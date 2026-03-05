@@ -10,6 +10,10 @@ import { registerDeleteAssetTool } from "./delete-asset.js";
 import { registerRenameAssetTool } from "./rename-asset.js";
 import { registerDuplicateAssetTool } from "./duplicate-asset.js";
 import { registerExportAssetTool } from "./export-asset.js";
+import { registerProjectHistoryTool } from "./project-history.js";
+import { registerAssetHistoryTool } from "./asset-history.js";
+import { registerRestoreAssetVersionTool } from "./restore-asset-version.js";
+import { registerRewindProjectTool } from "./rewind-project.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -22,4 +26,8 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerRenameAssetTool(server, fs);
   registerDuplicateAssetTool(server, fs);
   registerExportAssetTool(server, fs);
+  registerProjectHistoryTool(server, fs);
+  registerAssetHistoryTool(server, fs);
+  registerRestoreAssetVersionTool(server, fs);
+  registerRewindProjectTool(server, fs);
 }
