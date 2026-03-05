@@ -1,5 +1,4 @@
 import type { Tool } from "use-mcp/react";
-import { useMcpConnection } from "../hooks/useMcpConnection";
 
 const dot: Record<string, string> = {
   ready: "#22c55e",
@@ -11,13 +10,19 @@ const dot: Record<string, string> = {
   pending_auth: "#eab308",
 };
 
-export function McpStatus() {
-  const { state, tools, error, retry } = useMcpConnection();
+interface McpStatusProps {
+  state: string;
+  tools: Tool[];
+  error: string | undefined;
+  retry: (() => void) | undefined;
+}
+
+export function McpStatus({ state, tools, error, retry }: McpStatusProps) {
   const color = dot[state] ?? "#888";
   const ok = state === "ready";
 
   return (
-    <div style={{ textAlign: "left", maxWidth: 520, margin: "2rem auto" }}>
+    <div>
       <h1>Clipfirst</h1>
 
       <div style={{
@@ -45,7 +50,7 @@ export function McpStatus() {
             {error}
           </span>
         )}
-        {state === "failed" && (
+        {state === "failed" && retry && (
           <button onClick={retry} style={{ marginLeft: "auto", fontSize: "0.8rem", padding: "0.3em 0.8em" }}>
             Retry
           </button>
