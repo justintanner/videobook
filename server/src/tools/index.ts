@@ -14,6 +14,7 @@ import { registerProjectHistoryTool } from "./project-history.js";
 import { registerAssetHistoryTool } from "./asset-history.js";
 import { registerRestoreAssetVersionTool } from "./restore-asset-version.js";
 import { registerRewindProjectTool } from "./rewind-project.js";
+import { registerTrimVideoTool } from "./trim-video.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -30,4 +31,5 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerAssetHistoryTool(server, fs);
   registerRestoreAssetVersionTool(server, fs);
   registerRewindProjectTool(server, fs);
+  registerTrimVideoTool(server, fs);
 }

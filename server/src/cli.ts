@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "./server.js";
+import { queue } from "./queue.js";
 
 async function createClient(): Promise<Client> {
   const server = createServer();
@@ -58,6 +59,7 @@ async function run(): Promise<void> {
   }
 
   const args = parseArgs(rest);
+  await queue.start();
   const result = await client.callTool({ name: toolName, arguments: args });
 
   for (const item of result.content as Array<{ type: string; text?: string }>) {
@@ -69,6 +71,7 @@ async function run(): Promise<void> {
   }
 
   await client.close();
+  await queue.stop();
 }
 
 run().catch((err) => {

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Queue, MemoryStorage } from "@platformatic/job-queue";
 
 describe("job queue", () => {
-  let queue: Queue;
+  let queue: Queue<Record<string, unknown>>;
 
   afterEach(async () => {
     await queue.stop();
@@ -10,11 +10,11 @@ describe("job queue", () => {
 
   it("starts, executes a job, and stops cleanly", async () => {
     const storage = new MemoryStorage();
-    queue = new Queue({ storage, concurrency: 5 });
+    queue = new Queue<Record<string, unknown>>({ storage, concurrency: 5 });
 
     let executed = false;
 
-    queue.execute(async (job) => {
+    queue.execute(async (_job: { id: string; payload: Record<string, unknown>; attempts: number }) => {
       executed = true;
       return { done: true };
     });
