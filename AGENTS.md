@@ -100,10 +100,26 @@ export function registerMyTool(server: McpServer): void {
 
 Export from `server/src/tools/index.ts` and call in `registerAllTools()`.
 
+## External API Calls
+
+**IMPORTANT:** All external API calls from the server MUST use `@nakedapi` provider packages. Never call third-party AI/LLM APIs directly with `fetch` or other HTTP clients — always go through the corresponding `@nakedapi` provider (e.g., `kimicoding()` from `@nakedapi/kimicoding`).
+
+Example:
+```typescript
+import { kimicoding } from "@nakedapi/kimicoding";
+
+const provider = kimicoding({ apiKey: process.env.KIMI_CODING_API_KEY! });
+const response = await provider.chat({
+  model: "k2p5",
+  messages: [{ role: "user", content: "hello" }],
+});
+```
+
 ## Environment Variables
 
 - Server uses `process.env.PORT` (defaults to 3001)
-- No `.env` file is present; add environment variables as needed
+- `.env` file in project root, loaded via `import "dotenv/config"` in server entry points
+- API keys: `KIMI_CODING_API_KEY` (KimiCoding)
 - Never commit secrets or API keys to version control
 
 ## Project References

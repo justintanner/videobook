@@ -28,6 +28,10 @@ Strict mode enabled. Uses project references: `tsconfig.app.json` (src code) and
 
 Flat ESLint config (`eslint.config.js`) with typescript-eslint, react-hooks, and react-refresh plugins. Only lints `*.ts`/`*.tsx` files. `dist/` is ignored.
 
+## External API Calls
+
+IMPORTANT: All external API calls from the server MUST use `@nakedapi` provider packages. Never call third-party AI/LLM APIs directly with `fetch` or other HTTP clients — always go through the corresponding `@nakedapi` provider (e.g., `kimicoding()` from `@nakedapi/kimicoding`). API keys are stored in `.env` and loaded via `dotenv/config`.
+
 ## Best Practices
 
 ### State Management
