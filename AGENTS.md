@@ -12,9 +12,9 @@ Guidance for AI coding agents working in the Clipfirst repository.
 | `npm run build` | Type-check with tsc -b, then Vite build |
 | `npm run build:server` | Compile server TypeScript to server/dist/ |
 | `npm run lint` | Run ESLint across all *.ts/*.tsx files |
+| `npm run test` | Run vitest integration tests |
+| `npm run test:watch` | Run vitest in watch mode |
 | `npm run preview` | Preview production build locally |
-
-**Note:** No test runner is configured. To run tests, you'll need to add a test framework (e.g., vitest) first.
 
 ## Architecture
 
@@ -27,6 +27,11 @@ Guidance for AI coding agents working in the Clipfirst repository.
 - Entry: `server/src/index.ts` (Express app on port 3001)
 - Server factory: `server/src/server.ts` creates McpServer instances
 - Tools: `server/src/tools/*.ts` - register via `server/src/tools/index.ts`
+
+**Filesystem Layer** (`clipfirst-fs`): Local dependency at `../clipfirst-fs`.
+- Provides project/asset management with git versioning
+- Entry: `createFs({ outputDir })` returns a `ClipfirstFs` instance
+- All project, asset, and file operations MUST go through this package — never use `node:fs` directly for these
 
 ## Code Style
 
@@ -99,6 +104,20 @@ export function registerMyTool(server: McpServer): void {
 ```
 
 Export from `server/src/tools/index.ts` and call in `registerAllTools()`.
+
+## Filesystem Operations
+
+**IMPORTANT:** All project, asset, and file operations MUST use the `clipfirst-fs` package. Never use `node:fs` directly for managing projects, assets, or their files — always go through `createFs()` from `clipfirst-fs`. This ensures git versioning, proper directory structure, and consistent error handling via `Result` types.
+
+Example:
+```typescript
+import { createFs } from "clipfirst-fs";
+
+const fs = createFs({ outputDir: "/path/to/output" });
+const project = await fs.createProject("my-project");
+const asset = await fs.createAsset("vid", "intro clip", "my-project");
+await fs.writeFile(asset.value.assetId, "original.mp4", buffer, "my-project");
+```
 
 ## External API Calls
 
@@ -307,13 +326,15 @@ Current stack:
 | MCP server | @modelcontextprotocol/sdk | McpServer + StreamableHTTPServerTransport |
 | Server | Express | HTTP layer for MCP transport |
 | Validation | Zod | Shared between server tools and client |
+| Filesystem | clipfirst-fs | Project/asset management with git versioning |
 | Linting | ESLint 9 | Flat config with typescript-eslint, react-hooks |
+| Testing | Vitest | Integration tests with real dependencies |
 
 Recommended additions (add only when needed):
 
 | Category | Library | When |
 |---|---|---|
-| Testing | Vitest + React Testing Library | When adding tests |
+| UI Testing | React Testing Library | When adding component tests |
 | Complex forms | React Hook Form + Zod resolver | Multi-step or validated forms |
 | Global state | Zustand | When Context causes measurable perf issues |
 | Routing | React Router v7 or TanStack Router | When the app needs multiple pages |

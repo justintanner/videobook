@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run build` — Type-check with `tsc -b` then bundle with Vite
 - `npm run build:server` — Compile MCP server TypeScript
 - `npm run lint` — Run ESLint across the project
+- `npm run test` — Run vitest (integration tests with real dependencies)
 - `npm run preview` — Preview the production build locally
 
 ## Architecture
@@ -20,6 +21,8 @@ React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API
 
 **MCP Server:** `server/src/index.ts` — Express app exposing `POST /mcp` with `StreamableHTTPServerTransport` (stateless). Tools are registered in `server/src/tools/`. The server is also accessible to external MCP clients (Claude Desktop, etc.) at `http://localhost:3001/mcp`.
 
+**Filesystem Layer:** `clipfirst-fs` (local dependency at `../clipfirst-fs`) — provides project/asset management with git versioning. All project, asset, and file operations go through `createFs()` from this package.
+
 ## TypeScript
 
 Strict mode enabled. Uses project references: `tsconfig.app.json` (src code) and `tsconfig.node.json` (Vite/node config). Target ES2022 with bundler module resolution.
@@ -27,6 +30,10 @@ Strict mode enabled. Uses project references: `tsconfig.app.json` (src code) and
 ## Linting
 
 Flat ESLint config (`eslint.config.js`) with typescript-eslint, react-hooks, and react-refresh plugins. Only lints `*.ts`/`*.tsx` files. `dist/` is ignored.
+
+## Filesystem Operations
+
+IMPORTANT: All project, asset, and file operations MUST use the `clipfirst-fs` package. Never use `node:fs` directly for managing projects, assets, or their files — always go through `createFs()` from `clipfirst-fs`. This ensures git versioning, proper directory structure, and consistent error handling via `Result` types.
 
 ## External API Calls
 
