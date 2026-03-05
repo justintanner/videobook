@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "build:server": "cd server && tsc",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "use": "tsx server/src/cli.ts"
   },
   "dependencies": {
     "react": "^19.2.0",
