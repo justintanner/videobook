@@ -27,3 +27,29 @@ Strict mode enabled. Uses project references: `tsconfig.app.json` (src code) and
 ## Linting
 
 Flat ESLint config (`eslint.config.js`) with typescript-eslint, react-hooks, and react-refresh plugins. Only lints `*.ts`/`*.tsx` files. `dist/` is ignored.
+
+## Best Practices
+
+### State Management
+- **Local-first**: state starts in the component that uses it; lift only when sharing is proven necessary
+- **Derive, don't store**: compute filtered/transformed values during render with `useMemo`; never duplicate MCP data into separate state
+- **Single MCP connection**: share `useMcpConnection()` via props or Context; never create parallel instances
+- **Prop drill first**: prefer explicit props for 3 levels or fewer before reaching for Context or Zustand
+
+### useEffect Minimization
+- **No tool calls in effects**: invoke MCP tools from event handlers or explicit action hooks, not `useEffect`
+- **No state sync from props**: derive directly during render instead
+- **Always clean up**: subscriptions and listeners must return cleanup functions
+- Reserve `useEffect` for genuine side effects (analytics, imperative DOM via refs)
+
+### MCP Data Layer
+- The `use-mcp` hook owns connection lifecycle, tool discovery, and invocation — treat its state as read-only
+- Wrap tool invocations in **domain-specific custom hooks** (e.g., `useSearchTool`) that encapsulate tool names, argument construction, and result parsing
+- Guard tool calls with `state === "ready"` checks
+- On the server, tools return errors as content (`{ isError: true, content: [...] }`) rather than throwing
+
+### Component Design
+- Extract data fetching and logic into custom hooks; components receive data via props and render JSX
+- Single-purpose hooks with descriptive names (`useSearchTool`, not `useUtils`)
+- Use `useMemo`/`useCallback` only for expensive computations or functions passed to memoized children
+- Avoid inline object/array creation in JSX props; use stable `key` props (unique IDs, not indices)
