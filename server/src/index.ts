@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
+import { queue } from "./queue.js";
 
 const app = express();
 app.use(cors());
@@ -31,7 +32,22 @@ app.get("/mcp", (_req, res) => {
   }));
 });
 
-const PORT = process.env.PORT ?? 3001;
-app.listen(PORT, () => {
-  console.log(`MCP server listening on http://127.0.0.1:${PORT}/mcp`);
+async function start(): Promise<void> {
+  await queue.start();
+  const PORT = process.env.PORT ?? 3001;
+  app.listen(PORT, () => {
+    console.log(`MCP server listening on http://127.0.0.1:${PORT}/mcp`);
+  });
+}
+
+process.on("SIGINT", async () => {
+  await queue.stop();
+  process.exit(0);
 });
+
+process.on("SIGTERM", async () => {
+  await queue.stop();
+  process.exit(0);
+});
+
+start();

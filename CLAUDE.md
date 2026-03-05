@@ -39,6 +39,10 @@ IMPORTANT: All project, asset, and file operations MUST use the `clipfirst-fs` p
 
 IMPORTANT: All external API calls from the server MUST use `@nakedapi` provider packages. Never call third-party AI/LLM APIs directly with `fetch` or other HTTP clients — always go through the corresponding `@nakedapi` provider (e.g., `kimicoding()` from `@nakedapi/kimicoding`). API keys are stored in `.env` and loaded via `dotenv/config`.
 
+## Job Queue
+
+IMPORTANT: All long-running or async processes on the server MUST be submitted to the job queue. Never run long-running operations directly in MCP tool handlers — always enqueue them via the `queue` singleton from `server/src/queue.ts`. This ensures concurrency control, retries, and graceful shutdown. Use `queue.enqueueAndWait()` when the tool needs to return the result, or `queue.enqueue()` for fire-and-forget.
+
 ## Best Practices
 
 ### State Management

@@ -134,6 +134,31 @@ const response = await provider.chat({
 });
 ```
 
+## Job Queue
+
+**IMPORTANT:** All long-running or async processes on the server MUST be submitted to the job queue. Never run long-running operations directly in MCP tool handlers — always enqueue them via the `queue` singleton from `server/src/queue.ts`.
+
+- Queue singleton: `server/src/queue.ts` — `import { queue } from "../queue.js"`
+- Uses `@platformatic/job-queue` with `MemoryStorage`
+- Started in `server/src/index.ts` before Express listens
+- `queue.enqueueAndWait(id, payload)` — when the tool needs the result
+- `queue.enqueue(id, payload)` — fire-and-forget
+- `queue.execute(handler)` — register a job handler
+
+Example:
+```typescript
+import { queue } from "../queue.js";
+
+// Register handler (once, at startup)
+queue.execute(async (job) => {
+  // long-running work
+  return result;
+});
+
+// In a tool handler
+const result = await queue.enqueueAndWait(jobId, payload);
+```
+
 ## Environment Variables
 
 - Server uses `process.env.PORT` (defaults to 3001)
@@ -327,6 +352,7 @@ Current stack:
 | Server | Express | HTTP layer for MCP transport |
 | Validation | Zod | Shared between server tools and client |
 | Filesystem | clipfirst-fs | Project/asset management with git versioning |
+| Job Queue | @platformatic/job-queue | In-memory queue with concurrency control |
 | Linting | ESLint 9 | Flat config with typescript-eslint, react-hooks |
 | Testing | Vitest | Integration tests with real dependencies |
 
