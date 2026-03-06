@@ -19,6 +19,7 @@ import { registerDownloadVideoTool } from "./download-video.js";
 import { registerChangeVideoSpeedTool } from "./change-video-speed.js";
 import { registerReverseVideoTool } from "./reverse-video.js";
 import { registerExtractFrameTools } from "./extract-frame.js";
+import { registerExtractAudioTool } from "./extract-audio.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -40,4 +41,5 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerChangeVideoSpeedTool(server, fs);
   registerReverseVideoTool(server, fs);
   registerExtractFrameTools(server, fs);
+  registerExtractAudioTool(server, fs);
 }
