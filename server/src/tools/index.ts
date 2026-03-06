@@ -17,6 +17,7 @@ import { registerRewindProjectTool } from "./rewind-project.js";
 import { registerTrimVideoTool } from "./trim-video.js";
 import { registerDownloadVideoTool } from "./download-video.js";
 import { registerChangeVideoSpeedTool } from "./change-video-speed.js";
+import { registerReverseVideoTool } from "./reverse-video.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -36,4 +37,5 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerTrimVideoTool(server, fs);
   registerDownloadVideoTool(server, fs);
   registerChangeVideoSpeedTool(server, fs);
+  registerReverseVideoTool(server, fs);
 }
