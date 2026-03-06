@@ -5,6 +5,7 @@ import { unlink, rename } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { createRequire } from "node:module";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 interface ProbeStream {
   codec_type: string;
@@ -98,7 +99,7 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
   return probe.streams.some((s) => s.codec_type === "audio");
 }
 
-export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerChangeVideoSpeedJobHandler(): void {
   registerJobHandler("change_video_speed", async (payload) => {
     const { inputPath, outputPath, speed, hasAudio } = payload as {
       inputPath: string;
@@ -121,20 +122,23 @@ export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs)
     await ff.done();
     return { success: true };
   });
+}
 
-  server.tool(
-    "change_video_speed",
-    "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
-    {
+export function changeVideoSpeedDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "change_video_speed",
+    description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
+    schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
       speed: z.number().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
     },
-    async ({ asset_id, project_slug, speed }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug, speed } = args as { asset_id: string; project_slug: string; speed: number };
       const speedError = validateSpeed(speed);
       if (speedError) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: speedError }],
         };
       }
@@ -142,7 +146,7 @@ export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs)
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
@@ -151,7 +155,7 @@ export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs)
       const videoFile = findVideoFile(manifest.files);
       if (!videoFile) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
         };
       }
@@ -160,7 +164,7 @@ export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs)
       const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
         };
       }
@@ -194,12 +198,18 @@ export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs)
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Speed change failed: ${msg}` }],
         };
       } finally {
         await fs.releaseLock(assetDir);
       }
     },
-  );
+  };
+}
+
+export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs): void {
+  registerChangeVideoSpeedJobHandler();
+  const def = changeVideoSpeedDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

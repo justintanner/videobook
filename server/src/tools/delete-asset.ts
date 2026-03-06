@@ -1,20 +1,22 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import type { ToolDef } from "./tool-def.js";
 
-export function registerDeleteAssetTool(server: McpServer, fs: ClipfirstFs): void {
-  server.tool(
-    "delete_asset",
-    "Delete an asset directory",
-    {
+export function deleteAssetDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "delete_asset",
+    description: "Delete an asset directory",
+    schema: {
       asset_id: z.string().describe("Asset ID to delete (e.g. img-cute-cat)"),
       project_slug: z.string().describe("Project slug"),
     },
-    async ({ asset_id, project_slug }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const result = await fs.deleteAsset(asset_id, project_slug);
       if (!result.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: result.error.message }],
         };
       }
@@ -29,6 +31,11 @@ export function registerDeleteAssetTool(server: McpServer, fs: ClipfirstFs): voi
           }),
         }],
       };
-    }
-  );
+    },
+  };
+}
+
+export function registerDeleteAssetTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = deleteAssetDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

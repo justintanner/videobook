@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -167,7 +168,7 @@ async function extractFrame(
   }
 }
 
-export function registerExtractFrameTools(server: McpServer, fs: ClipfirstFs): void {
+export function registerExtractFrameJobHandler(): void {
   registerJobHandler("extract_frame", async (payload) => {
     const { inputPath, outputPath, timestamp } = payload as ExtractFramePayload;
 
@@ -182,24 +183,39 @@ export function registerExtractFrameTools(server: McpServer, fs: ClipfirstFs): v
 
     return { success: true };
   });
+}
 
-  server.tool(
-    "extract_first_frame",
-    "Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.",
-    {
-      asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
-    },
-    async ({ asset_id, project_slug }) => extractFrame(asset_id, project_slug, "first", fs),
-  );
+const extractFrameSchema = {
+  asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
+  project_slug: z.string().describe("Project slug"),
+};
 
-  server.tool(
-    "extract_last_frame",
-    "Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.",
+export function extractFrameDefs(fs: ClipfirstFs): ToolDef[] {
+  return [
     {
-      asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
+      name: "extract_first_frame",
+      description: "Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.",
+      schema: extractFrameSchema,
+      handler: async (args) => {
+        const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+        return extractFrame(asset_id, project_slug, "first", fs);
+      },
     },
-    async ({ asset_id, project_slug }) => extractFrame(asset_id, project_slug, "last", fs),
-  );
+    {
+      name: "extract_last_frame",
+      description: "Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.",
+      schema: extractFrameSchema,
+      handler: async (args) => {
+        const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+        return extractFrame(asset_id, project_slug, "last", fs);
+      },
+    },
+  ];
+}
+
+export function registerExtractFrameTools(server: McpServer, fs: ClipfirstFs): void {
+  registerExtractFrameJobHandler();
+  for (const def of extractFrameDefs(fs)) {
+    server.tool(def.name, def.description, def.schema, def.handler);
+  }
 }

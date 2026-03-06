@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { YtDlp } from "ytdlp-nodejs";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -137,7 +138,7 @@ type DownloadPayload = {
 
 // --- Main registration ---
 
-export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerDownloadVideoJobHandler(): void {
   const ytdlp = new YtDlp();
 
   registerJobHandler("download_video", async (payload) => {
@@ -161,11 +162,15 @@ export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): v
     await builder.run();
     return { success: true };
   });
+}
 
-  server.tool(
-    "download_video_file",
-    "Download a video from a URL (YouTube, Twitter/X, etc.) into a clipfirst project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
-    {
+export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
+  const ytdlp = new YtDlp();
+
+  return {
+    name: "download_video_file",
+    description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a clipfirst project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
+    schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
       start_time: z.string().optional().describe("Start time (e.g. '30', '1:30', '2m20s')"),
       end_time: z.string().optional().describe("End time (e.g. '60', '2:00', '3m')"),
@@ -173,7 +178,11 @@ export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): v
       export_videos: z.boolean().optional().default(true).describe("Auto-export 16:9 and 9:16 versions"),
       full: z.boolean().optional().default(false).describe("Download entire video (no 3-min cap)"),
     },
-    async ({ url, start_time, end_time, project_slug, export_videos, full }) => {
+    handler: async (args) => {
+      const { url, start_time, end_time, project_slug, export_videos, full } = args as {
+        url: string; start_time?: string; end_time?: string;
+        project_slug?: string; export_videos?: boolean; full?: boolean;
+      };
       // Parse times
       let startSecs: number | undefined;
       let endSecs: number | undefined;
@@ -182,19 +191,19 @@ export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): v
         endSecs = parseTime(end_time);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        return { isError: true, content: [{ type: "text" as const, text: msg }] };
+        return { isError: true as const, content: [{ type: "text" as const, text: msg }] };
       }
 
       // Validate
       if (full && (startSecs !== undefined || endSecs !== undefined)) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: "Cannot specify start/end times with full=true." }],
         };
       }
       if (startSecs !== undefined && endSecs !== undefined && startSecs >= endSecs) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: "start_time must be less than end_time." }],
         };
       }
@@ -224,7 +233,7 @@ export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): v
         info = await ytdlp.getInfoAsync(url) as unknown as InfoResult;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        return { isError: true, content: [{ type: "text" as const, text: `Failed to fetch video info: ${msg}` }] };
+        return { isError: true as const, content: [{ type: "text" as const, text: `Failed to fetch video info: ${msg}` }] };
       }
 
       // Detect multi-video (Twitter quoted tweets)
@@ -348,5 +357,11 @@ export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): v
         content: [{ type: "text" as const, text: results.join("\n") }],
       };
     },
-  );
+  };
+}
+
+export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): void {
+  registerDownloadVideoJobHandler();
+  const def = downloadVideoDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

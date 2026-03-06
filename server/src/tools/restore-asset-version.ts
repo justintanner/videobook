@@ -1,21 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import type { ToolDef } from "./tool-def.js";
 
-export function registerRestoreAssetVersionTool(server: McpServer, fs: ClipfirstFs): void {
-  server.tool(
-    "restore_asset_version",
-    "Restore an asset to a previous git commit version",
-    {
+export function restoreAssetVersionDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "restore_asset_version",
+    description: "Restore an asset to a previous git commit version",
+    schema: {
       asset_id: z.string().describe("Asset ID to restore (e.g. img-cute-cat)"),
       commit_hash: z.string().describe("Git commit hash to restore from"),
       project_slug: z.string().describe("Project slug"),
     },
-    async ({ asset_id, commit_hash, project_slug }) => {
+    handler: async (args) => {
+      const { asset_id, commit_hash, project_slug } = args as { asset_id: string; commit_hash: string; project_slug: string };
       const newCommit = await fs.restoreAsset(asset_id, commit_hash, project_slug);
       if (!newCommit) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{
             type: "text" as const,
             text: "Failed to restore asset. Check asset ID and commit hash.",
@@ -34,6 +36,11 @@ export function registerRestoreAssetVersionTool(server: McpServer, fs: Clipfirst
           }),
         }],
       };
-    }
-  );
+    },
+  };
+}
+
+export function registerRestoreAssetVersionTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = restoreAssetVersionDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

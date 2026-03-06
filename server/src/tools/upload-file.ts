@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import * as path from "node:path";
+import type { ToolDef } from "./tool-def.js";
 
 const extensionToPrefix: Record<string, string> = {
   ".mp4": "vid",
@@ -23,21 +24,22 @@ const extensionToPrefix: Record<string, string> = {
   ".md": "script",
 };
 
-export function registerUploadFileTool(server: McpServer, fs: ClipfirstFs): void {
-  server.tool(
-    "upload_file",
-    "Upload a media or markdown file into a clipfirst project as an asset",
-    {
+export function uploadFileDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "upload_file",
+    description: "Upload a media or markdown file into a clipfirst project as an asset",
+    schema: {
       project_slug: z.string().describe("Project slug to upload into"),
       filename: z.string().describe("Original filename with extension"),
       data: z.string().describe("Base64-encoded file contents"),
     },
-    async ({ project_slug, filename, data }) => {
+    handler: async (args) => {
+      const { project_slug, filename, data } = args as { project_slug: string; filename: string; data: string };
       const ext = path.extname(filename).toLowerCase();
       const prefix = extensionToPrefix[ext];
       if (!prefix) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Unsupported file extension: ${ext}` }],
         };
       }
@@ -46,7 +48,7 @@ export function registerUploadFileTool(server: McpServer, fs: ClipfirstFs): void
       const assetResult = await fs.createAsset(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: assetResult.error.message }],
         };
       }
@@ -60,7 +62,7 @@ export function registerUploadFileTool(server: McpServer, fs: ClipfirstFs): void
       );
       if (!writeResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: writeResult.error.message }],
         };
       }
@@ -71,6 +73,11 @@ export function registerUploadFileTool(server: McpServer, fs: ClipfirstFs): void
           text: JSON.stringify({ assetId, path: assetPath, filename }),
         }],
       };
-    }
-  );
+    },
+  };
+}
+
+export function registerUploadFileTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = uploadFileDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -148,7 +149,7 @@ async function cutMiddle(
   }
 }
 
-export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerTrimVideoJobHandler(): void {
   registerJobHandler("trim_video", async (payload) => {
     const { inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd } =
       payload as {
@@ -168,11 +169,13 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
     }
     return { success: true };
   });
+}
 
-  server.tool(
-    "trim_video",
-    "Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.",
-    {
+export function trimVideoDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "trim_video",
+    description: "Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.",
+    schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
       trim_start: z.number().optional().describe("Start of range to keep (seconds)"),
@@ -180,11 +183,15 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
       cut_start: z.number().optional().describe("Start of chunk to remove (seconds)"),
       cut_end: z.number().optional().describe("End of chunk to remove (seconds)"),
     },
-    async ({ asset_id, project_slug, trim_start, trim_end, cut_start, cut_end }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug, trim_start, trim_end, cut_start, cut_end } = args as {
+        asset_id: string; project_slug: string;
+        trim_start?: number; trim_end?: number; cut_start?: number; cut_end?: number;
+      };
       const validated = validateTrimParams(trim_start, trim_end, cut_start, cut_end);
       if ("error" in validated) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: validated.error }],
         };
       }
@@ -192,7 +199,7 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
@@ -201,7 +208,7 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
       const videoFile = findVideoFile(manifest.files);
       if (!videoFile) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
         };
       }
@@ -210,7 +217,7 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
       const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
         };
       }
@@ -263,12 +270,18 @@ export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void 
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Trim failed: ${msg}` }],
         };
       } finally {
         await fs.releaseLock(assetDir);
       }
     },
-  );
+  };
+}
+
+export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void {
+  registerTrimVideoJobHandler();
+  const def = trimVideoDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

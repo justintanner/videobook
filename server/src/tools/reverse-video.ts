@@ -5,6 +5,7 @@ import { unlink, rename } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { createRequire } from "node:module";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 interface ProbeStream {
   codec_type: string;
@@ -84,7 +85,7 @@ async function getVideoDuration(filePath: string): Promise<number> {
   return parseFloat(probe.format.duration);
 }
 
-export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReverseVideoJobHandler(): void {
   registerJobHandler("reverse_video", async (payload) => {
     const { inputPath, outputPath, hasAudio } = payload as {
       inputPath: string;
@@ -106,19 +107,22 @@ export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): vo
     await ff.done();
     return { success: true };
   });
+}
 
-  server.tool(
-    "reverse_video",
-    "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
-    {
+export function reverseVideoDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "reverse_video",
+    description: "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
+    schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
     },
-    async ({ asset_id, project_slug }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
@@ -127,7 +131,7 @@ export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): vo
       const videoFile = findVideoFile(manifest.files);
       if (!videoFile) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
         };
       }
@@ -136,7 +140,7 @@ export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): vo
       const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
         };
       }
@@ -147,7 +151,7 @@ export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): vo
         const duration = await getVideoDuration(videoPath);
         if (duration > MAX_DURATION_SECONDS) {
           return {
-            isError: true,
+            isError: true as const,
             content: [{
               type: "text" as const,
               text: `Video is ${duration.toFixed(1)}s — reverse requires buffering all frames in memory. Maximum supported duration is ${MAX_DURATION_SECONDS}s (5 minutes). Trim the video first.`,
@@ -180,12 +184,18 @@ export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): vo
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Reverse failed: ${msg}` }],
         };
       } finally {
         await fs.releaseLock(assetDir);
       }
     },
-  );
+  };
+}
+
+export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): void {
+  registerReverseVideoJobHandler();
+  const def = reverseVideoDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

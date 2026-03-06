@@ -1,12 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
+import type { ToolDef } from "./tool-def.js";
 
-export function registerGetDefaultProjectTool(server: McpServer, fs: ClipfirstFs): void {
-  server.tool(
-    "get_default_project",
-    "Get the default clipfirst project",
-    {},
-    async () => {
+export function getDefaultProjectDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "get_default_project",
+    description: "Get the default clipfirst project",
+    schema: {},
+    handler: async () => {
       const result = await fs.getProject();
       if (result.ok) {
         return {
@@ -14,9 +15,14 @@ export function registerGetDefaultProjectTool(server: McpServer, fs: ClipfirstFs
         };
       }
       return {
-        isError: true,
+        isError: true as const,
         content: [{ type: "text" as const, text: result.error.message }],
       };
-    }
-  );
+    },
+  };
+}
+
+export function registerGetDefaultProjectTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = getDefaultProjectDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

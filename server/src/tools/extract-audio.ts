@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue, registerJobHandler } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -52,7 +53,7 @@ function deriveAudioName(videoAssetId: string): string {
   return `ext-${baseName}`;
 }
 
-export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerExtractAudioJobHandler(): void {
   registerJobHandler("extract_audio", async (payload) => {
     const { inputPath, outputPath } = payload as {
       inputPath: string;
@@ -70,19 +71,22 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
 
     return { success: true };
   });
+}
 
-  server.tool(
-    "extract_audio",
-    "Extract the audio track from a video asset as a new audio asset (MP3). Creates an aud- asset with original.mp3.",
-    {
+export function extractAudioDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "extract_audio",
+    description: "Extract the audio track from a video asset as a new audio asset (MP3). Creates an aud- asset with original.mp3.",
+    schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
     },
-    async ({ asset_id, project_slug }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
@@ -91,7 +95,7 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
       const videoFile = findVideoFile(manifest.files);
       if (!videoFile) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
         };
       }
@@ -104,14 +108,14 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Failed to probe video: ${msg}` }],
         };
       }
 
       if (!audioPresent) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Video has no audio stream: ${asset_id}` }],
         };
       }
@@ -120,7 +124,7 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
       const assetResult = await fs.createAsset("aud", audioName, project_slug);
       if (!assetResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create audio asset: ${assetResult.error.message}` }],
         };
       }
@@ -131,7 +135,7 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
       const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
         };
       }
@@ -163,12 +167,18 @@ export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): vo
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: `Extract audio failed: ${msg}` }],
         };
       } finally {
         await fs.releaseLock(audioAssetDir);
       }
     },
-  );
+  };
+}
+
+export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): void {
+  registerExtractAudioJobHandler();
+  const def = extractAudioDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

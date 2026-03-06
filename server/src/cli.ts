@@ -1,17 +1,8 @@
 import "dotenv/config";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "./server.js";
+import { z } from "zod";
+import { fs } from "./fs.js";
 import { queue } from "./queue.js";
-
-async function createClient(): Promise<Client> {
-  const server = createServer();
-  const client = new Client({ name: "clipfirst-cli", version: "0.0.1" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverTransport);
-  await client.connect(clientTransport);
-  return client;
-}
+import { getAllToolDefs, registerAllJobHandlers } from "./tools/index.js";
 
 function parseValue(raw: string): unknown {
   try {
@@ -36,33 +27,38 @@ function parseArgs(argv: string[]): Record<string, unknown> {
 
 async function run(): Promise<void> {
   const [toolName, ...rest] = process.argv.slice(2);
-
-  const client = await createClient();
+  const tools = getAllToolDefs(fs);
 
   if (!toolName) {
-    const { tools } = await client.listTools();
     console.log("Usage: npm run use <tool> [key=value ...]\n");
     console.log("Available tools:");
     for (const t of tools) {
-      const props = Object.entries(
-        (t.inputSchema.properties ?? {}) as Record<string, { description?: string }>
-      );
-      const required = new Set((t.inputSchema.required ?? []) as string[]);
-      const params = props
-        .map(([k]) => required.has(k) ? `<${k}>` : `[${k}]`)
+      const schemaObj = z.object(t.schema);
+      const jsonSchema = schemaObj.toJSONSchema() as { required?: string[] };
+      const required = new Set(jsonSchema.required ?? []);
+      const params = Object.keys(t.schema)
+        .map((k) => (required.has(k) ? `<${k}>` : `[${k}]`))
         .join(" ");
       console.log(`  ${t.name} ${params}`);
       if (t.description) console.log(`    ${t.description}`);
     }
-    await client.close();
     return;
   }
 
-  const args = parseArgs(rest);
-  await queue.start();
-  const result = await client.callTool({ name: toolName, arguments: args });
+  const tool = tools.find((t) => t.name === toolName);
+  if (!tool) {
+    console.error(`Unknown tool: ${toolName}`);
+    process.exit(1);
+  }
 
-  for (const item of result.content as Array<{ type: string; text?: string }>) {
+  const rawArgs = parseArgs(rest);
+  const parsed = z.object(tool.schema).parse(rawArgs);
+
+  registerAllJobHandlers();
+  await queue.start();
+  const result = await tool.handler(parsed as Record<string, unknown>);
+
+  for (const item of result.content) {
     if (item.type === "text") {
       console.log(item.text);
     } else {
@@ -70,7 +66,6 @@ async function run(): Promise<void> {
     }
   }
 
-  await client.close();
   await queue.stop();
 }
 

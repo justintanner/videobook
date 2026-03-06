@@ -1,21 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import type { ToolDef } from "./tool-def.js";
 
-export function registerDuplicateAssetTool(server: McpServer, fs: ClipfirstFs): void {
-  server.tool(
-    "duplicate_asset",
-    "Duplicate an asset within the same project",
-    {
+export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "duplicate_asset",
+    description: "Duplicate an asset within the same project",
+    schema: {
       asset_id: z.string().describe("Asset ID to duplicate (e.g. img-cute-cat)"),
       project_slug: z.string().describe("Project slug"),
       new_name: z.string().optional().describe("Optional custom name for the copy"),
     },
-    async ({ asset_id, project_slug, new_name }) => {
+    handler: async (args) => {
+      const { asset_id, project_slug, new_name } = args as { asset_id: string; project_slug: string; new_name?: string };
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
@@ -27,7 +29,7 @@ export function registerDuplicateAssetTool(server: McpServer, fs: ClipfirstFs): 
       const createResult = await fs.createAsset(prefix, name, project_slug);
       if (!createResult.ok) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: createResult.error.message }],
         };
       }
@@ -38,14 +40,14 @@ export function registerDuplicateAssetTool(server: McpServer, fs: ClipfirstFs): 
         const readResult = await fs.readFile(asset_id, file.name, project_slug);
         if (!readResult.ok) {
           return {
-            isError: true,
+            isError: true as const,
             content: [{ type: "text" as const, text: readResult.error.message }],
           };
         }
         const writeResult = await fs.writeFile(newAssetId, file.name, readResult.value, project_slug);
         if (!writeResult.ok) {
           return {
-            isError: true,
+            isError: true as const,
             content: [{ type: "text" as const, text: writeResult.error.message }],
           };
         }
@@ -60,6 +62,11 @@ export function registerDuplicateAssetTool(server: McpServer, fs: ClipfirstFs): 
           }),
         }],
       };
-    }
-  );
+    },
+  };
+}
+
+export function registerDuplicateAssetTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = duplicateAssetDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
 }

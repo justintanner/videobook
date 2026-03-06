@@ -1,16 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { kimicoding } from "@nakedapi/kimicoding";
+import type { ToolDef } from "./tool-def.js";
 
-export function registerApiStatusTool(server: McpServer): void {
-  server.tool(
-    "api_status",
-    "Check if the KimiCoding API is reachable and the API key is valid",
-    {},
-    async () => {
+export function apiStatusDef(): ToolDef {
+  return {
+    name: "api_status",
+    description: "Check if the KimiCoding API is reachable and the API key is valid",
+    schema: {},
+    handler: async () => {
       const apiKey = process.env.KIMI_CODING_API_KEY;
       if (!apiKey) {
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: "KIMI_CODING_API_KEY environment variable is not set" }],
         };
       }
@@ -27,10 +28,15 @@ export function registerApiStatusTool(server: McpServer): void {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
-          isError: true,
+          isError: true as const,
           content: [{ type: "text" as const, text: message }],
         };
       }
-    }
-  );
+    },
+  };
+}
+
+export function registerApiStatusTool(server: McpServer): void {
+  const def = apiStatusDef();
+  server.tool(def.name, def.description, def.schema, def.handler);
 }
