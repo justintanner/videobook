@@ -16,6 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@nakedapi/kie": "file:../nakedapi/packages/provider/kie",
     "@nakedapi/kimicoding": "file:../nakedapi/packages/provider/kimicoding",
     "clipfirst-fs": "file:../clipfirst-fs",
     "dotenv": "^17.3.1",

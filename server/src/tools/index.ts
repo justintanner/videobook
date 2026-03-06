@@ -21,6 +21,7 @@ import { registerChangeVideoSpeedTool, changeVideoSpeedDef, registerChangeVideoS
 import { registerReverseVideoTool, reverseVideoDef, registerReverseVideoJobHandler } from "./reverse-video.js";
 import { registerExtractFrameTools, extractFrameDefs, registerExtractFrameJobHandler } from "./extract-frame.js";
 import { registerExtractAudioTool, extractAudioDef, registerExtractAudioJobHandler } from "./extract-audio.js";
+import { registerTranscribeTool, transcribeDef, registerTranscribeJobHandler } from "./transcribe.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -43,6 +44,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerReverseVideoTool(server, fs);
   registerExtractFrameTools(server, fs);
   registerExtractAudioTool(server, fs);
+  registerTranscribeTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -67,6 +69,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     reverseVideoDef(fs),
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
+    transcribeDef(fs),
   ];
 }
 
@@ -77,4 +80,5 @@ export function registerAllJobHandlers(): void {
   registerReverseVideoJobHandler();
   registerExtractFrameJobHandler();
   registerExtractAudioJobHandler();
+  registerTranscribeJobHandler();
 }
