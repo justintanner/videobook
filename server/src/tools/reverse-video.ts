@@ -1,10 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { unlink, rename } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { createRequire } from "node:module";
-import { queue, registerJobHandler } from "../queue.js";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 interface ProbeStream {
@@ -17,18 +16,7 @@ interface ProbeResult {
   streams: ProbeStream[];
   format: ProbeFormat;
 }
-interface FFmpeggyConstructorOpts {
-  input: string;
-  output: string;
-  outputOptions: string[];
-  overwriteExisting: boolean;
-}
-interface FFmpeggyInstance {
-  run(): Promise<unknown>;
-  done(): Promise<unknown>;
-}
 interface FFmpeggyClass {
-  new (opts: FFmpeggyConstructorOpts): FFmpeggyInstance;
   DefaultConfig: { ffmpegBin: string; ffprobeBin: string };
   probe(filePath: string): Promise<ProbeResult>;
 }
@@ -49,10 +37,7 @@ function getFFmpeggy(): FFmpeggyClass {
 }
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
-const LOCK_DURATION_MS = 300_000;
 const MAX_DURATION_SECONDS = 300;
-const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level:v", "4.0"];
-const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k"];
 
 function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const videos = files.filter((f) => {
@@ -60,19 +45,6 @@ function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
     return VIDEO_EXTENSIONS.has(ext);
   });
   return videos.find((f) => f.name.startsWith("original")) ?? videos[0] ?? null;
-}
-
-function buildReverseOutputOptions(hasAudio: boolean): string[] {
-  const opts = ["-vf", "reverse"];
-
-  if (hasAudio) {
-    opts.push("-af", "areverse");
-  } else {
-    opts.push("-an");
-  }
-
-  opts.push(...H264_MEDIUM, ...AUDIO_OPTS);
-  return opts;
 }
 
 async function hasAudioStream(filePath: string): Promise<boolean> {
@@ -83,30 +55,6 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
 async function getVideoDuration(filePath: string): Promise<number> {
   const probe = await getFFmpeggy().probe(filePath);
   return parseFloat(probe.format.duration);
-}
-
-export function registerReverseVideoJobHandler(): void {
-  registerJobHandler("reverse_video", async (payload) => {
-    const { inputPath, outputPath, hasAudio } = payload as {
-      inputPath: string;
-      outputPath: string;
-      hasAudio: boolean;
-    };
-
-    const outputOptions = buildReverseOutputOptions(hasAudio);
-
-    const FFmpeggy = getFFmpeggy();
-    const ff = new FFmpeggy({
-      input: inputPath,
-      output: outputPath,
-      outputOptions,
-      overwriteExisting: true,
-    });
-
-    await ff.run();
-    await ff.done();
-    return { success: true };
-  });
 }
 
 export function reverseVideoDef(fs: ClipfirstFs): ToolDef {
@@ -137,65 +85,44 @@ export function reverseVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const assetDir = manifest.path;
-      const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
-      if (!lockResult.ok) {
+      const videoPath = join(assetDir, videoFile.name);
+
+      const duration = await getVideoDuration(videoPath);
+      if (duration > MAX_DURATION_SECONDS) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
-        };
-      }
-
-      try {
-        const videoPath = join(assetDir, videoFile.name);
-
-        const duration = await getVideoDuration(videoPath);
-        if (duration > MAX_DURATION_SECONDS) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `Video is ${duration.toFixed(1)}s — reverse requires buffering all frames in memory. Maximum supported duration is ${MAX_DURATION_SECONDS}s (5 minutes). Trim the video first.`,
-            }],
-          };
-        }
-
-        const hasAudio = await hasAudioStream(videoPath);
-        const tempPath = join(assetDir, "original_reversed.mp4");
-        const jobId = `reverse-${asset_id}-${Date.now()}`;
-
-        await queue.enqueueAndWait(jobId, {
-          type: "reverse_video",
-          inputPath: videoPath,
-          outputPath: tempPath,
-          hasAudio,
-        });
-
-        await unlink(videoPath);
-        await rename(tempPath, videoPath);
-
-        await fs.commitOperation("reverse", asset_id, {}, project_slug);
-
-        return {
           content: [{
             type: "text" as const,
-            text: JSON.stringify({ asset_id }),
+            text: `Video is ${duration.toFixed(1)}s — reverse requires buffering all frames in memory. Maximum supported duration is ${MAX_DURATION_SECONDS}s (5 minutes). Trim the video first.`,
           }],
         };
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Reverse failed: ${msg}` }],
-        };
-      } finally {
-        await fs.releaseLock(assetDir);
       }
+
+      const hasAudio = await hasAudioStream(videoPath);
+      const tempPath = join(assetDir, "original_reversed.mp4");
+      const jobId = `reverse-${asset_id}-${Date.now()}`;
+
+      await queue.enqueue(jobId, {
+        type: "reverse_video",
+        inputPath: videoPath,
+        outputPath: tempPath,
+        hasAudio,
+        assetId: asset_id,
+        assetDir,
+        projectSlug: project_slug,
+      } as unknown as Record<string, unknown>);
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ asset_id, job_id: jobId, status: "enqueued" }),
+        }],
+      };
     },
   };
 }
 
 export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): void {
-  registerReverseVideoJobHandler();
   const def = reverseVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

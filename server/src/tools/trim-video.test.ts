@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -84,8 +84,8 @@ describe("trim_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.asset_id).toBe(uploaded.assetId);
-    expect(parsed.mode).toBe("keep");
-    expect(parsed.trim_start).toBe(1);
+    expect(parsed.status).toBe("enqueued");
+    await waitForJob(parsed.job_id);
   });
 
   it("trims with trim_start and trim_end", async () => {
@@ -103,9 +103,8 @@ describe("trim_video tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.mode).toBe("keep");
-    expect(parsed.trim_start).toBe(0.5);
-    expect(parsed.trim_end).toBe(2.5);
+    expect(parsed.status).toBe("enqueued");
+    await waitForJob(parsed.job_id);
   });
 
   it("cuts middle section", async () => {
@@ -123,9 +122,8 @@ describe("trim_video tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.mode).toBe("cut");
-    expect(parsed.cut_start).toBe(1);
-    expect(parsed.cut_end).toBe(2);
+    expect(parsed.status).toBe("enqueued");
+    await waitForJob(parsed.job_id);
   });
 
   it("returns error for nonexistent asset", async () => {

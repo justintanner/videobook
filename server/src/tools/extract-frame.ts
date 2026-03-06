@@ -1,22 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { writeFile as fsWriteFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { queue, registerJobHandler } from "../queue.js";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
 const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 const FFPROBE: string = require("ffprobe-static").path;
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
-const LOCK_DURATION_MS = 60_000;
 
 function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const videos = files.filter((f) => {
@@ -50,22 +48,6 @@ async function probeVideo(filePath: string): Promise<ProbeResult> {
   return { width, height, duration };
 }
 
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
-
-type ExtractFramePayload = {
-  type: "extract_frame";
-  inputPath: string;
-  outputPath: string;
-  timestamp: number;
-};
-
 async function extractFrame(
   videoAssetId: string,
   projectSlug: string,
@@ -89,8 +71,7 @@ async function extractFrame(
     };
   }
 
-  const assetDir = manifest.path;
-  const videoPath = join(assetDir, videoFile.name);
+  const videoPath = join(manifest.path, videoFile.name);
 
   let probe: ProbeResult;
   try {
@@ -105,7 +86,6 @@ async function extractFrame(
 
   const timestamp = mode === "first" ? 0.1 : Math.max(0, probe.duration - 0.1);
 
-  // Derive image asset name from video asset ID (strip "vid-" prefix)
   const baseName = videoAssetId.startsWith("vid-") ? videoAssetId.slice(4) : videoAssetId;
   const imageName = `${baseName}-${mode}-frame`;
 
@@ -120,69 +100,29 @@ async function extractFrame(
   const { assetId: imageAssetId, path: imageAssetDir } = assetResult.value;
   await mkdir(imageAssetDir, { recursive: true });
 
-  const lockResult = await fs.acquireLock(imageAssetDir, { durationMs: LOCK_DURATION_MS });
-  if (!lockResult.ok) {
-    return {
-      isError: true,
-      content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
-    };
-  }
+  const outputPath = join(imageAssetDir, "original.jpg");
+  const jobId = `extract-frame-${imageAssetId}-${Date.now()}`;
 
-  try {
-    const outputPath = join(imageAssetDir, "original.jpg");
-    const jobId = `extract-frame-${imageAssetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "extract_frame",
+    inputPath: videoPath,
+    outputPath,
+    timestamp,
+    imageAssetId,
+    imageAssetDir,
+    sourceVideoId: videoAssetId,
+    projectSlug,
+    width: probe.width,
+    height: probe.height,
+    mode,
+  } as unknown as Record<string, unknown>);
 
-    await queue.enqueueAndWait(jobId, {
-      type: "extract_frame",
-      inputPath: videoPath,
-      outputPath,
-      timestamp,
-    } as unknown as Record<string, unknown>);
-
-    const origin = {
-      origin: `${mode}_frame`,
-      source_asset: videoAssetId,
-      timestamp,
-      width: probe.width,
-      height: probe.height,
-    };
-    await fsWriteFile(join(imageAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-    const operationName = `extract_${mode}_frame`;
-    await fs.commitOperation(operationName, imageAssetId, { source: videoAssetId }, projectSlug);
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify({ image_asset_id: imageAssetId, source_video: videoAssetId, timestamp }),
-      }],
-    };
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      isError: true,
-      content: [{ type: "text" as const, text: `Extract frame failed: ${msg}` }],
-    };
-  } finally {
-    await fs.releaseLock(imageAssetDir);
-  }
-}
-
-export function registerExtractFrameJobHandler(): void {
-  registerJobHandler("extract_frame", async (payload) => {
-    const { inputPath, outputPath, timestamp } = payload as ExtractFramePayload;
-
-    await runFfmpeg([
-      "-y",
-      "-ss", String(timestamp),
-      "-i", inputPath,
-      "-frames:v", "1",
-      "-q:v", "2",
-      outputPath,
-    ]);
-
-    return { success: true };
-  });
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({ image_asset_id: imageAssetId, source_video: videoAssetId, job_id: jobId, status: "enqueued" }),
+    }],
+  };
 }
 
 const extractFrameSchema = {
@@ -214,7 +154,6 @@ export function extractFrameDefs(fs: ClipfirstFs): ToolDef[] {
 }
 
 export function registerExtractFrameTools(server: McpServer, fs: ClipfirstFs): void {
-  registerExtractFrameJobHandler();
   for (const def of extractFrameDefs(fs)) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }

@@ -1,22 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { writeFile as fsWriteFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { queue, registerJobHandler } from "../queue.js";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
 const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 const FFPROBE: string = require("ffprobe-static").path;
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
-const LOCK_DURATION_MS = 120_000;
 
 function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const videos = files.filter((f) => {
@@ -39,38 +37,9 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
   ) ?? false;
 }
 
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
-
 function deriveAudioName(videoAssetId: string): string {
   const baseName = videoAssetId.startsWith("vid-") ? videoAssetId.slice(4) : videoAssetId;
   return `ext-${baseName}`;
-}
-
-export function registerExtractAudioJobHandler(): void {
-  registerJobHandler("extract_audio", async (payload) => {
-    const { inputPath, outputPath } = payload as {
-      inputPath: string;
-      outputPath: string;
-    };
-
-    await runFfmpeg([
-      "-y",
-      "-i", inputPath,
-      "-vn",
-      "-acodec", "libmp3lame",
-      "-q:a", "2",
-      outputPath,
-    ]);
-
-    return { success: true };
-  });
 }
 
 export function extractAudioDef(fs: ClipfirstFs): ToolDef {
@@ -132,53 +101,30 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
       const { assetId: audioAssetId, path: audioAssetDir } = assetResult.value;
       await mkdir(audioAssetDir, { recursive: true });
 
-      const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
-      if (!lockResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Asset is locked: ${lockResult.error.message}` }],
-        };
-      }
+      const outputPath = join(audioAssetDir, "original.mp3");
+      const jobId = `extract-audio-${audioAssetId}-${Date.now()}`;
 
-      try {
-        const outputPath = join(audioAssetDir, "original.mp3");
-        const jobId = `extract-audio-${audioAssetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "extract_audio",
+        inputPath: videoPath,
+        outputPath,
+        audioAssetId,
+        audioAssetDir,
+        sourceVideoId: asset_id,
+        projectSlug: project_slug,
+      } as unknown as Record<string, unknown>);
 
-        await queue.enqueueAndWait(jobId, {
-          type: "extract_audio",
-          inputPath: videoPath,
-          outputPath,
-        } as unknown as Record<string, unknown>);
-
-        const origin = {
-          origin: "extract_audio",
-          source_asset: asset_id,
-        };
-        await fsWriteFile(join(audioAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-        await fs.commitOperation("extract_audio", audioAssetId, { source: asset_id }, project_slug);
-
-        return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ audio_asset_id: audioAssetId, source_video: asset_id }),
-          }],
-        };
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Extract audio failed: ${msg}` }],
-        };
-      } finally {
-        await fs.releaseLock(audioAssetDir);
-      }
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ audio_asset_id: audioAssetId, source_video: asset_id, job_id: jobId, status: "enqueued" }),
+        }],
+      };
     },
   };
 }
 
 export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): void {
-  registerExtractAudioJobHandler();
   const def = extractAudioDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

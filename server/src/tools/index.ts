@@ -15,13 +15,14 @@ import { registerProjectHistoryTool, projectHistoryDef } from "./project-history
 import { registerAssetHistoryTool, assetHistoryDef } from "./asset-history.js";
 import { registerRestoreAssetVersionTool, restoreAssetVersionDef } from "./restore-asset-version.js";
 import { registerRewindProjectTool, rewindProjectDef } from "./rewind-project.js";
-import { registerTrimVideoTool, trimVideoDef, registerTrimVideoJobHandler } from "./trim-video.js";
-import { registerDownloadVideoTool, downloadVideoDef, registerDownloadVideoJobHandler } from "./download-video.js";
-import { registerChangeVideoSpeedTool, changeVideoSpeedDef, registerChangeVideoSpeedJobHandler } from "./change-video-speed.js";
-import { registerReverseVideoTool, reverseVideoDef, registerReverseVideoJobHandler } from "./reverse-video.js";
-import { registerExtractFrameTools, extractFrameDefs, registerExtractFrameJobHandler } from "./extract-frame.js";
-import { registerExtractAudioTool, extractAudioDef, registerExtractAudioJobHandler } from "./extract-audio.js";
-import { registerTranscribeTool, transcribeDef, registerTranscribeJobHandler } from "./transcribe.js";
+import { registerTrimVideoTool, trimVideoDef } from "./trim-video.js";
+import { registerDownloadVideoTool, downloadVideoDef } from "./download-video.js";
+import { registerChangeVideoSpeedTool, changeVideoSpeedDef } from "./change-video-speed.js";
+import { registerReverseVideoTool, reverseVideoDef } from "./reverse-video.js";
+import { registerExtractFrameTools, extractFrameDefs } from "./extract-frame.js";
+import { registerExtractAudioTool, extractAudioDef } from "./extract-audio.js";
+import { registerTranscribeTool, transcribeDef } from "./transcribe.js";
+import { registerGenerateGrokImagineVideoTool, generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -45,6 +46,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerExtractFrameTools(server, fs);
   registerExtractAudioTool(server, fs);
   registerTranscribeTool(server, fs);
+  registerGenerateGrokImagineVideoTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -70,15 +72,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
     transcribeDef(fs),
+    generateGrokImagineVideoDef(fs),
   ];
-}
-
-export function registerAllJobHandlers(): void {
-  registerTrimVideoJobHandler();
-  registerDownloadVideoJobHandler();
-  registerChangeVideoSpeedJobHandler();
-  registerReverseVideoJobHandler();
-  registerExtractFrameJobHandler();
-  registerExtractAudioJobHandler();
-  registerTranscribeJobHandler();
 }

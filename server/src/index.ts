@@ -4,6 +4,8 @@ import cors from "cors";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
 import { queue } from "./queue.js";
+import { fs } from "./fs.js";
+import { registerAllJobHandlers } from "./jobs/index.js";
 
 const app = express();
 app.use(cors());
@@ -33,6 +35,7 @@ app.get("/mcp", (_req, res) => {
 });
 
 async function start(): Promise<void> {
+  registerAllJobHandlers(fs);
   await queue.start();
   const PORT = process.env.PORT ?? 3001;
   app.listen(PORT, () => {

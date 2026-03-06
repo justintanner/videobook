@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -84,7 +84,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.image_asset_id).toMatch(/^img-/);
     expect(parsed.source_video).toBe(uploaded.assetId);
-    expect(parsed.timestamp).toBe(0.1);
+    expect(parsed.status).toBe("enqueued");
+
+    await waitForJob(parsed.job_id);
 
     // Verify the image file exists and is non-empty
     const manifest = await client.callTool({
@@ -114,7 +116,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.image_asset_id).toMatch(/^img-/);
     expect(parsed.source_video).toBe(uploaded.assetId);
-    expect(parsed.timestamp).toBeGreaterThan(0.1);
+    expect(parsed.status).toBe("enqueued");
+
+    await waitForJob(parsed.job_id);
 
     const manifest = await client.callTool({
       name: "asset_manifest",
@@ -170,6 +174,8 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     });
 
     const parsed = JSON.parse((result.content as TextContent)[0].text);
+    await waitForJob(parsed.job_id);
+
     const manifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },

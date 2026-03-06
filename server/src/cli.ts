@@ -2,7 +2,8 @@ import "dotenv/config";
 import { z } from "zod";
 import { fs } from "./fs.js";
 import { queue } from "./queue.js";
-import { getAllToolDefs, registerAllJobHandlers } from "./tools/index.js";
+import { getAllToolDefs } from "./tools/index.js";
+import { registerAllJobHandlers } from "./jobs/index.js";
 
 function parseValue(raw: string): unknown {
   try {
@@ -54,7 +55,7 @@ async function run(): Promise<void> {
   const rawArgs = parseArgs(rest);
   const parsed = z.object(tool.schema).parse(rawArgs);
 
-  registerAllJobHandlers();
+  registerAllJobHandlers(fs);
   await queue.start();
   const result = await tool.handler(parsed as Record<string, unknown>);
 
