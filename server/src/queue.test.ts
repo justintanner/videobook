@@ -14,7 +14,7 @@ describe("job queue", () => {
 
     let executed = false;
 
-    queue.execute(async (_job: { id: string; payload: Record<string, unknown>; attempts: number }) => {
+    queue.execute(async () => {
       executed = true;
       return { done: true };
     });
