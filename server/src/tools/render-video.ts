@@ -7,6 +7,7 @@ import { isValidHex } from "../remotion/util.js";
 import type { ToolDef } from "./tool-def.js";
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
 
 function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const videos = files.filter((f) => {
@@ -64,6 +65,14 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         .number()
         .optional()
         .describe("Audio volume percent 0-100 (default: 100)"),
+      osg_asset_id: z
+        .string()
+        .optional()
+        .describe("Image asset ID (img- prefix) for on-screen graphic overlay"),
+      osg_position: z
+        .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
+        .optional()
+        .describe("OSG position (default: top-right)"),
     },
     handler: async (args) => {
       const {
@@ -79,6 +88,8 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         audio_fade_in = 150,
         audio_fade_out = 100,
         audio_volume = 100,
+        osg_asset_id,
+        osg_position = "top-right",
       } = args as {
         asset_id: string;
         project_slug: string;
@@ -92,6 +103,8 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         audio_fade_in?: number;
         audio_fade_out?: number;
         audio_volume?: number;
+        osg_asset_id?: string;
+        osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
       };
 
       if (!asset_id.startsWith("vid-")) {
@@ -167,6 +180,34 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         }
       }
 
+      let osgImagePath: string | null = null;
+      if (osg_asset_id) {
+        if (!osg_asset_id.startsWith("img-")) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: "osg_asset_id must start with img-" }],
+          };
+        }
+        const osgManifest = await fs.getManifest(osg_asset_id, project_slug);
+        if (!osgManifest.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `OSG asset error: ${osgManifest.error.message}` }],
+          };
+        }
+        const imgFile = osgManifest.value.files.find((f) => {
+          const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
+          return IMAGE_EXTENSIONS.has(ext);
+        });
+        if (!imgFile) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `No image file found in OSG asset ${osg_asset_id}` }],
+          };
+        }
+        osgImagePath = join(osgManifest.value.path, imgFile.name);
+      }
+
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
       const jobId = `render-${asset_id}-${Date.now()}`;
@@ -189,6 +230,8 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         audioFadeOut: audio_fade_out,
         audioVolume: audio_volume,
         hasElevenlabs,
+        osgImagePath,
+        osgPosition: osg_position,
       });
 
       return {

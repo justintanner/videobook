@@ -21,6 +21,8 @@ const defaultProps: RenderInputProps = {
   audioFadeIn: 150,
   audioFadeOut: 100,
   audioVolume: 100,
+  osgSrc: null,
+  osgPosition: "top-right",
 };
 
 // eslint-disable-next-line react-refresh/only-export-components

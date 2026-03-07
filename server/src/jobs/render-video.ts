@@ -12,6 +12,7 @@ import type {
   SubtitleStyle,
   SubtitlePosition,
   FontSizePreset,
+  OsgPosition,
   Chunk,
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
@@ -63,6 +64,8 @@ type RenderVideoPayload = {
   audioFadeOut: number;
   audioVolume: number;
   hasElevenlabs: boolean;
+  osgImagePath: string | null;
+  osgPosition: OsgPosition;
 };
 
 export function registerRenderVideoJob(fs: ClipfirstFs): void {
@@ -83,6 +86,8 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
       audioFadeOut,
       audioVolume,
       hasElevenlabs,
+      osgImagePath,
+      osgPosition,
     } = payload as RenderVideoPayload;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
@@ -108,6 +113,15 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
       const videoCopyName = `source-${assetId}-${Date.now()}${basename(videoPath).replace(/^[^.]*/, "")}`;
       const videoCopyPath = join(bundleDir, videoCopyName);
       await copyFile(resolve(videoPath), videoCopyPath);
+
+      // Copy OSG image into bundle dir if provided
+      let osgCopyName: string | null = null;
+      let osgCopyPath: string | null = null;
+      if (osgImagePath) {
+        osgCopyName = `osg-${assetId}-${Date.now()}${basename(osgImagePath).replace(/^[^.]*/, "")}`;
+        osgCopyPath = join(bundleDir, osgCopyName);
+        await copyFile(resolve(osgImagePath), osgCopyPath);
+      }
 
       try {
         for (const orient of orientations) {
@@ -146,6 +160,8 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
             audioFadeIn,
             audioFadeOut,
             audioVolume,
+            osgSrc: osgCopyName,
+            osgPosition: osgPosition ?? "top-right",
           };
 
           const composition = await selectComposition({
@@ -167,6 +183,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
         }
       } finally {
         await unlink(videoCopyPath).catch(() => {});
+        if (osgCopyPath) await unlink(osgCopyPath).catch(() => {});
       }
 
       const renderSettings = {

@@ -3,8 +3,8 @@ import type { Segment, Chunk, Word, Orientation, SubtitleStyle } from "./types.j
 const CHUNK_LIMITS: Record<string, [number, number]> = {
   "highlight:portrait": [40, 8],
   "highlight:landscape": [60, 12],
-  "tikdance:portrait": [18, 4],
-  "tikdance:landscape": [42, 8],
+  "tikdance:portrait": [16, 3],
+  "tikdance:landscape": [30, 5],
 };
 
 const MAX_DURATION = 6.0;

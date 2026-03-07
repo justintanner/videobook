@@ -3,6 +3,7 @@ import { AbsoluteFill } from "remotion";
 import type { RenderInputProps } from "./subtitles/types.js";
 import { BlurFillVideo } from "./BlurFillVideo.js";
 import { SubtitleOverlay } from "./subtitles/SubtitleOverlay.js";
+import { OsgOverlay } from "./OsgOverlay.js";
 
 export const RenderComposition: React.FC<RenderInputProps> = ({
   videoSrc,
@@ -18,6 +19,8 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   audioFadeIn,
   audioFadeOut,
   audioVolume,
+  osgSrc,
+  osgPosition,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
@@ -38,6 +41,9 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
           textColor={textColor}
           highlightColor={highlightColor}
         />
+      )}
+      {osgSrc && (
+        <OsgOverlay src={osgSrc} position={osgPosition} />
       )}
     </AbsoluteFill>
   );

@@ -22,6 +22,7 @@ export type Orientation = "landscape" | "portrait";
 export type SubtitleStyle = "tikdance" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
+export type OsgPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export interface RenderSettings {
   subtitlesEnabled: boolean;
@@ -53,4 +54,6 @@ export interface RenderInputProps extends Record<string, unknown> {
   audioFadeIn: number;
   audioFadeOut: number;
   audioVolume: number;
+  osgSrc: string | null;
+  osgPosition: OsgPosition;
 }
