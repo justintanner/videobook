@@ -18,10 +18,13 @@
   "dependencies": {
     "@nakedapi/kie": "file:../nakedapi/packages/provider/kie",
     "@nakedapi/kimicoding": "file:../nakedapi/packages/provider/kimicoding",
+    "@remotion/cli": "^4.0.434",
+    "@remotion/renderer": "^4.0.434",
     "clipfirst-fs": "file:../clipfirst-fs",
     "dotenv": "^17.3.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "remotion": "^4.0.434",
     "use-mcp": "^0.0.21"
   },
   "devDependencies": {

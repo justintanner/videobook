@@ -1,29 +1,11 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { unlink, rename, mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
-
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
+import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 300_000;
-const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level:v", "4.0"];
-const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k"];
 const CROSSFADE_SECS = 0.03;
-
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
 
 async function trimRange(
   inputPath: string,

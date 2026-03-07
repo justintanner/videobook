@@ -1,54 +1,11 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { writeFile as fsWriteFile } from "node:fs/promises";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { YtDlp } from "ytdlp-nodejs";
 import { registerJobHandler } from "../queue.js";
-
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
-const FFPROBE: string = require("ffprobe-static").path;
+import { probeVideo, runFfmpeg, H264_MEDIUM, AUDIO_OPTS, type ProbeResult } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 600_000;
-const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level:v", "4.0"];
-const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k"];
-
-interface ProbeResult {
-  width: number;
-  height: number;
-  duration: number;
-}
-
-async function probeVideo(filePath: string): Promise<ProbeResult> {
-  const { stdout } = await execFileAsync(FFPROBE, [
-    "-v", "quiet",
-    "-print_format", "json",
-    "-show_streams",
-    "-show_format",
-    filePath,
-  ]);
-  const data = JSON.parse(stdout);
-  const videoStream = (data.streams as Array<Record<string, unknown>>)?.find(
-    (s) => s.codec_type === "video",
-  );
-  const width = Number(videoStream?.width ?? 0);
-  const height = Number(videoStream?.height ?? 0);
-  const duration = Number(data.format?.duration ?? 0);
-  return { width, height, duration };
-}
-
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
 
 async function blurFillExport(
   inputPath: string,
@@ -120,7 +77,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
       await builder.run();
 
-      let probe: ProbeResult = { width: 0, height: 0, duration: 0 };
+      let probe: ProbeResult = { width: 0, height: 0, duration: 0, fps: 0 };
       try {
         probe = await probeVideo(outputPath);
       } catch {
