@@ -33,11 +33,11 @@ describe("list_projects tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "alpha" },
+      arguments: { project_slug: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "beta" },
+      arguments: { project_slug: "beta" },
     });
     const result = await client.callTool({
       name: "list_projects",

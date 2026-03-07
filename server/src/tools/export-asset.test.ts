@@ -14,11 +14,11 @@ describe("export_asset_to_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "source-proj" },
+      arguments: { project_slug: "source-proj" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "target-proj" },
+      arguments: { project_slug: "target-proj" },
     });
   });
 

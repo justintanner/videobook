@@ -18,24 +18,11 @@ describe("create_project tool", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it("creates a project with auto-generated slug", async () => {
-    client = await createTestClient(tempDir);
-    const result = await client.callTool({
-      name: "create_project",
-      arguments: {},
-    });
-    const content = result.content as Array<{ type: string; text: string }>;
-    const data = JSON.parse(content[0].text);
-    expect(data.slug).toBeTruthy();
-    expect(data.path).toBeTruthy();
-    expect(data.is_default).toBe(true);
-  });
-
   it("creates a project with explicit slug", async () => {
     client = await createTestClient(tempDir);
     const result = await client.callTool({
       name: "create_project",
-      arguments: { slug: "my-project" },
+      arguments: { project_slug: "my-project" },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -47,11 +34,11 @@ describe("create_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "dup" },
+      arguments: { project_slug: "dup" },
     });
     const result = await client.callTool({
       name: "create_project",
-      arguments: { slug: "dup" },
+      arguments: { project_slug: "dup" },
     });
     expect(result.isError).toBe(true);
   });

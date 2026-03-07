@@ -31,7 +31,7 @@ describe("get_default_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "my-proj" },
+      arguments: { project_slug: "my-proj" },
     });
     const result = await client.callTool({
       name: "get_default_project",

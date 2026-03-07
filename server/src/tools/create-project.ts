@@ -7,10 +7,10 @@ export function createProjectDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "create_project",
     description: "Create a new clipfirst project directory with git versioning",
-    schema: { slug: z.string().optional().describe("Project slug (auto-generated if omitted)") },
+    schema: { project_slug: z.string().describe("Project slug") },
     handler: async (args) => {
-      const { slug } = args as { slug?: string };
-      const result = await fs.createProject(slug);
+      const { project_slug } = args as { project_slug: string };
+      const result = await fs.createProject(project_slug);
       if (result.ok) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result.value) }],

@@ -14,7 +14,7 @@ describe("upload_file tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "test-proj" },
+      arguments: { project_slug: "test-proj" },
     });
   });
 

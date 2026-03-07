@@ -69,7 +69,7 @@ describe("extract_audio tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "audio-proj" },
+      arguments: { project_slug: "audio-proj" },
     });
   });
 

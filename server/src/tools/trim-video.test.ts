@@ -60,7 +60,7 @@ describe("trim_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "trim-proj" },
+      arguments: { project_slug: "trim-proj" },
     });
   });
 

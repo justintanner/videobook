@@ -60,7 +60,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { slug: "frame-proj" },
+      arguments: { project_slug: "frame-proj" },
     });
   });
 

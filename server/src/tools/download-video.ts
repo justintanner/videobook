@@ -69,14 +69,14 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
       start_time: z.string().optional().describe("Start time (e.g. '30', '1:30', '2m20s')"),
       end_time: z.string().optional().describe("End time (e.g. '60', '2:00', '3m')"),
-      project_slug: z.string().optional().describe("Project slug (defaults to active project)"),
+      project_slug: z.string().describe("Project slug"),
       export_videos: z.boolean().optional().default(true).describe("Auto-export 16:9 and 9:16 versions"),
       full: z.boolean().optional().default(false).describe("Download entire video (no 3-min cap)"),
     },
     handler: async (args) => {
       const { url, start_time, end_time, project_slug, export_videos, full } = args as {
         url: string; start_time?: string; end_time?: string;
-        project_slug?: string; export_videos?: boolean; full?: boolean;
+        project_slug: string; export_videos?: boolean; full?: boolean;
       };
       // Parse times
       let startSecs: number | undefined;
@@ -156,7 +156,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
           .slice(0, 60);
         const assetName = sanitized || "downloaded-video";
 
-        const projectSlug = project_slug ?? undefined;
+        const projectSlug = project_slug;
 
         const assetResult = await fs.createAsset("vid", assetName, projectSlug);
         if (!assetResult.ok) {
