@@ -43,7 +43,7 @@ describe("asset_manifest tool", () => {
     );
     expect(parsed.asset_id).toBe(uploaded.assetId);
     expect(parsed.file_count).toBeGreaterThanOrEqual(1);
-    expect(parsed.files.some((f: { name: string }) => f.name === "photo.png")).toBe(true);
+    expect(parsed.files.some((f: { name: string }) => f.name === "original.png")).toBe(true);
   });
 
   it("returns error for nonexistent asset", async () => {

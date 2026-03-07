@@ -62,7 +62,7 @@ describe("export_asset_to_project tool", () => {
     const manifestParsed = JSON.parse(
       (manifest.content as Array<{ type: string; text: string }>)[0].text
     );
-    expect(manifestParsed.files.some((f: { name: string }) => f.name === "photo.png")).toBe(true);
+    expect(manifestParsed.files.some((f: { name: string }) => f.name === "original.png")).toBe(true);
   });
 
   it("returns error when source and target are the same project", async () => {

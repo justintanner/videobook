@@ -2,6 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import * as path from "node:path";
+import { join } from "node:path";
+import { writeFile as fsWriteFile } from "node:fs/promises";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
 const extensionToPrefix: Record<string, string> = {
@@ -54,9 +57,11 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId, path: assetPath } = assetResult.value;
+      const isScript = prefix === "script";
+      const writtenFilename = isScript ? filename : `original${ext}`;
       const writeResult = await fs.writeFile(
         assetId,
-        filename,
+        writtenFilename,
         Buffer.from(data, "base64"),
         project_slug,
       );
@@ -67,10 +72,37 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      // Create .origin.json for media files
+      if (!isScript) {
+        let width: number | undefined;
+        let height: number | undefined;
+        let duration: number | undefined;
+
+        try {
+          const probe = await probeVideo(join(assetPath, writtenFilename));
+          if (probe.width > 0) width = probe.width;
+          if (probe.height > 0) height = probe.height;
+          if (probe.duration > 0) duration = probe.duration;
+        } catch {
+          // probing is non-fatal
+        }
+
+        const origin: Record<string, unknown> = {
+          origin: "upload",
+          ...(width !== undefined ? { width } : {}),
+          ...(height !== undefined ? { height } : {}),
+          ...(duration !== undefined ? { duration } : {}),
+          processed_at: new Date().toISOString(),
+        };
+
+        await fsWriteFile(join(assetPath, ".origin.json"), JSON.stringify(origin, null, 2));
+        await fs.commitOperation("upload", assetId, { source: filename }, project_slug);
+      }
+
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ assetId, path: assetPath, filename }),
+          text: JSON.stringify({ assetId, path: assetPath, filename: writtenFilename }),
         }],
       };
     },

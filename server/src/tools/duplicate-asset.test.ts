@@ -53,7 +53,7 @@ describe("duplicate_asset tool", () => {
     const manifestParsed = JSON.parse(
       (manifest.content as Array<{ type: string; text: string }>)[0].text
     );
-    expect(manifestParsed.files.some((f: { name: string }) => f.name === "photo.png")).toBe(true);
+    expect(manifestParsed.files.some((f: { name: string }) => f.name === "original.png")).toBe(true);
   });
 
   it("duplicates with a custom name", async () => {

@@ -6,45 +6,47 @@ import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
 import { findPendingTasks } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
+import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import type { ToolDef } from "./tool-def.js";
 
 type SyncResult = {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
+  external_uploads: Array<{ assetId: string; mediaFilename: string }>;
 };
 
 export function syncDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "sync",
-    description: "Check all pending KIE tasks for a project and enqueue completion jobs for finished ones. Call periodically after triggering generation tools.",
+    description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
     schema: {
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
 
-      if (!process.env.KIE_API_KEY) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
-        };
+      const result: SyncResult = { pending: [], completed: [], failed: [], external_uploads: [] };
+
+      // Process external uploads (always runs, no API key needed)
+      const uploads = await findUnprocessedUploads(fs, project_slug);
+      for (const upload of uploads) {
+        await processExternalUpload(fs, upload, project_slug);
+        result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
       }
 
-      const tasks = await findPendingTasks(fs, project_slug);
+      // Poll KIE tasks (only if API key is set)
+      if (process.env.KIE_API_KEY) {
+        const tasks = await findPendingTasks(fs, project_slug);
 
-      if (tasks.length === 0) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ pending: [], completed: [], failed: [] }) }],
-        };
-      }
+        if (tasks.length > 0) {
+          const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
-      const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
-      const result: SyncResult = { pending: [], completed: [], failed: [] };
-
-      for (const task of tasks) {
-        const taskInfo = await provider.getTask(task.taskId);
-        await processSyncedTask(task, taskInfo, result);
+          for (const task of tasks) {
+            const taskInfo = await provider.getTask(task.taskId);
+            await processSyncedTask(task, taskInfo, result);
+          }
+        }
       }
 
       return {
