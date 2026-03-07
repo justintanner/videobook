@@ -7,6 +7,7 @@ import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
+import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -17,4 +18,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);
   registerGenerateGrokImagineVideoJob(fs);
+  registerGenerateNanoBananaImageJob(fs);
 }

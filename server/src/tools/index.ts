@@ -23,6 +23,7 @@ import { registerExtractFrameTools, extractFrameDefs } from "./extract-frame.js"
 import { registerExtractAudioTool, extractAudioDef } from "./extract-audio.js";
 import { registerTranscribeTool, transcribeDef } from "./transcribe.js";
 import { registerGenerateGrokImagineVideoTool, generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
+import { registerGenerateNanoBananaImageTool, generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -47,6 +48,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerExtractAudioTool(server, fs);
   registerTranscribeTool(server, fs);
   registerGenerateGrokImagineVideoTool(server, fs);
+  registerGenerateNanoBananaImageTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -73,5 +75,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     extractAudioDef(fs),
     transcribeDef(fs),
     generateGrokImagineVideoDef(fs),
+    generateNanoBananaImageDef(fs),
   ];
 }
