@@ -1,11 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
-import { readFile, writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
-import { pollKieTask } from "./poll-kie-task.js";
-
-const LOCK_DURATION_MS = 600_000;
+import { writePendingTask } from "./pending-task.js";
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
@@ -21,7 +17,7 @@ type GenerateGrokImagineVideoPayload = {
   resolution?: "480p" | "720p";
 };
 
-export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineVideoJob(): void {
   registerJobHandler("generate_grok_imagine_video", async (payload) => {
     const {
       imagePath, imageFilename, vidAssetId, vidAssetDir,
@@ -31,69 +27,43 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     const apiKey = process.env.KIE_API_KEY;
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
-    const lockResult = await fs.acquireLock(vidAssetDir, { durationMs: LOCK_DURATION_MS });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
+    const provider = kie({ apiKey, timeout: 60_000 });
 
-    try {
-      const provider = kie({ apiKey, timeout: 60_000 });
+    const imageBuffer = await readFile(imagePath);
+    const blob = new Blob([imageBuffer]);
 
-      const imageBuffer = await readFile(imagePath);
-      const blob = new Blob([imageBuffer]);
+    const { downloadUrl } = await provider.uploadMedia({
+      file: blob,
+      filename: imageFilename,
+    });
 
-      const { downloadUrl } = await provider.uploadMedia({
-        file: blob,
-        filename: imageFilename,
-      });
-
-      const { taskId } = await provider.createTask({
-        model: "grok-imagine/image-to-video",
-        input: {
-          image_urls: [downloadUrl],
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(mode !== undefined ? { mode } : {}),
-          ...(duration !== undefined ? { duration } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-        },
-      });
-
-      const taskInfo = await pollKieTask(provider, taskId, 600_000);
-
-      if (taskInfo.state === "fail") {
-        throw new Error(`Video generation failed: ${taskInfo.failMsg ?? "unknown error"}`);
-      }
-
-      const videoUrl = taskInfo.result?.resultUrls[0];
-      if (!videoUrl) {
-        throw new Error("No video URL in API response");
-      }
-
-      const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      await fsWriteFile(join(vidAssetDir, "original.mp4"), buffer);
-
-      const origin = {
-        source_asset: sourceImageId,
-        model: "grok-imagine/image-to-video",
+    const { taskId } = await provider.createTask({
+      model: "grok-imagine/image-to-video",
+      input: {
+        image_urls: [downloadUrl],
         ...(prompt !== undefined ? { prompt } : {}),
         ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
-        generated_at: new Date().toISOString(),
-      };
-      await fsWriteFile(join(vidAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
+      },
+    });
 
-      await fs.commitOperation("grok_imagine_video", vidAssetId, {
-        source: sourceImageId,
-        model: "grok-imagine/image-to-video",
-      }, projectSlug);
+    await writePendingTask(vidAssetDir, {
+      taskId,
+      taskType: "grok_imagine_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      createdAt: new Date().toISOString(),
+      meta: {
+        sourceImageId,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(mode !== undefined ? { mode } : {}),
+        ...(duration !== undefined ? { duration } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
+      },
+    });
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(vidAssetDir);
-    }
+    return { success: true, taskId };
   });
 }

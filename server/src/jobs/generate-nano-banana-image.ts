@@ -1,11 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
-import { readFile, writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
-import { pollKieTask } from "./poll-kie-task.js";
-
-const LOCK_DURATION_MS = 600_000;
+import { writePendingTask } from "./pending-task.js";
 
 type GenerateNanoBananaImagePayload = {
   type: "generate_nano_banana_image";
@@ -20,7 +16,7 @@ type GenerateNanoBananaImagePayload = {
   outputFormat?: string;
 };
 
-export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
+export function registerGenerateNanoBananaImageJob(): void {
   registerJobHandler("generate_nano_banana_image", async (payload) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -30,70 +26,43 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
     const apiKey = process.env.KIE_API_KEY;
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
-    const lockResult = await fs.acquireLock(imgAssetDir, { durationMs: LOCK_DURATION_MS });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
+    const provider = kie({ apiKey, timeout: 60_000 });
 
-    try {
-      const provider = kie({ apiKey, timeout: 60_000 });
+    const uploadedUrls: string[] = [];
+    for (const { path, filename } of imageInputs) {
+      const imageBuffer = await readFile(path);
+      const blob = new Blob([imageBuffer]);
+      const { downloadUrl } = await provider.uploadMedia({ file: blob, filename });
+      uploadedUrls.push(downloadUrl);
+    }
 
-      const uploadedUrls: string[] = [];
-      for (const { path, filename } of imageInputs) {
-        const imageBuffer = await readFile(path);
-        const blob = new Blob([imageBuffer]);
-        const { downloadUrl } = await provider.uploadMedia({ file: blob, filename });
-        uploadedUrls.push(downloadUrl);
-      }
-
-      const { taskId } = await provider.createTask({
-        model: "nano-banana-pro",
-        input: {
-          prompt,
-          ...(uploadedUrls.length > 0 ? { image_input: uploadedUrls } : {}),
-          ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-          ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
-        },
-      });
-
-      const taskInfo = await pollKieTask(provider, taskId, 600_000);
-
-      if (taskInfo.state === "fail") {
-        throw new Error(`Image generation failed: ${taskInfo.failMsg ?? "unknown error"}`);
-      }
-
-      const imageUrl = taskInfo.result?.resultUrls[0];
-      if (!imageUrl) {
-        throw new Error("No image URL in API response");
-      }
-
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-      }
-
-      const ext = outputFormat ?? "png";
-      const buffer = Buffer.from(await response.arrayBuffer());
-      await fsWriteFile(join(imgAssetDir, `original.${ext}`), buffer);
-
-      const origin = {
-        source_assets: sourceImageIds,
-        model: "nano-banana-pro",
+    const { taskId } = await provider.createTask({
+      model: "nano-banana-pro",
+      input: {
         prompt,
+        ...(uploadedUrls.length > 0 ? { image_input: uploadedUrls } : {}),
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
-        generated_at: new Date().toISOString(),
-      };
-      await fsWriteFile(join(imgAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
+      },
+    });
 
-      await fs.commitOperation("nano_banana_image", imgAssetId, {
-        model: "nano-banana-pro",
+    await writePendingTask(imgAssetDir, {
+      taskId,
+      taskType: "nano_banana_image",
+      assetId: imgAssetId,
+      assetDir: imgAssetDir,
+      projectSlug,
+      createdAt: new Date().toISOString(),
+      meta: {
+        sourceImageIds,
         prompt,
-      }, projectSlug);
+        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
+        ...(outputFormat !== undefined ? { outputFormat } : {}),
+      },
+    });
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(imgAssetDir);
-    }
+    return { success: true, taskId };
   });
 }
