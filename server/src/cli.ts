@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { z } from "zod";
 import { fs } from "./fs.js";
-import { queue } from "./queue.js";
+import { queue, waitForJob } from "./queue.js";
 import { getAllToolDefs } from "./tools/index.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 
@@ -59,12 +59,25 @@ async function run(): Promise<void> {
   await queue.start();
   const result = await tool.handler(parsed as Record<string, unknown>);
 
+  const jobIds: string[] = [];
   for (const item of result.content) {
     if (item.type === "text") {
       console.log(item.text);
+      try {
+        const parsed = JSON.parse(item.text);
+        if (parsed.job_id) jobIds.push(parsed.job_id);
+      } catch {
+        // not JSON, ignore
+      }
     } else {
       console.log(JSON.stringify(item, null, 2));
     }
+  }
+
+  for (const jobId of jobIds) {
+    console.log(`Waiting for job ${jobId}...`);
+    await waitForJob(jobId, 600_000);
+    console.log(`Job ${jobId} completed.`);
   }
 
   await queue.stop();

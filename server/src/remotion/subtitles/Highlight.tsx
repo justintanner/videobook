@@ -3,7 +3,6 @@ import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
 import { getCurrentWordIndex } from "../util.js";
 import { getHighlightFontSize, getYPosition } from "../constants.js";
-import { layoutWords } from "./layout.js";
 
 interface HighlightProps {
   chunks: Chunk[];
@@ -33,9 +32,6 @@ export const Highlight: React.FC<HighlightProps> = ({
   );
   if (!activeChunk || activeChunk.words.length === 0) return null;
 
-  const { layouts, totalHeight } = layoutWords(activeChunk.words, width, fontPx);
-  const blockY = Math.round(height * yFraction - totalHeight / 2);
-
   const wordIdx = getCurrentWordIndex(activeChunk.words, currentTime, 0.05);
 
   const boxPadding = 8;
@@ -45,50 +41,54 @@ export const Highlight: React.FC<HighlightProps> = ({
     <div
       style={{
         position: "absolute",
-        top: blockY,
+        top: 0,
         left: 0,
         width: "100%",
-        height: totalHeight,
+        height: "100%",
+        display: "flex",
+        alignItems: yFraction <= 0.3 ? "flex-start" : yFraction >= 0.6 ? "flex-end" : "center",
+        justifyContent: "center",
+        paddingTop: yFraction <= 0.3 ? `${Math.round(height * yFraction)}px` : undefined,
+        paddingBottom: yFraction >= 0.6 ? `${Math.round(height * (1 - yFraction))}px` : undefined,
         pointerEvents: "none",
       }}
     >
-      {layouts.map((layout, i) => {
-        const isActive = i === wordIdx;
-        return (
-          <React.Fragment key={i}>
-            {isActive && layout.width > 0 && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: layout.x - boxPadding,
-                  top: layout.y - boxPadding,
-                  width: layout.width + 2 * boxPadding,
-                  height: layout.height + 2 * boxPadding,
-                  backgroundColor: highlightColor,
-                  borderRadius: boxRadius,
-                }}
-              />
-            )}
-            <div
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: `${Math.round(fontPx * 0.3)}px`,
+          maxWidth: `${width - 80}px`,
+          padding: "0 40px",
+        }}
+      >
+        {activeChunk.words.map((word, i) => {
+          const isActive = i === wordIdx;
+          const text = word.word.trim().toUpperCase();
+          if (!text) return null;
+          return (
+            <span
+              key={i}
               style={{
-                position: "absolute",
-                left: layout.x,
-                top: layout.y,
                 fontFamily: "'Montserrat', 'Arial Black', Arial, sans-serif",
                 fontWeight: 800,
                 fontSize: fontPx,
+                lineHeight: 1.2,
                 color: textColor,
-                lineHeight: `${layout.height}px`,
                 textShadow: "2px 2px 4px rgba(0,0,0,0.4)",
-                userSelect: "none",
                 whiteSpace: "nowrap",
+                padding: `${boxPadding}px`,
+                borderRadius: isActive ? boxRadius : 0,
+                backgroundColor: isActive ? highlightColor : "transparent",
               }}
             >
-              {layout.text}
-            </div>
-          </React.Fragment>
-        );
-      })}
+              {text}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 };
