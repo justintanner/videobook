@@ -1,7 +1,8 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { readFile } from "node:fs/promises";
-import { kie, type TaskResult } from "@nakedapi/kie";
+import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
+import { pollKieTask } from "./poll-kie-task.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -41,7 +42,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
         filename: audioFilename,
       });
 
-      const result: TaskResult = await provider.generate({
+      const { taskId } = await provider.createTask({
         model: "elevenlabs/speech-to-text",
         input: {
           audio_url: downloadUrl,
@@ -49,17 +50,19 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
           diarize,
           ...(languageCode ? { language_code: languageCode } : {}),
         },
-      }, { timeoutMs: 300_000 });
+      });
 
-      if (result.status === "failed") {
-        throw new Error(`Transcription failed: ${result.error ?? "unknown error"}`);
+      const taskInfo = await pollKieTask(provider, taskId, 300_000);
+
+      if (taskInfo.state === "fail") {
+        throw new Error(`Transcription failed: ${taskInfo.failMsg ?? "unknown error"}`);
       }
 
-      if (!result.resultObject) {
+      if (!taskInfo.result?.resultObject) {
         throw new Error("No transcription data in API response");
       }
 
-      const transcriptionStr = JSON.stringify(result.resultObject, null, 2);
+      const transcriptionStr = JSON.stringify(taskInfo.result.resultObject, null, 2);
 
       const writeResult = await fs.writeFile(assetId, "elevenlabs.json", transcriptionStr, projectSlug);
       if (!writeResult.ok) {

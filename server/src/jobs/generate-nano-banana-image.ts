@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { readFile, writeFile as fsWriteFile } from "node:fs/promises";
 import { join } from "node:path";
-import { kie, type TaskResult } from "@nakedapi/kie";
+import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
+import { pollKieTask } from "./poll-kie-task.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -43,7 +44,7 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
         uploadedUrls.push(downloadUrl);
       }
 
-      const result: TaskResult = await provider.generate({
+      const { taskId } = await provider.createTask({
         model: "nano-banana-pro",
         input: {
           prompt,
@@ -52,13 +53,15 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
           ...(resolution !== undefined ? { resolution } : {}),
           ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
         },
-      }, { timeoutMs: 600_000 });
+      });
 
-      if (result.status === "failed") {
-        throw new Error(`Image generation failed: ${result.error ?? "unknown error"}`);
+      const taskInfo = await pollKieTask(provider, taskId, 600_000);
+
+      if (taskInfo.state === "fail") {
+        throw new Error(`Image generation failed: ${taskInfo.failMsg ?? "unknown error"}`);
       }
 
-      const imageUrl = result.imageUrl ?? result.urls[0];
+      const imageUrl = taskInfo.result?.resultUrls[0];
       if (!imageUrl) {
         throw new Error("No image URL in API response");
       }

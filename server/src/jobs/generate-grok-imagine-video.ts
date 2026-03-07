@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { readFile, writeFile as fsWriteFile } from "node:fs/promises";
 import { join } from "node:path";
-import { kie, type TaskResult } from "@nakedapi/kie";
+import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
+import { pollKieTask } from "./poll-kie-task.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -44,7 +45,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         filename: imageFilename,
       });
 
-      const result: TaskResult = await provider.generate({
+      const { taskId } = await provider.createTask({
         model: "grok-imagine/image-to-video",
         input: {
           image_urls: [downloadUrl],
@@ -53,13 +54,15 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
           ...(duration !== undefined ? { duration } : {}),
           ...(resolution !== undefined ? { resolution } : {}),
         },
-      }, { timeoutMs: 600_000 });
+      });
 
-      if (result.status === "failed") {
-        throw new Error(`Video generation failed: ${result.error ?? "unknown error"}`);
+      const taskInfo = await pollKieTask(provider, taskId, 600_000);
+
+      if (taskInfo.state === "fail") {
+        throw new Error(`Video generation failed: ${taskInfo.failMsg ?? "unknown error"}`);
       }
 
-      const videoUrl = result.videoUrl ?? result.urls[0];
+      const videoUrl = taskInfo.result?.resultUrls[0];
       if (!videoUrl) {
         throw new Error("No video URL in API response");
       }
