@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -17,10 +17,10 @@ type GenerateGrokImagineVideoPayload = {
   resolution?: "480p" | "720p";
 };
 
-export function registerGenerateGrokImagineVideoJob(): void {
+export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload) => {
     const {
-      imagePath, imageFilename, vidAssetId, vidAssetDir,
+      imageFilename, vidAssetId, vidAssetDir,
       sourceImageId, projectSlug, prompt, mode, duration, resolution,
     } = payload as GenerateGrokImagineVideoPayload;
 
@@ -29,8 +29,9 @@ export function registerGenerateGrokImagineVideoJob(): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const imageBuffer = await readFile(imagePath);
-    const blob = new Blob([imageBuffer]);
+    const readResult = await fs.readFile(sourceImageId, imageFilename, projectSlug);
+    if (!readResult.ok) throw new Error(readResult.error.message);
+    const blob = new Blob([new Uint8Array(readResult.value)]);
 
     const { downloadUrl } = await provider.uploadMedia({
       file: blob,
@@ -48,7 +49,7 @@ export function registerGenerateGrokImagineVideoJob(): void {
       },
     });
 
-    await writePendingTask(vidAssetDir, {
+    await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_video",
       assetId: vidAssetId,

@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -98,7 +97,6 @@ async function extractFrame(
   }
 
   const { assetId: imageAssetId, path: imageAssetDir } = assetResult.value;
-  await mkdir(imageAssetDir, { recursive: true });
 
   const outputPath = join(imageAssetDir, "original.jpg");
   const jobId = `extract-frame-${imageAssetId}-${Date.now()}`;

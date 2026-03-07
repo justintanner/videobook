@@ -1,6 +1,4 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
 import { registerJobHandler } from "../queue.js";
 import { deletePendingTask } from "./pending-task.js";
 
@@ -30,14 +28,14 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
 
     try {
       if (taskType === "nano_banana_image") {
-        await completeNanoBananaImage(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+        await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_video") {
-        await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+        await completeGrokImagineVideo(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "transcribe") {
         await completeTranscribe(fs, assetId, projectSlug, meta, resultObject);
       }
 
-      await deletePendingTask(assetDir);
+      await deletePendingTask(fs, assetId, projectSlug);
       return { success: true };
     } finally {
       await fs.releaseLock(assetDir);
@@ -48,7 +46,6 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
 async function completeNanoBananaImage(
   fs: ClipfirstFs,
   assetId: string,
-  assetDir: string,
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
@@ -61,7 +58,7 @@ async function completeNanoBananaImage(
 
   const ext = (meta.outputFormat as string) ?? "png";
   const buffer = Buffer.from(await response.arrayBuffer());
-  await fsWriteFile(join(assetDir, `original.${ext}`), buffer);
+  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -72,18 +69,12 @@ async function completeNanoBananaImage(
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fsWriteFile(join(assetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-  await fs.commitOperation("nano_banana_image", assetId, {
-    model: "nano-banana-pro",
-    prompt: meta.prompt as string,
-  }, projectSlug);
+  await fs.writeMetadata(assetId, "origin", origin, projectSlug);
 }
 
 async function completeGrokImagineVideo(
   fs: ClipfirstFs,
   assetId: string,
-  assetDir: string,
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
@@ -95,7 +86,7 @@ async function completeGrokImagineVideo(
   if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  await fsWriteFile(join(assetDir, "original.mp4"), buffer);
+  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
 
   const origin = {
     source_asset: meta.sourceImageId,
@@ -106,12 +97,7 @@ async function completeGrokImagineVideo(
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fsWriteFile(join(assetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-  await fs.commitOperation("grok_imagine_video", assetId, {
-    source: meta.sourceImageId as string,
-    model: "grok-imagine/image-to-video",
-  }, projectSlug);
+  await fs.writeMetadata(assetId, "origin", origin, projectSlug);
 }
 
 async function completeTranscribe(

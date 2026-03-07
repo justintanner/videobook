@@ -1,6 +1,4 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -64,10 +62,7 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         width,
         height,
       };
-      await fsWriteFile(join(imageAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-      const operationName = `extract_${mode}_frame`;
-      await fs.commitOperation(operationName, imageAssetId, { source: sourceVideoId }, projectSlug);
+      await fs.writeMetadata(imageAssetId, "origin", origin, projectSlug);
 
       return { success: true };
     } finally {

@@ -1,5 +1,3 @@
-import { readFile, writeFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
 import type { ClipfirstFs } from "clipfirst-fs";
 
 export type PendingKieTask = {
@@ -12,27 +10,18 @@ export type PendingKieTask = {
   meta: Record<string, unknown>;
 };
 
-const FILENAME = ".kie-task.json";
-
-export async function writePendingTask(assetDir: string, task: PendingKieTask): Promise<void> {
-  await writeFile(join(assetDir, FILENAME), JSON.stringify(task, null, 2));
+export async function writePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string, task: PendingKieTask): Promise<void> {
+  await fs.writeMetadata(assetId, "kie-task", task, projectSlug);
 }
 
-export async function readPendingTask(assetDir: string): Promise<PendingKieTask | null> {
-  try {
-    const data = await readFile(join(assetDir, FILENAME), "utf-8");
-    return JSON.parse(data) as PendingKieTask;
-  } catch {
-    return null;
-  }
+export async function readPendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<PendingKieTask | null> {
+  const result = await fs.readMetadata<PendingKieTask>(assetId, "kie-task", projectSlug);
+  if (!result.ok) return null;
+  return result.value;
 }
 
-export async function deletePendingTask(assetDir: string): Promise<void> {
-  try {
-    await unlink(join(assetDir, FILENAME));
-  } catch {
-    // already deleted
-  }
+export async function deletePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<void> {
+  await fs.deleteFile(assetId, ".kie-task.json", projectSlug).catch(() => {});
 }
 
 export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string): Promise<PendingKieTask[]> {
@@ -40,7 +29,7 @@ export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string): Pr
   const tasks: PendingKieTask[] = [];
 
   for (const asset of assets) {
-    const task = await readPendingTask(asset.path);
+    const task = await readPendingTask(fs, asset.id, projectSlug);
     if (task) tasks.push(task);
   }
 

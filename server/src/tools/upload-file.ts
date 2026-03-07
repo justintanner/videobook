@@ -3,7 +3,6 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import * as path from "node:path";
 import { join } from "node:path";
-import { writeFile as fsWriteFile } from "node:fs/promises";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -95,8 +94,7 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
           processed_at: new Date().toISOString(),
         };
 
-        await fsWriteFile(join(assetPath, ".origin.json"), JSON.stringify(origin, null, 2));
-        await fs.commitOperation("upload", assetId, { source: filename }, project_slug);
+        await fs.writeMetadata(assetId, "origin", origin, project_slug);
       }
 
       return {

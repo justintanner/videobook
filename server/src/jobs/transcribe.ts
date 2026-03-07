@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -15,10 +15,10 @@ type TranscribePayload = {
   projectSlug: string;
 };
 
-export function registerTranscribeJob(): void {
+export function registerTranscribeJob(fs: ClipfirstFs): void {
   registerJobHandler("transcribe", async (payload) => {
     const {
-      audioPath, audioFilename, tagAudioEvents, diarize,
+      audioFilename, tagAudioEvents, diarize,
       languageCode, assetId, assetDir, projectSlug,
     } = payload as TranscribePayload;
 
@@ -27,8 +27,9 @@ export function registerTranscribeJob(): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const audioBuffer = await readFile(audioPath);
-    const blob = new Blob([audioBuffer]);
+    const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
+    if (!readResult.ok) throw new Error(readResult.error.message);
+    const blob = new Blob([new Uint8Array(readResult.value)]);
 
     const { downloadUrl } = await provider.uploadMedia({
       file: blob,
@@ -45,7 +46,7 @@ export function registerTranscribeJob(): void {
       },
     });
 
-    await writePendingTask(assetDir, {
+    await writePendingTask(fs, assetId, projectSlug, {
       taskId,
       taskType: "transcribe",
       assetId,

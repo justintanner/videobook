@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { unlink, rename, mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
+import { join, basename } from "node:path";
 import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
@@ -87,7 +87,7 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("trim_video", async (payload) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
-      assetId, assetDir, projectSlug, commitParams,
+      assetId, assetDir, projectSlug,
     } = payload as TrimVideoPayload;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
@@ -100,10 +100,10 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
         await trimRange(inputPath, outputPath, trimStart, trimEnd);
       }
 
-      await unlink(inputPath);
-      await rename(outputPath, inputPath);
-
-      await fs.commitOperation("trim", assetId, commitParams, projectSlug);
+      const inputFilename = basename(inputPath);
+      const outputFilename = basename(outputPath);
+      await fs.deleteFile(assetId, inputFilename, projectSlug);
+      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
 
       return { success: true };
     } finally {

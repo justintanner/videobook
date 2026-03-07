@@ -1,8 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -54,7 +53,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const imageInputs: Array<{ path: string; filename: string }> = [];
+      const imageInputs: Array<{ assetId: string; filename: string }> = [];
       const sourceImageIds: string[] = [];
 
       if (image_asset_ids && image_asset_ids.length > 0) {
@@ -90,7 +89,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
             };
           }
 
-          imageInputs.push({ path: join(manifest.path, imageFile.name), filename: imageFile.name });
+          imageInputs.push({ assetId: id, filename: imageFile.name });
           sourceImageIds.push(id);
         }
       }
@@ -105,7 +104,6 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-      await mkdir(imgAssetDir, { recursive: true });
 
       const jobId = `nano-banana-image-${imgAssetId}-${Date.now()}`;
 

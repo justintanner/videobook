@@ -12,15 +12,15 @@ import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderVideoJob } from "./render-video.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
-  registerTranscribeJob();
+  registerTranscribeJob(fs);
   registerDownloadVideoJob(fs);
   registerTrimVideoJob(fs);
   registerChangeVideoSpeedJob(fs);
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);
-  registerGenerateGrokImagineVideoJob();
-  registerGenerateNanoBananaImageJob();
+  registerGenerateGrokImagineVideoJob(fs);
+  registerGenerateNanoBananaImageJob(fs);
   registerCompleteKieTaskJob(fs);
   registerRenderVideoJob(fs);
 }

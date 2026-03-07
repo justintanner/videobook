@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -99,7 +98,6 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: audioAssetId, path: audioAssetDir } = assetResult.value;
-      await mkdir(audioAssetDir, { recursive: true });
 
       const outputPath = join(audioAssetDir, "original.mp3");
       const jobId = `extract-audio-${audioAssetId}-${Date.now()}`;

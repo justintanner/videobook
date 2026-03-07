@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { unlink, rename } from "node:fs/promises";
+import { basename } from "node:path";
 import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
 
@@ -96,10 +96,10 @@ export function registerChangeVideoSpeedJob(fs: ClipfirstFs): void {
       await ff.run();
       await ff.done();
 
-      await unlink(inputPath);
-      await rename(outputPath, inputPath);
-
-      await fs.commitOperation("speed", assetId, { speed }, projectSlug);
+      const inputFilename = basename(inputPath);
+      const outputFilename = basename(outputPath);
+      await fs.deleteFile(assetId, inputFilename, projectSlug);
+      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
 
       return { success: true };
     } finally {

@@ -1,5 +1,4 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { writeFile as fsWriteFile } from "node:fs/promises";
 import { join } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { registerJobHandler } from "../queue.js";
@@ -117,9 +116,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         full,
         downloaded_at: new Date().toISOString(),
       };
-      await fsWriteFile(join(assetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-      await fs.commitOperation("download", assetId, { source_url: url }, projectSlug);
+      await fs.writeMetadata(assetId, "origin", origin, projectSlug);
 
       return { success: true, exports };
     } finally {

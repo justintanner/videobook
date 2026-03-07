@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { readFile, writeFile, copyFile, unlink } from "node:fs/promises";
+import { copyFile, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
@@ -101,9 +101,9 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
 
       let allSegments = null;
       if (hasElevenlabs) {
-        const elevenlabsPath = join(assetDir, "elevenlabs.json");
-        const raw = await readFile(elevenlabsPath, "utf-8");
-        allSegments = parseSegments(JSON.parse(raw));
+        const elevenlabsResult = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+        if (!elevenlabsResult.ok) throw new Error(elevenlabsResult.error.message);
+        allSegments = parseSegments(JSON.parse(elevenlabsResult.value.toString()));
       }
 
       const bundleDir = await getBundleLocation();
@@ -200,9 +200,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
         renderedAt: new Date().toISOString(),
         outputs,
       };
-      await writeFile(join(assetDir, ".render.json"), JSON.stringify(renderSettings, null, 2));
-
-      await fs.commitOperation("render", assetId, renderSettings, projectSlug);
+      await fs.writeMetadata(assetId, "render", renderSettings, projectSlug);
 
       return { success: true, outputs };
     } finally {

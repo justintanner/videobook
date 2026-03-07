@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { queue } from "../queue.js";
@@ -165,7 +164,6 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
         }
 
         const { assetId, path: assetDir } = assetResult.value;
-        await mkdir(assetDir, { recursive: true });
 
         const filename = full ? "original_full.mp4" : "original.mp4";
         const outputPath = join(assetDir, filename);

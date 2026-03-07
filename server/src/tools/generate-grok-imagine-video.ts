@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
-import { mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
@@ -85,7 +84,6 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      await mkdir(vidAssetDir, { recursive: true });
 
       const jobId = `grok-imagine-video-${vidAssetId}-${Date.now()}`;
 

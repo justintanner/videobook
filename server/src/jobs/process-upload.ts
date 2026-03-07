@@ -1,6 +1,4 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { rename, writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
 import * as path from "node:path";
 import { probeVideo } from "../ffmpeg.js";
 
@@ -70,12 +68,12 @@ export async function processExternalUpload(
   projectSlug: string,
 ): Promise<void> {
   const targetFilename = `original${upload.extension}`;
-  const srcPath = join(upload.assetDir, upload.mediaFilename);
-  const dstPath = join(upload.assetDir, targetFilename);
 
   if (upload.mediaFilename !== targetFilename) {
-    await rename(srcPath, dstPath);
+    await fs.renameFile(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
   }
+
+  const dstPath = path.join(upload.assetDir, targetFilename);
 
   let width: number | undefined;
   let height: number | undefined;
@@ -98,6 +96,5 @@ export async function processExternalUpload(
     processed_at: new Date().toISOString(),
   };
 
-  await fsWriteFile(join(upload.assetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-  await fs.commitOperation("external", upload.assetId, {}, projectSlug);
+  await fs.writeMetadata(upload.assetId, "origin", origin, projectSlug);
 }

@@ -1,6 +1,4 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { writeFile as fsWriteFile } from "node:fs/promises";
-import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -56,9 +54,7 @@ export function registerExtractAudioJob(fs: ClipfirstFs): void {
         origin: "extract_audio",
         source_asset: sourceVideoId,
       };
-      await fsWriteFile(join(audioAssetDir, ".origin.json"), JSON.stringify(origin, null, 2));
-
-      await fs.commitOperation("extract_audio", audioAssetId, { source: sourceVideoId }, projectSlug);
+      await fs.writeMetadata(audioAssetId, "origin", origin, projectSlug);
 
       return { success: true };
     } finally {

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -6,7 +6,7 @@ import { writePendingTask } from "./pending-task.js";
 type GenerateNanoBananaImagePayload = {
   type: "generate_nano_banana_image";
   prompt: string;
-  imageInputs: Array<{ path: string; filename: string }>;
+  imageInputs: Array<{ assetId: string; filename: string }>;
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
@@ -16,7 +16,7 @@ type GenerateNanoBananaImagePayload = {
   outputFormat?: string;
 };
 
-export function registerGenerateNanoBananaImageJob(): void {
+export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_nano_banana_image", async (payload) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -29,9 +29,10 @@ export function registerGenerateNanoBananaImageJob(): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const uploadedUrls: string[] = [];
-    for (const { path, filename } of imageInputs) {
-      const imageBuffer = await readFile(path);
-      const blob = new Blob([imageBuffer]);
+    for (const { assetId: srcAssetId, filename } of imageInputs) {
+      const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
+      if (!readResult.ok) throw new Error(readResult.error.message);
+      const blob = new Blob([new Uint8Array(readResult.value)]);
       const { downloadUrl } = await provider.uploadMedia({ file: blob, filename });
       uploadedUrls.push(downloadUrl);
     }
@@ -47,7 +48,7 @@ export function registerGenerateNanoBananaImageJob(): void {
       },
     });
 
-    await writePendingTask(imgAssetDir, {
+    await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "nano_banana_image",
       assetId: imgAssetId,
