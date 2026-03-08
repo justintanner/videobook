@@ -26,7 +26,7 @@ import { registerGenerateGrokImagineVideoTool, generateGrokImagineVideoDef } fro
 import { registerGenerateNanoBananaImageTool, generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { registerRenderVideoTool, renderVideoDef } from "./render-video.js";
 import { registerSyncTool, syncDef } from "./sync.js";
-import { registerWhitelistAssetTool, whitelistAssetDef } from "./whitelist-asset.js";
+import { registerWhitelistTool, whitelistDef } from "./whitelist-asset.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -54,7 +54,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerGenerateNanoBananaImageTool(server, fs);
   registerRenderVideoTool(server, fs);
   registerSyncTool(server, fs);
-  registerWhitelistAssetTool(server, fs);
+  registerWhitelistTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -84,6 +84,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateNanoBananaImageDef(fs),
     renderVideoDef(fs),
     syncDef(fs),
-    whitelistAssetDef(fs),
+    whitelistDef(fs),
   ];
 }

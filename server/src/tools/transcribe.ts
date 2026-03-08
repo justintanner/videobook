@@ -53,7 +53,7 @@ export function transcribeDef(fs: ClipfirstFs): ToolDef {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: `Asset ${asset_id} must be whitelisted before transcription. Use whitelist_asset to mark it as ready.`,
+              text: `Asset ${asset_id} must be whitelisted before transcription. Use whitelist to mark it as ready.`,
             }],
           };
         }

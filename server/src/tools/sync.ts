@@ -5,10 +5,11 @@ import { join } from "node:path";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "../media-files.js";
+import { findVideoFile } from "../media-files.js";
 import { findPendingTasks } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
+import { readAndAssessDialog } from "../dialog-quality.js";
 import type { ToolDef } from "./tool-def.js";
 
 type SyncResult = {
@@ -16,7 +17,6 @@ type SyncResult = {
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
-  auto_transcribe: Array<{ assetId: string; jobId: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
 };
 
@@ -32,7 +32,7 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
 
       const result: SyncResult = {
         pending: [], completed: [], failed: [],
-        external_uploads: [], auto_transcribe: [], auto_render: [],
+        external_uploads: [], auto_render: [],
       };
 
       // Process external uploads (always runs, no API key needed)
@@ -56,26 +56,10 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
         }
       }
 
-      // Auto-pipeline: advance whitelisted videos through transcription/render
-      const actions = await findAutoPipelineActions(fs, project_slug);
+      // Auto-pipeline: advance whitelisted videos through render
+      const renderActions = await findAutoRenderActions(fs, project_slug);
 
-      for (const action of actions.needsTranscribe) {
-        const jobId = `auto-transcribe-${action.assetId}-${Date.now()}`;
-        await queue.enqueue(jobId, {
-          type: "transcribe",
-          audioPath: action.audioPath,
-          audioFilename: action.audioFilename,
-          tagAudioEvents: true,
-          diarize: true,
-          assetId: action.assetId,
-          assetDir: action.assetDir,
-          projectSlug: project_slug,
-          autoRender: true,
-        } as unknown as Record<string, unknown>);
-        result.auto_transcribe.push({ assetId: action.assetId, jobId });
-      }
-
-      for (const action of actions.needsRender) {
+      for (const action of renderActions) {
         const jobId = `auto-render-${action.assetId}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "render_video",
@@ -145,13 +129,6 @@ async function processSyncedTask(
   }
 }
 
-type TranscribeAction = {
-  assetId: string;
-  assetDir: string;
-  audioPath: string;
-  audioFilename: string;
-};
-
 type RenderAction = {
   assetId: string;
   assetDir: string;
@@ -159,27 +136,11 @@ type RenderAction = {
   videoFilename: string;
 };
 
-type AutoPipelineActions = {
-  needsTranscribe: TranscribeAction[];
-  needsRender: RenderAction[];
-};
-
-async function checkHasDialog(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<boolean> {
-  const result = await fs.readFile(assetId, ".analysis.gpt4otrans.json", projectSlug);
-  if (!result.ok) return false;
-  try {
-    const data = JSON.parse(result.value.toString()) as { text?: string };
-    return typeof data.text === "string" && data.text.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
-
-async function findAutoPipelineActions(
+async function findAutoRenderActions(
   fs: ClipfirstFs,
   projectSlug: string,
-): Promise<AutoPipelineActions> {
-  const actions: AutoPipelineActions = { needsTranscribe: [], needsRender: [] };
+): Promise<RenderAction[]> {
+  const actions: RenderAction[] = [];
   const assets = await fs.listAssets(projectSlug);
 
   for (const asset of assets) {
@@ -197,34 +158,17 @@ async function findAutoPipelineActions(
     // Skip: process_video incomplete
     if (!fileNames.has(".original.analysis.json")) continue;
     // Skip: already rendered
-    if (!fileNames.has(".render.json")) {
-      // Eligible for pipeline — determine path
-    } else {
-      continue;
-    }
+    if (fileNames.has(".render.json")) continue;
 
-    const hasDialog = await checkHasDialog(fs, asset.id, projectSlug);
+    const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
 
-    if (hasDialog) {
+    if (dialogQuality.hasDialog) {
+      // Has dialog — only render after transcription is done
       const hasElevenlabs = fileNames.has("elevenlabs.json");
-      const hasKieTask = fileNames.has(".kie-task.json");
-
-      if (!hasElevenlabs && !hasKieTask) {
-        // Needs transcribe
-        const audioFile = findAudioFile(files, asset.id);
-        if (audioFile) {
-          actions.needsTranscribe.push({
-            assetId: asset.id,
-            assetDir: manifest.path,
-            audioPath: join(manifest.path, audioFile.name),
-            audioFilename: audioFile.name,
-          });
-        }
-      } else if (hasElevenlabs) {
-        // Has transcription, needs render
+      if (hasElevenlabs) {
         const videoFile = findVideoFile(files);
         if (videoFile && !await fs.isLocked(manifest.path)) {
-          actions.needsRender.push({
+          actions.push({
             assetId: asset.id,
             assetDir: manifest.path,
             videoPath: join(manifest.path, videoFile.name),
@@ -232,12 +176,12 @@ async function findAutoPipelineActions(
           });
         }
       }
-      // hasKieTask && !hasElevenlabs => in progress, skip
+      // No elevenlabs yet => whitelist tool handles transcription trigger, skip
     } else {
       // No dialog — render directly (no subtitles)
       const videoFile = findVideoFile(files);
       if (videoFile && !await fs.isLocked(manifest.path)) {
-        actions.needsRender.push({
+        actions.push({
           assetId: asset.id,
           assetDir: manifest.path,
           videoPath: join(manifest.path, videoFile.name),

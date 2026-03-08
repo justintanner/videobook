@@ -1,13 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import { join } from "node:path";
+import { queue } from "../queue.js";
+import { findAudioFile } from "../media-files.js";
+import { readAndAssessDialog } from "../dialog-quality.js";
 import type { ToolDef } from "./tool-def.js";
 
 export const WHITELISTED_AT_FILE = ".whitelisted_at";
 
-export function whitelistAssetDef(fs: ClipfirstFs): ToolDef {
+export function whitelistDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "whitelist_asset",
+    name: "whitelist",
     description:
       "Whitelist a video asset for transcription. Videos must be whitelisted before they can be transcribed. New videos start as unreviewed — use this to mark them as ready for the transcription pipeline.",
     schema: {
@@ -62,28 +66,68 @@ export function whitelistAssetDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              asset_id,
-              status: alreadyWhitelisted
-                ? "already_whitelisted"
-                : "whitelisted",
-              whitelisted_at: timestamp,
-            }),
-          },
-        ],
-      };
+      const status = alreadyWhitelisted ? "already_whitelisted" : "whitelisted";
+
+      // Pipeline trigger: assess dialog and enqueue transcription if appropriate
+      const manifest = manifestResult.value;
+      const fileNames = new Set(manifest.files.map((f) => f.name));
+
+      if (fileNames.has(".render.json")) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_already_rendered" });
+      }
+      if (fileNames.has("elevenlabs.json")) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_already_transcribed" });
+      }
+      if (fileNames.has(".kie-task.json")) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_in_progress" });
+      }
+      if (!fileNames.has(".original.analysis.json")) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "pipeline_pending" });
+      }
+
+      const dialogQuality = await readAndAssessDialog(fs, asset_id, project_slug);
+
+      if (!dialogQuality.hasDialog) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped", dialog_quality: dialogQuality });
+      }
+
+      if (!process.env.KIE_API_KEY) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_no_api_key", dialog_quality: dialogQuality });
+      }
+
+      const audioFile = findAudioFile(manifest.files, asset_id);
+      if (!audioFile) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_no_audio", dialog_quality: dialogQuality });
+      }
+
+      const jobId = `auto-transcribe-${asset_id}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "transcribe",
+        audioPath: join(manifest.path, audioFile.name),
+        audioFilename: audioFile.name,
+        tagAudioEvents: true,
+        diarize: true,
+        assetId: asset_id,
+        assetDir: manifest.path,
+        projectSlug: project_slug,
+        autoRender: true,
+      } as unknown as Record<string, unknown>);
+
+      return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "enqueued", job_id: jobId, dialog_quality: dialogQuality });
     },
   };
 }
 
-export function registerWhitelistAssetTool(
+function ok(data: Record<string, unknown>) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(data) }],
+  };
+}
+
+export function registerWhitelistTool(
   server: McpServer,
   fs: ClipfirstFs,
 ): void {
-  const def = whitelistAssetDef(fs);
+  const def = whitelistDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }
