@@ -72,12 +72,6 @@ export function whitelistDef(fs: ClipfirstFs): ToolDef {
       const manifest = manifestResult.value;
       const fileNames = new Set(manifest.files.map((f) => f.name));
 
-      if (fileNames.has(".render.json")) {
-        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_already_rendered" });
-      }
-      if (fileNames.has("elevenlabs.json")) {
-        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_already_transcribed" });
-      }
       if (fileNames.has(".kie-task.json")) {
         return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_in_progress" });
       }

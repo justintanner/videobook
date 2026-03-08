@@ -157,8 +157,6 @@ async function findAutoRenderActions(
     if (!fileNames.has(".whitelisted_at")) continue;
     // Skip: process_video incomplete
     if (!fileNames.has(".original.analysis.json")) continue;
-    // Skip: already rendered
-    if (fileNames.has(".render.json")) continue;
 
     const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
 
