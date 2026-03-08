@@ -21,18 +21,19 @@ type ProcessVideoPayload = {
   assetId: string;
   assetDir: string;
   projectSlug?: string;
+  provenance: Record<string, unknown>;
 };
 
 export function registerProcessVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("process_video", async (payload) => {
     const {
-      videoPath, assetId, assetDir, projectSlug,
+      videoPath, assetId, assetDir, projectSlug, provenance,
     } = payload as ProcessVideoPayload;
 
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
 
-    await fs.writeMetadata(assetId, "original", { width, height, duration }, projectSlug);
+    await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration }, projectSlug);
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 

@@ -162,7 +162,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(content[0].text).toContain("No video file");
   });
 
-  it("writes .origin.json with correct metadata", async () => {
+  it("writes .original.json with correct metadata", async () => {
     const uploaded = await uploadVideo(client, "frame-proj", videoPath);
 
     const result = await client.callTool({
@@ -183,7 +183,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
 
     const { readFile } = await import("node:fs/promises");
-    const originJson = JSON.parse(await readFile(join(manifestData.path, ".origin.json"), "utf-8"));
+    const originJson = JSON.parse(await readFile(join(manifestData.path, ".original.json"), "utf-8"));
     expect(originJson.origin).toBe("first_frame");
     expect(originJson.source_asset).toBe(uploaded.assetId);
     expect(originJson.timestamp).toBe(0.1);

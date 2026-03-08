@@ -167,7 +167,7 @@ describe("extract_audio tool", () => {
     expect(content[0].text).toContain("no audio stream");
   });
 
-  it("writes .origin.json with correct metadata", async () => {
+  it("writes .original.json with correct metadata", async () => {
     const uploaded = await uploadVideo(client, "audio-proj", videoPath);
 
     const result = await client.callTool({
@@ -187,7 +187,7 @@ describe("extract_audio tool", () => {
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
 
-    const originJson = JSON.parse(await readFile(join(manifestData.path, ".origin.json"), "utf-8"));
+    const originJson = JSON.parse(await readFile(join(manifestData.path, ".original.json"), "utf-8"));
     expect(originJson.origin).toBe("extract_audio");
     expect(originJson.source_asset).toBe(uploaded.assetId);
   });

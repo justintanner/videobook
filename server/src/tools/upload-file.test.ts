@@ -42,7 +42,7 @@ describe("upload_file tool", () => {
     expect(written.toString()).toBe("fake-png-data");
   });
 
-  it("creates .origin.json after media upload", async () => {
+  it("creates .original.json after media upload", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const result = await client.callTool({
       name: "upload_file",
@@ -55,7 +55,7 @@ describe("upload_file tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const parsed = JSON.parse(content[0].text);
 
-    const originData = await readFile(join(tempDir, "test-proj", parsed.assetId, ".origin.json"), "utf-8");
+    const originData = await readFile(join(tempDir, "test-proj", parsed.assetId, ".original.json"), "utf-8");
     const origin = JSON.parse(originData);
     expect(origin.origin).toBe("upload");
     expect(origin.processed_at).toBeDefined();

@@ -37,7 +37,7 @@ export async function findUnprocessedUploads(
     const manifest = await fs.getManifest(asset.id, projectSlug);
     if (!manifest.ok) continue;
 
-    const hasOrigin = manifest.value.files.some((f) => f.name === ".origin.json");
+    const hasOrigin = manifest.value.files.some((f) => f.name === ".original.json");
     if (hasOrigin) continue;
 
     const mediaFile = manifest.value.files.find((f) => {
@@ -73,12 +73,7 @@ export async function processExternalUpload(
     await fs.renameFile(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
   }
 
-  const origin = {
-    origin: "external",
-    processed_at: new Date().toISOString(),
-  };
-  await fs.writeMetadata(upload.assetId, "origin", origin, projectSlug);
-
+  const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {
     const videoPath = path.join(upload.assetDir, targetFilename);
     const jobId = `process-video-${upload.assetId}-${Date.now()}`;
@@ -88,6 +83,9 @@ export async function processExternalUpload(
       assetId: upload.assetId,
       assetDir: upload.assetDir,
       projectSlug,
+      provenance,
     } as unknown as Record<string, unknown>);
+  } else {
+    await fs.writeMetadata(upload.assetId, "original", provenance, projectSlug);
   }
 }

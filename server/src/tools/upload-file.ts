@@ -70,14 +70,8 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Create .origin.json for media files
       if (!isScript) {
-        const origin = {
-          origin: "upload",
-          processed_at: new Date().toISOString(),
-        };
-        await fs.writeMetadata(assetId, "origin", origin, project_slug);
-
+        const provenance = { origin: "upload", processed_at: new Date().toISOString() };
         if (assetId.startsWith("vid-")) {
           const videoPath = path.join(assetPath, writtenFilename);
           const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -87,7 +81,10 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
             assetId,
             assetDir: assetPath,
             projectSlug: project_slug,
+            provenance,
           } as unknown as Record<string, unknown>);
+        } else {
+          await fs.writeMetadata(assetId, "original", provenance, project_slug);
         }
       }
 

@@ -94,7 +94,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         }
       }
 
-      const origin = {
+      const provenance = {
         origin: "download",
         source_url: url,
         title,
@@ -106,7 +106,6 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         full,
         downloaded_at: new Date().toISOString(),
       };
-      await fs.writeMetadata(assetId, "origin", origin, projectSlug);
 
       const processJobId = `process-video-${assetId}-${Date.now()}`;
       await queue.enqueue(processJobId, {
@@ -115,6 +114,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         assetId,
         assetDir,
         projectSlug,
+        provenance,
       } as unknown as Record<string, unknown>);
 
       return { success: true, exports };

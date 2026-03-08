@@ -54,7 +54,7 @@ export function registerExtractAudioJob(fs: ClipfirstFs): void {
         origin: "extract_audio",
         source_asset: sourceVideoId,
       };
-      await fs.writeMetadata(audioAssetId, "origin", origin, projectSlug);
+      await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
 
       return { success: true };
     } finally {

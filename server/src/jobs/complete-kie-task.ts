@@ -70,7 +70,7 @@ async function completeNanoBananaImage(
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fs.writeMetadata(assetId, "origin", origin, projectSlug);
+  await fs.writeMetadata(assetId, "original", origin, projectSlug);
 }
 
 async function completeGrokImagineVideo(
@@ -90,7 +90,7 @@ async function completeGrokImagineVideo(
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
 
-  const origin = {
+  const provenance = {
     source_asset: meta.sourceImageId,
     model: "grok-imagine/image-to-video",
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
@@ -99,7 +99,6 @@ async function completeGrokImagineVideo(
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fs.writeMetadata(assetId, "origin", origin, projectSlug);
 
   const videoPath = join(assetDir, "original.mp4");
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -109,6 +108,7 @@ async function completeGrokImagineVideo(
     assetId,
     assetDir,
     projectSlug,
+    provenance,
   } as unknown as Record<string, unknown>);
 }
 

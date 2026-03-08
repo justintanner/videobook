@@ -62,7 +62,7 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         width,
         height,
       };
-      await fs.writeMetadata(imageAssetId, "origin", origin, projectSlug);
+      await fs.writeMetadata(imageAssetId, "original", origin, projectSlug);
 
       return { success: true };
     } finally {
