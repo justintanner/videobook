@@ -28,6 +28,7 @@ import { registerRenderVideoTool, renderVideoDef } from "./render-video.js";
 import { registerSyncTool, syncDef } from "./sync.js";
 import { registerWhitelistTool, whitelistDef } from "./whitelist-asset.js";
 import { registerPreviewVideoGenTool, previewVideoGenDef } from "./preview-video-gen.js";
+import { registerChatTool, chatDef } from "./chat.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -57,6 +58,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerSyncTool(server, fs);
   registerWhitelistTool(server, fs);
   registerPreviewVideoGenTool(server, fs);
+  registerChatTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -88,5 +90,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     syncDef(fs),
     whitelistDef(fs),
     previewVideoGenDef(fs),
+    chatDef(fs),
   ];
 }
