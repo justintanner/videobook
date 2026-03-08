@@ -12,6 +12,7 @@ import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderVideoJob } from "./render-video.js";
 import { registerProcessVideoJob } from "./process-video.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
+import { registerAnalyzeVideoJob } from "./analyze-video.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -27,4 +28,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerRenderVideoJob(fs);
   registerProcessVideoJob(fs);
   registerTranscribeVideoAudioJob(fs);
+  registerAnalyzeVideoJob(fs);
 }

@@ -72,6 +72,12 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
         type: "transcribe_video_audio",
         videoPath, assetId, assetDir, projectSlug,
       } as unknown as Record<string, unknown>);
+    } else {
+      const jobId = `analyze-video-${assetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "analyze_video",
+        assetId, assetDir, projectSlug, hasTranscription: false,
+      } as unknown as Record<string, unknown>);
     }
 
     return { success: true, width, height, duration, frame_count: frameCount };
