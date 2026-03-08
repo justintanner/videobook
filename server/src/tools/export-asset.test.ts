@@ -24,7 +24,7 @@ describe("export_asset_to_project tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("exports an asset to a different project", async () => {

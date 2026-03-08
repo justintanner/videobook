@@ -58,7 +58,7 @@ describe("image → video e2e pipeline", () => {
   afterAll(async () => {
     await client?.close();
     await queue.stop();
-    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("generates image then video with dialog prompt", async () => {

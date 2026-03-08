@@ -15,7 +15,7 @@ describe("list_projects tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("returns empty array when no projects exist", async () => {

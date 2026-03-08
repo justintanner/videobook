@@ -66,7 +66,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("extracts first frame as a new image asset", async () => {

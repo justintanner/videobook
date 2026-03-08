@@ -20,7 +20,7 @@ describe("project_history tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("returns commit history for a project", async () => {

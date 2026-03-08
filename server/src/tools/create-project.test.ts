@@ -15,7 +15,7 @@ describe("create_project tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("creates a project with explicit slug", async () => {

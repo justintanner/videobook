@@ -20,7 +20,7 @@ describe("restore_asset_version tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("restores an asset to a previous version", async () => {
