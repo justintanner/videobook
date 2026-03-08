@@ -26,6 +26,7 @@ import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { renderVideoDef } from "./render-video.js";
 import { syncDef } from "./sync.js";
+import { sleepDef } from "./sleep.js";
 import { whitelistDef } from "./whitelist-asset.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
 import { chatDef } from "./chat.js";
@@ -65,6 +66,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateNanoBananaImageDef(fs),
     renderVideoDef(fs),
     syncDef(fs),
+    sleepDef(fs),
     whitelistDef(fs),
     previewVideoGenDef(fs),
     chatDef(fs),
