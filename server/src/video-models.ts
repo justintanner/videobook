@@ -408,7 +408,7 @@ Respond with JSON only:
 }
 
 // ---------------------------------------------------------------------------
-// Model option builder
+// Extract last-used settings per model from action log
 // ---------------------------------------------------------------------------
 
 type ActionLogEntry = {
@@ -417,6 +417,35 @@ type ActionLogEntry = {
   payload: string | Record<string, unknown>;
   date: string;
 };
+
+function actionNameToToolName(action: string): string | null {
+  if (!action.startsWith("tool-")) return null;
+  const toolName = action.slice(5).replace(/-/g, "_");
+  return Object.values(VIDEO_MODELS).some((m) => m.tool_name === toolName) ? toolName : null;
+}
+
+const NON_PARAM_KEYS = new Set(["project_slug"]);
+
+function extractLastSettingsPerModel(
+  log: ActionLogEntry[],
+): Map<string, Record<string, unknown>> {
+  const result = new Map<string, Record<string, unknown>>();
+  for (const entry of log) {
+    const toolName = actionNameToToolName(entry.action);
+    if (!toolName || result.has(toolName)) continue;
+    if (typeof entry.payload === "string") continue;
+    const params: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(entry.payload)) {
+      if (!NON_PARAM_KEYS.has(k)) params[k] = v;
+    }
+    result.set(toolName, params);
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Model option builder
+// ---------------------------------------------------------------------------
 
 type ModelOption = {
   key: string;
@@ -447,21 +476,13 @@ function buildModelOption(
 
   // Prefill from most recent historical usage of this tool
   if (historyEntries) {
-    for (let i = historyEntries.length - 1; i >= 0; i--) {
-      const entry = historyEntries[i];
-      const payload = typeof entry.payload === "string" ? null : entry.payload;
-      if (payload && payload.tool === toolName) {
-        // Historical prompt takes precedence
-        if (typeof payload.prompt === "string") {
-          params.prompt = payload.prompt;
+    const settingsMap = extractLastSettingsPerModel(historyEntries);
+    const historical = settingsMap.get(toolName);
+    if (historical) {
+      for (const [k, v] of Object.entries(historical)) {
+        if (allowedParams.has(k) && !(k in params)) {
+          params[k] = v;
         }
-        // Historical params take precedence over router guesses
-        if (payload.params && typeof payload.params === "object") {
-          for (const [k, v] of Object.entries(payload.params as Record<string, unknown>)) {
-            params[k] = v;
-          }
-        }
-        break;
       }
     }
   }
@@ -532,5 +553,6 @@ export {
   applyVideoToolConstraints,
   buildVideoRoutingPrompt,
   buildModelOption,
+  extractLastSettingsPerModel,
 };
 export type { VideoModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry };

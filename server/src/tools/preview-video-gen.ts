@@ -109,7 +109,7 @@ Determine which video generation tool to use and what parameters to pass.`;
       let historyEntries: ActionLogEntry[] = [];
       try {
         const log = await fs.getActionLog({ limit: 100 }, slug);
-        historyEntries = log.filter((e) => e.action === "generate") as ActionLogEntry[];
+        historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
       }
