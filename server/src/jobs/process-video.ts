@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { registerJobHandler } from "../queue.js";
+import { queue } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 function calculateFrameCount(duration: number): number {
@@ -64,6 +65,14 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     await fs.commitOperation("process_video", assetId, {
       width, height, duration, frame_count: frameCount,
     }, projectSlug);
+
+    if (probe.hasAudio) {
+      const jobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "transcribe_video_audio",
+        videoPath, assetId, assetDir, projectSlug,
+      } as unknown as Record<string, unknown>);
+    }
 
     return { success: true, width, height, duration, frame_count: frameCount };
   });

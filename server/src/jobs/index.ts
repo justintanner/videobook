@@ -11,6 +11,7 @@ import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderVideoJob } from "./render-video.js";
 import { registerProcessVideoJob } from "./process-video.js";
+import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -25,4 +26,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerCompleteKieTaskJob(fs);
   registerRenderVideoJob(fs);
   registerProcessVideoJob(fs);
+  registerTranscribeVideoAudioJob(fs);
 }

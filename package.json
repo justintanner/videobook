@@ -18,6 +18,7 @@
   "dependencies": {
     "@nakedapi/kie": "file:../nakedapi/packages/provider/kie",
     "@nakedapi/kimicoding": "file:../nakedapi/packages/provider/kimicoding",
+    "@nakedapi/openai": "file:../nakedapi/packages/provider/openai",
     "@remotion/cli": "^4.0.434",
     "@remotion/renderer": "^4.0.434",
     "clipfirst-fs": "file:../clipfirst-fs",

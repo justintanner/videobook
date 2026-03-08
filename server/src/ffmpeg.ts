@@ -16,6 +16,7 @@ export interface ProbeResult {
   height: number;
   duration: number;
   fps: number;
+  hasAudio: boolean;
 }
 
 export async function probeVideo(filePath: string): Promise<ProbeResult> {
@@ -41,7 +42,11 @@ export async function probeVideo(filePath: string): Promise<ProbeResult> {
     if (den > 0) fps = num / den;
   }
 
-  return { width, height, duration, fps };
+  const hasAudio = (data.streams as Array<Record<string, unknown>>)?.some(
+    (s) => s.codec_type === "audio",
+  ) ?? false;
+
+  return { width, height, duration, fps, hasAudio };
 }
 
 export async function runFfmpeg(args: string[]): Promise<void> {
