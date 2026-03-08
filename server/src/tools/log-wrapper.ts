@@ -1,0 +1,31 @@
+import type { ClipfirstFs } from "clipfirst-fs";
+import type { ToolDef } from "./tool-def.js";
+
+function withLogging(def: ToolDef, fs: ClipfirstFs): ToolDef {
+  return {
+    ...def,
+    handler: async (args) => {
+      const start = performance.now();
+      const result = await def.handler(args);
+      const ms = Math.round(performance.now() - start);
+
+      const status = result.isError ? "error" : "ok";
+      const suffix = result.isError
+        ? ` ${result.content[0]?.text.slice(0, 80)}`
+        : "";
+      console.log(`[mcp] ${def.name} ${status} ${ms}ms${suffix}`);
+
+      // Persist to project git log when project_slug is present
+      const slug = args.project_slug as string | undefined;
+      if (slug) {
+        const actionName = `tool-${def.name.replace(/_/g, "-")}`;
+        // Fire-and-forget — don't block tool response on git commit
+        fs.logAction(actionName, args, slug).catch(() => {});
+      }
+
+      return result;
+    },
+  };
+}
+
+export { withLogging };
