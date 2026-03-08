@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 
 export type PendingKieTask = {
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "transcribe";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "transcribe";
   assetId: string;
   assetDir: string;
   projectSlug: string;

@@ -29,6 +29,9 @@ import { syncDef } from "./sync.js";
 import { sleepDef } from "./sleep.js";
 import { whitelistDef } from "./whitelist-asset.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
+import { previewImageGenDef } from "./preview-image-gen.js";
+import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
+import { generateGptImageDef } from "./generate-gpt-image.js";
 import { chatDef } from "./chat.js";
 import { withLogging } from "./log-wrapper.js";
 
@@ -69,6 +72,9 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     sleepDef(fs),
     whitelistDef(fs),
     previewVideoGenDef(fs),
+    previewImageGenDef(fs),
+    generateGrokImagineImageDef(fs),
+    generateGptImageDef(fs),
     chatDef(fs),
   ];
 }

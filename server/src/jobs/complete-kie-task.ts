@@ -9,7 +9,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "transcribe";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "transcribe";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -33,6 +33,10 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+      } else if (taskType === "grok_imagine_image") {
+        await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType === "gpt_image") {
+        await completeGptImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "transcribe") {
         await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       }
@@ -111,6 +115,58 @@ async function completeGrokImagineVideo(
     projectSlug,
     provenance,
   } as unknown as Record<string, unknown>);
+}
+
+async function completeGrokImagineImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+
+  const origin = {
+    source_asset: meta.sourceImageId,
+    model: "grok-imagine/image-to-image",
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  await fs.writeMetadata(assetId, "original", origin, projectSlug);
+}
+
+async function completeGptImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+
+  const origin = {
+    source_assets: meta.sourceImageIds,
+    model: "gpt-image/1.5-image-to-image",
+    prompt: meta.prompt,
+    ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
+    ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  await fs.writeMetadata(assetId, "original", origin, projectSlug);
 }
 
 async function completeTranscribe(
