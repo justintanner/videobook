@@ -27,6 +27,7 @@ import { registerGenerateNanoBananaImageTool, generateNanoBananaImageDef } from 
 import { registerRenderVideoTool, renderVideoDef } from "./render-video.js";
 import { registerSyncTool, syncDef } from "./sync.js";
 import { registerWhitelistTool, whitelistDef } from "./whitelist-asset.js";
+import { registerPreviewVideoGenTool, previewVideoGenDef } from "./preview-video-gen.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerApiStatusTool(server);
@@ -55,6 +56,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
   registerRenderVideoTool(server, fs);
   registerSyncTool(server, fs);
   registerWhitelistTool(server, fs);
+  registerPreviewVideoGenTool(server, fs);
 }
 
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
@@ -85,5 +87,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     renderVideoDef(fs),
     syncDef(fs),
     whitelistDef(fs),
+    previewVideoGenDef(fs),
   ];
 }
