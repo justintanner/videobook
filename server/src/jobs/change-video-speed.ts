@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { basename } from "node:path";
 import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
+import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 interface FFmpeggyConstructorOpts {
   input: string;
@@ -100,6 +101,9 @@ export function registerChangeVideoSpeedJob(fs: ClipfirstFs): void {
       const outputFilename = basename(outputPath);
       await fs.deleteFile(assetId, inputFilename, projectSlug);
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+
+      // Re-arm whitelist so transcription pipeline picks up the changed video
+      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
       return { success: true };
     } finally {
