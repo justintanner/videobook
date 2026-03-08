@@ -52,3 +52,41 @@ export async function runFfmpeg(args: string[]): Promise<void> {
     throw new Error(`ffmpeg failed: ${msg}`);
   }
 }
+
+interface FFmpeggyProbeStream {
+  codec_type: string;
+}
+interface FFmpeggyProbeFormat {
+  duration: string;
+}
+interface FFmpeggyProbeResult {
+  streams: FFmpeggyProbeStream[];
+  format: FFmpeggyProbeFormat;
+}
+interface FFmpeggyConstructorOpts {
+  input: string;
+  output: string;
+  outputOptions: string[];
+  overwriteExisting: boolean;
+}
+interface FFmpeggyInstance {
+  run(): Promise<unknown>;
+  done(): Promise<unknown>;
+}
+export interface FFmpeggyClass {
+  new (opts: FFmpeggyConstructorOpts): FFmpeggyInstance;
+  DefaultConfig: { ffmpegBin: string; ffprobeBin: string };
+  probe(filePath: string): Promise<FFmpeggyProbeResult>;
+}
+
+let _FFmpeggy: FFmpeggyClass | null = null;
+
+export function getFFmpeggy(): FFmpeggyClass {
+  if (!_FFmpeggy) {
+    const mod: { FFmpeggy: FFmpeggyClass } = require("ffmpeggy");
+    _FFmpeggy = mod.FFmpeggy;
+    _FFmpeggy.DefaultConfig.ffmpegBin = FFMPEG;
+    _FFmpeggy.DefaultConfig.ffprobeBin = FFPROBE;
+  }
+  return _FFmpeggy;
+}

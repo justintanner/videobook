@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { registerJobHandler } from "../queue.js";
+import { join } from "node:path";
+import { queue, registerJobHandler } from "../queue.js";
 import { deletePendingTask } from "./pending-task.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -30,7 +31,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       if (taskType === "nano_banana_image") {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_video") {
-        await completeGrokImagineVideo(fs, assetId, projectSlug, meta, resultUrls);
+        await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "transcribe") {
         await completeTranscribe(fs, assetId, projectSlug, meta, resultObject);
       }
@@ -75,6 +76,7 @@ async function completeNanoBananaImage(
 async function completeGrokImagineVideo(
   fs: ClipfirstFs,
   assetId: string,
+  assetDir: string,
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
@@ -98,6 +100,16 @@ async function completeGrokImagineVideo(
     generated_at: new Date().toISOString(),
   };
   await fs.writeMetadata(assetId, "origin", origin, projectSlug);
+
+  const videoPath = join(assetDir, "original.mp4");
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeTranscribe(

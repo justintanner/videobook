@@ -1,8 +1,8 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
-import { registerJobHandler } from "../queue.js";
-import { probeVideo, runFfmpeg, H264_MEDIUM, AUDIO_OPTS, type ProbeResult } from "../ffmpeg.js";
+import { queue, registerJobHandler } from "../queue.js";
+import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -76,13 +76,6 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
       await builder.run();
 
-      let probe: ProbeResult = { width: 0, height: 0, duration: 0, fps: 0 };
-      try {
-        probe = await probeVideo(outputPath);
-      } catch {
-        // probe failure is non-fatal
-      }
-
       const exports: string[] = [];
       if (exportVideos) {
         try {
@@ -110,13 +103,19 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         webpage_url: webpageUrl,
         platform,
         thumbnail,
-        width: probe.width,
-        height: probe.height,
-        duration: probe.duration,
         full,
         downloaded_at: new Date().toISOString(),
       };
       await fs.writeMetadata(assetId, "origin", origin, projectSlug);
+
+      const processJobId = `process-video-${assetId}-${Date.now()}`;
+      await queue.enqueue(processJobId, {
+        type: "process_video",
+        videoPath: outputPath,
+        assetId,
+        assetDir,
+        projectSlug,
+      } as unknown as Record<string, unknown>);
 
       return { success: true, exports };
     } finally {

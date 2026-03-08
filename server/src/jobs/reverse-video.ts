@@ -1,42 +1,10 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { basename } from "node:path";
-import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
+import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
-interface FFmpeggyConstructorOpts {
-  input: string;
-  output: string;
-  outputOptions: string[];
-  overwriteExisting: boolean;
-}
-interface FFmpeggyInstance {
-  run(): Promise<unknown>;
-  done(): Promise<unknown>;
-}
-interface FFmpeggyClass {
-  new (opts: FFmpeggyConstructorOpts): FFmpeggyInstance;
-  DefaultConfig: { ffmpegBin: string; ffprobeBin: string };
-}
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
-const FFPROBE: string = require("ffprobe-static").path;
-
-let _FFmpeggy: FFmpeggyClass | null = null;
-function getFFmpeggy(): FFmpeggyClass {
-  if (!_FFmpeggy) {
-    const mod: { FFmpeggy: FFmpeggyClass } = require("ffmpeggy");
-    _FFmpeggy = mod.FFmpeggy;
-    _FFmpeggy.DefaultConfig.ffmpegBin = FFMPEG;
-    _FFmpeggy.DefaultConfig.ffprobeBin = FFPROBE;
-  }
-  return _FFmpeggy;
-}
-
 const LOCK_DURATION_MS = 300_000;
-const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level:v", "4.0"];
-const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k"];
 
 function buildReverseOutputOptions(hasAudio: boolean): string[] {
   const opts = ["-vf", "reverse"];

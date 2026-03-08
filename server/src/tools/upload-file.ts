@@ -2,8 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import * as path from "node:path";
-import { join } from "node:path";
-import { probeVideo } from "../ffmpeg.js";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 const extensionToPrefix: Record<string, string> = {
@@ -73,28 +72,23 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
 
       // Create .origin.json for media files
       if (!isScript) {
-        let width: number | undefined;
-        let height: number | undefined;
-        let duration: number | undefined;
-
-        try {
-          const probe = await probeVideo(join(assetPath, writtenFilename));
-          if (probe.width > 0) width = probe.width;
-          if (probe.height > 0) height = probe.height;
-          if (probe.duration > 0) duration = probe.duration;
-        } catch {
-          // probing is non-fatal
-        }
-
-        const origin: Record<string, unknown> = {
+        const origin = {
           origin: "upload",
-          ...(width !== undefined ? { width } : {}),
-          ...(height !== undefined ? { height } : {}),
-          ...(duration !== undefined ? { duration } : {}),
           processed_at: new Date().toISOString(),
         };
-
         await fs.writeMetadata(assetId, "origin", origin, project_slug);
+
+        if (assetId.startsWith("vid-")) {
+          const videoPath = path.join(assetPath, writtenFilename);
+          const jobId = `process-video-${assetId}-${Date.now()}`;
+          await queue.enqueue(jobId, {
+            type: "process_video",
+            videoPath,
+            assetId,
+            assetDir: assetPath,
+            projectSlug: project_slug,
+          } as unknown as Record<string, unknown>);
+        }
       }
 
       return {

@@ -2,35 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
 import { join, extname } from "node:path";
-import { createRequire } from "node:module";
 import { queue } from "../queue.js";
+import { getFFmpeggy } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
-
-interface ProbeStream {
-  codec_type: string;
-}
-interface ProbeResult {
-  streams: ProbeStream[];
-}
-interface FFmpeggyClass {
-  DefaultConfig: { ffmpegBin: string; ffprobeBin: string };
-  probe(filePath: string): Promise<ProbeResult>;
-}
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
-const FFPROBE: string = require("ffprobe-static").path;
-
-let _FFmpeggy: FFmpeggyClass | null = null;
-function getFFmpeggy(): FFmpeggyClass {
-  if (!_FFmpeggy) {
-    const mod: { FFmpeggy: FFmpeggyClass } = require("ffmpeggy");
-    _FFmpeggy = mod.FFmpeggy;
-    _FFmpeggy.DefaultConfig.ffmpegBin = FFMPEG;
-    _FFmpeggy.DefaultConfig.ffprobeBin = FFPROBE;
-  }
-  return _FFmpeggy;
-}
 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
 const SPEED_MIN = 0.25;

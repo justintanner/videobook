@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import * as path from "node:path";
-import { probeVideo } from "../ffmpeg.js";
+import { queue } from "../queue.js";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mp4", ".mov", ".webm", ".avi", ".mkv",
@@ -73,28 +73,21 @@ export async function processExternalUpload(
     await fs.renameFile(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
   }
 
-  const dstPath = path.join(upload.assetDir, targetFilename);
-
-  let width: number | undefined;
-  let height: number | undefined;
-  let duration: number | undefined;
-
-  try {
-    const probe = await probeVideo(dstPath);
-    if (probe.width > 0) width = probe.width;
-    if (probe.height > 0) height = probe.height;
-    if (probe.duration > 0) duration = probe.duration;
-  } catch {
-    // probing is non-fatal
-  }
-
-  const origin: Record<string, unknown> = {
+  const origin = {
     origin: "external",
-    ...(width !== undefined ? { width } : {}),
-    ...(height !== undefined ? { height } : {}),
-    ...(duration !== undefined ? { duration } : {}),
     processed_at: new Date().toISOString(),
   };
-
   await fs.writeMetadata(upload.assetId, "origin", origin, projectSlug);
+
+  if (upload.mediaType === "video") {
+    const videoPath = path.join(upload.assetDir, targetFilename);
+    const jobId = `process-video-${upload.assetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "process_video",
+      videoPath,
+      assetId: upload.assetId,
+      assetDir: upload.assetDir,
+      projectSlug,
+    } as unknown as Record<string, unknown>);
+  }
 }
