@@ -1,27 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
+import { findAudioFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
 import { WHITELISTED_AT_FILE } from "./whitelist-asset.js";
-
-const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a"]);
-
-function findAudioFile(files: AssetManifestFile[], assetId: string): AssetManifestFile | null {
-  if (assetId.startsWith("vid-")) {
-    return files.find((f) => f.name === "audio_original.mp3")
-      ?? files.find((f) => f.name === "original.mp3")
-      ?? null;
-  }
-  if (assetId.startsWith("aud-")) {
-    return files.find((f) => {
-      const ext = (f.extension ?? "").replace(/^\./, "").toLowerCase();
-      return AUDIO_EXTENSIONS.has(ext);
-    }) ?? null;
-  }
-  return null;
-}
 
 export function transcribeDef(fs: ClipfirstFs): ToolDef {
   return {

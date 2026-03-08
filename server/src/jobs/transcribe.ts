@@ -13,13 +13,14 @@ type TranscribePayload = {
   assetId: string;
   assetDir: string;
   projectSlug: string;
+  autoRender?: boolean;
 };
 
 export function registerTranscribeJob(fs: ClipfirstFs): void {
   registerJobHandler("transcribe", async (payload) => {
     const {
       audioFilename, tagAudioEvents, diarize,
-      languageCode, assetId, assetDir, projectSlug,
+      languageCode, assetId, assetDir, projectSlug, autoRender,
     } = payload as TranscribePayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -55,6 +56,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       createdAt: new Date().toISOString(),
       meta: {
         ...(languageCode ? { languageCode } : {}),
+        ...(autoRender ? { autoRender } : {}),
       },
     });
 

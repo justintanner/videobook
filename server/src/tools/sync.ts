@@ -1,9 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import { join } from "node:path";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
+import { findAudioFile, findVideoFile } from "../media-files.js";
 import { findPendingTasks } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
@@ -14,6 +16,8 @@ type SyncResult = {
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
+  auto_transcribe: Array<{ assetId: string; jobId: string }>;
+  auto_render: Array<{ assetId: string; jobId: string }>;
 };
 
 export function syncDef(fs: ClipfirstFs): ToolDef {
@@ -26,7 +30,10 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
 
-      const result: SyncResult = { pending: [], completed: [], failed: [], external_uploads: [] };
+      const result: SyncResult = {
+        pending: [], completed: [], failed: [],
+        external_uploads: [], auto_transcribe: [], auto_render: [],
+      };
 
       // Process external uploads (always runs, no API key needed)
       const uploads = await findUnprocessedUploads(fs, project_slug);
@@ -47,6 +54,51 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
             await processSyncedTask(task, taskInfo, result);
           }
         }
+      }
+
+      // Auto-pipeline: advance whitelisted videos through transcription/render
+      const actions = await findAutoPipelineActions(fs, project_slug);
+
+      for (const action of actions.needsTranscribe) {
+        const jobId = `auto-transcribe-${action.assetId}-${Date.now()}`;
+        await queue.enqueue(jobId, {
+          type: "transcribe",
+          audioPath: action.audioPath,
+          audioFilename: action.audioFilename,
+          tagAudioEvents: true,
+          diarize: true,
+          assetId: action.assetId,
+          assetDir: action.assetDir,
+          projectSlug: project_slug,
+          autoRender: true,
+        } as unknown as Record<string, unknown>);
+        result.auto_transcribe.push({ assetId: action.assetId, jobId });
+      }
+
+      for (const action of actions.needsRender) {
+        const jobId = `auto-render-${action.assetId}-${Date.now()}`;
+        await queue.enqueue(jobId, {
+          type: "render_video",
+          assetId: action.assetId,
+          assetDir: action.assetDir,
+          videoPath: action.videoPath,
+          videoFilename: action.videoFilename,
+          projectSlug: project_slug,
+          orientations: ["landscape"],
+          subtitlesEnabled: false,
+          highlightStyle: "tikdance",
+          position: "bottom",
+          fontSize: "medium",
+          textColor: "#F8FAFC",
+          highlightColor: "#991B1B",
+          audioFadeIn: 150,
+          audioFadeOut: 100,
+          audioVolume: 100,
+          hasElevenlabs: false,
+          osgImagePath: null,
+          osgPosition: "top-right",
+        });
+        result.auto_render.push({ assetId: action.assetId, jobId });
       }
 
       return {
@@ -91,6 +143,111 @@ async function processSyncedTask(
       state: taskInfo.state,
     });
   }
+}
+
+type TranscribeAction = {
+  assetId: string;
+  assetDir: string;
+  audioPath: string;
+  audioFilename: string;
+};
+
+type RenderAction = {
+  assetId: string;
+  assetDir: string;
+  videoPath: string;
+  videoFilename: string;
+};
+
+type AutoPipelineActions = {
+  needsTranscribe: TranscribeAction[];
+  needsRender: RenderAction[];
+};
+
+async function checkHasDialog(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<boolean> {
+  const result = await fs.readFile(assetId, ".analysis.gpt4otrans.json", projectSlug);
+  if (!result.ok) return false;
+  try {
+    const data = JSON.parse(result.value.toString()) as { text?: string };
+    return typeof data.text === "string" && data.text.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function findAutoPipelineActions(
+  fs: ClipfirstFs,
+  projectSlug: string,
+): Promise<AutoPipelineActions> {
+  const actions: AutoPipelineActions = { needsTranscribe: [], needsRender: [] };
+  const assets = await fs.listAssets(projectSlug);
+
+  for (const asset of assets) {
+    if (!asset.id.startsWith("vid-")) continue;
+
+    const manifestResult = await fs.getManifest(asset.id, projectSlug);
+    if (!manifestResult.ok) continue;
+
+    const manifest = manifestResult.value;
+    const files = manifest.files;
+    const fileNames = new Set(files.map((f) => f.name));
+
+    // Skip: not whitelisted
+    if (!fileNames.has(".whitelisted_at")) continue;
+    // Skip: process_video incomplete
+    if (!fileNames.has(".original.analysis.json")) continue;
+    // Skip: already rendered
+    if (!fileNames.has(".render.json")) {
+      // Eligible for pipeline — determine path
+    } else {
+      continue;
+    }
+
+    const hasDialog = await checkHasDialog(fs, asset.id, projectSlug);
+
+    if (hasDialog) {
+      const hasElevenlabs = fileNames.has("elevenlabs.json");
+      const hasKieTask = fileNames.has(".kie-task.json");
+
+      if (!hasElevenlabs && !hasKieTask) {
+        // Needs transcribe
+        const audioFile = findAudioFile(files, asset.id);
+        if (audioFile) {
+          actions.needsTranscribe.push({
+            assetId: asset.id,
+            assetDir: manifest.path,
+            audioPath: join(manifest.path, audioFile.name),
+            audioFilename: audioFile.name,
+          });
+        }
+      } else if (hasElevenlabs) {
+        // Has transcription, needs render
+        const videoFile = findVideoFile(files);
+        if (videoFile && !await fs.isLocked(manifest.path)) {
+          actions.needsRender.push({
+            assetId: asset.id,
+            assetDir: manifest.path,
+            videoPath: join(manifest.path, videoFile.name),
+            videoFilename: videoFile.name,
+          });
+        }
+      }
+      // hasKieTask && !hasElevenlabs => in progress, skip
+    } else {
+      // No dialog — render directly (no subtitles)
+      const videoFile = findVideoFile(files);
+      if (videoFile && !await fs.isLocked(manifest.path)) {
+        actions.needsRender.push({
+          assetId: asset.id,
+          assetDir: manifest.path,
+          videoPath: join(manifest.path, videoFile.name),
+          videoFilename: videoFile.name,
+        });
+      }
+    }
+  }
+
+  return actions;
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {

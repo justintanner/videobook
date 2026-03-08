@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { queue, registerJobHandler } from "../queue.js";
+import { findVideoFile } from "../media-files.js";
 import { deletePendingTask } from "./pending-task.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -33,7 +34,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       } else if (taskType === "grok_imagine_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "transcribe") {
-        await completeTranscribe(fs, assetId, projectSlug, meta, resultObject);
+        await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       }
 
       await deletePendingTask(fs, assetId, projectSlug);
@@ -115,6 +116,7 @@ async function completeGrokImagineVideo(
 async function completeTranscribe(
   fs: ClipfirstFs,
   assetId: string,
+  assetDir: string,
   projectSlug: string,
   meta: Record<string, unknown>,
   resultObject?: Record<string, unknown>,
@@ -128,4 +130,37 @@ async function completeTranscribe(
   await fs.commitOperation("transcribe", assetId, {
     ...(meta.languageCode ? { language_code: meta.languageCode } : {}),
   }, projectSlug);
+
+  if (meta.autoRender) {
+    const manifestResult = await fs.getManifest(assetId, projectSlug);
+    if (!manifestResult.ok) throw new Error(`Failed to get manifest for auto-render: ${manifestResult.error.message}`);
+
+    const videoFile = findVideoFile(manifestResult.value.files);
+    if (!videoFile) throw new Error(`No video file found for auto-render: ${assetId}`);
+
+    const videoPath = join(assetDir, videoFile.name);
+    const jobId = `auto-render-${assetId}-${Date.now()}`;
+
+    await queue.enqueue(jobId, {
+      type: "render_video",
+      assetId,
+      assetDir,
+      videoPath,
+      videoFilename: videoFile.name,
+      projectSlug,
+      orientations: ["landscape"],
+      subtitlesEnabled: false,
+      highlightStyle: "tikdance",
+      position: "bottom",
+      fontSize: "medium",
+      textColor: "#F8FAFC",
+      highlightColor: "#991B1B",
+      audioFadeIn: 150,
+      audioFadeOut: 100,
+      audioVolume: 100,
+      hasElevenlabs: false,
+      osgImagePath: null,
+      osgPosition: "top-right",
+    });
+  }
 }
