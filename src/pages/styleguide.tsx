@@ -34,18 +34,18 @@ const sizes = ['default', 'sm', 'lg', 'xl', 'icon'] as const;
 // ── Mock Data ──
 
 const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item: MediaItem }> }[] = [
-  { item: { id: 'o-ready', type: 'video', slug: '@main', title: 'Ready', filePath: '/opengraph.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-ready', type: 'video', slug: '@main', title: 'Ready', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }, Component: VideoCard },
   { item: { id: 'o-uploading', type: 'video', slug: '@hero-intro', title: 'Uploading', filePath: '', status: 'uploading', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
-  { item: { id: 'o-loading', type: 'video', slug: '@clip', title: 'Loading', filePath: '/sample.mp4', status: 'loading', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-loading', type: 'video', slug: '@clip', title: 'Loading', filePath: '/styleguide-vid-turret-cyber.jpg', status: 'loading', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg' }, Component: VideoCard },
   { item: { id: 'o-generating', type: 'image', slug: '@product', title: 'Generating', filePath: '', status: 'generating', width: 1024, height: 1024, origin: 'gpt15_imagen', thumbnailSrc: null }, Component: ImageCard },
-  { item: { id: 'o-rendering', type: 'video', slug: '@final-cut', title: 'Rendering', filePath: '', status: 'rendering', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-rendering', type: 'video', slug: '@final-cut', title: 'Rendering', filePath: '', status: 'rendering', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' }, Component: VideoCard },
   { item: { id: 'o-downloading', type: 'image', slug: '@bg', title: 'Downloading', filePath: '', status: 'downloading', width: 3840, height: 2160, origin: 'nano_banana', thumbnailSrc: null }, Component: ImageCard },
-  { item: { id: 'o-untranscribed', type: 'video', slug: '@interview', title: 'Untranscribed', filePath: '/sample.mp4', status: 'untranscribed', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
-  { item: { id: 'o-transcribing', type: 'video', slug: '@interview-final', title: 'Transcribing', filePath: '/sample.mp4', status: 'transcribing', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-untranscribed', type: 'video', slug: '@interview', title: 'Untranscribed', filePath: '/styleguide-vid-purple-grind.jpg', status: 'untranscribed', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }, Component: VideoCard },
+  { item: { id: 'o-transcribing', type: 'video', slug: '@interview-final', title: 'Transcribing', filePath: '/styleguide-vid-turret-cyber.jpg', status: 'transcribing', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg' }, Component: VideoCard },
   { item: { id: 'o-corrupt', type: 'video', slug: '@glitched', title: 'Corrupt', filePath: '', status: 'corrupt', durationSeconds: 45, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
   { item: { id: 'o-error', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
-  { item: { id: 'o-elf', type: 'final', slug: '@final', title: 'Elf Building', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
-  { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
+  { item: { id: 'o-elf', type: 'final', slug: '@final', title: 'Elf Building', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
+  { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
   { item: { id: 'o-final-error', type: 'final', slug: '@final-failed', title: 'Final Error', filePath: '', status: 'error', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
 ];
 
@@ -225,13 +225,13 @@ function SceneSlot({ label }: { label: string }) {
 }
 
 const demoImageMock: MediaItem = {
-  id: 'demo-image-ready', type: 'image', slug: '@img-trump', title: 'Trump Speech', filePath: '/opengraph.jpg',
-  status: 'ready', width: 640, height: 360, origin: 'nano_banana', thumbnailSrc: '/opengraph.jpg',
+  id: 'demo-image-ready', type: 'image', slug: '@img-neon-fox', title: 'Neon Fox', filePath: '/styleguide-img-neon-fox.jpg',
+  status: 'ready', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: '/styleguide-img-neon-fox.jpg',
 };
 
 const demoVideoMock: MediaItem = {
-  id: 'demo-video-ready', type: 'video', slug: '@vid-yt-joerogan-magic', title: 'JRE Magic', filePath: '/opengraph.jpg',
-  status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg',
+  id: 'demo-video-ready', type: 'video', slug: '@vid-purple-grind', title: 'Purple Grind', filePath: '/styleguide-vid-purple-grind.jpg',
+  status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg',
 };
 
 function AppLayoutDemo() {
@@ -411,7 +411,7 @@ function AppLayoutDemo() {
                     </div>
                     <div className="space-y-2">
                       <div className="w-[80px] h-[60px] border border-border/50 rounded overflow-hidden">
-                        <img src="/opengraph.jpg" alt="thumbnail" className="w-full h-full object-cover" />
+                        <img src="/styleguide-img-cover.jpg" alt="thumbnail" className="w-full h-full object-cover" />
                       </div>
                       <div className="w-[80px] h-[60px] border border-dashed border-border/50 rounded" />
                     </div>
