@@ -103,4 +103,702 @@
       rgba(0, 255, 255, 0.03) 4px
     );
   }
+
+  /* ==================== CLIP STATE UTILITIES ==================== */
+
+  .clip-state-uploading {
+    border: 2px solid rgba(0, 255, 255, 0.4);
+    border-bottom-color: rgba(0, 255, 255, 0.7);
+    animation: clip-uploading-pulse 2s ease-in-out infinite;
+  }
+
+  .clip-state-transcribing {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(0, 255, 255, 0.2);
+  }
+
+  .clip-state-untranscribed {
+    border: 1px solid rgba(0, 255, 255, 0.2);
+  }
+
+  .clip-state-generating {
+    border: 2px solid rgba(34, 197, 94, 0.4);
+    border-bottom-color: rgba(34, 197, 94, 0.7);
+    animation: clip-generating-pulse 2s ease-in-out infinite;
+  }
+
+  .clip-state-rendering {
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    animation: clip-rendering-pulse 2s ease-in-out infinite;
+  }
+
+  .clip-state-downloading {
+    border: 2px solid rgba(139, 92, 246, 0.4);
+    border-bottom-color: rgba(139, 92, 246, 0.7);
+    animation: clip-downloading-pulse 2s ease-in-out infinite;
+  }
+
+  .clip-state-corrupt {
+    animation: corrupt-border-pulse 2s ease-in-out infinite;
+    border: 2px solid rgba(255, 0, 128, 0.5);
+  }
+
+  .clip-state-loading {
+    border: 2px solid rgba(136, 212, 255, 0.4);
+    animation: clip-ice-pulse 2s ease-in-out infinite;
+  }
+
+  .clip-state-ready:hover {
+    animation: clip-ready-pulse 1.5s ease-in-out;
+  }
+
+  .clip-state-final {
+    animation: clip-final-glow 3s ease-in-out infinite;
+  }
+
+  /* ==================== DOWNLOADING STATE ==================== */
+
+  .downloading-marquee {
+    animation: downloading-marquee 8s linear infinite;
+  }
+
+  .downloading-cursor {
+    animation: downloading-cursor-blink 0.8s step-end infinite;
+  }
+
+  .downloading-pixel-grid {
+    background-image:
+      linear-gradient(rgba(139, 92, 246, 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139, 92, 246, 0.2) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  .downloading-scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(139, 92, 246, 0.05) 2px,
+      rgba(139, 92, 246, 0.05) 4px
+    );
+  }
+
+  /* ==================== UPLOADING STATE ==================== */
+
+  .uploading-cursor {
+    animation: uploading-cursor-blink 0.8s step-end infinite;
+  }
+
+  .uploading-pixel-grid {
+    background-image:
+      linear-gradient(rgba(0, 255, 255, 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 255, 0.2) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  /* ==================== GENERATING STATE ==================== */
+
+  .generating-cursor {
+    animation: generating-cursor-blink 0.8s step-end infinite;
+  }
+
+  /* ==================== CORRUPT STATE ==================== */
+
+  .corrupt-pixel-grid {
+    background-image:
+      linear-gradient(rgba(255, 0, 128, 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 0, 128, 0.2) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  .corrupt-scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 0, 128, 0.08) 2px,
+      rgba(255, 0, 128, 0.08) 4px
+    );
+  }
+
+  .corrupt-glitch-bar {
+    animation: corrupt-glitch-bar 1.5s ease-in-out infinite;
+  }
+
+  .corrupt-screen-tear {
+    animation: corrupt-screen-tear 3s step-end infinite;
+  }
+
+  /* ==================== ELF BUILDING ==================== */
+
+  .elf-hammer {
+    animation: elf-hammer 0.4s ease-in-out infinite;
+  }
+
+  .elf-sparkle {
+    animation: elf-sparkle 2s ease-in-out infinite;
+  }
+
+  .elf-bounce {
+    animation: elf-bounce 0.8s ease-in-out infinite;
+  }
+
+  /* ==================== RECEIVING GHOST CARD ==================== */
+
+  .receiving-border-glow {
+    animation: receiving-border-glow 2s ease-in-out infinite;
+  }
+
+  .receiving-scanline-sweep {
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 255, 255, 0.3) 50%, transparent 100%);
+    background-size: 100% 4px;
+    animation: receiving-scanline-sweep 2s linear infinite;
+  }
+
+  .receiving-segment-fill {
+    animation: receiving-segment-fill 1.5s ease-in-out infinite;
+  }
+
+  .receiving-text-flicker {
+    animation: receiving-text-flicker 2s ease-in-out infinite;
+  }
+
+  .receiving-cursor-blink {
+    animation: receiving-cursor-blink 0.8s step-end infinite;
+  }
+
+  /* Slower spin for loading rings */
+  .animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
+  }
+}
+
+/* ==================== KEYFRAME ANIMATIONS ==================== */
+
+/* Uploading/Generating - Pulsing Glow */
+@keyframes clip-uploading-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 20px rgba(0, 255, 255, 0.15),
+      0 0 15px rgba(0, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 35px rgba(0, 255, 255, 0.3),
+      0 0 30px rgba(0, 255, 255, 0.45);
+  }
+}
+
+/* Loading - Ice blue pulse */
+@keyframes clip-ice-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 20px rgba(136, 212, 255, 0.15),
+      0 0 15px rgba(136, 212, 255, 0.25);
+    border-color: rgba(136, 212, 255, 0.4);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 35px rgba(136, 212, 255, 0.3),
+      0 0 30px rgba(136, 212, 255, 0.45);
+    border-color: rgba(136, 212, 255, 0.7);
+  }
+}
+
+/* Ice shimmer sweep */
+@keyframes ice-shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* Transcribing - Scan Line */
+@keyframes clip-scan-line {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes clip-scan-glow {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Ready - Hover Glow */
+@keyframes clip-ready-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 100, 0);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(0, 255, 100, 0.5);
+  }
+}
+
+/* Final - Golden Glow */
+@keyframes clip-final-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 15px rgba(251, 191, 36, 0.15),
+      0 0 20px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 20px rgba(251, 191, 36, 0.25),
+      0 0 30px rgba(251, 191, 36, 0.5);
+  }
+}
+
+/* Generating - Cyan Glow */
+@keyframes clip-generating-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 20px rgba(6, 182, 212, 0.15),
+      0 0 15px rgba(6, 182, 212, 0.25);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 35px rgba(6, 182, 212, 0.3),
+      0 0 30px rgba(6, 182, 212, 0.45);
+  }
+}
+
+/* Generating: Rising pixel particle streams */
+@keyframes generating-particle-rise {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-128px) translateX(20px);
+    opacity: 0;
+  }
+}
+
+/* Generating: Segmented health bar */
+@keyframes generating-segment-fill {
+  0%,
+  100% {
+    background-color: rgba(34, 197, 94, 0.1);
+    box-shadow: none;
+  }
+  40%,
+  60% {
+    background-color: rgba(34, 197, 94, 0.8);
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  }
+}
+
+/* Generating: Cursor blink */
+@keyframes generating-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Generating: Model badge pulse */
+@keyframes generating-model-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.02);
+    filter: brightness(1.2);
+  }
+}
+
+/* Rendering - Cyan Glow */
+@keyframes clip-rendering-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 20px rgba(0, 255, 255, 0.15),
+      0 0 15px rgba(0, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 35px rgba(0, 255, 255, 0.3),
+      0 0 30px rgba(0, 255, 255, 0.45);
+  }
+}
+
+/* Downloading - Electric Purple/Violet Glow */
+@keyframes clip-downloading-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 20px rgba(139, 92, 246, 0.15),
+      0 0 15px rgba(139, 92, 246, 0.25);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 35px rgba(139, 92, 246, 0.3),
+      0 0 30px rgba(139, 92, 246, 0.45);
+  }
+}
+
+/* Downloading: Matrix-style data fall */
+@keyframes downloading-data-fall {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+/* Downloading: Progress bar fill */
+@keyframes downloading-progress {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+/* Downloading: URL marquee scroll */
+@keyframes downloading-marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Downloading: Cursor blink */
+@keyframes downloading-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Downloading: Scanline sweep */
+@keyframes downloading-scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* Uploading: Matrix-style data RISE (upward) */
+@keyframes uploading-data-rise {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+/* Uploading: Progress bar fill */
+@keyframes uploading-progress {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+/* Uploading: Cursor blink */
+@keyframes uploading-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Uploading: Scanline sweep (upward) */
+@keyframes uploading-scanline {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+/* Slow spin for loading rings */
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== ELF BUILDING ANIMATIONS ==================== */
+
+@keyframes elf-hammer {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-45deg) translateY(-4px);
+  }
+}
+
+@keyframes elf-sparkle {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(-25px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-35px) scale(0.5);
+  }
+}
+
+@keyframes elf-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* ==================== CORRUPT STATE ANIMATIONS ==================== */
+
+@keyframes corrupt-rgb-split {
+  0%,
+  100% {
+    text-shadow:
+      -2px 0 #ff0080,
+      2px 0 #00ffff;
+  }
+  25% {
+    text-shadow:
+      -3px 0 #ff0080,
+      3px 0 #00ffff,
+      0 0 4px #ff0080;
+  }
+  50% {
+    text-shadow:
+      -1px 0 #ff0080,
+      1px 0 #00ffff;
+  }
+  75% {
+    text-shadow:
+      -4px 0 #ff0080,
+      4px 0 #00ffff,
+      0 0 8px #00ffff;
+  }
+}
+
+@keyframes corrupt-glitch-bar {
+  0%,
+  100% {
+    transform: translateX(0) scaleX(1);
+    opacity: 0.6;
+  }
+  20% {
+    transform: translateX(-10px) scaleX(1.5);
+    opacity: 0.8;
+  }
+  40% {
+    transform: translateX(15px) scaleX(0.8);
+    opacity: 0.4;
+  }
+  60% {
+    transform: translateX(-5px) scaleX(1.2);
+    opacity: 0.7;
+  }
+  80% {
+    transform: translateX(8px) scaleX(0.9);
+    opacity: 0.5;
+  }
+}
+
+@keyframes corrupt-screen-tear {
+  0%,
+  100% {
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+  15% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translateX(5px);
+  }
+  30% {
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+  45% {
+    clip-path: inset(70% 0 10% 0);
+    transform: translateX(-8px);
+  }
+  60% {
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+  75% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translateX(3px);
+  }
+  90% {
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes corrupt-border-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 15px rgba(255, 0, 128, 0.2),
+      0 0 15px rgba(255, 0, 128, 0.3),
+      0 0 30px rgba(255, 0, 128, 0.1);
+    border-color: rgba(255, 0, 128, 0.5);
+  }
+  25% {
+    box-shadow:
+      inset 0 0 20px rgba(255, 0, 128, 0.3),
+      0 0 20px rgba(0, 255, 255, 0.2),
+      0 0 35px rgba(255, 0, 128, 0.2);
+    border-color: rgba(255, 0, 128, 0.7);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 25px rgba(255, 0, 128, 0.25),
+      0 0 25px rgba(255, 0, 128, 0.4),
+      0 0 40px rgba(255, 0, 128, 0.15);
+    border-color: rgba(255, 0, 128, 0.6);
+  }
+  75% {
+    box-shadow:
+      inset 0 0 18px rgba(255, 0, 128, 0.2),
+      0 0 18px rgba(255, 0, 128, 0.25),
+      -3px 0 20px rgba(0, 255, 255, 0.15),
+      3px 0 20px rgba(255, 0, 0, 0.15);
+    border-color: rgba(255, 0, 128, 0.55);
+  }
+}
+
+/* ==================== RECEIVING GHOST CARD ANIMATIONS ==================== */
+
+@keyframes receiving-border-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 10px rgba(0, 255, 255, 0.1),
+      0 0 15px rgba(0, 255, 255, 0.15);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 20px rgba(0, 255, 255, 0.2),
+      0 0 25px rgba(0, 255, 255, 0.25);
+  }
+}
+
+@keyframes receiving-scanline-sweep {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes receiving-segment-fill {
+  0%,
+  100% {
+    width: 20%;
+    opacity: 0.4;
+  }
+  50% {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+@keyframes receiving-text-flicker {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes receiving-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }

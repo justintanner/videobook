@@ -1,0 +1,56 @@
+import { cn } from '@/lib/utils';
+import type { MediaItem } from '../types';
+import { CardShell } from './CardShell';
+import { SlugBadge, DurationBadge } from './badges';
+
+function formatDuration(seconds: number | null | undefined): string | null {
+  if (seconds == null || seconds <= 0) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+interface VideoCardProps {
+  item: MediaItem;
+}
+
+export function VideoCard({ item }: VideoCardProps) {
+  const status = item.status ?? 'ready';
+  const isReady = status === 'ready';
+  const isError = status === 'error';
+  const isCorrupt = status === 'corrupt';
+  const isTranscribing = status === 'transcribing';
+  const isUntranscribed = status === 'untranscribed';
+  const isRendering = status.startsWith('render');
+  const isProcessing = isTranscribing || isUntranscribed || isRendering;
+
+  const duration = formatDuration(item.durationSeconds);
+  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
+
+  return (
+    <CardShell item={item}>
+      {/* CONTENT - Thumbnail */}
+      {thumbSrc && (
+        <img
+          src={thumbSrc}
+          alt={item.title}
+          draggable={false}
+          className={cn('w-full h-full object-cover transition-opacity', isProcessing && 'opacity-80')}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      )}
+
+      {/* Duration badge - top left */}
+      {!isError && !isCorrupt && duration && <DurationBadge duration={duration} isProcessing={isProcessing} />}
+
+      {/* Slug badge */}
+      {(isReady || isError || isRendering || isTranscribing || isUntranscribed) && (
+        <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} isProcessing={isProcessing} />
+      )}
+    </CardShell>
+  );
+}
