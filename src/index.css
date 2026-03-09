@@ -245,30 +245,6 @@
     animation: elf-bounce 0.8s ease-in-out infinite;
   }
 
-  /* ==================== RECEIVING GHOST CARD ==================== */
-
-  .receiving-border-glow {
-    animation: receiving-border-glow 2s ease-in-out infinite;
-  }
-
-  .receiving-scanline-sweep {
-    background: linear-gradient(180deg, transparent 0%, rgba(0, 255, 255, 0.3) 50%, transparent 100%);
-    background-size: 100% 4px;
-    animation: receiving-scanline-sweep 2s linear infinite;
-  }
-
-  .receiving-segment-fill {
-    animation: receiving-segment-fill 1.5s ease-in-out infinite;
-  }
-
-  .receiving-text-flicker {
-    animation: receiving-text-flicker 2s ease-in-out infinite;
-  }
-
-  .receiving-cursor-blink {
-    animation: receiving-cursor-blink 0.8s step-end infinite;
-  }
-
   /* Slower spin for loading rings */
   .animate-spin-slow {
     animation: spin-slow 3s linear infinite;
@@ -739,67 +715,78 @@
   }
 }
 
-/* ==================== RECEIVING GHOST CARD ANIMATIONS ==================== */
+/* ==================== RECEIVING GHOST CARD — SCI-FI HUD ==================== */
 
-@keyframes receiving-border-glow {
-  0%,
-  100% {
+@utility v4-radar-sweep {
+  animation: v4-radar-sweep 3s linear infinite;
+  transform-origin: center center;
+}
+
+@utility v4-chevron-flow {
+  animation: v4-chevron-flow 2s linear infinite;
+}
+
+@utility v4-hex-pulse {
+  animation: v4-hex-pulse 4s ease-in-out infinite;
+}
+
+@utility v4-hud-glow {
+  animation: v4-hud-glow 3s ease-in-out infinite;
+}
+
+@utility v4-status-blink {
+  animation: v4-status-blink 2s step-end infinite;
+}
+
+@utility v4-radar-blip {
+  animation: v4-radar-blip 3s ease-in-out infinite;
+}
+
+@utility v4-pct-flicker {
+  animation: v4-pct-flicker 1.5s ease-in-out infinite;
+}
+
+@keyframes v4-radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes v4-chevron-flow {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0%); }
+}
+
+@keyframes v4-hex-pulse {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(0, 255, 255, 0.02); }
+}
+
+@keyframes v4-hud-glow {
+  0%, 100% {
     box-shadow:
-      inset 0 0 10px rgba(0, 255, 255, 0.1),
-      0 0 15px rgba(0, 255, 255, 0.15);
+      inset 0 0 8px rgba(0, 255, 255, 0.08),
+      0 0 10px rgba(0, 255, 255, 0.1);
   }
   50% {
     box-shadow:
-      inset 0 0 20px rgba(0, 255, 255, 0.2),
-      0 0 25px rgba(0, 255, 255, 0.25);
+      inset 0 0 15px rgba(0, 255, 255, 0.15),
+      0 0 20px rgba(0, 255, 255, 0.18);
   }
 }
 
-@keyframes receiving-scanline-sweep {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  10% {
-    opacity: 0.8;
-  }
-  90% {
-    opacity: 0.8;
-  }
-  100% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
+@keyframes v4-status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-@keyframes receiving-segment-fill {
-  0%,
-  100% {
-    width: 20%;
-    opacity: 0.4;
-  }
-  50% {
-    width: 100%;
-    opacity: 1;
-  }
+@keyframes v4-radar-blip {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  15% { opacity: 1; transform: scale(1.3); }
+  40% { opacity: 0.6; transform: scale(1); }
 }
 
-@keyframes receiving-text-flicker {
-  0%,
-  100% {
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 1;
-  }
+@keyframes v4-pct-flicker {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
-@keyframes receiving-cursor-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}

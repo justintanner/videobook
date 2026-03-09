@@ -156,8 +156,19 @@ function ReceivingGhostCardSection() {
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-primary">ReceivingGhostCard</h2>
-      <div className="w-[200px]">
-        <ReceivingGhostCard filename="hero-intro-final.mp4" />
+      <div className="flex flex-wrap gap-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">short filename</span>
+          <div className="w-[200px]">
+            <ReceivingGhostCard filename="hero-intro-final.mp4" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">long filename</span>
+          <div className="w-[200px]">
+            <ReceivingGhostCard filename="customer-interview-segment-final-cut-v3-extended-remaster.mp4" />
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -654,6 +665,9 @@ export function Styleguide() {
 
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
+      {/* ReceivingGhostCard */}
+      <ReceivingGhostCardSection />
+
       {/* Cards — unique overlays */}
       <section className="space-y-4">
         <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-primary">Cards</h2>
@@ -672,9 +686,6 @@ export function Styleguide() {
           </CardWrapper>
         ))}
       </CardSection>
-
-      {/* ReceivingGhostCard */}
-      <ReceivingGhostCardSection />
 
       {/* Card Badges */}
       <CardBadgesSection />
