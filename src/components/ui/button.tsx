@@ -9,11 +9,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
-        outline: 'border border-input bg-transparent shadow-xs hover:bg-secondary hover:text-secondary-foreground',
-        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
-        ghost: 'hover:bg-secondary hover:text-secondary-foreground',
+        default: 'bg-primary text-primary-foreground border border-primary/50 hover:bg-primary/90',
+        destructive: 'bg-destructive text-destructive-foreground shadow-sm border border-destructive/50 hover:bg-destructive/90',
+        outline: 'border border-input bg-transparent shadow-xs active:shadow-none',
+        secondary: 'bg-secondary text-secondary-foreground border border-secondary/50 hover:bg-secondary/80',
+        ghost: 'border border-transparent hover:bg-secondary hover:text-secondary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         glow: 'bg-primary text-primary-foreground uppercase tracking-widest font-semibold shadow-[0_0_20px_rgba(0,255,255,0.4)] hover:shadow-[0_0_30px_rgba(0,255,255,0.6)] hover:bg-primary/90',
         dashed: 'border border-dashed border-primary/30 bg-transparent text-primary/60 uppercase tracking-widest hover:border-primary/60 hover:text-primary',
@@ -21,11 +21,11 @@ const buttonVariants = cva(
         toggleInactive: 'bg-muted text-muted-foreground border border-transparent hover:bg-secondary hover:text-foreground',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
-        lg: 'h-10 rounded-md px-8',
-        xl: 'h-12 rounded-md px-10 text-base',
-        icon: 'h-9 w-9',
+        default: 'min-h-9 px-4 py-2',
+        sm: 'min-h-8 rounded-md px-3 text-xs',
+        lg: 'min-h-10 rounded-md px-8',
+        xl: 'min-h-12 rounded-md px-10 text-base',
+        icon: 'min-h-9 w-9',
       },
     },
     defaultVariants: {

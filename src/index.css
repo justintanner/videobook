@@ -19,11 +19,11 @@
   --color-primary: hsl(190 100% 50%); /* Electric Cyan */
   --color-primary-foreground: hsl(220 20% 10%);
 
-  --color-secondary: hsl(190 30% 16%);
+  --color-secondary: hsl(215 25% 20%);
   --color-secondary-foreground: hsl(195 90% 95%);
 
-  --color-muted: hsl(195 25% 13%);
-  --color-muted-foreground: hsl(195 20% 65%);
+  --color-muted: hsl(215 25% 15%);
+  --color-muted-foreground: hsl(215 20% 65%);
 
   --color-accent: hsl(35 100% 50%); /* Amber Warning */
   --color-accent-foreground: hsl(220 20% 10%);
@@ -31,8 +31,8 @@
   --color-destructive: hsl(0 80% 60%);
   --color-destructive-foreground: hsl(210 40% 98%);
 
-  --color-border: hsl(190 40% 18%);
-  --color-input: hsl(190 40% 20%);
+  --color-border: hsl(215 25% 20%);
+  --color-input: hsl(215 25% 20%);
   --color-ring: hsl(190 100% 50%);
 
   --radius-sm: 2px;

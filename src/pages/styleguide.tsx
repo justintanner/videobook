@@ -10,15 +10,15 @@ import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
-  Zap,
+  Zap, ArrowLeft,
 } from 'lucide-react';
 
 const colors = [
   { name: 'Primary', bg: 'bg-primary', hex: '#00D4FF' },
-  { name: 'Secondary', bg: 'bg-secondary', hex: '#1D3135' },
+  { name: 'Secondary', bg: 'bg-secondary', hex: '#262D3A' },
   { name: 'Accent', bg: 'bg-accent', hex: '#FF9500' },
   { name: 'Destructive', bg: 'bg-destructive', hex: '#EB4747' },
-  { name: 'Muted', bg: 'bg-muted', hex: '#19252A' },
+  { name: 'Muted', bg: 'bg-muted', hex: '#1D2233' },
   { name: 'Card', bg: 'bg-card', hex: '#14181F' },
   { name: 'Background', bg: 'bg-background', hex: '#0D0F12' },
   { name: 'Popover', bg: 'bg-popover', hex: '#14181F' },
@@ -364,24 +364,28 @@ function AppLayoutDemo() {
 export function Styleguide() {
   return (
     <div className="min-h-screen p-8 space-y-12">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-primary">Styleguide</h1>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          &larr; Dashboard
-        </Link>
+      <header className="space-y-1">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold font-mono tracking-wider text-blue-400">CLIPFIRST STYLE GUIDE</h1>
+          <Link href="/" className="text-sm font-mono text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Dashboard
+          </Link>
+        </div>
+        <p className="text-sm font-mono text-muted-foreground">Media cards, overlays, and center-stage views in all states</p>
       </header>
 
       {/* App Layout Demo */}
       <AppLayoutDemo />
 
       <hr className="border-border" />
-      <h2 className="text-2xl font-bold text-primary font-mono">Component Catalog</h2>
+      <h2 className="text-2xl font-bold text-blue-400 font-mono">Component Catalog</h2>
 
       {/* Colors + Typography + Buttons — compact row */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Colors */}
         <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Colors</h2>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Colors</h2>
           <div className="grid grid-cols-4 gap-2">
             {colors.map((c) => (
               <div key={c.name} className="space-y-1">
@@ -395,7 +399,7 @@ export function Styleguide() {
 
         {/* Typography */}
         <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Typography</h2>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Typography</h2>
           <div className="space-y-1">
             <p className="text-xl font-bold">Rajdhani Bold</p>
             <p className="text-lg font-semibold">Rajdhani Semibold</p>
@@ -408,7 +412,7 @@ export function Styleguide() {
 
         {/* Buttons */}
         <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Buttons</h2>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Buttons</h2>
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1.5">
               {variants.map((v) => (
@@ -432,7 +436,7 @@ export function Styleguide() {
 
       {/* Cards — unique overlays */}
       <section className="space-y-4">
-        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-primary">Cards</h2>
+        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Cards</h2>
         <div className="flex flex-wrap gap-3">
           <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
           <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
@@ -445,7 +449,7 @@ export function Styleguide() {
 
       {/* Custom Utilities */}
       <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Custom Utilities</h2>
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Custom Utilities</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className="bg-card border border-border p-3 clip-corner-tl">
             <p className="text-xs font-medium">.clip-corner-tl</p>
