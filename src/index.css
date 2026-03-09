@@ -1,68 +1,106 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+@custom-variant dark (&:is(.dark *));
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@theme inline {
+  --font-sans: 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
+  --color-background: hsl(220 15% 6%);
+  --color-foreground: hsl(195 90% 95%);
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
+  --color-card: hsl(220 20% 10%);
+  --color-card-foreground: hsl(195 90% 95%);
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
+  --color-popover: hsl(220 20% 10%);
+  --color-popover-foreground: hsl(195 90% 95%);
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  --color-primary: hsl(190 100% 50%); /* Electric Cyan */
+  --color-primary-foreground: hsl(220 20% 10%);
+
+  --color-secondary: hsl(215 25% 20%);
+  --color-secondary-foreground: hsl(195 90% 95%);
+
+  --color-muted: hsl(215 25% 15%);
+  --color-muted-foreground: hsl(215 20% 65%);
+
+  --color-accent: hsl(35 100% 50%); /* Amber Warning */
+  --color-accent-foreground: hsl(220 20% 10%);
+
+  --color-destructive: hsl(0 80% 60%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+
+  --color-border: hsl(215 25% 20%);
+  --color-input: hsl(215 25% 20%);
+  --color-ring: hsl(190 100% 50%);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@layer base {
+  * {
+    @apply border-border;
   }
-  a:hover {
-    color: #747bff;
+  body {
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30 selection:text-primary;
+    background-image:
+      linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
-  button {
-    background-color: #f9f9f9;
+
+  /* Cyberpunk Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary);
+    box-shadow: 0 0 10px var(--color-primary);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .border-glow {
+    box-shadow: inset 0 0 10px -5px var(--color-primary);
+  }
+
+  /* Cyberpunk cut corners */
+  .clip-corner-tl {
+    clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+  }
+  .clip-corner-br {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  }
+  .clip-corner-both {
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  }
+
+  /* Scanlines effect - retro CRT monitor look */
+  .scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 255, 0.03) 2px,
+      rgba(0, 255, 255, 0.03) 4px
+    );
   }
 }
