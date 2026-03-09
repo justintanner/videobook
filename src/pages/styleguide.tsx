@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -11,6 +12,11 @@ import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { ReceivingGhostCard } from '@/components/sidebar/cards/ReceivingGhostCard';
 import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
 import type { MediaItem } from '@/components/sidebar/types';
+import {
+  FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
+  Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
+  Zap,
+} from 'lucide-react';
 
 const colors = [
   { name: 'Primary', bg: 'bg-primary', fg: 'text-primary-foreground' },
@@ -207,6 +213,298 @@ function ReceivingGhostCardSection() {
   );
 }
 
+// ── App Layout Demo Helpers ──
+
+function BracketLabel({ label }: { label: string }) {
+  return <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">[{label}]</span>;
+}
+
+function ToggleGroup({ options, activeIndex }: { options: string[]; activeIndex: number }) {
+  return (
+    <div className="flex">
+      {options.map((opt, i) => {
+        const isFirst = i === 0;
+        const isLast = i === options.length - 1;
+        const rounded = isFirst && isLast ? '' : isFirst ? 'rounded-r-none' : isLast ? 'rounded-l-none' : 'rounded-none border-x-0';
+        return (
+          <Button
+            key={opt}
+            variant={i === activeIndex ? 'toggleActive' : 'toggleInactive'}
+            size="sm"
+            className={rounded}
+          >
+            {opt}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FakeDropdown({ text }: { text: string }) {
+  return (
+    <div className="bg-muted border border-input rounded-md px-3 py-1.5 text-sm font-mono flex items-center gap-2">
+      {text}
+      <ChevronDown className="w-3 h-3 text-muted-foreground" />
+    </div>
+  );
+}
+
+function SceneSlot({ label }: { label: string }) {
+  return (
+    <div className="w-[200px] h-full shrink-0 border-r border-border/50 relative flex items-center justify-center">
+      <span className="absolute top-1.5 left-1.5 text-xs font-mono text-primary bg-black/60 px-1.5 py-0.5 rounded">{label}</span>
+      <button className="absolute top-1.5 right-1.5 text-xs text-muted-foreground">
+        <MoreHorizontal className="w-3.5 h-3.5" />
+      </button>
+      <div className="w-6 h-6 border-2 border-primary/20 border-t-primary/60 rounded-full animate-spin" />
+    </div>
+  );
+}
+
+const demoImageMock: MediaItem = {
+  id: 'demo-image-ready', type: 'image', slug: '@hero', title: 'Hero', filePath: '/opengraph.jpg',
+  status: 'ready', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: '/opengraph.jpg',
+};
+
+const demoVideoMock: MediaItem = {
+  id: 'demo-video-ready', type: 'video', slug: '@main', title: 'Main Feature', filePath: '/opengraph.jpg',
+  status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg',
+};
+
+function AppLayoutDemo() {
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
+  return (
+    <div className="overflow-x-auto mb-8">
+      <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border bg-background">
+        <div className="grid grid-rows-[48px_1fr_auto] h-[800px]">
+          {/* ── Nav Bar ── */}
+          <div className="bg-card border-b border-border flex items-center justify-between px-4">
+            <div className="flex gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">CLIPFIRST</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="font-mono text-sm">vax</span>
+                <ChevronDown className="w-3 h-3" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Film className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">GENERATIONS</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Scissors className="w-3.5 h-3.5 text-primary" />
+              <span className="font-mono text-xs uppercase tracking-wider text-primary">CLIP IT</span>
+            </div>
+          </div>
+
+          {/* ── Middle Row: sidebars + center ── */}
+          <div className="flex flex-row overflow-hidden">
+            {/* Left Sidebar */}
+            <div className={`${leftOpen ? 'w-[210px]' : 'w-[40px]'} transition-all duration-200 bg-card/50 border-r border-border flex flex-col overflow-hidden`}>
+              <div className="px-3 pt-3 pb-2 flex items-center justify-between">
+                {leftOpen ? (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">ASSETS</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><Download className="w-3.5 h-3.5" /></button>
+                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><ClipboardList className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setLeftOpen(false)} className="text-muted-foreground/50 hover:text-muted-foreground"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => setLeftOpen(true)} className="text-muted-foreground/50 hover:text-muted-foreground mx-auto">
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {leftOpen && (
+                <>
+                  <div className="flex-1 overflow-y-auto px-2 space-y-2">
+                    <div className="w-full"><ImageCard item={demoImageMock} /></div>
+                  </div>
+                  <div className="p-2 mt-auto">
+                    <Button variant="dashed" className="w-full" size="sm">
+                      <Upload className="w-3.5 h-3.5" />
+                      UPLOAD_ASSET
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Center Content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-4 overflow-y-auto">
+              {/* VIDEO_GENERATION Panel */}
+              <div className="border border-primary/50 rounded-md p-3">
+                {/* Title row */}
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <Grid3x3 className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-mono text-sm font-bold text-primary uppercase tracking-wider">VIDEO_GENERATION</span>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* [PROMPT] section */}
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center justify-between">
+                    <BracketLabel label="PROMPT" />
+                    <Button variant="default" size="sm">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Rewrite
+                    </Button>
+                  </div>
+                  <textarea
+                    className="bg-muted/30 border border-input/50 rounded-md p-3 text-sm font-mono text-foreground/80 resize-none h-28 w-full focus:outline-none focus:ring-1 focus:ring-ring"
+                    defaultValue="Create a dynamic and engaging video showcasing the product features with cinematic transitions and professional color grading."
+                    readOnly
+                  />
+                </div>
+
+                {/* + SCENE button */}
+                <Button variant="dashed" className="w-full mb-3">+ SCENE</Button>
+
+                {/* Parameters row */}
+                <div className="flex flex-wrap gap-x-8 gap-y-3 my-3">
+                  <div>
+                    <BracketLabel label="ASPECT RATIO" />
+                    <div className="mt-1.5">
+                      <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
+                    </div>
+                  </div>
+                  <div>
+                    <BracketLabel label="DURATION" />
+                    <div className="mt-1.5">
+                      <FakeDropdown text="8" />
+                    </div>
+                  </div>
+                  <div>
+                    <BracketLabel label="IMAGE ORIENTATION" />
+                    <div className="mt-1.5">
+                      <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
+                    </div>
+                  </div>
+                  <div>
+                    <BracketLabel label="MODE" />
+                    <div className="mt-1.5">
+                      <ToggleGroup options={['std', 'pro']} activeIndex={0} />
+                    </div>
+                  </div>
+                  <div>
+                    <BracketLabel label="MULTI SHOTS" />
+                    <div className="mt-1.5">
+                      <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
+                    </div>
+                  </div>
+                  <div>
+                    <BracketLabel label="SOUND" />
+                    <div className="mt-1.5">
+                      <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* + ADD ELEMENT button */}
+                <Button variant="dashed" className="w-full">+ ADD ELEMENT</Button>
+
+                {/* WARNINGS box */}
+                <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
+                  <div className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">WARNINGS</div>
+                  <ul className="list-disc list-inside">
+                    <li className="text-xs font-mono text-amber-400/80">Kling 3.0 multi_prompt must be a non-empty list</li>
+                  </ul>
+                </div>
+
+                {/* Footer row */}
+                <div className="flex justify-between items-center mt-3">
+                  <FakeDropdown text="Kling 3.0" />
+                  <Button variant="glow" size="lg">
+                    <Zap className="w-4 h-4" />
+                    GENERATE
+                  </Button>
+                </div>
+              </div>
+
+            </div>
+              {/* Chat input — sticky bottom */}
+              <div className="shrink-0 px-4 pb-3 pt-2 border-t border-border/30">
+                <div className="border border-border/50 rounded-md px-3 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm font-mono text-muted-foreground">gen image of a dancing banana</span>
+                  </div>
+                  <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50" />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Sidebar */}
+            <div className={`${rightOpen ? 'w-[210px]' : 'w-[40px]'} transition-all duration-200 bg-card/50 border-l border-border flex flex-col overflow-hidden`}>
+              <div className="px-3 pt-3 pb-2 flex items-center justify-between">
+                {rightOpen ? (
+                  <>
+                    <div className="flex gap-1">
+                      <button onClick={() => setRightOpen(false)} className="text-muted-foreground/50 hover:text-muted-foreground"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><Download className="w-3.5 h-3.5" /></button>
+                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><ClipboardList className="w-3.5 h-3.5" /></button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">CLIPS</span>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => setRightOpen(true)} className="text-muted-foreground/50 hover:text-muted-foreground mx-auto">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {rightOpen && (
+                <>
+                  <div className="flex-1 overflow-y-auto px-2 mt-2 space-y-2">
+                    <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+                  </div>
+                  <div className="p-2 mt-auto">
+                    <Button variant="dashed" className="w-full" size="sm">
+                      <Upload className="w-3.5 h-3.5" />
+                      UPLOAD_CLIP
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── Bottom Timeline ── */}
+          <div className="h-[120px] border-t border-border bg-card/30">
+            <div className="flex overflow-x-auto h-[90px]">
+              {['@s01', '@s02', '@s03', '@s04', '@s05'].map((label) => (
+                <SceneSlot key={label} label={label} />
+              ))}
+            </div>
+            <div className="h-[30px] flex items-center justify-center border-t border-border/30 gap-2">
+              <Music className="w-3.5 h-3.5 text-muted-foreground/50" />
+              <span className="text-xs font-mono text-muted-foreground/50 uppercase tracking-wider">DROP_AUDIO_TRACK</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -218,6 +516,12 @@ export function Styleguide() {
           &larr; Dashboard
         </Link>
       </header>
+
+      {/* App Layout Demo */}
+      <AppLayoutDemo />
+
+      <hr className="border-border" />
+      <h2 className="text-2xl font-bold text-primary font-mono">Component Catalog</h2>
 
       {/* Colors + Typography + Buttons — compact row */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
