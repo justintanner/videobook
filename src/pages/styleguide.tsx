@@ -529,7 +529,7 @@ function AppLayoutDemo() {
 
 export function Styleguide() {
   return (
-    <div className="min-h-screen p-8 max-w-7xl mx-auto space-y-12">
+    <div className="min-h-screen p-8 space-y-12">
       <header className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-primary">Styleguide</h1>
         <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
