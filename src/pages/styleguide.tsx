@@ -6,11 +6,19 @@ import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { ReceivingGhostCard } from '@/components/sidebar/cards/ReceivingGhostCard';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SelectWithChevron } from '@/components/ui/SelectWithChevron';
+import { Toaster } from '@/components/ui/toaster';
+import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
-  Zap, ArrowLeft, ImageIcon,
+  Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell,
 } from 'lucide-react';
 
 const colors = [
@@ -393,11 +401,24 @@ function AppLayoutDemo() {
   );
 }
 
+function SelectWithChevronDemo() {
+  const [value, setValue] = useState('veo3');
+  return (
+    <SelectWithChevron value={value} onChange={setValue}>
+      <option value="veo3">Veo 3</option>
+      <option value="kling3">Kling 3.0</option>
+      <option value="wan21">Wan 2.1</option>
+      <option value="sora">Sora</option>
+    </SelectWithChevron>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
   return (
     <div className="min-h-screen p-8 space-y-12">
+      <Toaster />
       <header className="space-y-1">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold font-mono tracking-wider text-blue-400">CLIPFIRST STYLE GUIDE</h1>
@@ -478,6 +499,127 @@ export function Styleguide() {
           {cardOverlayMocks.map(({ item, Component }) => (
             <div key={item.id} className="w-[200px]"><Component item={item} /></div>
           ))}
+        </div>
+      </section>
+
+      {/* ==================== NEW UI PRIMITIVES ==================== */}
+
+      {/* Dialog */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Dialog</h2>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">Open Dialog</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>System Diagnostic</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">Dismiss</Button>
+              </DialogClose>
+              <Button size="sm">Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </section>
+
+      {/* Dropdown Menu */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Dropdown Menu</h2>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings className="w-3.5 h-3.5 mr-1.5" />
+              Options
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
+            <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
+            <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </section>
+
+      {/* Popover + Tooltip row */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Popover & Tooltip</h2>
+        <div className="flex gap-4 items-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Info className="w-3.5 h-3.5 mr-1.5" />
+                Popover
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <div className="space-y-2">
+                <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
+                <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm">Hover for Tooltip</Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Neural interface ready</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </section>
+
+      {/* Scroll Area */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Scroll Area</h2>
+        <ScrollArea className="h-[120px] w-[300px] rounded border border-border bg-card p-3">
+          <div className="space-y-2">
+            {Array.from({ length: 12 }, (_, i) => (
+              <div key={i} className="text-xs font-mono text-muted-foreground">
+                [{String(i + 1).padStart(2, '0')}] subsystem_node_{i + 1} &mdash; ONLINE
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </section>
+
+      {/* Toast */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Toast</h2>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
+          >
+            Default Toast
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
+          >
+            Destructive Toast
+          </Button>
+        </div>
+      </section>
+
+      {/* SelectWithChevron */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">SelectWithChevron</h2>
+        <div className="w-[240px]">
+          <SelectWithChevronDemo />
         </div>
       </section>
 
