@@ -14,11 +14,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SelectWithChevron } from '@/components/ui/SelectWithChevron';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/useToast';
+import { Input } from '@/components/ui/input';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuCheckboxItem, ContextMenuLabel } from '@/components/ui/context-menu';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
+import { JsonSyntax } from '@/components/ui/JsonSyntax';
+import { GenToggle } from '@/components/ui/GenToggle';
+import { GenField, GenTextarea } from '@/components/ui/GenField';
+import { GenSelect } from '@/components/ui/GenSelect';
+import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
+import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
+import { ChatInput } from '@/components/ui/ChatInput';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
-  Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell,
+  Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
 } from 'lucide-react';
 
 const colors = [
@@ -413,6 +424,136 @@ function SelectWithChevronDemo() {
   );
 }
 
+// ── Stateful Demo Helpers for Batch 2 ──
+
+function GenToggleDemo() {
+  const [aspect, setAspect] = useState<string>('16:9');
+  const [mode, setMode] = useState<string>('std');
+  const [compactVal, setCompactVal] = useState<string>('5');
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Standard</p>
+        <GenToggle value={aspect} onChange={setAspect} options={['16:9', '9:16', '1:1']} />
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Two options</p>
+        <GenToggle value={mode} onChange={setMode} options={['std', 'pro']} />
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Compact</p>
+        <GenToggle value={compactVal} onChange={setCompactVal} options={['3', '5', '8', '10']} compact />
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Disabled</p>
+        <GenToggle value="std" onChange={() => {}} options={['std', 'pro']} disabled />
+      </div>
+    </div>
+  );
+}
+
+function GenFieldDemo() {
+  const [text, setText] = useState('A cinematic shot of a neon-lit cityscape at night');
+  return (
+    <div className="space-y-4 max-w-md">
+      <GenField label="PROMPT" required>
+        <GenTextarea value={text} onChange={setText} placeholder="Describe your scene..." rows={3} />
+      </GenField>
+      <GenField label="NEGATIVE PROMPT" actions={<span className="text-[10px] font-mono text-primary/40">optional</span>}>
+        <GenTextarea value="" onChange={() => {}} placeholder="What to avoid..." rows={2} />
+      </GenField>
+      <GenField label="DISABLED FIELD">
+        <GenTextarea value="This field is disabled" onChange={() => {}} disabled />
+      </GenField>
+    </div>
+  );
+}
+
+function GenSelectDemo() {
+  const [value, setValue] = useState('kling3');
+  return (
+    <div className="w-[240px]">
+      <GenSelect
+        value={value}
+        onChange={setValue}
+        options={[
+          { value: 'veo3', label: 'Veo 3' },
+          { value: 'kling3', label: 'Kling 3.0' },
+          { value: 'wan21', label: 'Wan 2.1' },
+          { value: 'sora', label: 'Sora' },
+        ]}
+      />
+    </div>
+  );
+}
+
+function MultiPromptEditorDemo() {
+  const [scenes, setScenes] = useState([
+    { prompt: 'Wide establishing shot of the city skyline at golden hour', duration: 5 },
+    { prompt: 'Close-up of hands typing on a laptop', duration: 3 },
+  ]);
+  return (
+    <div className="max-w-md">
+      <MultiPromptEditor value={scenes} onChange={setScenes} />
+    </div>
+  );
+}
+
+function AssetDropSlotDemo() {
+  const [filled, setFilled] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>({
+    slug: '@hero-bg',
+    src: '/styleguide-img-cover.jpg',
+    thumbnailSrc: '/styleguide-img-cover.jpg',
+    type: 'image',
+  });
+  const [empty, setEmpty] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>(null);
+  return (
+    <div className="flex gap-4">
+      <div className="w-[180px] space-y-1">
+        <p className="text-xs text-muted-foreground">With value (image)</p>
+        <AssetDropSlot value={filled} onChange={setFilled} />
+      </div>
+      <div className="w-[180px] space-y-1">
+        <p className="text-xs text-muted-foreground">Empty (image)</p>
+        <AssetDropSlot value={empty} onChange={setEmpty} />
+      </div>
+      <div className="w-[180px] space-y-1">
+        <p className="text-xs text-muted-foreground">Empty (video)</p>
+        <AssetDropSlot value={null} onChange={() => {}} acceptTypes={['video']} />
+      </div>
+      <div className="w-[180px] space-y-1">
+        <p className="text-xs text-muted-foreground">Disabled</p>
+        <AssetDropSlot value={null} onChange={() => {}} disabled />
+      </div>
+    </div>
+  );
+}
+
+function ContextMenuDemo() {
+  const [showGrid, setShowGrid] = useState(true);
+  const [showGuides, setShowGuides] = useState(false);
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="w-[300px] h-[120px] rounded-lg border-2 border-dashed border-primary/30 bg-card flex items-center justify-center cursor-context-menu select-none">
+          <span className="text-sm font-mono text-muted-foreground">Right-click here</span>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuLabel>Edit</ContextMenuLabel>
+        <ContextMenuItem><Copy className="w-3.5 h-3.5 mr-2" /> Copy</ContextMenuItem>
+        <ContextMenuItem><Download className="w-3.5 h-3.5 mr-2" /> Download</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuLabel>View</ContextMenuLabel>
+        <ContextMenuCheckboxItem checked={showGrid} onCheckedChange={setShowGrid}>Show Grid</ContextMenuCheckboxItem>
+        <ContextMenuCheckboxItem checked={showGuides} onCheckedChange={setShowGuides}>Show Guides</ContextMenuCheckboxItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Delete</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -620,6 +761,154 @@ export function Styleguide() {
         <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">SelectWithChevron</h2>
         <div className="w-[240px]">
           <SelectWithChevronDemo />
+        </div>
+      </section>
+
+      {/* ==================== BATCH 2: NEW COMPONENTS ==================== */}
+
+      {/* Input */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Input</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Default</p>
+            <Input placeholder="Enter text..." />
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Email</p>
+            <Input type="email" placeholder="user@example.com" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Disabled</p>
+            <Input placeholder="Disabled" disabled />
+          </div>
+        </div>
+      </section>
+
+      {/* Context Menu */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Context Menu</h2>
+        <ContextMenuDemo />
+      </section>
+
+      {/* Card Primitives */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Card Primitives</h2>
+        <div className="flex flex-wrap gap-4">
+          <Card className="w-[300px]">
+            <CardHeader>
+              <CardTitle>System Status</CardTitle>
+              <CardDescription>All subsystems operational</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Neural link integrity at 98.7%. Memory usage nominal. Renderer: WebGPU v2.1.</p>
+            </CardContent>
+            <CardFooter className="gap-2">
+              <Button size="sm">Details</Button>
+              <Button size="sm" variant="outline">Dismiss</Button>
+            </CardFooter>
+          </Card>
+          <Card className="w-[300px]">
+            <CardHeader>
+              <CardTitle>Render Queue</CardTitle>
+              <CardDescription>3 jobs pending</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1 text-xs font-mono text-muted-foreground">
+                <p>[01] hero-intro — encoding</p>
+                <p>[02] product-shot — queued</p>
+                <p>[03] outro — queued</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* Badges */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Badges</h2>
+        <div className="flex flex-wrap gap-4">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <SlugBadge slug="@hero-intro" colorScheme="cyan" isError={false} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <SlugBadge slug="@final-export" colorScheme="gold" isError={false} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <SlugBadge slug="@broken-clip" colorScheme="cyan" isError={true} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <SlugBadge slug="@processing" colorScheme="cyan" isError={false} isProcessing />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <DurationBadge duration="1:30" isProcessing={false} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <DurationBadge duration="0:45" isProcessing={true} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <ResolutionBadge width={1920} height={1080} />
+          </div>
+          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+            <ResolutionBadge width={3840} height={2160} />
+          </div>
+        </div>
+      </section>
+
+      {/* JsonSyntax */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">JsonSyntax</h2>
+        <div className="max-w-lg bg-card border border-border rounded-lg p-4">
+          <JsonSyntax data={{
+            project: 'clipfirst',
+            version: 2.1,
+            active: true,
+            models: ['veo3', 'kling3', 'wan21'],
+            config: {
+              resolution: '1920x1080',
+              fps: 30,
+              hdr: null,
+            },
+          }} />
+        </div>
+      </section>
+
+      {/* GenToggle */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenToggle</h2>
+        <GenToggleDemo />
+      </section>
+
+      {/* GenField + GenTextarea */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenField + GenTextarea</h2>
+        <GenFieldDemo />
+      </section>
+
+      {/* GenSelect */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenSelect</h2>
+        <GenSelectDemo />
+      </section>
+
+      {/* MultiPromptEditor */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">MultiPromptEditor</h2>
+        <MultiPromptEditorDemo />
+      </section>
+
+      {/* AssetDropSlot */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">AssetDropSlot</h2>
+        <AssetDropSlotDemo />
+      </section>
+
+      {/* ChatInput */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">ChatInput</h2>
+        <div className="max-w-lg space-y-3">
+          <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
+          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
       </section>
 
