@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { ReceivingGhostCard } from '@/components/sidebar/cards/ReceivingGhostCard';
-import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
@@ -17,14 +14,14 @@ import {
 } from 'lucide-react';
 
 const colors = [
-  { name: 'Primary', bg: 'bg-primary', fg: 'text-primary-foreground' },
-  { name: 'Secondary', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
-  { name: 'Accent', bg: 'bg-accent', fg: 'text-accent-foreground' },
-  { name: 'Destructive', bg: 'bg-destructive', fg: 'text-destructive-foreground' },
-  { name: 'Muted', bg: 'bg-muted', fg: 'text-muted-foreground' },
-  { name: 'Card', bg: 'bg-card', fg: 'text-card-foreground' },
-  { name: 'Background', bg: 'bg-background', fg: 'text-foreground' },
-  { name: 'Popover', bg: 'bg-popover', fg: 'text-popover-foreground' },
+  { name: 'Primary', bg: 'bg-primary', hex: '#00D4FF' },
+  { name: 'Secondary', bg: 'bg-secondary', hex: '#1D3135' },
+  { name: 'Accent', bg: 'bg-accent', hex: '#FF9500' },
+  { name: 'Destructive', bg: 'bg-destructive', hex: '#EB4747' },
+  { name: 'Muted', bg: 'bg-muted', hex: '#19252A' },
+  { name: 'Card', bg: 'bg-card', hex: '#14181F' },
+  { name: 'Background', bg: 'bg-background', hex: '#0D0F12' },
+  { name: 'Popover', bg: 'bg-popover', hex: '#14181F' },
 ] as const;
 
 const variants = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'] as const;
@@ -45,112 +42,10 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
   { item: { id: 'o-error', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
   { item: { id: 'o-elf', type: 'final', slug: '@final', title: 'Elf Building', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
   { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
-  { item: { id: 'o-final-error', type: 'final', slug: '@final-failed', title: 'Final Error', filePath: '', status: 'error', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
 ];
 
-const planMocks: MediaItem[] = [
-  { id: 'plan-uploading', type: 'plan', slug: '@plan', title: 'Plan', filePath: '', status: 'uploading' },
-  { id: 'plan-loading', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'loading' },
-  { id: 'plan-generating', type: 'plan', slug: '@plan', title: 'Plan', filePath: '', status: 'generating' },
-  { id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' },
-  { id: 'plan-ready-text', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist standing on a rooftop.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' },
-  { id: 'plan-error', type: 'plan', slug: '@plan', title: 'Plan', filePath: '', status: 'error' },
-  { id: 'plan-corrupt', type: 'plan', slug: '@plan', title: 'Plan', filePath: '', status: 'corrupt' },
-];
-
-const planIdLabels: Record<string, string> = {
-  'plan-ready-empty': 'ready (empty)',
-  'plan-ready-text': 'ready (with text)',
-};
-
-// ── Badge Mocks ──
-
-const slugBadgeMocks: { id: string; label: string; props: { slug: string; colorScheme: 'cyan' | 'gold'; isError: boolean; isProcessing?: boolean } }[] = [
-  { id: 'slug-cyan', label: 'cyan', props: { slug: '@hero-intro', colorScheme: 'cyan', isError: false } },
-  { id: 'slug-cyan-error', label: 'cyan error', props: { slug: '@broken-clip', colorScheme: 'cyan', isError: true } },
-  { id: 'slug-cyan-processing', label: 'cyan processing', props: { slug: '@rendering-v2', colorScheme: 'cyan', isError: false, isProcessing: true } },
-  { id: 'slug-gold', label: 'gold', props: { slug: '@final-export-v2', colorScheme: 'gold', isError: false } },
-  { id: 'slug-gold-error', label: 'gold error', props: { slug: '@final-render-failed', colorScheme: 'gold', isError: true } },
-  { id: 'slug-long', label: 'truncation', props: { slug: '@customer-interview-segment-final-cut-v3-extended-remaster', colorScheme: 'cyan', isError: false } },
-];
-
-const durationBadgeMocks: { id: string; label: string; props: { duration: string; isProcessing: boolean } }[] = [
-  { id: 'dur-30s', label: '30s', props: { duration: '0:30', isProcessing: false } },
-  { id: 'dur-2m', label: '2m', props: { duration: '2:00', isProcessing: false } },
-  { id: 'dur-1h', label: '1h', props: { duration: '1:00:00', isProcessing: false } },
-  { id: 'dur-processing', label: 'processing', props: { duration: '0:45', isProcessing: true } },
-];
-
-const resolutionBadgeMocks: { id: string; label: string; props: { width: number; height: number } }[] = [
-  { id: 'res-1080p', label: '1080p landscape', props: { width: 1920, height: 1080 } },
-  { id: 'res-portrait', label: '1080p portrait', props: { width: 1080, height: 1920 } },
-  { id: 'res-square', label: 'square', props: { width: 512, height: 512 } },
-  { id: 'res-4k', label: '4K', props: { width: 3840, height: 2160 } },
-];
 
 // ── Helper Components ──
-
-function getStateLabel(item: MediaItem, labelOverrides?: Record<string, string>): string {
-  const status = item.status || 'ready';
-  return labelOverrides?.[item.id] ?? labelOverrides?.[status] ?? status;
-}
-
-function CardSection({ title, colorClass, children }: { title: string; colorClass: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-4">
-      <h2 className={`text-xl font-mono font-bold border-b border-border pb-2 ${colorClass}`}>{title}</h2>
-      <div className="flex flex-wrap gap-6">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function CardWrapper({ item, labelOverrides, children }: { item: MediaItem; labelOverrides?: Record<string, string>; children: React.ReactNode }) {
-  const stateLabel = getStateLabel(item, labelOverrides);
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{stateLabel}</span>
-      <div className="w-[200px]">{children}</div>
-    </div>
-  );
-}
-
-function CardBadgesSection() {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Card Badges</h2>
-
-      <div className="border border-border/50 rounded bg-zinc-900 p-3 flex flex-wrap items-start gap-x-4 gap-y-3">
-        {slugBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-1">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="relative h-10 w-40">
-              <SlugBadge {...mock.props} />
-            </div>
-          </div>
-        ))}
-        {durationBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-1">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="relative h-9 w-20">
-              <DurationBadge {...mock.props} />
-            </div>
-          </div>
-        ))}
-        {resolutionBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-1">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="relative h-9 w-24">
-              <ResolutionBadge {...mock.props} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 
 // ── App Layout Demo Helpers ──
 
@@ -486,11 +381,13 @@ export function Styleguide() {
       <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Colors */}
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Colors</h2>
-          <div className="grid grid-cols-4 gap-1.5">
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Colors</h2>
+          <div className="grid grid-cols-4 gap-2">
             {colors.map((c) => (
-              <div key={c.name} className={`${c.bg} ${c.fg} rounded px-2 py-1.5 text-center text-[10px] font-medium border border-border`}>
-                {c.name}
+              <div key={c.name} className="space-y-1">
+                <div className={`${c.bg} rounded h-10 border border-border`} />
+                <p className="text-[10px] font-medium leading-tight">{c.name}</p>
+                <p className="text-[9px] font-mono text-muted-foreground leading-tight">{c.hex}</p>
               </div>
             ))}
           </div>
@@ -498,7 +395,7 @@ export function Styleguide() {
 
         {/* Typography */}
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Typography</h2>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Typography</h2>
           <div className="space-y-1">
             <p className="text-xl font-bold">Rajdhani Bold</p>
             <p className="text-lg font-semibold">Rajdhani Semibold</p>
@@ -511,7 +408,7 @@ export function Styleguide() {
 
         {/* Buttons */}
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Buttons</h2>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Buttons</h2>
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1.5">
               {variants.map((v) => (
@@ -531,64 +428,6 @@ export function Styleguide() {
         </div>
       </section>
 
-      {/* Cards + Inputs + Utilities — compact row */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Cards */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Cards</h2>
-          <div className="space-y-3">
-            <Card className="py-3">
-              <CardHeader className="px-4 py-0">
-                <CardTitle className="text-sm">Default Card</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 py-0">
-                <p className="text-xs text-muted-foreground">Standard card with border and shadow</p>
-              </CardContent>
-            </Card>
-            <Card className="border-primary border-glow py-3">
-              <CardHeader className="px-4 py-0">
-                <CardTitle className="text-sm text-primary">Highlighted Card</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 py-0">
-                <p className="text-xs text-muted-foreground">With border-glow utility</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Inputs */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Inputs</h2>
-          <div className="space-y-2">
-            <Input placeholder="Default input..." />
-            <Input placeholder="Disabled" disabled />
-          </div>
-        </div>
-
-        {/* Custom Utilities */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold border-b border-border pb-1">Custom Utilities</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-card border border-border p-3 clip-corner-tl">
-              <p className="text-xs font-medium">.clip-corner-tl</p>
-            </div>
-            <div className="bg-card border border-border p-3 clip-corner-br">
-              <p className="text-xs font-medium">.clip-corner-br</p>
-            </div>
-            <div className="bg-card border border-border p-3 clip-corner-both">
-              <p className="text-xs font-medium">.clip-corner-both</p>
-            </div>
-            <div className="bg-card border border-primary p-3 border-glow rounded-lg">
-              <p className="text-xs font-medium">.border-glow</p>
-            </div>
-          </div>
-          <div className="bg-card border border-border p-3 rounded-lg relative overflow-hidden">
-            <div className="absolute inset-0 scanlines pointer-events-none" />
-            <p className="text-xs font-medium relative">.scanlines</p>
-          </div>
-        </div>
-      </section>
-
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
       {/* Cards — unique overlays */}
@@ -596,23 +435,36 @@ export function Styleguide() {
         <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-primary">Cards</h2>
         <div className="flex flex-wrap gap-3">
           <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
+          <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
+          <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-text', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist standing on a rooftop.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' }} /></div>
           {cardOverlayMocks.map(({ item, Component }) => (
             <div key={item.id} className="w-[200px]"><Component item={item} /></div>
           ))}
         </div>
       </section>
 
-      {/* PlanCard */}
-      <CardSection title="PlanCard" colorClass="text-indigo-400">
-        {planMocks.map((item) => (
-          <CardWrapper key={item.id} item={item} labelOverrides={planIdLabels}>
-            <PlanCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
-
-      {/* Card Badges */}
-      <CardBadgesSection />
+      {/* Custom Utilities */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-primary">Custom Utilities</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="bg-card border border-border p-3 clip-corner-tl">
+            <p className="text-xs font-medium">.clip-corner-tl</p>
+          </div>
+          <div className="bg-card border border-border p-3 clip-corner-br">
+            <p className="text-xs font-medium">.clip-corner-br</p>
+          </div>
+          <div className="bg-card border border-border p-3 clip-corner-both">
+            <p className="text-xs font-medium">.clip-corner-both</p>
+          </div>
+          <div className="bg-card border border-primary p-3 border-glow rounded-lg">
+            <p className="text-xs font-medium">.border-glow</p>
+          </div>
+        </div>
+        <div className="bg-card border border-border p-3 rounded-lg relative overflow-hidden">
+          <div className="absolute inset-0 scanlines pointer-events-none" />
+          <p className="text-xs font-medium relative">.scanlines</p>
+        </div>
+      </section>
 
     </div>
   );
