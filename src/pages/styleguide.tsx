@@ -6,8 +6,6 @@ import { Input } from '@/components/ui/input';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
-import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
-import { AudioCard } from '@/components/sidebar/cards/AudioCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { ReceivingGhostCard } from '@/components/sidebar/cards/ReceivingGhostCard';
 import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
@@ -35,56 +33,20 @@ const sizes = ['default', 'sm', 'lg', 'xl', 'icon'] as const;
 
 // ── Mock Data ──
 
-const videoMocks: MediaItem[] = [
-  { id: 'video-uploading', type: 'video', slug: '@hero-intro', title: 'Hero Intro', filePath: '', status: 'uploading', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null },
-  { id: 'video-loading', type: 'video', slug: '@processing-clip', title: 'Processing Clip', filePath: '/sample.mp4', status: 'loading', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' },
-  { id: 'video-untranscribed', type: 'video', slug: '@customer-interview-segment', title: 'Interview', filePath: '/sample.mp4', status: 'untranscribed', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' },
-  { id: 'video-transcribing', type: 'video', slug: '@customer-interview-segment-final', title: 'Interview', filePath: '/sample.mp4', status: 'transcribing', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' },
-  { id: 'video-rendering', type: 'video', slug: '@final-cut-rendering', title: 'Final Cut', filePath: '', status: 'rendering', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' },
-  { id: 'video-ready', type: 'video', slug: '@main', title: 'Main Feature', filePath: '/sample.mp4', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg' },
-  { id: 'video-error', type: 'video', slug: '@broken-clip-needs-rerender', title: 'Broken Clip', filePath: '', status: 'error', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null },
-  { id: 'video-corrupt', type: 'video', slug: '@glitched-footage', title: 'Glitched Footage', filePath: '', status: 'corrupt', durationSeconds: 45, origin: 'veo3', thumbnailSrc: null },
-];
-
-const videoStateLabels: Record<string, string> = {
-  untranscribed: 'pending*',
-  rendering: 'rendering*',
-};
-
-const finalMocks: MediaItem[] = [
-  { id: 'vid-final-loading', type: 'final', slug: '@final-processing', title: 'Final', filePath: '/final.mp4', status: 'loading', durationSeconds: 180, thumbnailSrc: null },
-  { id: 'vid-final-rendering', type: 'final', slug: '@final', title: 'Final', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: null },
-  { id: 'vid-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: null },
-  { id: 'vid-final-error', type: 'final', slug: '@final-render-attempt-03-failed', title: 'Final', filePath: '', status: 'error', durationSeconds: 180, thumbnailSrc: null },
-];
-
-const imageMocks: MediaItem[] = [
-  { id: 'image-uploading', type: 'image', slug: '@hero', title: 'Banner Hero', filePath: '', status: 'uploading', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: null },
-  { id: 'image-loading', type: 'image', slug: '@processing-image', title: 'Processing Image', filePath: '/opengraph.jpg', status: 'loading', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: null },
-  { id: 'image-generating', type: 'image', slug: '@product-shot-lifestyle-v3', title: 'Product Shot', filePath: '', status: 'generating', width: 1024, height: 1024, origin: 'gpt15_imagen', thumbnailSrc: null },
-  { id: 'image-downloading', type: 'image', slug: '@bg', title: 'Background', filePath: '', status: 'downloading', width: 3840, height: 2160, origin: 'nano_banana', thumbnailSrc: null },
-  { id: 'image-ready', type: 'image', slug: '@logo-final', title: 'Logo Final', filePath: '/opengraph.jpg', status: 'ready', width: 512, height: 512, origin: 'nano_banana', thumbnailSrc: null },
-  { id: 'image-error', type: 'image', slug: '@broken-image-corrupted', title: 'Broken Image', filePath: '', status: 'error', width: 1920, height: 1080, origin: 'gpt15_imagen', thumbnailSrc: null },
-  { id: 'image-corrupt', type: 'image', slug: '@corrupted-texture', title: 'Corrupted Texture', filePath: '', status: 'corrupt', width: 1024, height: 1024, origin: 'nano_banana', thumbnailSrc: null },
-];
-
-const scriptMocks: MediaItem[] = [
-  { id: 'script-uploading', type: 'script', slug: '@intro-script', title: 'Intro Script', filePath: '', status: 'uploading' },
-  { id: 'script-loading', type: 'script', slug: '@processing-script', title: 'Processing Script', filePath: '/script.txt', status: 'loading' },
-  { id: 'script-generating', type: 'script', slug: '@narration', title: 'Narration', filePath: '', status: 'generating' },
-  { id: 'script-ready', type: 'script', slug: '@voiceover', title: 'Voiceover', filePath: '/script.txt', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' },
-  { id: 'script-error', type: 'script', slug: '@broken-script', title: 'Broken Script', filePath: '', status: 'error' },
-  { id: 'script-corrupt', type: 'script', slug: '@garbled-dialogue', title: 'Garbled Dialogue', filePath: '', status: 'corrupt' },
-];
-
-const audioMocks: MediaItem[] = [
-  { id: 'audio-uploading', type: 'audio', slug: '@narration-take-1', title: 'Narration Take 1', filePath: '', status: 'uploading' },
-  { id: 'audio-loading', type: 'audio', slug: '@processing-audio', title: 'Processing Audio', filePath: '/sample.mp3', status: 'loading' },
-  { id: 'audio-generating', type: 'audio', slug: '@voiceover-v2', title: 'Voiceover V2', filePath: '', status: 'generating' },
-  { id: 'audio-downloading', type: 'audio', slug: '@background-music', title: 'Background Music', filePath: '', status: 'downloading' },
-  { id: 'audio-ready', type: 'audio', slug: '@final-mix', title: 'Final Mix', filePath: '/sample.mp3', status: 'ready' },
-  { id: 'audio-error', type: 'audio', slug: '@broken-recording', title: 'Broken Recording', filePath: '', status: 'error' },
-  { id: 'audio-corrupt', type: 'audio', slug: '@garbled-audio', title: 'Garbled Audio', filePath: '', status: 'corrupt' },
+const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item: MediaItem }> }[] = [
+  { item: { id: 'o-ready', type: 'video', slug: '@main', title: 'Ready', filePath: '/opengraph.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-uploading', type: 'video', slug: '@hero-intro', title: 'Uploading', filePath: '', status: 'uploading', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
+  { item: { id: 'o-loading', type: 'video', slug: '@clip', title: 'Loading', filePath: '/sample.mp4', status: 'loading', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-generating', type: 'image', slug: '@product', title: 'Generating', filePath: '', status: 'generating', width: 1024, height: 1024, origin: 'gpt15_imagen', thumbnailSrc: null }, Component: ImageCard },
+  { item: { id: 'o-rendering', type: 'video', slug: '@final-cut', title: 'Rendering', filePath: '', status: 'rendering', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-downloading', type: 'image', slug: '@bg', title: 'Downloading', filePath: '', status: 'downloading', width: 3840, height: 2160, origin: 'nano_banana', thumbnailSrc: null }, Component: ImageCard },
+  { item: { id: 'o-untranscribed', type: 'video', slug: '@interview', title: 'Untranscribed', filePath: '/sample.mp4', status: 'untranscribed', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-transcribing', type: 'video', slug: '@interview-final', title: 'Transcribing', filePath: '/sample.mp4', status: 'transcribing', durationSeconds: 120, origin: 'veo3', thumbnailSrc: '/opengraph.jpg' }, Component: VideoCard },
+  { item: { id: 'o-corrupt', type: 'video', slug: '@glitched', title: 'Corrupt', filePath: '', status: 'corrupt', durationSeconds: 45, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
+  { item: { id: 'o-error', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
+  { item: { id: 'o-elf', type: 'final', slug: '@final', title: 'Elf Building', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
+  { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
+  { item: { id: 'o-final-error', type: 'final', slug: '@final-failed', title: 'Final Error', filePath: '', status: 'error', durationSeconds: 180, thumbnailSrc: null }, Component: FinalVideoCard },
 ];
 
 const planMocks: MediaItem[] = [
@@ -704,50 +666,15 @@ export function Styleguide() {
 
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
-      {/* VideoCard */}
-      <CardSection title="VideoCard" colorClass="text-primary">
-        {videoMocks.map((item) => (
-          <CardWrapper key={item.id} item={item} labelOverrides={videoStateLabels}>
-            <VideoCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
-
-      {/* FinalVideoCard */}
-      <CardSection title="FinalVideoCard" colorClass="text-amber-400">
-        {finalMocks.map((item) => (
-          <CardWrapper key={item.id} item={item}>
-            <FinalVideoCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
-
-      {/* ImageCard */}
-      <CardSection title="ImageCard" colorClass="text-primary">
-        {imageMocks.map((item) => (
-          <CardWrapper key={item.id} item={item}>
-            <ImageCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
-
-      {/* ScriptCard */}
-      <CardSection title="ScriptCard" colorClass="text-primary">
-        {scriptMocks.map((item) => (
-          <CardWrapper key={item.id} item={item}>
-            <ScriptCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
-
-      {/* AudioCard */}
-      <CardSection title="AudioCard" colorClass="text-blue-400">
-        {audioMocks.map((item) => (
-          <CardWrapper key={item.id} item={item}>
-            <AudioCard item={item} />
-          </CardWrapper>
-        ))}
-      </CardSection>
+      {/* Cards — unique overlays */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-primary">Cards</h2>
+        <div className="flex flex-wrap gap-3">
+          {cardOverlayMocks.map(({ item, Component }) => (
+            <div key={item.id} className="w-[200px]"><Component item={item} /></div>
+          ))}
+        </div>
+      </section>
 
       {/* PlanCard */}
       <CardSection title="PlanCard" colorClass="text-indigo-400">
