@@ -257,18 +257,18 @@ function SceneSlot({ label }: { label: string }) {
       <button className="absolute top-1.5 right-1.5 text-xs text-muted-foreground">
         <MoreHorizontal className="w-3.5 h-3.5" />
       </button>
-      <div className="w-6 h-6 border-2 border-primary/20 border-t-primary/60 rounded-full animate-spin" />
+      <div className="w-3 h-3 bg-primary/60 rounded-full" />
     </div>
   );
 }
 
 const demoImageMock: MediaItem = {
-  id: 'demo-image-ready', type: 'image', slug: '@hero', title: 'Hero', filePath: '/opengraph.jpg',
-  status: 'ready', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: '/opengraph.jpg',
+  id: 'demo-image-ready', type: 'image', slug: '@img-trump', title: 'Trump Speech', filePath: '/opengraph.jpg',
+  status: 'ready', width: 640, height: 360, origin: 'nano_banana', thumbnailSrc: '/opengraph.jpg',
 };
 
 const demoVideoMock: MediaItem = {
-  id: 'demo-video-ready', type: 'video', slug: '@main', title: 'Main Feature', filePath: '/opengraph.jpg',
+  id: 'demo-video-ready', type: 'video', slug: '@vid-yt-joerogan-magic', title: 'JRE Magic', filePath: '/opengraph.jpg',
   status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/opengraph.jpg',
 };
 
@@ -357,83 +357,103 @@ function AppLayoutDemo() {
                   </Button>
                 </div>
 
-                {/* [PROMPT] section */}
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center justify-between">
-                    <BracketLabel label="PROMPT" />
-                    <Button variant="default" size="sm">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Rewrite
-                    </Button>
-                  </div>
-                  <textarea
-                    className="bg-muted/30 border border-input/50 rounded-md p-3 text-sm font-mono text-foreground/80 resize-none h-28 w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                    defaultValue="Create a dynamic and engaging video showcasing the product features with cinematic transitions and professional color grading."
-                    readOnly
-                  />
-                </div>
+                {/* Two-column layout: left = form, right = images */}
+                <div className="flex flex-row">
+                  {/* Left column */}
+                  <div className="flex-1 min-w-0">
+                    {/* [PROMPT] section */}
+                    <div className="space-y-2 mb-3">
+                      <div className="flex items-center justify-between">
+                        <BracketLabel label="PROMPT" />
+                        <Button variant="default" size="sm">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Rewrite
+                        </Button>
+                      </div>
+                      <textarea
+                        className="bg-muted/30 border border-input/50 rounded-md p-3 text-sm font-mono text-foreground/80 resize-none h-28 w-full focus:outline-none focus:ring-1 focus:ring-ring"
+                        defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion."
+                        readOnly
+                      />
+                    </div>
 
-                {/* + SCENE button */}
-                <Button variant="dashed" className="w-full mb-3">+ SCENE</Button>
+                    {/* + SCENE button */}
+                    <Button variant="dashed" className="w-full mb-3">+ SCENE</Button>
 
-                {/* Parameters row */}
-                <div className="flex flex-wrap gap-x-8 gap-y-3 my-3">
-                  <div>
-                    <BracketLabel label="ASPECT RATIO" />
-                    <div className="mt-1.5">
-                      <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
+                    {/* Parameters row */}
+                    <div className="flex flex-wrap gap-x-8 gap-y-3 my-3">
+                      <div>
+                        <BracketLabel label="ASPECT RATIO" />
+                        <div className="mt-1.5">
+                          <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
+                        </div>
+                      </div>
+                      <div>
+                        <BracketLabel label="DURATION" />
+                        <div className="mt-1.5">
+                          <FakeDropdown text="8" />
+                        </div>
+                      </div>
+                      <div>
+                        <BracketLabel label="IMAGE ORIENTATION" />
+                        <div className="mt-1.5">
+                          <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
+                        </div>
+                      </div>
+                      <div>
+                        <BracketLabel label="MODE" />
+                        <div className="mt-1.5">
+                          <ToggleGroup options={['std', 'pro']} activeIndex={0} />
+                        </div>
+                      </div>
+                      <div>
+                        <BracketLabel label="MULTI SHOTS" />
+                        <div className="mt-1.5">
+                          <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
+                        </div>
+                      </div>
+                      <div>
+                        <BracketLabel label="SOUND" />
+                        <div className="mt-1.5">
+                          <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <BracketLabel label="DURATION" />
-                    <div className="mt-1.5">
-                      <FakeDropdown text="8" />
-                    </div>
-                  </div>
-                  <div>
-                    <BracketLabel label="IMAGE ORIENTATION" />
-                    <div className="mt-1.5">
-                      <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
-                    </div>
-                  </div>
-                  <div>
-                    <BracketLabel label="MODE" />
-                    <div className="mt-1.5">
-                      <ToggleGroup options={['std', 'pro']} activeIndex={0} />
-                    </div>
-                  </div>
-                  <div>
-                    <BracketLabel label="MULTI SHOTS" />
-                    <div className="mt-1.5">
-                      <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
-                    </div>
-                  </div>
-                  <div>
-                    <BracketLabel label="SOUND" />
-                    <div className="mt-1.5">
-                      <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
-                    </div>
-                  </div>
-                </div>
 
-                {/* + ADD ELEMENT button */}
-                <Button variant="dashed" className="w-full">+ ADD ELEMENT</Button>
+                    {/* + ADD ELEMENT button */}
+                    <Button variant="dashed" className="w-full">+ ADD ELEMENT</Button>
 
-                {/* WARNINGS box */}
-                <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
-                  <div className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">WARNINGS</div>
-                  <ul className="list-disc list-inside">
-                    <li className="text-xs font-mono text-amber-400/80">Kling 3.0 multi_prompt must be a non-empty list</li>
-                  </ul>
-                </div>
+                    {/* WARNINGS box */}
+                    <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
+                      <div className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">WARNINGS</div>
+                      <ul className="list-disc list-inside">
+                        <li className="text-xs font-mono text-amber-400/80">Kling 3.0 multi_prompt must be a non-empty list</li>
+                      </ul>
+                    </div>
 
-                {/* Footer row */}
-                <div className="flex justify-between items-center mt-3">
-                  <FakeDropdown text="Kling 3.0" />
-                  <Button variant="glow" size="lg">
-                    <Zap className="w-4 h-4" />
-                    GENERATE
-                  </Button>
+                    {/* Footer row */}
+                    <div className="flex justify-between items-center mt-3">
+                      <FakeDropdown text="Kling 3.0" />
+                      <Button variant="glow" size="lg">
+                        <Zap className="w-4 h-4" />
+                        GENERATE
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Right column — IMAGES */}
+                  <div className="w-[160px] shrink-0 border-l border-border/50 pl-3 ml-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <BracketLabel label="IMAGES" />
+                      <span className="text-xs font-mono text-muted-foreground">1/2</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="w-[80px] h-[60px] border border-border/50 rounded overflow-hidden">
+                        <img src="/opengraph.jpg" alt="thumbnail" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="w-[80px] h-[60px] border border-dashed border-border/50 rounded" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
