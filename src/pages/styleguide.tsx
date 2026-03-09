@@ -24,7 +24,8 @@ const colors = [
 ] as const;
 
 const variants = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'] as const;
-const sizes = ['default', 'sm', 'lg', 'icon'] as const;
+const hudVariants = ['glow', 'dashed', 'toggleActive', 'toggleInactive'] as const;
+const sizes = ['default', 'sm', 'lg', 'xl', 'icon'] as const;
 
 // ── Mock Data ──
 
@@ -262,6 +263,58 @@ export function Styleguide() {
             <div className="flex flex-wrap gap-1.5">
               <Button size="sm" disabled>Disabled</Button>
               <Button size="sm" variant="destructive" disabled>Disabled</Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HUD Buttons */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold border-b border-border pb-1">HUD Buttons</h2>
+        <div className="space-y-4">
+          {/* HUD variants row */}
+          <div className="flex flex-wrap gap-1.5">
+            {hudVariants.map((v) => (
+              <Button key={v} variant={v} size="sm">{v}</Button>
+            ))}
+          </div>
+
+          {/* Generate — glow CTA */}
+          <div className="flex gap-4 items-center">
+            <Button variant="glow" size="xl">&#x26A1; Generate</Button>
+            <Button variant="glow" size="lg">&#x26A1; Generate</Button>
+            <Button variant="glow" size="default">&#x26A1; Generate</Button>
+          </div>
+
+          {/* Dashed add buttons — full width */}
+          <div className="space-y-2 max-w-xl">
+            <Button variant="dashed" className="w-full">+ Scene</Button>
+            <Button variant="dashed" className="w-full">+ Add Element</Button>
+          </div>
+
+          {/* Toggle groups */}
+          <div className="flex flex-wrap gap-6">
+            <div>
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">[Aspect Ratio]</span>
+              <div className="flex">
+                <Button variant="toggleActive" size="sm" className="rounded-r-none">16:9</Button>
+                <Button variant="toggleInactive" size="sm" className="rounded-none border-x-0">9:16</Button>
+                <Button variant="toggleInactive" size="sm" className="rounded-l-none">1:1</Button>
+              </div>
+            </div>
+            <div>
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">[Mode]</span>
+              <div className="flex">
+                <Button variant="toggleActive" size="sm" className="rounded-r-none">std</Button>
+                <Button variant="toggleInactive" size="sm" className="rounded-l-none">pro</Button>
+              </div>
+            </div>
+            <div>
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider block mb-1.5">[Sound]</span>
+              <div className="flex">
+                <Button variant="toggleInactive" size="sm" className="rounded-r-none">No</Button>
+                <Button variant="toggleActive" size="sm" className="rounded-l-none">Yes</Button>
+              </div>
             </div>
           </div>
         </div>
