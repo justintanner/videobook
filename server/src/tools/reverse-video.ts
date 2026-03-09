@@ -18,12 +18,14 @@ function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
 }
 
 async function hasAudioStream(filePath: string): Promise<boolean> {
-  const probe = await getFFmpeggy().probe(filePath);
+  const FFmpeggy = await getFFmpeggy();
+  const probe = await FFmpeggy.probe(filePath);
   return probe.streams.some((s) => s.codec_type === "audio");
 }
 
 async function getVideoDuration(filePath: string): Promise<number> {
-  const probe = await getFFmpeggy().probe(filePath);
+  const FFmpeggy = await getFFmpeggy();
+  const probe = await FFmpeggy.probe(filePath);
   return parseFloat(probe.format.duration);
 }
 

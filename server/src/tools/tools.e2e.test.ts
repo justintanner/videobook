@@ -13,10 +13,9 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const FFMPEG: string = require("ffmpeg-static");
 
-// change_video_speed and reverse_video use ffmpeggy for probing;
-// its CJS build is broken in some environments (ESM syntax in cjs/).
-let hasFFmpeggy = false;
-try { require("ffmpeggy"); hasFFmpeggy = true; } catch { /* skip */ }
+const hasKieKey = !!process.env.KIE_API_KEY;
+const hasOpenAiKey = !!process.env.OPENAI_API_KEY;
+const hasKimiKey = !!process.env.KIMI_CODING_API_KEY;
 
 type TextContent = Array<{ type: string; text: string }>;
 type ManifestFile = { name: string; size_bytes: number };
@@ -26,6 +25,10 @@ const TARGET_PROJECT = "e2e-export-target";
 
 function parse(result: { content: unknown }): Record<string, unknown> {
   return JSON.parse((result.content as TextContent)[0].text);
+}
+
+function parseText(result: { content: unknown }): string {
+  return (result.content as TextContent)[0].text;
 }
 
 async function generateTestVideo(outputPath: string): Promise<void> {
@@ -62,7 +65,7 @@ async function pollManifestForFile(
   throw new Error(`${fileName} not found in ${assetId} after ${timeoutMs}ms`);
 }
 
-describe("non-generation MCP tools e2e", () => {
+describe("MCP tools e2e", () => {
   let client: Client;
   let tempDir: string;
   let videoPath: string;
@@ -429,6 +432,36 @@ describe("non-generation MCP tools e2e", () => {
     await pollManifestForFile(client, PROJECT, vidAssetId, ".original.json");
   });
 
+  it("sleep returns ready for processed asset", async () => {
+    const result = await client.callTool({
+      name: "sleep",
+      arguments: {
+        asset_id: vidAssetId,
+        project_slug: PROJECT,
+        timeout_seconds: 10,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = parse(result);
+    expect(parsed.status).toBe("ready");
+    expect(parsed.asset_id).toBe(vidAssetId);
+  });
+
+  it("whitelists a video asset", async () => {
+    const result = await client.callTool({
+      name: "whitelist",
+      arguments: {
+        asset_id: vidAssetId,
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = parse(result);
+    expect(parsed.asset_id).toBe(vidAssetId);
+    expect(["whitelisted", "already_whitelisted"]).toContain(parsed.status);
+    expect(parsed.whitelisted_at).toBeTruthy();
+  });
+
   it("trims video", async () => {
     const result = await client.callTool({
       name: "trim_video",
@@ -445,7 +478,7 @@ describe("non-generation MCP tools e2e", () => {
     await waitForJob(parsed.job_id as string);
   });
 
-  it.skipIf(!hasFFmpeggy)("changes video speed", async () => {
+  it("changes video speed", async () => {
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
@@ -460,7 +493,7 @@ describe("non-generation MCP tools e2e", () => {
     await waitForJob(parsed.job_id as string);
   });
 
-  it.skipIf(!hasFFmpeggy)("reverses video", async () => {
+  it("reverses video", async () => {
     const result = await client.callTool({
       name: "reverse_video",
       arguments: {
@@ -500,6 +533,31 @@ describe("non-generation MCP tools e2e", () => {
     expect(fileNames).toContain("original.jpg");
   });
 
+  it("extracts last frame", async () => {
+    const result = await client.callTool({
+      name: "extract_last_frame",
+      arguments: {
+        asset_id: vidAssetId,
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = parse(result);
+    expect(parsed.image_asset_id).toMatch(/^img-/);
+    expect(parsed.source_video).toBe(vidAssetId);
+    expect(parsed.status).toBe("enqueued");
+    await waitForJob(parsed.job_id as string);
+
+    const manifest = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: parsed.image_asset_id as string, project_slug: PROJECT },
+    });
+    expect(manifest.isError).toBeFalsy();
+    const manifestData = parse(manifest);
+    const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
+    expect(fileNames).toContain("original.jpg");
+  });
+
   it("extracts audio", async () => {
     const result = await client.callTool({
       name: "extract_audio",
@@ -524,5 +582,185 @@ describe("non-generation MCP tools e2e", () => {
     const manifestData = parse(manifest);
     const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.mp3");
+  });
+
+  // ── Section 10: Render video (enqueue only) ────────────────────
+
+  it("enqueues render_video for landscape without subtitles", async () => {
+    const result = await client.callTool({
+      name: "render_video",
+      arguments: {
+        asset_id: vidAssetId,
+        project_slug: PROJECT,
+        orientation: "landscape",
+        subtitles_enabled: false,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = parse(result);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.asset_id).toBe(vidAssetId);
+    expect(parsed.orientations).toEqual(["landscape"]);
+    // Don't waitForJob — Remotion rendering not available in test env
+  });
+
+  // ── Section 11: Render timeline (error — no rendered files) ────
+
+  it("render_timeline errors when slots lack rendered files", async () => {
+    const result = await client.callTool({
+      name: "render_timeline",
+      arguments: { project_slug: PROJECT },
+    });
+    expect(result.isError).toBe(true);
+    // Timeline slots reference vid-intro which doesn't exist as an asset
+    expect(parseText(result)).toContain("vid-intro");
+  });
+
+  // ── Section 12: Download video (validation) ────────────────────
+
+  it("download_video_file rejects start >= end", async () => {
+    const result = await client.callTool({
+      name: "download_video_file",
+      arguments: {
+        url: "https://example.com/video.mp4",
+        start_time: "60",
+        end_time: "30",
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("start_time must be less than end_time");
+  });
+
+  // ── Section 13: API status ─────────────────────────────────────
+
+  it("api_status returns error without KIMI_CODING_API_KEY", async () => {
+    if (hasKimiKey) return; // skip check when key is set
+    const result = await client.callTool({
+      name: "api_status",
+      arguments: {},
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIMI_CODING_API_KEY");
+  });
+
+  it.skipIf(!hasKimiKey)("api_status returns 200 OK with key", async () => {
+    const result = await client.callTool({
+      name: "api_status",
+      arguments: {},
+    });
+    expect(result.isError).toBeFalsy();
+    expect(parseText(result)).toBe("200 OK");
+  });
+
+  // ── Section 14: Transcribe (requires KIE_API_KEY) ──────────────
+
+  it("transcribe returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
+    const result = await client.callTool({
+      name: "transcribe",
+      arguments: {
+        asset_id: vidAssetId,
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIE_API_KEY");
+  });
+
+  // ── Section 15: Generation tools (require KIE_API_KEY) ─────────
+
+  it("generate_nano_banana_image returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
+    const result = await client.callTool({
+      name: "generate_nano_banana_image",
+      arguments: {
+        prompt: "a sunset over the ocean",
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIE_API_KEY");
+  });
+
+  it("generate_grok_imagine_video returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        asset_id: renamedAssetId,
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIE_API_KEY");
+  });
+
+  it("generate_grok_imagine_image returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
+    const result = await client.callTool({
+      name: "generate_grok_imagine_image",
+      arguments: {
+        asset_id: renamedAssetId,
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIE_API_KEY");
+  });
+
+  it("generate_gpt_image returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
+    const result = await client.callTool({
+      name: "generate_gpt_image",
+      arguments: {
+        prompt: "a sunset",
+        project_slug: PROJECT,
+        image_asset_ids: [renamedAssetId],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("KIE_API_KEY");
+  });
+
+  // ── Section 16: Preview tools (require OPENAI_API_KEY) ─────────
+
+  it("preview_video_gen returns error without OPENAI_API_KEY", async () => {
+    if (hasOpenAiKey) return;
+    const result = await client.callTool({
+      name: "preview_video_gen",
+      arguments: {
+        prompt: "generate a sunset video",
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("OPENAI_API_KEY");
+  });
+
+  it("preview_image_gen returns error without OPENAI_API_KEY", async () => {
+    if (hasOpenAiKey) return;
+    const result = await client.callTool({
+      name: "preview_image_gen",
+      arguments: {
+        prompt: "generate a sunset image",
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("OPENAI_API_KEY");
+  });
+
+  it("chat returns error without OPENAI_API_KEY", async () => {
+    if (hasOpenAiKey) return;
+    const result = await client.callTool({
+      name: "chat",
+      arguments: {
+        prompt: "trim the first 2 seconds",
+        project_slug: PROJECT,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseText(result)).toContain("OPENAI_API_KEY");
   });
 });

@@ -86,9 +86,9 @@ export interface FFmpeggyClass {
 
 let _FFmpeggy: FFmpeggyClass | null = null;
 
-export function getFFmpeggy(): FFmpeggyClass {
+export async function getFFmpeggy(): Promise<FFmpeggyClass> {
   if (!_FFmpeggy) {
-    const mod: { FFmpeggy: FFmpeggyClass } = require("ffmpeggy");
+    const mod = await import("ffmpeggy") as { FFmpeggy: FFmpeggyClass };
     _FFmpeggy = mod.FFmpeggy;
     _FFmpeggy.DefaultConfig.ffmpegBin = FFMPEG;
     _FFmpeggy.DefaultConfig.ffprobeBin = FFPROBE;

@@ -54,7 +54,7 @@ export function registerChangeVideoSpeedJob(fs: ClipfirstFs): void {
 
     try {
       const outputOptions = buildSpeedOutputOptions(speed, hasAudio);
-      const FFmpeggy = getFFmpeggy();
+      const FFmpeggy = await getFFmpeggy();
       const ff = new FFmpeggy({
         input: inputPath,
         output: outputPath,

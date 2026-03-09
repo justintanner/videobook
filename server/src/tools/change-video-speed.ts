@@ -25,7 +25,8 @@ function validateSpeed(speed: number): string | null {
 }
 
 async function hasAudioStream(filePath: string): Promise<boolean> {
-  const probe = await getFFmpeggy().probe(filePath);
+  const FFmpeggy = await getFFmpeggy();
+  const probe = await FFmpeggy.probe(filePath);
   return probe.streams.some((s) => s.codec_type === "audio");
 }
 

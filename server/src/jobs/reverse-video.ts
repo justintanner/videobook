@@ -39,7 +39,7 @@ export function registerReverseVideoJob(fs: ClipfirstFs): void {
 
     try {
       const outputOptions = buildReverseOutputOptions(hasAudio);
-      const FFmpeggy = getFFmpeggy();
+      const FFmpeggy = await getFFmpeggy();
       const ff = new FFmpeggy({
         input: inputPath,
         output: outputPath,
