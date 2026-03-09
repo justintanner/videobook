@@ -139,7 +139,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
             chunks = chunkSegments(allSegments, orient, highlightStyle);
           }
 
-          const outputFilename = isPortrait ? "render_9x16.mp4" : "render_16x9.mp4";
+          const outputFilename = isPortrait ? "1080x1920_portrait.mp4" : "1920x1080_landscape.mp4";
           const outputPath = join(assetDir, outputFilename);
 
           const inputProps: RenderInputProps = {

@@ -13,7 +13,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_video",
     description:
-      "Render a vid- asset to portrait (1080x1920) and/or landscape (1920x1080) with blur-fill background and optional word-level subtitles. Produces render_9x16.mp4 and/or render_16x9.mp4.",
+      "Render a vid- asset to portrait (1080x1920) and/or landscape (1920x1080) with blur-fill background and optional word-level subtitles. Produces 1080x1920_portrait.mp4 and/or 1920x1080_landscape.mp4.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),

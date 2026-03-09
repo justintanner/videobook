@@ -1,0 +1,120 @@
+import type { ClipfirstFs } from "clipfirst-fs";
+import { z } from "zod";
+import { queue } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
+
+type TimelineSlot = {
+  slug: string;
+  volume?: number;
+  audioFadeIn?: number;
+  audioFadeOut?: number;
+};
+
+const LANDSCAPE_RENDER = "1920x1080_landscape.mp4";
+const PORTRAIT_RENDER = "1080x1920_portrait.mp4";
+
+export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "render_timeline",
+    description:
+      "Concatenate rendered video clips in timeline order into a single final output. Each slot must have a rendered video (1920x1080_landscape.mp4 or 1080x1920_portrait.mp4). Writes output to the 'final' singleton asset.",
+    schema: {
+      project_slug: z.string().describe("Project slug"),
+      orientation: z
+        .enum(["landscape", "portrait"])
+        .optional()
+        .describe("Which orientation to render (default: landscape)"),
+    },
+    handler: async (args) => {
+      const { project_slug, orientation = "landscape" } = args as {
+        project_slug: string;
+        orientation?: "landscape" | "portrait";
+      };
+
+      const timelineResult = await fs.readProjectMeta<TimelineSlot[]>("timeline", project_slug);
+      if (!timelineResult.ok) {
+        if (timelineResult.error.code === "NOT_FOUND") {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: "No timeline found for this project. Use edit_timeline first." }],
+          };
+        }
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: timelineResult.error.message }],
+        };
+      }
+
+      const slots = timelineResult.value.filter((s) => s.slug);
+      if (slots.length === 0) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Timeline has no slots with assets assigned." }],
+        };
+      }
+
+      const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : LANDSCAPE_RENDER;
+
+      const resolvedSlots: Array<{
+        slug: string;
+        volume: number;
+        fadeIn: number;
+        fadeOut: number;
+        assetDir: string;
+      }> = [];
+
+      for (const slot of slots) {
+        const manifestResult = await fs.getManifest(slot.slug, project_slug);
+        if (!manifestResult.ok) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Asset ${slot.slug} not found: ${manifestResult.error.message}`,
+            }],
+          };
+        }
+
+        const hasRender = manifestResult.value.files.some((f) => f.name === renderFilename);
+        if (!hasRender) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Asset ${slot.slug} is missing ${renderFilename}. Render it first with render_video.`,
+            }],
+          };
+        }
+
+        resolvedSlots.push({
+          slug: slot.slug,
+          volume: slot.volume ?? 100,
+          fadeIn: slot.audioFadeIn ?? 0,
+          fadeOut: slot.audioFadeOut ?? 0,
+          assetDir: manifestResult.value.path,
+        });
+      }
+
+      const jobId = `render-timeline-${project_slug}-${Date.now()}`;
+
+      await queue.enqueue(jobId, {
+        type: "render_timeline",
+        projectSlug: project_slug,
+        orientation,
+        resolvedSlots,
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            job_id: jobId,
+            status: "enqueued",
+            slot_count: resolvedSlots.length,
+            orientation,
+          }),
+        }],
+      };
+    },
+  };
+}
