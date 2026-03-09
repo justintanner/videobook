@@ -119,42 +119,30 @@ function CardWrapper({ item, labelOverrides, children }: { item: MediaItem; labe
 
 function CardBadgesSection() {
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Card Badges</h2>
 
-      {/* SlugBadge */}
-      <h3 className="text-sm font-mono font-bold text-blue-400/70">SlugBadge</h3>
-      <div className="flex flex-wrap gap-4 mb-6">
+      <div className="border border-border/50 rounded bg-zinc-900 p-3 flex flex-wrap items-start gap-x-4 gap-y-3">
         {slugBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[200px] h-[60px] relative overflow-hidden border border-border/50 rounded bg-zinc-900">
+          <div key={mock.id} className="flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="relative h-10 w-40">
               <SlugBadge {...mock.props} />
             </div>
           </div>
         ))}
-      </div>
-
-      {/* DurationBadge */}
-      <h3 className="text-sm font-mono font-bold text-blue-400/70">DurationBadge</h3>
-      <div className="flex flex-wrap gap-4 mb-6">
         {durationBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[120px] h-[50px] relative overflow-hidden border border-border/50 rounded bg-zinc-900">
+          <div key={mock.id} className="flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="relative h-9 w-20">
               <DurationBadge {...mock.props} />
             </div>
           </div>
         ))}
-      </div>
-
-      {/* ResolutionBadge */}
-      <h3 className="text-sm font-mono font-bold text-blue-400/70">ResolutionBadge</h3>
-      <div className="flex flex-wrap gap-4">
         {resolutionBadgeMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[120px] h-[50px] relative overflow-hidden border border-border/50 rounded bg-zinc-900">
+          <div key={mock.id} className="flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="relative h-9 w-24">
               <ResolutionBadge {...mock.props} />
             </div>
           </div>
