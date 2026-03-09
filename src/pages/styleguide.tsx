@@ -10,7 +10,7 @@ import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
-  Zap, ArrowLeft,
+  Zap, ArrowLeft, ImageIcon,
 } from 'lucide-react';
 
 const colors = [
@@ -49,37 +49,42 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
 
 // ── App Layout Demo Helpers ──
 
-function BracketLabel({ label }: { label: string }) {
-  return <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">[{label}]</span>;
+function BracketLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-bold tracking-[0.15em] text-primary/70 uppercase">[{label}]</span>
+      {required && <span className="text-[8px] font-bold text-red-400/80 tracking-wider">*REQ</span>}
+    </div>
+  );
 }
 
 function ToggleGroup({ options, activeIndex }: { options: string[]; activeIndex: number }) {
   return (
-    <div className="flex">
-      {options.map((opt, i) => {
-        const isFirst = i === 0;
-        const isLast = i === options.length - 1;
-        const rounded = isFirst && isLast ? '' : isFirst ? 'rounded-r-none' : isLast ? 'rounded-l-none' : 'rounded-none border-x-0';
-        return (
-          <Button
-            key={opt}
-            variant={i === activeIndex ? 'toggleActive' : 'toggleInactive'}
-            size="sm"
-            className={rounded}
-          >
-            {opt}
-          </Button>
-        );
-      })}
+    <div className="inline-flex border border-primary/30 rounded overflow-hidden bg-black/40">
+      {options.map((opt, i) => (
+        <button
+          key={opt}
+          type="button"
+          className={[
+            'font-mono font-bold tracking-wider px-4 h-9 text-xs',
+            i > 0 ? 'border-l border-primary/30' : '',
+            i === activeIndex
+              ? 'bg-primary/20 text-primary shadow-[inset_0_0_12px_rgba(0,255,255,0.3)]'
+              : 'text-primary/50',
+          ].join(' ')}
+        >
+          {opt}
+        </button>
+      ))}
     </div>
   );
 }
 
 function FakeDropdown({ text }: { text: string }) {
   return (
-    <div className="bg-muted border border-input rounded-md px-3 py-1.5 text-sm font-mono flex items-center gap-2">
+    <div className="bg-black/60 border border-primary/30 rounded px-3 py-1.5 text-xs font-mono font-bold tracking-wide text-primary/90 flex items-center gap-2">
       {text}
-      <ChevronDown className="w-3 h-3 text-muted-foreground" />
+      <ChevronDown className="w-3 h-3 text-primary/50" />
     </div>
   );
 }
@@ -177,129 +182,158 @@ function AppLayoutDemo() {
 
             {/* Center Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 p-4 overflow-y-auto">
-              {/* VIDEO_GENERATION Panel */}
-              <div className="border border-primary/50 rounded-md p-3">
-                {/* Title row */}
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-2">
-                    <Grid3x3 className="w-3.5 h-3.5 text-primary" />
-                    <span className="font-mono text-sm font-bold text-primary uppercase tracking-wider">VIDEO_GENERATION</span>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
+            <div className="flex-1 p-4 overflow-y-auto flex flex-col">
+              {/* VIDEO_GENERATION Panel — DynamicGen Style */}
+              <div className="relative w-full flex-1 overflow-hidden bg-gradient-to-b from-cyan-950/30 via-black to-black rounded flex flex-col">
+                {/* Scanlines overlay */}
+                <div className="absolute inset-0 pointer-events-none scanlines opacity-20 z-10" />
+                {/* Pixel grid background */}
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-5"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)',
+                    backgroundSize: '4px 4px',
+                  }}
+                />
 
-                {/* Two-column layout: left = form, right = images */}
-                <div className="flex flex-row">
-                  {/* Left column */}
-                  <div className="flex-1 min-w-0">
-                    {/* [PROMPT] section */}
-                    <div className="space-y-2 mb-3">
+                {/* Inner bordered frame */}
+                <div className="relative z-20 flex-1 flex flex-col border-2 border-cyan-400/50 shadow-[0_0_30px_-10px_rgba(0,255,255,0.3)]">
+                  {/* Header */}
+                  <div className="flex items-center justify-between pl-2.5 pr-2.5 py-1.5 shrink-0 border-b-2 border-inherit bg-black/50 backdrop-blur-sm">
+                    <div className="flex items-center gap-2">
+                      <Film className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#22d3ee]" />
+                      <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">VIDEO_GENERATION</span>
+                    </div>
+                    <button className="w-7 h-7 flex items-center justify-center text-primary/60 transition-all hover:bg-red-500/10 hover:text-red-400">
+                      <X className="w-5 h-5 stroke-[2.5]" />
+                    </button>
+                  </div>
+
+                  {/* Body: form + asset sidebar */}
+                  <div className="flex flex-row flex-1">
+                    {/* Form column */}
+                    <div className="flex-1 pl-4 pr-8 py-4 mr-2">
+                      {/* [PROMPT] section */}
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center justify-between">
+                          <BracketLabel label="PROMPT" required />
+                          <button className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono font-bold tracking-wider text-primary bg-primary/20 border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.3)]">
+                            <Sparkles className="w-3 h-3" />
+                            Rewrite
+                          </button>
+                        </div>
+                        <textarea
+                          className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28"
+                          defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion."
+                          readOnly
+                        />
+                      </div>
+
+                      {/* Parameters */}
+                      <div className="flex flex-wrap gap-x-6 gap-y-4 my-3">
+                        <div>
+                          <BracketLabel label="ASPECT RATIO" />
+                          <div className="mt-1.5">
+                            <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
+                          </div>
+                        </div>
+                        <div>
+                          <BracketLabel label="DURATION" />
+                          <div className="mt-1.5">
+                            <FakeDropdown text="8" />
+                          </div>
+                        </div>
+                        <div>
+                          <BracketLabel label="IMAGE ORIENTATION" />
+                          <div className="mt-1.5">
+                            <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
+                          </div>
+                        </div>
+                        <div>
+                          <BracketLabel label="MODE" />
+                          <div className="mt-1.5">
+                            <ToggleGroup options={['std', 'pro']} activeIndex={0} />
+                          </div>
+                        </div>
+                        <div>
+                          <BracketLabel label="MULTI SHOTS" />
+                          <div className="mt-1.5">
+                            <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
+                          </div>
+                        </div>
+                        <div>
+                          <BracketLabel label="SOUND" />
+                          <div className="mt-1.5">
+                            <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Warnings */}
+                      <div className="mt-3 border border-yellow-500/30 bg-yellow-500/5 rounded p-3">
+                        <div className="text-xs font-mono font-bold text-yellow-400/70 uppercase tracking-wider mb-1">WARNINGS</div>
+                        <ul className="list-disc list-inside">
+                          <li className="text-xs font-mono text-yellow-400/70">Kling 3.0 multi_prompt must be a non-empty list</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Asset sidebar */}
+                    <div className="w-44 border-l border-primary/20 bg-black/20 p-3 space-y-3">
                       <div className="flex items-center justify-between">
-                        <BracketLabel label="PROMPT" />
-                        <Button variant="default" size="sm">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Rewrite
-                        </Button>
+                        <BracketLabel label="IMAGES" />
+                        <span className="text-[10px] font-mono text-primary/50">1/2</span>
                       </div>
-                      <textarea
-                        className="bg-muted/30 border border-input/50 rounded-md p-3 text-sm font-mono text-foreground/80 resize-none h-28 w-full focus:outline-none focus:ring-1 focus:ring-ring"
-                        defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion."
-                        readOnly
-                      />
-                    </div>
 
-                    {/* + SCENE button */}
-                    <Button variant="dashed" className="w-full mb-3">+ SCENE</Button>
+                      {/* Filled slot */}
+                      <div className="relative aspect-video border-2 border-primary/50 bg-black/60 overflow-hidden">
+                        <div className="absolute inset-0 scanlines pointer-events-none opacity-20" />
+                        <img src="/styleguide-img-cover.jpg" alt="thumbnail" className="w-full h-full object-cover" />
+                        <button className="absolute top-1 right-1 w-5 h-5 rounded bg-black/70 border border-primary/30 flex items-center justify-center hover:bg-red-500/30 hover:border-red-500/60 transition-colors">
+                          <X className="w-3 h-3 text-primary/70" />
+                        </button>
+                      </div>
 
-                    {/* Parameters row */}
-                    <div className="flex flex-wrap gap-x-8 gap-y-3 my-3">
-                      <div>
-                        <BracketLabel label="ASPECT RATIO" />
-                        <div className="mt-1.5">
-                          <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
-                        </div>
+                      {/* Empty slot */}
+                      <div className="relative aspect-video border-2 border-primary/30 border-dashed bg-black/60 overflow-hidden flex items-center justify-center">
+                        <div className="absolute inset-0 scanlines pointer-events-none opacity-20" />
+                        <ImageIcon className="w-5 h-5 text-primary/25 relative z-10" />
+                        <div className="absolute inset-0 pointer-events-none showcase-slot-ready" />
                       </div>
-                      <div>
-                        <BracketLabel label="DURATION" />
-                        <div className="mt-1.5">
-                          <FakeDropdown text="8" />
-                        </div>
-                      </div>
-                      <div>
-                        <BracketLabel label="IMAGE ORIENTATION" />
-                        <div className="mt-1.5">
-                          <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
-                        </div>
-                      </div>
-                      <div>
-                        <BracketLabel label="MODE" />
-                        <div className="mt-1.5">
-                          <ToggleGroup options={['std', 'pro']} activeIndex={0} />
-                        </div>
-                      </div>
-                      <div>
-                        <BracketLabel label="MULTI SHOTS" />
-                        <div className="mt-1.5">
-                          <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
-                        </div>
-                      </div>
-                      <div>
-                        <BracketLabel label="SOUND" />
-                        <div className="mt-1.5">
-                          <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* + ADD ELEMENT button */}
-                    <Button variant="dashed" className="w-full">+ ADD ELEMENT</Button>
-
-                    {/* WARNINGS box */}
-                    <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
-                      <div className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider mb-1">WARNINGS</div>
-                      <ul className="list-disc list-inside">
-                        <li className="text-xs font-mono text-amber-400/80">Kling 3.0 multi_prompt must be a non-empty list</li>
-                      </ul>
-                    </div>
-
-                    {/* Footer row */}
-                    <div className="flex justify-between items-center mt-3">
-                      <FakeDropdown text="Kling 3.0" />
-                      <Button variant="glow" size="lg">
-                        <Zap className="w-4 h-4" />
-                        GENERATE
-                      </Button>
                     </div>
                   </div>
 
-                  {/* Right column — IMAGES */}
-                  <div className="w-[160px] shrink-0 border-l border-border/50 pl-3 ml-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <BracketLabel label="IMAGES" />
-                      <span className="text-xs font-mono text-muted-foreground">1/2</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="w-[80px] h-[60px] border border-border/50 rounded overflow-hidden">
-                        <img src="/styleguide-img-cover.jpg" alt="thumbnail" className="w-full h-full object-cover" />
+                  {/* Footer */}
+                  <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
+                    <FakeDropdown text="Kling 3.0" />
+                    <button className="relative w-48 py-3 px-6 overflow-hidden font-bold text-sm tracking-[0.2em] uppercase border-2 rounded transition-all duration-300 bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]">
+                      <div className="relative flex items-center justify-center gap-2">
+                        <Zap className="w-5 h-5 drop-shadow-[0_0_6px_currentColor]" />
+                        <span>GENERATE</span>
                       </div>
-                      <div className="w-[80px] h-[60px] border border-dashed border-border/50 rounded" />
-                    </div>
+                      {/* Pulsing glow overlay */}
+                      <div
+                        className="absolute inset-0 pointer-events-none rounded"
+                        style={{
+                          boxShadow: 'inset 0 0 15px rgba(34,211,238,0.5)',
+                          animation: 'showcase-slot-pulse 2s ease-in-out infinite',
+                        }}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>
 
             </div>
               {/* Chat input — sticky bottom */}
-              <div className="shrink-0 px-4 pb-3 pt-2 border-t border-border/30">
-                <div className="border border-border/50 rounded-md px-3 py-2 flex items-center justify-between">
+              <div className="shrink-0 px-4 pb-3 pt-2 border-t border-primary/20 bg-black/40">
+                <div className="border border-primary/40 rounded-md px-3 py-2.5 flex items-center justify-between bg-black/60 shadow-[inset_0_0_12px_rgba(0,255,255,0.08)]">
                   <div className="flex items-center gap-2">
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-mono text-muted-foreground">gen image of a dancing banana</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-primary/60" />
+                    <span className="text-sm font-mono text-primary/70">gen image of a dancing banana</span>
                   </div>
-                  <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50" />
+                  <GripVertical className="w-3.5 h-3.5 text-primary/30" />
                 </div>
               </div>
             </div>

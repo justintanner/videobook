@@ -245,6 +245,10 @@
     animation: elf-bounce 0.8s ease-in-out infinite;
   }
 
+  .showcase-slot-ready {
+    animation: showcase-slot-ready 2.5s ease-in-out infinite;
+  }
+
   /* Slower spin for loading rings */
   .animate-spin-slow {
     animation: spin-slow 3s linear infinite;
@@ -713,6 +717,18 @@
       3px 0 20px rgba(255, 0, 0, 0.15);
     border-color: rgba(255, 0, 128, 0.55);
   }
+}
+
+/* ==================== SHOWCASE / GEN PANEL ==================== */
+
+@keyframes showcase-slot-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes showcase-slot-ready {
+  0%, 100% { box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1); }
+  50% { box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.2); }
 }
 
 /* ==================== RECEIVING GHOST CARD — SCI-FI HUD ==================== */
