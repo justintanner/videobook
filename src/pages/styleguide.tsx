@@ -10,7 +10,6 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { SelectWithChevron } from '@/components/ui/SelectWithChevron';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/useToast';
@@ -50,8 +49,6 @@ const colors = [
   { name: 'Popover', bg: 'bg-popover', hex: '#14181F' },
 ] as const;
 
-const variants = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'] as const;
-const sizes = ['default', 'sm', 'lg', 'xl', 'icon'] as const;
 
 // ── Mock Data ──
 
@@ -354,13 +351,7 @@ function AppLayoutDemo() {
             </div>
               {/* Chat input — sticky bottom */}
               <div className="shrink-0 px-4 pb-3 pt-2 border-t border-primary/20 bg-black/40">
-                <div className="border border-primary/40 rounded-md px-3 py-2.5 flex items-center justify-between bg-black/60 shadow-[inset_0_0_12px_rgba(0,255,255,0.08)]">
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-3.5 h-3.5 text-primary/60" />
-                    <span className="text-sm font-mono text-primary/70">gen image of a dancing banana</span>
-                  </div>
-                  <GripVertical className="w-3.5 h-3.5 text-primary/30" />
-                </div>
+                <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
               </div>
             </div>
 
@@ -1345,24 +1336,89 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Buttons */}
+        {/* Dialog / Dropdown / Popover / Tooltip */}
         <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Buttons</h2>
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-1.5">
-              {variants.map((v) => (
-                <Button key={v} variant={v} size="sm">{v}</Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {sizes.map((s) => (
-                <Button key={s} size={s}>{s === 'icon' ? '?' : s}</Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" disabled>Disabled</Button>
-              <Button size="sm" variant="destructive" disabled>Disabled</Button>
-            </div>
+          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Overlays</h2>
+          <div className="flex flex-wrap gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">Dialog</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>System Diagnostic</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline" size="sm">Dismiss</Button>
+                  </DialogClose>
+                  <Button size="sm">Confirm</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-3.5 h-3.5 mr-1.5" />
+                  Dropdown
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
+                <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
+                <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Info className="w-3.5 h-3.5 mr-1.5" />
+                  Popover
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <div className="space-y-2">
+                  <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
+                  <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm">Tooltip</Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Neural interface ready</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
+            >
+              Toast
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
+            >
+              Toast Error
+            </Button>
+          </div>
+          <div className="w-[200px]">
+            <SelectWithChevronDemo />
           </div>
         </div>
       </section>
@@ -1379,127 +1435,6 @@ export function Styleguide() {
           {cardOverlayMocks.map(({ item, Component }) => (
             <div key={item.id} className="w-[200px]"><Component item={item} /></div>
           ))}
-        </div>
-      </section>
-
-      {/* ==================== NEW UI PRIMITIVES ==================== */}
-
-      {/* Dialog */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Dialog</h2>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">Open Dialog</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>System Diagnostic</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline" size="sm">Dismiss</Button>
-              </DialogClose>
-              <Button size="sm">Confirm</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </section>
-
-      {/* Dropdown Menu */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Dropdown Menu</h2>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings className="w-3.5 h-3.5 mr-1.5" />
-              Options
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
-            <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
-            <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </section>
-
-      {/* Popover + Tooltip row */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Popover & Tooltip</h2>
-        <div className="flex gap-4 items-center">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Info className="w-3.5 h-3.5 mr-1.5" />
-                Popover
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent>
-              <div className="space-y-2">
-                <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
-                <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm">Hover for Tooltip</Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Neural interface ready</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </section>
-
-      {/* Scroll Area */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Scroll Area</h2>
-        <ScrollArea className="h-[120px] w-[300px] rounded border border-border bg-card p-3">
-          <div className="space-y-2">
-            {Array.from({ length: 12 }, (_, i) => (
-              <div key={i} className="text-xs font-mono text-muted-foreground">
-                [{String(i + 1).padStart(2, '0')}] subsystem_node_{i + 1} &mdash; ONLINE
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      </section>
-
-      {/* Toast */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Toast</h2>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
-          >
-            Default Toast
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
-          >
-            Destructive Toast
-          </Button>
-        </div>
-      </section>
-
-      {/* SelectWithChevron */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">SelectWithChevron</h2>
-        <div className="w-[240px]">
-          <SelectWithChevronDemo />
         </div>
       </section>
 
