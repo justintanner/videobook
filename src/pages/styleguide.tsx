@@ -25,15 +25,15 @@ import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
-import { CardShell } from '@/components/sidebar/cards/CardShell';
+
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { GenFrame, CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
 import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
-  FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
-  Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
+  FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
+  Film, Grid3x3, Scissors, Music, MoreHorizontal,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
   AlertTriangle, RotateCcw, AudioLines,
 } from 'lucide-react';
@@ -137,6 +137,8 @@ const demoVideoMock: MediaItem = {
 function AppLayoutDemo() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [leftSort, setLeftSort] = useState<'newest' | 'oldest'>('newest');
+  const [rightSort, setRightSort] = useState<'newest' | 'oldest'>('newest');
 
   return (
     <div className="overflow-x-auto mb-8">
@@ -168,32 +170,14 @@ function AppLayoutDemo() {
           {/* ── Middle Row: sidebars + center ── */}
           <div className="flex flex-row overflow-hidden">
             {/* Left Sidebar */}
-            <div className={`${leftOpen ? 'w-[210px]' : 'w-[40px]'} transition-all duration-200 bg-card/50 border-r border-border flex flex-col overflow-hidden`}>
-              <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-                {leftOpen ? (
-                  <>
-                    <div className="flex items-center gap-1.5">
-                      <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">ASSETS</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><Download className="w-3.5 h-3.5" /></button>
-                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><ClipboardList className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setLeftOpen(false)} className="text-muted-foreground/50 hover:text-muted-foreground"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </>
-                ) : (
-                  <button onClick={() => setLeftOpen(true)} className="text-muted-foreground/50 hover:text-muted-foreground mx-auto">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+            <CollapsibleSidebar side="left" collapsed={!leftOpen} onToggle={() => setLeftOpen((o) => !o)} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+              <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={!leftOpen} onToggle={() => setLeftOpen((o) => !o)} side="left" sortOrder={leftSort} onSortChange={() => setLeftSort((s) => s === 'newest' ? 'oldest' : 'newest')} />
               {leftOpen && (
                 <>
-                  <div className="flex-1 overflow-y-auto px-2 space-y-2">
+                  <div className="flex-1 overflow-y-auto space-y-2">
                     <div className="w-full"><ImageCard item={demoImageMock} /></div>
                   </div>
-                  <div className="p-2 mt-auto">
+                  <div className="pt-2 mt-auto">
                     <Button variant="dashed" className="w-full" size="sm">
                       <Upload className="w-3.5 h-3.5" />
                       UPLOAD_ASSET
@@ -201,7 +185,7 @@ function AppLayoutDemo() {
                   </div>
                 </>
               )}
-            </div>
+            </CollapsibleSidebar>
 
             {/* Center Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -356,32 +340,14 @@ function AppLayoutDemo() {
             </div>
 
             {/* Right Sidebar */}
-            <div className={`${rightOpen ? 'w-[210px]' : 'w-[40px]'} transition-all duration-200 bg-card/50 border-l border-border flex flex-col overflow-hidden`}>
-              <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-                {rightOpen ? (
-                  <>
-                    <div className="flex gap-1">
-                      <button onClick={() => setRightOpen(false)} className="text-muted-foreground/50 hover:text-muted-foreground"><ChevronRight className="w-3.5 h-3.5" /></button>
-                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><Download className="w-3.5 h-3.5" /></button>
-                      <button className="text-muted-foreground/50 hover:text-muted-foreground"><ClipboardList className="w-3.5 h-3.5" /></button>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">CLIPS</span>
-                    </div>
-                  </>
-                ) : (
-                  <button onClick={() => setRightOpen(true)} className="text-muted-foreground/50 hover:text-muted-foreground mx-auto">
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+            <CollapsibleSidebar side="right" collapsed={!rightOpen} onToggle={() => setRightOpen((o) => !o)} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+              <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={!rightOpen} onToggle={() => setRightOpen((o) => !o)} side="right" sortOrder={rightSort} onSortChange={() => setRightSort((s) => s === 'newest' ? 'oldest' : 'newest')} />
               {rightOpen && (
                 <>
-                  <div className="flex-1 overflow-y-auto px-2 mt-2 space-y-2">
+                  <div className="flex-1 overflow-y-auto space-y-2 mt-2">
                     <div className="w-full"><VideoCard item={demoVideoMock} /></div>
                   </div>
-                  <div className="p-2 mt-auto">
+                  <div className="pt-2 mt-auto">
                     <Button variant="dashed" className="w-full" size="sm">
                       <Upload className="w-3.5 h-3.5" />
                       UPLOAD_CLIP
@@ -389,7 +355,7 @@ function AppLayoutDemo() {
                   </div>
                 </>
               )}
-            </div>
+            </CollapsibleSidebar>
           </div>
 
           {/* ── Bottom Timeline ── */}
@@ -818,83 +784,6 @@ function FailedAssetReadoutSection() {
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-// ── Overlay Showcase ──
-
-const overlayMocks: { id: string; label: string; item: MediaItem }[] = [
-  { id: 'ov-loading', label: 'loading', item: { id: 'ov1', type: 'video', slug: '@loading-clip', title: 'Loading', filePath: '', status: 'loading' } },
-  { id: 'ov-uploading', label: 'uploading', item: { id: 'ov2', type: 'video', slug: '@uploading-clip', title: 'Uploading', filePath: '', status: 'uploading' } },
-  { id: 'ov-generating', label: 'generating', item: { id: 'ov3', type: 'video', slug: '@generating-clip', title: 'Generating', filePath: '', status: 'generating' } },
-  { id: 'ov-rendering', label: 'rendering', item: { id: 'ov4', type: 'video', slug: '@rendering-clip', title: 'Rendering', filePath: '', status: 'rendering' } },
-  { id: 'ov-downloading', label: 'downloading', item: { id: 'ov5', type: 'video', slug: '@downloading-clip', title: 'Downloading', filePath: '', status: 'downloading' } },
-  { id: 'ov-transcribing', label: 'transcribing', item: { id: 'ov6', type: 'video', slug: '@transcribing-clip', title: 'Transcribing', filePath: '', status: 'transcribing' } },
-  { id: 'ov-untranscribed', label: 'untranscribed', item: { id: 'ov7', type: 'video', slug: '@untranscribed-clip', title: 'Untranscribed', filePath: '', status: 'untranscribed' } },
-  { id: 'ov-corrupt', label: 'corrupt', item: { id: 'ov8', type: 'video', slug: '@corrupt-clip', title: 'Corrupt', filePath: '', status: 'corrupt' } },
-  { id: 'ov-error', label: 'error (failed)', item: { id: 'ov9', type: 'video', slug: '@failed-clip', title: 'Failed', filePath: '', status: 'error' } },
-  { id: 'ov-elf', label: 'elf building (final)', item: { id: 'ov10', type: 'final', slug: '@final-render', title: 'Final', filePath: '', status: 'rendering' } },
-];
-
-function OverlayShowcaseSection() {
-  return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Overlay Showcase (Standalone)</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        All 10 card overlay states rendered standalone via CardShell. Each overlay is shown at larger scale than the
-        typical card thumbnail for visual inspection of animations and layering.
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-        {overlayMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[200px]">
-              <CardShell item={mock.item}>
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="font-mono text-[10px] text-muted-foreground/40">CONTENT</span>
-                </div>
-              </CardShell>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ── CardShell Standalone ──
-
-const cardShellMocks: { id: string; label: string; item: MediaItem }[] = [
-  { id: 'cs-ready', label: 'ready', item: { id: 'cs1', type: 'video', slug: '@ready-clip', title: 'Ready', filePath: '', status: 'ready' } },
-  { id: 'cs-final', label: 'ready (final/gold)', item: { id: 'cs2', type: 'final', slug: '@final-export', title: 'Final', filePath: '', status: 'ready' } },
-  { id: 'cs-error', label: 'error', item: { id: 'cs3', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error' } },
-  { id: 'cs-generating', label: 'generating', item: { id: 'cs4', type: 'video', slug: '@gen-clip', title: 'Generating', filePath: '', status: 'generating' } },
-  { id: 'cs-rendering', label: 'rendering', item: { id: 'cs5', type: 'video', slug: '@render-clip', title: 'Rendering', filePath: '', status: 'rendering' } },
-];
-
-function CardShellSection() {
-  return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CardShell (Wrapper)</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        Base wrapper for all media cards. Provides: accent bar (bottom), corner stroke (bottom-right), state-derived
-        overlay, and clip-corner styling. Hover any card to see the accent bar appear.
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-        {cardShellMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[200px]">
-              <CardShell item={mock.item}>
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_CONTENT</span>
-                </div>
-              </CardShell>
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -1600,12 +1489,6 @@ export function Styleguide() {
 
       {/* CenterStage: FailedAssetReadout */}
       <FailedAssetReadoutSection />
-
-      {/* Overlay Showcase */}
-      <OverlayShowcaseSection />
-
-      {/* CardShell */}
-      <CardShellSection />
 
       {/* SidebarHeader */}
       <SidebarHeaderSection />
