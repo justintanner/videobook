@@ -25,11 +25,13 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
+  AlertTriangle, RotateCcw,
 } from 'lucide-react';
 
 const colors = [
@@ -554,6 +556,277 @@ function ContextMenuDemo() {
   );
 }
 
+// ── CenterStage: TransmissionView ──
+
+const centerStageMocks = [
+  { id: 'cs-transmission', label: 'transmission', message: 'Generate a 30s product demo with upbeat music' },
+  { id: 'cs-transmission-short', label: 'transmission (short)', message: 'Retry render' },
+];
+
+function CenterStageSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: TransmissionView</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Animated transition shown when a new message is sent. Phases: flash scan line, typewriter text, dissolve.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {centerStageMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden">
+              <TransmissionView message={mock.message} onComplete={() => {}} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── CenterStage: IdleScreen ──
+
+const idleScreenMocks = [
+  { id: 'idle-welcome', label: 'welcome', props: { label: 'WAITING_FOR_INPUT...', badge: 'SRC: NULL' } },
+  { id: 'idle-empty-timeline', label: 'timeline-empty', props: { label: 'NO_VIDEO_CONTENT...', fillParent: true as const } },
+  { id: 'idle-no-badge', label: 'idle (no badge)', props: { label: 'STANDBY...' } },
+];
+
+function IdleScreenSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: IdleScreen</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Pulsing idle states shown when no asset is selected or the timeline is empty. Badge appears in welcome mode only.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {idleScreenMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="h-[250px] bg-background border border-border/50 rounded overflow-hidden flex">
+              <IdleScreen {...mock.props} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── CenterStage: AssetViewShell ──
+
+const assetViewShellMocks = [
+  { id: 'shell-constrained', label: 'constrained (fillParent=false)', fillParent: false },
+  { id: 'shell-full', label: 'full bleed (fillParent=true)', fillParent: true },
+];
+
+function AssetViewShellSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: AssetViewShell</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Shared frame for all asset-mode views. Two modes: constrained (max-w-4xl, aspect-video) and full bleed (w-full
+        h-full). Border + shadow provide consistent visual containment.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {assetViewShellMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="h-[250px] bg-background border border-border/50 rounded overflow-hidden flex">
+              <AssetViewShell fillParent={mock.fillParent}>
+                <div className="flex items-center justify-center w-full h-full">
+                  <span className="font-mono text-xs text-primary/40">CONTENT_AREA</span>
+                </div>
+              </AssetViewShell>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── CenterStage: RenderingReadout ──
+
+const renderingReadoutMocks: { id: string; label: string; asset: MediaItem }[] = [
+  {
+    id: 'readout-rendering',
+    label: 'rendering (video)',
+    asset: {
+      id: 'vid-hero',
+      type: 'video',
+      slug: '@hero-intro',
+      title: 'Hero Intro',
+      filePath: '',
+      status: 'rendering',
+      durationSeconds: 30,
+    },
+  },
+  {
+    id: 'readout-landscape',
+    label: 'rendering-landscape',
+    asset: {
+      id: 'vid-wide',
+      type: 'video',
+      slug: '@wide-shot-establishing',
+      title: 'Wide Shot',
+      filePath: '',
+      status: 'rendering-landscape',
+      durationSeconds: 60,
+    },
+  },
+  {
+    id: 'readout-portrait',
+    label: 'rendering-portrait',
+    asset: {
+      id: 'vid-tall',
+      type: 'video',
+      slug: '@portrait-reel',
+      title: 'Portrait Reel',
+      filePath: '',
+      status: 'rendering-portrait',
+      durationSeconds: 45,
+    },
+  },
+  {
+    id: 'readout-final',
+    label: 'rendering (final)',
+    asset: {
+      id: 'vid-final',
+      type: 'final',
+      slug: '@final-export-v2',
+      title: 'Final',
+      filePath: '',
+      status: 'rendering',
+      durationSeconds: 180,
+    },
+  },
+  {
+    id: 'readout-queued',
+    label: 'render-queued',
+    asset: {
+      id: 'vid-queued',
+      type: 'video',
+      slug: '@queued-clip',
+      title: 'Queued Clip',
+      filePath: '',
+      status: 'render-queued',
+      durationSeconds: 30,
+    },
+  },
+  {
+    id: 'readout-queued-final',
+    label: 'render-queued (final)',
+    asset: {
+      id: 'vid-queued-final',
+      type: 'final',
+      slug: '@final-queued',
+      title: 'Final Queued',
+      filePath: '',
+      status: 'render-queued',
+      durationSeconds: 120,
+    },
+  },
+];
+
+function RenderingReadoutSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">RenderingReadout (Center-Stage View)</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Full-panel rendering status view shown in center stage when a video asset is rendering. Scan line animation,
+        grid overlay, corner HUD brackets, Film/Clapperboard icon (type-aware), pulsing status badge, and slug text.
+        Cyan for regular videos, amber for final-type assets.
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {renderingReadoutMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="w-[250px] h-[200px] border border-border/50 rounded overflow-hidden">
+              <RenderingReadout asset={mock.asset} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── CenterStage: FailedAssetReadout (static replica) ──
+
+function FailedAssetReadoutSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">FailedAssetReadout (Center-Stage View)</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, model/tool
+        info, and optional retry button. Static replica below — the real component fetches diagnostic data via
+        useAssetDiagnostic hook which requires a live API connection.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* With error + prompt + model + retry */}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            full diagnostic (with retry)
+          </span>
+          <div className="w-[350px] h-[280px] overflow-hidden">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30">
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <span className="text-red-400 font-bold tracking-wider">@hero-intro-v3</span>
+                <span className="text-red-500/60 ml-auto">FAILED</span>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+                <div className="text-red-400 break-words">
+                  Video generation failed: model returned empty response after 120s timeout. Quota may be exceeded.
+                </div>
+                <div className="space-y-1">
+                  <span className="text-primary/50">Prompt:</span>
+                  <div className="text-primary/80 break-words pl-2">
+                    A slow-motion shot of ocean waves crashing against volcanic rocks at sunset, with golden light
+                    filtering through the spray
+                  </div>
+                </div>
+                <div className="text-primary/50 space-x-3">
+                  <span>
+                    Model: <span className="text-primary/70">veo3</span>
+                  </span>
+                  <span>
+                    Tool: <span className="text-primary/70">generate_veo_video</span>
+                  </span>
+                </div>
+              </div>
+              <div className="shrink-0 p-3 border-t border-red-500/30 bg-red-950/20">
+                <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded text-primary font-bold tracking-wider">
+                  <RotateCcw className="w-4 h-4" />
+                  RETRY
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Minimal error — no prompt, no retry */}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">minimal (error only)</span>
+          <div className="w-[350px] h-[200px] overflow-hidden">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30">
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <span className="text-red-400 font-bold tracking-wider">@corrupted-upload</span>
+                <span className="text-red-500/60 ml-auto">FAILED</span>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+                <div className="text-red-400 break-words">File upload interrupted: connection reset by peer</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -911,6 +1184,21 @@ export function Styleguide() {
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
       </section>
+
+      {/* CenterStage: IdleScreen */}
+      <IdleScreenSection />
+
+      {/* CenterStage: AssetViewShell */}
+      <AssetViewShellSection />
+
+      {/* CenterStage: TransmissionView */}
+      <CenterStageSection />
+
+      {/* CenterStage: RenderingReadout */}
+      <RenderingReadoutSection />
+
+      {/* CenterStage: FailedAssetReadout */}
+      <FailedAssetReadoutSection />
 
       {/* Custom Utilities */}
       <section className="space-y-3">
