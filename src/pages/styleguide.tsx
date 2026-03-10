@@ -26,12 +26,17 @@ import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
+import { CardShell } from '@/components/sidebar/cards/CardShell';
+import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
+import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
+import { GenFrame, CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
+import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, ChevronRight, ChevronLeft, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, ClipboardList, MoreHorizontal, GripVertical,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
-  AlertTriangle, RotateCcw,
+  AlertTriangle, RotateCcw, AudioLines,
 } from 'lucide-react';
 
 const colors = [
@@ -827,6 +832,467 @@ function FailedAssetReadoutSection() {
   );
 }
 
+// ── Overlay Showcase ──
+
+const overlayMocks: { id: string; label: string; item: MediaItem }[] = [
+  { id: 'ov-loading', label: 'loading', item: { id: 'ov1', type: 'video', slug: '@loading-clip', title: 'Loading', filePath: '', status: 'loading' } },
+  { id: 'ov-uploading', label: 'uploading', item: { id: 'ov2', type: 'video', slug: '@uploading-clip', title: 'Uploading', filePath: '', status: 'uploading' } },
+  { id: 'ov-generating', label: 'generating', item: { id: 'ov3', type: 'video', slug: '@generating-clip', title: 'Generating', filePath: '', status: 'generating' } },
+  { id: 'ov-rendering', label: 'rendering', item: { id: 'ov4', type: 'video', slug: '@rendering-clip', title: 'Rendering', filePath: '', status: 'rendering' } },
+  { id: 'ov-downloading', label: 'downloading', item: { id: 'ov5', type: 'video', slug: '@downloading-clip', title: 'Downloading', filePath: '', status: 'downloading' } },
+  { id: 'ov-transcribing', label: 'transcribing', item: { id: 'ov6', type: 'video', slug: '@transcribing-clip', title: 'Transcribing', filePath: '', status: 'transcribing' } },
+  { id: 'ov-untranscribed', label: 'untranscribed', item: { id: 'ov7', type: 'video', slug: '@untranscribed-clip', title: 'Untranscribed', filePath: '', status: 'untranscribed' } },
+  { id: 'ov-corrupt', label: 'corrupt', item: { id: 'ov8', type: 'video', slug: '@corrupt-clip', title: 'Corrupt', filePath: '', status: 'corrupt' } },
+  { id: 'ov-error', label: 'error (failed)', item: { id: 'ov9', type: 'video', slug: '@failed-clip', title: 'Failed', filePath: '', status: 'error' } },
+  { id: 'ov-elf', label: 'elf building (final)', item: { id: 'ov10', type: 'final', slug: '@final-render', title: 'Final', filePath: '', status: 'rendering' } },
+];
+
+function OverlayShowcaseSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Overlay Showcase (Standalone)</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        All 10 card overlay states rendered standalone via CardShell. Each overlay is shown at larger scale than the
+        typical card thumbnail for visual inspection of animations and layering.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
+        {overlayMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="w-[200px]">
+              <CardShell item={mock.item}>
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="font-mono text-[10px] text-muted-foreground/40">CONTENT</span>
+                </div>
+              </CardShell>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── CardShell Standalone ──
+
+const cardShellMocks: { id: string; label: string; item: MediaItem }[] = [
+  { id: 'cs-ready', label: 'ready', item: { id: 'cs1', type: 'video', slug: '@ready-clip', title: 'Ready', filePath: '', status: 'ready' } },
+  { id: 'cs-final', label: 'ready (final/gold)', item: { id: 'cs2', type: 'final', slug: '@final-export', title: 'Final', filePath: '', status: 'ready' } },
+  { id: 'cs-error', label: 'error', item: { id: 'cs3', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error' } },
+  { id: 'cs-generating', label: 'generating', item: { id: 'cs4', type: 'video', slug: '@gen-clip', title: 'Generating', filePath: '', status: 'generating' } },
+  { id: 'cs-rendering', label: 'rendering', item: { id: 'cs5', type: 'video', slug: '@render-clip', title: 'Rendering', filePath: '', status: 'rendering' } },
+];
+
+function CardShellSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CardShell (Wrapper)</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Base wrapper for all media cards. Provides: accent bar (bottom), corner stroke (bottom-right), state-derived
+        overlay, and clip-corner styling. Hover any card to see the accent bar appear.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
+        {cardShellMocks.map((mock) => (
+          <div key={mock.id} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
+            <div className="w-[200px]">
+              <CardShell item={mock.item}>
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_CONTENT</span>
+                </div>
+              </CardShell>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── SidebarHeader ──
+
+function SidebarHeaderSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">SidebarHeader</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Header for sidebar panels. Shows icon, title, sort control (icon-only with tooltip), and collapse toggle.
+        Collapsed mode renders vertically with expand icon and readable vertical title.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            expanded left (sort + collapse)
+          </span>
+          <div className="w-[280px] border border-border/50 rounded p-2 bg-card/10">
+            <SidebarHeader
+              icon={<Film className="w-4 h-4" />}
+              title="CLIPS"
+              collapsed={false}
+              onToggle={() => {}}
+              side="left"
+              sortOrder="newest"
+              onSortChange={() => {}}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            expanded right (no sort)
+          </span>
+          <div className="w-[280px] border border-border/50 rounded p-2 bg-card/10">
+            <SidebarHeader
+              icon={<AudioLines className="w-4 h-4" />}
+              title="AUDIO"
+              collapsed={false}
+              onToggle={() => {}}
+              side="right"
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">collapsed left</span>
+          <div className="w-[48px] border border-border/50 rounded p-1 bg-card/10">
+            <SidebarHeader
+              icon={<Film className="w-4 h-4" />}
+              title="CLIPS"
+              collapsed={true}
+              onToggle={() => {}}
+              side="left"
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">collapsed right</span>
+          <div className="w-[48px] border border-border/50 rounded p-1 bg-card/10">
+            <SidebarHeader
+              icon={<AudioLines className="w-4 h-4" />}
+              title="AUDIO"
+              collapsed={true}
+              onToggle={() => {}}
+              side="right"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── CollapsibleSidebar ──
+
+function CollapsibleSidebarSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CollapsibleSidebar</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
+        border; right variant has left border. Collapsed: 48px, expanded: 280px.
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">left expanded</span>
+          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex">
+            <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}}>
+              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
+              </div>
+            </CollapsibleSidebar>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">left collapsed</span>
+          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex">
+            <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
+              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
+            </CollapsibleSidebar>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">right expanded</span>
+          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex justify-end">
+            <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}}>
+              <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
+              </div>
+            </CollapsibleSidebar>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">right collapsed</span>
+          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex justify-end">
+            <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
+              <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
+            </CollapsibleSidebar>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Gen System ──
+
+const genNoop = () => {};
+
+const executeButtonStates: ExecuteButtonState[] = [
+  'disabled', 'ready', 'charging', 'submitting', 'queued', 'processing', 'success',
+];
+
+const mockModelOptions: ModelOption[] = [
+  {
+    key: 'veo3_fast',
+    label: 'Veo 3 Fast',
+    tool_name: 'generate_veo_video',
+    description: 'Fast video generation',
+    schema: { type: 'object', properties: {}, required: [] },
+    prefilled_values: {},
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+  {
+    key: 'veo3',
+    label: 'Veo 3',
+    tool_name: 'generate_veo_video',
+    description: 'High quality video generation',
+    schema: { type: 'object', properties: {}, required: [] },
+    prefilled_values: {},
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+  {
+    key: 'nano_banana',
+    label: 'Nano Banana',
+    tool_name: 'generate_nano_banana_image',
+    description: 'Image generation',
+    schema: { type: 'object', properties: {}, required: [] },
+    prefilled_values: {},
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+];
+
+function GenSystemSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Gen System</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Generation panel primitives: GenFrame (CRT container), GenPanel (frame + header + footer), ExecuteButton
+        (7-state action button), CloseButton, ModelSelector, and a composed panel demo.
+      </p>
+
+      {/* GenFrame */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">GenFrame</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Base container with CRT scanlines, pixel grid background, cyan border glow. All gen panels inherit this frame.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">bare frame</span>
+          <div className="h-[200px]">
+            <GenFrame>
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-xs text-primary/30">CONTENT_AREA</span>
+              </div>
+            </GenFrame>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with header + footer</span>
+          <div className="h-[200px]">
+            <GenFrame
+              header={
+                <div className="flex items-center gap-2 px-3 py-2 border-b-2 border-inherit bg-black/50">
+                  <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">SAMPLE_HEADER</span>
+                </div>
+              }
+              footer={
+                <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30">
+                  <span className="text-xs font-mono text-primary/40">FOOTER_AREA</span>
+                </div>
+              }
+            >
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-xs text-primary/30">CONTENT_AREA</span>
+              </div>
+            </GenFrame>
+          </div>
+        </div>
+      </div>
+
+      {/* GenPanel */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">GenPanel</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Complete panel: GenFrame + header (icon, label, close button) + optional footer. Used by DynamicGen for
+        VIDEO_GENERATION and IMAGE_GENERATION.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">video panel</span>
+          <div className="h-[220px]">
+            <GenPanel
+              label="VIDEO_GENERATION"
+              icon={<Film className="w-5 h-5" />}
+              onClose={genNoop}
+              footer={
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>
+                </div>
+              }
+            >
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-xs text-primary/30">FORM_FIELDS</span>
+              </div>
+            </GenPanel>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            image panel (close disabled)
+          </span>
+          <div className="h-[220px]">
+            <GenPanel
+              label="IMAGE_GENERATION"
+              icon={<ImageIcon className="w-5 h-5" />}
+              onClose={genNoop}
+              closeDisabled={true}
+              footer={
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>
+                </div>
+              }
+            >
+              <div className="flex-1 flex items-center justify-center">
+                <span className="font-mono text-xs text-primary/30">FORM_FIELDS</span>
+              </div>
+            </GenPanel>
+          </div>
+        </div>
+      </div>
+
+      {/* ExecuteButton */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ExecuteButton</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        7 visual states: disabled (grayed), ready (pulsing glow), charging (gradient sweep), submitting (spinner),
+        queued (bouncing dots), processing (scan line), success (green flash).
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+        {executeButtonStates.map((state) => (
+          <div key={state} className="flex flex-col gap-2">
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{state}</span>
+            <div className="w-[160px]">
+              <ExecuteButton
+                state={state}
+                onClick={genNoop}
+                disabledReason={state === 'disabled' ? 'Fill required fields first' : undefined}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* CloseButton */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">CloseButton</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Panel close trigger. Hover turns red. Disabled state at 50% opacity. Shows "Close (ESC)" tooltip.
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">enabled</span>
+          <div className="flex items-center gap-3 h-10 border border-primary/20 rounded px-3 bg-black/30 w-fit">
+            <CloseButton onClick={genNoop} />
+            <span className="text-xs font-mono text-muted-foreground">hover for red</span>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
+          <div className="flex items-center gap-3 h-10 border border-primary/20 rounded px-3 bg-black/30 w-fit">
+            <CloseButton onClick={genNoop} disabled />
+            <span className="text-xs font-mono text-muted-foreground">50% opacity</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ModelSelector */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ModelSelector</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Model dropdown for switching between generation models. Sits in the panel footer alongside ExecuteButton.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">3 models</span>
+          <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
+          <ModelSelector selectedModelKey="nano_banana" modelOptions={mockModelOptions} onChange={genNoop} disabled />
+        </div>
+      </div>
+
+      {/* Composed Panel Demo */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Composed Panel (Demo)</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Full DynamicGen-style composition: GenPanel with model selector and execute button in footer, form fields in
+        the body.
+      </p>
+      <div className="grid grid-cols-1 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            video generation panel
+          </span>
+          <div className="h-[400px] max-w-3xl">
+            <GenPanel
+              label="VIDEO_GENERATION"
+              icon={<Film className="w-5 h-5" />}
+              onClose={genNoop}
+              footer={
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
+                  <div className="flex-1" />
+                  <div className="w-48">
+                    <ExecuteButton state="ready" onClick={genNoop} />
+                  </div>
+                </div>
+              }
+            >
+              <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
+                <div className="space-y-6">
+                  <GenField
+                    label="Prompt"
+                    required
+                    actions={
+                      <button className="h-5 px-1.5 font-bold text-[10px] tracking-wider shrink-0 rounded border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:border-primary/60 shadow-[0_0_8px_rgba(0,255,255,0.3)] transition-all duration-200 flex items-center justify-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Rewrite</span>
+                      </button>
+                    }
+                  >
+                    <GenTextarea
+                      value="A cinematic drone shot sweeping over a coastal city at golden hour, with reflections of sunlight dancing on the water surface"
+                      onChange={genNoop}
+                      rows={4}
+                    />
+                  </GenField>
+                  <div className="flex flex-wrap gap-x-6 gap-y-4">
+                    <GenField label="Aspect Ratio">
+                      <GenToggle value="16:9" onChange={genNoop} options={['16:9', '9:16'] as const} />
+                    </GenField>
+                    <GenField label="Duration">
+                      <GenToggle value="8" onChange={genNoop} options={['5', '8', '10'] as const} />
+                    </GenField>
+                    <GenField label="Model">
+                      <GenToggle value="veo3_fast" onChange={genNoop} options={['veo3_fast', 'veo3'] as const} />
+                    </GenField>
+                  </div>
+                </div>
+              </div>
+            </GenPanel>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -1199,6 +1665,21 @@ export function Styleguide() {
 
       {/* CenterStage: FailedAssetReadout */}
       <FailedAssetReadoutSection />
+
+      {/* Overlay Showcase */}
+      <OverlayShowcaseSection />
+
+      {/* CardShell */}
+      <CardShellSection />
+
+      {/* SidebarHeader */}
+      <SidebarHeaderSection />
+
+      {/* CollapsibleSidebar */}
+      <CollapsibleSidebarSection />
+
+      {/* Gen System */}
+      <GenSystemSection />
 
       {/* Custom Utilities */}
       <section className="space-y-3">
