@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'wouter';
 import { useWavesurfer } from '@wavesurfer/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,7 @@ import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
-  Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
+  Zap, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
   AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
   Smartphone, Monitor, Square, Play, Volume2, Loader2, Mic,
   Check, CheckCircle2,
@@ -2920,17 +2919,13 @@ function ChatMessagingSection() {
 
 export function Styleguide() {
   return (
-    <div className="min-h-screen p-8 space-y-12">
+    <div className="min-h-screen pt-2 px-8 pb-8 space-y-12">
       <Toaster />
-      <header className="space-y-1">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold font-mono tracking-wider text-blue-400">CLIPFIRST STYLE GUIDE</h1>
-          <Link href="/" className="text-sm font-mono text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Dashboard
-          </Link>
-        </div>
-        <p className="text-sm font-mono text-muted-foreground">Media cards, overlays, and center-stage views in all states</p>
+      <header>
+        <h1 className="text-3xl font-mono font-bold text-primary tracking-wider">CLIPFIRST STYLE GUIDE</h1>
+        <p className="text-muted-foreground font-mono text-sm mt-1">
+          Media cards, overlays, and center-stage views in all states
+        </p>
       </header>
 
       {/* App Layout Demo */}
