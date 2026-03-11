@@ -2313,16 +2313,9 @@ function GenSystemSection() {
         video and image generation.
       </p>
 
-      {/* GenFrame */}
-      <div className="mb-12 pl-4 border-l-2 border-primary/20">
-        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">GenFrame</h3>
-        <p className="text-xs font-mono text-muted-foreground mb-5">
-          Base container with CRT scanlines, pixel grid background, cyan border glow. All gen panels inherit this frame.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">bare frame</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenFrame — bare</p>
           <div className="h-[220px]">
             <GenFrame>
               <div className="flex-1 flex items-center justify-center">
@@ -2332,7 +2325,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">with header + footer</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenFrame — header + footer</p>
           <div className="h-[220px]">
             <GenFrame
               header={
@@ -2354,17 +2347,9 @@ function GenSystemSection() {
         </div>
       </div>
 
-      {/* GenPanel */}
-      <div className="mb-12 pl-4 border-l-2 border-primary/20">
-        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">GenPanel</h3>
-        <p className="text-xs font-mono text-muted-foreground mb-5">
-          Complete panel: GenFrame + header (icon, label, close button) + optional footer. Used by DynamicGen for
-          VIDEO_GENERATION and IMAGE_GENERATION.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">video panel</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — video</p>
           <div className="h-[240px]">
             <GenPanel
               label="VIDEO_GENERATION"
@@ -2383,9 +2368,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
-            image panel (close disabled)
-          </span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — image (close disabled)</p>
           <div className="h-[240px]">
             <GenPanel
               label="IMAGE_GENERATION"
@@ -2406,22 +2389,9 @@ function GenSystemSection() {
         </div>
       </div>
 
-      {/* Composed Panel Demo */}
-      <div className="mb-8 mt-4">
-        <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
-        <div className="pl-4 border-l-2 border-primary/30">
-          <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">Composed Panel (Demo)</h3>
-          <p className="text-xs font-mono text-muted-foreground mb-5">
-            Full DynamicGen-style composition: GenPanel with model selector and execute button in footer, form fields in
-            the body.
-          </p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-8 mb-16">
+      <div className="grid grid-cols-1 gap-8 mb-10">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
-            video generation panel
-          </span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — composed demo</p>
           <div className="h-[420px] max-w-3xl">
             <GenPanel
               label="VIDEO_GENERATION"
@@ -2473,30 +2443,21 @@ function GenSystemSection() {
         </div>
       </div>
 
-      {/* ImageParamSlots */}
-      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
-      <div className="mb-12 pl-4 border-l-2 border-primary/20">
-        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ImageParamSlots</h3>
-        <p className="text-xs font-mono text-muted-foreground mb-5">
-          Asset slot panel for image/video parameters. Shows slot count indicator, required badges, and manages add/remove
-          of asset references. Used in the DynamicGen sidebar.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-10">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">empty (1 required)</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — empty</p>
           <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockAssetFields} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} />
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">filled (1 of 2)</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — filled</p>
           <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockAssetFieldsFilled} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} resolvedAssets={mockResolvedAssets} />
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">disabled</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — disabled</p>
           <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots
               assetFields={mockAssetFields}
@@ -2507,26 +2468,16 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">video mode</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — video</p>
           <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockVideoAssetFields} imageSlots={{ min: 1, max: 1 }} onChange={genNoop} />
           </div>
         </div>
       </div>
 
-      {/* ElementGroupEditor */}
-      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
-      <div className="mb-12 pl-4 border-l-2 border-primary/20">
-        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ElementGroupEditor</h3>
-        <p className="text-xs font-mono text-muted-foreground mb-5">
-          Violet-accented inline element groups with asset drop slots, name, and description fields. Each group represents
-          a named character/object reference. Groups are added progressively and show name/desc fields when slugs are
-          populated or when name/desc values are prefilled (e.g. from prompt history).
-        </p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-10">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">empty (add button)</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — empty</p>
           <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
@@ -2538,9 +2489,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
-            1 group filled (with name/desc)
-          </span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — 1 group</p>
           <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
@@ -2553,7 +2502,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">2 groups filled</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — 2 groups</p>
           <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
@@ -2566,9 +2515,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
-            prefilled name/desc (no slugs)
-          </span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — prefilled</p>
           <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
@@ -2580,7 +2527,7 @@ function GenSystemSection() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">disabled</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — disabled</p>
           <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
@@ -2595,23 +2542,15 @@ function GenSystemSection() {
         </div>
       </div>
 
-      {/* ErrorPage */}
-      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
-      <div className="mb-12 pl-4 border-l-2 border-primary/20">
-        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ErrorPage</h3>
-        <p className="text-xs font-mono text-muted-foreground mb-5">
-          Fallback shown when no model options are available. AlertCircle icon + message.
-        </p>
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">default message</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ErrorPage — default</p>
           <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ErrorPage />
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">custom message</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ErrorPage — custom</p>
           <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ErrorPage message="Model configuration error: missing API key" />
           </div>
