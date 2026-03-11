@@ -292,12 +292,14 @@ function AppLayoutDemo() {
 
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">App Layout</h2>
-        <p className="text-xs font-mono text-muted-foreground mb-6">
-          Full application frame — header, collapsible sidebars, center stage, and timeline. The establishing shot.
-        </p>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">App Layout</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+        Full application frame — header, collapsible sidebars, center stage, and timeline. The establishing shot.
+      </p>
       <div className="overflow-x-auto">
       <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
         <div className="grid grid-rows-[48px_1fr_auto] h-[800px]">
@@ -693,11 +695,12 @@ function CenterStageSection() {
 
   return (
     <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
-        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: TransmissionView</h2>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: TransmissionView</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Animated transition shown when a new message is sent. Phases: flash scan line, typewriter text, dissolve.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -719,11 +722,12 @@ function CenterStageSection() {
 function IdleScreenSection() {
   return (
     <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
-        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: IdleScreen</h2>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: IdleScreen</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
       </p>
       <div className="max-w-2xl flex flex-col gap-4">
@@ -746,11 +750,12 @@ const assetViewShellMocks = [
 function AssetViewShellSection() {
   return (
     <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
-        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: AssetViewShell</h2>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: AssetViewShell</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Shared frame for all asset-mode views. Two modes: constrained (max-w-4xl, aspect-video) and full bleed (w-full
         h-full). Border + shadow provide consistent visual containment.
       </p>
@@ -858,11 +863,12 @@ const renderingReadoutMocks: { id: string; label: string; asset: MediaItem }[] =
 function RenderingReadoutSection() {
   return (
     <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
-        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: RenderingReadout</h2>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: RenderingReadout</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Full-panel rendering status view shown in center stage when a video asset is rendering. Scan line animation,
         grid overlay, corner HUD brackets, Film/Clapperboard icon (type-aware), pulsing status badge, and slug text.
         Cyan for regular videos, amber for final-type assets.
@@ -886,11 +892,12 @@ function RenderingReadoutSection() {
 function FailedAssetReadoutSection() {
   return (
     <section className="mb-20 rounded-2xl bg-gradient-to-b from-red-950/20 via-background to-background p-8 ring-1 ring-red-500/10 shadow-[0_0_60px_-15px_rgba(255,50,50,0.10)]">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-1.5 h-8 rounded-full bg-red-500 shadow-[0_0_12px_rgba(255,50,50,0.5)]" />
-        <h2 className="text-2xl font-mono font-bold text-red-400 tracking-wide">CenterStage: FailedAssetReadout</h2>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: FailedAssetReadout</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-red-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-red-300/40 mb-10 pl-5">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, and model/tool
         info. Static replica below — the real component fetches diagnostic data via useAssetDiagnostic hook which
         requires a live API connection.
@@ -1010,13 +1017,11 @@ function VideoTrimViewSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400">VideoTrimView</h2>
-        </div>
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">VideoTrimView</h2>
         <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-cyan-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Full-screen trimming overlay. Two-column layout: video player + waveform timeline on left,
         transcript panel with word-level selection on right. Waveform shows audio shape with
         hover-expandable thumbnail badges at even intervals. Click words to mark cuts (shown with
@@ -1291,13 +1296,11 @@ function PlayerControlsSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-cyan-400">Player Controls</h2>
-        </div>
-        <div className="flex-1 h-px bg-gradient-to-r from-blue-500/40 to-transparent" />
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Player Controls</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-blue-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Atomic building blocks for the player interface. TabButton for orientation selection,
         TimelineTabs for aspect ratio switching, SlugBadge for clip identification, and GearButton
         for settings access.
@@ -1390,13 +1393,11 @@ function PlayerInterfaceSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-cyan-400">Player Interface</h2>
-        </div>
-        <div className="flex-1 h-px bg-gradient-to-r from-emerald-500/40 to-transparent" />
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Player Interface</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-emerald-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Complete ClipPlayer shell showing landscape (active), portrait (idle), square (rendering),
         and video error states. Header contains TimelineTabs, SlugBadge, and GearButton.
       </p>
@@ -1487,13 +1488,11 @@ function AudioPlayerSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-cyan-400">Audio Player</h2>
-        </div>
-        <div className="flex-1 h-px bg-gradient-to-r from-violet-500/40 to-transparent" />
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Audio Player</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-violet-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Full audio editing interface with waveform visualization, trim handles, cut regions,
         fade controls, and playback. Header shows slug, vocals badge, keep/cut toggle, and action buttons.
       </p>
@@ -1670,13 +1669,11 @@ function AudioTrackSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-300 to-cyan-400">Audio Track</h2>
-        </div>
-        <div className="flex-1 h-px bg-gradient-to-r from-fuchsia-500/40 to-transparent" />
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Audio Track</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-fuchsia-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Audio track states for the timeline: empty drop zone (default and collapsed), assigning,
         active tracks with waveform and controls, and multi-track lane composition.
       </p>
@@ -1810,13 +1807,11 @@ function TimelineScrubberSection() {
     <section className="mb-24">
       {/* Studio section header */}
       <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
-          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-cyan-400">Timeline Scrubber</h2>
-        </div>
-        <div className="flex-1 h-px bg-gradient-to-r from-amber-500/40 to-transparent" />
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Timeline Scrubber</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-amber-500/20">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Assembled timeline with video slots, playhead, audio track lane, and empty drop zone.
         Demonstrates full scrubber composition with proportional slot widths and audio positioning.
       </p>
@@ -1874,17 +1869,15 @@ function TimelineScrubberSection() {
 function VideoSettingsModalSection() {
   return (
     <section className="mb-24">
-      {/* Premium section header with gradient accent */}
-      <div className="mb-10">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-1 h-8 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full" />
-          <h2 className="text-2xl font-mono font-bold tracking-tight text-foreground">Video Settings Modal</h2>
-        </div>
-        <p className="text-sm font-mono text-muted-foreground ml-5 pl-4 border-l border-zinc-800/60">
-          Static render of the video render settings panel. Matches the render_video MCP tool parameters:
-          orientation, audio, subtitles, and OSG overlay.
-        </p>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Video Settings Modal</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+        Static render of the video render settings panel. Matches the render_video MCP tool parameters:
+        orientation, audio, subtitles, and OSG overlay.
+      </p>
 
       {/* Outer luxury container — automotive HUD display panel */}
       <div className="relative max-w-3xl mx-auto rounded-xl bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 border border-zinc-700/40 p-6 shadow-[0_8px_60px_-15px_rgba(0,0,0,0.7),0_0_40px_-10px_rgba(0,255,255,0.08)]">
@@ -2150,17 +2143,15 @@ function VideoSettingsModalSection() {
 function CollapsibleSidebarSection() {
   return (
     <section className="mb-24">
-      {/* Premium section header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-1 h-8 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full" />
-          <h2 className="text-2xl font-mono font-bold tracking-tight text-foreground">CollapsibleSidebar</h2>
-        </div>
-        <p className="text-sm font-mono text-muted-foreground ml-5 pl-4 border-l border-zinc-800/60">
-          Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
-          border; right variant has left border. Collapsed: 48px, expanded: 280px.
-        </p>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">CollapsibleSidebar</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+        Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
+        border; right variant has left border. Collapsed: 48px, expanded: 280px.
+      </p>
 
       {/* Instrument cluster container */}
       <div className="relative rounded-xl bg-gradient-to-b from-zinc-900/60 to-zinc-950/80 border border-zinc-700/30 p-8 shadow-[0_4px_40px_-10px_rgba(0,0,0,0.5)]">
@@ -2311,20 +2302,16 @@ const mockElementFormPrefilledNoSlugs: Record<string, unknown> = {
 function GenSystemSection() {
   return (
     <section className="mb-24">
-      {/* Commanding section header */}
-      <div className="mb-14">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-1.5 h-10 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full shadow-[0_0_12px_rgba(0,255,255,0.3)]" />
-          <h2 className="text-3xl font-mono font-bold tracking-tight text-foreground">Gen System</h2>
-        </div>
-        <p className="text-sm font-mono text-muted-foreground ml-6 pl-4 border-l border-zinc-800/60 max-w-3xl">
-          Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
-          image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
-          video and image generation.
-        </p>
-        {/* Wide gradient separator under main header */}
-        <div className="mt-8 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+      <div className="flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Gen System</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+        Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
+        image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
+        video and image generation.
+      </p>
 
       {/* GenFrame */}
       <div className="mb-12 pl-4 border-l-2 border-primary/20">
@@ -2683,11 +2670,12 @@ function PendingGenerationsSection() {
       <div className="absolute bottom-0 left-0 w-12 h-12 border-b-2 border-l-2 border-cyan-500/25 rounded-bl-xl" />
       <div className="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-cyan-500/25 rounded-br-xl" />
 
-      <div className="relative mb-8">
-        <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase text-cyan-400 pb-4" style={{ textShadow: '0 0 25px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.15)' }}>Pending Generations</h2>
-        <div className="h-px bg-gradient-to-r from-cyan-500/50 via-cyan-500/15 to-transparent" />
+      <div className="relative flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Pending Generations</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="relative text-xs font-mono text-muted-foreground mb-8">
+      <p className="relative text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Review queue for AI-generated videos. Button shows generation state with flash animation on incoming.
         Drawer opens full-screen with approve/reject per tile, pending incoming strip, and all-clear auto-close.
       </p>
@@ -2919,13 +2907,12 @@ function ChatMessagingSection() {
       <div className="absolute bottom-0 left-0 w-14 h-14 border-b-2 border-l-2 border-cyan-500/20 rounded-bl-xl" />
       <div className="absolute bottom-0 right-0 w-14 h-14 border-b-2 border-r-2 border-cyan-500/20 rounded-br-xl" />
 
-      <div className="relative mb-8">
-        <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase pb-4" style={{ textShadow: '0 0 25px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.15)' }}>
-          <span className="text-cyan-400">Chat</span> <span className="text-cyan-600/50">&amp;</span> <span className="text-cyan-400">Messaging</span>
-        </h2>
-        <div className="h-px bg-gradient-to-r from-cyan-500/50 via-cyan-500/15 to-transparent" />
+      <div className="relative flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Chat & Messaging</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="relative text-xs font-mono text-muted-foreground mb-8">
+      <p className="relative text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor with proof-read audio.
       </p>
 
@@ -3120,21 +3107,18 @@ export function Styleguide() {
       {/* App Layout Demo */}
       <AppLayoutDemo />
 
-      {/* ── COMPONENT CATALOG MEGA-DIVIDER ── */}
-      <div className="relative py-16 -mx-8 px-8 mt-20 mb-8 border-y-2 border-primary/40 bg-gradient-to-r from-primary/[0.06] via-transparent to-primary/[0.06]">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--color-primary)/0.08,transparent_70%)]" />
-        <div className="relative flex items-center gap-6">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <h2 className="text-4xl font-bold text-primary font-mono tracking-[0.2em] uppercase drop-shadow-[0_0_20px_var(--color-primary)] whitespace-nowrap">Component Catalog</h2>
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-        </div>
+      <div className="mt-20 flex items-center gap-4 mb-3">
+        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+        <h2 className="text-2xl font-mono font-black tracking-tight">Component Catalog</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
 
       {/* Header / Nav Bar */}
       <section className="space-y-8">
-        <div className="flex items-center gap-4">
-          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Header / Nav Bar</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">Header / Nav Bar</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
         <div className="rounded-xl border-2 border-border/60 overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.4)]">
           <HeaderBar />
@@ -3145,9 +3129,10 @@ export function Styleguide() {
       <section className="grid grid-cols-1 md:grid-cols-2 gap-16 p-10 -mx-8 bg-gradient-to-b from-card/50 to-transparent border-y border-border/30">
         {/* Colors */}
         <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-            <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Colors</h2>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+            <h2 className="text-2xl font-mono font-black tracking-tight">Colors</h2>
+            <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
           </div>
           <div className="grid grid-cols-4 gap-5">
             {colors.map((c) => (
@@ -3162,9 +3147,10 @@ export function Styleguide() {
 
         {/* Typography */}
         <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-            <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Typography</h2>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+            <h2 className="text-2xl font-mono font-black tracking-tight">Typography</h2>
+            <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
           </div>
           <div className="space-y-5">
             <div className="pb-4 border-b border-border/20">
@@ -3199,9 +3185,10 @@ export function Styleguide() {
 
       {/* Cards -- unique overlays */}
       <section className="space-y-8 p-10 -mx-8 bg-card/20 border-y border-border/20">
-        <div className="flex items-center gap-4">
-          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Cards</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">Cards</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
         <div className="flex flex-wrap gap-6">
           <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
@@ -3224,11 +3211,10 @@ export function Styleguide() {
         <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-cyan-500/30 rounded-bl-xl" />
         <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-cyan-500/30 rounded-br-xl" />
 
-        <div className="relative">
-          <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase pb-4 mb-2" style={{ textShadow: '0 0 20px rgba(0,212,255,0.5), 0 0 40px rgba(0,212,255,0.2)' }}>
-            <span className="text-cyan-400">Forms</span> <span className="text-cyan-600/60">&amp;</span> <span className="text-cyan-400">Controls</span>
-          </h2>
-          <div className="h-px bg-gradient-to-r from-cyan-500/60 via-cyan-500/20 to-transparent" />
+        <div className="relative flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">Forms & Controls</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
 
         {/* Row 1 — 3-column grid */}
@@ -3421,9 +3407,10 @@ export function Styleguide() {
 
       {/* Badges */}
       <section className="space-y-8">
-        <div className="flex items-center gap-4">
-          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Badges</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">Badges</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
         <div className="flex flex-wrap gap-5">
           <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
@@ -3455,9 +3442,10 @@ export function Styleguide() {
 
       {/* JsonSyntax */}
       <section className="space-y-8">
-        <div className="flex items-center gap-4">
-          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">JsonSyntax</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">JsonSyntax</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
         <div className="max-w-xl bg-card border-2 border-border/40 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
           <JsonSyntax data={{
@@ -3476,9 +3464,10 @@ export function Styleguide() {
 
       {/* Timeline Slots */}
       <section className="space-y-8 p-10 -mx-8 bg-gradient-to-b from-card/30 to-transparent border-y border-border/20">
-        <div className="flex items-center gap-4">
-          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
-          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Timeline Slots</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h2 className="text-2xl font-mono font-black tracking-tight">Timeline Slots</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
 
         <div className="grid grid-cols-2 gap-6">
