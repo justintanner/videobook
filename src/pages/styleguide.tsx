@@ -694,7 +694,7 @@ function CenterStageSection() {
   const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
 
   return (
-    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+    <section className="mb-24">
       <div className="flex items-center gap-4 mb-3">
         <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
         <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: TransmissionView</h2>
@@ -706,7 +706,7 @@ function CenterStageSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {centerStageMocks.map((mock) => (
           <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-4">
-            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
             <div className="h-[340px] bg-black/60 rounded-xl overflow-hidden flex flex-col border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <TransmissionView message={mock.message} onComplete={handleComplete} />
             </div>
@@ -721,7 +721,7 @@ function CenterStageSection() {
 
 function IdleScreenSection() {
   return (
-    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+    <section className="mb-24">
       <div className="flex items-center gap-4 mb-3">
         <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
         <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: IdleScreen</h2>
@@ -731,7 +731,7 @@ function IdleScreenSection() {
         Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
       </p>
       <div className="max-w-2xl flex flex-col gap-4">
-        <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">welcome</span>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">welcome</p>
         <div className="h-[360px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
           <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
         </div>
@@ -749,7 +749,7 @@ const assetViewShellMocks = [
 
 function AssetViewShellSection() {
   return (
-    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+    <section className="mb-24">
       <div className="flex items-center gap-4 mb-3">
         <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
         <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: AssetViewShell</h2>
@@ -762,7 +762,7 @@ function AssetViewShellSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {assetViewShellMocks.map((mock) => (
           <div key={mock.id} className="flex flex-col gap-4">
-            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
             <div className="h-[300px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <AssetViewShell fillParent={mock.fillParent}>
                 <div className="flex items-center justify-center w-full h-full">
@@ -876,7 +876,7 @@ function RenderingReadoutSection() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
         {renderingReadoutMocks.map((mock) => (
           <div key={mock.id} className="flex flex-col gap-4">
-            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
             <div className="h-[240px] bg-black/60 rounded-xl overflow-hidden border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <RenderingReadout asset={mock.asset} />
             </div>
@@ -905,9 +905,7 @@ function FailedAssetReadoutSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* With error + prompt + model + retry */}
         <div className="flex flex-col gap-4">
-          <span className="text-[11px] font-mono text-red-400/70 uppercase tracking-[0.2em] bg-red-500/10 px-3 py-1 rounded-full w-fit">
-            full diagnostic
-          </span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">full diagnostic</p>
           <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
             <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
@@ -941,7 +939,7 @@ function FailedAssetReadoutSection() {
 
         {/* Minimal error — no prompt, no retry */}
         <div className="flex flex-col gap-4">
-          <span className="text-[11px] font-mono text-red-400/70 uppercase tracking-[0.2em] bg-red-500/10 px-3 py-1 rounded-full w-fit">minimal (error only)</span>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">minimal (error only)</p>
           <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
             <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
@@ -1879,11 +1877,7 @@ function VideoSettingsModalSection() {
         orientation, audio, subtitles, and OSG overlay.
       </p>
 
-      {/* Outer luxury container — automotive HUD display panel */}
-      <div className="relative max-w-3xl mx-auto rounded-xl bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 border border-zinc-700/40 p-6 shadow-[0_8px_60px_-15px_rgba(0,0,0,0.7),0_0_40px_-10px_rgba(0,255,255,0.08)]">
-        {/* Subtle top highlight line */}
-        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-
+      <div className="max-w-3xl mx-auto">
         <div
           className="relative overflow-hidden rounded-lg border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.15),inset_0_0_30px_rgba(0,255,255,0.05)]"
           style={{
@@ -2129,9 +2123,6 @@ function VideoSettingsModalSection() {
             </button>
           </div>
         </div>
-
-        {/* Bottom highlight line */}
-        <div className="absolute bottom-0 left-12 right-12 h-px bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
       </div>
     </section>
   );
@@ -2153,13 +2144,9 @@ function CollapsibleSidebarSection() {
         border; right variant has left border. Collapsed: 48px, expanded: 280px.
       </p>
 
-      {/* Instrument cluster container */}
-      <div className="relative rounded-xl bg-gradient-to-b from-zinc-900/60 to-zinc-950/80 border border-zinc-700/30 p-8 shadow-[0_4px_40px_-10px_rgba(0,0,0,0.5)]">
-        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">left expanded</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">left expanded</p>
             <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
               <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
                 <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
@@ -2170,7 +2157,7 @@ function CollapsibleSidebarSection() {
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">left collapsed</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">left collapsed</p>
             <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
               <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
                 <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
@@ -2178,7 +2165,7 @@ function CollapsibleSidebarSection() {
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">right expanded</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">right expanded</p>
             <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
               <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
                 <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
@@ -2189,7 +2176,7 @@ function CollapsibleSidebarSection() {
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">right collapsed</span>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">right collapsed</p>
             <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
               <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
                 <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
@@ -2197,9 +2184,6 @@ function CollapsibleSidebarSection() {
             </div>
           </div>
         </div>
-
-        <div className="absolute bottom-0 left-12 right-12 h-px bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
-      </div>
     </section>
   );
 }
@@ -2600,32 +2584,24 @@ function PendingGenerationsSection() {
   }, []);
 
   return (
-    <section className="relative mb-20 bg-gradient-to-b from-black/50 to-zinc-950/30 border border-cyan-500/15 rounded-xl p-10 shadow-[0_0_50px_-10px_rgba(0,212,255,0.1)] overflow-hidden">
-      {/* Scan-line overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.025] bg-[repeating-linear-gradient(0deg,transparent,transparent_3px,rgba(0,212,255,0.3)_3px,rgba(0,212,255,0.3)_4px)]" />
-      {/* Corner accents */}
-      <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-cyan-500/25 rounded-tl-xl" />
-      <div className="absolute top-0 right-0 w-12 h-12 border-t-2 border-r-2 border-cyan-500/25 rounded-tr-xl" />
-      <div className="absolute bottom-0 left-0 w-12 h-12 border-b-2 border-l-2 border-cyan-500/25 rounded-bl-xl" />
-      <div className="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-cyan-500/25 rounded-br-xl" />
-
-      <div className="relative flex items-center gap-4 mb-3">
+    <section className="mb-24">
+      <div className="flex items-center gap-4 mb-3">
         <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
         <h2 className="text-2xl font-mono font-black tracking-tight">Pending Generations</h2>
         <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="relative text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Review queue for AI-generated videos. Button shows generation state with flash animation on incoming.
         Drawer opens full-screen with approve/reject per tile, pending incoming strip, and all-clear auto-close.
       </p>
 
       {/* PendingGenerationsButton states */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>PendingGenerationsButton</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">PendingGenerationsButton</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Four states: inactive (muted), generating (amber pulse), ready (amber glow), ready + generating (split badge).
         Click "Flash" to trigger the burst animation on the ready button.
       </p>
-      <div className="relative flex flex-wrap items-end gap-6 mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
+      <div className="flex flex-wrap items-end gap-6 mb-10">
         {pendingGenButtonStates.map((s) => (
           <div key={s.label} className="flex flex-col items-center gap-2">
             <PendingGenerationsButton
@@ -2647,15 +2623,12 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Drawer demo */}
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>PendingGenerationsDrawer</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">PendingGenerationsDrawer</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Full-screen review overlay. Active tile highlighted with cyan glow. Approve/reject removes tiles with
         spring animation. Pending section shows incoming generations. All-clear state auto-closes after 1.5s.
       </p>
-      <div className="relative flex items-center gap-3 mb-10">
+      <div className="flex items-center gap-3 mb-10">
         <button
           onClick={() => { resetDrawer(); setDrawerOpen(true); }}
           className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
@@ -2671,14 +2644,11 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Inline preview: ReviewTile + PendingSection anatomy */}
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>Anatomy (inline preview)</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Anatomy (inline preview)</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Review tile with metadata strip and action buttons. Active tile has cyan border glow; inactive tiles are dimmed.
       </p>
-      <div className="relative grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-10">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-10">
         {/* Active tile mock */}
         <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col">
           <div className="aspect-video bg-black relative">
@@ -2747,14 +2717,11 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Pending strip preview */}
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>Pending Strip</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Pending Strip</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Bottom bar showing in-flight generation jobs with status tags (GEN, DL).
       </p>
-      <div className="relative max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-zinc-950/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
+      <div className="max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-zinc-950/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
         <div className="border-t border-border/50">
           <div className="flex items-center gap-2 px-6 py-2">
             <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
@@ -2777,14 +2744,11 @@ function PendingGenerationsSection() {
       </div>
 
       {/* All Clear state preview */}
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>All Clear State</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">All Clear State</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Shown when all videos are processed. Auto-closes the drawer after 1.5 seconds.
       </p>
-      <div className="relative max-w-sm border border-cyan-500/20 rounded-lg overflow-hidden bg-zinc-950/80 py-8 shadow-[0_0_25px_-5px_rgba(0,212,255,0.08)]">
+      <div className="max-w-sm border border-cyan-500/20 rounded-lg overflow-hidden bg-zinc-950/80 py-8 shadow-[0_0_25px_-5px_rgba(0,212,255,0.08)]">
         <div className="flex flex-col items-center justify-center py-6 px-6">
           <CheckCircle2 className="w-12 h-12 text-primary mb-3" />
           <span className="text-sm font-mono font-bold tracking-widest text-primary uppercase">ALL_CLEAR</span>
@@ -2837,30 +2801,22 @@ function ChatMessagingSection() {
   }, []);
 
   return (
-    <section className="relative mb-20 bg-gradient-to-b from-black/60 to-zinc-950/40 border border-cyan-900/30 rounded-xl p-10 shadow-[0_0_50px_-10px_rgba(0,212,255,0.08)] overflow-hidden">
-      {/* Scan-line overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,212,255,0.5)_2px,rgba(0,212,255,0.5)_3px)]" />
-      {/* Corner brackets */}
-      <div className="absolute top-0 left-0 w-14 h-14 border-t-2 border-l-2 border-cyan-500/20 rounded-tl-xl" />
-      <div className="absolute top-0 right-0 w-14 h-14 border-t-2 border-r-2 border-cyan-500/20 rounded-tr-xl" />
-      <div className="absolute bottom-0 left-0 w-14 h-14 border-b-2 border-l-2 border-cyan-500/20 rounded-bl-xl" />
-      <div className="absolute bottom-0 right-0 w-14 h-14 border-b-2 border-r-2 border-cyan-500/20 rounded-br-xl" />
-
-      <div className="relative flex items-center gap-4 mb-3">
+    <section className="mb-24">
+      <div className="flex items-center gap-4 mb-3">
         <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
         <h2 className="text-2xl font-mono font-black tracking-tight">Chat & Messaging</h2>
         <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
-      <p className="relative text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
         Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor with proof-read audio.
       </p>
 
       {/* ── ChatInput States ── */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ChatInput</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ChatInput</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Terminal prompt with @ autocomplete for asset slugs. Type @ to see the dropdown. Supports keyboard navigation (arrows, tab, enter, escape).
       </p>
-      <div className="relative space-y-5 max-w-2xl mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
+      <div className="space-y-5 max-w-2xl mb-10">
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default</span>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
@@ -2879,12 +2835,9 @@ function ChatMessagingSection() {
         </div>
       </div>
 
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
       {/* ── TransmissionSequence ── */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>TransmissionSequence</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">TransmissionSequence</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Cinematic confirmation animation: scan line sweep, typewriter &ldquo;TRANSMISSION_RECEIVED&rdquo;, message echo, then dissolve. Plays once and calls onComplete.
       </p>
       <div className="mb-3">
@@ -2895,7 +2848,7 @@ function ChatMessagingSection() {
           REPLAY
         </button>
       </div>
-      <div className="relative h-48 max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-black/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
+      <div className="h-48 max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-black/80 mb-10">
         {transmissionRunning && (
           <TransmissionSequence
             key={transmissionKey}
@@ -2910,15 +2863,12 @@ function ChatMessagingSection() {
         )}
       </div>
 
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
       {/* ── ProofReadButton States ── */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ProofReadButton</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ProofReadButton</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Five states derived from audio URL, playback, pending, and dirty flags. Cycles between initial, pending, play, playing, and dirty (regenerate).
       </p>
-      <div className="relative flex flex-wrap items-end gap-6 mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
+      <div className="flex flex-wrap items-end gap-6 mb-10">
         {([
           { label: 'Initial', audioUrl: null, isPlaying: false, isPending: false, dialogDirty: false },
           { label: 'Pending', audioUrl: null, isPlaying: false, isPending: true, dialogDirty: false },
@@ -2955,15 +2905,12 @@ function ChatMessagingSection() {
         </div>
       </div>
 
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
       {/* ── ScriptBlock (editable text block) ── */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ScriptBlock</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptBlock</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Labeled editable text block with save/cancel controls. Click the text to enter edit mode. Edit the text to reveal save/cancel buttons.
       </p>
-      <div className="relative max-w-2xl mb-10">
+      <div className="max-w-2xl mb-10">
         <ScriptBlock
           label="Script"
           content={scriptContent}
@@ -2976,16 +2923,13 @@ function ChatMessagingSection() {
         />
       </div>
 
-      {/* Neon divider */}
-      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
-
       {/* ── ScriptReadout (full component) ── */}
-      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ScriptReadout</h3>
-      <p className="relative text-xs font-mono text-muted-foreground mb-4">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptReadout</p>
+      <p className="text-xs font-mono text-muted-foreground mb-4">
         Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
         and editable body with proof-read audio controls. Click the script text to edit.
       </p>
-      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         {/* With content */}
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with content</span>
@@ -3065,7 +3009,7 @@ export function Styleguide() {
       </section>
 
       {/* Colors + Typography -- dramatic row */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-16 p-10 -mx-8 bg-gradient-to-b from-card/50 to-transparent border-y border-border/30">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-16">
         {/* Colors */}
         <div className="space-y-6">
           <div className="flex items-center gap-4 mb-3">
@@ -3123,7 +3067,7 @@ export function Styleguide() {
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
       {/* Cards -- unique overlays */}
-      <section className="space-y-8 p-10 -mx-8 bg-card/20 border-y border-border/20">
+      <section className="space-y-8">
         <div className="flex items-center gap-4 mb-3">
           <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
           <h2 className="text-2xl font-mono font-black tracking-tight">Cards</h2>
@@ -3141,26 +3085,18 @@ export function Styleguide() {
 
       {/* ==================== FORMS & CONTROLS ==================== */}
 
-      <section className="relative bg-black/40 border border-cyan-500/20 rounded-xl p-10 space-y-14 shadow-[0_0_40px_-8px_rgba(0,212,255,0.12)] overflow-hidden">
-        {/* Scan-line overlay */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,212,255,0.4)_2px,rgba(0,212,255,0.4)_4px)]" />
-        {/* Corner accents */}
-        <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-cyan-500/30 rounded-tl-xl" />
-        <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-cyan-500/30 rounded-tr-xl" />
-        <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-cyan-500/30 rounded-bl-xl" />
-        <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-cyan-500/30 rounded-br-xl" />
-
-        <div className="relative flex items-center gap-4 mb-3">
+      <section className="space-y-8">
+        <div className="flex items-center gap-4 mb-3">
           <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
           <h2 className="text-2xl font-mono font-black tracking-tight">Forms & Controls</h2>
           <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
         </div>
 
         {/* Row 1 — 3-column grid */}
-        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Overlays & Menus */}
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Overlays &amp; Menus</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Overlays &amp; Menus</p>
             <div className="flex flex-wrap gap-2">
               <Dialog>
                 <DialogTrigger asChild>
@@ -3251,8 +3187,8 @@ export function Styleguide() {
           </div>
 
           {/* Inputs */}
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Inputs</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Inputs</p>
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <p className="text-[11px] font-mono text-muted-foreground/70">Default</p>
@@ -3270,8 +3206,8 @@ export function Styleguide() {
           </div>
 
           {/* Selection Controls */}
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Selection Controls</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Selection Controls</p>
             <div className="space-y-4">
               <div className="w-[200px]">
                 <SelectWithChevronDemo />
@@ -3282,45 +3218,36 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Neon divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
-
         {/* Row 2 — 2-column grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Gen Text Fields */}
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Gen Text Fields</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Gen Text Fields</p>
             <GenFieldDemo />
           </div>
 
           {/* Multi-Prompt Editor */}
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Multi-Prompt Editor</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Multi-Prompt Editor</p>
             <MultiPromptEditorDemo />
           </div>
         </div>
 
-        {/* Neon divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
-
         {/* Row 3 — Chat Input full-width */}
-        <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-          <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Chat Input</h3>
+        <div className="space-y-5">
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Chat Input</p>
           <p className="text-[11px] font-mono text-muted-foreground/60">Type @ to trigger autocomplete with sample asset slugs</p>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
 
-        {/* Neon divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
-
         {/* Row 4 — ExecuteButton + CloseButton */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>ExecuteButton</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ExecuteButton</p>
             <ExecuteButtonStatesDemo />
           </div>
-          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>CloseButton</h3>
+          <div className="space-y-5">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">CloseButton</p>
             <div className="flex items-center gap-6">
               <div className="space-y-2 text-center">
                 <CloseButton onClick={() => {}} />
@@ -3334,12 +3261,9 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Neon divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
-
         {/* Row 5 — Asset Drop Slots */}
-        <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
-          <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Asset Drop Slots</h3>
+        <div className="space-y-5">
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Asset Drop Slots</p>
           <AssetDropSlotDemo />
         </div>
       </section>
@@ -3402,7 +3326,7 @@ export function Styleguide() {
       </section>
 
       {/* Timeline Slots */}
-      <section className="space-y-8 p-10 -mx-8 bg-gradient-to-b from-card/30 to-transparent border-y border-border/20">
+      <section className="space-y-8">
         <div className="flex items-center gap-4 mb-3">
           <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
           <h2 className="text-2xl font-mono font-black tracking-tight">Timeline Slots</h2>
@@ -3412,7 +3336,7 @@ export function Styleguide() {
         <div className="grid grid-cols-2 gap-6">
           {/* Empty */}
           <div>
-            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Empty</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Empty</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s01" />
             </div>
@@ -3420,7 +3344,7 @@ export function Styleguide() {
 
           {/* Filled */}
           <div>
-            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Filled</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Filled</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" />
             </div>
@@ -3428,7 +3352,7 @@ export function Styleguide() {
 
           {/* Active */}
           <div>
-            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Active (selected)</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Active (selected)</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive />
             </div>
@@ -3436,7 +3360,7 @@ export function Styleguide() {
 
           {/* Drag Over */}
           <div>
-            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Drag Over</p>
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Drag Over</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s03" isDragOver />
             </div>
@@ -3445,7 +3369,7 @@ export function Styleguide() {
 
         {/* Multi-slot timeline with playhead */}
         <div className="pt-2">
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Multi-slot timeline with playhead</p>
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Multi-slot timeline with playhead</p>
           <div className="relative h-28 flex gap-0.5 border border-border/30 rounded-md overflow-hidden">
             <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
             <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
