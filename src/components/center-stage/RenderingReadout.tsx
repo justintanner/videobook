@@ -32,7 +32,7 @@ export function RenderingReadout({ asset, className }: RenderingReadoutProps) {
       {/* Scanning line animation */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute inset-y-0 w-40 opacity-30"
+          className="absolute inset-y-0 w-24 opacity-30"
           style={{
             background: `linear-gradient(to right, transparent, ${primaryColor}, transparent)`,
             animation: 'clip-scan-line 3s linear infinite',
@@ -48,20 +48,20 @@ export function RenderingReadout({ asset, className }: RenderingReadoutProps) {
             linear-gradient(${primaryColor}40 1px, transparent 1px),
             linear-gradient(90deg, ${primaryColor}40 1px, transparent 1px)
           `,
-          backgroundSize: '20px 20px',
+          backgroundSize: '12px 12px',
         }}
       />
 
       {/* Center content */}
-      <div className="relative z-10 flex flex-col items-center gap-4">
+      <div className="relative z-10 flex flex-col items-center gap-2">
         {isFinal ? (
-          <Clapperboard className="w-16 h-16 animate-pulse" style={{ color: primaryColor }} />
+          <Clapperboard className="w-8 h-8 animate-pulse" style={{ color: primaryColor }} />
         ) : (
-          <Film className="w-16 h-16 animate-pulse" style={{ color: primaryColor }} />
+          <Film className="w-8 h-8 animate-pulse" style={{ color: primaryColor }} />
         )}
 
         <div
-          className="px-4 py-2 rounded border text-sm font-bold tracking-wider animate-pulse"
+          className="px-2.5 py-1 rounded border text-[10px] font-bold tracking-wider animate-pulse"
           style={{
             color: primaryColor,
             borderColor: `${primaryColor}60`,
@@ -72,26 +72,26 @@ export function RenderingReadout({ asset, className }: RenderingReadoutProps) {
           {badgeText}
         </div>
 
-        <div className="text-xs opacity-60 mt-2" style={{ color: primaryColor }}>
+        <div className="text-xs opacity-60" style={{ color: primaryColor }}>
           {asset.slug}
         </div>
       </div>
 
       {/* Corner decorations */}
       <div
-        className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 opacity-40"
+        className="absolute top-2 left-2 w-5 h-5 border-l-2 border-t-2 opacity-40"
         style={{ borderColor: primaryColor }}
       />
       <div
-        className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 opacity-40"
+        className="absolute top-2 right-2 w-5 h-5 border-r-2 border-t-2 opacity-40"
         style={{ borderColor: primaryColor }}
       />
       <div
-        className="absolute bottom-4 left-4 w-8 h-8 border-l-2 border-b-2 opacity-40"
+        className="absolute bottom-2 left-2 w-5 h-5 border-l-2 border-b-2 opacity-40"
         style={{ borderColor: primaryColor }}
       />
       <div
-        className="absolute bottom-4 right-4 w-8 h-8 border-r-2 border-b-2 opacity-40"
+        className="absolute bottom-2 right-2 w-5 h-5 border-r-2 border-b-2 opacity-40"
         style={{ borderColor: primaryColor }}
       />
     </div>
