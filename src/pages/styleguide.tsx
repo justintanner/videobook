@@ -37,6 +37,7 @@ import {
   Film, Grid3x3, Scissors, Music, MoreHorizontal,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
   AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
+  Smartphone, Monitor, Square, Play, Volume2, Loader2, Mic,
 } from 'lucide-react';
 
 const colors = [
@@ -68,8 +69,46 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
   { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
 ];
 
+const MOCK_WAVEFORM_BARS: number[] = [
+  0.2, 0.35, 0.5, 0.65, 0.8, 0.7, 0.55, 0.4, 0.3, 0.45,
+  0.6, 0.75, 0.9, 0.85, 0.7, 0.55, 0.4, 0.5, 0.65, 0.8,
+  0.95, 1.0, 0.9, 0.75, 0.6, 0.45, 0.35, 0.5, 0.65, 0.8,
+  0.7, 0.55, 0.4, 0.3, 0.2, 0.35, 0.5, 0.65, 0.75, 0.6,
+  0.45, 0.55, 0.7, 0.85, 0.9, 0.8, 0.65, 0.5, 0.4, 0.3,
+  0.45, 0.6, 0.5, 0.35, 0.25, 0.15, 0.2, 0.3, 0.2, 0.1,
+];
+
 
 // ── Helper Components ──
+
+function StaticWaveform({
+  bars,
+  playedFraction,
+  height,
+  barColor = 'rgba(0, 255, 255, 0.3)',
+  playedBarColor = 'rgba(0, 255, 255, 0.8)',
+}: {
+  bars: number[];
+  playedFraction: number;
+  height: number;
+  barColor?: string;
+  playedBarColor?: string;
+}) {
+  return (
+    <div className="flex items-end gap-px w-full" style={{ height }}>
+      {bars.map((v, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-sm"
+          style={{
+            height: `${Math.max(v * 100, 4)}%`,
+            backgroundColor: i / bars.length < playedFraction ? playedBarColor : barColor,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 // ── App Layout Demo Helpers ──
 
@@ -1151,6 +1190,940 @@ function VideoTrimViewSection() {
 }
 
 
+// ── Player Controls ──
+
+function PlayerControlsSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Controls</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Atomic building blocks for the player interface. TabButton for orientation selection,
+        TimelineTabs for aspect ratio switching, SlugBadge for clip identification, and GearButton
+        for settings access.
+      </p>
+
+      <div className="space-y-6">
+        {/* TabButton */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">TabButton (active / inactive)</p>
+          <div className="flex items-center gap-2">
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
+              <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
+            </button>
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground hover:border-white/20">
+              <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
+            </button>
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground hover:border-white/20">
+              <Square className="w-3.5 h-3.5 inline mr-1" />1:1
+            </button>
+          </div>
+        </div>
+
+        {/* TimelineTabs */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">TimelineTabs</p>
+          <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20 w-fit">
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
+              <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
+            </button>
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
+              <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
+            </button>
+            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
+              <Square className="w-3.5 h-3.5 inline mr-1" />1:1
+            </button>
+          </div>
+        </div>
+
+        {/* SlugBadge */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">SlugBadge</p>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@hero-intro</span>
+            <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@product-shot-final-v2</span>
+          </div>
+        </div>
+
+        {/* GearButton */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">GearButton</p>
+          <button className="p-1.5 rounded transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10">
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ── Player Interface ──
+
+function PlayerInterfaceSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Interface</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Complete ClipPlayer shell showing landscape (active), portrait (idle), square (rendering),
+        and video error states. Header contains TimelineTabs, SlugBadge, and GearButton.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Landscape (active) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Landscape (active)</p>
+          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
+            {/* Header */}
+            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
+                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Square className="w-3 h-3 inline mr-0.5" />1:1
+                </button>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground truncate max-w-[120px]">@hero-intro</span>
+              <button className="p-1 rounded text-muted-foreground hover:text-primary">
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {/* Video area */}
+            <div className="flex-1 bg-black flex items-center justify-center">
+              <img src="/styleguide-img-cover.jpg" alt="poster" className="w-full h-full object-contain opacity-70" />
+            </div>
+          </div>
+        </div>
+
+        {/* Portrait (idle) — LazyRenderPlaceholder */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Portrait (idle) — LazyRenderPlaceholder</p>
+          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
+            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
+                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Square className="w-3 h-3 inline mr-0.5" />1:1
+                </button>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
+              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
+            </div>
+            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Plus className="w-8 h-8" />
+              <span className="text-sm">Create portrait render</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Square (rendering) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Square (rendering)</p>
+          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
+            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
+                  <Square className="w-3 h-3 inline mr-0.5" />1:1
+                </button>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
+              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
+            </div>
+            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <span className="text-sm">Rendering square...</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Video error */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Video error</p>
+          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
+            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
+                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
+                </button>
+                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
+                  <Square className="w-3 h-3 inline mr-0.5" />1:1
+                </button>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground">@broken-clip</span>
+              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
+            </div>
+            <div className="flex-1 bg-black flex flex-col items-center justify-center gap-2 text-destructive">
+              <AlertTriangle className="w-8 h-8" />
+              <span className="text-sm font-medium">Video playback error</span>
+              <span className="text-xs text-muted-foreground">Failed to load media resource</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ── Audio Player ──
+
+function AudioPlayerSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Player</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Full audio editing interface with waveform visualization, trim handles, cut regions,
+        fade controls, and playback. Header shows slug, vocals badge, keep/cut toggle, and action buttons.
+      </p>
+
+      <div className="border border-border/50 rounded overflow-hidden bg-card/30">
+        {/* Header */}
+        <div className="shrink-0 px-4 py-2 border-b border-border/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">
+              VOCALS
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Keep / Cut toggle */}
+            <div className="flex border border-primary/30 rounded overflow-hidden">
+              <button className="px-2 py-1 text-xs font-medium bg-primary/20 border-r border-primary/30 text-primary">Keep</button>
+              <button className="px-2 py-1 text-xs font-medium bg-black/40 text-muted-foreground">Cut</button>
+            </div>
+            {/* TRIM button with confirmation popup */}
+            <div className="relative">
+              <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded transition-all bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_12px_rgba(34,211,238,0.3)]">
+                <Scissors className="w-3 h-3 inline mr-1" />TRIM
+              </button>
+              {/* Confirmation popup (shown) */}
+              <div className="absolute top-full mt-1 right-0 z-50 bg-black/95 border border-primary/30 rounded p-3 shadow-lg w-48">
+                <p className="text-xs text-muted-foreground mb-2">Apply trim to audio?</p>
+                <div className="flex gap-2">
+                  <button className="flex-1 px-2 py-1 text-xs bg-primary/20 text-primary border border-primary/40 rounded">Confirm</button>
+                  <button className="flex-1 px-2 py-1 text-xs bg-black/40 text-muted-foreground border border-white/10 rounded">Cancel</button>
+                </div>
+              </div>
+            </div>
+            {/* ISOLATE VOCALS */}
+            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded transition-all bg-violet-500/20 text-violet-400 border-violet-500/40">
+              <Mic className="w-3 h-3 inline mr-1" />ISOLATE VOCALS
+            </button>
+          </div>
+        </div>
+
+        {/* Waveform area */}
+        <div className="relative px-4 py-3" style={{ minHeight: 120 }}>
+          {/* Waveform */}
+          <div className="relative w-full" style={{ height: 80 }}>
+            <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0.4} height={80} />
+
+            {/* Trim region overlay — left handle at ~15%, right at ~75% */}
+            <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: '15%' }} />
+            <div className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none" style={{ width: '25%' }} />
+
+            {/* Cut region (red) — small section between 45% and 55% */}
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none"
+              style={{
+                left: '45%',
+                width: '10%',
+                background: 'rgba(239, 68, 68, 0.2)',
+                borderLeft: '2px solid rgba(239, 68, 68, 0.6)',
+                borderRight: '2px solid rgba(239, 68, 68, 0.6)',
+              }}
+            />
+
+            {/* Left trim handle */}
+            <div
+              className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
+              style={{ left: '15%', width: 6, marginLeft: -3 }}
+            >
+              <div className="w-0.5 h-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.7)]" />
+            </div>
+
+            {/* Right trim handle */}
+            <div
+              className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
+              style={{ left: '75%', width: 6, marginLeft: -3 }}
+            >
+              <div className="w-0.5 h-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.7)]" />
+            </div>
+
+            {/* Fade-in handle (yellow, left side) */}
+            <div
+              className="absolute top-0 z-10 pointer-events-none"
+              style={{ left: '15%', width: '8%', height: '100%' }}
+            >
+              <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.4), transparent)' }} />
+            </div>
+
+            {/* Fade-out handle (yellow, right side) */}
+            <div
+              className="absolute top-0 z-10 pointer-events-none"
+              style={{ right: '25%', width: '6%', height: '100%' }}
+            >
+              <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.4), transparent)' }} />
+            </div>
+
+            {/* Playhead */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_6px_rgba(34,211,238,0.7)]"
+              style={{ left: '40%' }}
+            />
+          </div>
+        </div>
+
+        {/* Audio settings row */}
+        <div className="px-4 py-2 border-t border-border/30 flex items-center gap-6 flex-wrap">
+          {/* Fade In */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-yellow-400 w-14 shrink-0">Fade In</span>
+            <input
+              type="range" min={0} max={2000} defaultValue={500} readOnly
+              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yellow-400 [&::-webkit-slider-thumb]:cursor-pointer"
+            />
+            <span className="text-xs font-mono text-yellow-400/80 w-12">500ms</span>
+          </div>
+          {/* Fade Out */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-yellow-400 w-14 shrink-0">Fade Out</span>
+            <input
+              type="range" min={0} max={2000} defaultValue={300} readOnly
+              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yellow-400 [&::-webkit-slider-thumb]:cursor-pointer"
+            />
+            <span className="text-xs font-mono text-yellow-400/80 w-12">300ms</span>
+          </div>
+          {/* Volume */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-amber-400 w-14 shrink-0">Volume</span>
+            <input
+              type="range" min={50} max={500} defaultValue={100} readOnly
+              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:cursor-pointer"
+            />
+            <span className="text-xs font-mono text-amber-400/80 w-12">100%</span>
+          </div>
+          {/* APPLY button */}
+          <button className="px-4 py-1 text-xs font-bold tracking-wider bg-primary/20 text-primary border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">
+            APPLY
+          </button>
+        </div>
+
+        {/* Playback controls */}
+        <div className="px-4 py-2 border-t border-border/30 flex items-center gap-4">
+          <button className="w-8 h-8 rounded-full border border-primary/50 bg-primary/10 flex items-center justify-center text-primary">
+            <Play className="w-4 h-4 ml-0.5" />
+          </button>
+          <div className="font-mono text-sm tabular-nums">
+            <span className="text-cyan-400">01:23</span>
+            <span className="text-muted-foreground mx-1">/</span>
+            <span className="text-muted-foreground">03:45</span>
+          </div>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Volume2 className="w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              type="range" min={0} max={100} defaultValue={80} readOnly
+              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ── Audio Track ──
+
+function AudioTrackSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Track</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Audio track states for the timeline: empty drop zone (default and collapsed), assigning,
+        active tracks with waveform and controls, and multi-track lane composition.
+      </p>
+
+      <div className="space-y-6">
+        {/* Empty (default) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Empty (default)</p>
+          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
+            <Music className="w-3.5 h-3.5" />
+            <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+
+        {/* Empty (collapsed) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Empty (collapsed)</p>
+          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-8 min-h-8 border-border/40 text-muted-foreground/50">
+            <Music className="w-3 h-3" />
+            <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+
+        {/* Assigning */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Assigning</p>
+          <div className="h-14 min-h-14 border border-border/50 bg-primary/5 rounded flex items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
+          </div>
+        </div>
+
+        {/* Active (cyan) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Active (cyan)</p>
+          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded overflow-hidden">
+            {/* Positioned audio block */}
+            <div
+              className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
+              style={{ left: '10%', width: '60%' }}
+            >
+              {/* Waveform inside block */}
+              <div className="absolute inset-0 px-1 flex items-center">
+                <StaticWaveform
+                  bars={MOCK_WAVEFORM_BARS}
+                  playedFraction={0}
+                  height={36}
+                  barColor="rgba(0, 255, 255, 0.3)"
+                  playedBarColor="rgba(0, 255, 255, 0.6)"
+                />
+              </div>
+              {/* Slug label */}
+              <div className="absolute bottom-0.5 left-1 z-20">
+                <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span>
+              </div>
+              {/* Fade-in handle */}
+              <div className="absolute top-0 left-0 bottom-0 z-10" style={{ width: '8%' }}>
+                <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.6), transparent)' }} />
+              </div>
+              {/* Fade-out handle */}
+              <div className="absolute top-0 right-0 bottom-0 z-10" style={{ width: '5%' }}>
+                <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.6), transparent)' }} />
+              </div>
+              {/* Resize handles */}
+              <div className="absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize hover:bg-cyan-400/40 z-20" />
+              <div className="absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize hover:bg-cyan-400/40 z-20" />
+            </div>
+          </div>
+        </div>
+
+        {/* Active (magenta) */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Active (magenta)</p>
+          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded overflow-hidden">
+            <div
+              className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
+              style={{ left: '20%', width: '50%' }}
+            >
+              <div className="absolute inset-0 px-1 flex items-center">
+                <StaticWaveform
+                  bars={MOCK_WAVEFORM_BARS}
+                  playedFraction={0}
+                  height={36}
+                  barColor="rgba(217, 70, 239, 0.3)"
+                  playedBarColor="rgba(217, 70, 239, 0.6)"
+                />
+              </div>
+              <div className="absolute bottom-0.5 left-1 z-20">
+                <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@sfx-hit</span>
+              </div>
+              <div className="absolute top-0 left-0 bottom-0 z-10" style={{ width: '6%' }}>
+                <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.6), transparent)' }} />
+              </div>
+              <div className="absolute top-0 right-0 bottom-0 z-10" style={{ width: '4%' }}>
+                <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.6), transparent)' }} />
+              </div>
+              <div className="absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize hover:bg-fuchsia-400/40 z-20" />
+              <div className="absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize hover:bg-fuchsia-400/40 z-20" />
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-track lane */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Multi-track lane</p>
+          <div className="relative h-14 border border-border/30 bg-card/20 rounded overflow-hidden">
+            {/* Track 1 (cyan) */}
+            <div
+              className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
+              style={{ left: '5%', width: '45%' }}
+            >
+              <div className="absolute inset-0 px-1 flex items-center">
+                <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0} height={36} barColor="rgba(0, 255, 255, 0.3)" />
+              </div>
+              <div className="absolute bottom-0.5 left-1 z-20">
+                <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@music</span>
+              </div>
+            </div>
+            {/* Track 2 (magenta, overlapping) */}
+            <div
+              className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
+              style={{ left: '55%', width: '35%' }}
+            >
+              <div className="absolute inset-0 px-1 flex items-center">
+                <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0} height={36} barColor="rgba(217, 70, 239, 0.3)" />
+              </div>
+              <div className="absolute bottom-0.5 left-1 z-20">
+                <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@voiceover</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ── Timeline Scrubber ──
+
+function TimelineScrubberSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Timeline Scrubber</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Assembled timeline with video slots, playhead, audio track lane, and empty drop zone.
+        Demonstrates full scrubber composition with proportional slot widths and audio positioning.
+      </p>
+
+      <div className="border border-border/30 rounded overflow-hidden bg-card/20">
+        {/* Video slots + playhead */}
+        <div className="relative h-28 flex gap-0.5">
+          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlotDemo label="@s04" flex={2} />
+          <TimelineSlotDemo label="@s05" flex={2} />
+          {/* Playhead at 42% */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
+            style={{ left: '42%' }}
+          />
+        </div>
+
+        {/* Audio track lane with positioned block */}
+        <div className="relative h-14 border-t border-border/30">
+          <div
+            className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
+            style={{ left: '8%', width: '55%' }}
+          >
+            <div className="absolute inset-0 px-1 flex items-center">
+              <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0.42} height={36} />
+            </div>
+            <div className="absolute bottom-0.5 left-1 z-20">
+              <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span>
+            </div>
+          </div>
+          {/* Playhead extension into audio lane */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
+            style={{ left: '42%' }}
+          />
+        </div>
+
+        {/* Empty drop zone for second track */}
+        <div className="border-t border-border/30">
+          <div className="border-2 border-dashed flex items-center justify-center gap-2 transition-colors h-10 min-h-10 border-border/40 text-muted-foreground/50 m-0.5 rounded">
+            <Music className="w-3 h-3" />
+            <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ── Video Settings Modal ──
+
+function VideoSettingsModalSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Video Settings Modal</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Static render of the video settings panel. All sections expanded: Audio source/fade/volume,
+        Fill Mode (portrait), Subtitles with style controls, and OSG with positioning and timing.
+      </p>
+
+      <div className="max-w-lg mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-2 border-b border-primary/20">
+          <h3 className="text-sm font-mono font-bold text-primary tracking-wider uppercase">Render Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Portrait — @hero-intro</p>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="px-4 py-3 space-y-4 max-h-[500px] overflow-y-auto">
+
+          {/* ── Audio Section ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
+            </div>
+            {/* Source toggle */}
+            <div className="mb-3">
+              <span className="text-xs text-muted-foreground block mb-1">Source</span>
+              <div className="flex gap-1">
+                {['Clean', 'Original', 'Vocals', 'Mute'].map((opt, i) => (
+                  <button
+                    key={opt}
+                    className={cn(
+                      'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                      i === 0
+                        ? 'bg-primary/20 border-primary/50 text-primary'
+                        : 'bg-black/40 border-white/10 text-muted-foreground hover:border-white/20'
+                    )}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Fade In */}
+            <div className="flex items-center gap-1 pb-2">
+              <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
+              <input
+                type="number" defaultValue={500} min={0} max={2000} readOnly
+                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+              />
+              <span className="text-xs text-muted-foreground">ms</span>
+            </div>
+            {/* Fade Out */}
+            <div className="flex items-center gap-1 pb-2">
+              <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
+              <input
+                type="number" defaultValue={300} min={0} max={2000} readOnly
+                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+              />
+              <span className="text-xs text-muted-foreground">ms</span>
+            </div>
+            {/* Volume */}
+            <div className="flex items-center gap-1 pb-2">
+              <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
+              <input
+                type="number" defaultValue={100} min={1} max={1000} readOnly
+                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+            </div>
+          </div>
+
+          {/* ── Fill Mode Section (portrait) ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Fill Mode</span>
+            </div>
+            <div className="flex gap-1">
+              {['Blur', 'Actor'].map((opt, i) => (
+                <button
+                  key={opt}
+                  className={cn(
+                    'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                    i === 0
+                      ? 'bg-primary/20 border-primary/50 text-primary'
+                      : 'bg-black/40 border-white/10 text-muted-foreground hover:border-white/20'
+                  )}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Subtitles Section (ON) ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Subtitles</span>
+              <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
+            </div>
+            <div className="space-y-2">
+              {/* Language */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Language</span>
+                <div className="flex gap-1">
+                  {['Original', 'English'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 0 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Position */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Position</span>
+                <div className="flex gap-1">
+                  {['Top', 'Middle', 'Bottom'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Highlight */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Highlight</span>
+                <div className="flex gap-1">
+                  {['None', 'TikDance', 'Highlight'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Size */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Size</span>
+                <div className="flex gap-1">
+                  {['S', 'M', 'L'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Background */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Background</span>
+                <div className="flex gap-1">
+                  {['None', 'Semi', 'Solid'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Colors */}
+              <div className="flex gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Text</span>
+                  <div className="w-6 h-6 rounded border border-white/20 bg-white" />
+                  <span className="text-xs font-mono text-muted-foreground">#FFFFFF</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Highlight</span>
+                  <div className="w-6 h-6 rounded border border-white/20 bg-yellow-400" />
+                  <span className="text-xs font-mono text-muted-foreground">#FACC15</span>
+                </div>
+              </div>
+              {/* Alpha */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs w-14 shrink-0 text-muted-foreground">Alpha</span>
+                <input
+                  type="number" defaultValue={255} min={0} max={255} readOnly
+                  className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
+                />
+              </div>
+              {/* Effects */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Effects</span>
+                <div className="flex gap-1">
+                  {['None', 'Subtle', 'Broadcast'].map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={cn(
+                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── OSG Section (ON) ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
+              <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
+            </div>
+            <div className="space-y-2">
+              {/* Text */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Text</span>
+                <input
+                  type="text" defaultValue="CLIPFIRST.COM" maxLength={200} readOnly
+                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                />
+              </div>
+              {/* QR URL */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">QR URL</span>
+                <input
+                  type="text" defaultValue="https://clipfirst.com" readOnly
+                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                />
+              </div>
+              {/* Logo text */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Logo Text</span>
+                <input
+                  type="text" defaultValue="CF" readOnly
+                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                />
+              </div>
+              {/* Position presets */}
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Position</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {['Top-L', 'Top-C', 'Top-R', 'Bot-L', 'Bot-C', 'Bot-R'].map((pos, i) => (
+                    <button
+                      key={pos}
+                      className={cn(
+                        'px-2 py-1 text-[10px] font-medium border transition-all',
+                        i === 5 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Coordinates */}
+              <div className="grid grid-cols-2 gap-2">
+                {[{ label: 'X1', val: 10 }, { label: 'Y1', val: 850 }, { label: 'X2', val: 350 }, { label: 'Y2', val: 920 }].map(({ label, val }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <span className="text-xs w-6 shrink-0 text-muted-foreground">{label}</span>
+                    <input
+                      type="number" defaultValue={val} readOnly
+                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
+                    />
+                  </div>
+                ))}
+              </div>
+              {/* Sizing */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Font', val: 24, suffix: 'px' },
+                  { label: 'Padding', val: 10, suffix: 'px' },
+                  { label: 'Logo W', val: 60, suffix: 'px' },
+                  { label: 'QR Size', val: 80, suffix: 'px' },
+                ].map(({ label, val, suffix }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <span className="text-xs w-14 shrink-0 text-muted-foreground">{label}</span>
+                    <input
+                      type="number" defaultValue={val} readOnly
+                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
+                    />
+                    <span className="text-xs text-muted-foreground">{suffix}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Colors */}
+              <div className="flex gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">BG</span>
+                  <div className="w-6 h-6 rounded border border-white/20 bg-black" />
+                  <span className="text-xs font-mono text-muted-foreground">#000000</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Logo</span>
+                  <div className="w-6 h-6 rounded border border-white/20 bg-cyan-400" />
+                  <span className="text-xs font-mono text-muted-foreground">#22D3EE</span>
+                </div>
+              </div>
+              {/* Opacity */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs w-14 shrink-0 text-muted-foreground">Opacity</span>
+                <input
+                  type="number" defaultValue={0.9} min={0} max={1} step={0.05} readOnly
+                  className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
+                />
+              </div>
+              {/* Timing */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Start', val: 0, suffix: 'ms' },
+                  { label: 'End', val: 0, suffix: 'ms' },
+                  { label: 'Fade In', val: 500, suffix: 'ms' },
+                  { label: 'Fade Out', val: 500, suffix: 'ms' },
+                ].map(({ label, val, suffix }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <span className="text-xs w-14 shrink-0 text-muted-foreground">{label}</span>
+                    <input
+                      type="number" defaultValue={val} readOnly
+                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
+                    />
+                    <span className="text-xs text-muted-foreground">{suffix}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-primary/20">
+          <button className="w-full py-2 text-sm font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/40 rounded shadow-[0_0_20px_rgba(0,255,255,0.3)] hover:bg-primary/30 transition-all">
+            Apply Settings
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
 // ── CollapsibleSidebar ──
 
 function CollapsibleSidebarSection() {
@@ -1803,6 +2776,24 @@ export function Styleguide() {
 
       {/* VideoTrimView */}
       <VideoTrimViewSection />
+
+      {/* Player Controls */}
+      <PlayerControlsSection />
+
+      {/* Player Interface */}
+      <PlayerInterfaceSection />
+
+      {/* Audio Player */}
+      <AudioPlayerSection />
+
+      {/* Audio Track */}
+      <AudioTrackSection />
+
+      {/* Timeline Scrubber */}
+      <TimelineScrubberSection />
+
+      {/* Video Settings Modal */}
+      <VideoSettingsModalSection />
 
       {/* CollapsibleSidebar */}
       <CollapsibleSidebarSection />
