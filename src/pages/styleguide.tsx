@@ -1258,6 +1258,31 @@ function PlayerControlsSection() {
 
 // ── Player Interface ──
 
+function RatioToggle({ active }: { active: '9:16' | '16:9' | '1:1' }) {
+  const items: Array<{ icon: typeof Monitor; label: string; value: string }> = [
+    { icon: Smartphone, label: '9:16', value: '9:16' },
+    { icon: Monitor, label: '16:9', value: '16:9' },
+    { icon: Square, label: '1:1', value: '1:1' },
+  ];
+  return (
+    <div className="inline-flex gap-0.5 rounded-sm bg-black/60 p-0.5">
+      {items.map(({ icon: Icon, label, value }) => (
+        <button
+          key={value}
+          className={cn(
+            'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
+            value === active
+              ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
+              : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+          )}
+        >
+          <Icon className="w-3 h-3" />{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PlayerInterfaceSection() {
   return (
     <section className="mb-12">
@@ -1272,27 +1297,22 @@ function PlayerInterfaceSection() {
         <div>
           <p className="text-xs text-muted-foreground mb-2">Landscape (active)</p>
           <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
-            {/* Header */}
             <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
-              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
-                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Square className="w-3 h-3 inline mr-0.5" />1:1
-                </button>
-              </div>
+              <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground truncate max-w-[120px]">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground hover:text-primary">
                 <Settings className="w-3.5 h-3.5" />
               </button>
             </div>
-            {/* Video area */}
             <div className="flex-1 bg-black flex items-center justify-center">
-              <img src="/styleguide-img-cover.jpg" alt="poster" className="w-full h-full object-contain opacity-70" />
+              <video
+                src="/fixtures/video-frost.mp4"
+                className="w-full h-full object-contain"
+                controls
+                loop
+                muted
+                playsInline
+              />
             </div>
           </div>
         </div>
@@ -1302,17 +1322,7 @@ function PlayerInterfaceSection() {
           <p className="text-xs text-muted-foreground mb-2">Portrait (idle) — LazyRenderPlaceholder</p>
           <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
             <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
-              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
-                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Square className="w-3 h-3 inline mr-0.5" />1:1
-                </button>
-              </div>
+              <RatioToggle active="9:16" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
             </div>
@@ -1328,17 +1338,7 @@ function PlayerInterfaceSection() {
           <p className="text-xs text-muted-foreground mb-2">Square (rendering)</p>
           <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
             <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
-              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
-                  <Square className="w-3 h-3 inline mr-0.5" />1:1
-                </button>
-              </div>
+              <RatioToggle active="1:1" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
             </div>
@@ -1354,17 +1354,7 @@ function PlayerInterfaceSection() {
           <p className="text-xs text-muted-foreground mb-2">Video error</p>
           <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
             <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
-              <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20">
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-primary/20 border-primary/50 text-primary">
-                  <Monitor className="w-3 h-3 inline mr-0.5" />16:9
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Smartphone className="w-3 h-3 inline mr-0.5" />9:16
-                </button>
-                <button className="px-2 py-0.5 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground">
-                  <Square className="w-3 h-3 inline mr-0.5" />1:1
-                </button>
-              </div>
+              <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground">@broken-clip</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
             </div>
