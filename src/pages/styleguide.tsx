@@ -1759,44 +1759,63 @@ function VideoSettingsModalSection() {
         orientation, audio, subtitles, and OSG overlay.
       </p>
 
-      <div className="max-w-2xl mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+      <div
+        className="relative overflow-hidden max-w-2xl mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2),inset_0_0_30px_rgba(0,255,255,0.05)]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px)',
+          backgroundSize: '4px 4px',
+        }}
+      >
+        {/* Scanlines overlay */}
+        <div className="scanlines pointer-events-none absolute inset-0 opacity-20" />
+
         {/* Header */}
-        <div className="px-4 pt-4 pb-2 border-b border-primary/20">
+        <div className="relative px-4 pt-4 pb-2 border-b border-primary/20">
           <h3 className="text-sm font-mono font-bold text-primary tracking-wider uppercase">Render Settings</h3>
           <p className="text-xs text-muted-foreground mt-0.5">vid-hero-intro — my-project</p>
         </div>
 
         {/* Body */}
-        <div className="px-4 py-3 space-y-4">
-
-          {/* ── Orientation (full width) ── */}
-          <div>
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientation</span>
-            <div className="flex gap-1 mt-2">
-              {['Landscape', 'Portrait', 'Both'].map((opt, i) => (
-                <button
-                  key={opt}
-                  className={cn(
-                    'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                    i === 2
-                      ? 'bg-primary/20 border-primary/50 text-primary'
-                      : 'bg-black/40 border-white/10 text-muted-foreground hover:border-white/20'
-                  )}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="relative px-4 py-3 space-y-4">
 
           {/* ── Two-column grid ── */}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
 
-            {/* Left column: Audio + OSG */}
+            {/* Left column: Orientation + Audio */}
             <div className="space-y-4">
 
+              {/* ── Orientation Section ── */}
+              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
+                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
+                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
+                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientation</span>
+                <div className="space-y-1.5 mt-2">
+                  {['Landscape', 'Portrait'].map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer group">
+                      <div className={cn(
+                        'w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all',
+                        'bg-primary/20 border-primary/50'
+                      )}>
+                        <svg className="w-2.5 h-2.5 text-primary" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="2 6 5 9 10 3" />
+                        </svg>
+                      </div>
+                      <span className="text-xs text-foreground group-hover:text-primary transition-colors">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* ── Audio Section ── */}
-              <div>
+              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
+                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
+                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
+                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
                 </div>
@@ -1825,46 +1844,18 @@ function VideoSettingsModalSection() {
                   <span className="text-xs text-muted-foreground">%</span>
                 </div>
               </div>
-
-              {/* ── OSG Section ── */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
-                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Asset ID</span>
-                    <input
-                      type="text" defaultValue="img-logo-overlay" readOnly
-                      className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
-                    <div className="grid grid-cols-2 gap-1">
-                      {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
-                        <button
-                          key={pos}
-                          className={cn(
-                            'px-2 py-1 text-[10px] font-medium border transition-all',
-                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                          )}
-                        >
-                          {pos}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* Right column: Subtitles */}
+            {/* Right column: Subtitles + OSG */}
             <div className="space-y-4">
 
               {/* ── Subtitles Section ── */}
-              <div>
+              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
+                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
+                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
+                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Subtitles</span>
                   <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
@@ -1932,12 +1923,50 @@ function VideoSettingsModalSection() {
                   </div>
                 </div>
               </div>
+
+              {/* ── OSG Section ── */}
+              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
+                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
+                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
+                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
+                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Asset ID</span>
+                    <input
+                      type="text" defaultValue="img-logo-overlay" readOnly
+                      className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
+                    <div className="grid grid-cols-2 gap-1">
+                      {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
+                        <button
+                          key={pos}
+                          className={cn(
+                            'px-2 py-1 text-[10px] font-medium border transition-all',
+                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                          )}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-primary/20">
+        <div className="relative px-4 py-3 border-t border-primary/20">
           <button className="w-full py-2 text-sm font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/40 rounded shadow-[0_0_20px_rgba(0,255,255,0.3)] hover:bg-primary/30 transition-all">
             Apply Settings
           </button>
