@@ -957,6 +957,12 @@ const trimSelectedWordIndices = new Set([5, 6, 7]);
 // Active word index (currently playing)
 const trimActiveWordIndex = 11;
 
+const trimTimelineBadges = Array.from({ length: 6 }, (_, i) => ({
+  percent: ((i + 0.5) / 6) * 100,
+  src: i % 2 === 0 ? '/styleguide-img-cover.jpg' : '/styleguide-vid-purple-grind.jpg',
+  time: `0:${Math.round(((i + 0.5) / 6) * 10).toString().padStart(2, '0')}`,
+}));
+
 const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0px 4px, rgba(239,68,68,0.35) 4px 8px)';
 
 function VideoTrimViewSection() {
@@ -964,8 +970,9 @@ function VideoTrimViewSection() {
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">VideoTrimView</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Full-screen trimming overlay. Two-column layout: video player + filmstrip timeline on left,
-        transcript panel with word-level selection on right. Click words to mark cuts (shown with
+        Full-screen trimming overlay. Two-column layout: video player + waveform timeline on left,
+        transcript panel with word-level selection on right. Waveform shows audio shape with
+        hover-expandable thumbnail badges at even intervals. Click words to mark cuts (shown with
         red strikethrough). Cut regions appear as striped red overlays on the timeline. Cyan playhead
         tracks current position. Supports snap-to-words, zoom, and inline word editing.
       </p>
@@ -1028,27 +1035,24 @@ function VideoTrimViewSection() {
                 </div>
 
                 {/* Filmstrip */}
-                <div className="relative" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
-                  <div className="relative bg-black border border-zinc-700/50 rounded-md" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
-                    {/* Thumbnail strip (mock frames) */}
-                    <div className="absolute inset-0 flex overflow-hidden rounded-md">
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="flex-1 h-full bg-cover bg-center"
-                          style={{
-                            backgroundImage: `url(${i % 2 === 0 ? '/styleguide-img-cover.jpg' : '/styleguide-vid-purple-grind.jpg'})`,
-                            filter: 'brightness(0.7)',
-                          }}
-                        />
-                      ))}
+                <div className="relative overflow-visible" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
+                  <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
+                    {/* Waveform */}
+                    <div className="absolute inset-0 rounded-md overflow-hidden">
+                      <StyleguideWaveform
+                        url="/fixtures/video-frost.mp4"
+                        height={TRIM_FILMSTRIP_HEIGHT}
+                        waveColor="rgba(0, 255, 255, 0.15)"
+                        progressColor="rgba(0, 255, 255, 0.5)"
+                        progress={TRIM_PLAYHEAD_POS / 100}
+                      />
                     </div>
 
                     {/* Cut region overlays */}
                     {trimDemoCutRegions.map((region, i) => (
                       <div
                         key={i}
-                        className="absolute top-0 bottom-0 pointer-events-none"
+                        className="absolute top-0 bottom-0 pointer-events-none z-10"
                         style={{
                           left: `${region.startPercent}%`,
                           width: `${region.widthPercent}%`,
@@ -1057,6 +1061,41 @@ function VideoTrimViewSection() {
                       />
                     ))}
                   </div>
+
+                  {/* Thumbnail badges */}
+                  {trimTimelineBadges.map((badge, i) => {
+                    const inCut = trimDemoCutRegions.some(
+                      (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
+                    );
+                    return (
+                      <div
+                        key={i}
+                        className="group absolute z-20"
+                        style={{
+                          left: `${badge.percent}%`,
+                          top: '50%',
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                      >
+                        {/* Timestamp label — visible on hover */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40">
+                          <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
+                        </div>
+                        {/* Badge */}
+                        <div
+                          className={cn(
+                            'w-6 h-6 rounded-sm border border-cyan-500/30 bg-cover bg-center',
+                            'transition-all duration-200 ease-out',
+                            'group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)]',
+                            'group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40',
+                            'group-hover:rounded-md',
+                            inCut && 'opacity-50',
+                          )}
+                          style={{ backgroundImage: `url(${badge.src})` }}
+                        />
+                      </div>
+                    );
+                  })}
 
                   {/* Edge handles for cut regions */}
                   {trimDemoCutRegions.map((region, i) => (
