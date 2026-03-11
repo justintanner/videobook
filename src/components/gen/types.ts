@@ -31,4 +31,45 @@ export interface ModelOption {
   };
 }
 
+export interface DynamicGenerationPreview {
+  category: 'image' | 'video' | 'audio';
+  selected_model: string;
+  model_options: ModelOption[];
+  resolved_assets?: ResolvedAsset[];
+}
+
+export interface ResolvedAsset {
+  slug: string;
+  src: string;
+  thumbnailSrc?: string | null;
+  type: 'image' | 'video';
+}
+
 export type ExecuteButtonState = 'disabled' | 'ready' | 'charging' | 'submitting' | 'queued' | 'processing' | 'success';
+
+// Element group field pattern: element1_slugs, element2_name, element3_desc, etc.
+export const ELEMENT_FIELD_RE = /^element(\d+)_(slugs|name|desc)$/;
+export const MAX_ELEMENT_GROUPS = 3;
+
+// Veo 3.1 generation modes
+export type VeoGenerationType = 'TEXT_2_VIDEO' | 'FIRST_AND_LAST_FRAMES_2_VIDEO' | 'REFERENCE_2_VIDEO';
+
+export interface VeoModeConstraint {
+  image_slots: { min: number; max: number };
+  allowed_aspect_ratios?: string[];
+  requires_fast_model?: boolean;
+}
+
+export const VEO_MODE_CONSTRAINTS: Record<VeoGenerationType, VeoModeConstraint> = {
+  TEXT_2_VIDEO: {
+    image_slots: { min: 0, max: 0 },
+  },
+  FIRST_AND_LAST_FRAMES_2_VIDEO: {
+    image_slots: { min: 1, max: 2 },
+  },
+  REFERENCE_2_VIDEO: {
+    image_slots: { min: 1, max: 3 },
+    allowed_aspect_ratios: ['16:9', '9:16'],
+    requires_fast_model: true,
+  },
+};

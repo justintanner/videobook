@@ -34,10 +34,13 @@ import { ScriptBlock } from '@/components/chat/ScriptBlocks';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { GenFrame, CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
+import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
+import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
+import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { PendingGenerationsButton } from '@/components/pending-generations/PendingGenerationsButton';
 import { PendingGenerationsDrawer } from '@/components/pending-generations/PendingGenerationsDrawer';
 import type { GenerationState } from '@/components/pending-generations/PendingGenerationsButton';
-import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
+import type { ExecuteButtonState, ModelOption, JSONSchemaProperty } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
@@ -2196,12 +2199,75 @@ const mockModelOptions: ModelOption[] = [
   },
 ];
 
+// ── ImageParamSlots mock data ──
+
+const mockAssetFields = [
+  { name: 'image_slugs', schema: { type: 'array' as const, items: { type: 'string' }, description: 'Image slugs' }, value: [], required: true },
+];
+
+const mockAssetFieldsFilled = [
+  { name: 'image_slugs', schema: { type: 'array' as const, items: { type: 'string' }, description: 'Image slugs' }, value: ['@img-neon-fox'], required: true },
+];
+
+const mockVideoAssetFields = [
+  { name: 'video_slug', schema: { type: 'string' as const, description: 'Video slug' }, value: '', required: true },
+];
+
+const mockResolvedAssets = [
+  { slug: '@img-neon-fox', src: '/styleguide-img-neon-fox.jpg', type: 'image' as const },
+  { slug: '@img-hero-banner', src: '/styleguide-img-cover.jpg', type: 'image' as const },
+  { slug: '@img-cute-dog-1', src: '/styleguide-vid-purple-grind.jpg', type: 'image' as const },
+  { slug: '@img-cute-dog-2', src: '/styleguide-vid-turret-cyber.jpg', type: 'image' as const },
+  { slug: '@img-hero-front', src: '/styleguide-vid-sky-ghost.jpg', type: 'image' as const },
+  { slug: '@img-hero-side', src: '/styleguide-img-neon-fox.jpg', type: 'image' as const },
+  { slug: '@img-villain-mask', src: '/styleguide-final-thumb.jpg', type: 'image' as const },
+];
+
+// ── ElementGroupEditor mock data ──
+
+const mockElementGroupIndices = [1, 2, 3];
+const mockElementSchemas = new Map<string, JSONSchemaProperty>([
+  ['element1_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 1 slugs', maxItems: 4 }],
+  ['element1_name', { type: 'string', description: 'Element 1 name' }],
+  ['element1_desc', { type: 'string', description: 'Element 1 description' }],
+  ['element2_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 2 slugs', maxItems: 4 }],
+  ['element2_name', { type: 'string', description: 'Element 2 name' }],
+  ['element2_desc', { type: 'string', description: 'Element 2 description' }],
+  ['element3_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 3 slugs', maxItems: 4 }],
+  ['element3_name', { type: 'string', description: 'Element 3 name' }],
+  ['element3_desc', { type: 'string', description: 'Element 3 description' }],
+]);
+const mockElementFormEmpty: Record<string, unknown> = {};
+const mockElementFormFilled: Record<string, unknown> = {
+  element1_slugs: ['@img-cute-dog-1', '@img-cute-dog-2'],
+  element1_name: '',
+  element1_desc: 'A friendly golden retriever',
+};
+const mockElementFormMulti: Record<string, unknown> = {
+  element1_slugs: ['@img-hero-front', '@img-hero-side'],
+  element1_name: 'element_hero',
+  element1_desc: 'Main character, confident stance',
+  element2_slugs: ['@img-villain-mask'],
+  element2_name: 'element_villain',
+  element2_desc: 'Antagonist with dark cloak',
+};
+const mockElementFormPrefilledNoSlugs: Record<string, unknown> = {
+  element1_name: 'element_hero',
+  element1_desc: 'Main character from prompt history',
+  element1_slugs: [],
+  element2_name: 'element_sidekick',
+  element2_desc: 'Comic relief companion',
+  element2_slugs: [],
+};
+
 function GenSystemSection() {
   return (
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Gen System</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Generation panel primitives: GenFrame (CRT container), GenPanel (frame + header + footer), and a composed panel demo.
+        Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
+        image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
+        video and image generation.
       </p>
 
       {/* GenFrame */}
@@ -2351,6 +2417,142 @@ function GenSystemSection() {
                 </div>
               </div>
             </GenPanel>
+          </div>
+        </div>
+      </div>
+
+      {/* ImageParamSlots */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ImageParamSlots</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Asset slot panel for image/video parameters. Shows slot count indicator, required badges, and manages add/remove
+        of asset references. Used in the DynamicGen sidebar.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (1 required)</span>
+          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+            <ImageParamSlots assetFields={mockAssetFields} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">filled (1 of 2)</span>
+          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+            <ImageParamSlots assetFields={mockAssetFieldsFilled} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} resolvedAssets={mockResolvedAssets} />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
+          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+            <ImageParamSlots
+              assetFields={mockAssetFields}
+              imageSlots={{ min: 0, max: 1 }}
+              onChange={genNoop}
+              disabled
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">video mode</span>
+          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+            <ImageParamSlots assetFields={mockVideoAssetFields} imageSlots={{ min: 1, max: 1 }} onChange={genNoop} />
+          </div>
+        </div>
+      </div>
+
+      {/* ElementGroupEditor */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ElementGroupEditor</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Violet-accented inline element groups with asset drop slots, name, and description fields. Each group represents
+        a named character/object reference. Groups are added progressively and show name/desc fields when slugs are
+        populated or when name/desc values are prefilled (e.g. from prompt history).
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (add button)</span>
+          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+            <ElementGroupEditor
+              elementGroupIndices={mockElementGroupIndices}
+              elementSchemas={mockElementSchemas}
+              formValues={mockElementFormEmpty}
+              assets={[]}
+              onChange={genNoop}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            1 group filled (with name/desc)
+          </span>
+          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+            <ElementGroupEditor
+              elementGroupIndices={mockElementGroupIndices}
+              elementSchemas={mockElementSchemas}
+              formValues={mockElementFormFilled}
+              resolvedAssets={mockResolvedAssets}
+              assets={[]}
+              onChange={genNoop}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">2 groups filled</span>
+          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+            <ElementGroupEditor
+              elementGroupIndices={mockElementGroupIndices}
+              elementSchemas={mockElementSchemas}
+              formValues={mockElementFormMulti}
+              resolvedAssets={mockResolvedAssets}
+              assets={[]}
+              onChange={genNoop}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            prefilled name/desc (no slugs)
+          </span>
+          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+            <ElementGroupEditor
+              elementGroupIndices={mockElementGroupIndices}
+              elementSchemas={mockElementSchemas}
+              formValues={mockElementFormPrefilledNoSlugs}
+              assets={[]}
+              onChange={genNoop}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
+          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+            <ElementGroupEditor
+              elementGroupIndices={mockElementGroupIndices}
+              elementSchemas={mockElementSchemas}
+              formValues={mockElementFormFilled}
+              resolvedAssets={mockResolvedAssets}
+              assets={[]}
+              onChange={genNoop}
+              disabled
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ErrorPage */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ErrorPage</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Fallback shown when no model options are available. AlertCircle icon + message.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default message</span>
+          <div className="h-[100px] border border-border/50 rounded overflow-hidden bg-black/40">
+            <ErrorPage />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">custom message</span>
+          <div className="h-[100px] border border-border/50 rounded overflow-hidden bg-black/40">
+            <ErrorPage message="Model configuration error: missing API key" />
           </div>
         </div>
       </div>
