@@ -608,23 +608,6 @@ function ExecuteButtonStatesDemo() {
   );
 }
 
-const modelSelectorDemoOptions: ModelOption[] = [
-  { key: 'veo3', label: 'Veo 3', tool_name: 'veo3', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
-  { key: 'kling3', label: 'Kling 3.0', tool_name: 'kling3', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
-  { key: 'wan21', label: 'Wan 2.1', tool_name: 'wan21', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
-];
-
-function ModelSelectorDemo() {
-  const [model, setModel] = useState('veo3');
-  return (
-    <div className="space-y-3">
-      <ModelSelector selectedModelKey={model} modelOptions={modelSelectorDemoOptions} onChange={setModel} />
-      <ModelSelector selectedModelKey={model} modelOptions={modelSelectorDemoOptions} onChange={setModel} disabled />
-      <p className="text-[10px] text-muted-foreground">Second selector is disabled</p>
-    </div>
-  );
-}
-
 // ── CenterStage: TransmissionView ──
 
 const centerStageMocks = [
@@ -1582,17 +1565,7 @@ export function Styleguide() {
                 UPLOAD_CLIP
               </Button>
             </div>
-            <div className="w-[200px]">
-              <SelectWithChevronDemo />
-            </div>
             <ContextMenuDemo />
-          </div>
-
-          {/* Selection Controls */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Selection Controls</h3>
-            <GenToggleDemo />
-            <GenSelectDemo />
           </div>
 
           {/* Inputs */}
@@ -1613,6 +1586,16 @@ export function Styleguide() {
               </div>
             </div>
           </div>
+
+          {/* Selection Controls */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Selection Controls</h3>
+            <div className="w-[200px]">
+              <SelectWithChevronDemo />
+            </div>
+            <GenToggleDemo />
+            <GenSelectDemo />
+          </div>
         </div>
 
         {/* Row 2 — 2-column grid */}
@@ -1630,42 +1613,30 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Row 3 — 2-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Chat Input */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Chat Input</h3>
-            <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
-            <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
-          </div>
-
-          {/* ModelSelector */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ModelSelector</h3>
-            <ModelSelectorDemo />
-          </div>
+        {/* Row 3 — Chat Input full-width */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Chat Input</h3>
+          <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
+          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
 
-        {/* Row 4 — 2-column grid: ExecuteButton, CloseButton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* ExecuteButton */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ExecuteButton</h3>
-            <ExecuteButtonStatesDemo />
-          </div>
+        {/* Row 4 — ExecuteButton */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ExecuteButton</h3>
+          <ExecuteButtonStatesDemo />
+        </div>
 
-          {/* CloseButton */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">CloseButton</h3>
-            <div className="flex items-center gap-4">
-              <div className="space-y-1 text-center">
-                <CloseButton onClick={() => {}} />
-                <p className="text-[10px] text-muted-foreground">enabled</p>
-              </div>
-              <div className="space-y-1 text-center">
-                <CloseButton onClick={() => {}} disabled />
-                <p className="text-[10px] text-muted-foreground">disabled</p>
-              </div>
+        {/* Row 5 — CloseButton */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">CloseButton</h3>
+          <div className="flex items-center gap-4">
+            <div className="space-y-1 text-center">
+              <CloseButton onClick={() => {}} />
+              <p className="text-[10px] text-muted-foreground">enabled</p>
+            </div>
+            <div className="space-y-1 text-center">
+              <CloseButton onClick={() => {}} disabled />
+              <p className="text-[10px] text-muted-foreground">disabled</p>
             </div>
           </div>
         </div>

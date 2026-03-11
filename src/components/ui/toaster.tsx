@@ -48,25 +48,25 @@ export function Toaster() {
             {/* Corner accents */}
             <div
               className={cn(
-                'absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-primary/60',
+                'absolute -top-px -left-px w-3 h-3 border-t-2 border-l-2 border-primary/60',
                 isDestructive && 'border-destructive/60'
               )}
             />
             <div
               className={cn(
-                'absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-primary/60',
+                'absolute -top-px -right-px w-3 h-3 border-t-2 border-r-2 border-primary/60',
                 isDestructive && 'border-destructive/60'
               )}
             />
             <div
               className={cn(
-                'absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-primary/60',
+                'absolute -bottom-px -left-px w-3 h-3 border-b-2 border-l-2 border-primary/60',
                 isDestructive && 'border-destructive/60'
               )}
             />
             <div
               className={cn(
-                'absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-primary/60',
+                'absolute -bottom-px -right-px w-3 h-3 border-b-2 border-r-2 border-primary/60',
                 isDestructive && 'border-destructive/60'
               )}
             />
