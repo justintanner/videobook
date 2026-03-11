@@ -492,7 +492,7 @@ function GenToggleDemo() {
 function GenFieldDemo() {
   const [text, setText] = useState('A cinematic shot of a neon-lit cityscape at night');
   return (
-    <div className="space-y-4 max-w-md">
+    <div className="space-y-4">
       <GenField label="PROMPT" required>
         <GenTextarea value={text} onChange={setText} placeholder="Describe your scene..." rows={3} />
       </GenField>
@@ -530,7 +530,7 @@ function MultiPromptEditorDemo() {
     { prompt: 'Close-up of hands typing on a laptop', duration: 3 },
   ]);
   return (
-    <div className="max-w-md">
+    <div>
       <MultiPromptEditor value={scenes} onChange={setScenes} />
     </div>
   );
@@ -545,7 +545,7 @@ function AssetDropSlotDemo() {
   });
   const [empty, setEmpty] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>(null);
   return (
-    <div className="flex gap-4">
+    <div className="flex flex-wrap gap-4">
       <div className="w-[180px] space-y-1">
         <p className="text-xs text-muted-foreground">With value (image)</p>
         <AssetDropSlot value={filled} onChange={setFilled} />
@@ -588,6 +588,40 @@ function ContextMenuDemo() {
         <ContextMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Delete</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+const allExecuteStates: ExecuteButtonState[] = ['disabled', 'ready', 'charging', 'submitting', 'queued', 'processing', 'success'];
+
+function ExecuteButtonStatesDemo() {
+  return (
+    <div className="space-y-2">
+      {allExecuteStates.map((state) => (
+        <div key={state} className="flex items-center gap-3">
+          <span className="text-[10px] font-mono text-muted-foreground w-20 shrink-0">{state}</span>
+          <div className="flex-1 max-w-[220px]">
+            <ExecuteButton state={state} onClick={() => {}} disabledReason="Fill required fields" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const modelSelectorDemoOptions: ModelOption[] = [
+  { key: 'veo3', label: 'Veo 3', tool_name: 'veo3', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+  { key: 'kling3', label: 'Kling 3.0', tool_name: 'kling3', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+  { key: 'wan21', label: 'Wan 2.1', tool_name: 'wan21', description: '', schema: { type: 'object', properties: {} }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+];
+
+function ModelSelectorDemo() {
+  const [model, setModel] = useState('veo3');
+  return (
+    <div className="space-y-3">
+      <ModelSelector selectedModelKey={model} modelOptions={modelSelectorDemoOptions} onChange={setModel} />
+      <ModelSelector selectedModelKey={model} modelOptions={modelSelectorDemoOptions} onChange={setModel} disabled />
+      <p className="text-[10px] text-muted-foreground">Second selector is disabled</p>
+    </div>
   );
 }
 
@@ -1192,10 +1226,6 @@ function CollapsibleSidebarSection() {
 
 const genNoop = () => {};
 
-const executeButtonStates: ExecuteButtonState[] = [
-  'disabled', 'ready', 'charging', 'submitting', 'queued', 'processing', 'success',
-];
-
 const mockModelOptions: ModelOption[] = [
   {
     key: 'veo3_fast',
@@ -1231,8 +1261,7 @@ function GenSystemSection() {
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Gen System</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Generation panel primitives: GenFrame (CRT container), GenPanel (frame + header + footer), ExecuteButton
-        (7-state action button), CloseButton, ModelSelector, and a composed panel demo.
+        Generation panel primitives: GenFrame (CRT container), GenPanel (frame + header + footer), and a composed panel demo.
       </p>
 
       {/* GenFrame */}
@@ -1324,65 +1353,6 @@ function GenSystemSection() {
         </div>
       </div>
 
-      {/* ExecuteButton */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ExecuteButton</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        7 visual states: disabled (grayed), ready (pulsing glow), charging (gradient sweep), submitting (spinner),
-        queued (bouncing dots), processing (scan line), success (green flash).
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
-        {executeButtonStates.map((state) => (
-          <div key={state} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{state}</span>
-            <div className="w-[190px]">
-              <ExecuteButton
-                state={state}
-                onClick={genNoop}
-                disabledReason={state === 'disabled' ? 'Fill required fields first' : undefined}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* CloseButton */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">CloseButton</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Panel close trigger. Hover turns red. Disabled state at 50% opacity. Shows "Close (ESC)" tooltip.
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">enabled</span>
-          <div className="flex items-center gap-3 h-10 border border-primary/20 rounded px-3 bg-black/30 w-fit">
-            <CloseButton onClick={genNoop} />
-            <span className="text-xs font-mono text-muted-foreground">hover for red</span>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
-          <div className="flex items-center gap-3 h-10 border border-primary/20 rounded px-3 bg-black/30 w-fit">
-            <CloseButton onClick={genNoop} disabled />
-            <span className="text-xs font-mono text-muted-foreground">50% opacity</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ModelSelector */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ModelSelector</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Model dropdown for switching between generation models. Sits in the panel footer alongside ExecuteButton.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">3 models</span>
-          <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
-          <ModelSelector selectedModelKey="nano_banana" modelOptions={mockModelOptions} onChange={genNoop} disabled />
-        </div>
-      </div>
-
       {/* Composed Panel Demo */}
       <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Composed Panel (Demo)</h3>
       <p className="text-xs font-mono text-muted-foreground mb-3">
@@ -1471,8 +1441,8 @@ export function Styleguide() {
       <hr className="border-border" />
       <h2 className="text-2xl font-bold text-blue-400 font-mono">Component Catalog</h2>
 
-      {/* Colors + Typography + Buttons — compact row */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {/* Colors + Typography — compact row */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Colors */}
         <div className="space-y-3">
           <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Colors</h2>
@@ -1499,100 +1469,6 @@ export function Styleguide() {
             <p className="font-mono text-xs text-muted-foreground">const x = await fetchData();</p>
           </div>
         </div>
-
-        {/* Dialog / Dropdown / Popover / Tooltip */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Overlays</h2>
-          <div className="flex flex-wrap gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">Dialog</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>System Diagnostic</DialogTitle>
-                </DialogHeader>
-                <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="outline" size="sm">Dismiss</Button>
-                  </DialogClose>
-                  <Button size="sm">Confirm</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-3.5 h-3.5 mr-1.5" />
-                  Dropdown
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
-                <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
-                <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Info className="w-3.5 h-3.5 mr-1.5" />
-                  Popover
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent>
-                <div className="space-y-2">
-                  <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
-                  <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm">Tooltip</Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Neural interface ready</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
-            >
-              Toast
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
-            >
-              Toast Error
-            </Button>
-            <Button variant="dashed" size="sm" className="text-foreground">
-              <Upload className="w-3.5 h-3.5" />
-              UPLOAD_ASSET
-            </Button>
-            <Button variant="dashed" size="sm" className="text-foreground">
-              <Upload className="w-3.5 h-3.5" />
-              UPLOAD_CLIP
-            </Button>
-          </div>
-          <div className="w-[200px]">
-            <SelectWithChevronDemo />
-          </div>
-        </div>
       </section>
 
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
@@ -1610,31 +1486,195 @@ export function Styleguide() {
         </div>
       </section>
 
-      {/* ==================== BATCH 2: NEW COMPONENTS ==================== */}
+      {/* ==================== FORMS & CONTROLS ==================== */}
 
-      {/* Input */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Input</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Default</p>
-            <Input placeholder="Enter text..." />
+      <section className="space-y-6">
+        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Forms & Controls</h2>
+
+        {/* Row 1 — 3-column grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Overlays & Menus */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Overlays & Menus</h3>
+            <div className="flex flex-wrap gap-2">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">Dialog</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>System Diagnostic</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline" size="sm">Dismiss</Button>
+                    </DialogClose>
+                    <Button size="sm">Confirm</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="w-3.5 h-3.5 mr-1.5" />
+                    Dropdown
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
+                  <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
+                  <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Info className="w-3.5 h-3.5 mr-1.5" />
+                    Popover
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
+                    <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm">Tooltip</Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Neural interface ready</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
+              >
+                Toast
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
+              >
+                Toast Error
+              </Button>
+              <Button variant="dashed" size="sm" className="text-foreground">
+                <Upload className="w-3.5 h-3.5" />
+                UPLOAD_ASSET
+              </Button>
+              <Button variant="dashed" size="sm" className="text-foreground">
+                <Upload className="w-3.5 h-3.5" />
+                UPLOAD_CLIP
+              </Button>
+            </div>
+            <div className="w-[200px]">
+              <SelectWithChevronDemo />
+            </div>
+            <ContextMenuDemo />
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Email</p>
-            <Input type="email" placeholder="user@example.com" />
+
+          {/* Selection Controls */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Selection Controls</h3>
+            <GenToggleDemo />
+            <GenSelectDemo />
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Disabled</p>
-            <Input placeholder="Disabled" disabled />
+
+          {/* Inputs */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Inputs</h3>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Default</p>
+                <Input placeholder="Enter text..." />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Email</p>
+                <Input type="email" placeholder="user@example.com" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Disabled</p>
+                <Input placeholder="Disabled" disabled />
+              </div>
+            </div>
           </div>
         </div>
-      </section>
 
-      {/* Context Menu */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Context Menu</h2>
-        <ContextMenuDemo />
+        {/* Row 2 — 2-column grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Gen Text Fields */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Gen Text Fields</h3>
+            <GenFieldDemo />
+          </div>
+
+          {/* Multi-Prompt Editor */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Multi-Prompt Editor</h3>
+            <MultiPromptEditorDemo />
+          </div>
+        </div>
+
+        {/* Row 3 — 2-column grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Chat Input */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Chat Input</h3>
+            <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
+            <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
+          </div>
+
+          {/* ModelSelector */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ModelSelector</h3>
+            <ModelSelectorDemo />
+          </div>
+        </div>
+
+        {/* Row 4 — 2-column grid: ExecuteButton, CloseButton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* ExecuteButton */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ExecuteButton</h3>
+            <ExecuteButtonStatesDemo />
+          </div>
+
+          {/* CloseButton */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">CloseButton</h3>
+            <div className="flex items-center gap-4">
+              <div className="space-y-1 text-center">
+                <CloseButton onClick={() => {}} />
+                <p className="text-[10px] text-muted-foreground">enabled</p>
+              </div>
+              <div className="space-y-1 text-center">
+                <CloseButton onClick={() => {}} disabled />
+                <p className="text-[10px] text-muted-foreground">disabled</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 5 — Asset Drop Slots */}
+        <div>
+          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider mb-3">Asset Drop Slots</h3>
+          <AssetDropSlotDemo />
+        </div>
       </section>
 
       {/* Card Primitives */}
@@ -1719,36 +1759,6 @@ export function Styleguide() {
         </div>
       </section>
 
-      {/* GenToggle */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenToggle</h2>
-        <GenToggleDemo />
-      </section>
-
-      {/* GenField + GenTextarea */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenField + GenTextarea</h2>
-        <GenFieldDemo />
-      </section>
-
-      {/* GenSelect */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">GenSelect</h2>
-        <GenSelectDemo />
-      </section>
-
-      {/* MultiPromptEditor */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">MultiPromptEditor</h2>
-        <MultiPromptEditorDemo />
-      </section>
-
-      {/* AssetDropSlot */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">AssetDropSlot</h2>
-        <AssetDropSlotDemo />
-      </section>
-
       {/* Timeline Slots */}
       <section className="space-y-3">
         <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Timeline Slots</h2>
@@ -1802,15 +1812,6 @@ export function Styleguide() {
               style={{ left: '55%' }}
             />
           </div>
-        </div>
-      </section>
-
-      {/* ChatInput */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">ChatInput</h2>
-        <div className="max-w-lg space-y-3">
-          <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
-          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
       </section>
 
