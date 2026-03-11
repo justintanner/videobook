@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
@@ -526,6 +526,9 @@ const centerStageMocks = [
 ];
 
 function CenterStageSection() {
+  const [replayCount, setReplayCount] = useState(0);
+  const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
+
   return (
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: TransmissionView</h2>
@@ -534,10 +537,10 @@ function CenterStageSection() {
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {centerStageMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
+          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-2">
             <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden">
-              <TransmissionView message={mock.message} onComplete={() => {}} />
+            <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden flex flex-col">
+              <TransmissionView message={mock.message} onComplete={handleComplete} />
             </div>
           </div>
         ))}
@@ -773,75 +776,6 @@ function FailedAssetReadoutSection() {
   );
 }
 
-// ── SidebarHeader ──
-
-function SidebarHeaderSection() {
-  return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">SidebarHeader</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        Header for sidebar panels. Shows icon, title, sort control (icon-only with tooltip), and collapse toggle.
-        Collapsed mode renders vertically with expand icon and readable vertical title.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-            expanded left (sort + collapse)
-          </span>
-          <div className="w-[280px] border border-border/50 rounded p-2 bg-card/10">
-            <SidebarHeader
-              icon={<Film className="w-4 h-4" />}
-              title="CLIPS"
-              collapsed={false}
-              onToggle={() => {}}
-              side="left"
-              sortOrder="newest"
-              onSortChange={() => {}}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-            expanded right (no sort)
-          </span>
-          <div className="w-[280px] border border-border/50 rounded p-2 bg-card/10">
-            <SidebarHeader
-              icon={<AudioLines className="w-4 h-4" />}
-              title="AUDIO"
-              collapsed={false}
-              onToggle={() => {}}
-              side="right"
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">collapsed left</span>
-          <div className="w-[48px] border border-border/50 rounded p-1 bg-card/10">
-            <SidebarHeader
-              icon={<Film className="w-4 h-4" />}
-              title="CLIPS"
-              collapsed={true}
-              onToggle={() => {}}
-              side="left"
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">collapsed right</span>
-          <div className="w-[48px] border border-border/50 rounded p-1 bg-card/10">
-            <SidebarHeader
-              icon={<AudioLines className="w-4 h-4" />}
-              title="AUDIO"
-              collapsed={true}
-              onToggle={() => {}}
-              side="right"
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ── CollapsibleSidebar ──
 
@@ -1043,7 +977,7 @@ function GenSystemSection() {
         {executeButtonStates.map((state) => (
           <div key={state} className="flex flex-col gap-2">
             <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{state}</span>
-            <div className="w-[160px]">
+            <div className="w-[190px]">
               <ExecuteButton
                 state={state}
                 onClick={genNoop}
@@ -1474,8 +1408,6 @@ export function Styleguide() {
       {/* CenterStage: FailedAssetReadout */}
       <FailedAssetReadoutSection />
 
-      {/* SidebarHeader */}
-      <SidebarHeaderSection />
 
       {/* CollapsibleSidebar */}
       <CollapsibleSidebarSection />
