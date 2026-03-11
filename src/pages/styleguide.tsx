@@ -1755,85 +1755,30 @@ function VideoSettingsModalSection() {
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Video Settings Modal</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Static render of the video settings panel. All sections expanded: Audio source/fade/volume,
-        Fill Mode (portrait), Subtitles with style controls, and OSG with positioning and timing.
+        Static render of the video render settings panel. Matches the render_video MCP tool parameters:
+        orientation, audio, subtitles, and OSG overlay.
       </p>
 
-      <div className="max-w-lg mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+      <div className="max-w-2xl mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2)]">
         {/* Header */}
         <div className="px-4 pt-4 pb-2 border-b border-primary/20">
           <h3 className="text-sm font-mono font-bold text-primary tracking-wider uppercase">Render Settings</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Portrait — @hero-intro</p>
+          <p className="text-xs text-muted-foreground mt-0.5">vid-hero-intro — my-project</p>
         </div>
 
-        {/* Scrollable body */}
-        <div className="px-4 py-3 space-y-4 max-h-[500px] overflow-y-auto">
+        {/* Body */}
+        <div className="px-4 py-3 space-y-4">
 
-          {/* ── Audio Section ── */}
+          {/* ── Orientation (full width) ── */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
-            </div>
-            {/* Source toggle */}
-            <div className="mb-3">
-              <span className="text-xs text-muted-foreground block mb-1">Source</span>
-              <div className="flex gap-1">
-                {['Clean', 'Original', 'Vocals', 'Mute'].map((opt, i) => (
-                  <button
-                    key={opt}
-                    className={cn(
-                      'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                      i === 0
-                        ? 'bg-primary/20 border-primary/50 text-primary'
-                        : 'bg-black/40 border-white/10 text-muted-foreground hover:border-white/20'
-                    )}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Fade In */}
-            <div className="flex items-center gap-1 pb-2">
-              <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
-              <input
-                type="number" defaultValue={500} min={0} max={2000} readOnly
-                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-              />
-              <span className="text-xs text-muted-foreground">ms</span>
-            </div>
-            {/* Fade Out */}
-            <div className="flex items-center gap-1 pb-2">
-              <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
-              <input
-                type="number" defaultValue={300} min={0} max={2000} readOnly
-                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-              />
-              <span className="text-xs text-muted-foreground">ms</span>
-            </div>
-            {/* Volume */}
-            <div className="flex items-center gap-1 pb-2">
-              <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
-              <input
-                type="number" defaultValue={100} min={1} max={1000} readOnly
-                className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-              />
-              <span className="text-xs text-muted-foreground">%</span>
-            </div>
-          </div>
-
-          {/* ── Fill Mode Section (portrait) ── */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Fill Mode</span>
-            </div>
-            <div className="flex gap-1">
-              {['Blur', 'Actor'].map((opt, i) => (
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientation</span>
+            <div className="flex gap-1 mt-2">
+              {['Landscape', 'Portrait', 'Both'].map((opt, i) => (
                 <button
                   key={opt}
                   className={cn(
                     'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                    i === 0
+                    i === 2
                       ? 'bg-primary/20 border-primary/50 text-primary'
                       : 'bg-black/40 border-white/10 text-muted-foreground hover:border-white/20'
                   )}
@@ -1844,255 +1789,148 @@ function VideoSettingsModalSection() {
             </div>
           </div>
 
-          {/* ── Subtitles Section (ON) ── */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Subtitles</span>
-              <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
-            </div>
-            <div className="space-y-2">
-              {/* Language */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Language</span>
-                <div className="flex gap-1">
-                  {['Original', 'English'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 0 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Position */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Position</span>
-                <div className="flex gap-1">
-                  {['Top', 'Middle', 'Bottom'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Highlight */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Highlight</span>
-                <div className="flex gap-1">
-                  {['None', 'TikDance', 'Highlight'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Size */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Size</span>
-                <div className="flex gap-1">
-                  {['S', 'M', 'L'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Background */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Background</span>
-                <div className="flex gap-1">
-                  {['None', 'Semi', 'Solid'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Colors */}
-              <div className="flex gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Text</span>
-                  <div className="w-6 h-6 rounded border border-white/20 bg-white" />
-                  <span className="text-xs font-mono text-muted-foreground">#FFFFFF</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Highlight</span>
-                  <div className="w-6 h-6 rounded border border-white/20 bg-yellow-400" />
-                  <span className="text-xs font-mono text-muted-foreground">#FACC15</span>
-                </div>
-              </div>
-              {/* Alpha */}
-              <div className="flex items-center gap-1">
-                <span className="text-xs w-14 shrink-0 text-muted-foreground">Alpha</span>
-                <input
-                  type="number" defaultValue={255} min={0} max={255} readOnly
-                  className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
-                />
-              </div>
-              {/* Effects */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Effects</span>
-                <div className="flex gap-1">
-                  {['None', 'Subtle', 'Broadcast'].map((opt, i) => (
-                    <button
-                      key={opt}
-                      className={cn(
-                        'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                        i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* ── Two-column grid ── */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
 
-          {/* ── OSG Section (ON) ── */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
-              <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
+            {/* Left column: Audio + OSG */}
+            <div className="space-y-4">
+
+              {/* ── Audio Section ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
+                  <input
+                    type="number" defaultValue={150} min={0} max={5000} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                  <span className="text-xs text-muted-foreground">ms</span>
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
+                  <input
+                    type="number" defaultValue={100} min={0} max={5000} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                  <span className="text-xs text-muted-foreground">ms</span>
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
+                  <input
+                    type="number" defaultValue={100} min={0} max={100} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+
+              {/* ── OSG Section ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
+                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Asset ID</span>
+                    <input
+                      type="text" defaultValue="img-logo-overlay" readOnly
+                      className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
+                    <div className="grid grid-cols-2 gap-1">
+                      {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
+                        <button
+                          key={pos}
+                          className={cn(
+                            'px-2 py-1 text-[10px] font-medium border transition-all',
+                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                          )}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              {/* Text */}
+
+            {/* Right column: Subtitles */}
+            <div className="space-y-4">
+
+              {/* ── Subtitles Section ── */}
               <div>
-                <span className="text-xs text-muted-foreground block mb-1">Text</span>
-                <input
-                  type="text" defaultValue="CLIPFIRST.COM" maxLength={200} readOnly
-                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                />
-              </div>
-              {/* QR URL */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">QR URL</span>
-                <input
-                  type="text" defaultValue="https://clipfirst.com" readOnly
-                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                />
-              </div>
-              {/* Logo text */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Logo Text</span>
-                <input
-                  type="text" defaultValue="CF" readOnly
-                  className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                />
-              </div>
-              {/* Position presets */}
-              <div>
-                <span className="text-xs text-muted-foreground block mb-1">Position</span>
-                <div className="grid grid-cols-3 gap-1">
-                  {['Top-L', 'Top-C', 'Top-R', 'Bot-L', 'Bot-C', 'Bot-R'].map((pos, i) => (
-                    <button
-                      key={pos}
-                      className={cn(
-                        'px-2 py-1 text-[10px] font-medium border transition-all',
-                        i === 5 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {pos}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Subtitles</span>
+                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
                 </div>
-              </div>
-              {/* Coordinates */}
-              <div className="grid grid-cols-2 gap-2">
-                {[{ label: 'X1', val: 10 }, { label: 'Y1', val: 850 }, { label: 'X2', val: 350 }, { label: 'Y2', val: 920 }].map(({ label, val }) => (
-                  <div key={label} className="flex items-center gap-1">
-                    <span className="text-xs w-6 shrink-0 text-muted-foreground">{label}</span>
-                    <input
-                      type="number" defaultValue={val} readOnly
-                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
-                    />
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Highlight Style</span>
+                    <div className="flex gap-1">
+                      {['TikDance', 'Highlight'].map((opt, i) => (
+                        <button
+                          key={opt}
+                          className={cn(
+                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                            i === 0 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-              {/* Sizing */}
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Font', val: 24, suffix: 'px' },
-                  { label: 'Padding', val: 10, suffix: 'px' },
-                  { label: 'Logo W', val: 60, suffix: 'px' },
-                  { label: 'QR Size', val: 80, suffix: 'px' },
-                ].map(({ label, val, suffix }) => (
-                  <div key={label} className="flex items-center gap-1">
-                    <span className="text-xs w-14 shrink-0 text-muted-foreground">{label}</span>
-                    <input
-                      type="number" defaultValue={val} readOnly
-                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
-                    />
-                    <span className="text-xs text-muted-foreground">{suffix}</span>
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
+                    <div className="flex gap-1">
+                      {['Top', 'Middle', 'Bottom'].map((opt, i) => (
+                        <button
+                          key={opt}
+                          className={cn(
+                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                            i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-              {/* Colors */}
-              <div className="flex gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">BG</span>
-                  <div className="w-6 h-6 rounded border border-white/20 bg-black" />
-                  <span className="text-xs font-mono text-muted-foreground">#000000</span>
+                  <div>
+                    <span className="text-xs text-muted-foreground block mb-1">Font Size</span>
+                    <div className="flex gap-1">
+                      {['S', 'M', 'L'].map((opt, i) => (
+                        <button
+                          key={opt}
+                          className={cn(
+                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
+                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Text</span>
+                      <div className="w-6 h-6 rounded border border-white/20 bg-slate-50" />
+                      <span className="text-xs font-mono text-muted-foreground">#F8FAFC</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Highlight</span>
+                      <div className="w-6 h-6 rounded border border-white/20 bg-red-800" />
+                      <span className="text-xs font-mono text-muted-foreground">#991B1B</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Logo</span>
-                  <div className="w-6 h-6 rounded border border-white/20 bg-cyan-400" />
-                  <span className="text-xs font-mono text-muted-foreground">#22D3EE</span>
-                </div>
-              </div>
-              {/* Opacity */}
-              <div className="flex items-center gap-1">
-                <span className="text-xs w-14 shrink-0 text-muted-foreground">Opacity</span>
-                <input
-                  type="number" defaultValue={0.9} min={0} max={1} step={0.05} readOnly
-                  className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
-                />
-              </div>
-              {/* Timing */}
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Start', val: 0, suffix: 'ms' },
-                  { label: 'End', val: 0, suffix: 'ms' },
-                  { label: 'Fade In', val: 500, suffix: 'ms' },
-                  { label: 'Fade Out', val: 500, suffix: 'ms' },
-                ].map(({ label, val, suffix }) => (
-                  <div key={label} className="flex items-center gap-1">
-                    <span className="text-xs w-14 shrink-0 text-muted-foreground">{label}</span>
-                    <input
-                      type="number" defaultValue={val} readOnly
-                      className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded"
-                    />
-                    <span className="text-xs text-muted-foreground">{suffix}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
