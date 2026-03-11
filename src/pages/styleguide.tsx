@@ -36,7 +36,7 @@ import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, MoreHorizontal,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
-  AlertTriangle, AudioLines,
+  AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
 } from 'lucide-react';
 
 const colors = [
@@ -850,6 +850,290 @@ function FailedAssetReadoutSection() {
 }
 
 
+// ── VideoTrimView (static replica) ──
+
+const TRIM_FILMSTRIP_HEIGHT = 80;
+const TRIM_PLAYHEAD_POS = 42; // percent
+
+const trimDemoWords = [
+  { text: 'The', start: 0.0, end: 0.2 },
+  { text: 'quick', start: 0.2, end: 0.5 },
+  { text: 'brown', start: 0.5, end: 0.8 },
+  { text: 'fox', start: 0.8, end: 1.1 },
+  { text: 'jumps', start: 1.1, end: 1.5 },
+  { text: 'over', start: 1.5, end: 1.8 },
+  { text: 'the', start: 1.8, end: 2.0 },
+  { text: 'lazy', start: 2.0, end: 2.4 },
+  { text: 'dog.', start: 2.4, end: 2.8 },
+  { text: 'A', start: 3.0, end: 3.1 },
+  { text: 'second', start: 3.1, end: 3.5 },
+  { text: 'sentence', start: 3.5, end: 4.0 },
+  { text: 'appears', start: 4.0, end: 4.4 },
+  { text: 'here', start: 4.4, end: 4.7 },
+  { text: 'with', start: 4.7, end: 5.0 },
+  { text: 'more', start: 5.0, end: 5.3 },
+  { text: 'words.', start: 5.3, end: 5.7 },
+  { text: 'Then', start: 6.0, end: 6.2 },
+  { text: 'the', start: 6.2, end: 6.4 },
+  { text: 'narrator', start: 6.4, end: 6.9 },
+  { text: 'continues', start: 6.9, end: 7.4 },
+  { text: 'speaking', start: 7.4, end: 7.9 },
+  { text: 'about', start: 7.9, end: 8.2 },
+  { text: 'the', start: 8.2, end: 8.4 },
+  { text: 'product.', start: 8.4, end: 8.9 },
+];
+
+const trimDemoCutRegions = [
+  { startPercent: 18, widthPercent: 12 },
+  { startPercent: 62, widthPercent: 8 },
+];
+
+// Words at indices 5,6,7 ("over the lazy") are selected/cut
+const trimSelectedWordIndices = new Set([5, 6, 7]);
+// Active word index (currently playing)
+const trimActiveWordIndex = 11;
+
+const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0px 4px, rgba(239,68,68,0.35) 4px 8px)';
+
+function VideoTrimViewSection() {
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">VideoTrimView</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Full-screen trimming overlay. Two-column layout: video player + filmstrip timeline on left,
+        transcript panel with word-level selection on right. Click words to mark cuts (shown with
+        red strikethrough). Cut regions appear as striped red overlays on the timeline. Cyan playhead
+        tracks current position. Supports snap-to-words, zoom, and inline word editing.
+      </p>
+
+      {/* Full-width demo */}
+      <div className="border border-zinc-700/50 rounded-lg overflow-hidden bg-zinc-950">
+        {/* Header bar */}
+        <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800">
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Scissors className="w-4 h-4" />
+            <span className="font-mono text-xs tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              className={cn(
+                'px-4 py-1.5 text-xs font-bold tracking-[0.15em] uppercase border rounded transition-all duration-200',
+                'flex items-center justify-center gap-1.5',
+                'bg-cyan-500/20 text-cyan-400 border-current',
+                'shadow-[0_0_20px_rgba(34,211,238,0.5)]',
+              )}
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              <span>TRIM</span>
+            </button>
+            <button className="w-7 h-7 flex items-center justify-center text-zinc-500 transition-all hover:bg-red-500/10 hover:text-red-400 rounded">
+              <X className="w-5 h-5 stroke-[2.5]" />
+            </button>
+          </div>
+        </div>
+
+        {/* Main content: two-column */}
+        <div className="flex overflow-hidden" style={{ height: 420 }}>
+          {/* Left: video + timeline */}
+          <div className="flex-1 flex flex-col px-4 py-3 overflow-hidden min-w-0">
+            {/* Video player */}
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <div className="relative w-full h-full bg-black rounded-lg overflow-hidden">
+                <video loop playsInline controls poster="/styleguide-img-cover.jpg" className="w-full h-full object-contain" />
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="shrink-0 mt-2 px-4 py-3 bg-zinc-900/50 rounded-lg">
+              <div className="relative">
+                {/* Time ruler */}
+                <div className="relative select-none" style={{ height: 20 }}>
+                  {[0, 2, 4, 6, 8, 10].map((t) => (
+                    <div key={t} className="absolute bottom-0" style={{ left: `${(t / 10) * 100}%` }}>
+                      <div className="w-px h-3 bg-zinc-500" />
+                      <span className="absolute bottom-0 text-[9px] text-zinc-400 font-mono leading-none whitespace-nowrap" style={{ transform: 'translateX(-50%)', left: 0, top: 1 }}>
+                        0:{t.toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                  ))}
+                  {[1, 3, 5, 7, 9].map((t) => (
+                    <div key={t} className="absolute bottom-0" style={{ left: `${(t / 10) * 100}%` }}>
+                      <div className="w-px h-1.5 bg-zinc-700" />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filmstrip */}
+                <div className="relative" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
+                  <div className="relative bg-black border border-zinc-700/50 rounded-md" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
+                    {/* Thumbnail strip (mock frames) */}
+                    <div className="absolute inset-0 flex overflow-hidden rounded-md">
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 h-full bg-cover bg-center"
+                          style={{
+                            backgroundImage: `url(${i % 2 === 0 ? '/styleguide-img-cover.jpg' : '/styleguide-vid-purple-grind.jpg'})`,
+                            filter: 'brightness(0.7)',
+                          }}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Cut region overlays */}
+                    {trimDemoCutRegions.map((region, i) => (
+                      <div
+                        key={i}
+                        className="absolute top-0 bottom-0 pointer-events-none"
+                        style={{
+                          left: `${region.startPercent}%`,
+                          width: `${region.widthPercent}%`,
+                          background: trimStripedBg,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Edge handles for cut regions */}
+                  {trimDemoCutRegions.map((region, i) => (
+                    <div key={`handles-${i}`}>
+                      <div className="absolute top-0 flex items-center justify-center" style={{ left: `${region.startPercent}%`, width: 8, marginLeft: -4, height: TRIM_FILMSTRIP_HEIGHT }}>
+                        <div className="w-1 h-4/5 rounded-full bg-red-500/60" />
+                      </div>
+                      <div className="absolute top-0 flex items-center justify-center" style={{ left: `${region.startPercent + region.widthPercent}%`, width: 8, marginLeft: -4, height: TRIM_FILMSTRIP_HEIGHT }}>
+                        <div className="w-1 h-4/5 rounded-full bg-red-500/60" />
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Playhead */}
+                  <div
+                    className="absolute top-0 pointer-events-none z-30"
+                    style={{
+                      left: `${TRIM_PLAYHEAD_POS}%`,
+                      width: 3,
+                      height: TRIM_FILMSTRIP_HEIGHT,
+                      marginLeft: -1,
+                      backgroundColor: 'rgb(34, 211, 238)',
+                      filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))',
+                    }}
+                  >
+                    <div
+                      className="absolute"
+                      style={{
+                        top: -6,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '5px solid transparent',
+                        borderRight: '5px solid transparent',
+                        borderTop: '6px solid rgb(34, 211, 238)',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Duration labels */}
+                <div className="relative" style={{ height: 20 }}>
+                  <div
+                    className="absolute top-0.5 pointer-events-none z-30"
+                    style={{ left: `${TRIM_PLAYHEAD_POS}%`, transform: 'translateX(-50%)' }}
+                  >
+                    <span className="font-mono text-[9px] text-cyan-400 bg-black/60 px-1 rounded">00:04.200</span>
+                  </div>
+                  {trimDemoCutRegions.map((region, i) => (
+                    <div
+                      key={i}
+                      className="absolute top-1 text-[10px] text-red-400 font-medium whitespace-nowrap"
+                      style={{
+                        left: `${region.startPercent + region.widthPercent / 2}%`,
+                        transform: 'translateX(-50%)',
+                      }}
+                    >
+                      {(region.widthPercent / 10).toFixed(1)}s
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: transcript panel */}
+          <div className="w-[280px] shrink-0 flex flex-col border-l border-cyan-500/20 bg-zinc-950/80 shadow-[inset_2px_0_12px_rgba(34,211,238,0.04)]">
+            {/* Header */}
+            <div className="shrink-0 px-4 py-2 border-b border-zinc-800/60">
+              <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">Transcript</span>
+            </div>
+
+            {/* Words */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 leading-relaxed scrollbar-hide">
+              <div className="leading-relaxed">
+                {trimDemoWords.map((word, i) => {
+                  const isSelected = trimSelectedWordIndices.has(i);
+                  const isActive = i === trimActiveWordIndex;
+                  return (
+                    <span key={i}>
+                      <span
+                        className={cn(
+                          'inline-block text-sm font-sans cursor-pointer select-none',
+                          'px-0.5 mx-0.5 my-0.5 rounded-sm transition-all duration-150',
+                          isSelected
+                            ? 'text-red-400/60 line-through decoration-red-500/80'
+                            : isActive
+                              ? 'text-cyan-300 bg-cyan-500/15 drop-shadow-[0_0_8px_#22d3ee]'
+                              : 'text-zinc-300 hover:text-white'
+                        )}
+                      >
+                        {word.text}
+                      </span>
+                      {word.text.endsWith('.') && <br />}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 border-t border-zinc-800/60 px-4 py-2 space-y-2">
+              {/* Timestamp */}
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-sm text-cyan-400 tabular-nums">00:04.200</span>
+                <span className="text-zinc-600 text-sm">/</span>
+                <span className="font-mono text-sm text-zinc-500 tabular-nums">00:08.900</span>
+              </div>
+              {/* Controls */}
+              <div className="flex items-center gap-1">
+                <button className="p-1.5 rounded-md transition-colors flex items-center gap-1 bg-cyan-500/20 text-cyan-400">
+                  <Magnet className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium">Snap</span>
+                </button>
+                <button className="p-1.5 rounded-md transition-colors flex items-center gap-1 bg-red-500/20 text-red-400">
+                  <Eraser className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium">Clear</span>
+                </button>
+                <div className="w-px h-4 bg-zinc-700 mx-0.5" />
+                <div className="flex items-center gap-1">
+                  <button className="p-1 rounded text-zinc-400"><Minus className="w-3 h-3" /></button>
+                  <input
+                    type="range" min={1} max={10} step={1} defaultValue={1} readOnly
+                    className="w-12 h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
+                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2
+                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:cursor-pointer"
+                  />
+                  <button className="p-1 rounded text-zinc-400"><Plus className="w-3 h-3" /></button>
+                  <span className="text-[10px] text-cyan-400 w-4 text-right">1x</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
 // ── CollapsibleSidebar ──
 
 function CollapsibleSidebarSection() {
@@ -1545,6 +1829,8 @@ export function Styleguide() {
       {/* CenterStage: FailedAssetReadout */}
       <FailedAssetReadoutSection />
 
+      {/* VideoTrimView */}
+      <VideoTrimViewSection />
 
       {/* CollapsibleSidebar */}
       <CollapsibleSidebarSection />
