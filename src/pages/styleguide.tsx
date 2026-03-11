@@ -26,7 +26,10 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
-import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, TransmissionView, TransmissionSequence, RenderingReadout } from '@/components/center-stage';
+import { ScriptReadout } from '@/components/chat/ScriptReadout';
+import { ProofReadButton } from '@/components/chat/ProofReadButton';
+import { ScriptBlock } from '@/components/chat/ScriptBlocks';
 
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
@@ -2574,6 +2577,209 @@ function PendingGenerationsSection() {
   );
 }
 
+// ── Chat & Messaging Section ──
+
+const sampleScript = `INT. NEON ALLEY - NIGHT
+
+A figure in a long coat walks through rain-slicked streets. Holographic advertisements flicker overhead, casting cyan light across wet pavement.
+
+NARRATOR (V.O.)
+In the year 2087, the line between human and machine had blurred beyond recognition.
+
+The figure stops, looking up at a massive screen displaying a countdown timer.
+
+NARRATOR (V.O.)
+But some things never change. The need to create. To tell stories. To be heard.`;
+
+function ChatMessagingSection() {
+  const [transmissionKey, setTransmissionKey] = useState(0);
+  const [transmissionRunning, setTransmissionRunning] = useState(false);
+
+  // ProofReadButton demo state
+  const dummyAudioRef = useRef<HTMLAudioElement>(null);
+
+  // ScriptBlock demo
+  const [scriptContent, setScriptContent] = useState(sampleScript);
+  const [scriptOriginal] = useState(sampleScript);
+  const scriptHasChanges = scriptContent !== scriptOriginal;
+
+  const replayTransmission = useCallback(() => {
+    setTransmissionRunning(false);
+    setTransmissionKey((k) => k + 1);
+    // small delay so React unmounts then remounts
+    setTimeout(() => setTransmissionRunning(true), 50);
+  }, []);
+
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Chat & Messaging</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor with proof-read audio.
+      </p>
+
+      {/* ── ChatInput States ── */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ChatInput</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Terminal prompt with @ autocomplete for asset slugs. Type @ to see the dropdown. Supports keyboard navigation (arrows, tab, enter, escape).
+      </p>
+      <div className="space-y-4 max-w-2xl mb-8">
+        <div className="space-y-1">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Default</p>
+          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Loading</p>
+          <ChatInput isLoading assetSlugs={[]} />
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Transmitting</p>
+          <ChatInput isTransmitting assetSlugs={[]} />
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Disabled</p>
+          <ChatInput disabled assetSlugs={[]} />
+        </div>
+      </div>
+
+      {/* ── TransmissionSequence ── */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">TransmissionSequence</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Cinematic confirmation animation: scan line sweep, typewriter &ldquo;TRANSMISSION_RECEIVED&rdquo;, message echo, then dissolve. Plays once and calls onComplete.
+      </p>
+      <div className="mb-2">
+        <button
+          onClick={replayTransmission}
+          className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
+        >
+          REPLAY
+        </button>
+      </div>
+      <div className="relative h-48 max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-black mb-8">
+        {transmissionRunning && (
+          <TransmissionSequence
+            key={transmissionKey}
+            message="gen cinematic drone shot of neon alley at night, rain-slicked streets"
+            onComplete={() => setTransmissionRunning(false)}
+          />
+        )}
+        {!transmissionRunning && (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-xs font-mono text-muted-foreground/40">Click REPLAY to trigger animation</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── ProofReadButton States ── */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ProofReadButton</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Five states derived from audio URL, playback, pending, and dirty flags. Cycles between initial, pending, play, playing, and dirty (regenerate).
+      </p>
+      <div className="flex flex-wrap items-end gap-6 mb-8">
+        {([
+          { label: 'Initial', audioUrl: null, isPlaying: false, isPending: false, dialogDirty: false },
+          { label: 'Pending', audioUrl: null, isPlaying: false, isPending: true, dialogDirty: false },
+          { label: 'Play', audioUrl: '/fake.mp3', isPlaying: false, isPending: false, dialogDirty: false },
+          { label: 'Playing', audioUrl: '/fake.mp3', isPlaying: true, isPending: false, dialogDirty: false },
+          { label: 'Dirty', audioUrl: '/fake.mp3', isPlaying: false, isPending: false, dialogDirty: true },
+        ] as const).map((s) => (
+          <div key={s.label} className="flex flex-col items-center gap-2">
+            <ProofReadButton
+              audioUrl={s.audioUrl}
+              isPlaying={s.isPlaying}
+              isPending={s.isPending}
+              dialogDirty={s.dialogDirty}
+              disabled={false}
+              onPlay={() => {}}
+              onRegenerate={() => {}}
+              audioRef={dummyAudioRef}
+            />
+            <span className="text-[10px] font-mono text-muted-foreground">{s.label}</span>
+          </div>
+        ))}
+        <div key="disabled" className="flex flex-col items-center gap-2">
+          <ProofReadButton
+            audioUrl={null}
+            isPlaying={false}
+            isPending={false}
+            dialogDirty={false}
+            disabled={true}
+            onPlay={() => {}}
+            onRegenerate={() => {}}
+            audioRef={dummyAudioRef}
+          />
+          <span className="text-[10px] font-mono text-muted-foreground">Disabled</span>
+        </div>
+      </div>
+
+      {/* ── ScriptBlock (editable text block) ── */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ScriptBlock</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Labeled editable text block with save/cancel controls. Click the text to enter edit mode. Edit the text to reveal save/cancel buttons.
+      </p>
+      <div className="max-w-2xl mb-8">
+        <ScriptBlock
+          label="Script"
+          content={scriptContent}
+          onChange={setScriptContent}
+          onSave={() => {}}
+          onCancel={() => setScriptContent(scriptOriginal)}
+          hasChanges={scriptHasChanges}
+          isSaving={false}
+          placeholder="Enter script content..."
+        />
+      </div>
+
+      {/* ── ScriptReadout (full component) ── */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ScriptReadout</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
+        and editable body with proof-read audio controls. Click the script text to edit.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+        {/* With content */}
+        <div>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">With Content</p>
+          <div className="h-[400px]">
+            <ScriptReadout
+              content={sampleScript}
+              slug="@hero-script"
+              onSave={() => {}}
+              onGenerateVideo={() => {}}
+              onProofRead={() => {}}
+            />
+          </div>
+        </div>
+
+        {/* Empty state */}
+        <div>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Empty (no content)</p>
+          <div className="h-[400px]">
+            <ScriptReadout
+              content={null}
+              slug="@empty-script"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Generating state */}
+      <div className="max-w-lg">
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Generating Video</p>
+        <div className="h-[400px]">
+          <ScriptReadout
+            content={sampleScript}
+            slug="@rendering-script"
+            isGenerating={true}
+            onSave={() => {}}
+            onGenerateVideo={() => {}}
+            onProofRead={() => {}}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -3003,6 +3209,9 @@ export function Styleguide() {
 
       {/* Pending Generations */}
       <PendingGenerationsSection />
+
+      {/* Chat & Messaging */}
+      <ChatMessagingSection />
 
       {/* Custom Utilities */}
       <section className="space-y-3">
