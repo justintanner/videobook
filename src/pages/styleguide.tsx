@@ -253,7 +253,7 @@ function HeaderBar() {
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 h-full">
           <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-          <span className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">CLIPFIRST</span>
+          <span className="font-mono font-bold text-sm uppercase tracking-wider"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span></span>
         </div>
 
         {/* Project selector */}
@@ -2922,7 +2922,7 @@ export function Styleguide() {
     <div className="min-h-screen pt-2 px-8 pb-8 space-y-12">
       <Toaster />
       <header>
-        <h1 className="text-3xl font-mono font-bold text-primary tracking-wider">CLIPFIRST STYLE GUIDE</h1>
+        <h1 className="text-3xl font-mono font-bold tracking-wider"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span> <span className="text-primary">STYLE GUIDE</span></h1>
         <p className="text-muted-foreground font-mono text-sm mt-1">
           Media cards, overlays, and center-stage views in all states
         </p>
