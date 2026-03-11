@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
+import { useWavesurfer } from '@wavesurfer/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
@@ -69,45 +70,43 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
   { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
 ];
 
-const MOCK_WAVEFORM_BARS: number[] = [
-  0.2, 0.35, 0.5, 0.65, 0.8, 0.7, 0.55, 0.4, 0.3, 0.45,
-  0.6, 0.75, 0.9, 0.85, 0.7, 0.55, 0.4, 0.5, 0.65, 0.8,
-  0.95, 1.0, 0.9, 0.75, 0.6, 0.45, 0.35, 0.5, 0.65, 0.8,
-  0.7, 0.55, 0.4, 0.3, 0.2, 0.35, 0.5, 0.65, 0.75, 0.6,
-  0.45, 0.55, 0.7, 0.85, 0.9, 0.8, 0.65, 0.5, 0.4, 0.3,
-  0.45, 0.6, 0.5, 0.35, 0.25, 0.15, 0.2, 0.3, 0.2, 0.1,
-];
-
-
 // ── Helper Components ──
 
-function StaticWaveform({
-  bars,
-  playedFraction,
+function StyleguideWaveform({
+  url,
   height,
-  barColor = 'rgba(0, 255, 255, 0.3)',
-  playedBarColor = 'rgba(0, 255, 255, 0.8)',
+  waveColor = 'rgba(0, 255, 255, 0.3)',
+  progressColor = 'rgba(0, 255, 255, 0.8)',
+  progress = 0,
 }: {
-  bars: number[];
-  playedFraction: number;
+  url: string;
   height: number;
-  barColor?: string;
-  playedBarColor?: string;
+  waveColor?: string;
+  progressColor?: string;
+  progress?: number;
 }) {
-  return (
-    <div className="flex items-end gap-px w-full" style={{ height }}>
-      {bars.map((v, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-sm"
-          style={{
-            height: `${Math.max(v * 100, 4)}%`,
-            backgroundColor: i / bars.length < playedFraction ? playedBarColor : barColor,
-          }}
-        />
-      ))}
-    </div>
-  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { wavesurfer } = useWavesurfer({
+    container: containerRef,
+    height,
+    waveColor,
+    progressColor,
+    url,
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
+    interact: false,
+    normalize: true,
+  });
+
+  useEffect(() => {
+    if (!wavesurfer || progress <= 0) return;
+    const handleReady = () => wavesurfer.seekTo(progress);
+    wavesurfer.on('ready', handleReady);
+    return () => { wavesurfer.un('ready', handleReady); };
+  }, [wavesurfer, progress]);
+
+  return <div ref={containerRef} className="w-full" />;
 }
 
 // ── App Layout Demo Helpers ──
@@ -995,7 +994,7 @@ function VideoTrimViewSection() {
             {/* Video player */}
             <div className="flex-1 min-h-0 flex items-center justify-center">
               <div className="relative w-full h-full bg-black rounded-lg overflow-hidden">
-                <video loop playsInline controls poster="/styleguide-img-cover.jpg" className="w-full h-full object-contain" />
+                <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
               </div>
             </div>
 
@@ -1433,7 +1432,7 @@ function AudioPlayerSection() {
         <div className="relative px-4 py-3" style={{ minHeight: 120 }}>
           {/* Waveform */}
           <div className="relative w-full" style={{ height: 80 }}>
-            <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0.4} height={80} />
+            <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={80} progress={0.4} />
 
             {/* Trim region overlay — left handle at ~15%, right at ~75% */}
             <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: '15%' }} />
@@ -1608,13 +1607,7 @@ function AudioTrackSection() {
             >
               {/* Waveform inside block */}
               <div className="absolute inset-0 px-1 flex items-center">
-                <StaticWaveform
-                  bars={MOCK_WAVEFORM_BARS}
-                  playedFraction={0}
-                  height={36}
-                  barColor="rgba(0, 255, 255, 0.3)"
-                  playedBarColor="rgba(0, 255, 255, 0.6)"
-                />
+                <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" progressColor="rgba(0, 255, 255, 0.6)" />
               </div>
               {/* Slug label */}
               <div className="absolute bottom-0.5 left-1 z-20">
@@ -1644,13 +1637,7 @@ function AudioTrackSection() {
               style={{ left: '20%', width: '50%' }}
             >
               <div className="absolute inset-0 px-1 flex items-center">
-                <StaticWaveform
-                  bars={MOCK_WAVEFORM_BARS}
-                  playedFraction={0}
-                  height={36}
-                  barColor="rgba(217, 70, 239, 0.3)"
-                  playedBarColor="rgba(217, 70, 239, 0.6)"
-                />
+                <StyleguideWaveform url="/fixtures/sfx-hit.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" progressColor="rgba(217, 70, 239, 0.6)" />
               </div>
               <div className="absolute bottom-0.5 left-1 z-20">
                 <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@sfx-hit</span>
@@ -1677,7 +1664,7 @@ function AudioTrackSection() {
               style={{ left: '5%', width: '45%' }}
             >
               <div className="absolute inset-0 px-1 flex items-center">
-                <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0} height={36} barColor="rgba(0, 255, 255, 0.3)" />
+                <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" />
               </div>
               <div className="absolute bottom-0.5 left-1 z-20">
                 <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@music</span>
@@ -1689,7 +1676,7 @@ function AudioTrackSection() {
               style={{ left: '55%', width: '35%' }}
             >
               <div className="absolute inset-0 px-1 flex items-center">
-                <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0} height={36} barColor="rgba(217, 70, 239, 0.3)" />
+                <StyleguideWaveform url="/fixtures/sfx-click.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" />
               </div>
               <div className="absolute bottom-0.5 left-1 z-20">
                 <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@voiceover</span>
@@ -1736,7 +1723,7 @@ function TimelineScrubberSection() {
             style={{ left: '8%', width: '55%' }}
           >
             <div className="absolute inset-0 px-1 flex items-center">
-              <StaticWaveform bars={MOCK_WAVEFORM_BARS} playedFraction={0.42} height={36} />
+              <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} progress={0.42} />
             </div>
             <div className="absolute bottom-0.5 left-1 z-20">
               <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span>
