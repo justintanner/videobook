@@ -153,7 +153,7 @@ function ToggleGroup({ options, activeIndex }: { options: string[]; activeIndex:
 
 function FakeDropdown({ text }: { text: string }) {
   return (
-    <div className="bg-black/60 border border-primary/30 rounded px-3 py-1.5 text-xs font-mono font-bold tracking-wide text-primary/90 flex items-center gap-2">
+    <div className="bg-black/60 border border-primary/30 rounded px-3 py-2.5 text-xs font-mono font-bold tracking-wide text-primary/90 flex items-center gap-2">
       {text}
       <ChevronDown className="w-3 h-3 text-primary/50" />
     </div>
