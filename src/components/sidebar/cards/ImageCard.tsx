@@ -11,6 +11,10 @@ export function ImageCard({ item }: ImageCardProps) {
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const isUploading = status === 'uploading';
+  const isGenerating = status === 'generating';
+  const isDownloading = status === 'downloading';
+  const isLoading = status === 'loading';
+  const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
 
   return (
     <CardShell item={item}>
@@ -25,12 +29,12 @@ export function ImageCard({ item }: ImageCardProps) {
       )}
 
       {/* Resolution Badge - Top Left */}
-      {!isUploading && !isError && !isCorrupt && item.width && item.height && (
+      {!hasOpaqueOverlay && !isError && item.width && item.height && (
         <ResolutionBadge width={item.width} height={item.height} />
       )}
 
       {/* Slug badge */}
-      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
+      {!hasOpaqueOverlay && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
     </CardShell>
   );
 }

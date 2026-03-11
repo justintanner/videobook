@@ -21,10 +21,15 @@ export function VideoCard({ item }: VideoCardProps) {
   const isReady = status === 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
+  const isUploading = status === 'uploading';
+  const isGenerating = status === 'generating';
+  const isDownloading = status === 'downloading';
+  const isLoading = status === 'loading';
   const isTranscribing = status === 'transcribing';
   const isUntranscribed = status === 'untranscribed';
   const isRendering = status.startsWith('render');
   const isProcessing = isTranscribing || isUntranscribed || isRendering;
+  const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
 
   const duration = formatDuration(item.durationSeconds);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
@@ -45,7 +50,7 @@ export function VideoCard({ item }: VideoCardProps) {
       )}
 
       {/* Duration badge - top left */}
-      {!isError && !isCorrupt && duration && <DurationBadge duration={duration} isProcessing={isProcessing} />}
+      {!hasOpaqueOverlay && !isError && duration && <DurationBadge duration={duration} isProcessing={isProcessing} />}
 
       {/* Slug badge */}
       {(isReady || isError || isRendering || isTranscribing || isUntranscribed) && (
