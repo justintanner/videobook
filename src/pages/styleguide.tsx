@@ -1781,7 +1781,7 @@ function VideoSettingsModalSection() {
           {/* ── Two-column grid ── */}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
 
-            {/* Left column: Orientation + Audio */}
+            {/* Left column: Orientation + Subtitles */}
             <div className="space-y-4">
 
               {/* ── Orientation Section ── */}
@@ -1791,7 +1791,7 @@ function VideoSettingsModalSection() {
                 <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
                 <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
                 <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientation</span>
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientations to Render</span>
                 <div className="space-y-1.5 mt-2">
                   {['Landscape', 'Portrait'].map((opt) => (
                     <label key={opt} className="flex items-center gap-2 cursor-pointer group">
@@ -1808,46 +1808,6 @@ function VideoSettingsModalSection() {
                   ))}
                 </div>
               </div>
-
-              {/* ── Audio Section ── */}
-              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
-                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
-                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
-                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
-                </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
-                  <input
-                    type="number" defaultValue={150} min={0} max={5000} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                  <span className="text-xs text-muted-foreground">ms</span>
-                </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
-                  <input
-                    type="number" defaultValue={100} min={0} max={5000} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                  <span className="text-xs text-muted-foreground">ms</span>
-                </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
-                  <input
-                    type="number" defaultValue={100} min={0} max={100} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                  <span className="text-xs text-muted-foreground">%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right column: Subtitles + OSG */}
-            <div className="space-y-4">
 
               {/* ── Subtitles Section ── */}
               <div className="relative border border-primary/15 bg-black/40 rounded p-3">
@@ -1910,17 +1870,68 @@ function VideoSettingsModalSection() {
                     </div>
                   </div>
                   <div className="flex gap-4">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Text</span>
-                      <div className="w-6 h-6 rounded border border-white/20 bg-slate-50" />
+                      <div className="w-8 h-8 rounded border border-white/10 bg-black/30 p-1.5">
+                        <div className="w-full h-full rounded-sm bg-slate-50" />
+                      </div>
                       <span className="text-xs font-mono text-muted-foreground">#F8FAFC</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Highlight</span>
-                      <div className="w-6 h-6 rounded border border-white/20 bg-red-800" />
+                      <div className="w-8 h-8 rounded border border-white/10 bg-black/30 p-1.5">
+                        <div className="w-full h-full rounded-sm bg-red-800" />
+                      </div>
                       <span className="text-xs font-mono text-muted-foreground">#991B1B</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column: Audio + OSG */}
+            <div className="space-y-4">
+
+              {/* ── Audio Section ── */}
+              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
+                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
+                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
+                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
+                  <input
+                    type="number" defaultValue={250} min={0} max={5000} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
+                  <input
+                    type="number" defaultValue={1000} min={0} max={5000} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                </div>
+                <div className="flex items-center gap-1 pb-2">
+                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
+                  <input
+                    type="number" defaultValue={60} min={0} max={100} readOnly
+                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
+                  />
+                </div>
+                <div className="flex gap-1 mt-1">
+                  {[
+                    { label: '60%', fadeIn: 250, fadeOut: 1000, vol: 60 },
+                    { label: '80%', fadeIn: 250, fadeOut: 1000, vol: 80 },
+                  ].map((p) => (
+                    <button key={p.label} className="flex-1 px-2 py-1 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all">
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
