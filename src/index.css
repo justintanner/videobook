@@ -821,6 +821,62 @@
   50% { opacity: 1; }
 }
 
+/* ==================== PENDING GENERATIONS BUTTON ==================== */
+
+@keyframes gen-ready-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 4px rgba(245, 158, 11, 0.3),
+      0 0 8px rgba(245, 158, 11, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 8px rgba(245, 158, 11, 0.5),
+      0 0 16px rgba(245, 158, 11, 0.25),
+      0 0 24px rgba(245, 158, 11, 0.1);
+  }
+}
+
+@keyframes gen-pending-pulse {
+  0%,
+  100% {
+    border-color: rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.1);
+  }
+  50% {
+    border-color: rgba(245, 158, 11, 0.4);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+  }
+}
+
+@keyframes gen-flash-burst {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+.gen-ready-glow {
+  animation: gen-ready-glow 2s ease-in-out infinite;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+}
+
+.gen-ready-steady {
+  box-shadow:
+    0 0 4px rgba(245, 158, 11, 0.2),
+    0 0 8px rgba(245, 158, 11, 0.1);
+  text-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.gen-pending {
+  animation: gen-pending-pulse 2s ease-in-out infinite;
+}
+
 /* ==================== TRANSMISSION SEQUENCE ==================== */
 
 @keyframes transmission-scan {

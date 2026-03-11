@@ -31,6 +31,9 @@ import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { GenFrame, CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
+import { PendingGenerationsButton } from '@/components/pending-generations/PendingGenerationsButton';
+import { PendingGenerationsDrawer } from '@/components/pending-generations/PendingGenerationsDrawer';
+import type { GenerationState } from '@/components/pending-generations/PendingGenerationsButton';
 import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -39,6 +42,7 @@ import {
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
   AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
   Smartphone, Monitor, Square, Play, Volume2, Loader2, Mic,
+  Check, CheckCircle2,
 } from 'lucide-react';
 
 const colors = [
@@ -2351,6 +2355,225 @@ function GenSystemSection() {
   );
 }
 
+// ── Pending Generations Section ──
+
+const pendingGenButtonStates: { label: string; state: GenerationState; generatingCount: number; readyCount: number }[] = [
+  { label: 'inactive', state: 'inactive', generatingCount: 0, readyCount: 0 },
+  { label: 'generating', state: 'generating', generatingCount: 3, readyCount: 0 },
+  { label: 'ready', state: 'ready', generatingCount: 0, readyCount: 4 },
+  { label: 'ready + generating', state: 'ready', generatingCount: 2, readyCount: 3 },
+];
+
+const mockReadyVideos: MediaItem[] = [
+  { id: 'rv-1', type: 'video', slug: '@hero-intro', title: 'Hero Intro', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 8, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' },
+  { id: 'rv-2', type: 'video', slug: '@product-shot', title: 'Product Shot', filePath: '/styleguide-vid-turret-cyber.jpg', status: 'ready', durationSeconds: 5, origin: 'kling3', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg' },
+  { id: 'rv-3', type: 'video', slug: '@sky-ghost', title: 'Sky Ghost', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 10, origin: 'wan21', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' },
+];
+
+const mockPendingVideos: MediaItem[] = [
+  { id: 'pv-1', type: 'video', slug: '@drone-flyover', title: 'Drone Flyover', filePath: '', status: 'generating', durationSeconds: null, origin: 'veo3', thumbnailSrc: null },
+  { id: 'pv-2', type: 'video', slug: '@neon-walk', title: 'Neon Walk', filePath: '', status: 'downloading', durationSeconds: null, origin: 'kling3', thumbnailSrc: null },
+];
+
+function PendingGenerationsSection() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [flashKey, setFlashKey] = useState(0);
+  const [drawerVideos, setDrawerVideos] = useState(mockReadyVideos);
+  const [drawerPending, setDrawerPending] = useState(mockPendingVideos);
+
+  const handleApprove = useCallback((video: MediaItem) => {
+    setDrawerVideos((prev) => prev.filter((v) => v.id !== video.id));
+  }, []);
+
+  const handleReject = useCallback((video: MediaItem) => {
+    setDrawerVideos((prev) => prev.filter((v) => v.id !== video.id));
+  }, []);
+
+  const resetDrawer = useCallback(() => {
+    setDrawerVideos(mockReadyVideos);
+    setDrawerPending(mockPendingVideos);
+  }, []);
+
+  return (
+    <section className="mb-12">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Pending Generations</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-6">
+        Review queue for AI-generated videos. Button shows generation state with flash animation on incoming.
+        Drawer opens full-screen with approve/reject per tile, pending incoming strip, and all-clear auto-close.
+      </p>
+
+      {/* PendingGenerationsButton states */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">PendingGenerationsButton</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Four states: inactive (muted), generating (amber pulse), ready (amber glow), ready + generating (split badge).
+        Click "Flash" to trigger the burst animation on the ready button.
+      </p>
+      <div className="flex flex-wrap items-end gap-6 mb-4">
+        {pendingGenButtonStates.map((s) => (
+          <div key={s.label} className="flex flex-col items-center gap-2">
+            <PendingGenerationsButton
+              state={s.state}
+              generatingCount={s.generatingCount}
+              readyCount={s.readyCount}
+              flashKey={s.state === 'ready' ? flashKey : 0}
+              onClick={() => {}}
+            />
+            <span className="text-[10px] font-mono text-muted-foreground">{s.label}</span>
+          </div>
+        ))}
+        <button
+          onClick={() => setFlashKey((k) => k + 1)}
+          className="text-[10px] font-mono font-bold tracking-wider text-primary/60 border border-primary/30 rounded px-2 py-1 hover:bg-primary/10 transition-colors"
+        >
+          FLASH
+        </button>
+      </div>
+
+      {/* Drawer demo */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">PendingGenerationsDrawer</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Full-screen review overlay. Active tile highlighted with cyan glow. Approve/reject removes tiles with
+        spring animation. Pending section shows incoming generations. All-clear state auto-closes after 1.5s.
+      </p>
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={() => { resetDrawer(); setDrawerOpen(true); }}
+          className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
+        >
+          OPEN DRAWER (3 ready + 2 pending)
+        </button>
+        <button
+          onClick={() => { setDrawerVideos([]); setDrawerPending([]); setDrawerOpen(true); }}
+          className="text-xs font-mono font-bold tracking-wider text-primary/60 border border-primary/20 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
+        >
+          OPEN EMPTY (all-clear)
+        </button>
+      </div>
+
+      {/* Inline preview: ReviewTile + PendingSection anatomy */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">Anatomy (inline preview)</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Review tile with metadata strip and action buttons. Active tile has cyan border glow; inactive tiles are dimmed.
+      </p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 max-w-4xl">
+        {/* Active tile mock */}
+        <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col">
+          <div className="aspect-video bg-black relative">
+            <img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
+            <span className="text-primary/70 truncate">@hero-intro</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">0:08</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">veo3</span>
+          </div>
+          <div className="flex border-t border-border/50">
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 border-r border-border/50">
+              <X className="w-3.5 h-3.5" /> REJECT
+            </div>
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary">
+              <Check className="w-3.5 h-3.5" /> APPROVE
+            </div>
+          </div>
+        </div>
+
+        {/* Inactive tile mock */}
+        <div className="rounded-lg border border-border/20 bg-card/60 opacity-60 overflow-hidden flex flex-col">
+          <div className="aspect-video bg-black relative cursor-pointer">
+            <img src="/styleguide-vid-turret-cyber.jpg" alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
+            <span className="text-primary/70 truncate">@product-shot</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">0:05</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">kling3</span>
+          </div>
+          <div className="flex border-t border-border/50">
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 border-r border-border/50">
+              <X className="w-3.5 h-3.5" /> REJECT
+            </div>
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary">
+              <Check className="w-3.5 h-3.5" /> APPROVE
+            </div>
+          </div>
+        </div>
+
+        {/* Mutating tile mock */}
+        <div className="rounded-lg border border-border/20 bg-card/60 overflow-hidden flex flex-col">
+          <div className="aspect-video bg-black relative">
+            <img src="/styleguide-vid-sky-ghost.jpg" alt="" className="w-full h-full object-cover opacity-50" />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
+            <span className="text-primary/70 truncate">@sky-ghost</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">0:10</span>
+            <span className="text-border">&middot;</span>
+            <span className="shrink-0">wan21</span>
+          </div>
+          <div className="flex border-t border-border/50">
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400/50 border-r border-border/50">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> REJECT
+            </div>
+            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary/50">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> APPROVE
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Pending strip preview */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">Pending Strip</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Bottom bar showing in-flight generation jobs with status tags (GEN, DL).
+      </p>
+      <div className="max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-zinc-950">
+        <div className="border-t border-border/50">
+          <div className="flex items-center gap-2 px-6 py-2">
+            <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
+            <span className="text-[10px] font-mono text-muted-foreground">3</span>
+          </div>
+          <div className="max-h-32 overflow-y-auto px-6 pb-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {[
+              { slug: '@drone-flyover', status: 'GEN' },
+              { slug: '@neon-walk', status: 'DL' },
+              { slug: '@sunset-pan', status: 'GEN' },
+            ].map((v) => (
+              <div key={v.slug} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin text-amber-500/60 shrink-0" />
+                <span className="truncate text-foreground/70">{v.slug}</span>
+                <span className="text-[10px] bg-amber-500/15 text-amber-500/70 px-1.5 rounded shrink-0">{v.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* All Clear state preview */}
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">All Clear State</h3>
+      <p className="text-xs font-mono text-muted-foreground mb-3">
+        Shown when all videos are processed. Auto-closes the drawer after 1.5 seconds.
+      </p>
+      <div className="max-w-sm border border-border/30 rounded-lg overflow-hidden bg-zinc-950 py-8">
+        <div className="flex flex-col items-center justify-center py-6 px-6">
+          <CheckCircle2 className="w-12 h-12 text-primary mb-3" />
+          <span className="text-sm font-mono font-bold tracking-widest text-primary uppercase">ALL_CLEAR</span>
+        </div>
+      </div>
+
+      <PendingGenerationsDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        videos={drawerVideos}
+        pendingVideos={drawerPending}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
+    </section>
+  );
+}
+
 // ── Main Styleguide ──
 
 export function Styleguide() {
@@ -2777,6 +3000,9 @@ export function Styleguide() {
 
       {/* Gen System */}
       <GenSystemSection />
+
+      {/* Pending Generations */}
+      <PendingGenerationsSection />
 
       {/* Custom Utilities */}
       <section className="space-y-3">
