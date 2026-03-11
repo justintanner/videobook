@@ -692,16 +692,19 @@ function CenterStageSection() {
   const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
 
   return (
-    <section className="mb-16">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: TransmissionView</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-8">
+    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
+        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: TransmissionView</h2>
+      </div>
+      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
         Animated transition shown when a new message is sent. Phases: flash scan line, typewriter text, dissolve.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {centerStageMocks.map((mock) => (
-          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-3">
-            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
-            <div className="h-[340px] bg-background rounded-lg overflow-hidden flex flex-col border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
+          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-4">
+            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <div className="h-[340px] bg-black/60 rounded-xl overflow-hidden flex flex-col border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <TransmissionView message={mock.message} onComplete={handleComplete} />
             </div>
           </div>
@@ -715,14 +718,17 @@ function CenterStageSection() {
 
 function IdleScreenSection() {
   return (
-    <section className="mb-16">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: IdleScreen</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-8">
+    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
+        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: IdleScreen</h2>
+      </div>
+      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
         Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
       </p>
-      <div className="max-w-2xl flex flex-col gap-3">
-        <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">welcome</span>
-        <div className="h-[360px] bg-background rounded-lg overflow-hidden flex border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
+      <div className="max-w-2xl flex flex-col gap-4">
+        <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">welcome</span>
+        <div className="h-[360px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
           <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
         </div>
       </div>
@@ -739,20 +745,23 @@ const assetViewShellMocks = [
 
 function AssetViewShellSection() {
   return (
-    <section className="mb-16">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: AssetViewShell</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-8">
+    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
+        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: AssetViewShell</h2>
+      </div>
+      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
         Shared frame for all asset-mode views. Two modes: constrained (max-w-4xl, aspect-video) and full bleed (w-full
         h-full). Border + shadow provide consistent visual containment.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {assetViewShellMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-3">
-            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
-            <div className="h-[300px] bg-background rounded-lg overflow-hidden flex border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
+          <div key={mock.id} className="flex flex-col gap-4">
+            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <div className="h-[300px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <AssetViewShell fillParent={mock.fillParent}>
                 <div className="flex items-center justify-center w-full h-full">
-                  <span className="font-mono text-xs text-primary/40">CONTENT_AREA</span>
+                  <span className="font-mono text-xs text-cyan-500/40 tracking-widest">CONTENT_AREA</span>
                 </div>
               </AssetViewShell>
             </div>
@@ -848,18 +857,21 @@ const renderingReadoutMocks: { id: string; label: string; asset: MediaItem }[] =
 
 function RenderingReadoutSection() {
   return (
-    <section className="mb-16">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: RenderingReadout</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-8">
+    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-1.5 h-8 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(0,212,255,0.5)]" />
+        <h2 className="text-2xl font-mono font-bold text-cyan-400 tracking-wide">CenterStage: RenderingReadout</h2>
+      </div>
+      <p className="text-xs font-mono text-cyan-300/50 mb-10 pl-5">
         Full-panel rendering status view shown in center stage when a video asset is rendering. Scan line animation,
         grid overlay, corner HUD brackets, Film/Clapperboard icon (type-aware), pulsing status badge, and slug text.
         Cyan for regular videos, amber for final-type assets.
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
         {renderingReadoutMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-3">
-            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
-            <div className="h-[240px] bg-background rounded-lg overflow-hidden border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
+          <div key={mock.id} className="flex flex-col gap-4">
+            <span className="text-[11px] font-mono text-cyan-400/70 uppercase tracking-[0.2em] bg-cyan-500/10 px-3 py-1 rounded-full w-fit">{mock.label}</span>
+            <div className="h-[240px] bg-black/60 rounded-xl overflow-hidden border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
               <RenderingReadout asset={mock.asset} />
             </div>
           </div>
@@ -873,21 +885,24 @@ function RenderingReadoutSection() {
 
 function FailedAssetReadoutSection() {
   return (
-    <section className="mb-16">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: FailedAssetReadout</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-8">
+    <section className="mb-20 rounded-2xl bg-gradient-to-b from-red-950/20 via-background to-background p-8 ring-1 ring-red-500/10 shadow-[0_0_60px_-15px_rgba(255,50,50,0.10)]">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-1.5 h-8 rounded-full bg-red-500 shadow-[0_0_12px_rgba(255,50,50,0.5)]" />
+        <h2 className="text-2xl font-mono font-bold text-red-400 tracking-wide">CenterStage: FailedAssetReadout</h2>
+      </div>
+      <p className="text-xs font-mono text-red-300/40 mb-10 pl-5">
         Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, and model/tool
         info. Static replica below — the real component fetches diagnostic data via useAssetDiagnostic hook which
         requires a live API connection.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* With error + prompt + model + retry */}
-        <div className="flex flex-col gap-3">
-          <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">
+        <div className="flex flex-col gap-4">
+          <span className="text-[11px] font-mono text-red-400/70 uppercase tracking-[0.2em] bg-red-500/10 px-3 py-1 rounded-full w-fit">
             full diagnostic
           </span>
-          <div className="h-[280px] bg-background rounded-lg overflow-hidden ring-1 ring-white/[0.03]">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-lg">
+          <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
                 <span className="text-red-400 font-bold tracking-wider">@hero-intro-v3</span>
@@ -918,10 +933,10 @@ function FailedAssetReadoutSection() {
         </div>
 
         {/* Minimal error — no prompt, no retry */}
-        <div className="flex flex-col gap-3">
-          <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">minimal (error only)</span>
-          <div className="h-[280px] bg-background rounded-lg overflow-hidden ring-1 ring-white/[0.03]">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-lg">
+        <div className="flex flex-col gap-4">
+          <span className="text-[11px] font-mono text-red-400/70 uppercase tracking-[0.2em] bg-red-500/10 px-3 py-1 rounded-full w-fit">minimal (error only)</span>
+          <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
                 <span className="text-red-400 font-bold tracking-wider">@corrupted-upload</span>
@@ -992,9 +1007,16 @@ const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0p
 
 function VideoTrimViewSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">VideoTrimView</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400">VideoTrimView</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-cyan-500/20">
         Full-screen trimming overlay. Two-column layout: video player + waveform timeline on left,
         transcript panel with word-level selection on right. Waveform shows audio shape with
         hover-expandable thumbnail badges at even intervals. Click words to mark cuts (shown with
@@ -1002,10 +1024,10 @@ function VideoTrimViewSection() {
         tracks current position. Supports snap-to-words, zoom, and inline word editing.
       </p>
 
-      {/* Full-width demo */}
-      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950">
-        {/* Header bar */}
-        <div className="h-10 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800/80">
+      {/* Full-width demo -- studio equipment panel */}
+      <div className="bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 shadow-[0_0_40px_rgba(34,211,238,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
+        {/* Header bar -- hardware rack style */}
+        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
           <div className="flex items-center gap-2 text-zinc-400">
             <Scissors className="w-3.5 h-3.5" />
             <span className="font-mono text-[11px] tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
@@ -1039,8 +1061,8 @@ function VideoTrimViewSection() {
               </div>
             </div>
 
-            {/* Timeline */}
-            <div className="shrink-0 mt-2 px-3 py-2.5 bg-zinc-900/40 rounded-md">
+            {/* Timeline -- recessed panel */}
+            <div className="shrink-0 mt-3 px-4 py-3 bg-zinc-900/60 rounded-lg border border-zinc-800/40 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
               <div className="relative">
                 {/* Time ruler */}
                 <div className="relative select-none" style={{ height: 20 }}>
@@ -1188,10 +1210,10 @@ function VideoTrimViewSection() {
           </div>
 
           {/* Right: transcript panel */}
-          <div className="w-[280px] shrink-0 flex flex-col border-l border-cyan-500/20 bg-zinc-950/80 shadow-[inset_2px_0_12px_rgba(34,211,238,0.04)]">
-            {/* Header */}
-            <div className="shrink-0 px-4 py-2 border-b border-zinc-800/60">
-              <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">Transcript</span>
+          <div className="w-[300px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90 shadow-[inset_2px_0_16px_rgba(34,211,238,0.06)]">
+            {/* Header -- LED panel accent */}
+            <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80">
+              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70 drop-shadow-[0_0_4px_rgba(34,211,238,0.3)]">Transcript</span>
             </div>
 
             {/* Words */}
@@ -1222,11 +1244,11 @@ function VideoTrimViewSection() {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="shrink-0 border-t border-zinc-800/60 px-4 py-2 space-y-2">
-              {/* Timestamp */}
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-sm text-cyan-400 tabular-nums">00:04.200</span>
+            {/* Footer -- hardware display */}
+            <div className="shrink-0 border-t border-zinc-700/50 px-4 py-3 space-y-2.5 bg-zinc-900/60">
+              {/* Timestamp -- backlit display */}
+              <div className="flex items-center gap-2 bg-black/60 rounded-md px-3 py-1.5 border border-zinc-800/60">
+                <span className="font-mono text-sm text-cyan-400 tabular-nums drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]">00:04.200</span>
                 <span className="text-zinc-600 text-sm">/</span>
                 <span className="font-mono text-sm text-zinc-500 tabular-nums">00:08.900</span>
               </div>
@@ -1266,18 +1288,25 @@ function VideoTrimViewSection() {
 
 function PlayerControlsSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Controls</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-cyan-400">Player Controls</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-blue-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-blue-500/20">
         Atomic building blocks for the player interface. TabButton for orientation selection,
         TimelineTabs for aspect ratio switching, SlugBadge for clip identification, and GearButton
         for settings access.
       </p>
 
-      <div className="space-y-5 p-4 rounded-lg border border-zinc-700/40 bg-zinc-950/50">
+      <div className="space-y-6 p-6 rounded-xl border border-zinc-600/40 bg-gradient-to-b from-zinc-950 to-zinc-900/80 ring-1 ring-blue-500/10 shadow-[0_0_30px_rgba(96,165,250,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
         {/* TabButton */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">TabButton (active / inactive)</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">TabButton (active / inactive)</p>
           <div className="flex items-center gap-2">
             <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
               <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
@@ -1293,7 +1322,7 @@ function PlayerControlsSection() {
 
         {/* TimelineTabs */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">TimelineTabs</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">TimelineTabs</p>
           <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20 w-fit">
             <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
               <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
@@ -1309,7 +1338,7 @@ function PlayerControlsSection() {
 
         {/* SlugBadge */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">SlugBadge</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">SlugBadge</p>
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@hero-intro</span>
             <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@product-shot-final-v2</span>
@@ -1318,7 +1347,7 @@ function PlayerControlsSection() {
 
         {/* GearButton */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">GearButton</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">GearButton</p>
           <button className="p-1.5 rounded transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10">
             <Settings className="w-4 h-4" />
           </button>
@@ -1358,18 +1387,25 @@ function RatioToggle({ active }: { active: '9:16' | '16:9' | '1:1' }) {
 
 function PlayerInterfaceSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Interface</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-cyan-400">Player Interface</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-emerald-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-emerald-500/20">
         Complete ClipPlayer shell showing landscape (active), portrait (idle), square (rendering),
         and video error states. Header contains TimelineTabs, SlugBadge, and GearButton.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-emerald-500/10 shadow-[0_0_30px_rgba(52,211,153,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
         {/* Landscape (active) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Landscape (active)</p>
-          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Landscape (active)</p>
+          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
             <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground truncate max-w-[120px]">@hero-intro</span>
@@ -1392,8 +1428,8 @@ function PlayerInterfaceSection() {
 
         {/* Portrait (idle) — LazyRenderPlaceholder */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Portrait (idle) — LazyRenderPlaceholder</p>
-          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Portrait (idle) — LazyRenderPlaceholder</p>
+          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
             <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="9:16" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
@@ -1408,8 +1444,8 @@ function PlayerInterfaceSection() {
 
         {/* Square (rendering) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Square (rendering)</p>
-          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Square (rendering)</p>
+          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
             <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="1:1" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
@@ -1424,8 +1460,8 @@ function PlayerInterfaceSection() {
 
         {/* Video error */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Video error</p>
-          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Video error</p>
+          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
             <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground">@broken-clip</span>
@@ -1448,16 +1484,23 @@ function PlayerInterfaceSection() {
 
 function AudioPlayerSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Player</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-cyan-400">Audio Player</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-violet-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-violet-500/20">
         Full audio editing interface with waveform visualization, trim handles, cut regions,
         fade controls, and playback. Header shows slug, vocals badge, keep/cut toggle, and action buttons.
       </p>
 
-      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950/80">
-        {/* Header */}
-        <div className="shrink-0 px-4 py-2 border-b border-zinc-800/60 flex items-center justify-between">
+      <div className="border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-violet-500/10 shadow-[0_0_40px_rgba(167,139,250,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
+        {/* Header -- studio console strip */}
+        <div className="shrink-0 px-5 py-3 border-b border-zinc-700/50 flex items-center justify-between bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
           <div className="flex items-center gap-2">
             <span className="font-mono text-[11px] uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
             <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">
@@ -1491,8 +1534,8 @@ function AudioPlayerSection() {
           </div>
         </div>
 
-        {/* Waveform area */}
-        <div className="relative px-4 py-2.5" style={{ minHeight: 120 }}>
+        {/* Waveform area -- recessed display panel */}
+        <div className="relative px-5 py-4 bg-gradient-to-b from-zinc-950 to-black/80" style={{ minHeight: 140 }}>
           {/* Waveform */}
           <div className="relative w-full" style={{ height: 80 }}>
             <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={80} progress={0.4} />
@@ -1553,8 +1596,8 @@ function AudioPlayerSection() {
           </div>
         </div>
 
-        {/* Audio settings row */}
-        <div className="px-4 py-2 border-t border-zinc-800/60 flex items-center gap-5 flex-wrap">
+        {/* Audio settings row -- console strip */}
+        <div className="px-5 py-3 border-t border-zinc-700/50 flex items-center gap-6 flex-wrap bg-zinc-900/40">
           {/* Fade In */}
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-mono text-yellow-400/90 w-14 shrink-0">Fade In</span>
@@ -1594,15 +1637,15 @@ function AudioPlayerSection() {
           </button>
         </div>
 
-        {/* Playback controls */}
-        <div className="px-4 py-2 border-t border-zinc-800/60 flex items-center gap-3">
-          <button className="w-7 h-7 rounded-full border border-primary/40 bg-primary/10 flex items-center justify-center text-primary">
+        {/* Playback controls -- transport bar */}
+        <div className="px-5 py-3 border-t border-zinc-700/50 flex items-center gap-4 bg-zinc-900/60">
+          <button className="w-9 h-9 rounded-full border border-primary/50 bg-primary/15 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(34,211,238,0.2)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-shadow">
             <Play className="w-4 h-4 ml-0.5" />
           </button>
-          <div className="font-mono text-sm tabular-nums">
-            <span className="text-cyan-400">01:23</span>
-            <span className="text-muted-foreground mx-1">/</span>
-            <span className="text-muted-foreground">03:45</span>
+          <div className="font-mono text-sm tabular-nums bg-black/50 rounded-md px-3 py-1 border border-zinc-800/60">
+            <span className="text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]">01:23</span>
+            <span className="text-zinc-600 mx-1">/</span>
+            <span className="text-zinc-500">03:45</span>
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
             <Volume2 className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1624,17 +1667,24 @@ function AudioPlayerSection() {
 
 function AudioTrackSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Track</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-300 to-cyan-400">Audio Track</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-fuchsia-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-fuchsia-500/20">
         Audio track states for the timeline: empty drop zone (default and collapsed), assigning,
         active tracks with waveform and controls, and multi-track lane composition.
       </p>
 
-      <div className="space-y-4">
+      <div className="space-y-5 p-6 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-fuchsia-500/10 shadow-[0_0_30px_rgba(232,121,249,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
         {/* Empty (default) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Empty (default)</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Empty (default)</p>
           <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-zinc-600/40 text-muted-foreground/40">
             <Music className="w-3.5 h-3.5" />
             <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
@@ -1643,7 +1693,7 @@ function AudioTrackSection() {
 
         {/* Empty (collapsed) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Empty (collapsed)</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Empty (collapsed)</p>
           <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-8 min-h-8 border-zinc-600/40 text-muted-foreground/40">
             <Music className="w-3 h-3" />
             <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
@@ -1652,7 +1702,7 @@ function AudioTrackSection() {
 
         {/* Assigning */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Assigning</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Assigning</p>
           <div className="h-14 min-h-14 border border-zinc-700/40 bg-primary/5 rounded-md flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
@@ -1661,7 +1711,7 @@ function AudioTrackSection() {
 
         {/* Active (cyan) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Active (cyan)</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Active (cyan)</p>
           <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded-md overflow-hidden">
             {/* Positioned audio block */}
             <div
@@ -1693,7 +1743,7 @@ function AudioTrackSection() {
 
         {/* Active (magenta) */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Active (magenta)</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Active (magenta)</p>
           <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded-md overflow-hidden">
             <div
               className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
@@ -1719,7 +1769,7 @@ function AudioTrackSection() {
 
         {/* Multi-track lane */}
         <div>
-          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Multi-track lane</p>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Multi-track lane</p>
           <div className="relative h-14 border border-zinc-700/30 bg-zinc-950/40 rounded-md overflow-hidden">
             {/* Track 1 (cyan) */}
             <div
@@ -1757,16 +1807,23 @@ function AudioTrackSection() {
 
 function TimelineScrubberSection() {
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Timeline Scrubber</h2>
-      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
+    <section className="mb-24">
+      {/* Studio section header */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
+          <h2 className="text-2xl font-mono font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-cyan-400">Timeline Scrubber</h2>
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-r from-amber-500/40 to-transparent" />
+      </div>
+      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed pl-4 border-l-2 border-amber-500/20">
         Assembled timeline with video slots, playhead, audio track lane, and empty drop zone.
         Demonstrates full scrubber composition with proportional slot widths and audio positioning.
       </p>
 
-      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950/60">
-        {/* Video slots + playhead */}
-        <div className="relative h-28 flex gap-0.5">
+      <div className="border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10 shadow-[0_0_40px_rgba(251,191,36,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
+        {/* Video slots + playhead -- recessed panel */}
+        <div className="relative h-32 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
           <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
           <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
           <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
@@ -1780,7 +1837,7 @@ function TimelineScrubberSection() {
         </div>
 
         {/* Audio track lane with positioned block */}
-        <div className="relative h-14 border-t border-zinc-800/60">
+        <div className="relative h-16 border-t border-zinc-700/50 bg-zinc-900/30">
           <div
             className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
             style={{ left: '8%', width: '55%' }}
@@ -1816,236 +1873,272 @@ function TimelineScrubberSection() {
 
 function VideoSettingsModalSection() {
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Video Settings Modal</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        Static render of the video render settings panel. Matches the render_video MCP tool parameters:
-        orientation, audio, subtitles, and OSG overlay.
-      </p>
-
-      <div
-        className="relative overflow-hidden max-w-2xl mx-auto rounded border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.2),inset_0_0_30px_rgba(0,255,255,0.05)]"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px)',
-          backgroundSize: '4px 4px',
-        }}
-      >
-        {/* Scanlines overlay */}
-        <div className="scanlines pointer-events-none absolute inset-0 opacity-20" />
-
-        {/* Header */}
-        <div className="relative px-4 pt-4 pb-2 border-b border-primary/20">
-          <h3 className="text-sm font-mono font-bold text-primary tracking-wider uppercase">Render Settings</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">vid-hero-intro — my-project</p>
+    <section className="mb-24">
+      {/* Premium section header with gradient accent */}
+      <div className="mb-10">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full" />
+          <h2 className="text-2xl font-mono font-bold tracking-tight text-foreground">Video Settings Modal</h2>
         </div>
+        <p className="text-sm font-mono text-muted-foreground ml-5 pl-4 border-l border-zinc-800/60">
+          Static render of the video render settings panel. Matches the render_video MCP tool parameters:
+          orientation, audio, subtitles, and OSG overlay.
+        </p>
+      </div>
 
-        {/* Body */}
-        <div className="relative px-4 py-3 space-y-4">
+      {/* Outer luxury container — automotive HUD display panel */}
+      <div className="relative max-w-3xl mx-auto rounded-xl bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 border border-zinc-700/40 p-6 shadow-[0_8px_60px_-15px_rgba(0,0,0,0.7),0_0_40px_-10px_rgba(0,255,255,0.08)]">
+        {/* Subtle top highlight line */}
+        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
-          {/* ── Two-column grid ── */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div
+          className="relative overflow-hidden rounded-lg border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.15),inset_0_0_30px_rgba(0,255,255,0.05)]"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px)',
+            backgroundSize: '4px 4px',
+          }}
+        >
+          {/* Scanlines overlay */}
+          <div className="scanlines pointer-events-none absolute inset-0 opacity-20" />
 
-            {/* Left column: Orientation + Subtitles */}
-            <div className="space-y-4">
-
-              {/* ── Orientation Section ── */}
-              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
-                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
-                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
-                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Orientations to Render</span>
-                <div className="space-y-1.5 mt-2">
-                  {['Landscape', 'Portrait'].map((opt) => (
-                    <label key={opt} className="flex items-center gap-2 cursor-pointer group">
-                      <div className={cn(
-                        'w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all',
-                        'bg-primary/20 border-primary/50'
-                      )}>
-                        <svg className="w-2.5 h-2.5 text-primary" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="2 6 5 9 10 3" />
-                        </svg>
-                      </div>
-                      <span className="text-xs text-foreground group-hover:text-primary transition-colors">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Subtitles Section ── */}
-              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
-                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
-                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
-                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Subtitles</span>
-                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Highlight Style</span>
-                    <div className="flex gap-1">
-                      {['TikDance', 'Highlight'].map((opt, i) => (
-                        <button
-                          key={opt}
-                          className={cn(
-                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                            i === 0 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                          )}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
-                    <div className="flex gap-1">
-                      {['Top', 'Middle', 'Bottom'].map((opt, i) => (
-                        <button
-                          key={opt}
-                          className={cn(
-                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                            i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                          )}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Font Size</span>
-                    <div className="flex gap-1">
-                      {['S', 'M', 'L'].map((opt, i) => (
-                        <button
-                          key={opt}
-                          className={cn(
-                            'flex-1 px-2 py-1 text-xs font-medium border transition-all',
-                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                          )}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Text</span>
-                      <div className="w-8 h-8 rounded border border-white/10 bg-black/30 p-1.5">
-                        <div className="w-full h-full rounded-sm bg-slate-50" />
-                      </div>
-                      <span className="text-xs font-mono text-muted-foreground">#F8FAFC</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Highlight</span>
-                      <div className="w-8 h-8 rounded border border-white/10 bg-black/30 p-1.5">
-                        <div className="w-full h-full rounded-sm bg-red-800" />
-                      </div>
-                      <span className="text-xs font-mono text-muted-foreground">#991B1B</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {/* Header */}
+          <div className="relative px-6 pt-5 pb-3 border-b border-primary/20">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-primary/60 shadow-[0_0_8px_rgba(0,255,255,0.5)]" />
+              <h3 className="text-sm font-mono font-bold text-primary tracking-[0.2em] uppercase">Render Settings</h3>
             </div>
+            <p className="text-xs text-muted-foreground mt-1.5 ml-5 font-mono tracking-wide">vid-hero-intro — my-project</p>
+          </div>
 
-            {/* Right column: Audio + OSG */}
-            <div className="space-y-4">
+          {/* Body */}
+          <div className="relative px-6 py-5 space-y-5">
 
-              {/* ── Audio Section ── */}
-              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
-                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
-                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
-                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">Audio</span>
+            {/* ── Two-column grid ── */}
+            <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+
+              {/* Left column: Orientation + Subtitles */}
+              <div className="space-y-5">
+
+                {/* ── Orientation Section ── */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
+                  {/* Corner brackets — larger */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                    <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Orientations to Render</span>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    {['Landscape', 'Portrait'].map((opt) => (
+                      <label key={opt} className="flex items-center gap-3 cursor-pointer group py-0.5">
+                        <div className={cn(
+                          'w-4 h-4 rounded-sm border flex items-center justify-center transition-all',
+                          'bg-primary/20 border-primary/50 shadow-[0_0_6px_rgba(0,255,255,0.2)]'
+                        )}>
+                          <svg className="w-2.5 h-2.5 text-primary" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="2 6 5 9 10 3" />
+                          </svg>
+                        </div>
+                        <span className="text-sm text-foreground group-hover:text-primary transition-colors">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade In</span>
-                  <input
-                    type="number" defaultValue={250} min={0} max={5000} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Fade Out</span>
-                  <input
-                    type="number" defaultValue={1000} min={0} max={5000} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                </div>
-                <div className="flex items-center gap-1 pb-2">
-                  <span className="text-xs w-14 shrink-0 text-muted-foreground">Volume</span>
-                  <input
-                    type="number" defaultValue={60} min={0} max={100} readOnly
-                    className="flex-1 bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                  />
-                </div>
-                <div className="flex gap-1 mt-1">
-                  {[
-                    { label: '60%', fadeIn: 250, fadeOut: 1000, vol: 60 },
-                    { label: '80%', fadeIn: 250, fadeOut: 1000, vol: 80 },
-                  ].map((p) => (
-                    <button key={p.label} className="flex-1 px-2 py-1 text-[10px] font-medium border bg-black/40 border-white/10 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all">
-                      {p.label}
-                    </button>
-                  ))}
+
+                {/* ── Subtitles Section ── */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
+                  {/* Corner brackets */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Subtitles</span>
+                    </div>
+                    <button className="px-2.5 py-1 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">ON</button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Highlight Style</span>
+                      <div className="flex gap-1.5">
+                        {['TikDance', 'Highlight'].map((opt, i) => (
+                          <button
+                            key={opt}
+                            className={cn(
+                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
+                              i === 0 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Position</span>
+                      <div className="flex gap-1.5">
+                        {['Top', 'Middle', 'Bottom'].map((opt, i) => (
+                          <button
+                            key={opt}
+                            className={cn(
+                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
+                              i === 2 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Font Size</span>
+                      <div className="flex gap-1.5">
+                        {['S', 'M', 'L'].map((opt, i) => (
+                          <button
+                            key={opt}
+                            className={cn(
+                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
+                              i === 1 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Gradient divider before color swatches */}
+                    <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent my-1" />
+                    <div className="flex gap-6 pt-1">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xs text-muted-foreground tracking-wide">Text</span>
+                        <div className="w-9 h-9 rounded-md border border-white/15 bg-black/30 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
+                          <div className="w-full h-full rounded-sm bg-slate-50" />
+                        </div>
+                        <span className="text-xs font-mono text-muted-foreground">#F8FAFC</span>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xs text-muted-foreground tracking-wide">Highlight</span>
+                        <div className="w-9 h-9 rounded-md border border-white/15 bg-black/30 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
+                          <div className="w-full h-full rounded-sm bg-red-800" />
+                        </div>
+                        <span className="text-xs font-mono text-muted-foreground">#991B1B</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* ── OSG Section ── */}
-              <div className="relative border border-primary/15 bg-black/40 rounded p-3">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-[5px] h-[5px] border-l-2 border-t-2 border-primary/40" />
-                <div className="absolute top-0 right-0 w-[5px] h-[5px] border-r-2 border-t-2 border-primary/40" />
-                <div className="absolute bottom-0 left-0 w-[5px] h-[5px] border-l-2 border-b-2 border-primary/40" />
-                <div className="absolute bottom-0 right-0 w-[5px] h-[5px] border-r-2 border-b-2 border-primary/40" />
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-foreground">OSG</span>
-                  <button className="px-2 py-0.5 text-[10px] font-medium bg-primary/20 border border-primary/50 text-primary rounded">ON</button>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Asset ID</span>
-                    <input
-                      type="text" defaultValue="img-logo-overlay" readOnly
-                      className="w-full bg-black/40 border border-white/10 text-xs font-mono px-2 py-1 rounded focus:border-primary/50"
-                    />
+              {/* Right column: Audio + OSG */}
+              <div className="space-y-5">
+
+                {/* ── Audio Section ── */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
+                  {/* Corner brackets */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Audio</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Position</span>
-                    <div className="grid grid-cols-2 gap-1">
-                      {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
-                        <button
-                          key={pos}
-                          className={cn(
-                            'px-2 py-1 text-[10px] font-medium border transition-all',
-                            i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground'
-                          )}
-                        >
-                          {pos}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Fade In</span>
+                      <input
+                        type="number" defaultValue={250} min={0} max={5000} readOnly
+                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Fade Out</span>
+                      <input
+                        type="number" defaultValue={1000} min={0} max={5000} readOnly
+                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Volume</span>
+                      <input
+                        type="number" defaultValue={60} min={0} max={100} readOnly
+                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
+                      />
+                    </div>
+                    {/* Gradient divider */}
+                    <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+                    <div className="flex gap-2 pt-1">
+                      {[
+                        { label: '60%', fadeIn: 250, fadeOut: 1000, vol: 60 },
+                        { label: '80%', fadeIn: 250, fadeOut: 1000, vol: 80 },
+                      ].map((p) => (
+                        <button key={p.label} className="flex-1 px-3 py-1.5 text-[10px] font-bold border rounded-sm bg-black/40 border-white/15 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all tracking-wider">
+                          {p.label}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── OSG Section ── */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
+                  {/* Corner brackets */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">OSG</span>
+                    </div>
+                    <button className="px-2.5 py-1 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">ON</button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Asset ID</span>
+                      <input
+                        type="text" defaultValue="img-logo-overlay" readOnly
+                        className="w-full bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Position</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
+                          <button
+                            key={pos}
+                            className={cn(
+                              'px-3 py-1.5 text-[10px] font-medium border rounded-sm transition-all',
+                              i === 1 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/15 text-muted-foreground'
+                            )}
+                          >
+                            {pos}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Footer */}
+          <div className="relative px-6 py-4 border-t border-primary/20">
+            <button className="w-full py-2.5 text-sm font-bold tracking-[0.2em] uppercase bg-primary/20 text-primary border border-primary/40 rounded-lg shadow-[0_0_25px_rgba(0,255,255,0.25),inset_0_1px_0_rgba(0,255,255,0.1)] hover:bg-primary/30 hover:shadow-[0_0_35px_rgba(0,255,255,0.35)] transition-all">
+              Apply Settings
+            </button>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="relative px-4 py-3 border-t border-primary/20">
-          <button className="w-full py-2 text-sm font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/40 rounded shadow-[0_0_20px_rgba(0,255,255,0.3)] hover:bg-primary/30 transition-all">
-            Apply Settings
-          </button>
-        </div>
+        {/* Bottom highlight line */}
+        <div className="absolute bottom-0 left-12 right-12 h-px bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
       </div>
     </section>
   );
@@ -2056,51 +2149,65 @@ function VideoSettingsModalSection() {
 
 function CollapsibleSidebarSection() {
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CollapsibleSidebar</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
-        border; right variant has left border. Collapsed: 48px, expanded: 280px.
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">left expanded</span>
-          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex">
-            <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-              <div className="flex-1 flex items-center justify-center">
-                <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
-              </div>
-            </CollapsibleSidebar>
+    <section className="mb-24">
+      {/* Premium section header */}
+      <div className="mb-10">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full" />
+          <h2 className="text-2xl font-mono font-bold tracking-tight text-foreground">CollapsibleSidebar</h2>
+        </div>
+        <p className="text-sm font-mono text-muted-foreground ml-5 pl-4 border-l border-zinc-800/60">
+          Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
+          border; right variant has left border. Collapsed: 48px, expanded: 280px.
+        </p>
+      </div>
+
+      {/* Instrument cluster container */}
+      <div className="relative rounded-xl bg-gradient-to-b from-zinc-900/60 to-zinc-950/80 border border-zinc-700/30 p-8 shadow-[0_4px_40px_-10px_rgba(0,0,0,0.5)]">
+        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">left expanded</span>
+            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+                <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
+                </div>
+              </CollapsibleSidebar>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">left collapsed</span>
+            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
+                <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
+              </CollapsibleSidebar>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">right expanded</span>
+            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+                <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
+                </div>
+              </CollapsibleSidebar>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">right collapsed</span>
+            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
+                <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
+              </CollapsibleSidebar>
+            </div>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">left collapsed</span>
-          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex">
-            <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
-              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
-            </CollapsibleSidebar>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">right expanded</span>
-          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex justify-end">
-            <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-              <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
-              <div className="flex-1 flex items-center justify-center">
-                <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
-              </div>
-            </CollapsibleSidebar>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">right collapsed</span>
-          <div className="h-[200px] border border-border/50 rounded overflow-hidden flex justify-end">
-            <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
-              <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
-            </CollapsibleSidebar>
-          </div>
-        </div>
+
+        <div className="absolute bottom-0 left-12 right-12 h-px bg-gradient-to-r from-transparent via-zinc-700/30 to-transparent" />
       </div>
     </section>
   );
@@ -2203,23 +2310,33 @@ const mockElementFormPrefilledNoSlugs: Record<string, unknown> = {
 
 function GenSystemSection() {
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Gen System</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
-        Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
-        image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
-        video and image generation.
-      </p>
+    <section className="mb-24">
+      {/* Commanding section header */}
+      <div className="mb-14">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-1.5 h-10 bg-gradient-to-b from-primary via-primary/60 to-transparent rounded-full shadow-[0_0_12px_rgba(0,255,255,0.3)]" />
+          <h2 className="text-3xl font-mono font-bold tracking-tight text-foreground">Gen System</h2>
+        </div>
+        <p className="text-sm font-mono text-muted-foreground ml-6 pl-4 border-l border-zinc-800/60 max-w-3xl">
+          Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
+          image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
+          video and image generation.
+        </p>
+        {/* Wide gradient separator under main header */}
+        <div className="mt-8 h-px bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+      </div>
 
       {/* GenFrame */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">GenFrame</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Base container with CRT scanlines, pixel grid background, cyan border glow. All gen panels inherit this frame.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">bare frame</span>
-          <div className="h-[200px]">
+      <div className="mb-12 pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">GenFrame</h3>
+        <p className="text-xs font-mono text-muted-foreground mb-5">
+          Base container with CRT scanlines, pixel grid background, cyan border glow. All gen panels inherit this frame.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">bare frame</span>
+          <div className="h-[220px]">
             <GenFrame>
               <div className="flex-1 flex items-center justify-center">
                 <span className="font-mono text-xs text-primary/30">CONTENT_AREA</span>
@@ -2227,9 +2344,9 @@ function GenSystemSection() {
             </GenFrame>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with header + footer</span>
-          <div className="h-[200px]">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">with header + footer</span>
+          <div className="h-[220px]">
             <GenFrame
               header={
                 <div className="flex items-center gap-2 px-3 py-2 border-b-2 border-inherit bg-black/50">
@@ -2251,15 +2368,17 @@ function GenSystemSection() {
       </div>
 
       {/* GenPanel */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">GenPanel</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Complete panel: GenFrame + header (icon, label, close button) + optional footer. Used by DynamicGen for
-        VIDEO_GENERATION and IMAGE_GENERATION.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">video panel</span>
-          <div className="h-[220px]">
+      <div className="mb-12 pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">GenPanel</h3>
+        <p className="text-xs font-mono text-muted-foreground mb-5">
+          Complete panel: GenFrame + header (icon, label, close button) + optional footer. Used by DynamicGen for
+          VIDEO_GENERATION and IMAGE_GENERATION.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">video panel</span>
+          <div className="h-[240px]">
             <GenPanel
               label="VIDEO_GENERATION"
               icon={<Film className="w-5 h-5" />}
@@ -2276,11 +2395,11 @@ function GenSystemSection() {
             </GenPanel>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
             image panel (close disabled)
           </span>
-          <div className="h-[220px]">
+          <div className="h-[240px]">
             <GenPanel
               label="IMAGE_GENERATION"
               icon={<ImageIcon className="w-5 h-5" />}
@@ -2301,17 +2420,22 @@ function GenSystemSection() {
       </div>
 
       {/* Composed Panel Demo */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Composed Panel (Demo)</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Full DynamicGen-style composition: GenPanel with model selector and execute button in footer, form fields in
-        the body.
-      </p>
-      <div className="grid grid-cols-1 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+      <div className="mb-8 mt-4">
+        <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
+        <div className="pl-4 border-l-2 border-primary/30">
+          <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">Composed Panel (Demo)</h3>
+          <p className="text-xs font-mono text-muted-foreground mb-5">
+            Full DynamicGen-style composition: GenPanel with model selector and execute button in footer, form fields in
+            the body.
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-8 mb-16">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
             video generation panel
           </span>
-          <div className="h-[400px] max-w-3xl">
+          <div className="h-[420px] max-w-3xl">
             <GenPanel
               label="VIDEO_GENERATION"
               icon={<Film className="w-5 h-5" />}
@@ -2363,27 +2487,30 @@ function GenSystemSection() {
       </div>
 
       {/* ImageParamSlots */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ImageParamSlots</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Asset slot panel for image/video parameters. Shows slot count indicator, required badges, and manages add/remove
-        of asset references. Used in the DynamicGen sidebar.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (1 required)</span>
-          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
+      <div className="mb-12 pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ImageParamSlots</h3>
+        <p className="text-xs font-mono text-muted-foreground mb-5">
+          Asset slot panel for image/video parameters. Shows slot count indicator, required badges, and manages add/remove
+          of asset references. Used in the DynamicGen sidebar.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-16">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">empty (1 required)</span>
+          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockAssetFields} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">filled (1 of 2)</span>
-          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">filled (1 of 2)</span>
+          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockAssetFieldsFilled} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} resolvedAssets={mockResolvedAssets} />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
-          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">disabled</span>
+          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots
               assetFields={mockAssetFields}
               imageSlots={{ min: 0, max: 1 }}
@@ -2392,25 +2519,28 @@ function GenSystemSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">video mode</span>
-          <div className="w-[176px] border border-primary/20 rounded bg-black/20">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">video mode</span>
+          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ImageParamSlots assetFields={mockVideoAssetFields} imageSlots={{ min: 1, max: 1 }} onChange={genNoop} />
           </div>
         </div>
       </div>
 
       {/* ElementGroupEditor */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ElementGroupEditor</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Violet-accented inline element groups with asset drop slots, name, and description fields. Each group represents
-        a named character/object reference. Groups are added progressively and show name/desc fields when slugs are
-        populated or when name/desc values are prefilled (e.g. from prompt history).
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (add button)</span>
-          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
+      <div className="mb-12 pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ElementGroupEditor</h3>
+        <p className="text-xs font-mono text-muted-foreground mb-5">
+          Violet-accented inline element groups with asset drop slots, name, and description fields. Each group represents
+          a named character/object reference. Groups are added progressively and show name/desc fields when slugs are
+          populated or when name/desc values are prefilled (e.g. from prompt history).
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-16">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">empty (add button)</span>
+          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
               elementSchemas={mockElementSchemas}
@@ -2420,11 +2550,11 @@ function GenSystemSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
             1 group filled (with name/desc)
           </span>
-          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
               elementSchemas={mockElementSchemas}
@@ -2435,9 +2565,9 @@ function GenSystemSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">2 groups filled</span>
-          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">2 groups filled</span>
+          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
               elementSchemas={mockElementSchemas}
@@ -2448,11 +2578,11 @@ function GenSystemSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">
             prefilled name/desc (no slugs)
           </span>
-          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
               elementSchemas={mockElementSchemas}
@@ -2462,9 +2592,9 @@ function GenSystemSection() {
             />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
-          <div className="max-w-md border border-primary/20 rounded bg-black/20 p-3">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">disabled</span>
+          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ElementGroupEditor
               elementGroupIndices={mockElementGroupIndices}
               elementSchemas={mockElementSchemas}
@@ -2479,20 +2609,23 @@ function GenSystemSection() {
       </div>
 
       {/* ErrorPage */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ErrorPage</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
-        Fallback shown when no model options are available. AlertCircle icon + message.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default message</span>
-          <div className="h-[100px] border border-border/50 rounded overflow-hidden bg-black/40">
+      <div className="h-px bg-gradient-to-r from-transparent via-zinc-700/40 to-transparent mb-12" />
+      <div className="mb-12 pl-4 border-l-2 border-primary/20">
+        <h3 className="text-lg font-mono font-bold mb-2 text-foreground/90 tracking-wide">ErrorPage</h3>
+        <p className="text-xs font-mono text-muted-foreground mb-5">
+          Fallback shown when no model options are available. AlertCircle icon + message.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">default message</span>
+          <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ErrorPage />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">custom message</span>
-          <div className="h-[100px] border border-border/50 rounded overflow-hidden bg-black/40">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-primary/60 uppercase tracking-[0.15em] font-bold">custom message</span>
+          <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
             <ErrorPage message="Model configuration error: missing API key" />
           </div>
         </div>
@@ -2541,20 +2674,31 @@ function PendingGenerationsSection() {
   }, []);
 
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Pending Generations</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+    <section className="relative mb-20 bg-gradient-to-b from-black/50 to-zinc-950/30 border border-cyan-500/15 rounded-xl p-10 shadow-[0_0_50px_-10px_rgba(0,212,255,0.1)] overflow-hidden">
+      {/* Scan-line overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.025] bg-[repeating-linear-gradient(0deg,transparent,transparent_3px,rgba(0,212,255,0.3)_3px,rgba(0,212,255,0.3)_4px)]" />
+      {/* Corner accents */}
+      <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-cyan-500/25 rounded-tl-xl" />
+      <div className="absolute top-0 right-0 w-12 h-12 border-t-2 border-r-2 border-cyan-500/25 rounded-tr-xl" />
+      <div className="absolute bottom-0 left-0 w-12 h-12 border-b-2 border-l-2 border-cyan-500/25 rounded-bl-xl" />
+      <div className="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-cyan-500/25 rounded-br-xl" />
+
+      <div className="relative mb-8">
+        <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase text-cyan-400 pb-4" style={{ textShadow: '0 0 25px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.15)' }}>Pending Generations</h2>
+        <div className="h-px bg-gradient-to-r from-cyan-500/50 via-cyan-500/15 to-transparent" />
+      </div>
+      <p className="relative text-xs font-mono text-muted-foreground mb-8">
         Review queue for AI-generated videos. Button shows generation state with flash animation on incoming.
         Drawer opens full-screen with approve/reject per tile, pending incoming strip, and all-clear auto-close.
       </p>
 
       {/* PendingGenerationsButton states */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">PendingGenerationsButton</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>PendingGenerationsButton</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Four states: inactive (muted), generating (amber pulse), ready (amber glow), ready + generating (split badge).
         Click "Flash" to trigger the burst animation on the ready button.
       </p>
-      <div className="flex flex-wrap items-end gap-6 mb-8">
+      <div className="relative flex flex-wrap items-end gap-6 mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
         {pendingGenButtonStates.map((s) => (
           <div key={s.label} className="flex flex-col items-center gap-2">
             <PendingGenerationsButton
@@ -2576,12 +2720,15 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Drawer demo */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">PendingGenerationsDrawer</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>PendingGenerationsDrawer</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Full-screen review overlay. Active tile highlighted with cyan glow. Approve/reject removes tiles with
         spring animation. Pending section shows incoming generations. All-clear state auto-closes after 1.5s.
       </p>
-      <div className="flex items-center gap-3 mb-8">
+      <div className="relative flex items-center gap-3 mb-10">
         <button
           onClick={() => { resetDrawer(); setDrawerOpen(true); }}
           className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
@@ -2597,11 +2744,14 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Inline preview: ReviewTile + PendingSection anatomy */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Anatomy (inline preview)</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>Anatomy (inline preview)</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Review tile with metadata strip and action buttons. Active tile has cyan border glow; inactive tiles are dimmed.
       </p>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-8">
+      <div className="relative grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-10">
         {/* Active tile mock */}
         <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col">
           <div className="aspect-video bg-black relative">
@@ -2670,11 +2820,14 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Pending strip preview */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Pending Strip</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>Pending Strip</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Bottom bar showing in-flight generation jobs with status tags (GEN, DL).
       </p>
-      <div className="max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-zinc-950 mb-8">
+      <div className="relative max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-zinc-950/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
         <div className="border-t border-border/50">
           <div className="flex items-center gap-2 px-6 py-2">
             <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
@@ -2697,11 +2850,14 @@ function PendingGenerationsSection() {
       </div>
 
       {/* All Clear state preview */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">All Clear State</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>All Clear State</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Shown when all videos are processed. Auto-closes the drawer after 1.5 seconds.
       </p>
-      <div className="max-w-sm border border-border/30 rounded-lg overflow-hidden bg-zinc-950 py-8">
+      <div className="relative max-w-sm border border-cyan-500/20 rounded-lg overflow-hidden bg-zinc-950/80 py-8 shadow-[0_0_25px_-5px_rgba(0,212,255,0.08)]">
         <div className="flex flex-col items-center justify-center py-6 px-6">
           <CheckCircle2 className="w-12 h-12 text-primary mb-3" />
           <span className="text-sm font-mono font-bold tracking-widest text-primary uppercase">ALL_CLEAR</span>
@@ -2754,18 +2910,31 @@ function ChatMessagingSection() {
   }, []);
 
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Chat & Messaging</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+    <section className="relative mb-20 bg-gradient-to-b from-black/60 to-zinc-950/40 border border-cyan-900/30 rounded-xl p-10 shadow-[0_0_50px_-10px_rgba(0,212,255,0.08)] overflow-hidden">
+      {/* Scan-line overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,212,255,0.5)_2px,rgba(0,212,255,0.5)_3px)]" />
+      {/* Corner brackets */}
+      <div className="absolute top-0 left-0 w-14 h-14 border-t-2 border-l-2 border-cyan-500/20 rounded-tl-xl" />
+      <div className="absolute top-0 right-0 w-14 h-14 border-t-2 border-r-2 border-cyan-500/20 rounded-tr-xl" />
+      <div className="absolute bottom-0 left-0 w-14 h-14 border-b-2 border-l-2 border-cyan-500/20 rounded-bl-xl" />
+      <div className="absolute bottom-0 right-0 w-14 h-14 border-b-2 border-r-2 border-cyan-500/20 rounded-br-xl" />
+
+      <div className="relative mb-8">
+        <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase pb-4" style={{ textShadow: '0 0 25px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.15)' }}>
+          <span className="text-cyan-400">Chat</span> <span className="text-cyan-600/50">&amp;</span> <span className="text-cyan-400">Messaging</span>
+        </h2>
+        <div className="h-px bg-gradient-to-r from-cyan-500/50 via-cyan-500/15 to-transparent" />
+      </div>
+      <p className="relative text-xs font-mono text-muted-foreground mb-8">
         Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor with proof-read audio.
       </p>
 
       {/* ── ChatInput States ── */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ChatInput</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ChatInput</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Terminal prompt with @ autocomplete for asset slugs. Type @ to see the dropdown. Supports keyboard navigation (arrows, tab, enter, escape).
       </p>
-      <div className="space-y-4 max-w-2xl mb-8">
+      <div className="relative space-y-5 max-w-2xl mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default</span>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
@@ -2784,9 +2953,12 @@ function ChatMessagingSection() {
         </div>
       </div>
 
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
       {/* ── TransmissionSequence ── */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">TransmissionSequence</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>TransmissionSequence</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Cinematic confirmation animation: scan line sweep, typewriter &ldquo;TRANSMISSION_RECEIVED&rdquo;, message echo, then dissolve. Plays once and calls onComplete.
       </p>
       <div className="mb-3">
@@ -2797,7 +2969,7 @@ function ChatMessagingSection() {
           REPLAY
         </button>
       </div>
-      <div className="relative h-48 max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-black mb-8">
+      <div className="relative h-48 max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-black/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
         {transmissionRunning && (
           <TransmissionSequence
             key={transmissionKey}
@@ -2812,12 +2984,15 @@ function ChatMessagingSection() {
         )}
       </div>
 
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
       {/* ── ProofReadButton States ── */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ProofReadButton</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ProofReadButton</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Five states derived from audio URL, playback, pending, and dirty flags. Cycles between initial, pending, play, playing, and dirty (regenerate).
       </p>
-      <div className="flex flex-wrap items-end gap-6 mb-8">
+      <div className="relative flex flex-wrap items-end gap-6 mb-10 bg-black/20 border border-cyan-900/15 rounded-lg p-6">
         {([
           { label: 'Initial', audioUrl: null, isPlaying: false, isPending: false, dialogDirty: false },
           { label: 'Pending', audioUrl: null, isPlaying: false, isPending: true, dialogDirty: false },
@@ -2854,12 +3029,15 @@ function ChatMessagingSection() {
         </div>
       </div>
 
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
       {/* ── ScriptBlock (editable text block) ── */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ScriptBlock</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ScriptBlock</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Labeled editable text block with save/cancel controls. Click the text to enter edit mode. Edit the text to reveal save/cancel buttons.
       </p>
-      <div className="max-w-2xl mb-8">
+      <div className="relative max-w-2xl mb-10">
         <ScriptBlock
           label="Script"
           content={scriptContent}
@@ -2872,13 +3050,16 @@ function ChatMessagingSection() {
         />
       </div>
 
+      {/* Neon divider */}
+      <div className="relative h-px bg-gradient-to-r from-transparent via-cyan-500/25 to-transparent mb-2" />
+
       {/* ── ScriptReadout (full component) ── */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">ScriptReadout</h3>
-      <p className="text-xs font-mono text-muted-foreground mb-3">
+      <h3 className="relative text-sm font-mono font-bold mb-4 text-cyan-400/80" style={{ textShadow: '0 0 12px rgba(0,212,255,0.3)' }}>ScriptReadout</h3>
+      <p className="relative text-xs font-mono text-muted-foreground mb-4">
         Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
         and editable body with proof-read audio controls. Click the script text to edit.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         {/* With content */}
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with content</span>
@@ -2939,53 +3120,90 @@ export function Styleguide() {
       {/* App Layout Demo */}
       <AppLayoutDemo />
 
-      <hr className="border-border/40" />
-      <h2 className="text-2xl font-bold text-primary/90 font-mono tracking-wide">Component Catalog</h2>
+      {/* ── COMPONENT CATALOG MEGA-DIVIDER ── */}
+      <div className="relative py-16 -mx-8 px-8 mt-20 mb-8 border-y-2 border-primary/40 bg-gradient-to-r from-primary/[0.06] via-transparent to-primary/[0.06]">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--color-primary)/0.08,transparent_70%)]" />
+        <div className="relative flex items-center gap-6">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+          <h2 className="text-4xl font-bold text-primary font-mono tracking-[0.2em] uppercase drop-shadow-[0_0_20px_var(--color-primary)] whitespace-nowrap">Component Catalog</h2>
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        </div>
+      </div>
 
       {/* Header / Nav Bar */}
-      <section className="space-y-5">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Header / Nav Bar</h2>
-        <div className="rounded-lg border border-border/60 overflow-hidden">
+      <section className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Header / Nav Bar</h2>
+        </div>
+        <div className="rounded-xl border-2 border-border/60 overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.4)]">
           <HeaderBar />
         </div>
       </section>
 
-      {/* Colors + Typography — compact row */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-12">
+      {/* Colors + Typography -- dramatic row */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-16 p-10 -mx-8 bg-gradient-to-b from-card/50 to-transparent border-y border-border/30">
         {/* Colors */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Colors</h2>
-          <div className="grid grid-cols-4 gap-3">
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+            <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Colors</h2>
+          </div>
+          <div className="grid grid-cols-4 gap-5">
             {colors.map((c) => (
-              <div key={c.name} className="space-y-1.5">
-                <div className={`${c.bg} rounded-md h-12 border border-border/50`} />
-                <p className="text-[11px] font-medium leading-tight tracking-wide">{c.name}</p>
-                <p className="text-[10px] font-mono text-muted-foreground/70 leading-tight">{c.hex}</p>
+              <div key={c.name} className="space-y-2.5 group">
+                <div className={`${c.bg} rounded-lg h-20 border-2 border-border/40 shadow-lg transition-transform group-hover:scale-105`} />
+                <p className="text-sm font-bold leading-tight tracking-wide">{c.name}</p>
+                <p className="text-xs font-mono text-muted-foreground/80 leading-tight">{c.hex}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Typography */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Typography</h2>
-          <div className="space-y-2.5">
-            <p className="text-xl font-bold">Rajdhani Bold</p>
-            <p className="text-lg font-semibold">Rajdhani Semibold</p>
-            <p className="text-base font-normal">Rajdhani Regular</p>
-            <p className="text-base font-light text-foreground/70">Rajdhani Light</p>
-            <p className="font-mono text-sm tracking-wide">JetBrains Mono — 0123456789</p>
-            <p className="font-mono text-xs text-muted-foreground/80">const x = await fetchData();</p>
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+            <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Typography</h2>
+          </div>
+          <div className="space-y-5">
+            <div className="pb-4 border-b border-border/20">
+              <p className="text-3xl font-bold">Rajdhani Bold</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-bold / 700</p>
+            </div>
+            <div className="pb-4 border-b border-border/20">
+              <p className="text-2xl font-semibold">Rajdhani Semibold</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-semibold / 600</p>
+            </div>
+            <div className="pb-4 border-b border-border/20">
+              <p className="text-xl font-normal">Rajdhani Regular</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-normal / 400</p>
+            </div>
+            <div className="pb-4 border-b border-border/20">
+              <p className="text-xl font-light text-foreground/70">Rajdhani Light</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-light / 300</p>
+            </div>
+            <div className="pb-4 border-b border-border/20">
+              <p className="font-mono text-lg tracking-wide">JetBrains Mono -- 0123456789</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / code</p>
+            </div>
+            <div>
+              <p className="font-mono text-sm text-primary/70 tracking-wide">const x = await fetchData();</p>
+              <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / inline code</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
-      {/* Cards — unique overlays */}
-      <section className="space-y-5">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Cards</h2>
-        <div className="flex flex-wrap gap-4">
+      {/* Cards -- unique overlays */}
+      <section className="space-y-8 p-10 -mx-8 bg-card/20 border-y border-border/20">
+        <div className="flex items-center gap-4">
+          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Cards</h2>
+        </div>
+        <div className="flex flex-wrap gap-6">
           <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
           <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
           <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-text', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist standing on a rooftop.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' }} /></div>
@@ -2997,14 +3215,27 @@ export function Styleguide() {
 
       {/* ==================== FORMS & CONTROLS ==================== */}
 
-      <section className="space-y-8">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Forms & Controls</h2>
+      <section className="relative bg-black/40 border border-cyan-500/20 rounded-xl p-10 space-y-14 shadow-[0_0_40px_-8px_rgba(0,212,255,0.12)] overflow-hidden">
+        {/* Scan-line overlay */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,212,255,0.4)_2px,rgba(0,212,255,0.4)_4px)]" />
+        {/* Corner accents */}
+        <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-cyan-500/30 rounded-tl-xl" />
+        <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-cyan-500/30 rounded-tr-xl" />
+        <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-cyan-500/30 rounded-bl-xl" />
+        <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-cyan-500/30 rounded-br-xl" />
+
+        <div className="relative">
+          <h2 className="text-2xl font-mono font-bold tracking-[0.15em] uppercase pb-4 mb-2" style={{ textShadow: '0 0 20px rgba(0,212,255,0.5), 0 0 40px rgba(0,212,255,0.2)' }}>
+            <span className="text-cyan-400">Forms</span> <span className="text-cyan-600/60">&amp;</span> <span className="text-cyan-400">Controls</span>
+          </h2>
+          <div className="h-px bg-gradient-to-r from-cyan-500/60 via-cyan-500/20 to-transparent" />
+        </div>
 
         {/* Row 1 — 3-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Overlays & Menus */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Overlays & Menus</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Overlays &amp; Menus</h3>
             <div className="flex flex-wrap gap-2">
               <Dialog>
                 <DialogTrigger asChild>
@@ -3095,8 +3326,8 @@ export function Styleguide() {
           </div>
 
           {/* Inputs */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Inputs</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Inputs</h3>
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <p className="text-[11px] font-mono text-muted-foreground/70">Default</p>
@@ -3114,8 +3345,8 @@ export function Styleguide() {
           </div>
 
           {/* Selection Controls */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Selection Controls</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Selection Controls</h3>
             <div className="space-y-4">
               <div className="w-[200px]">
                 <SelectWithChevronDemo />
@@ -3126,36 +3357,45 @@ export function Styleguide() {
           </div>
         </div>
 
+        {/* Neon divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+
         {/* Row 2 — 2-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Gen Text Fields */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Gen Text Fields</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Gen Text Fields</h3>
             <GenFieldDemo />
           </div>
 
           {/* Multi-Prompt Editor */}
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Multi-Prompt Editor</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Multi-Prompt Editor</h3>
             <MultiPromptEditorDemo />
           </div>
         </div>
 
+        {/* Neon divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+
         {/* Row 3 — Chat Input full-width */}
-        <div className="space-y-4">
-          <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Chat Input</h3>
+        <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+          <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Chat Input</h3>
           <p className="text-[11px] font-mono text-muted-foreground/60">Type @ to trigger autocomplete with sample asset slugs</p>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
 
+        {/* Neon divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+
         {/* Row 4 — ExecuteButton + CloseButton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">ExecuteButton</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>ExecuteButton</h3>
             <ExecuteButtonStatesDemo />
           </div>
-          <div className="space-y-4">
-            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">CloseButton</h3>
+          <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+            <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>CloseButton</h3>
             <div className="flex items-center gap-6">
               <div className="space-y-2 text-center">
                 <CloseButton onClick={() => {}} />
@@ -3169,48 +3409,57 @@ export function Styleguide() {
           </div>
         </div>
 
+        {/* Neon divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+
         {/* Row 5 — Asset Drop Slots */}
-        <div className="space-y-4">
-          <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Asset Drop Slots</h3>
+        <div className="space-y-5 bg-black/20 border border-cyan-900/20 rounded-lg p-5">
+          <h3 className="text-xs font-mono font-bold text-cyan-400/70 uppercase tracking-[0.15em] border-b border-cyan-500/20 pb-3" style={{ textShadow: '0 0 10px rgba(0,212,255,0.3)' }}>Asset Drop Slots</h3>
           <AssetDropSlotDemo />
         </div>
       </section>
 
       {/* Badges */}
-      <section className="space-y-5">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Badges</h2>
-        <div className="flex flex-wrap gap-4">
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+      <section className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Badges</h2>
+        </div>
+        <div className="flex flex-wrap gap-5">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <SlugBadge slug="@hero-intro" colorScheme="cyan" isError={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <SlugBadge slug="@final-export" colorScheme="gold" isError={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <SlugBadge slug="@broken-clip" colorScheme="cyan" isError={true} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <SlugBadge slug="@processing" colorScheme="cyan" isError={false} isProcessing />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <DurationBadge duration="1:30" isProcessing={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <DurationBadge duration="0:45" isProcessing={true} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <ResolutionBadge width={1920} height={1080} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
+          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
             <ResolutionBadge width={3840} height={2160} />
           </div>
         </div>
       </section>
 
       {/* JsonSyntax */}
-      <section className="space-y-5">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">JsonSyntax</h2>
-        <div className="max-w-xl bg-card border border-border/50 rounded-lg p-5">
+      <section className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">JsonSyntax</h2>
+        </div>
+        <div className="max-w-xl bg-card border-2 border-border/40 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
           <JsonSyntax data={{
             project: 'clipfirst',
             version: 2.1,
@@ -3226,8 +3475,11 @@ export function Styleguide() {
       </section>
 
       {/* Timeline Slots */}
-      <section className="space-y-5">
-        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Timeline Slots</h2>
+      <section className="space-y-8 p-10 -mx-8 bg-gradient-to-b from-card/30 to-transparent border-y border-border/20">
+        <div className="flex items-center gap-4">
+          <div className="w-1.5 h-8 bg-primary rounded-full shadow-[0_0_12px_var(--color-primary)]" />
+          <h2 className="text-2xl font-mono font-bold text-foreground tracking-wide uppercase">Timeline Slots</h2>
+        </div>
 
         <div className="grid grid-cols-2 gap-6">
           {/* Empty */}
