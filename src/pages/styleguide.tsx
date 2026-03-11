@@ -252,7 +252,7 @@ function HeaderBar() {
       <div className="flex items-center gap-1">
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 h-full">
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+          <div className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 logo-dot-pulse" />
           <span className="font-mono font-bold text-sm uppercase tracking-wider"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span></span>
         </div>
 

@@ -256,6 +256,11 @@
   .animate-spin-slow {
     animation: spin-slow 3s linear infinite;
   }
+
+  /* Logo dot pulse — subtle blink every 5s */
+  .logo-dot-pulse {
+    animation: logo-dot-pulse 5s ease-in-out infinite;
+  }
 }
 
 /* ==================== KEYFRAME ANIMATIONS ==================== */
@@ -923,6 +928,18 @@
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Logo dot — brief pulse then idle for remainder of 5s cycle */
+@keyframes logo-dot-pulse {
+  0%, 15%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  7% {
+    opacity: 0.4;
+    transform: scale(0.85);
   }
 }
 
