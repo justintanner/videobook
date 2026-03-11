@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'wouter';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
@@ -112,14 +113,79 @@ function FakeDropdown({ text }: { text: string }) {
   );
 }
 
-function SceneSlot({ label }: { label: string }) {
+function TimelineSlotDemo({
+  label,
+  isActive = false,
+  isDragOver = false,
+  hasContent = false,
+  thumbnailSrc,
+  assetId,
+  flex = 1,
+}: {
+  label: string;
+  isActive?: boolean;
+  isDragOver?: boolean;
+  hasContent?: boolean;
+  thumbnailSrc?: string;
+  assetId?: string;
+  flex?: number;
+}) {
   return (
-    <div className="w-[200px] h-full shrink-0 border-r border-border/50 relative flex items-center justify-center">
-      <span className="absolute top-1.5 left-1.5 text-xs font-mono text-primary bg-black/60 px-1.5 py-0.5 rounded">{label}</span>
-      <button className="absolute top-1.5 right-1.5 text-xs text-muted-foreground">
-        <MoreHorizontal className="w-3.5 h-3.5" />
-      </button>
-      <div className="w-3 h-3 bg-primary/60 rounded-full" />
+    <div
+      className={cn(
+        'relative h-full border bg-card/30 backdrop-blur-sm flex flex-col cursor-pointer transition-all group overflow-hidden',
+        isDragOver
+          ? 'border-2 border-dashed border-primary bg-primary/10 scale-y-[1.02] shadow-[0_0_15px_rgba(0,255,255,0.3)]'
+          : isActive
+            ? 'border-primary bg-primary/5'
+            : 'border-border/50 hover:border-primary/30',
+        hasContent && !isDragOver && 'cursor-grab active:cursor-grabbing'
+      )}
+      style={{ flex: `${flex} 1 0`, minWidth: '60px' }}
+    >
+      {/* Slot label badge */}
+      <div className="absolute top-1 left-1 z-30">
+        <span className="text-xs font-mono text-primary font-bold px-2 py-1 rounded bg-black/85 backdrop-blur-md border border-primary/20 whitespace-nowrap">
+          {label}
+        </span>
+      </div>
+
+      {/* Context menu button */}
+      <div className="absolute top-1 right-1 z-30">
+        <button className="w-6 h-6 flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors rounded hover:bg-black/40">
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Content */}
+      {hasContent ? (
+        <div className="absolute inset-0 w-full h-full">
+          <div className="absolute inset-0 bg-primary/5" />
+          {thumbnailSrc && (
+            <img src={thumbnailSrc} draggable={false} className="w-full h-full object-cover opacity-50" alt="" />
+          )}
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
+          <div className="w-8 h-8 border border-dashed border-foreground rounded-full flex items-center justify-center">
+            <span className="text-xs">+</span>
+          </div>
+        </div>
+      )}
+
+      {/* Asset ID label */}
+      {assetId && (
+        <div className="absolute bottom-1 left-1 z-20 max-w-[calc(100%-8px)]">
+          <span className="text-[9px] font-mono text-muted-foreground/70 px-1 py-0.5 rounded bg-black/70 truncate block">
+            {assetId}
+          </span>
+        </div>
+      )}
+
+      {/* Active Indicator */}
+      {isActive && (
+        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary shadow-[0_0_10px_var(--color-primary)]" />
+      )}
     </div>
   );
 }
@@ -359,11 +425,18 @@ function AppLayoutDemo() {
           </div>
 
           {/* ── Bottom Timeline ── */}
-          <div className="h-[120px] border-t border-border bg-card/30">
-            <div className="flex overflow-x-auto h-[90px]">
-              {['@s01', '@s02', '@s03', '@s04', '@s05'].map((label) => (
-                <SceneSlot key={label} label={label} />
-              ))}
+          <div className="border-t border-border bg-card/30">
+            <div className="relative h-28 flex gap-0.5">
+              <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+              <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+              <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+              <TimelineSlotDemo label="@s04" flex={2} />
+              <TimelineSlotDemo label="@s05" flex={2} />
+              {/* Playhead */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
+                style={{ left: '42%' }}
+              />
             </div>
             <div className="h-[30px] flex items-center justify-center border-t border-border/30 gap-2">
               <Music className="w-3.5 h-3.5 text-muted-foreground/50" />
@@ -1382,6 +1455,62 @@ export function Styleguide() {
       <section className="space-y-3">
         <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">AssetDropSlot</h2>
         <AssetDropSlotDemo />
+      </section>
+
+      {/* Timeline Slots */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Timeline Slots</h2>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Empty */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Empty</p>
+            <div className="h-28 flex gap-0.5">
+              <TimelineSlotDemo label="@s01" />
+            </div>
+          </div>
+
+          {/* Filled */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Filled</p>
+            <div className="h-28 flex gap-0.5">
+              <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" />
+            </div>
+          </div>
+
+          {/* Active */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Active (selected)</p>
+            <div className="h-28 flex gap-0.5">
+              <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive />
+            </div>
+          </div>
+
+          {/* Drag Over */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Drag Over</p>
+            <div className="h-28 flex gap-0.5">
+              <TimelineSlotDemo label="@s03" isDragOver />
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-slot timeline with playhead */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Multi-slot timeline with playhead</p>
+          <div className="relative h-28 flex gap-0.5 border border-border/30 rounded overflow-hidden">
+            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+            <TimelineSlotDemo label="@s04" flex={2} />
+            <TimelineSlotDemo label="@s05" flex={2} />
+            {/* Playhead */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
+              style={{ left: '55%' }}
+            />
+          </div>
+        </div>
       </section>
 
       {/* ChatInput */}
