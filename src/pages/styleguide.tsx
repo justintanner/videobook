@@ -400,7 +400,7 @@ function AppLayoutDemo() {
 
             </div>
               {/* Chat input — sticky bottom */}
-              <div className="shrink-0 px-4 pb-3 pt-2 border-t border-primary/20 bg-black/40">
+              <div className="shrink-0 px-4 pb-3 pt-2">
                 <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
               </div>
             </div>
@@ -438,9 +438,9 @@ function AppLayoutDemo() {
                 style={{ left: '42%' }}
               />
             </div>
-            <div className="h-[30px] flex items-center justify-center border-t border-border/30 gap-2">
-              <Music className="w-3.5 h-3.5 text-muted-foreground/50" />
-              <span className="text-xs font-mono text-muted-foreground/50 uppercase tracking-wider">DROP_AUDIO_TRACK</span>
+            <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
+              <Music className="w-3.5 h-3.5" />
+              <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
             </div>
           </div>
         </div>
@@ -1295,6 +1295,14 @@ export function Styleguide() {
               onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
             >
               Toast Error
+            </Button>
+            <Button variant="dashed" size="sm" className="text-foreground">
+              <Upload className="w-3.5 h-3.5" />
+              UPLOAD_ASSET
+            </Button>
+            <Button variant="dashed" size="sm" className="text-foreground">
+              <Upload className="w-3.5 h-3.5" />
+              UPLOAD_CLIP
             </Button>
           </div>
           <div className="w-[200px]">
