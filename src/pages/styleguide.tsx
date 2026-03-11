@@ -17,7 +17,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/useToast';
 import { Input } from '@/components/ui/input';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuCheckboxItem, ContextMenuLabel } from '@/components/ui/context-menu';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
 import { JsonSyntax } from '@/components/ui/JsonSyntax';
 import { GenToggle } from '@/components/ui/GenToggle';
@@ -3229,39 +3228,6 @@ export function Styleguide() {
         </div>
       </section>
 
-      {/* Card Primitives */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Card Primitives</h2>
-        <div className="flex flex-wrap gap-4">
-          <Card className="w-[300px]">
-            <CardHeader>
-              <CardTitle>System Status</CardTitle>
-              <CardDescription>All subsystems operational</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Neural link integrity at 98.7%. Memory usage nominal. Renderer: WebGPU v2.1.</p>
-            </CardContent>
-            <CardFooter className="gap-2">
-              <Button size="sm">Details</Button>
-              <Button size="sm" variant="outline">Dismiss</Button>
-            </CardFooter>
-          </Card>
-          <Card className="w-[300px]">
-            <CardHeader>
-              <CardTitle>Render Queue</CardTitle>
-              <CardDescription>3 jobs pending</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1 text-xs font-mono text-muted-foreground">
-                <p>[01] hero-intro — encoding</p>
-                <p>[02] product-shot — queued</p>
-                <p>[03] outro — queued</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
       {/* Badges */}
       <section className="space-y-3">
         <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Badges</h2>
@@ -3414,29 +3380,6 @@ export function Styleguide() {
 
       {/* Chat & Messaging */}
       <ChatMessagingSection />
-
-      {/* Custom Utilities */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Custom Utilities</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div className="bg-card border border-border p-3 clip-corner-tl">
-            <p className="text-xs font-medium">.clip-corner-tl</p>
-          </div>
-          <div className="bg-card border border-border p-3 clip-corner-br">
-            <p className="text-xs font-medium">.clip-corner-br</p>
-          </div>
-          <div className="bg-card border border-border p-3 clip-corner-both">
-            <p className="text-xs font-medium">.clip-corner-both</p>
-          </div>
-          <div className="bg-card border border-primary p-3 border-glow rounded-lg">
-            <p className="text-xs font-medium">.border-glow</p>
-          </div>
-        </div>
-        <div className="bg-card border border-border p-3 rounded-lg relative overflow-hidden">
-          <div className="absolute inset-0 scanlines pointer-events-none" />
-          <p className="text-xs font-medium relative">.scanlines</p>
-        </div>
-      </section>
 
     </div>
   );
