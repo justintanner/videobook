@@ -43,7 +43,7 @@ import type { ExecuteButtonState, ModelOption, JSONSchemaProperty } from '@/comp
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
-  Film, Grid3x3, Scissors, Music, MoreHorizontal,
+  Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
   AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
   Smartphone, Monitor, Square, Play, Volume2, Loader2, Mic,
@@ -247,6 +247,44 @@ const demoVideoMock: MediaItem = {
   status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg',
 };
 
+function HeaderBar() {
+  return (
+    <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
+      <div className="flex items-center gap-1">
+        {/* Logo */}
+        <div className="flex items-center gap-2 px-3 h-full">
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+          <span className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">CLIPFIRST</span>
+        </div>
+
+        {/* Project selector */}
+        <button className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors font-mono text-sm">
+          <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+          <span>vax</span>
+          <ChevronDown className="w-3 h-3 opacity-50" />
+        </button>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-border mx-1" />
+
+        {/* Generations */}
+        <button className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors font-mono text-xs uppercase tracking-wider">
+          <Clapperboard className="w-3.5 h-3.5 shrink-0" />
+          <span>Generations</span>
+        </button>
+      </div>
+
+      {/* Right side */}
+      <div className="flex items-center gap-1">
+        <button className="flex items-center gap-1.5 px-5 py-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors font-mono text-xs font-bold uppercase tracking-wider">
+          <Scissors className="w-3.5 h-3.5 shrink-0" />
+          <span>Clip It</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppLayoutDemo() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
@@ -258,27 +296,7 @@ function AppLayoutDemo() {
       <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border bg-background">
         <div className="grid grid-rows-[48px_1fr_auto] h-[800px]">
           {/* ── Nav Bar ── */}
-          <div className="bg-card border-b border-border flex items-center justify-between px-4">
-            <div className="flex gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                <span className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">CLIPFIRST</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span className="font-mono text-sm">vax</span>
-                <ChevronDown className="w-3 h-3" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Film className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">GENERATIONS</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Scissors className="w-3.5 h-3.5 text-primary" />
-              <span className="font-mono text-xs uppercase tracking-wider text-primary">CLIP IT</span>
-            </div>
-          </div>
+          <HeaderBar />
 
           {/* ── Middle Row: sidebars + center ── */}
           <div className="flex flex-row overflow-hidden">
@@ -2920,6 +2938,14 @@ export function Styleguide() {
 
       <hr className="border-border" />
       <h2 className="text-2xl font-bold text-blue-400 font-mono">Component Catalog</h2>
+
+      {/* Header / Nav Bar */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Header / Nav Bar</h2>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <HeaderBar />
+        </div>
+      </section>
 
       {/* Colors + Typography — compact row */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
