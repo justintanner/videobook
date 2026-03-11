@@ -179,7 +179,7 @@ function TimelineSlotDemo({
   return (
     <div
       className={cn(
-        'relative h-full border bg-card/30 backdrop-blur-sm flex flex-col cursor-pointer transition-all group overflow-hidden',
+        'relative h-full border bg-card/30 backdrop-blur-sm flex flex-col cursor-pointer transition-all duration-150 group overflow-hidden',
         isDragOver
           ? 'border-2 border-dashed border-primary bg-primary/10 scale-y-[1.02] shadow-[0_0_15px_rgba(0,255,255,0.3)]'
           : isActive
@@ -190,15 +190,15 @@ function TimelineSlotDemo({
       style={{ flex: `${flex} 1 0`, minWidth: '60px' }}
     >
       {/* Slot label badge */}
-      <div className="absolute top-1 left-1 z-30">
-        <span className="text-xs font-mono text-primary font-bold px-2 py-1 rounded bg-black/85 backdrop-blur-md border border-primary/20 whitespace-nowrap">
+      <div className="absolute top-1.5 left-1.5 z-30">
+        <span className="text-[10px] font-mono text-primary font-bold px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-primary/15 whitespace-nowrap tracking-wide">
           {label}
         </span>
       </div>
 
       {/* Context menu button */}
-      <div className="absolute top-1 right-1 z-30">
-        <button className="w-6 h-6 flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors rounded hover:bg-black/40">
+      <div className="absolute top-1.5 right-1.5 z-30">
+        <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -212,17 +212,17 @@ function TimelineSlotDemo({
           )}
         </div>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
-          <div className="w-8 h-8 border border-dashed border-foreground rounded-full flex items-center justify-center">
-            <span className="text-xs">+</span>
+        <div className="absolute inset-0 flex items-center justify-center opacity-15 group-hover:opacity-35 transition-opacity duration-200">
+          <div className="w-7 h-7 border border-dashed border-foreground/60 rounded-full flex items-center justify-center">
+            <span className="text-[10px] text-foreground/60">+</span>
           </div>
         </div>
       )}
 
       {/* Asset ID label */}
       {assetId && (
-        <div className="absolute bottom-1 left-1 z-20 max-w-[calc(100%-8px)]">
-          <span className="text-[9px] font-mono text-muted-foreground/70 px-1 py-0.5 rounded bg-black/70 truncate block">
+        <div className="absolute bottom-1.5 left-1.5 z-20 max-w-[calc(100%-12px)]">
+          <span className="text-[9px] font-mono text-muted-foreground/60 px-1 py-0.5 rounded bg-black/70 truncate block leading-tight">
             {assetId}
           </span>
         </div>
@@ -291,8 +291,15 @@ function AppLayoutDemo() {
   const [rightSort, setRightSort] = useState<'newest' | 'oldest'>('newest');
 
   return (
-    <div className="overflow-x-auto mb-8">
-      <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border bg-background">
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">App Layout</h2>
+        <p className="text-xs font-mono text-muted-foreground mb-6">
+          Full application frame — header, collapsible sidebars, center stage, and timeline. The establishing shot.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+      <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
         <div className="grid grid-rows-[48px_1fr_auto] h-[800px]">
           {/* ── Nav Bar ── */}
           <HeaderBar />
@@ -509,7 +516,8 @@ function AppLayoutDemo() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -533,20 +541,20 @@ function GenToggleDemo() {
   const [compactVal, setCompactVal] = useState<string>('5');
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Standard</p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Standard</p>
         <GenToggle value={aspect} onChange={setAspect} options={['16:9', '9:16', '1:1']} />
       </div>
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Two options</p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Two options</p>
         <GenToggle value={mode} onChange={setMode} options={['std', 'pro']} />
       </div>
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Compact</p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Compact</p>
         <GenToggle value={compactVal} onChange={setCompactVal} options={['3', '5', '8', '10']} compact />
       </div>
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Disabled</p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Disabled</p>
         <GenToggle value="std" onChange={() => {}} options={['std', 'pro']} disabled />
       </div>
     </div>
@@ -609,21 +617,21 @@ function AssetDropSlotDemo() {
   });
   const [empty, setEmpty] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>(null);
   return (
-    <div className="flex flex-wrap gap-4">
-      <div className="w-[180px] space-y-1">
-        <p className="text-xs text-muted-foreground">With value (image)</p>
+    <div className="flex flex-wrap gap-5">
+      <div className="w-[180px] space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">With value (image)</p>
         <AssetDropSlot value={filled} onChange={setFilled} />
       </div>
-      <div className="w-[180px] space-y-1">
-        <p className="text-xs text-muted-foreground">Empty (image)</p>
+      <div className="w-[180px] space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Empty (image)</p>
         <AssetDropSlot value={empty} onChange={setEmpty} />
       </div>
-      <div className="w-[180px] space-y-1">
-        <p className="text-xs text-muted-foreground">Empty (video)</p>
+      <div className="w-[180px] space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Empty (video)</p>
         <AssetDropSlot value={null} onChange={() => {}} acceptTypes={['video']} />
       </div>
-      <div className="w-[180px] space-y-1">
-        <p className="text-xs text-muted-foreground">Disabled</p>
+      <div className="w-[180px] space-y-1.5">
+        <p className="text-[11px] font-mono text-muted-foreground/70">Disabled</p>
         <AssetDropSlot value={null} onChange={() => {}} disabled />
       </div>
     </div>
@@ -636,8 +644,8 @@ function ContextMenuDemo() {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="w-[300px] h-[120px] rounded-lg border-2 border-dashed border-primary/30 bg-card flex items-center justify-center cursor-context-menu select-none">
-          <span className="text-sm font-mono text-muted-foreground">Right-click here</span>
+        <div className="w-full h-[88px] rounded-lg border border-dashed border-primary/25 bg-card/60 flex items-center justify-center cursor-context-menu select-none">
+          <span className="text-[11px] font-mono text-muted-foreground/60">Right-click this area</span>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -659,11 +667,11 @@ const allExecuteStates: ExecuteButtonState[] = ['disabled', 'ready', 'charging',
 
 function ExecuteButtonStatesDemo() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {allExecuteStates.map((state) => (
-        <div key={state} className="flex items-center gap-3">
-          <span className="text-[10px] font-mono text-muted-foreground w-20 shrink-0">{state}</span>
-          <div className="flex-1 max-w-[220px]">
+        <div key={state} className="flex items-center gap-4">
+          <span className="text-[11px] font-mono text-muted-foreground/70 w-24 shrink-0">{state}</span>
+          <div className="flex-1 max-w-[240px]">
             <ExecuteButton state={state} onClick={() => {}} disabledReason="Fill required fields" />
           </div>
         </div>
@@ -684,16 +692,16 @@ function CenterStageSection() {
   const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
 
   return (
-    <section className="mb-12">
+    <section className="mb-16">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: TransmissionView</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground mb-8">
         Animated transition shown when a new message is sent. Phases: flash scan line, typewriter text, dissolve.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {centerStageMocks.map((mock) => (
-          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden flex flex-col">
+          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-3">
+            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
+            <div className="h-[340px] bg-background rounded-lg overflow-hidden flex flex-col border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
               <TransmissionView message={mock.message} onComplete={handleComplete} />
             </div>
           </div>
@@ -707,14 +715,14 @@ function CenterStageSection() {
 
 function IdleScreenSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-16">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: IdleScreen</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground mb-8">
         Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
       </p>
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">welcome</span>
-        <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden flex">
+      <div className="max-w-2xl flex flex-col gap-3">
+        <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">welcome</span>
+        <div className="h-[360px] bg-background rounded-lg overflow-hidden flex border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
           <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
         </div>
       </div>
@@ -731,17 +739,17 @@ const assetViewShellMocks = [
 
 function AssetViewShellSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-16">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: AssetViewShell</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground mb-8">
         Shared frame for all asset-mode views. Two modes: constrained (max-w-4xl, aspect-video) and full bleed (w-full
         h-full). Border + shadow provide consistent visual containment.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {assetViewShellMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="h-[250px] bg-background border border-border/50 rounded overflow-hidden flex">
+          <div key={mock.id} className="flex flex-col gap-3">
+            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
+            <div className="h-[300px] bg-background rounded-lg overflow-hidden flex border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
               <AssetViewShell fillParent={mock.fillParent}>
                 <div className="flex items-center justify-center w-full h-full">
                   <span className="font-mono text-xs text-primary/40">CONTENT_AREA</span>
@@ -840,18 +848,18 @@ const renderingReadoutMocks: { id: string; label: string; asset: MediaItem }[] =
 
 function RenderingReadoutSection() {
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">RenderingReadout (Center-Stage View)</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+    <section className="mb-16">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: RenderingReadout</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-8">
         Full-panel rendering status view shown in center stage when a video asset is rendering. Scan line animation,
         grid overlay, corner HUD brackets, Film/Clapperboard icon (type-aware), pulsing status badge, and slug text.
         Cyan for regular videos, amber for final-type assets.
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
         {renderingReadoutMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="w-[250px] h-[200px] border border-border/50 rounded overflow-hidden">
+          <div key={mock.id} className="flex flex-col gap-3">
+            <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">{mock.label}</span>
+            <div className="h-[240px] bg-background rounded-lg overflow-hidden border border-border/40 shadow-[0_0_30px_-8px_rgba(0,212,255,0.06)] ring-1 ring-white/[0.03]">
               <RenderingReadout asset={mock.asset} />
             </div>
           </div>
@@ -865,21 +873,21 @@ function RenderingReadoutSection() {
 
 function FailedAssetReadoutSection() {
   return (
-    <section className="mb-12">
-      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">FailedAssetReadout (Center-Stage View)</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+    <section className="mb-16">
+      <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: FailedAssetReadout</h2>
+      <p className="text-xs font-mono text-muted-foreground mb-8">
         Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, and model/tool
         info. Static replica below — the real component fetches diagnostic data via useAssetDiagnostic hook which
         requires a live API connection.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* With error + prompt + model + retry */}
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-3">
+          <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">
             full diagnostic
           </span>
-          <div className="w-[350px] h-[250px] overflow-hidden">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30">
+          <div className="h-[280px] bg-background rounded-lg overflow-hidden ring-1 ring-white/[0.03]">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-lg">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
                 <span className="text-red-400 font-bold tracking-wider">@hero-intro-v3</span>
@@ -910,10 +918,10 @@ function FailedAssetReadoutSection() {
         </div>
 
         {/* Minimal error — no prompt, no retry */}
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">minimal (error only)</span>
-          <div className="w-[350px] h-[200px] overflow-hidden">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30">
+        <div className="flex flex-col gap-3">
+          <span className="text-[11px] font-mono text-muted-foreground/80 uppercase tracking-widest">minimal (error only)</span>
+          <div className="h-[280px] bg-background rounded-lg overflow-hidden ring-1 ring-white/[0.03]">
+            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-lg">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
                 <span className="text-red-400 font-bold tracking-wider">@corrupted-upload</span>
@@ -984,9 +992,9 @@ const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0p
 
 function VideoTrimViewSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">VideoTrimView</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Full-screen trimming overlay. Two-column layout: video player + waveform timeline on left,
         transcript panel with word-level selection on right. Waveform shows audio shape with
         hover-expandable thumbnail badges at even intervals. Click words to mark cuts (shown with
@@ -995,27 +1003,27 @@ function VideoTrimViewSection() {
       </p>
 
       {/* Full-width demo */}
-      <div className="border border-zinc-700/50 rounded-lg overflow-hidden bg-zinc-950">
+      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950">
         {/* Header bar */}
-        <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800">
+        <div className="h-10 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800/80">
           <div className="flex items-center gap-2 text-zinc-400">
-            <Scissors className="w-4 h-4" />
-            <span className="font-mono text-xs tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
+            <Scissors className="w-3.5 h-3.5" />
+            <span className="font-mono text-[11px] tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               className={cn(
-                'px-4 py-1.5 text-xs font-bold tracking-[0.15em] uppercase border rounded transition-all duration-200',
+                'px-3.5 py-1 text-[11px] font-bold tracking-[0.15em] uppercase border rounded transition-all duration-200',
                 'flex items-center justify-center gap-1.5',
                 'bg-cyan-500/20 text-cyan-400 border-current',
-                'shadow-[0_0_20px_rgba(34,211,238,0.5)]',
+                'shadow-[0_0_16px_rgba(34,211,238,0.4)]',
               )}
             >
-              <Scissors className="w-3.5 h-3.5" />
+              <Scissors className="w-3 h-3" />
               <span>TRIM</span>
             </button>
-            <button className="w-7 h-7 flex items-center justify-center text-zinc-500 transition-all hover:bg-red-500/10 hover:text-red-400 rounded">
-              <X className="w-5 h-5 stroke-[2.5]" />
+            <button className="w-6 h-6 flex items-center justify-center text-zinc-500 transition-all hover:bg-red-500/10 hover:text-red-400 rounded">
+              <X className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
         </div>
@@ -1023,16 +1031,16 @@ function VideoTrimViewSection() {
         {/* Main content: two-column */}
         <div className="flex overflow-hidden" style={{ height: 420 }}>
           {/* Left: video + timeline */}
-          <div className="flex-1 flex flex-col px-4 py-3 overflow-hidden min-w-0">
+          <div className="flex-1 flex flex-col px-3 py-2.5 overflow-hidden min-w-0">
             {/* Video player */}
             <div className="flex-1 min-h-0 flex items-center justify-center">
-              <div className="relative w-full h-full bg-black rounded-lg overflow-hidden">
+              <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
                 <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
               </div>
             </div>
 
             {/* Timeline */}
-            <div className="shrink-0 mt-2 px-4 py-3 bg-zinc-900/50 rounded-lg">
+            <div className="shrink-0 mt-2 px-3 py-2.5 bg-zinc-900/40 rounded-md">
               <div className="relative">
                 {/* Time ruler */}
                 <div className="relative select-none" style={{ height: 20 }}>
@@ -1165,7 +1173,7 @@ function VideoTrimViewSection() {
                   {trimDemoCutRegions.map((region, i) => (
                     <div
                       key={i}
-                      className="absolute top-1 text-[10px] text-red-400 font-medium whitespace-nowrap"
+                      className="absolute top-1 text-[10px] text-red-400 font-mono font-medium whitespace-nowrap"
                       style={{
                         left: `${region.startPercent + region.widthPercent / 2}%`,
                         transform: 'translateX(-50%)',
@@ -1258,18 +1266,18 @@ function VideoTrimViewSection() {
 
 function PlayerControlsSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Controls</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Atomic building blocks for the player interface. TabButton for orientation selection,
         TimelineTabs for aspect ratio switching, SlugBadge for clip identification, and GearButton
         for settings access.
       </p>
 
-      <div className="space-y-6">
+      <div className="space-y-5 p-4 rounded-lg border border-zinc-700/40 bg-zinc-950/50">
         {/* TabButton */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">TabButton (active / inactive)</p>
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">TabButton (active / inactive)</p>
           <div className="flex items-center gap-2">
             <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
               <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
@@ -1285,7 +1293,7 @@ function PlayerControlsSection() {
 
         {/* TimelineTabs */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">TimelineTabs</p>
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">TimelineTabs</p>
           <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20 w-fit">
             <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
               <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
@@ -1301,7 +1309,7 @@ function PlayerControlsSection() {
 
         {/* SlugBadge */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">SlugBadge</p>
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">SlugBadge</p>
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@hero-intro</span>
             <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@product-shot-final-v2</span>
@@ -1310,7 +1318,7 @@ function PlayerControlsSection() {
 
         {/* GearButton */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">GearButton</p>
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">GearButton</p>
           <button className="p-1.5 rounded transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10">
             <Settings className="w-4 h-4" />
           </button>
@@ -1350,19 +1358,19 @@ function RatioToggle({ active }: { active: '9:16' | '16:9' | '1:1' }) {
 
 function PlayerInterfaceSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Player Interface</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Complete ClipPlayer shell showing landscape (active), portrait (idle), square (rendering),
         and video error states. Header contains TimelineTabs, SlugBadge, and GearButton.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Landscape (active) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Landscape (active)</p>
-          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
-            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Landscape (active)</p>
+          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground truncate max-w-[120px]">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground hover:text-primary">
@@ -1384,9 +1392,9 @@ function PlayerInterfaceSection() {
 
         {/* Portrait (idle) — LazyRenderPlaceholder */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Portrait (idle) — LazyRenderPlaceholder</p>
-          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
-            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Portrait (idle) — LazyRenderPlaceholder</p>
+          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="9:16" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
@@ -1400,9 +1408,9 @@ function PlayerInterfaceSection() {
 
         {/* Square (rendering) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Square (rendering)</p>
-          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
-            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Square (rendering)</p>
+          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="1:1" />
               <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
@@ -1416,9 +1424,9 @@ function PlayerInterfaceSection() {
 
         {/* Video error */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Video error</p>
-          <div className="flex flex-col h-[280px] border border-border/50 rounded overflow-hidden">
-            <div className="shrink-0 px-3 py-2 bg-black/50 border-b border-border/30 flex items-center justify-between">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-2">Video error</p>
+          <div className="flex flex-col h-[280px] border border-zinc-700/40 rounded-lg overflow-hidden">
+            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
               <RatioToggle active="16:9" />
               <span className="font-mono text-xs text-muted-foreground">@broken-clip</span>
               <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
@@ -1440,18 +1448,18 @@ function PlayerInterfaceSection() {
 
 function AudioPlayerSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Player</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Full audio editing interface with waveform visualization, trim handles, cut regions,
         fade controls, and playback. Header shows slug, vocals badge, keep/cut toggle, and action buttons.
       </p>
 
-      <div className="border border-border/50 rounded overflow-hidden bg-card/30">
+      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950/80">
         {/* Header */}
-        <div className="shrink-0 px-4 py-2 border-b border-border/30 flex items-center justify-between">
+        <div className="shrink-0 px-4 py-2 border-b border-zinc-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
             <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">
               VOCALS
             </span>
@@ -1484,7 +1492,7 @@ function AudioPlayerSection() {
         </div>
 
         {/* Waveform area */}
-        <div className="relative px-4 py-3" style={{ minHeight: 120 }}>
+        <div className="relative px-4 py-2.5" style={{ minHeight: 120 }}>
           {/* Waveform */}
           <div className="relative w-full" style={{ height: 80 }}>
             <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={80} progress={0.4} />
@@ -1546,10 +1554,10 @@ function AudioPlayerSection() {
         </div>
 
         {/* Audio settings row */}
-        <div className="px-4 py-2 border-t border-border/30 flex items-center gap-6 flex-wrap">
+        <div className="px-4 py-2 border-t border-zinc-800/60 flex items-center gap-5 flex-wrap">
           {/* Fade In */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-yellow-400 w-14 shrink-0">Fade In</span>
+            <span className="text-[11px] font-mono text-yellow-400/90 w-14 shrink-0">Fade In</span>
             <input
               type="range" min={0} max={2000} defaultValue={500} readOnly
               className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
@@ -1560,7 +1568,7 @@ function AudioPlayerSection() {
           </div>
           {/* Fade Out */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-yellow-400 w-14 shrink-0">Fade Out</span>
+            <span className="text-[11px] font-mono text-yellow-400/90 w-14 shrink-0">Fade Out</span>
             <input
               type="range" min={0} max={2000} defaultValue={300} readOnly
               className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
@@ -1571,7 +1579,7 @@ function AudioPlayerSection() {
           </div>
           {/* Volume */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-amber-400 w-14 shrink-0">Volume</span>
+            <span className="text-[11px] font-mono text-amber-400/90 w-14 shrink-0">Volume</span>
             <input
               type="range" min={50} max={500} defaultValue={100} readOnly
               className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
@@ -1587,8 +1595,8 @@ function AudioPlayerSection() {
         </div>
 
         {/* Playback controls */}
-        <div className="px-4 py-2 border-t border-border/30 flex items-center gap-4">
-          <button className="w-8 h-8 rounded-full border border-primary/50 bg-primary/10 flex items-center justify-center text-primary">
+        <div className="px-4 py-2 border-t border-zinc-800/60 flex items-center gap-3">
+          <button className="w-7 h-7 rounded-full border border-primary/40 bg-primary/10 flex items-center justify-center text-primary">
             <Play className="w-4 h-4 ml-0.5" />
           </button>
           <div className="font-mono text-sm tabular-nums">
@@ -1616,18 +1624,18 @@ function AudioPlayerSection() {
 
 function AudioTrackSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Audio Track</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Audio track states for the timeline: empty drop zone (default and collapsed), assigning,
         active tracks with waveform and controls, and multi-track lane composition.
       </p>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Empty (default) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Empty (default)</p>
-          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Empty (default)</p>
+          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-zinc-600/40 text-muted-foreground/40">
             <Music className="w-3.5 h-3.5" />
             <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
           </div>
@@ -1635,8 +1643,8 @@ function AudioTrackSection() {
 
         {/* Empty (collapsed) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Empty (collapsed)</p>
-          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-8 min-h-8 border-border/40 text-muted-foreground/50">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Empty (collapsed)</p>
+          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-8 min-h-8 border-zinc-600/40 text-muted-foreground/40">
             <Music className="w-3 h-3" />
             <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
           </div>
@@ -1644,8 +1652,8 @@ function AudioTrackSection() {
 
         {/* Assigning */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Assigning</p>
-          <div className="h-14 min-h-14 border border-border/50 bg-primary/5 rounded flex items-center justify-center gap-2 text-muted-foreground">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Assigning</p>
+          <div className="h-14 min-h-14 border border-zinc-700/40 bg-primary/5 rounded-md flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
           </div>
@@ -1653,8 +1661,8 @@ function AudioTrackSection() {
 
         {/* Active (cyan) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Active (cyan)</p>
-          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded overflow-hidden">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Active (cyan)</p>
+          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded-md overflow-hidden">
             {/* Positioned audio block */}
             <div
               className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
@@ -1685,8 +1693,8 @@ function AudioTrackSection() {
 
         {/* Active (magenta) */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Active (magenta)</p>
-          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded overflow-hidden">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Active (magenta)</p>
+          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded-md overflow-hidden">
             <div
               className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
               style={{ left: '20%', width: '50%' }}
@@ -1711,8 +1719,8 @@ function AudioTrackSection() {
 
         {/* Multi-track lane */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Multi-track lane</p>
-          <div className="relative h-14 border border-border/30 bg-card/20 rounded overflow-hidden">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-1.5">Multi-track lane</p>
+          <div className="relative h-14 border border-zinc-700/30 bg-zinc-950/40 rounded-md overflow-hidden">
             {/* Track 1 (cyan) */}
             <div
               className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
@@ -1749,14 +1757,14 @@ function AudioTrackSection() {
 
 function TimelineScrubberSection() {
   return (
-    <section className="mb-12">
+    <section className="mb-14">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">Timeline Scrubber</h2>
-      <p className="text-xs font-mono text-muted-foreground mb-6">
+      <p className="text-xs font-mono text-muted-foreground/80 mb-5 max-w-2xl leading-relaxed">
         Assembled timeline with video slots, playhead, audio track lane, and empty drop zone.
         Demonstrates full scrubber composition with proportional slot widths and audio positioning.
       </p>
 
-      <div className="border border-border/30 rounded overflow-hidden bg-card/20">
+      <div className="border border-zinc-700/40 rounded-lg overflow-hidden bg-zinc-950/60">
         {/* Video slots + playhead */}
         <div className="relative h-28 flex gap-0.5">
           <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
@@ -1772,7 +1780,7 @@ function TimelineScrubberSection() {
         </div>
 
         {/* Audio track lane with positioned block */}
-        <div className="relative h-14 border-t border-border/30">
+        <div className="relative h-14 border-t border-zinc-800/60">
           <div
             className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
             style={{ left: '8%', width: '55%' }}
@@ -1792,8 +1800,8 @@ function TimelineScrubberSection() {
         </div>
 
         {/* Empty drop zone for second track */}
-        <div className="border-t border-border/30">
-          <div className="border-2 border-dashed flex items-center justify-center gap-2 transition-colors h-10 min-h-10 border-border/40 text-muted-foreground/50 m-0.5 rounded">
+        <div className="border-t border-zinc-800/60">
+          <div className="border border-dashed flex items-center justify-center gap-2 transition-colors h-10 min-h-10 border-zinc-600/40 text-muted-foreground/40 m-0.5 rounded-md">
             <Music className="w-3 h-3" />
             <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
           </div>
@@ -2546,7 +2554,7 @@ function PendingGenerationsSection() {
         Four states: inactive (muted), generating (amber pulse), ready (amber glow), ready + generating (split badge).
         Click "Flash" to trigger the burst animation on the ready button.
       </p>
-      <div className="flex flex-wrap items-end gap-6 mb-4">
+      <div className="flex flex-wrap items-end gap-6 mb-8">
         {pendingGenButtonStates.map((s) => (
           <div key={s.label} className="flex flex-col items-center gap-2">
             <PendingGenerationsButton
@@ -2568,12 +2576,12 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Drawer demo */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">PendingGenerationsDrawer</h3>
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">PendingGenerationsDrawer</h3>
       <p className="text-xs font-mono text-muted-foreground mb-3">
         Full-screen review overlay. Active tile highlighted with cyan glow. Approve/reject removes tiles with
         spring animation. Pending section shows incoming generations. All-clear state auto-closes after 1.5s.
       </p>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-8">
         <button
           onClick={() => { resetDrawer(); setDrawerOpen(true); }}
           className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
@@ -2589,11 +2597,11 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Inline preview: ReviewTile + PendingSection anatomy */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">Anatomy (inline preview)</h3>
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Anatomy (inline preview)</h3>
       <p className="text-xs font-mono text-muted-foreground mb-3">
         Review tile with metadata strip and action buttons. Active tile has cyan border glow; inactive tiles are dimmed.
       </p>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 max-w-4xl">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-8">
         {/* Active tile mock */}
         <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col">
           <div className="aspect-video bg-black relative">
@@ -2662,11 +2670,11 @@ function PendingGenerationsSection() {
       </div>
 
       {/* Pending strip preview */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">Pending Strip</h3>
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">Pending Strip</h3>
       <p className="text-xs font-mono text-muted-foreground mb-3">
         Bottom bar showing in-flight generation jobs with status tags (GEN, DL).
       </p>
-      <div className="max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-zinc-950">
+      <div className="max-w-2xl border border-border/30 rounded-lg overflow-hidden bg-zinc-950 mb-8">
         <div className="border-t border-border/50">
           <div className="flex items-center gap-2 px-6 py-2">
             <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
@@ -2689,7 +2697,7 @@ function PendingGenerationsSection() {
       </div>
 
       {/* All Clear state preview */}
-      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70 mt-8">All Clear State</h3>
+      <h3 className="text-sm font-mono font-bold mb-3 text-blue-400/70">All Clear State</h3>
       <p className="text-xs font-mono text-muted-foreground mb-3">
         Shown when all videos are processed. Auto-closes the drawer after 1.5 seconds.
       </p>
@@ -2758,20 +2766,20 @@ function ChatMessagingSection() {
         Terminal prompt with @ autocomplete for asset slugs. Type @ to see the dropdown. Supports keyboard navigation (arrows, tab, enter, escape).
       </p>
       <div className="space-y-4 max-w-2xl mb-8">
-        <div className="space-y-1">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Default</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default</span>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
-        <div className="space-y-1">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Loading</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">loading</span>
           <ChatInput isLoading assetSlugs={[]} />
         </div>
-        <div className="space-y-1">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Transmitting</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">transmitting</span>
           <ChatInput isTransmitting assetSlugs={[]} />
         </div>
-        <div className="space-y-1">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Disabled</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
           <ChatInput disabled assetSlugs={[]} />
         </div>
       </div>
@@ -2781,7 +2789,7 @@ function ChatMessagingSection() {
       <p className="text-xs font-mono text-muted-foreground mb-3">
         Cinematic confirmation animation: scan line sweep, typewriter &ldquo;TRANSMISSION_RECEIVED&rdquo;, message echo, then dissolve. Plays once and calls onComplete.
       </p>
-      <div className="mb-2">
+      <div className="mb-3">
         <button
           onClick={replayTransmission}
           className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
@@ -2870,10 +2878,10 @@ function ChatMessagingSection() {
         Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
         and editable body with proof-read audio controls. Click the script text to edit.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* With content */}
-        <div>
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">With Content</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with content</span>
           <div className="h-[400px]">
             <ScriptReadout
               content={sampleScript}
@@ -2886,8 +2894,8 @@ function ChatMessagingSection() {
         </div>
 
         {/* Empty state */}
-        <div>
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Empty (no content)</p>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (no content)</span>
           <div className="h-[400px]">
             <ScriptReadout
               content={null}
@@ -2898,8 +2906,8 @@ function ChatMessagingSection() {
       </div>
 
       {/* Generating state */}
-      <div className="max-w-lg">
-        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Generating Video</p>
+      <div className="flex flex-col gap-2 max-w-lg">
+        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">generating video</span>
         <div className="h-[400px]">
           <ScriptReadout
             content={sampleScript}
@@ -2919,11 +2927,11 @@ function ChatMessagingSection() {
 
 export function Styleguide() {
   return (
-    <div className="min-h-screen pt-2 px-8 pb-8 space-y-12">
+    <div className="min-h-screen pt-8 px-8 pb-12 space-y-14">
       <Toaster />
-      <header>
-        <h1 className="text-3xl font-mono font-bold tracking-wider"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span> <span className="text-primary">STYLE GUIDE</span></h1>
-        <p className="text-muted-foreground font-mono text-sm mt-1">
+      <header className="space-y-3">
+        <h1 className="text-3xl font-mono font-bold tracking-[0.15em]"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span> <span className="text-primary/80 font-semibold">STYLE GUIDE</span></h1>
+        <p className="text-muted-foreground font-mono text-sm leading-relaxed">
           Media cards, overlays, and center-stage views in all states
         </p>
       </header>
@@ -2931,43 +2939,43 @@ export function Styleguide() {
       {/* App Layout Demo */}
       <AppLayoutDemo />
 
-      <hr className="border-border" />
-      <h2 className="text-2xl font-bold text-blue-400 font-mono">Component Catalog</h2>
+      <hr className="border-border/40" />
+      <h2 className="text-2xl font-bold text-primary/90 font-mono tracking-wide">Component Catalog</h2>
 
       {/* Header / Nav Bar */}
-      <section className="space-y-4">
-        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Header / Nav Bar</h2>
-        <div className="rounded-lg border border-border overflow-hidden">
+      <section className="space-y-5">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Header / Nav Bar</h2>
+        <div className="rounded-lg border border-border/60 overflow-hidden">
           <HeaderBar />
         </div>
       </section>
 
       {/* Colors + Typography — compact row */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-12">
         {/* Colors */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Colors</h2>
-          <div className="grid grid-cols-4 gap-2">
+        <div className="space-y-4">
+          <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Colors</h2>
+          <div className="grid grid-cols-4 gap-3">
             {colors.map((c) => (
-              <div key={c.name} className="space-y-1">
-                <div className={`${c.bg} rounded h-10 border border-border`} />
-                <p className="text-[10px] font-medium leading-tight">{c.name}</p>
-                <p className="text-[9px] font-mono text-muted-foreground leading-tight">{c.hex}</p>
+              <div key={c.name} className="space-y-1.5">
+                <div className={`${c.bg} rounded-md h-12 border border-border/50`} />
+                <p className="text-[11px] font-medium leading-tight tracking-wide">{c.name}</p>
+                <p className="text-[10px] font-mono text-muted-foreground/70 leading-tight">{c.hex}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Typography */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Typography</h2>
-          <div className="space-y-1">
+        <div className="space-y-4">
+          <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Typography</h2>
+          <div className="space-y-2.5">
             <p className="text-xl font-bold">Rajdhani Bold</p>
             <p className="text-lg font-semibold">Rajdhani Semibold</p>
             <p className="text-base font-normal">Rajdhani Regular</p>
-            <p className="text-base font-light">Rajdhani Light</p>
-            <p className="font-mono text-sm">JetBrains Mono — 0123456789</p>
-            <p className="font-mono text-xs text-muted-foreground">const x = await fetchData();</p>
+            <p className="text-base font-light text-foreground/70">Rajdhani Light</p>
+            <p className="font-mono text-sm tracking-wide">JetBrains Mono — 0123456789</p>
+            <p className="font-mono text-xs text-muted-foreground/80">const x = await fetchData();</p>
           </div>
         </div>
       </section>
@@ -2975,9 +2983,9 @@ export function Styleguide() {
       {/* ==================== MEDIA CARD SECTIONS ==================== */}
 
       {/* Cards — unique overlays */}
-      <section className="space-y-4">
-        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Cards</h2>
-        <div className="flex flex-wrap gap-3">
+      <section className="space-y-5">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Cards</h2>
+        <div className="flex flex-wrap gap-4">
           <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
           <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
           <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-text', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist standing on a rooftop.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' }} /></div>
@@ -2989,14 +2997,14 @@ export function Styleguide() {
 
       {/* ==================== FORMS & CONTROLS ==================== */}
 
-      <section className="space-y-6">
-        <h2 className="text-xl font-mono font-bold border-b border-border pb-2 text-blue-400">Forms & Controls</h2>
+      <section className="space-y-8">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Forms & Controls</h2>
 
         {/* Row 1 — 3-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {/* Overlays & Menus */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Overlays & Menus</h3>
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Overlays & Menus</h3>
             <div className="flex flex-wrap gap-2">
               <Dialog>
                 <DialogTrigger asChild>
@@ -3087,120 +3095,122 @@ export function Styleguide() {
           </div>
 
           {/* Inputs */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Inputs</h3>
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Inputs</h3>
             <div className="space-y-3">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Default</p>
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-mono text-muted-foreground/70">Default</p>
                 <Input placeholder="Enter text..." />
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Email</p>
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-mono text-muted-foreground/70">Email</p>
                 <Input type="email" placeholder="user@example.com" />
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Disabled</p>
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-mono text-muted-foreground/70">Disabled</p>
                 <Input placeholder="Disabled" disabled />
               </div>
             </div>
           </div>
 
           {/* Selection Controls */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Selection Controls</h3>
-            <div className="w-[200px]">
-              <SelectWithChevronDemo />
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Selection Controls</h3>
+            <div className="space-y-4">
+              <div className="w-[200px]">
+                <SelectWithChevronDemo />
+              </div>
+              <GenToggleDemo />
+              <GenSelectDemo />
             </div>
-            <GenToggleDemo />
-            <GenSelectDemo />
           </div>
         </div>
 
         {/* Row 2 — 2-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Gen Text Fields */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Gen Text Fields</h3>
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Gen Text Fields</h3>
             <GenFieldDemo />
           </div>
 
           {/* Multi-Prompt Editor */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Multi-Prompt Editor</h3>
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Multi-Prompt Editor</h3>
             <MultiPromptEditorDemo />
           </div>
         </div>
 
         {/* Row 3 — Chat Input full-width */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">Chat Input</h3>
-          <p className="text-xs text-muted-foreground">Type @ to trigger autocomplete with sample asset slugs</p>
+        <div className="space-y-4">
+          <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Chat Input</h3>
+          <p className="text-[11px] font-mono text-muted-foreground/60">Type @ to trigger autocomplete with sample asset slugs</p>
           <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
         </div>
 
-        {/* Row 4 — ExecuteButton */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">ExecuteButton</h3>
-          <ExecuteButtonStatesDemo />
-        </div>
-
-        {/* Row 5 — CloseButton */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider">CloseButton</h3>
-          <div className="flex items-center gap-4">
-            <div className="space-y-1 text-center">
-              <CloseButton onClick={() => {}} />
-              <p className="text-[10px] text-muted-foreground">enabled</p>
-            </div>
-            <div className="space-y-1 text-center">
-              <CloseButton onClick={() => {}} disabled />
-              <p className="text-[10px] text-muted-foreground">disabled</p>
+        {/* Row 4 — ExecuteButton + CloseButton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">ExecuteButton</h3>
+            <ExecuteButtonStatesDemo />
+          </div>
+          <div className="space-y-4">
+            <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">CloseButton</h3>
+            <div className="flex items-center gap-6">
+              <div className="space-y-2 text-center">
+                <CloseButton onClick={() => {}} />
+                <p className="text-[11px] font-mono text-muted-foreground/70">enabled</p>
+              </div>
+              <div className="space-y-2 text-center">
+                <CloseButton onClick={() => {}} disabled />
+                <p className="text-[11px] font-mono text-muted-foreground/70">disabled</p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Row 5 — Asset Drop Slots */}
-        <div>
-          <h3 className="text-sm font-mono font-semibold text-blue-400/70 uppercase tracking-wider mb-3">Asset Drop Slots</h3>
+        <div className="space-y-4">
+          <h3 className="text-[11px] font-mono font-semibold text-primary/50 uppercase tracking-[0.1em] border-b border-border/40 pb-2">Asset Drop Slots</h3>
           <AssetDropSlotDemo />
         </div>
       </section>
 
       {/* Badges */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Badges</h2>
+      <section className="space-y-5">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Badges</h2>
         <div className="flex flex-wrap gap-4">
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <SlugBadge slug="@hero-intro" colorScheme="cyan" isError={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <SlugBadge slug="@final-export" colorScheme="gold" isError={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <SlugBadge slug="@broken-clip" colorScheme="cyan" isError={true} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <SlugBadge slug="@processing" colorScheme="cyan" isError={false} isProcessing />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <DurationBadge duration="1:30" isProcessing={false} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <DurationBadge duration="0:45" isProcessing={true} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <ResolutionBadge width={1920} height={1080} />
           </div>
-          <div className="relative w-[180px] h-[100px] bg-card border border-border rounded overflow-hidden">
+          <div className="relative w-[180px] h-[100px] bg-card border border-border/50 rounded-md overflow-hidden">
             <ResolutionBadge width={3840} height={2160} />
           </div>
         </div>
       </section>
 
       {/* JsonSyntax */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">JsonSyntax</h2>
-        <div className="max-w-lg bg-card border border-border rounded-lg p-4">
+      <section className="space-y-5">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">JsonSyntax</h2>
+        <div className="max-w-xl bg-card border border-border/50 rounded-lg p-5">
           <JsonSyntax data={{
             project: 'clipfirst',
             version: 2.1,
@@ -3216,13 +3226,13 @@ export function Styleguide() {
       </section>
 
       {/* Timeline Slots */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-mono font-bold border-b border-border pb-2 text-blue-400">Timeline Slots</h2>
+      <section className="space-y-5">
+        <h2 className="text-lg font-mono font-semibold border-b border-border/40 pb-3 text-primary/80 tracking-wide">Timeline Slots</h2>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-6">
           {/* Empty */}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Empty</p>
+            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Empty</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s01" />
             </div>
@@ -3230,7 +3240,7 @@ export function Styleguide() {
 
           {/* Filled */}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Filled</p>
+            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Filled</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" />
             </div>
@@ -3238,7 +3248,7 @@ export function Styleguide() {
 
           {/* Active */}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Active (selected)</p>
+            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Active (selected)</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive />
             </div>
@@ -3246,7 +3256,7 @@ export function Styleguide() {
 
           {/* Drag Over */}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Drag Over</p>
+            <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Drag Over</p>
             <div className="h-28 flex gap-0.5">
               <TimelineSlotDemo label="@s03" isDragOver />
             </div>
@@ -3254,9 +3264,9 @@ export function Styleguide() {
         </div>
 
         {/* Multi-slot timeline with playhead */}
-        <div>
-          <p className="text-xs text-muted-foreground mb-2">Multi-slot timeline with playhead</p>
-          <div className="relative h-28 flex gap-0.5 border border-border/30 rounded overflow-hidden">
+        <div className="pt-2">
+          <p className="text-[11px] font-mono text-muted-foreground/70 mb-3 tracking-wide">Multi-slot timeline with playhead</p>
+          <div className="relative h-28 flex gap-0.5 border border-border/30 rounded-md overflow-hidden">
             <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
             <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
             <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
