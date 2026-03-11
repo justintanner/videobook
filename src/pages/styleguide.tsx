@@ -548,28 +548,18 @@ function CenterStageSection() {
 
 // ── CenterStage: IdleScreen ──
 
-const idleScreenMocks = [
-  { id: 'idle-welcome', label: 'welcome', props: { label: 'WAITING_FOR_INPUT...', badge: 'SRC: NULL' } },
-  { id: 'idle-empty-timeline', label: 'timeline-empty', props: { label: 'NO_VIDEO_CONTENT...', fillParent: true as const } },
-  { id: 'idle-no-badge', label: 'idle (no badge)', props: { label: 'STANDBY...' } },
-];
-
 function IdleScreenSection() {
   return (
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">CenterStage: IdleScreen</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Pulsing idle states shown when no asset is selected or the timeline is empty. Badge appears in welcome mode only.
+        Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {idleScreenMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{mock.label}</span>
-            <div className="h-[250px] bg-background border border-border/50 rounded overflow-hidden flex">
-              <IdleScreen {...mock.props} />
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">welcome</span>
+        <div className="h-[300px] bg-background border border-border/50 rounded overflow-hidden flex">
+          <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
+        </div>
       </div>
     </section>
   );
