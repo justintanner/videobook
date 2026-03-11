@@ -35,7 +35,7 @@ import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, MoreHorizontal,
   Zap, ArrowLeft, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
-  AlertTriangle, RotateCcw, AudioLines,
+  AlertTriangle, AudioLines,
 } from 'lucide-react';
 
 const colors = [
@@ -711,17 +711,17 @@ function FailedAssetReadoutSection() {
     <section className="mb-12">
       <h2 className="text-xl font-mono font-bold mb-2 text-blue-400">FailedAssetReadout (Center-Stage View)</h2>
       <p className="text-xs font-mono text-muted-foreground mb-6">
-        Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, model/tool
-        info, and optional retry button. Static replica below — the real component fetches diagnostic data via
-        useAssetDiagnostic hook which requires a live API connection.
+        Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, and model/tool
+        info. Static replica below — the real component fetches diagnostic data via useAssetDiagnostic hook which
+        requires a live API connection.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* With error + prompt + model + retry */}
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-            full diagnostic (with retry)
+            full diagnostic
           </span>
-          <div className="w-[350px] h-[280px] overflow-hidden">
+          <div className="w-[350px] h-[250px] overflow-hidden">
             <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30">
               <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
@@ -747,12 +747,6 @@ function FailedAssetReadoutSection() {
                     Tool: <span className="text-primary/70">generate_veo_video</span>
                   </span>
                 </div>
-              </div>
-              <div className="shrink-0 p-3 border-t border-red-500/30 bg-red-950/20">
-                <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded text-primary font-bold tracking-wider">
-                  <RotateCcw className="w-4 h-4" />
-                  RETRY
-                </button>
               </div>
             </div>
           </div>
@@ -863,7 +857,7 @@ function CollapsibleSidebarSection() {
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">left expanded</span>
           <div className="h-[200px] border border-border/50 rounded overflow-hidden flex">
-            <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}}>
+            <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
               <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
               <div className="flex-1 flex items-center justify-center">
                 <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
@@ -882,7 +876,7 @@ function CollapsibleSidebarSection() {
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">right expanded</span>
           <div className="h-[200px] border border-border/50 rounded overflow-hidden flex justify-end">
-            <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}}>
+            <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
               <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
               <div className="flex-1 flex items-center justify-center">
                 <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
