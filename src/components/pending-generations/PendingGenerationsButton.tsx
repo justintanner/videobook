@@ -18,9 +18,9 @@ function getStateStyles(state: GenerationState, showIncoming: boolean) {
   if (showIncoming) {
     return {
       outer: 'border-amber-400/70 gen-ready-glow',
+      chevronZone: 'text-amber-300/60 animate-pulse',
       promptBg: 'bg-black/50',
       promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.2)]',
-      chevron: 'text-amber-300/60 animate-pulse',
       commandText: 'text-amber-300/90',
       iconZone: 'text-amber-300',
     };
@@ -28,9 +28,9 @@ function getStateStyles(state: GenerationState, showIncoming: boolean) {
   if (state === 'ready') {
     return {
       outer: 'border-amber-500/50 gen-ready-steady',
+      chevronZone: 'text-amber-400/50 animate-pulse',
       promptBg: 'bg-black/50',
       promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.12)]',
-      chevron: 'text-amber-400/50 animate-pulse',
       commandText: 'text-amber-400/70',
       iconZone: 'text-amber-400/80',
     };
@@ -38,9 +38,9 @@ function getStateStyles(state: GenerationState, showIncoming: boolean) {
   if (state === 'generating') {
     return {
       outer: 'border-amber-500/30 gen-pending',
+      chevronZone: 'text-amber-500/40 animate-pulse',
       promptBg: 'bg-black/40',
       promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.08)]',
-      chevron: 'text-amber-500/40 animate-pulse',
       commandText: 'text-amber-500/60',
       iconZone: 'text-amber-500/60',
     };
@@ -48,9 +48,9 @@ function getStateStyles(state: GenerationState, showIncoming: boolean) {
   // inactive
   return {
     outer: 'border-amber-500/30 hover:border-amber-500/45',
+    chevronZone: 'text-amber-500/50 group-hover:text-amber-500/70 group-hover:animate-pulse',
     promptBg: 'bg-black/40 group-hover:bg-black/60',
     promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.05)] group-hover:shadow-[inset_0_0_10px_rgba(245,158,11,0.1)]',
-    chevron: 'text-amber-500/50 group-hover:text-amber-500/70 group-hover:animate-pulse',
     commandText: 'text-amber-500/70 group-hover:text-amber-500/90',
     iconZone: 'text-amber-500/60 group-hover:text-amber-500/80',
   };
@@ -83,38 +83,24 @@ export function PendingGenerationsButton({
   }, [flashKey, state]);
 
   const showIncoming = flashPhase === 'glow' || flashPhase === 'settle';
-
-  // Badge content based on state
-  const badgeContent = (() => {
-    if (state === 'inactive') return null;
-    if (state === 'ready' && generatingCount > 0)
-      return (
-        <>
-          {readyCount}
-          <span className="text-amber-500/60">/</span>
-          {generatingCount}
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500/80 animate-pulse ml-0.5 align-middle" />
-        </>
-      );
-    if (state === 'ready') return <>{readyCount}</>;
-    return (
-      <>
-        {generatingCount}
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500/80 animate-pulse ml-0.5 align-middle" />
-      </>
-    );
-  })();
-
   const commandText = showIncoming ? 'incoming!' : '/inbox';
   const styles = getStateStyles(state, showIncoming);
+
+  // Badge count
+  const badgeCount = (() => {
+    if (state === 'inactive') return null;
+    if (state === 'ready') return readyCount;
+    return generatingCount;
+  })();
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-0 h-8 border rounded overflow-hidden',
-        'transition-all cursor-pointer',
-        styles.outer
+        'group relative flex items-center gap-0 h-8 border rounded',
+        'transition-all duration-300 cursor-pointer',
+        styles.outer,
+        'focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none'
       )}
     >
       {/* Flash burst overlay */}
@@ -125,38 +111,51 @@ export function PendingGenerationsButton({
         />
       )}
 
+      {/* Chevron zone */}
+      <div className={cn(
+        'flex items-center justify-center h-full px-2 transition-colors',
+        styles.chevronZone
+      )}>
+        <span className="font-mono text-sm select-none -translate-y-1">&#x2304;</span>
+      </div>
+
       {/* Prompt zone */}
       <div
         className={cn(
-          'flex-1 flex items-center gap-1.5 px-2.5 h-full',
-          'rounded-l transition-all',
+          'flex-1 flex items-center gap-1.5 h-full px-2.5',
+          'transition-all',
           styles.promptBg,
           styles.promptShadow
         )}
       >
-        {/* Chevron */}
-        <span className={cn('font-mono text-sm select-none transition-all -translate-y-1', styles.chevron)}>&#x2304;</span>
-
-        {/* Command text */}
         <span className={cn('font-mono text-xs font-bold tracking-widest transition-colors', styles.commandText)}>
           {commandText}
         </span>
       </div>
 
       {/* Icon zone */}
-      <div className={cn('flex items-center justify-center gap-1 px-2 h-full transition-colors', styles.iconZone)}>
+      <div className={cn(
+        'flex items-center justify-center px-2 h-full transition-colors',
+        styles.iconZone
+      )}>
         <Mailbox className="w-3.5 h-3.5" />
-        {badgeContent && (
-          <span
-            className={cn(
-              'text-[10px] font-mono px-1.5 rounded inline-flex items-center gap-0.5',
-              state === 'ready' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-500/10 text-amber-500/50'
-            )}
-          >
-            {badgeContent}
-          </span>
-        )}
       </div>
+
+      {/* Badge — absolute top-right */}
+      {badgeCount != null && (
+        <span
+          className={cn(
+            'absolute -top-1.5 -right-1.5 z-20',
+            'text-[10px] font-mono font-bold leading-none px-1 min-w-[16px] h-4',
+            'rounded-full inline-flex items-center justify-center',
+            state === 'ready'
+              ? 'bg-amber-500 text-black'
+              : 'bg-amber-500/30 text-amber-400'
+          )}
+        >
+          {badgeCount}
+        </span>
+      )}
     </button>
   );
 }
