@@ -1487,7 +1487,7 @@ function Page10_GenSystem() {
             }>
               <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
                 <div className="space-y-4">
-                  <GenField label="Prompt" required actions={<button className="h-5 px-1.5 font-bold text-[10px] tracking-wider shrink-0 rounded border bg-primary/20 border-primary/40 text-primary flex items-center gap-1"><Sparkles className="w-3 h-3" /><span>Rewrite</span></button>}>
+                  <GenField label="Prompt" required actions={<CommandButton size="sm" command="/rewrite_prompt" icon={<Sparkles className="w-3 h-3" />} />}>
                     <GenTextarea value="A cinematic drone shot sweeping over a coastal city at golden hour" onChange={genNoop} rows={3} />
                   </GenField>
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
