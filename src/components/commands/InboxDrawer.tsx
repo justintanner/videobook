@@ -102,12 +102,12 @@ export function InboxDrawer({
     [activeVideoId, videos]
   );
 
-  const handleApprove = useCallback(
-    (video: MediaItem) => {
+  const handleMutate = useCallback(
+    (video: MediaItem, action: (v: MediaItem) => void) => {
       if (mutatingIds.has(video.id)) return;
       advanceActiveIfNeeded(video.id);
       setMutatingIds((prev) => new Set(prev).add(video.id));
-      onApprove(video);
+      action(video);
       setTimeout(() => {
         setMutatingIds((prev) => {
           const next = new Set(prev);
@@ -116,24 +116,17 @@ export function InboxDrawer({
         });
       }, 600);
     },
-    [mutatingIds, advanceActiveIfNeeded, onApprove]
+    [mutatingIds, advanceActiveIfNeeded]
+  );
+
+  const handleApprove = useCallback(
+    (video: MediaItem) => handleMutate(video, onApprove),
+    [handleMutate, onApprove]
   );
 
   const handleReject = useCallback(
-    (video: MediaItem) => {
-      if (mutatingIds.has(video.id)) return;
-      advanceActiveIfNeeded(video.id);
-      setMutatingIds((prev) => new Set(prev).add(video.id));
-      onReject(video);
-      setTimeout(() => {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(video.id);
-          return next;
-        });
-      }, 600);
-    },
-    [mutatingIds, advanceActiveIfNeeded, onReject]
+    (video: MediaItem) => handleMutate(video, onReject),
+    [handleMutate, onReject]
   );
 
   const activeIndex = videos.findIndex((v) => v.id === activeVideoId);
