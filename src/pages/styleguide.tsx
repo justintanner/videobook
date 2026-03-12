@@ -25,6 +25,7 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { CommandButton } from '@/components/ui/CommandButton';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -261,18 +262,12 @@ function HeaderBar() {
         <div className="w-px h-5 bg-border mx-1" />
 
         {/* Generations */}
-        <button className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors font-mono text-xs uppercase tracking-wider">
-          <Clapperboard className="w-3.5 h-3.5 shrink-0" />
-          <span>Generations</span>
-        </button>
+        <CommandButton command="/pending" icon={<Clapperboard className="w-3.5 h-3.5" />} />
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <button className="flex items-center gap-1.5 px-5 py-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors font-mono text-xs font-bold uppercase tracking-wider">
-          <Scissors className="w-3.5 h-3.5 shrink-0" />
-          <span>Clip It</span>
-        </button>
+        <CommandButton command="/render_final" icon={<Scissors className="w-3.5 h-3.5" />} />
       </div>
     </div>
   );
@@ -416,6 +411,26 @@ function ContextMenuDemo() {
         <ContextMenuCheckboxItem checked={showGuides} onCheckedChange={setShowGuides}>Show Guides</ContextMenuCheckboxItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Delete</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+function ClipContextMenu({ children }: { children: React.ReactNode }) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuLabel className="text-[10px] font-mono text-muted-foreground/60">clip</ContextMenuLabel>
+        <ContextMenuItem className="text-xs font-mono gap-2"><Play className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>preview</span></ContextMenuItem>
+        <ContextMenuItem className="text-xs font-mono gap-2"><Scissors className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>trim</span></ContextMenuItem>
+        <ContextMenuItem className="text-xs font-mono gap-2"><Download className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>download</span></ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-xs font-mono gap-2"><Copy className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>duplicate</span></ContextMenuItem>
+        <ContextMenuItem className="text-xs font-mono gap-2"><Mic className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>transcribe</span></ContextMenuItem>
+        <ContextMenuItem className="text-xs font-mono gap-2"><Film className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>render</span></ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-xs font-mono gap-2 text-destructive"><Trash2 className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>delete</span></ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -773,7 +788,7 @@ function Page1_FinalVideoPreview() {
               <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
             </div>
             <div className="pt-2 mt-auto">
-              <Button variant="dashed" className="w-full" size="sm"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
+              <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
             </div>
           </CollapsibleSidebar>
 
@@ -801,8 +816,12 @@ function Page1_FinalVideoPreview() {
           <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2">
-              <div className="w-full"><VideoCard item={demoVideoMock} /></div>
-              <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
+              <ClipContextMenu>
+                <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+              </ClipContextMenu>
+              <ClipContextMenu>
+                <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
+              </ClipContextMenu>
             </div>
           </CollapsibleSidebar>
         </div>
@@ -819,7 +838,7 @@ function Page1_FinalVideoPreview() {
           </div>
           <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
             <Music className="w-3.5 h-3.5" />
-            <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+            <span className="font-mono text-xs">/add_audio</span>
           </div>
         </div>
       </div>
@@ -841,7 +860,7 @@ function Page2_VideoGeneration() {
               <div className="w-full"><ImageCard item={demoImageMock} /></div>
             </div>
             <div className="pt-2 mt-auto">
-              <Button variant="dashed" className="w-full" size="sm"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
+              <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
             </div>
           </CollapsibleSidebar>
 
@@ -895,7 +914,7 @@ function Page2_VideoGeneration() {
                   <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
                     <FakeDropdown text="Kling 3.0" />
                     <button className="relative w-48 py-3 px-6 overflow-hidden font-bold text-sm tracking-[0.2em] uppercase border-2 rounded transition-all duration-300 bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_20px_rgba(34,211,238,0.5)]">
-                      <div className="relative flex items-center justify-center gap-2"><Zap className="w-5 h-5" /><span>GENERATE</span></div>
+                      <div className="relative flex items-center justify-center gap-2"><Zap className="w-5 h-5" /><span>/generate</span></div>
                     </button>
                   </div>
                 </div>
@@ -922,7 +941,7 @@ function Page2_VideoGeneration() {
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '35%' }} />
           </div>
           <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 h-14 min-h-14 border-border/40 text-muted-foreground/50">
-            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">/add_audio</span>
           </div>
         </div>
       </div>
@@ -1067,7 +1086,7 @@ function Page5_FormsControls() {
             <Tooltip><TooltipTrigger asChild><Button variant="outline" size="sm">Tooltip</Button></TooltipTrigger><TooltipContent><p>Neural interface ready</p></TooltipContent></Tooltip>
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded.' })}>Toast</Button>
-          <Button variant="dashed" size="sm" className="text-foreground"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
+          <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} />
         </div>
         <ContextMenuDemo />
         <div className="mt-2">
@@ -1371,13 +1390,13 @@ function Page9_AudioSystem() {
         <div>
           <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Empty (default)</p>
           <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-14 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">/add_audio</span>
           </div>
         </div>
         <div>
           <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Collapsed</p>
           <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">/add_audio</span>
           </div>
         </div>
         <div>
@@ -1437,7 +1456,7 @@ function Page9_AudioSystem() {
         </div>
         <div className="border-t border-zinc-800/60">
           <div className="border border-dashed flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40 m-0.5 rounded-md">
-            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">/add_audio</span>
           </div>
         </div>
       </div>

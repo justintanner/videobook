@@ -69,7 +69,7 @@ export function PendingGenerationsButton({
     if (showIncoming) return 'INCOMING!';
     if (state === 'ready') return 'READY';
     if (state === 'generating') return 'INCOMING';
-    return 'GENERATIONS';
+    return '/PENDING';
   })();
 
   return (
