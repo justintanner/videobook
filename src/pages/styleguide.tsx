@@ -1182,9 +1182,6 @@ function Page7_Trimming() {
             <span className="font-mono text-xs tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-3.5 py-1.5 text-[11px] font-bold tracking-[0.15em] uppercase border rounded text-zinc-400 border-zinc-600 hover:border-zinc-500 flex items-center gap-1.5">
-              <Play className="w-3 h-3" /><span>PREVIEW</span>
-            </button>
             <button className="px-3.5 py-1.5 text-[11px] font-bold tracking-[0.15em] uppercase border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_16px_rgba(34,211,238,0.4)] flex items-center gap-1.5">
               <Scissors className="w-3 h-3" /><span>TRIM</span>
             </button>
