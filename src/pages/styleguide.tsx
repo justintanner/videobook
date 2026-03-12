@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useRoute } from 'wouter';
 import { useWavesurfer } from '@wavesurfer/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -691,10 +692,38 @@ function useSlideScale() {
 }
 
 function useSlideNavigation(totalSlides: number) {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const goTo = useCallback((i: number) => setCurrentSlide(Math.max(0, Math.min(i, totalSlides - 1))), [totalSlides]);
-  const next = useCallback(() => setCurrentSlide((c) => Math.min(c + 1, totalSlides - 1)), [totalSlides]);
-  const prev = useCallback(() => setCurrentSlide((c) => Math.max(c - 1, 0)), []);
+  const [, params] = useRoute('/styleguide/:page');
+  const [, navigate] = useLocation();
+
+  const initialSlide = params?.page ? Math.max(0, Math.min(Number(params.page) - 1, totalSlides - 1)) : 0;
+  const [currentSlide, setCurrentSlide] = useState(initialSlide);
+
+  const updateUrl = useCallback((slide: number) => {
+    navigate(`/styleguide/${slide + 1}`, { replace: true });
+  }, [navigate]);
+
+  // Set URL on initial mount if no page param
+  useEffect(() => {
+    if (!params?.page) updateUrl(initialSlide);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const goTo = useCallback((i: number) => {
+    const clamped = Math.max(0, Math.min(i, totalSlides - 1));
+    setCurrentSlide(clamped);
+    updateUrl(clamped);
+  }, [totalSlides, updateUrl]);
+
+  const next = useCallback(() => setCurrentSlide((c) => {
+    const n = Math.min(c + 1, totalSlides - 1);
+    updateUrl(n);
+    return n;
+  }), [totalSlides, updateUrl]);
+
+  const prev = useCallback(() => setCurrentSlide((c) => {
+    const n = Math.max(c - 1, 0);
+    updateUrl(n);
+    return n;
+  }), [updateUrl]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

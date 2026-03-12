@@ -23,6 +23,7 @@ function Dashboard() {
 function App() {
   return (
     <Switch>
+      <Route path="/styleguide/:page" component={Styleguide} />
       <Route path="/styleguide" component={Styleguide} />
       <Route path="/" component={Dashboard} />
     </Switch>
