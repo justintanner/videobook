@@ -5,7 +5,7 @@ import type { GenerationState } from './types';
 
 type FlashPhase = 'idle' | 'burst' | 'glow' | 'settle';
 
-interface PendingGenerationsButtonProps {
+interface InboxButtonProps {
   state: GenerationState;
   generatingCount: number;
   readyCount: number;
@@ -55,13 +55,13 @@ function getStateStyles(state: GenerationState, showIncoming: boolean) {
   };
 }
 
-export function PendingGenerationsButton({
+export function InboxButton({
   state,
   generatingCount,
   readyCount,
   flashKey,
   onClick,
-}: PendingGenerationsButtonProps) {
+}: InboxButtonProps) {
   const [flashPhase, setFlashPhase] = useState<FlashPhase>('idle');
 
   // Flash sequence triggered by flashKey changes (skip initial 0), only in ready state

@@ -3,7 +3,7 @@ import { X, Check, Loader2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 
-interface PendingGenerationsDrawerProps {
+interface InboxDrawerProps {
   open: boolean;
   onClose: () => void;
   videos: MediaItem[];
@@ -12,14 +12,14 @@ interface PendingGenerationsDrawerProps {
   onReject: (video: MediaItem) => void;
 }
 
-export function PendingGenerationsDrawer({
+export function InboxDrawer({
   open,
   onClose,
   videos,
   pendingVideos,
   onApprove,
   onReject,
-}: PendingGenerationsDrawerProps) {
+}: InboxDrawerProps) {
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [allClear, setAllClear] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);

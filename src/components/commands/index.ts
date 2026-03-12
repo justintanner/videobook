@@ -1,5 +1,5 @@
 export { CommandButton } from './CommandButton';
 export { ExecuteButton } from './ExecuteButton';
-export { PendingGenerationsButton } from './PendingGenerationsButton';
-export { PendingGenerationsDrawer } from './PendingGenerationsDrawer';
+export { InboxButton } from './InboxButton';
+export { InboxDrawer } from './InboxDrawer';
 export type { ExecuteButtonState, GenerationState } from './types';

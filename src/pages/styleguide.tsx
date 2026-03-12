@@ -25,7 +25,7 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
-import { CommandButton, PendingGenerationsButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
+import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -253,7 +253,7 @@ function HeaderBar() {
         <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
 
         {/* Generations */}
-        <PendingGenerationsButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
+        <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
       </div>
 
       {/* Right side */}
@@ -1591,7 +1591,7 @@ function Page10_GenSystem() {
 function Page11_Workflow() {
   return (
     <div className="w-full h-full flex flex-col gap-6">
-      {/* Top row: Sidebars + PendingGenerations */}
+      {/* Top row: Sidebars + Inbox */}
       <div className="flex gap-6 h-[440px] shrink-0">
         {/* CollapsibleSidebar states */}
         <div className="flex-1 flex flex-col gap-2">
@@ -1633,13 +1633,13 @@ function Page11_Workflow() {
             </div>
           </div>
         </div>
-        {/* PendingGenerations */}
+        {/* Inbox */}
         <div className="w-[440px] shrink-0 flex flex-col gap-2">
           <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Inbox</h3>
           <div className="flex flex-wrap gap-4 mb-3">
             {pendingGenButtonStates.map((s) => (
               <div key={s.label} className="flex flex-col items-center gap-1">
-                <PendingGenerationsButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={() => {}} />
+                <InboxButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={() => {}} />
                 <span className="text-[9px] font-mono text-muted-foreground">{s.label}</span>
               </div>
             ))}
