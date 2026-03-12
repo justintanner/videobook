@@ -674,8 +674,7 @@ function useSlideScale() {
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const update = () => {
-      // Reserve vertical space for title above + nav below the 1080p slide
-      const s = Math.min(window.innerWidth / 1920, (window.innerHeight - 80) / 1080, 1);
+      const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080, 1);
       setScale(s);
     };
     update();
@@ -715,42 +714,10 @@ function useSlideNavigation(totalSlides: number) {
   return { currentSlide, goTo, next, prev };
 }
 
-const SLIDE_TITLES = [
-  'FINAL VIDEO PREVIEW',
-  'VIDEO GENERATION',
-  'MEDIA CATALOG',
-  'DESIGN SYSTEM',
-  'FORMS & CONTROLS',
-  'CENTER STAGE',
-  'VIDEO EDITING',
-  'AUDIO SYSTEM',
-  'GENERATION SYSTEM',
-  'WORKFLOW',
-];
-
 function Slide({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative w-[1920px] h-[1080px] bg-background overflow-hidden">
-      <div className="absolute inset-0">{children}</div>
-    </div>
-  );
-}
-
-function SlideNav({ current, total, onGoTo }: { current: number; total: number; onGoTo: (i: number) => void }) {
-  return (
-    <div className="flex gap-2 justify-center">
-      {Array.from({ length: total }, (_, i) => (
-        <button
-          key={i}
-          onClick={() => onGoTo(i)}
-          className={cn(
-            'w-2.5 h-2.5 rounded-full transition-all duration-300 border',
-            i === current
-              ? 'bg-primary border-primary shadow-[0_0_8px_rgba(0,255,255,0.6)] scale-125'
-              : 'bg-transparent border-primary/30 hover:border-primary/60'
-          )}
-        />
-      ))}
+      <div className="absolute inset-0 py-6 px-6">{children}</div>
     </div>
   );
 }
@@ -1655,7 +1622,8 @@ const SLIDE_PAGES = [
 
 export function Styleguide() {
   const scale = useSlideScale();
-  const { currentSlide, goTo } = useSlideNavigation(SLIDE_PAGES.length);
+  const { currentSlide, next, prev } = useSlideNavigation(SLIDE_PAGES.length);
+  const total = SLIDE_PAGES.length;
 
   return (
     <div
@@ -1667,22 +1635,13 @@ export function Styleguide() {
       }}
     >
       <Toaster />
-      {/* Scaled wrapper: title + slide + nav */}
+      {/* Scaled wrapper */}
       <div
         style={{
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
         }}
       >
-        {/* Title + page number row — outside the 1080p window */}
-        <div className="flex justify-between items-end px-1 pb-2" style={{ width: 1920 }}>
-          <span className="text-[11px] font-mono font-bold tracking-[0.2em] text-primary/60 uppercase">
-            {SLIDE_TITLES[currentSlide]}
-          </span>
-          <span className="text-[11px] font-mono font-bold tracking-wider text-primary/40">
-            {String(currentSlide + 1).padStart(2, '0')}/{String(SLIDE_PAGES.length).padStart(2, '0')}
-          </span>
-        </div>
         {/* 1080p slide area */}
         <div className="relative" style={{ width: 1920, height: 1080 }}>
           {SLIDE_PAGES.map((PageComponent, i) => (
@@ -1700,10 +1659,20 @@ export function Styleguide() {
             </div>
           ))}
         </div>
-        {/* Carousel nav — outside the 1080p window */}
-        <div className="pt-3" style={{ width: 1920 }}>
-          <SlideNav current={currentSlide} total={SLIDE_PAGES.length} onGoTo={goTo} />
-        </div>
+      </div>
+      {/* Fixed page counter — outside scaled wrapper, bottom-right of viewport */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 font-mono text-[11px] text-primary/40 select-none">
+        {currentSlide > 0 ? (
+          <button onClick={prev} className="pointer-events-auto hover:text-primary/70 transition-colors">&larr;</button>
+        ) : (
+          <span className="invisible">&larr;</span>
+        )}
+        <span>{currentSlide + 1}/{total}</span>
+        {currentSlide < total - 1 ? (
+          <button onClick={next} className="pointer-events-auto hover:text-primary/70 transition-colors">&rarr;</button>
+        ) : (
+          <span className="invisible">&rarr;</span>
+        )}
       </div>
     </div>
   );
