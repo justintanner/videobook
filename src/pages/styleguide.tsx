@@ -1660,11 +1660,11 @@ function Page11_Workflow() {
 const SLIDE_PAGES = [
   Page1_FinalVideoPreview,
   Page2_VideoGeneration,
+  Page7_Trimming,
   Page3_MediaCatalog,
   Page4_DesignSystem,
   Page5_FormsControls,
   Page6_CenterStage,
-  Page7_Trimming,
   Page8_VideoEditing,
   Page9_AudioSystem,
   Page10_GenSystem,
