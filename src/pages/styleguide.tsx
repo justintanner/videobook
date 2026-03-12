@@ -1176,16 +1176,12 @@ function Page7_Trimming() {
   return (
     <div className="w-full h-full flex flex-col">
       <div className="h-full bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 flex flex-col">
-        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
-          <div className="flex items-center gap-2.5 text-zinc-400">
-            <Scissors className="w-4 h-4" />
-            <span className="font-mono text-xs tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
+        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 relative">
+          <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Editing</span>
+          <div className="absolute inset-x-0 flex justify-center pointer-events-none">
+            <span className="font-mono text-xs tracking-widest text-zinc-400">@hero-intro</span>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="px-3.5 py-1.5 text-[11px] font-bold tracking-[0.15em] uppercase border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_16px_rgba(34,211,238,0.4)] flex items-center gap-1.5">
-              <Scissors className="w-3 h-3" /><span>TRIM</span>
-            </button>
-          </div>
+          <CloseButton onClick={() => {}} />
         </div>
         <div className="flex flex-1 overflow-hidden min-h-0">
           <div className="flex-1 flex flex-col px-4 py-3 overflow-hidden min-w-0">
@@ -1247,7 +1243,7 @@ function Page7_Trimming() {
               </div>
             </div>
           </div>
-          <div className="w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+          <div className="relative w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
             <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
               <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
               <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
@@ -1265,6 +1261,9 @@ function Page7_Trimming() {
                   );
                 })}
               </div>
+            </div>
+            <div className="absolute bottom-3 right-3 z-10">
+              <CommandButton command="/trim" icon={<Scissors className="w-5 h-5" />} size="lg" />
             </div>
           </div>
         </div>
