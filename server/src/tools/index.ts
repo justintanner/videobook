@@ -36,6 +36,7 @@ import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { editTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
+import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -82,5 +83,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     getTimelineDef(fs),
     editTimelineDef(fs),
     renderTimelineDef(fs),
+    redesignStyleguidePageDef(fs),
   ];
 }
