@@ -30,7 +30,7 @@ import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
-import { CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
+import { CloseButton, GenPanel, ModelSelector } from '@/components/gen/ui';
 import { PendingGenerationsButton } from '@/components/pending-generations/PendingGenerationsButton';
 import type { GenerationState } from '@/components/pending-generations/PendingGenerationsButton';
 import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
@@ -438,7 +438,7 @@ function ExecuteButtonStatesDemo() {
         <div key={state} className="flex items-center gap-4">
           <span className="text-[11px] font-mono text-muted-foreground/70 w-24 shrink-0">{state}</span>
           <div className="flex-1 max-w-[240px]">
-            <ExecuteButton state={state} onClick={() => {}} disabledReason="Fill required fields" />
+            <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" state={state} disabledReason="Fill required fields" />
           </div>
         </div>
       ))}
@@ -906,9 +906,7 @@ function Page2_VideoGeneration() {
                   </div>
                   <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
                     <FakeDropdown text="Kling 3.0" />
-                    <button className="relative w-48 py-3 px-6 overflow-hidden font-bold text-sm tracking-[0.2em] uppercase border-2 rounded transition-all duration-300 bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_20px_rgba(34,211,238,0.5)]">
-                      <div className="relative flex items-center justify-center gap-2"><Zap className="w-5 h-5" /><span>/generate</span></div>
-                    </button>
+                    <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" />
                   </div>
                 </div>
               </div>
@@ -1083,7 +1081,7 @@ function Page5_FormsControls() {
         </div>
         <ContextMenuDemo />
         <div className="mt-2">
-          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">ExecuteButton</h4>
+          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">CommandButton lg</h4>
           <ExecuteButtonStatesDemo />
         </div>
         <div className="flex items-center gap-4 mt-2">
@@ -1490,7 +1488,7 @@ function Page10_GenSystem() {
               <div className="flex items-center gap-4">
                 <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
                 <div className="flex-1" />
-                <div className="w-48"><ExecuteButton state="ready" onClick={genNoop} /></div>
+                <div className="w-48"><CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" state="ready" /></div>
               </div>
             }>
               <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
