@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { Loader2, Zap, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { ExecuteButtonState } from '../types';
+import type { ExecuteButtonState } from './types';
 
 interface ExecuteButtonProps {
   state: ExecuteButtonState;

@@ -45,8 +45,6 @@ export interface ResolvedAsset {
   type: 'image' | 'video';
 }
 
-export type ExecuteButtonState = 'disabled' | 'ready' | 'charging' | 'submitting' | 'queued' | 'processing' | 'success';
-
 // Element group field pattern: element1_slugs, element2_name, element3_desc, etc.
 export const ELEMENT_FIELD_RE = /^element(\d+)_(slugs|name|desc)$/;
 export const MAX_ELEMENT_GROUPS = 3;

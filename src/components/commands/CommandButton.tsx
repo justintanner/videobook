@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { ExecuteButtonState } from '@/components/gen/types';
+import type { ExecuteButtonState } from './types';
 
 const sizes = {
   sm: {

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Mailbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { GenerationState } from './types';
 
 type FlashPhase = 'idle' | 'burst' | 'glow' | 'settle';
-
-export type GenerationState = 'inactive' | 'generating' | 'ready';
 
 interface PendingGenerationsButtonProps {
   state: GenerationState;

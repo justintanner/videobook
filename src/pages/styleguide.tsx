@@ -25,15 +25,13 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
-import { CommandButton } from '@/components/ui/CommandButton';
+import { CommandButton, PendingGenerationsButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { CloseButton, GenPanel, ModelSelector } from '@/components/gen/ui';
-import { PendingGenerationsButton } from '@/components/pending-generations/PendingGenerationsButton';
-import type { GenerationState } from '@/components/pending-generations/PendingGenerationsButton';
-import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
+import type { ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
@@ -1280,9 +1278,12 @@ function Page8_VideoEditing() {
       <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
         {/* Landscape */}
         <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <RatioToggle active="16:9" />
-            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
+            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex-1 bg-black flex items-center justify-center min-h-0">
             <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
@@ -1290,9 +1291,12 @@ function Page8_VideoEditing() {
         </div>
         {/* Portrait */}
         <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <RatioToggle active="9:16" />
-            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
+            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
             <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
@@ -1300,9 +1304,12 @@ function Page8_VideoEditing() {
         </div>
         {/* Square */}
         <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <RatioToggle active="1:1" />
-            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
+            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
             <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
@@ -1310,9 +1317,12 @@ function Page8_VideoEditing() {
         </div>
         {/* Error */}
         <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <RatioToggle active="16:9" />
-            <span className="font-mono text-[10px] text-muted-foreground">@broken</span>
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@broken</span>
+            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex-1 bg-black flex flex-col items-center justify-center gap-1 text-destructive min-h-0">
             <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
