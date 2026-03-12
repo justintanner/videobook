@@ -1482,7 +1482,7 @@ function Page10_GenSystem() {
               <div className="flex items-center gap-4">
                 <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
                 <div className="flex-1" />
-                <div className="w-48"><CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" state="ready" /></div>
+                <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" state="ready" />
               </div>
             }>
               <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
@@ -1568,7 +1568,7 @@ function Page10_GenSystem() {
             </div>
           </div>
           <div className="relative px-6 py-3 border-t border-primary/20">
-            <button className="w-full py-2 text-sm font-bold tracking-[0.2em] uppercase bg-primary/20 text-primary border border-primary/40 rounded-lg shadow-[0_0_25px_rgba(0,255,255,0.25)]">Apply Settings</button>
+            <CommandButton command="/apply" icon={<Check className="w-5 h-5" />} size="lg" className="w-full" />
           </div>
         </div>
       </div>
