@@ -30,3 +30,9 @@ dist-ssr
 
 # Styleguide fixture media
 public/fixtures/
+
+# Generated output
+output/
+
+# Claude Code
+.claude/worktrees/
