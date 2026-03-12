@@ -73,20 +73,43 @@ const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> =
   },
 };
 
-const shadowColor = 'rgba(34,211,238,0.5)';
+const variants = {
+  default: {
+    shadow: 'rgba(34,211,238,0.5)',
+    chevron: 'text-primary/40 group-hover:text-primary/50',
+    chevronDown: 'text-primary/40 group-hover:text-primary/60',
+    cursorBg: 'bg-primary/40',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
+    text: 'text-primary/70 group-hover:text-primary/90',
+    icon: 'text-primary/80 group-hover:text-primary',
+  },
+  violet: {
+    shadow: 'rgba(139,92,246,0.5)',
+    chevron: 'text-violet-400/40 group-hover:text-violet-400/50',
+    chevronDown: 'text-violet-400/40 group-hover:text-violet-400/60',
+    cursorBg: 'bg-violet-400/40',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(139,92,246,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.12)]',
+    text: 'text-violet-400/70 group-hover:text-violet-400/90',
+    icon: 'text-violet-400/80 group-hover:text-violet-400',
+  },
+} as const;
 
 interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   command: string;
   icon: ReactNode;
   chevron?: 'right' | 'down';
   size?: 'sm' | 'default' | 'lg';
+  variant?: keyof typeof variants;
   state?: ExecuteButtonState;
   disabledReason?: string;
   className?: string;
 }
 
-export function CommandButton({ command, icon, chevron = 'right', size = 'default', state, disabledReason, className, ...props }: CommandButtonProps) {
+export function CommandButton({ command, icon, chevron = 'right', size = 'default', variant = 'default', state, disabledReason, className, ...props }: CommandButtonProps) {
   const s = sizes[size];
+  const v = variants[variant];
   const isDisabled = state === 'disabled';
   const isLoading = state != null && ['charging', 'submitting', 'queued', 'processing'].includes(state);
   const isSuccess = state === 'success';
@@ -121,7 +144,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         <div
           className="absolute inset-0 pointer-events-none z-0"
           style={{
-            background: `linear-gradient(90deg, transparent, ${shadowColor}, transparent)`,
+            background: `linear-gradient(90deg, transparent, ${v.shadow}, transparent)`,
             backgroundSize: '200% 100%',
             animation: 'showcase-charge 1s linear infinite',
           }}
@@ -134,7 +157,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
           <div
             className={cn('absolute inset-y-0', s.scanWidth)}
             style={{
-              background: `linear-gradient(90deg, transparent, ${shadowColor}, transparent)`,
+              background: `linear-gradient(90deg, transparent, ${v.shadow}, transparent)`,
               animation: 'showcase-scan 2s linear infinite',
             }}
           />
@@ -151,13 +174,14 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         isDisabled
           ? 'text-zinc-600'
           : chevron === 'down'
-            ? 'text-primary/40 group-hover:text-primary/60'
-            : 'text-primary/40 group-hover:text-primary/50'
+            ? v.chevronDown
+            : v.chevron
       )}>
         {chevron === 'right' && !state && (
           <span
             className={cn(
-              'absolute w-px bg-primary/40',
+              'absolute w-px',
+              v.cursorBg,
               s.cursor,
               'opacity-0 group-hover:opacity-100 transition-opacity',
               'group-hover:animate-[cursor-blink_1s_step-end_infinite]'
@@ -179,10 +203,8 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         className={cn(
           'relative z-10 flex-1 flex items-center h-full',
           s.promptPad,
-          'bg-black/40',
-          'shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
-          !isDisabled && 'group-hover:bg-black/60',
-          !isDisabled && 'group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
+          v.promptBg,
+          !isDisabled && v.promptHover,
           'transition-all'
         )}
       >
@@ -190,7 +212,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         <span className={cn(
           'font-mono font-bold transition-colors',
           s.text,
-          state ? 'text-current' : 'text-primary/70 group-hover:text-primary/90'
+          state ? 'text-current' : v.text
         )}>
           {displayCommand}
         </span>
@@ -209,7 +231,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
       <div className={cn(
         'relative z-10 flex items-center justify-center h-full transition-colors',
         s.iconPad,
-        state ? 'text-current' : 'text-primary/80 group-hover:text-primary'
+        state ? 'text-current' : v.icon
       )}>
         {displayIcon}
       </div>
@@ -219,7 +241,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         <div
           className="absolute inset-0 pointer-events-none rounded z-0"
           style={{
-            boxShadow: `inset 0 0 15px ${shadowColor}`,
+            boxShadow: `inset 0 0 15px ${v.shadow}`,
             animation: 'showcase-slot-pulse 2s ease-in-out infinite',
           }}
         />

@@ -1352,8 +1352,8 @@ function Page9_AudioSystem() {
             <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">VOCALS</span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_12px_rgba(34,211,238,0.3)]"><Scissors className="w-3 h-3 inline mr-1" />TRIM</button>
-            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded bg-violet-500/20 text-violet-400 border-violet-500/40"><Mic className="w-3 h-3 inline mr-1" />ISOLATE VOCALS</button>
+            <CommandButton command="/trim_audio" icon={<Scissors className="w-3.5 h-3.5" />} className="bg-cyan-500/10" />
+            <CommandButton command="/isolate_vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" className="bg-violet-500/20 border-violet-500/30" />
           </div>
         </div>
         <div className="relative px-5 py-3" style={{ minHeight: 100 }}>
