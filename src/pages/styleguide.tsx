@@ -674,7 +674,8 @@ function useSlideScale() {
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const update = () => {
-      const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080, 1);
+      // Reserve vertical space for title above + nav below the 1080p slide
+      const s = Math.min(window.innerWidth / 1920, (window.innerHeight - 80) / 1080, 1);
       setScale(s);
     };
     update();
@@ -727,33 +728,17 @@ const SLIDE_TITLES = [
   'WORKFLOW',
 ];
 
-function Slide({ title, pageNum, totalPages, children }: { title: string; pageNum: number; totalPages: number; children: React.ReactNode }) {
+function Slide({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative w-[1920px] h-[1080px] bg-background overflow-hidden">
-      {/* Corner bracket accents */}
-      <div className="absolute top-0 left-0 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
-      <div className="absolute top-0 right-0 w-8 h-8 border-r-2 border-t-2 border-primary/40" />
-      <div className="absolute bottom-0 left-0 w-8 h-8 border-l-2 border-b-2 border-primary/40" />
-      <div className="absolute bottom-0 right-0 w-8 h-8 border-r-2 border-b-2 border-primary/40" />
-      {/* Title label */}
-      <div className="absolute top-4 left-5 z-50">
-        <span className="text-[11px] font-mono font-bold tracking-[0.2em] text-primary/60 uppercase">{title}</span>
-      </div>
-      {/* Page number */}
-      <div className="absolute top-4 right-5 z-50">
-        <span className="text-[11px] font-mono font-bold tracking-wider text-primary/40">
-          {String(pageNum).padStart(2, '0')}/{String(totalPages).padStart(2, '0')}
-        </span>
-      </div>
-      {/* Content */}
-      <div className="absolute inset-0 pt-10 pb-4 px-10">{children}</div>
+      <div className="absolute inset-0">{children}</div>
     </div>
   );
 }
 
 function SlideNav({ current, total, onGoTo }: { current: number; total: number; onGoTo: (i: number) => void }) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+    <div className="flex gap-2 justify-center">
       {Array.from({ length: total }, (_, i) => (
         <button
           key={i}
@@ -1674,7 +1659,7 @@ export function Styleguide() {
 
   return (
     <div
-      className="w-screen h-screen overflow-hidden relative"
+      className="w-screen h-screen overflow-hidden relative flex items-center justify-center"
       style={{
         backgroundColor: '#0a0c10',
         backgroundImage: 'radial-gradient(circle, rgba(0,212,255,0.08) 1px, transparent 1px)',
@@ -1682,32 +1667,44 @@ export function Styleguide() {
       }}
     >
       <Toaster />
-      {/* Centered scaled slide */}
+      {/* Scaled wrapper: title + slide + nav */}
       <div
-        className="absolute top-1/2 left-1/2"
         style={{
-          width: 1920,
-          height: 1080,
-          transform: `translate(-50%, -50%) scale(${scale})`,
+          transform: `scale(${scale})`,
           transformOrigin: 'center center',
         }}
       >
-        {SLIDE_PAGES.map((PageComponent, i) => (
-          <div
-            key={i}
-            className="absolute top-0 left-0 transition-opacity duration-500"
-            style={{
-              opacity: i === currentSlide ? 1 : 0,
-              pointerEvents: i === currentSlide ? 'auto' : 'none',
-            }}
-          >
-            <Slide title={SLIDE_TITLES[i]} pageNum={i + 1} totalPages={SLIDE_PAGES.length}>
-              <PageComponent />
-            </Slide>
-          </div>
-        ))}
+        {/* Title + page number row — outside the 1080p window */}
+        <div className="flex justify-between items-end px-1 pb-2" style={{ width: 1920 }}>
+          <span className="text-[11px] font-mono font-bold tracking-[0.2em] text-primary/60 uppercase">
+            {SLIDE_TITLES[currentSlide]}
+          </span>
+          <span className="text-[11px] font-mono font-bold tracking-wider text-primary/40">
+            {String(currentSlide + 1).padStart(2, '0')}/{String(SLIDE_PAGES.length).padStart(2, '0')}
+          </span>
+        </div>
+        {/* 1080p slide area */}
+        <div className="relative" style={{ width: 1920, height: 1080 }}>
+          {SLIDE_PAGES.map((PageComponent, i) => (
+            <div
+              key={i}
+              className="absolute top-0 left-0 transition-opacity duration-500"
+              style={{
+                opacity: i === currentSlide ? 1 : 0,
+                pointerEvents: i === currentSlide ? 'auto' : 'none',
+              }}
+            >
+              <Slide>
+                <PageComponent />
+              </Slide>
+            </div>
+          ))}
+        </div>
+        {/* Carousel nav — outside the 1080p window */}
+        <div className="pt-3" style={{ width: 1920 }}>
+          <SlideNav current={currentSlide} total={SLIDE_PAGES.length} onGoTo={goTo} />
+        </div>
       </div>
-      <SlideNav current={currentSlide} total={SLIDE_PAGES.length} onGoTo={goTo} />
     </div>
   );
 }
