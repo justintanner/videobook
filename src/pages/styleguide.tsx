@@ -37,7 +37,7 @@ import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
-  Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
+  Film, Grid3x3, Scissors, Music, MoreHorizontal,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
@@ -252,17 +252,10 @@ function HeaderBar() {
         </div>
 
         {/* Project selector */}
-        <button className="flex items-center gap-1.5 px-4 py-1.5 rounded border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors font-mono text-sm">
-          <FolderOpen className="w-3.5 h-3.5 shrink-0" />
-          <span>vax</span>
-          <ChevronDown className="w-3 h-3 opacity-50" />
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-5 bg-border mx-1" />
+        <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
 
         {/* Generations */}
-        <CommandButton command="/pending" icon={<Clapperboard className="w-3.5 h-3.5" />} />
+        <PendingGenerationsButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
       </div>
 
       {/* Right side */}
@@ -1640,7 +1633,7 @@ function Page11_Workflow() {
         </div>
         {/* PendingGenerations */}
         <div className="w-[440px] shrink-0 flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Pending Generations</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Inbox</h3>
           <div className="flex flex-wrap gap-4 mb-3">
             {pendingGenButtonStates.map((s) => (
               <div key={s.label} className="flex flex-col items-center gap-1">

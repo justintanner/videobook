@@ -14,6 +14,48 @@ interface PendingGenerationsButtonProps {
   onClick: () => void;
 }
 
+function getStateStyles(state: GenerationState, showIncoming: boolean) {
+  if (showIncoming) {
+    return {
+      outer: 'border-amber-400/70 gen-ready-glow',
+      promptBg: 'bg-black/50',
+      promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.2)]',
+      chevron: 'text-amber-300/60 animate-pulse',
+      commandText: 'text-amber-300/90',
+      iconZone: 'text-amber-300',
+    };
+  }
+  if (state === 'ready') {
+    return {
+      outer: 'border-amber-500/50 gen-ready-steady',
+      promptBg: 'bg-black/50',
+      promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.12)]',
+      chevron: 'text-amber-400/50 animate-pulse',
+      commandText: 'text-amber-400/70',
+      iconZone: 'text-amber-400/80',
+    };
+  }
+  if (state === 'generating') {
+    return {
+      outer: 'border-amber-500/30 gen-pending',
+      promptBg: 'bg-black/40',
+      promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.08)]',
+      chevron: 'text-amber-500/40 animate-pulse',
+      commandText: 'text-amber-500/60',
+      iconZone: 'text-amber-500/60',
+    };
+  }
+  // inactive
+  return {
+    outer: 'border-amber-500/30 hover:border-amber-500/45',
+    promptBg: 'bg-black/40 group-hover:bg-black/60',
+    promptShadow: 'shadow-[inset_0_0_10px_rgba(245,158,11,0.05)] group-hover:shadow-[inset_0_0_10px_rgba(245,158,11,0.1)]',
+    chevron: 'text-amber-500/50 group-hover:text-amber-500/70 group-hover:animate-pulse',
+    commandText: 'text-amber-500/70 group-hover:text-amber-500/90',
+    iconZone: 'text-amber-500/60 group-hover:text-amber-500/80',
+  };
+}
+
 export function PendingGenerationsButton({
   state,
   generatingCount,
@@ -55,7 +97,6 @@ export function PendingGenerationsButton({
         </>
       );
     if (state === 'ready') return <>{readyCount}</>;
-    // generating state
     return (
       <>
         {generatingCount}
@@ -64,54 +105,58 @@ export function PendingGenerationsButton({
     );
   })();
 
-  // Label based on state
-  const label = (() => {
-    if (showIncoming) return 'INCOMING!';
-    if (state === 'ready') return 'READY';
-    if (state === 'generating') return 'INCOMING';
-    return '/PENDING';
-  })();
+  const commandText = showIncoming ? 'incoming!' : '/inbox';
+  const styles = getStateStyles(state, showIncoming);
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        'relative flex items-center justify-center gap-1.5 px-3 py-1',
-        'text-xs font-mono font-bold tracking-widest uppercase',
-        'border rounded transition-colors',
-        // Flash glow override (transient, heavy animation)
-        showIncoming && 'border-amber-400/70 text-amber-300 gen-ready-glow',
-        // Ready: static amber glow
-        !showIncoming && state === 'ready' && 'border-amber-500/50 text-amber-400 gen-ready-steady',
-        // Generating: subtle pulse
-        !showIncoming && state === 'generating' && 'border-amber-500/30 text-amber-500/60 gen-pending',
-        // Inactive: muted but hover-responsive
-        !showIncoming && state === 'inactive' && 'border-muted/30 text-muted-foreground/50 hover:border-muted/50'
+        'group relative flex items-center gap-0 h-8 border rounded overflow-hidden',
+        'transition-all cursor-pointer',
+        styles.outer
       )}
     >
       {/* Flash burst overlay */}
       {flashPhase === 'burst' && (
         <div
-          className="absolute inset-0 rounded bg-white/30 pointer-events-none"
+          className="absolute inset-0 rounded bg-white/30 pointer-events-none z-10"
           style={{ animation: 'gen-flash-burst 200ms ease-out forwards' }}
         />
       )}
 
-      <Clapperboard className="w-3.5 h-3.5" />
+      {/* Prompt zone */}
+      <div
+        className={cn(
+          'flex-1 flex items-center gap-1.5 px-2.5 h-full',
+          'rounded-l transition-all',
+          styles.promptBg,
+          styles.promptShadow
+        )}
+      >
+        {/* Chevron */}
+        <span className={cn('font-mono text-sm select-none transition-all -translate-y-1', styles.chevron)}>&#x2304;</span>
 
-      <span>{label}</span>
-
-      {/* Combined badge */}
-      {badgeContent && (
-        <span
-          className={cn(
-            'text-[10px] font-mono px-1.5 rounded inline-flex items-center gap-0.5',
-            state === 'ready' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-500/10 text-amber-500/50'
-          )}
-        >
-          {badgeContent}
+        {/* Command text */}
+        <span className={cn('font-mono text-xs font-bold tracking-widest transition-colors', styles.commandText)}>
+          {commandText}
         </span>
-      )}
+      </div>
+
+      {/* Icon zone */}
+      <div className={cn('flex items-center justify-center gap-1 px-2 h-full transition-colors', styles.iconZone)}>
+        <Clapperboard className="w-3.5 h-3.5" />
+        {badgeContent && (
+          <span
+            className={cn(
+              'text-[10px] font-mono px-1.5 rounded inline-flex items-center gap-0.5',
+              state === 'ready' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-500/10 text-amber-500/50'
+            )}
+          >
+            {badgeContent}
+          </span>
+        )}
+      </div>
     </button>
   );
 }

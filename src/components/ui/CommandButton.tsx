@@ -4,10 +4,11 @@ import { cn } from '@/lib/utils';
 interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   command: string;
   icon: ReactNode;
+  chevron?: 'right' | 'down';
   className?: string;
 }
 
-export function CommandButton({ command, icon, className, ...props }: CommandButtonProps) {
+export function CommandButton({ command, icon, chevron = 'right', className, ...props }: CommandButtonProps) {
   return (
     <button
       className={cn(
@@ -29,19 +30,28 @@ export function CommandButton({ command, icon, className, ...props }: CommandBut
         )}
       >
         {/* Chevron */}
-        <span className="text-primary/40 group-hover:text-primary/50 font-mono text-sm select-none transition-colors">&rsaquo;</span>
+        <span className={cn(
+          'font-mono text-sm select-none transition-all',
+          chevron === 'down'
+            ? '-translate-y-1 text-primary/40 group-hover:text-primary/60 group-hover:animate-pulse'
+            : 'text-primary/40 group-hover:text-primary/50'
+        )}>
+          {chevron === 'down' ? '\u2304' : '\u203A'}
+        </span>
 
-        {/* Blinking cursor */}
-        <span
-          className={cn(
-            'w-px h-3 bg-primary/40',
-            'opacity-0 group-hover:opacity-100 transition-opacity',
-            'group-hover:animate-[cursor-blink_1s_step-end_infinite]'
-          )}
-        />
+        {/* Blinking cursor (right chevron only) */}
+        {chevron === 'right' && (
+          <span
+            className={cn(
+              'w-px h-3 bg-primary/40',
+              'opacity-0 group-hover:opacity-100 transition-opacity',
+              'group-hover:animate-[cursor-blink_1s_step-end_infinite]'
+            )}
+          />
+        )}
 
         {/* Command text */}
-        <span className="font-mono text-xs font-bold uppercase tracking-widest text-primary/70 group-hover:text-primary/90 transition-colors">
+        <span className="font-mono text-xs font-bold tracking-widest text-primary/70 group-hover:text-primary/90 transition-colors">
           {command}
         </span>
       </div>
