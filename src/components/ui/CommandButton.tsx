@@ -7,6 +7,7 @@ import type { ExecuteButtonState } from '@/components/gen/types';
 const sizes = {
   default: {
     button: 'h-8 border border-primary/25',
+    chevronPad: 'px-2',
     promptPad: 'px-2.5 gap-1.5',
     iconPad: 'px-2',
     text: 'text-xs tracking-widest',
@@ -15,6 +16,7 @@ const sizes = {
   },
   lg: {
     button: 'h-12 border-2 border-cyan-400 bg-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)]',
+    chevronPad: 'px-3',
     promptPad: 'px-4 gap-2',
     iconPad: 'px-3',
     text: 'text-sm tracking-[0.2em]',
@@ -23,14 +25,25 @@ const sizes = {
   },
 } as const;
 
-const stateCommands: Record<ExecuteButtonState, string | null> = {
-  disabled: null,
-  ready: null,
-  charging: '/charging...',
-  submitting: '/initializing...',
-  queued: '/in_queue...',
-  processing: '/generating...',
-  success: '/complete',
+const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> = {
+  default: {
+    disabled: null,
+    ready: null,
+    charging: '/charging...',
+    submitting: '/initializing...',
+    queued: '/in_queue...',
+    processing: '/generating...',
+    success: '/complete',
+  },
+  lg: {
+    disabled: null,
+    ready: null,
+    charging: null,
+    submitting: null,
+    queued: null,
+    processing: 'generating',
+    success: 'complete',
+  },
 };
 
 const shadowColor = 'rgba(34,211,238,0.5)';
@@ -50,7 +63,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
   const isDisabled = state === 'disabled';
   const isLoading = state != null && ['charging', 'submitting', 'queued', 'processing'].includes(state);
   const isSuccess = state === 'success';
-  const displayCommand = state ? (stateCommands[state] ?? command) : command;
+  const displayCommand = state ? (stateCommands[size][state] ?? command) : command;
 
   let displayIcon = icon;
   if (isLoading) displayIcon = <Loader2 className="w-5 h-5 animate-spin" />;
@@ -104,43 +117,48 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
       {/* Success flash */}
       {isSuccess && <div className="absolute inset-0 bg-green-500/30 animate-[showcase-success_0.5s_ease-out] pointer-events-none z-0" />}
 
-      {/* Prompt zone */}
-      <div
-        className={cn(
-          'relative z-10 flex-1 flex items-center h-full',
-          s.promptPad,
-          'bg-black/40 rounded-l',
-          'shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
-          !isDisabled && 'group-hover:bg-black/60',
-          !isDisabled && 'group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
-          'transition-all'
-        )}
-      >
-        {/* Chevron */}
-        <span className={cn(
-          'font-mono select-none transition-all',
-          s.chevron,
-          isDisabled
-            ? 'text-zinc-600'
-            : chevron === 'down'
-              ? '-translate-y-1 text-primary/40 group-hover:text-primary/60 group-hover:animate-pulse'
-              : 'text-primary/40 group-hover:text-primary/50'
-        )}>
-          {chevron === 'down' ? '\u2304' : '\u203A'}
-        </span>
-
-        {/* Blinking cursor (right chevron only, hide during state transitions) */}
+      {/* Chevron zone */}
+      <div className={cn(
+        'relative z-10 flex items-center justify-center h-full transition-colors',
+        s.chevronPad,
+        isDisabled
+          ? 'text-zinc-600'
+          : chevron === 'down'
+            ? 'text-primary/40 group-hover:text-primary/60'
+            : 'text-primary/40 group-hover:text-primary/50'
+      )}>
         {chevron === 'right' && !state && (
           <span
             className={cn(
-              'w-px bg-primary/40',
+              'absolute w-px bg-primary/40',
               s.cursor,
               'opacity-0 group-hover:opacity-100 transition-opacity',
               'group-hover:animate-[cursor-blink_1s_step-end_infinite]'
             )}
           />
         )}
+        <span className={cn(
+          'font-mono select-none transition-all',
+          s.chevron,
+          chevron === 'down' && !isDisabled && '-translate-y-1 group-hover:animate-pulse',
+          chevron === 'right' && !state && 'group-hover:opacity-0'
+        )}>
+          {chevron === 'down' ? '\u2304' : '\u203A'}
+        </span>
+      </div>
 
+      {/* Prompt zone */}
+      <div
+        className={cn(
+          'relative z-10 flex-1 flex items-center h-full',
+          s.promptPad,
+          'bg-black/40',
+          'shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
+          !isDisabled && 'group-hover:bg-black/60',
+          !isDisabled && 'group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
+          'transition-all'
+        )}
+      >
         {/* Command text */}
         <span className={cn(
           'font-mono font-bold transition-colors',

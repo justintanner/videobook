@@ -429,7 +429,7 @@ function ClipContextMenu({ children }: { children: React.ReactNode }) {
   );
 }
 
-const allExecuteStates: ExecuteButtonState[] = ['disabled', 'ready', 'charging', 'submitting', 'queued', 'processing', 'success'];
+const allExecuteStates: ExecuteButtonState[] = ['disabled', 'ready', 'processing', 'success'];
 
 function ExecuteButtonStatesDemo() {
   return (
