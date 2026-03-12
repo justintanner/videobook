@@ -887,78 +887,6 @@ function RenderingReadoutSection() {
   );
 }
 
-// ── CenterStage: FailedAssetReadout (static replica) ──
-
-function FailedAssetReadoutSection() {
-  return (
-    <section className="mb-20 rounded-2xl bg-gradient-to-b from-red-950/20 via-background to-background p-8 ring-1 ring-red-500/10 shadow-[0_0_60px_-15px_rgba(255,50,50,0.10)]">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: FailedAssetReadout</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-red-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Error diagnostic panel shown in center stage for failed assets. Displays error message, prompt used, and model/tool
-        info. Static replica below — the real component fetches diagnostic data via useAssetDiagnostic hook which
-        requires a live API connection.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* With error + prompt + model + retry */}
-        <div className="flex flex-col gap-4">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">full diagnostic</p>
-          <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
-              <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
-                <AlertTriangle className="w-4 h-4 text-red-500" />
-                <span className="text-red-400 font-bold tracking-wider">@hero-intro-v3</span>
-                <span className="text-red-500/60 ml-auto">FAILED</span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-                <div className="text-red-400 break-words">
-                  Video generation failed: model returned empty response after 120s timeout. Quota may be exceeded.
-                </div>
-                <div className="space-y-1">
-                  <span className="text-primary/50">Prompt:</span>
-                  <div className="text-primary/80 break-words pl-2">
-                    A slow-motion shot of ocean waves crashing against volcanic rocks at sunset, with golden light
-                    filtering through the spray
-                  </div>
-                </div>
-                <div className="text-primary/50 space-x-3">
-                  <span>
-                    Model: <span className="text-primary/70">veo3</span>
-                  </span>
-                  <span>
-                    Tool: <span className="text-primary/70">generate_veo_video</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Minimal error — no prompt, no retry */}
-        <div className="flex flex-col gap-4">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">minimal (error only)</p>
-          <div className="h-[280px] bg-black/60 rounded-xl overflow-hidden ring-1 ring-red-500/20 shadow-[0_0_40px_-10px_rgba(255,50,50,0.12),inset_0_1px_0_rgba(255,50,50,0.1)]">
-            <div className="w-full h-full bg-black/95 font-mono text-xs flex flex-col border border-red-500/30 rounded-xl">
-              <div className="flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-500/30 shrink-0">
-                <AlertTriangle className="w-4 h-4 text-red-500" />
-                <span className="text-red-400 font-bold tracking-wider">@corrupted-upload</span>
-                <span className="text-red-500/60 ml-auto">FAILED</span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-                <div className="text-red-400 break-words">File upload interrupted: connection reset by peer</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
 // ── VideoTrimView (static replica) ──
 
 const TRIM_FILMSTRIP_HEIGHT = 80;
@@ -1280,78 +1208,6 @@ function VideoTrimViewSection() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── Player Controls ──
-
-function PlayerControlsSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Player Controls</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Atomic building blocks for the player interface. TabButton for orientation selection,
-        TimelineTabs for aspect ratio switching, SlugBadge for clip identification, and GearButton
-        for settings access.
-      </p>
-
-      <div className="space-y-6 p-6 rounded-xl border border-zinc-600/40 bg-gradient-to-b from-zinc-950 to-zinc-900/80 ring-1 ring-blue-500/10 shadow-[0_0_30px_rgba(96,165,250,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* TabButton */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">TabButton (active / inactive)</p>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
-              <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
-            </button>
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground hover:border-white/20">
-              <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
-            </button>
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground hover:border-white/20">
-              <Square className="w-3.5 h-3.5 inline mr-1" />1:1
-            </button>
-          </div>
-        </div>
-
-        {/* TimelineTabs */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">TimelineTabs</p>
-          <div className="flex items-center gap-1 bg-card/40 p-1 border border-primary/20 w-fit">
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
-              <Smartphone className="w-3.5 h-3.5 inline mr-1" />9:16
-            </button>
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-primary/20 border-primary/50 text-primary">
-              <Monitor className="w-3.5 h-3.5 inline mr-1" />16:9
-            </button>
-            <button className="px-3 py-1 text-xs font-medium border transition-all bg-black/40 border-white/10 text-muted-foreground">
-              <Square className="w-3.5 h-3.5 inline mr-1" />1:1
-            </button>
-          </div>
-        </div>
-
-        {/* SlugBadge */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">SlugBadge</p>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@hero-intro</span>
-            <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">@product-shot-final-v2</span>
-          </div>
-        </div>
-
-        {/* GearButton */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">GearButton</p>
-          <button className="p-1.5 rounded transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10">
-            <Settings className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </section>
@@ -3124,14 +2980,7 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Row 3 — Chat Input full-width */}
-        <div className="space-y-5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Chat Input</p>
-          <p className="text-[11px] font-mono text-muted-foreground/60">Type @ to trigger autocomplete with sample asset slugs</p>
-          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
-        </div>
-
-        {/* Row 4 — ExecuteButton + CloseButton */}
+        {/* Row 3 — ExecuteButton + CloseButton */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           <div className="space-y-5">
             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ExecuteButton</p>
@@ -3152,7 +3001,7 @@ export function Styleguide() {
           </div>
         </div>
 
-        {/* Row 5 — Asset Drop Slots */}
+        {/* Row 4 — Asset Drop Slots */}
         <div className="space-y-5">
           <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Asset Drop Slots</p>
           <AssetDropSlotDemo />
@@ -3288,14 +3137,8 @@ export function Styleguide() {
       {/* CenterStage: RenderingReadout */}
       <RenderingReadoutSection />
 
-      {/* CenterStage: FailedAssetReadout */}
-      <FailedAssetReadoutSection />
-
       {/* VideoTrimView */}
       <VideoTrimViewSection />
-
-      {/* Player Controls */}
-      <PlayerControlsSection />
 
       {/* Player Interface */}
       <PlayerInterfaceSection />
