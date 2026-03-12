@@ -26,7 +26,7 @@ import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AssetViewShell, IdleScreen, TransmissionView, TransmissionSequence, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
-import { ProofReadButton } from '@/components/chat/ProofReadButton';
+
 import { ScriptBlock } from '@/components/chat/ScriptBlocks';
 
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -2737,9 +2737,6 @@ function ChatMessagingSection() {
   const [transmissionKey, setTransmissionKey] = useState(0);
   const [transmissionRunning, setTransmissionRunning] = useState(false);
 
-  // ProofReadButton demo state
-  const dummyAudioRef = useRef<HTMLAudioElement>(null);
-
   // ScriptBlock demo
   const [scriptContent, setScriptContent] = useState(sampleScript);
   const [scriptOriginal] = useState(sampleScript);
@@ -2760,7 +2757,7 @@ function ChatMessagingSection() {
         <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
       </div>
       <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor with proof-read audio.
+        Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor.
       </p>
 
       {/* ── ChatInput States ── */}
@@ -2815,48 +2812,6 @@ function ChatMessagingSection() {
         )}
       </div>
 
-      {/* ── ProofReadButton States ── */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ProofReadButton</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Five states derived from audio URL, playback, pending, and dirty flags. Cycles between initial, pending, play, playing, and dirty (regenerate).
-      </p>
-      <div className="flex flex-wrap items-end gap-6 mb-10">
-        {([
-          { label: 'Initial', audioUrl: null, isPlaying: false, isPending: false, dialogDirty: false },
-          { label: 'Pending', audioUrl: null, isPlaying: false, isPending: true, dialogDirty: false },
-          { label: 'Play', audioUrl: '/fake.mp3', isPlaying: false, isPending: false, dialogDirty: false },
-          { label: 'Playing', audioUrl: '/fake.mp3', isPlaying: true, isPending: false, dialogDirty: false },
-          { label: 'Dirty', audioUrl: '/fake.mp3', isPlaying: false, isPending: false, dialogDirty: true },
-        ] as const).map((s) => (
-          <div key={s.label} className="flex flex-col items-center gap-2">
-            <ProofReadButton
-              audioUrl={s.audioUrl}
-              isPlaying={s.isPlaying}
-              isPending={s.isPending}
-              dialogDirty={s.dialogDirty}
-              disabled={false}
-              onPlay={() => {}}
-              onRegenerate={() => {}}
-              audioRef={dummyAudioRef}
-            />
-            <span className="text-[10px] font-mono text-muted-foreground">{s.label}</span>
-          </div>
-        ))}
-        <div key="disabled" className="flex flex-col items-center gap-2">
-          <ProofReadButton
-            audioUrl={null}
-            isPlaying={false}
-            isPending={false}
-            dialogDirty={false}
-            disabled={true}
-            onPlay={() => {}}
-            onRegenerate={() => {}}
-            audioRef={dummyAudioRef}
-          />
-          <span className="text-[10px] font-mono text-muted-foreground">Disabled</span>
-        </div>
-      </div>
-
       {/* ── ScriptBlock (editable text block) ── */}
       <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptBlock</p>
       <p className="text-xs font-mono text-muted-foreground mb-4">
@@ -2879,10 +2834,9 @@ function ChatMessagingSection() {
       <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptReadout</p>
       <p className="text-xs font-mono text-muted-foreground mb-4">
         Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
-        and editable body with proof-read audio controls. Click the script text to edit.
+        and editable body. Click the script text to edit.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        {/* With content */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with content</span>
           <div className="h-[400px]">
@@ -2891,35 +2845,20 @@ function ChatMessagingSection() {
               slug="@hero-script"
               onSave={() => {}}
               onGenerateVideo={() => {}}
-              onProofRead={() => {}}
             />
           </div>
         </div>
-
-        {/* Empty state */}
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">empty (no content)</span>
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">generating video</span>
           <div className="h-[400px]">
             <ScriptReadout
-              content={null}
-              slug="@empty-script"
+              content={sampleScript}
+              slug="@rendering-script"
+              isGenerating={true}
+              onSave={() => {}}
+              onGenerateVideo={() => {}}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Generating state */}
-      <div className="flex flex-col gap-2 max-w-lg">
-        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">generating video</span>
-        <div className="h-[400px]">
-          <ScriptReadout
-            content={sampleScript}
-            slug="@rendering-script"
-            isGenerating={true}
-            onSave={() => {}}
-            onGenerateVideo={() => {}}
-            onProofRead={() => {}}
-          />
         </div>
       </div>
     </section>

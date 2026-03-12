@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { FileText, Loader2, Film } from 'lucide-react';
-import { ProofReadButton } from './ProofReadButton';
 import { ScriptBlock } from './ScriptBlocks';
 
 const pixelGridStyle = {
@@ -16,10 +15,7 @@ interface ScriptReadoutProps {
   className?: string;
   onSave?: (content: string) => void;
   onGenerateVideo?: (scriptContent: string) => void;
-  onProofRead?: () => void;
   isGenerating?: boolean;
-  isProofReading?: boolean;
-  audioUrl?: string | null;
 }
 
 export function ScriptReadout({
@@ -28,16 +24,11 @@ export function ScriptReadout({
   className,
   onSave,
   onGenerateVideo,
-  onProofRead,
   isGenerating = false,
-  isProofReading = false,
-  audioUrl = null,
 }: ScriptReadoutProps) {
   const [plainContent, setPlainContent] = useState(content ?? '');
   const [originalContent] = useState(content ?? '');
   const [isSaving, setIsSaving] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   const plainHasChanges = plainContent !== originalContent;
 
@@ -51,26 +42,6 @@ export function ScriptReadout({
   const handleCancel = useCallback(() => {
     setPlainContent(originalContent);
   }, [originalContent]);
-
-  const handleStopPlayback = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    setIsPlaying(false);
-  }, []);
-
-  const handlePlayToggle = useCallback(() => {
-    if (isPlaying) {
-      handleStopPlayback();
-      return;
-    }
-    if (audioUrl && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
-  }, [isPlaying, handleStopPlayback, audioUrl]);
 
   const handleGenerateVideo = useCallback(() => {
     if (content && onGenerateVideo) {
@@ -176,24 +147,10 @@ export function ScriptReadout({
               hasChanges={plainHasChanges}
               isSaving={isSaving}
               placeholder="Enter script content..."
-              audioActions={
-                <ProofReadButton
-                  audioUrl={audioUrl}
-                  isPlaying={isPlaying}
-                  isPending={isProofReading}
-                  dialogDirty={plainHasChanges}
-                  disabled={false}
-                  onPlay={handlePlayToggle}
-                  onRegenerate={onProofRead ?? (() => {})}
-                  audioRef={audioRef}
-                />
-              }
             />
           )}
         </div>
 
-        {/* Hidden audio element for proof read playback */}
-        {audioUrl && <audio ref={audioRef} src={audioUrl} onEnded={handleStopPlayback} />}
       </div>
     </div>
   );
