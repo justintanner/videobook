@@ -6,40 +6,37 @@ import { queue } from "../queue.js";
 import { takeScreenshot } from "../screenshot.js";
 import type { ToolDef } from "./tool-def.js";
 
-const VISION_SYSTEM_PROMPT = `You are Edward Tufte reincarnated as an 80s vector-arcade interface designer—
-think Battlezone meets Blade Runner's Esper machine.
+const VISION_SYSTEM_PROMPT = `You are an opinionated UI design consultant influenced by Edward Tufte's principles: data-ink ratio, clarity, visual hierarchy, and information density. You have high standards and don't pull punches.
 
-Analyze this UI screenshot. Your design philosophy:
-- Data-ink ratio is sacred: ruthlessly eliminate decorative noise
-- Every element must earn its place like a cyan wireframe on infinite black void
-- Chrome typography and neon data traces pulsing against darkness
-- High-density HUD readouts, sparklines like synthwave equalizer bars
-- Small multiples tiled like multi-screen radar stations
-- Clarity cuts through static like a hot pink laser through smoked glass
-- Maximal data density + minimalist vector elegance = truth
+Analyze this UI screenshot. Identify the 3-5 most impactful improvements that would make this interface clearer, more usable, and more information-dense. Preserve the fundamental layout and visual identity, but don't be shy about making bold changes within that structure.
+
+Focus on:
+- Wasted space that should be reclaimed for useful information
+- Low-contrast or hard-to-read elements that need real fixes, not tweaks
+- Visual clutter and decorative weight that should be stripped away
+- Hierarchy problems — be direct about what's fighting for attention and shouldn't be
+- Spacing, alignment, and density — every pixel should justify its existence
+
+Be specific and blunt. "The sidebar labels are nearly invisible at this contrast" not "consider adjusting contrast." Name exact elements, colors, and sizes.
 
 Return JSON:
 {
-  "critique": ["issue 1", "issue 2", ...],
+  "critique": ["specific issue 1", "specific issue 2", ...],
   "prompt": "A detailed image generation prompt describing the improved UI mockup..."
 }
 
-The prompt must describe a complete, self-contained UI mockup image in the style of
-a dark retro-futurist interface: black background, cyan/magenta/chrome vector elements,
-glowing wireframe typography, neon grid lines, HUD-style data readouts.
-Be extremely specific about layout, colors (#00FFFF cyan, #FF1493 hot pink, #C0C0C0 chrome),
-typography, spacing, and visual hierarchy.`;
+The prompt must describe the SAME UI with the improvements applied — same layout structure, same color palette, same visual identity. But push the changes hard: tighter spacing, bolder hierarchy, less wasted space, stronger contrast where it matters. Describe specific changes to elements: what moved, resized, recolored, was added, or was removed. Be precise about positions, sizes, colors, and typography. The result should look like the same interface after a focused, confident design pass — not a timid nudge.`;
 
 function buildSystemPrompt(focus?: string): string {
   if (!focus) return VISION_SYSTEM_PROMPT;
-  return VISION_SYSTEM_PROMPT + `\n\nPay special attention to: ${focus}`;
+  return VISION_SYSTEM_PROMPT + `\n\nPay special attention to this area: ${focus}`;
 }
 
 export function redesignStyleguidePageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "redesign_styleguide_page",
     description:
-      "Screenshot a styleguide page, analyze it through a Tufte/vector-arcade design lens via GPT-5.4 vision, and generate an improved mockup via nano-banana-pro. End-to-end pipeline.",
+      "Screenshot a styleguide page, identify 3-5 specific improvements via GPT-5.4 vision, and generate an improved mockup via nano-banana-pro that preserves the existing design.",
     schema: {
       page: z.number().int().min(1).max(11).describe("Styleguide page number (1-11)"),
       project_slug: z.string().describe("Project slug"),
