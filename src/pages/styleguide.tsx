@@ -878,9 +878,7 @@ function Page2_VideoGeneration() {
                       <div className="space-y-2 mb-3">
                         <div className="flex items-center justify-between">
                           <BracketLabel label="PROMPT" required />
-                          <button className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono font-bold tracking-wider text-primary bg-primary/20 border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.3)]">
-                            <Sparkles className="w-3 h-3" />Rewrite
-                          </button>
+                          <CommandButton size="sm" command="/rewrite_prompt" icon={<Sparkles className="w-3 h-3" />} />
                         </div>
                         <textarea className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28" defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion." readOnly />
                       </div>

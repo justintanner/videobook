@@ -5,6 +5,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ExecuteButtonState } from '@/components/gen/types';
 
 const sizes = {
+  sm: {
+    button: 'h-5 border border-primary/25 text-[10px]',
+    chevronPad: 'px-1',
+    promptPad: 'px-1.5 gap-1',
+    iconPad: 'px-1',
+    text: 'text-[10px] tracking-wider',
+    chevron: 'text-xs',
+    cursor: 'h-2',
+    iconSize: 'w-3 h-3',
+    dot: 'w-1 h-1',
+    scanWidth: 'w-6',
+  },
   default: {
     button: 'h-8 border border-primary/25',
     chevronPad: 'px-2',
@@ -13,6 +25,9 @@ const sizes = {
     text: 'text-xs tracking-widest',
     chevron: 'text-sm',
     cursor: 'h-3',
+    iconSize: 'w-5 h-5',
+    dot: 'w-1.5 h-1.5',
+    scanWidth: 'w-12',
   },
   lg: {
     button: 'h-12 border-2 border-cyan-400 bg-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)]',
@@ -22,6 +37,9 @@ const sizes = {
     text: 'text-sm tracking-[0.2em]',
     chevron: 'text-xl font-bold',
     cursor: 'h-4',
+    iconSize: 'w-5 h-5',
+    dot: 'w-1.5 h-1.5',
+    scanWidth: 'w-12',
   },
 } as const;
 
@@ -44,6 +62,15 @@ const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> =
     processing: 'generating',
     success: 'complete',
   },
+  sm: {
+    disabled: null,
+    ready: null,
+    charging: null,
+    submitting: null,
+    queued: null,
+    processing: null,
+    success: null,
+  },
 };
 
 const shadowColor = 'rgba(34,211,238,0.5)';
@@ -52,7 +79,7 @@ interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   command: string;
   icon: ReactNode;
   chevron?: 'right' | 'down';
-  size?: 'default' | 'lg';
+  size?: 'sm' | 'default' | 'lg';
   state?: ExecuteButtonState;
   disabledReason?: string;
   className?: string;
@@ -66,8 +93,8 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
   const displayCommand = state ? (stateCommands[size][state] ?? command) : command;
 
   let displayIcon = icon;
-  if (isLoading) displayIcon = <Loader2 className="w-5 h-5 animate-spin" />;
-  else if (isSuccess) displayIcon = <CheckCircle2 className="w-5 h-5" />;
+  if (isLoading) displayIcon = <Loader2 className={cn(s.iconSize, 'animate-spin')} />;
+  else if (isSuccess) displayIcon = <CheckCircle2 className={s.iconSize} />;
 
   const button = (
     <button
@@ -105,7 +132,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
       {state === 'processing' && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <div
-            className="absolute inset-y-0 w-12"
+            className={cn('absolute inset-y-0', s.scanWidth)}
             style={{
               background: `linear-gradient(90deg, transparent, ${shadowColor}, transparent)`,
               animation: 'showcase-scan 2s linear infinite',
@@ -171,9 +198,9 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         {/* Queued bouncing dots */}
         {state === 'queued' && (
           <div className="flex gap-1 ml-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className={cn(s.dot, 'rounded-full bg-current animate-bounce')} style={{ animationDelay: '0ms' }} />
+            <div className={cn(s.dot, 'rounded-full bg-current animate-bounce')} style={{ animationDelay: '150ms' }} />
+            <div className={cn(s.dot, 'rounded-full bg-current animate-bounce')} style={{ animationDelay: '300ms' }} />
           </div>
         )}
       </div>
