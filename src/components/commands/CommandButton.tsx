@@ -75,6 +75,7 @@ const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> =
 
 const variants = {
   default: {
+    bg: 'bg-cyan-500/10',
     shadow: 'rgba(34,211,238,0.5)',
     chevron: 'text-primary/40 group-hover:text-primary/50',
     chevronDown: 'text-primary/40 group-hover:text-primary/60',
@@ -85,6 +86,7 @@ const variants = {
     icon: 'text-primary/80 group-hover:text-primary',
   },
   violet: {
+    bg: 'bg-violet-500/20 border-violet-500/30',
     shadow: 'rgba(139,92,246,0.5)',
     chevron: 'text-violet-400/40 group-hover:text-violet-400/50',
     chevronDown: 'text-violet-400/40 group-hover:text-violet-400/60',
@@ -125,6 +127,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
       className={cn(
         'group flex items-center gap-0 rounded overflow-hidden relative',
         s.button,
+        v.bg,
         'transition-all duration-300 cursor-pointer',
         // State color overrides (after size classes so twMerge picks them)
         state && isDisabled && 'bg-zinc-800/30 text-zinc-600 border-zinc-700/50 shadow-none cursor-not-allowed',
