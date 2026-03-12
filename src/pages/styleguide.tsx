@@ -24,29 +24,22 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
-import { AssetViewShell, IdleScreen, TransmissionView, TransmissionSequence, RenderingReadout } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
-
-import { ScriptBlock } from '@/components/chat/ScriptBlocks';
-
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { CloseButton, GenPanel, ExecuteButton, ModelSelector } from '@/components/gen/ui';
-import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
-import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
-import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { PendingGenerationsButton } from '@/components/pending-generations/PendingGenerationsButton';
-import { PendingGenerationsDrawer } from '@/components/pending-generations/PendingGenerationsDrawer';
 import type { GenerationState } from '@/components/pending-generations/PendingGenerationsButton';
-import type { ExecuteButtonState, ModelOption, JSONSchemaProperty } from '@/components/gen/types';
+import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
   Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
-  Zap, ImageIcon, Info, Settings, User, LogOut, Bell, Copy, Trash2,
-  AlertTriangle, AudioLines, Magnet, Eraser, Minus, Plus,
-  Smartphone, Monitor, Square, Play, Volume2, Loader2, Mic,
-  Check, CheckCircle2,
+  Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
+  AlertTriangle, AudioLines, Plus,
+  Smartphone, Monitor, Square, Play, Loader2, Mic,
+  Check,
 } from 'lucide-react';
 
 const colors = [
@@ -284,244 +277,6 @@ function HeaderBar() {
   );
 }
 
-function AppLayoutDemo() {
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
-  const [leftSort, setLeftSort] = useState<'newest' | 'oldest'>('newest');
-  const [rightSort, setRightSort] = useState<'newest' | 'oldest'>('newest');
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">App Layout</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Full application frame — header, collapsible sidebars, center stage, and timeline. The establishing shot.
-      </p>
-      <div className="overflow-x-auto">
-      <div className="min-w-[1100px] overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
-        <div className="grid grid-rows-[48px_1fr_auto] h-[800px]">
-          {/* ── Nav Bar ── */}
-          <HeaderBar />
-
-          {/* ── Middle Row: sidebars + center ── */}
-          <div className="flex flex-row overflow-hidden">
-            {/* Left Sidebar */}
-            <CollapsibleSidebar side="left" collapsed={!leftOpen} onToggle={() => setLeftOpen((o) => !o)} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
-              <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={!leftOpen} onToggle={() => setLeftOpen((o) => !o)} side="left" sortOrder={leftSort} onSortChange={() => setLeftSort((s) => s === 'newest' ? 'oldest' : 'newest')} />
-              {leftOpen && (
-                <>
-                  <div className="flex-1 overflow-y-auto space-y-2">
-                    <div className="w-full"><ImageCard item={demoImageMock} /></div>
-                  </div>
-                  <div className="pt-2 mt-auto">
-                    <Button variant="dashed" className="w-full" size="sm">
-                      <Upload className="w-3.5 h-3.5" />
-                      UPLOAD_ASSET
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CollapsibleSidebar>
-
-            {/* Center Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 p-4 overflow-y-auto flex flex-col">
-              {/* VIDEO_GENERATION Panel — DynamicGen Style */}
-              <div className="relative w-full flex-1 overflow-hidden bg-gradient-to-b from-cyan-950/30 via-black to-black rounded flex flex-col">
-                {/* Scanlines overlay */}
-                <div className="absolute inset-0 pointer-events-none scanlines opacity-20 z-10" />
-                {/* Pixel grid background */}
-                <div
-                  className="absolute inset-0 pointer-events-none opacity-5"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)',
-                    backgroundSize: '4px 4px',
-                  }}
-                />
-
-                {/* Inner bordered frame */}
-                <div className="relative z-20 flex-1 flex flex-col border-2 border-cyan-400/50 shadow-[0_0_30px_-10px_rgba(0,255,255,0.3)]">
-                  {/* Header */}
-                  <div className="flex items-center justify-between pl-2.5 pr-2.5 py-1.5 shrink-0 border-b-2 border-inherit bg-black/50 backdrop-blur-sm">
-                    <div className="flex items-center gap-2">
-                      <Film className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#22d3ee]" />
-                      <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">VIDEO_GENERATION</span>
-                    </div>
-                    <button className="w-7 h-7 flex items-center justify-center text-primary/60 transition-all hover:bg-red-500/10 hover:text-red-400">
-                      <X className="w-5 h-5 stroke-[2.5]" />
-                    </button>
-                  </div>
-
-                  {/* Body: form + asset sidebar */}
-                  <div className="flex flex-row flex-1">
-                    {/* Form column */}
-                    <div className="flex-1 pl-4 pr-8 py-4 mr-2">
-                      {/* [PROMPT] section */}
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <BracketLabel label="PROMPT" required />
-                          <button className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono font-bold tracking-wider text-primary bg-primary/20 border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.3)]">
-                            <Sparkles className="w-3 h-3" />
-                            Rewrite
-                          </button>
-                        </div>
-                        <textarea
-                          className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28"
-                          defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion."
-                          readOnly
-                        />
-                      </div>
-
-                      {/* Parameters */}
-                      <div className="flex flex-wrap gap-x-6 gap-y-4 my-3">
-                        <div>
-                          <BracketLabel label="ASPECT RATIO" />
-                          <div className="mt-1.5">
-                            <ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} />
-                          </div>
-                        </div>
-                        <div>
-                          <BracketLabel label="DURATION" />
-                          <div className="mt-1.5">
-                            <FakeDropdown text="8" />
-                          </div>
-                        </div>
-                        <div>
-                          <BracketLabel label="IMAGE ORIENTATION" />
-                          <div className="mt-1.5">
-                            <ToggleGroup options={['auto', 'original', 'portrait', 'landscape']} activeIndex={0} />
-                          </div>
-                        </div>
-                        <div>
-                          <BracketLabel label="MODE" />
-                          <div className="mt-1.5">
-                            <ToggleGroup options={['std', 'pro']} activeIndex={0} />
-                          </div>
-                        </div>
-                        <div>
-                          <BracketLabel label="MULTI SHOTS" />
-                          <div className="mt-1.5">
-                            <ToggleGroup options={['No', 'Yes']} activeIndex={0} />
-                          </div>
-                        </div>
-                        <div>
-                          <BracketLabel label="SOUND" />
-                          <div className="mt-1.5">
-                            <ToggleGroup options={['No', 'Yes']} activeIndex={1} />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Warnings */}
-                      <div className="mt-3 border border-yellow-500/30 bg-yellow-500/5 rounded p-3">
-                        <div className="text-xs font-mono font-bold text-yellow-400/70 uppercase tracking-wider mb-1">WARNINGS</div>
-                        <ul className="list-disc list-inside">
-                          <li className="text-xs font-mono text-yellow-400/70">Kling 3.0 multi_prompt must be a non-empty list</li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    {/* Asset sidebar */}
-                    <div className="w-44 border-l border-primary/20 bg-black/20 p-3 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <BracketLabel label="IMAGES" />
-                        <span className="text-[10px] font-mono text-primary/50">1/2</span>
-                      </div>
-
-                      {/* Filled slot */}
-                      <div className="relative aspect-video border-2 border-primary/50 bg-black/60 overflow-hidden">
-                        <div className="absolute inset-0 scanlines pointer-events-none opacity-20" />
-                        <img src="/styleguide-img-cover.jpg" alt="thumbnail" className="w-full h-full object-cover" />
-                        <button className="absolute top-1 right-1 w-5 h-5 rounded bg-black/70 border border-primary/30 flex items-center justify-center hover:bg-red-500/30 hover:border-red-500/60 transition-colors">
-                          <X className="w-3 h-3 text-primary/70" />
-                        </button>
-                      </div>
-
-                      {/* Empty slot */}
-                      <div className="relative aspect-video border-2 border-primary/30 border-dashed bg-black/60 overflow-hidden flex items-center justify-center">
-                        <div className="absolute inset-0 scanlines pointer-events-none opacity-20" />
-                        <ImageIcon className="w-5 h-5 text-primary/25 relative z-10" />
-                        <div className="absolute inset-0 pointer-events-none showcase-slot-ready" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
-                    <FakeDropdown text="Kling 3.0" />
-                    <button className="relative w-48 py-3 px-6 overflow-hidden font-bold text-sm tracking-[0.2em] uppercase border-2 rounded transition-all duration-300 bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:bg-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]">
-                      <div className="relative flex items-center justify-center gap-2">
-                        <Zap className="w-5 h-5 drop-shadow-[0_0_6px_currentColor]" />
-                        <span>GENERATE</span>
-                      </div>
-                      {/* Pulsing glow overlay */}
-                      <div
-                        className="absolute inset-0 pointer-events-none rounded"
-                        style={{
-                          boxShadow: 'inset 0 0 15px rgba(34,211,238,0.5)',
-                          animation: 'showcase-slot-pulse 2s ease-in-out infinite',
-                        }}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-              {/* Chat input — sticky bottom */}
-              <div className="shrink-0 px-4 pb-3 pt-2">
-                <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
-              </div>
-            </div>
-
-            {/* Right Sidebar */}
-            <CollapsibleSidebar side="right" collapsed={!rightOpen} onToggle={() => setRightOpen((o) => !o)} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
-              <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={!rightOpen} onToggle={() => setRightOpen((o) => !o)} side="right" sortOrder={rightSort} onSortChange={() => setRightSort((s) => s === 'newest' ? 'oldest' : 'newest')} />
-              {rightOpen && (
-                <>
-                  <div className="flex-1 overflow-y-auto space-y-2 mt-2">
-                    <div className="w-full"><VideoCard item={demoVideoMock} /></div>
-                  </div>
-                  <div className="pt-2 mt-auto">
-                    <Button variant="dashed" className="w-full" size="sm">
-                      <Upload className="w-3.5 h-3.5" />
-                      UPLOAD_CLIP
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CollapsibleSidebar>
-          </div>
-
-          {/* ── Bottom Timeline ── */}
-          <div className="border-t border-border bg-card/30">
-            <div className="relative h-28 flex gap-0.5">
-              <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-              <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-              <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-              <TimelineSlotDemo label="@s04" flex={2} />
-              <TimelineSlotDemo label="@s05" flex={2} />
-              {/* Playhead */}
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
-                style={{ left: '42%' }}
-              />
-            </div>
-            <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
-              <Music className="w-3.5 h-3.5" />
-              <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </section>
-  );
-}
 
 function SelectWithChevronDemo() {
   const [value, setValue] = useState('veo3');
@@ -689,56 +444,6 @@ const centerStageMocks = [
   { id: 'cs-transmission-short', label: 'transmission (short)', message: 'Retry render' },
 ];
 
-function CenterStageSection() {
-  const [replayCount, setReplayCount] = useState(0);
-  const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
-
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: TransmissionView</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Animated transition shown when a new message is sent. Phases: flash scan line, typewriter text, dissolve.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {centerStageMocks.map((mock) => (
-          <div key={`${mock.id}-${replayCount}`} className="flex flex-col gap-4">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
-            <div className="h-[340px] bg-black/60 rounded-xl overflow-hidden flex flex-col border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
-              <TransmissionView message={mock.message} onComplete={handleComplete} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ── CenterStage: IdleScreen ──
-
-function IdleScreenSection() {
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: IdleScreen</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Pulsing idle state shown when no asset is selected. Badge appears in welcome mode.
-      </p>
-      <div className="max-w-2xl flex flex-col gap-4">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">welcome</p>
-        <div className="h-[360px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
-          <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ── CenterStage: AssetViewShell ──
 
@@ -747,35 +452,6 @@ const assetViewShellMocks = [
   { id: 'shell-full', label: 'full bleed (fillParent=true)', fillParent: true },
 ];
 
-function AssetViewShellSection() {
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: AssetViewShell</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Shared frame for all asset-mode views. Two modes: constrained (max-w-4xl, aspect-video) and full bleed (w-full
-        h-full). Border + shadow provide consistent visual containment.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {assetViewShellMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-4">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
-            <div className="h-[300px] bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
-              <AssetViewShell fillParent={mock.fillParent}>
-                <div className="flex items-center justify-center w-full h-full">
-                  <span className="font-mono text-xs text-cyan-500/40 tracking-widest">CONTENT_AREA</span>
-                </div>
-              </AssetViewShell>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 // ── CenterStage: RenderingReadout ──
 
@@ -860,36 +536,9 @@ const renderingReadoutMocks: { id: string; label: string; asset: MediaItem }[] =
   },
 ];
 
-function RenderingReadoutSection() {
-  return (
-    <section className="mb-20 rounded-2xl bg-gradient-to-b from-cyan-950/20 via-background to-background p-8 ring-1 ring-cyan-500/10 shadow-[0_0_60px_-15px_rgba(0,212,255,0.12)]">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CenterStage: RenderingReadout</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Full-panel rendering status view shown in center stage when a video asset is rendering. Scan line animation,
-        grid overlay, corner HUD brackets, Film/Clapperboard icon (type-aware), pulsing status badge, and slug text.
-        Cyan for regular videos, amber for final-type assets.
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
-        {renderingReadoutMocks.map((mock) => (
-          <div key={mock.id} className="flex flex-col gap-4">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{mock.label}</p>
-            <div className="h-[240px] bg-black/60 rounded-xl overflow-hidden border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15),inset_0_1px_0_rgba(0,212,255,0.1)] ring-1 ring-cyan-500/20">
-              <RenderingReadout asset={mock.asset} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 // ── VideoTrimView (static replica) ──
 
-const TRIM_FILMSTRIP_HEIGHT = 80;
 const TRIM_PLAYHEAD_POS = 42; // percent
 
 const trimDemoWords = [
@@ -930,289 +579,7 @@ const trimSelectedWordIndices = new Set([5, 6, 7]);
 // Active word index (currently playing)
 const trimActiveWordIndex = 11;
 
-const trimTimelineBadges = Array.from({ length: 6 }, (_, i) => ({
-  percent: ((i + 0.5) / 6) * 100,
-  src: i % 2 === 0 ? '/styleguide-img-cover.jpg' : '/styleguide-vid-purple-grind.jpg',
-  time: `0:${Math.round(((i + 0.5) / 6) * 10).toString().padStart(2, '0')}`,
-}));
-
 const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0px 4px, rgba(239,68,68,0.35) 4px 8px)';
-
-function VideoTrimViewSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">VideoTrimView</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Full-screen trimming overlay. Two-column layout: video player + waveform timeline on left,
-        transcript panel with word-level selection on right. Waveform shows audio shape with
-        hover-expandable thumbnail badges at even intervals. Click words to mark cuts (shown with
-        red strikethrough). Cut regions appear as striped red overlays on the timeline. Cyan playhead
-        tracks current position. Supports snap-to-words, zoom, and inline word editing.
-      </p>
-
-      {/* Full-width demo -- studio equipment panel */}
-      <div className="bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 shadow-[0_0_40px_rgba(34,211,238,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* Header bar -- hardware rack style */}
-        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Scissors className="w-3.5 h-3.5" />
-            <span className="font-mono text-[11px] tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <button
-              className={cn(
-                'px-3.5 py-1 text-[11px] font-bold tracking-[0.15em] uppercase border rounded transition-all duration-200',
-                'flex items-center justify-center gap-1.5',
-                'bg-cyan-500/20 text-cyan-400 border-current',
-                'shadow-[0_0_16px_rgba(34,211,238,0.4)]',
-              )}
-            >
-              <Scissors className="w-3 h-3" />
-              <span>TRIM</span>
-            </button>
-            <button className="w-6 h-6 flex items-center justify-center text-zinc-500 transition-all hover:bg-red-500/10 hover:text-red-400 rounded">
-              <X className="w-4 h-4 stroke-[2.5]" />
-            </button>
-          </div>
-        </div>
-
-        {/* Main content: two-column */}
-        <div className="flex overflow-hidden" style={{ height: 420 }}>
-          {/* Left: video + timeline */}
-          <div className="flex-1 flex flex-col px-3 py-2.5 overflow-hidden min-w-0">
-            {/* Video player */}
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
-                <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
-              </div>
-            </div>
-
-            {/* Timeline -- recessed panel */}
-            <div className="shrink-0 mt-3 px-4 py-3 bg-zinc-900/60 rounded-lg border border-zinc-800/40 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
-              <div className="relative">
-                {/* Time ruler */}
-                <div className="relative select-none" style={{ height: 20 }}>
-                  {[0, 2, 4, 6, 8, 10].map((t) => (
-                    <div key={t} className="absolute bottom-0" style={{ left: `${(t / 10) * 100}%` }}>
-                      <div className="w-px h-3 bg-zinc-500" />
-                      <span className="absolute bottom-0 text-[9px] text-zinc-400 font-mono leading-none whitespace-nowrap" style={{ transform: 'translateX(-50%)', left: 0, top: 1 }}>
-                        0:{t.toString().padStart(2, '0')}
-                      </span>
-                    </div>
-                  ))}
-                  {[1, 3, 5, 7, 9].map((t) => (
-                    <div key={t} className="absolute bottom-0" style={{ left: `${(t / 10) * 100}%` }}>
-                      <div className="w-px h-1.5 bg-zinc-700" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Filmstrip */}
-                <div className="relative overflow-visible" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
-                  <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: TRIM_FILMSTRIP_HEIGHT }}>
-                    {/* Waveform */}
-                    <div className="absolute inset-0 rounded-md overflow-hidden">
-                      <StyleguideWaveform
-                        url="/fixtures/video-frost.mp4"
-                        height={TRIM_FILMSTRIP_HEIGHT}
-                        waveColor="rgba(0, 255, 255, 0.15)"
-                        progressColor="rgba(0, 255, 255, 0.5)"
-                        progress={TRIM_PLAYHEAD_POS / 100}
-                      />
-                    </div>
-
-                    {/* Cut region overlays */}
-                    {trimDemoCutRegions.map((region, i) => (
-                      <div
-                        key={i}
-                        className="absolute top-0 bottom-0 pointer-events-none z-10"
-                        style={{
-                          left: `${region.startPercent}%`,
-                          width: `${region.widthPercent}%`,
-                          background: trimStripedBg,
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Thumbnail badges */}
-                  {trimTimelineBadges.map((badge, i) => {
-                    const inCut = trimDemoCutRegions.some(
-                      (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
-                    );
-                    return (
-                      <div
-                        key={i}
-                        className="group absolute z-20"
-                        style={{
-                          left: `${badge.percent}%`,
-                          top: '50%',
-                          transform: 'translate(-50%, -50%)',
-                        }}
-                      >
-                        {/* Timestamp label — visible on hover */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40">
-                          <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
-                        </div>
-                        {/* Badge */}
-                        <div
-                          className={cn(
-                            'w-6 h-6 rounded-sm border border-cyan-500/30 bg-cover bg-center',
-                            'transition-all duration-200 ease-out',
-                            'group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)]',
-                            'group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40',
-                            'group-hover:rounded-md',
-                            inCut && 'opacity-50',
-                          )}
-                          style={{ backgroundImage: `url(${badge.src})` }}
-                        />
-                      </div>
-                    );
-                  })}
-
-                  {/* Edge handles for cut regions */}
-                  {trimDemoCutRegions.map((region, i) => (
-                    <div key={`handles-${i}`}>
-                      <div className="absolute top-0 flex items-center justify-center" style={{ left: `${region.startPercent}%`, width: 8, marginLeft: -4, height: TRIM_FILMSTRIP_HEIGHT }}>
-                        <div className="w-1 h-4/5 rounded-full bg-red-500/60" />
-                      </div>
-                      <div className="absolute top-0 flex items-center justify-center" style={{ left: `${region.startPercent + region.widthPercent}%`, width: 8, marginLeft: -4, height: TRIM_FILMSTRIP_HEIGHT }}>
-                        <div className="w-1 h-4/5 rounded-full bg-red-500/60" />
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Playhead */}
-                  <div
-                    className="absolute top-0 pointer-events-none z-30"
-                    style={{
-                      left: `${TRIM_PLAYHEAD_POS}%`,
-                      width: 3,
-                      height: TRIM_FILMSTRIP_HEIGHT,
-                      marginLeft: -1,
-                      backgroundColor: 'rgb(34, 211, 238)',
-                      filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))',
-                    }}
-                  >
-                    <div
-                      className="absolute"
-                      style={{
-                        top: -6,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 0,
-                        height: 0,
-                        borderLeft: '5px solid transparent',
-                        borderRight: '5px solid transparent',
-                        borderTop: '6px solid rgb(34, 211, 238)',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Duration labels */}
-                <div className="relative" style={{ height: 20 }}>
-                  <div
-                    className="absolute top-0.5 pointer-events-none z-30"
-                    style={{ left: `${TRIM_PLAYHEAD_POS}%`, transform: 'translateX(-50%)' }}
-                  >
-                    <span className="font-mono text-[9px] text-cyan-400 bg-black/60 px-1 rounded">00:04.200</span>
-                  </div>
-                  {trimDemoCutRegions.map((region, i) => (
-                    <div
-                      key={i}
-                      className="absolute top-1 text-[10px] text-red-400 font-mono font-medium whitespace-nowrap"
-                      style={{
-                        left: `${region.startPercent + region.widthPercent / 2}%`,
-                        transform: 'translateX(-50%)',
-                      }}
-                    >
-                      {(region.widthPercent / 10).toFixed(1)}s
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right: transcript panel */}
-          <div className="w-[300px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90 shadow-[inset_2px_0_16px_rgba(34,211,238,0.06)]">
-            {/* Header -- LED panel accent */}
-            <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80">
-              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70 drop-shadow-[0_0_4px_rgba(34,211,238,0.3)]">Transcript</span>
-            </div>
-
-            {/* Words */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 leading-relaxed scrollbar-hide">
-              <div className="leading-relaxed">
-                {trimDemoWords.map((word, i) => {
-                  const isSelected = trimSelectedWordIndices.has(i);
-                  const isActive = i === trimActiveWordIndex;
-                  return (
-                    <span key={i}>
-                      <span
-                        className={cn(
-                          'inline-block text-sm font-sans cursor-pointer select-none',
-                          'px-0.5 mx-0.5 my-0.5 rounded-sm transition-all duration-150',
-                          isSelected
-                            ? 'text-red-400/60 line-through decoration-red-500/80'
-                            : isActive
-                              ? 'text-cyan-300 bg-cyan-500/15 drop-shadow-[0_0_8px_#22d3ee]'
-                              : 'text-zinc-300 hover:text-white'
-                        )}
-                      >
-                        {word.text}
-                      </span>
-                      {word.text.endsWith('.') && <br />}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Footer -- hardware display */}
-            <div className="shrink-0 border-t border-zinc-700/50 px-4 py-3 space-y-2.5 bg-zinc-900/60">
-              {/* Timestamp -- backlit display */}
-              <div className="flex items-center gap-2 bg-black/60 rounded-md px-3 py-1.5 border border-zinc-800/60">
-                <span className="font-mono text-sm text-cyan-400 tabular-nums drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]">00:04.200</span>
-                <span className="text-zinc-600 text-sm">/</span>
-                <span className="font-mono text-sm text-zinc-500 tabular-nums">00:08.900</span>
-              </div>
-              {/* Controls */}
-              <div className="flex items-center gap-1">
-                <button className="p-1.5 rounded-md transition-colors flex items-center gap-1 bg-cyan-500/20 text-cyan-400">
-                  <Magnet className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-medium">Snap</span>
-                </button>
-                <button className="p-1.5 rounded-md transition-colors flex items-center gap-1 bg-red-500/20 text-red-400">
-                  <Eraser className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-medium">Clear</span>
-                </button>
-                <div className="w-px h-4 bg-zinc-700 mx-0.5" />
-                <div className="flex items-center gap-1">
-                  <button className="p-1 rounded text-zinc-400"><Minus className="w-3 h-3" /></button>
-                  <input
-                    type="range" min={1} max={10} step={1} defaultValue={1} readOnly
-                    className="w-12 h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:cursor-pointer"
-                  />
-                  <button className="p-1 rounded text-zinc-400"><Plus className="w-3 h-3" /></button>
-                  <span className="text-[10px] text-cyan-400 w-4 text-right">1x</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 
 // ── Player Interface ──
@@ -1242,807 +609,6 @@ function RatioToggle({ active }: { active: '9:16' | '16:9' | '1:1' }) {
   );
 }
 
-function PlayerInterfaceSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Player Interface</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Complete ClipPlayer shell showing landscape (active), portrait (idle), square (rendering),
-        and video error states. Header contains TimelineTabs, SlugBadge, and GearButton.
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-emerald-500/10 shadow-[0_0_30px_rgba(52,211,153,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* Landscape (active) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Landscape (active)</p>
-          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
-            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="16:9" />
-              <span className="font-mono text-xs text-muted-foreground truncate max-w-[120px]">@hero-intro</span>
-              <button className="p-1 rounded text-muted-foreground hover:text-primary">
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 bg-black flex items-center justify-center">
-              <video
-                src="/fixtures/video-frost.mp4"
-                className="w-full h-full object-contain"
-                controls
-                loop
-                muted
-                playsInline
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Portrait (idle) — LazyRenderPlaceholder */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Portrait (idle) — LazyRenderPlaceholder</p>
-          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
-            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="9:16" />
-              <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
-              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
-            </div>
-            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Plus className="w-8 h-8" />
-              <span className="text-sm">Create portrait render</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Square (rendering) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Square (rendering)</p>
-          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
-            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="1:1" />
-              <span className="font-mono text-xs text-muted-foreground">@hero-intro</span>
-              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
-            </div>
-            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin" />
-              <span className="text-sm">Rendering square...</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Video error */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-3 uppercase tracking-widest">Video error</p>
-          <div className="flex flex-col h-[300px] border border-zinc-600/50 rounded-xl overflow-hidden shadow-lg ring-1 ring-zinc-700/30">
-            <div className="shrink-0 px-3 py-1.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="16:9" />
-              <span className="font-mono text-xs text-muted-foreground">@broken-clip</span>
-              <button className="p-1 rounded text-muted-foreground"><Settings className="w-3.5 h-3.5" /></button>
-            </div>
-            <div className="flex-1 bg-black flex flex-col items-center justify-center gap-2 text-destructive">
-              <AlertTriangle className="w-8 h-8" />
-              <span className="text-sm font-medium">Video playback error</span>
-              <span className="text-xs text-muted-foreground">Failed to load media resource</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── Audio Player ──
-
-function AudioPlayerSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Audio Player</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Full audio editing interface with waveform visualization, trim handles, cut regions,
-        fade controls, and playback. Header shows slug, vocals badge, keep/cut toggle, and action buttons.
-      </p>
-
-      <div className="border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-violet-500/10 shadow-[0_0_40px_rgba(167,139,250,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* Header -- studio console strip */}
-        <div className="shrink-0 px-5 py-3 border-b border-zinc-700/50 flex items-center justify-between bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
-            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">
-              VOCALS
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Keep / Cut toggle */}
-            <div className="flex border border-primary/30 rounded overflow-hidden">
-              <button className="px-2 py-1 text-xs font-medium bg-primary/20 border-r border-primary/30 text-primary">Keep</button>
-              <button className="px-2 py-1 text-xs font-medium bg-black/40 text-muted-foreground">Cut</button>
-            </div>
-            {/* TRIM button with confirmation popup */}
-            <div className="relative">
-              <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded transition-all bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_12px_rgba(34,211,238,0.3)]">
-                <Scissors className="w-3 h-3 inline mr-1" />TRIM
-              </button>
-              {/* Confirmation popup (shown) */}
-              <div className="absolute top-full mt-1 right-0 z-50 bg-black/95 border border-primary/30 rounded p-3 shadow-lg w-48">
-                <p className="text-xs text-muted-foreground mb-2">Apply trim to audio?</p>
-                <div className="flex gap-2">
-                  <button className="flex-1 px-2 py-1 text-xs bg-primary/20 text-primary border border-primary/40 rounded">Confirm</button>
-                  <button className="flex-1 px-2 py-1 text-xs bg-black/40 text-muted-foreground border border-white/10 rounded">Cancel</button>
-                </div>
-              </div>
-            </div>
-            {/* ISOLATE VOCALS */}
-            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded transition-all bg-violet-500/20 text-violet-400 border-violet-500/40">
-              <Mic className="w-3 h-3 inline mr-1" />ISOLATE VOCALS
-            </button>
-          </div>
-        </div>
-
-        {/* Waveform area -- recessed display panel */}
-        <div className="relative px-5 py-4 bg-gradient-to-b from-zinc-950 to-black/80" style={{ minHeight: 140 }}>
-          {/* Waveform */}
-          <div className="relative w-full" style={{ height: 80 }}>
-            <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={80} progress={0.4} />
-
-            {/* Trim region overlay — left handle at ~15%, right at ~75% */}
-            <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: '15%' }} />
-            <div className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none" style={{ width: '25%' }} />
-
-            {/* Cut region (red) — small section between 45% and 55% */}
-            <div
-              className="absolute top-0 bottom-0 pointer-events-none"
-              style={{
-                left: '45%',
-                width: '10%',
-                background: 'rgba(239, 68, 68, 0.2)',
-                borderLeft: '2px solid rgba(239, 68, 68, 0.6)',
-                borderRight: '2px solid rgba(239, 68, 68, 0.6)',
-              }}
-            />
-
-            {/* Left trim handle */}
-            <div
-              className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
-              style={{ left: '15%', width: 6, marginLeft: -3 }}
-            >
-              <div className="w-0.5 h-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.7)]" />
-            </div>
-
-            {/* Right trim handle */}
-            <div
-              className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
-              style={{ left: '75%', width: 6, marginLeft: -3 }}
-            >
-              <div className="w-0.5 h-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.7)]" />
-            </div>
-
-            {/* Fade-in handle (yellow, left side) */}
-            <div
-              className="absolute top-0 z-10 pointer-events-none"
-              style={{ left: '15%', width: '8%', height: '100%' }}
-            >
-              <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.4), transparent)' }} />
-            </div>
-
-            {/* Fade-out handle (yellow, right side) */}
-            <div
-              className="absolute top-0 z-10 pointer-events-none"
-              style={{ right: '25%', width: '6%', height: '100%' }}
-            >
-              <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.4), transparent)' }} />
-            </div>
-
-            {/* Playhead */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_6px_rgba(34,211,238,0.7)]"
-              style={{ left: '40%' }}
-            />
-          </div>
-        </div>
-
-        {/* Audio settings row -- console strip */}
-        <div className="px-5 py-3 border-t border-zinc-700/50 flex items-center gap-6 flex-wrap bg-zinc-900/40">
-          {/* Fade In */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-yellow-400/90 w-14 shrink-0">Fade In</span>
-            <input
-              type="range" min={0} max={2000} defaultValue={500} readOnly
-              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yellow-400 [&::-webkit-slider-thumb]:cursor-pointer"
-            />
-            <span className="text-xs font-mono text-yellow-400/80 w-12">500ms</span>
-          </div>
-          {/* Fade Out */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-yellow-400/90 w-14 shrink-0">Fade Out</span>
-            <input
-              type="range" min={0} max={2000} defaultValue={300} readOnly
-              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yellow-400 [&::-webkit-slider-thumb]:cursor-pointer"
-            />
-            <span className="text-xs font-mono text-yellow-400/80 w-12">300ms</span>
-          </div>
-          {/* Volume */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-amber-400/90 w-14 shrink-0">Volume</span>
-            <input
-              type="range" min={50} max={500} defaultValue={100} readOnly
-              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:cursor-pointer"
-            />
-            <span className="text-xs font-mono text-amber-400/80 w-12">100%</span>
-          </div>
-          {/* APPLY button */}
-          <button className="px-4 py-1 text-xs font-bold tracking-wider bg-primary/20 text-primary border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">
-            APPLY
-          </button>
-        </div>
-
-        {/* Playback controls -- transport bar */}
-        <div className="px-5 py-3 border-t border-zinc-700/50 flex items-center gap-4 bg-zinc-900/60">
-          <button className="w-9 h-9 rounded-full border border-primary/50 bg-primary/15 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(34,211,238,0.2)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-shadow">
-            <Play className="w-4 h-4 ml-0.5" />
-          </button>
-          <div className="font-mono text-sm tabular-nums bg-black/50 rounded-md px-3 py-1 border border-zinc-800/60">
-            <span className="text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]">01:23</span>
-            <span className="text-zinc-600 mx-1">/</span>
-            <span className="text-zinc-500">03:45</span>
-          </div>
-          <div className="flex items-center gap-1.5 ml-auto">
-            <Volume2 className="w-3.5 h-3.5 text-muted-foreground" />
-            <input
-              type="range" min={0} max={100} defaultValue={80} readOnly
-              className="w-20 h-1 bg-zinc-700 rounded-full appearance-none
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer"
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── Audio Track ──
-
-function AudioTrackSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Audio Track</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Audio track states for the timeline: empty drop zone (default and collapsed), assigning,
-        active tracks with waveform and controls, and multi-track lane composition.
-      </p>
-
-      <div className="space-y-5 p-6 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-fuchsia-500/10 shadow-[0_0_30px_rgba(232,121,249,0.04),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* Empty (default) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Empty (default)</p>
-          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3.5 h-3.5" />
-            <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
-          </div>
-        </div>
-
-        {/* Empty (collapsed) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Empty (collapsed)</p>
-          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 transition-colors h-8 min-h-8 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3 h-3" />
-            <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
-          </div>
-        </div>
-
-        {/* Assigning */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Assigning</p>
-          <div className="h-14 min-h-14 border border-zinc-700/40 bg-primary/5 rounded-md flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
-          </div>
-        </div>
-
-        {/* Active (cyan) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Active (cyan)</p>
-          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded-md overflow-hidden">
-            {/* Positioned audio block */}
-            <div
-              className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
-              style={{ left: '10%', width: '60%' }}
-            >
-              {/* Waveform inside block */}
-              <div className="absolute inset-0 px-1 flex items-center">
-                <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" progressColor="rgba(0, 255, 255, 0.6)" />
-              </div>
-              {/* Slug label */}
-              <div className="absolute bottom-0.5 left-1 z-20">
-                <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span>
-              </div>
-              {/* Fade-in handle */}
-              <div className="absolute top-0 left-0 bottom-0 z-10" style={{ width: '8%' }}>
-                <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.6), transparent)' }} />
-              </div>
-              {/* Fade-out handle */}
-              <div className="absolute top-0 right-0 bottom-0 z-10" style={{ width: '5%' }}>
-                <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.6), transparent)' }} />
-              </div>
-              {/* Resize handles */}
-              <div className="absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize hover:bg-cyan-400/40 z-20" />
-              <div className="absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize hover:bg-cyan-400/40 z-20" />
-            </div>
-          </div>
-        </div>
-
-        {/* Active (magenta) */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Active (magenta)</p>
-          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded-md overflow-hidden">
-            <div
-              className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
-              style={{ left: '20%', width: '50%' }}
-            >
-              <div className="absolute inset-0 px-1 flex items-center">
-                <StyleguideWaveform url="/fixtures/sfx-hit.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" progressColor="rgba(217, 70, 239, 0.6)" />
-              </div>
-              <div className="absolute bottom-0.5 left-1 z-20">
-                <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@sfx-hit</span>
-              </div>
-              <div className="absolute top-0 left-0 bottom-0 z-10" style={{ width: '6%' }}>
-                <div className="w-full h-full" style={{ background: 'linear-gradient(to right, rgba(250,204,21,0.6), transparent)' }} />
-              </div>
-              <div className="absolute top-0 right-0 bottom-0 z-10" style={{ width: '4%' }}>
-                <div className="w-full h-full" style={{ background: 'linear-gradient(to left, rgba(250,204,21,0.6), transparent)' }} />
-              </div>
-              <div className="absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize hover:bg-fuchsia-400/40 z-20" />
-              <div className="absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize hover:bg-fuchsia-400/40 z-20" />
-            </div>
-          </div>
-        </div>
-
-        {/* Multi-track lane */}
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2.5 uppercase tracking-widest">Multi-track lane</p>
-          <div className="relative h-14 border border-zinc-700/30 bg-zinc-950/40 rounded-md overflow-hidden">
-            {/* Track 1 (cyan) */}
-            <div
-              className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
-              style={{ left: '5%', width: '45%' }}
-            >
-              <div className="absolute inset-0 px-1 flex items-center">
-                <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" />
-              </div>
-              <div className="absolute bottom-0.5 left-1 z-20">
-                <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@music</span>
-              </div>
-            </div>
-            {/* Track 2 (magenta, overlapping) */}
-            <div
-              className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden"
-              style={{ left: '55%', width: '35%' }}
-            >
-              <div className="absolute inset-0 px-1 flex items-center">
-                <StyleguideWaveform url="/fixtures/sfx-click.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" />
-              </div>
-              <div className="absolute bottom-0.5 left-1 z-20">
-                <span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@voiceover</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── Timeline Scrubber ──
-
-function TimelineScrubberSection() {
-  return (
-    <section className="mb-24">
-      {/* Studio section header */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Timeline Scrubber</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Assembled timeline with video slots, playhead, audio track lane, and empty drop zone.
-        Demonstrates full scrubber composition with proportional slot widths and audio positioning.
-      </p>
-
-      <div className="border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10 shadow-[0_0_40px_rgba(251,191,36,0.06),inset_0_1px_0_rgba(255,255,255,0.03)]">
-        {/* Video slots + playhead -- recessed panel */}
-        <div className="relative h-32 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
-          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-          <TimelineSlotDemo label="@s04" flex={2} />
-          <TimelineSlotDemo label="@s05" flex={2} />
-          {/* Playhead at 42% */}
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
-            style={{ left: '42%' }}
-          />
-        </div>
-
-        {/* Audio track lane with positioned block */}
-        <div className="relative h-16 border-t border-zinc-700/50 bg-zinc-900/30">
-          <div
-            className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden"
-            style={{ left: '8%', width: '55%' }}
-          >
-            <div className="absolute inset-0 px-1 flex items-center">
-              <StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} progress={0.42} />
-            </div>
-            <div className="absolute bottom-0.5 left-1 z-20">
-              <span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span>
-            </div>
-          </div>
-          {/* Playhead extension into audio lane */}
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
-            style={{ left: '42%' }}
-          />
-        </div>
-
-        {/* Empty drop zone for second track */}
-        <div className="border-t border-zinc-800/60">
-          <div className="border border-dashed flex items-center justify-center gap-2 transition-colors h-10 min-h-10 border-zinc-600/40 text-muted-foreground/40 m-0.5 rounded-md">
-            <Music className="w-3 h-3" />
-            <span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── Video Settings Modal ──
-
-function VideoSettingsModalSection() {
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Video Settings Modal</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Static render of the video render settings panel. Matches the render_video MCP tool parameters:
-        orientation, audio, subtitles, and OSG overlay.
-      </p>
-
-      <div className="max-w-3xl mx-auto">
-        <div
-          className="relative overflow-hidden rounded-lg border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.15),inset_0_0_30px_rgba(0,255,255,0.05)]"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px)',
-            backgroundSize: '4px 4px',
-          }}
-        >
-          {/* Scanlines overlay */}
-          <div className="scanlines pointer-events-none absolute inset-0 opacity-20" />
-
-          {/* Header */}
-          <div className="relative px-6 pt-5 pb-3 border-b border-primary/20">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-primary/60 shadow-[0_0_8px_rgba(0,255,255,0.5)]" />
-              <h3 className="text-sm font-mono font-bold text-primary tracking-[0.2em] uppercase">Render Settings</h3>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1.5 ml-5 font-mono tracking-wide">vid-hero-intro — my-project</p>
-          </div>
-
-          {/* Body */}
-          <div className="relative px-6 py-5 space-y-5">
-
-            {/* ── Two-column grid ── */}
-            <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-
-              {/* Left column: Orientation + Subtitles */}
-              <div className="space-y-5">
-
-                {/* ── Orientation Section ── */}
-                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
-                  {/* Corner brackets — larger */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                    <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Orientations to Render</span>
-                  </div>
-                  <div className="space-y-2 mt-3">
-                    {['Landscape', 'Portrait'].map((opt) => (
-                      <label key={opt} className="flex items-center gap-3 cursor-pointer group py-0.5">
-                        <div className={cn(
-                          'w-4 h-4 rounded-sm border flex items-center justify-center transition-all',
-                          'bg-primary/20 border-primary/50 shadow-[0_0_6px_rgba(0,255,255,0.2)]'
-                        )}>
-                          <svg className="w-2.5 h-2.5 text-primary" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="2 6 5 9 10 3" />
-                          </svg>
-                        </div>
-                        <span className="text-sm text-foreground group-hover:text-primary transition-colors">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ── Subtitles Section ── */}
-                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
-                  {/* Corner brackets */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Subtitles</span>
-                    </div>
-                    <button className="px-2.5 py-1 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">ON</button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Highlight Style</span>
-                      <div className="flex gap-1.5">
-                        {['TikDance', 'Highlight'].map((opt, i) => (
-                          <button
-                            key={opt}
-                            className={cn(
-                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
-                              i === 0 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Position</span>
-                      <div className="flex gap-1.5">
-                        {['Top', 'Middle', 'Bottom'].map((opt, i) => (
-                          <button
-                            key={opt}
-                            className={cn(
-                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
-                              i === 2 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Font Size</span>
-                      <div className="flex gap-1.5">
-                        {['S', 'M', 'L'].map((opt, i) => (
-                          <button
-                            key={opt}
-                            className={cn(
-                              'flex-1 px-3 py-1.5 text-xs font-medium border rounded-sm transition-all',
-                              i === 1 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/10 text-muted-foreground'
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Gradient divider before color swatches */}
-                    <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent my-1" />
-                    <div className="flex gap-6 pt-1">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs text-muted-foreground tracking-wide">Text</span>
-                        <div className="w-9 h-9 rounded-md border border-white/15 bg-black/30 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
-                          <div className="w-full h-full rounded-sm bg-slate-50" />
-                        </div>
-                        <span className="text-xs font-mono text-muted-foreground">#F8FAFC</span>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs text-muted-foreground tracking-wide">Highlight</span>
-                        <div className="w-9 h-9 rounded-md border border-white/15 bg-black/30 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
-                          <div className="w-full h-full rounded-sm bg-red-800" />
-                        </div>
-                        <span className="text-xs font-mono text-muted-foreground">#991B1B</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right column: Audio + OSG */}
-              <div className="space-y-5">
-
-                {/* ── Audio Section ── */}
-                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
-                  {/* Corner brackets */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Audio</span>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Fade In</span>
-                      <input
-                        type="number" defaultValue={250} min={0} max={5000} readOnly
-                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Fade Out</span>
-                      <input
-                        type="number" defaultValue={1000} min={0} max={5000} readOnly
-                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs w-16 shrink-0 text-muted-foreground tracking-wide">Volume</span>
-                      <input
-                        type="number" defaultValue={60} min={0} max={100} readOnly
-                        className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
-                      />
-                    </div>
-                    {/* Gradient divider */}
-                    <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
-                    <div className="flex gap-2 pt-1">
-                      {[
-                        { label: '60%', fadeIn: 250, fadeOut: 1000, vol: 60 },
-                        { label: '80%', fadeIn: 250, fadeOut: 1000, vol: 80 },
-                      ].map((p) => (
-                        <button key={p.label} className="flex-1 px-3 py-1.5 text-[10px] font-bold border rounded-sm bg-black/40 border-white/15 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all tracking-wider">
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── OSG Section ── */}
-                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-4 shadow-[inset_0_1px_0_rgba(0,255,255,0.06)]">
-                  {/* Corner brackets */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-primary/50" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-primary/50" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-primary/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-primary/50" />
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                      <span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">OSG</span>
-                    </div>
-                    <button className="px-2.5 py-1 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded shadow-[0_0_8px_rgba(0,255,255,0.2)]">ON</button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Asset ID</span>
-                      <input
-                        type="text" defaultValue="img-logo-overlay" readOnly
-                        className="w-full bg-black/50 border border-white/15 text-xs font-mono px-3 py-1.5 rounded-md focus:border-primary/50"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1.5 tracking-wide">Position</span>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'].map((pos, i) => (
-                          <button
-                            key={pos}
-                            className={cn(
-                              'px-3 py-1.5 text-[10px] font-medium border rounded-sm transition-all',
-                              i === 1 ? 'bg-primary/20 border-primary/50 text-primary shadow-[0_0_8px_rgba(0,255,255,0.15)]' : 'bg-black/40 border-white/15 text-muted-foreground'
-                            )}
-                          >
-                            {pos}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="relative px-6 py-4 border-t border-primary/20">
-            <button className="w-full py-2.5 text-sm font-bold tracking-[0.2em] uppercase bg-primary/20 text-primary border border-primary/40 rounded-lg shadow-[0_0_25px_rgba(0,255,255,0.25),inset_0_1px_0_rgba(0,255,255,0.1)] hover:bg-primary/30 hover:shadow-[0_0_35px_rgba(0,255,255,0.35)] transition-all">
-              Apply Settings
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-
-// ── CollapsibleSidebar ──
-
-function CollapsibleSidebarSection() {
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">CollapsibleSidebar</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Layout wrapper with left/right border, configurable width, and collapse transition. Left variant has right
-        border; right variant has left border. Collapsed: 48px, expanded: 280px.
-      </p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">left expanded</p>
-            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-                <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
-                </div>
-              </CollapsibleSidebar>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">left collapsed</p>
-            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
-                <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
-              </CollapsibleSidebar>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">right expanded</p>
-            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-                <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span>
-                </div>
-              </CollapsibleSidebar>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">right collapsed</p>
-            <div className="h-[240px] border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end shadow-[0_2px_20px_-5px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
-                <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
-              </CollapsibleSidebar>
-            </div>
-          </div>
-        </div>
-    </section>
-  );
-}
 
 // ── Gen System ──
 
@@ -2078,280 +644,6 @@ const mockModelOptions: ModelOption[] = [
   },
 ];
 
-// ── ImageParamSlots mock data ──
-
-const mockAssetFields = [
-  { name: 'image_slugs', schema: { type: 'array' as const, items: { type: 'string' }, description: 'Image slugs' }, value: [], required: true },
-];
-
-const mockAssetFieldsFilled = [
-  { name: 'image_slugs', schema: { type: 'array' as const, items: { type: 'string' }, description: 'Image slugs' }, value: ['@img-neon-fox'], required: true },
-];
-
-const mockVideoAssetFields = [
-  { name: 'video_slug', schema: { type: 'string' as const, description: 'Video slug' }, value: '', required: true },
-];
-
-const mockResolvedAssets = [
-  { slug: '@img-neon-fox', src: '/styleguide-img-neon-fox.jpg', type: 'image' as const },
-  { slug: '@img-hero-banner', src: '/styleguide-img-cover.jpg', type: 'image' as const },
-  { slug: '@img-cute-dog-1', src: '/styleguide-vid-purple-grind.jpg', type: 'image' as const },
-  { slug: '@img-cute-dog-2', src: '/styleguide-vid-turret-cyber.jpg', type: 'image' as const },
-  { slug: '@img-hero-front', src: '/styleguide-vid-sky-ghost.jpg', type: 'image' as const },
-  { slug: '@img-hero-side', src: '/styleguide-img-neon-fox.jpg', type: 'image' as const },
-  { slug: '@img-villain-mask', src: '/styleguide-final-thumb.jpg', type: 'image' as const },
-];
-
-// ── ElementGroupEditor mock data ──
-
-const mockElementGroupIndices = [1, 2, 3];
-const mockElementSchemas = new Map<string, JSONSchemaProperty>([
-  ['element1_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 1 slugs', maxItems: 4 }],
-  ['element1_name', { type: 'string', description: 'Element 1 name' }],
-  ['element1_desc', { type: 'string', description: 'Element 1 description' }],
-  ['element2_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 2 slugs', maxItems: 4 }],
-  ['element2_name', { type: 'string', description: 'Element 2 name' }],
-  ['element2_desc', { type: 'string', description: 'Element 2 description' }],
-  ['element3_slugs', { type: 'array', items: { type: 'string' }, description: 'Element 3 slugs', maxItems: 4 }],
-  ['element3_name', { type: 'string', description: 'Element 3 name' }],
-  ['element3_desc', { type: 'string', description: 'Element 3 description' }],
-]);
-const mockElementFormEmpty: Record<string, unknown> = {};
-const mockElementFormFilled: Record<string, unknown> = {
-  element1_slugs: ['@img-cute-dog-1', '@img-cute-dog-2'],
-  element1_name: '',
-  element1_desc: 'A friendly golden retriever',
-};
-const mockElementFormMulti: Record<string, unknown> = {
-  element1_slugs: ['@img-hero-front', '@img-hero-side'],
-  element1_name: 'element_hero',
-  element1_desc: 'Main character, confident stance',
-  element2_slugs: ['@img-villain-mask'],
-  element2_name: 'element_villain',
-  element2_desc: 'Antagonist with dark cloak',
-};
-const mockElementFormPrefilledNoSlugs: Record<string, unknown> = {
-  element1_name: 'element_hero',
-  element1_desc: 'Main character from prompt history',
-  element1_slugs: [],
-  element2_name: 'element_sidekick',
-  element2_desc: 'Comic relief companion',
-  element2_slugs: [],
-};
-
-function GenSystemSection() {
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Gen System</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-6 max-w-2xl leading-relaxed">
-        Generation panel components: structural frames, form fields, execute button, asset drop slots, model selectors,
-        image parameter slots, element group editors, and error states. These compose into the DynamicGen panel used for
-        video and image generation.
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — video</p>
-          <div className="h-[240px]">
-            <GenPanel
-              label="VIDEO_GENERATION"
-              icon={<Film className="w-5 h-5" />}
-              onClose={genNoop}
-              footer={
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>
-                </div>
-              }
-            >
-              <div className="flex-1 flex items-center justify-center">
-                <span className="font-mono text-xs text-primary/30">FORM_FIELDS</span>
-              </div>
-            </GenPanel>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — image (close disabled)</p>
-          <div className="h-[240px]">
-            <GenPanel
-              label="IMAGE_GENERATION"
-              icon={<ImageIcon className="w-5 h-5" />}
-              onClose={genNoop}
-              closeDisabled={true}
-              footer={
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>
-                </div>
-              }
-            >
-              <div className="flex-1 flex items-center justify-center">
-                <span className="font-mono text-xs text-primary/30">FORM_FIELDS</span>
-              </div>
-            </GenPanel>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 mb-6">
-        <div className="flex flex-col gap-2">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — composed demo</p>
-          <div className="h-[420px] max-w-3xl">
-            <GenPanel
-              label="VIDEO_GENERATION"
-              icon={<Film className="w-5 h-5" />}
-              onClose={genNoop}
-              footer={
-                <div className="flex items-center gap-4">
-                  <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
-                  <div className="flex-1" />
-                  <div className="w-48">
-                    <ExecuteButton state="ready" onClick={genNoop} />
-                  </div>
-                </div>
-              }
-            >
-              <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
-                <div className="space-y-6">
-                  <GenField
-                    label="Prompt"
-                    required
-                    actions={
-                      <button className="h-5 px-1.5 font-bold text-[10px] tracking-wider shrink-0 rounded border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:border-primary/60 shadow-[0_0_8px_rgba(0,255,255,0.3)] transition-all duration-200 flex items-center justify-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        <span>Rewrite</span>
-                      </button>
-                    }
-                  >
-                    <GenTextarea
-                      value="A cinematic drone shot sweeping over a coastal city at golden hour, with reflections of sunlight dancing on the water surface"
-                      onChange={genNoop}
-                      rows={4}
-                    />
-                  </GenField>
-                  <div className="flex flex-wrap gap-x-6 gap-y-4">
-                    <GenField label="Aspect Ratio">
-                      <GenToggle value="16:9" onChange={genNoop} options={['16:9', '9:16'] as const} />
-                    </GenField>
-                    <GenField label="Duration">
-                      <GenToggle value="8" onChange={genNoop} options={['5', '8', '10'] as const} />
-                    </GenField>
-                    <GenField label="Model">
-                      <GenToggle value="veo3_fast" onChange={genNoop} options={['veo3_fast', 'veo3'] as const} />
-                    </GenField>
-                  </div>
-                </div>
-              </div>
-            </GenPanel>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4 mb-6 items-start">
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — empty</p>
-          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ImageParamSlots assetFields={mockAssetFields} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — filled</p>
-          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ImageParamSlots assetFields={mockAssetFieldsFilled} imageSlots={{ min: 1, max: 2 }} onChange={genNoop} resolvedAssets={mockResolvedAssets} />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — disabled</p>
-          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ImageParamSlots
-              assetFields={mockAssetFields}
-              imageSlots={{ min: 0, max: 1 }}
-              onChange={genNoop}
-              disabled
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ImageParamSlots — video</p>
-          <div className="w-[190px] border border-primary/20 rounded-lg bg-black/30 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ImageParamSlots assetFields={mockVideoAssetFields} imageSlots={{ min: 1, max: 1 }} onChange={genNoop} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 items-start">
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — empty</p>
-          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ElementGroupEditor
-              elementGroupIndices={mockElementGroupIndices}
-              elementSchemas={mockElementSchemas}
-              formValues={mockElementFormEmpty}
-              assets={[]}
-              onChange={genNoop}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — 1 group</p>
-          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ElementGroupEditor
-              elementGroupIndices={mockElementGroupIndices}
-              elementSchemas={mockElementSchemas}
-              formValues={mockElementFormFilled}
-              resolvedAssets={mockResolvedAssets}
-              assets={[]}
-              onChange={genNoop}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — 2 groups</p>
-          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ElementGroupEditor
-              elementGroupIndices={mockElementGroupIndices}
-              elementSchemas={mockElementSchemas}
-              formValues={mockElementFormMulti}
-              resolvedAssets={mockResolvedAssets}
-              assets={[]}
-              onChange={genNoop}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ElementGroupEditor — prefilled</p>
-          <div className="max-w-md border border-zinc-700/40 rounded-lg bg-black/30 p-4 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ElementGroupEditor
-              elementGroupIndices={mockElementGroupIndices}
-              elementSchemas={mockElementSchemas}
-              formValues={mockElementFormPrefilledNoSlugs}
-              assets={[]}
-              onChange={genNoop}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ErrorPage — default</p>
-          <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ErrorPage />
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ErrorPage — custom</p>
-          <div className="h-[120px] border border-zinc-700/40 rounded-lg overflow-hidden bg-black/40 shadow-[0_2px_15px_-5px_rgba(0,0,0,0.4)]">
-            <ErrorPage message="Model configuration error: missing API key" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // ── Pending Generations Section ──
 
 const pendingGenButtonStates: { label: string; state: GenerationState; generatingCount: number; readyCount: number }[] = [
@@ -2360,220 +652,6 @@ const pendingGenButtonStates: { label: string; state: GenerationState; generatin
   { label: 'ready', state: 'ready', generatingCount: 0, readyCount: 4 },
   { label: 'ready + generating', state: 'ready', generatingCount: 2, readyCount: 3 },
 ];
-
-const mockReadyVideos: MediaItem[] = [
-  { id: 'rv-1', type: 'video', slug: '@hero-intro', title: 'Hero Intro', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 8, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' },
-  { id: 'rv-2', type: 'video', slug: '@product-shot', title: 'Product Shot', filePath: '/styleguide-vid-turret-cyber.jpg', status: 'ready', durationSeconds: 5, origin: 'kling3', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg' },
-  { id: 'rv-3', type: 'video', slug: '@sky-ghost', title: 'Sky Ghost', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 10, origin: 'wan21', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' },
-];
-
-const mockPendingVideos: MediaItem[] = [
-  { id: 'pv-1', type: 'video', slug: '@drone-flyover', title: 'Drone Flyover', filePath: '', status: 'generating', durationSeconds: null, origin: 'veo3', thumbnailSrc: null },
-  { id: 'pv-2', type: 'video', slug: '@neon-walk', title: 'Neon Walk', filePath: '', status: 'downloading', durationSeconds: null, origin: 'kling3', thumbnailSrc: null },
-];
-
-function PendingGenerationsSection() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [flashKey, setFlashKey] = useState(0);
-  const [drawerVideos, setDrawerVideos] = useState(mockReadyVideos);
-  const [drawerPending, setDrawerPending] = useState(mockPendingVideos);
-
-  const handleApprove = useCallback((video: MediaItem) => {
-    setDrawerVideos((prev) => prev.filter((v) => v.id !== video.id));
-  }, []);
-
-  const handleReject = useCallback((video: MediaItem) => {
-    setDrawerVideos((prev) => prev.filter((v) => v.id !== video.id));
-  }, []);
-
-  const resetDrawer = useCallback(() => {
-    setDrawerVideos(mockReadyVideos);
-    setDrawerPending(mockPendingVideos);
-  }, []);
-
-  return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Pending Generations</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Review queue for AI-generated videos. Button shows generation state with flash animation on incoming.
-        Drawer opens full-screen with approve/reject per tile, pending incoming strip, and all-clear auto-close.
-      </p>
-
-      {/* PendingGenerationsButton states */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">PendingGenerationsButton</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Four states: inactive (muted), generating (amber pulse), ready (amber glow), ready + generating (split badge).
-        Click "Flash" to trigger the burst animation on the ready button.
-      </p>
-      <div className="flex flex-wrap items-end gap-6 mb-10">
-        {pendingGenButtonStates.map((s) => (
-          <div key={s.label} className="flex flex-col items-center gap-2">
-            <PendingGenerationsButton
-              state={s.state}
-              generatingCount={s.generatingCount}
-              readyCount={s.readyCount}
-              flashKey={s.state === 'ready' ? flashKey : 0}
-              onClick={() => {}}
-            />
-            <span className="text-[10px] font-mono text-muted-foreground">{s.label}</span>
-          </div>
-        ))}
-        <button
-          onClick={() => setFlashKey((k) => k + 1)}
-          className="text-[10px] font-mono font-bold tracking-wider text-primary/60 border border-primary/30 rounded px-2 py-1 hover:bg-primary/10 transition-colors"
-        >
-          FLASH
-        </button>
-      </div>
-
-      {/* Drawer demo */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">PendingGenerationsDrawer</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Full-screen review overlay. Active tile highlighted with cyan glow. Approve/reject removes tiles with
-        spring animation. Pending section shows incoming generations. All-clear state auto-closes after 1.5s.
-      </p>
-      <div className="flex items-center gap-3 mb-10">
-        <button
-          onClick={() => { resetDrawer(); setDrawerOpen(true); }}
-          className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
-        >
-          OPEN DRAWER (3 ready + 2 pending)
-        </button>
-        <button
-          onClick={() => { setDrawerVideos([]); setDrawerPending([]); setDrawerOpen(true); }}
-          className="text-xs font-mono font-bold tracking-wider text-primary/60 border border-primary/20 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
-        >
-          OPEN EMPTY (all-clear)
-        </button>
-      </div>
-
-      {/* Inline preview: ReviewTile + PendingSection anatomy */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Anatomy (inline preview)</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Review tile with metadata strip and action buttons. Active tile has cyan border glow; inactive tiles are dimmed.
-      </p>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 max-w-4xl mb-10">
-        {/* Active tile mock */}
-        <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col">
-          <div className="aspect-video bg-black relative">
-            <img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
-            <span className="text-primary/70 truncate">@hero-intro</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">0:08</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">veo3</span>
-          </div>
-          <div className="flex border-t border-border/50">
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 border-r border-border/50">
-              <X className="w-3.5 h-3.5" /> REJECT
-            </div>
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary">
-              <Check className="w-3.5 h-3.5" /> APPROVE
-            </div>
-          </div>
-        </div>
-
-        {/* Inactive tile mock */}
-        <div className="rounded-lg border border-border/20 bg-card/60 opacity-60 overflow-hidden flex flex-col">
-          <div className="aspect-video bg-black relative cursor-pointer">
-            <img src="/styleguide-vid-turret-cyber.jpg" alt="" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
-            <span className="text-primary/70 truncate">@product-shot</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">0:05</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">kling3</span>
-          </div>
-          <div className="flex border-t border-border/50">
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 border-r border-border/50">
-              <X className="w-3.5 h-3.5" /> REJECT
-            </div>
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary">
-              <Check className="w-3.5 h-3.5" /> APPROVE
-            </div>
-          </div>
-        </div>
-
-        {/* Mutating tile mock */}
-        <div className="rounded-lg border border-border/20 bg-card/60 overflow-hidden flex flex-col">
-          <div className="aspect-video bg-black relative">
-            <img src="/styleguide-vid-sky-ghost.jpg" alt="" className="w-full h-full object-cover opacity-50" />
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
-            <span className="text-primary/70 truncate">@sky-ghost</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">0:10</span>
-            <span className="text-border">&middot;</span>
-            <span className="shrink-0">wan21</span>
-          </div>
-          <div className="flex border-t border-border/50">
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400/50 border-r border-border/50">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> REJECT
-            </div>
-            <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary/50">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> APPROVE
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Pending strip preview */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Pending Strip</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Bottom bar showing in-flight generation jobs with status tags (GEN, DL).
-      </p>
-      <div className="max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-zinc-950/80 mb-10 shadow-[0_0_20px_-5px_rgba(0,212,255,0.06)]">
-        <div className="border-t border-border/50">
-          <div className="flex items-center gap-2 px-6 py-2">
-            <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
-            <span className="text-[10px] font-mono text-muted-foreground">3</span>
-          </div>
-          <div className="max-h-32 overflow-y-auto px-6 pb-3 flex flex-wrap gap-x-4 gap-y-1.5">
-            {[
-              { slug: '@drone-flyover', status: 'GEN' },
-              { slug: '@neon-walk', status: 'DL' },
-              { slug: '@sunset-pan', status: 'GEN' },
-            ].map((v) => (
-              <div key={v.slug} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin text-amber-500/60 shrink-0" />
-                <span className="truncate text-foreground/70">{v.slug}</span>
-                <span className="text-[10px] bg-amber-500/15 text-amber-500/70 px-1.5 rounded shrink-0">{v.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* All Clear state preview */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">All Clear State</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Shown when all videos are processed. Auto-closes the drawer after 1.5 seconds.
-      </p>
-      <div className="max-w-sm border border-cyan-500/20 rounded-lg overflow-hidden bg-zinc-950/80 py-8 shadow-[0_0_25px_-5px_rgba(0,212,255,0.08)]">
-        <div className="flex flex-col items-center justify-center py-6 px-6">
-          <CheckCircle2 className="w-12 h-12 text-primary mb-3" />
-          <span className="text-sm font-mono font-bold tracking-widest text-primary uppercase">ALL_CLEAR</span>
-        </div>
-      </div>
-
-      <PendingGenerationsDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        videos={drawerVideos}
-        pendingVideos={drawerPending}
-        onApprove={handleApprove}
-        onReject={handleReject}
-      />
-    </section>
-  );
-}
 
 // ── Chat & Messaging Section ──
 
@@ -2589,584 +667,1047 @@ The figure stops, looking up at a massive screen displaying a countdown timer.
 NARRATOR (V.O.)
 But some things never change. The need to create. To tell stories. To be heard.`;
 
-function ChatMessagingSection() {
-  const [transmissionKey, setTransmissionKey] = useState(0);
-  const [transmissionRunning, setTransmissionRunning] = useState(false);
 
-  // ScriptBlock demo
-  const [scriptContent, setScriptContent] = useState(sampleScript);
-  const [scriptOriginal] = useState(sampleScript);
-  const scriptHasChanges = scriptContent !== scriptOriginal;
+// ── Slide Deck Infrastructure ──
 
-  const replayTransmission = useCallback(() => {
-    setTransmissionRunning(false);
-    setTransmissionKey((k) => k + 1);
-    // small delay so React unmounts then remounts
-    setTimeout(() => setTransmissionRunning(true), 50);
+function useSlideScale() {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const update = () => {
+      const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080, 1);
+      setScale(s);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
+  return scale;
+}
 
+function useSlideNavigation(totalSlides: number) {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const goTo = useCallback((i: number) => setCurrentSlide(Math.max(0, Math.min(i, totalSlides - 1))), [totalSlides]);
+  const next = useCallback(() => setCurrentSlide((c) => Math.min(c + 1, totalSlides - 1)), [totalSlides]);
+  const prev = useCallback(() => setCurrentSlide((c) => Math.max(c - 1, 0)), []);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); prev(); }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [next, prev]);
+
+  useEffect(() => {
+    let startY = 0;
+    const onStart = (e: TouchEvent) => { startY = e.touches[0].clientY; };
+    const onEnd = (e: TouchEvent) => {
+      const delta = startY - e.changedTouches[0].clientY;
+      if (Math.abs(delta) > 50) { if (delta > 0) next(); else prev(); }
+    };
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => { window.removeEventListener('touchstart', onStart); window.removeEventListener('touchend', onEnd); };
+  }, [next, prev]);
+
+  return { currentSlide, goTo, next, prev };
+}
+
+const SLIDE_TITLES = [
+  'FINAL VIDEO PREVIEW',
+  'VIDEO GENERATION',
+  'MEDIA CATALOG',
+  'DESIGN SYSTEM',
+  'FORMS & CONTROLS',
+  'CENTER STAGE',
+  'VIDEO EDITING',
+  'AUDIO SYSTEM',
+  'GENERATION SYSTEM',
+  'WORKFLOW',
+];
+
+function Slide({ title, pageNum, totalPages, children }: { title: string; pageNum: number; totalPages: number; children: React.ReactNode }) {
   return (
-    <section className="mb-24">
-      <div className="flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Chat & Messaging</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
+    <div className="relative w-[1920px] h-[1080px] bg-background overflow-hidden">
+      {/* Corner bracket accents */}
+      <div className="absolute top-0 left-0 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
+      <div className="absolute top-0 right-0 w-8 h-8 border-r-2 border-t-2 border-primary/40" />
+      <div className="absolute bottom-0 left-0 w-8 h-8 border-l-2 border-b-2 border-primary/40" />
+      <div className="absolute bottom-0 right-0 w-8 h-8 border-r-2 border-b-2 border-primary/40" />
+      {/* Title label */}
+      <div className="absolute top-4 left-5 z-50">
+        <span className="text-[11px] font-mono font-bold tracking-[0.2em] text-primary/60 uppercase">{title}</span>
       </div>
-      <p className="text-xs font-mono text-zinc-400 mb-8 max-w-2xl leading-relaxed">
-        Terminal-style input with @ autocomplete, transmission confirmation animation, and full script viewer/editor.
-      </p>
-
-      {/* ── ChatInput States ── */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ChatInput</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Terminal prompt with @ autocomplete for asset slugs. Type @ to see the dropdown. Supports keyboard navigation (arrows, tab, enter, escape).
-      </p>
-      <div className="space-y-5 max-w-2xl mb-10">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">default</span>
-          <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">loading</span>
-          <ChatInput isLoading assetSlugs={[]} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">transmitting</span>
-          <ChatInput isTransmitting assetSlugs={[]} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">disabled</span>
-          <ChatInput disabled assetSlugs={[]} />
-        </div>
+      {/* Page number */}
+      <div className="absolute top-4 right-5 z-50">
+        <span className="text-[11px] font-mono font-bold tracking-wider text-primary/40">
+          {String(pageNum).padStart(2, '0')}/{String(totalPages).padStart(2, '0')}
+        </span>
       </div>
-
-      {/* ── TransmissionSequence ── */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">TransmissionSequence</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Cinematic confirmation animation: scan line sweep, typewriter &ldquo;TRANSMISSION_RECEIVED&rdquo;, message echo, then dissolve. Plays once and calls onComplete.
-      </p>
-      <div className="mb-3">
-        <button
-          onClick={replayTransmission}
-          className="text-xs font-mono font-bold tracking-wider text-primary border border-primary/40 rounded px-3 py-1.5 hover:bg-primary/10 transition-colors"
-        >
-          REPLAY
-        </button>
-      </div>
-      <div className="h-48 max-w-2xl border border-cyan-900/30 rounded-lg overflow-hidden bg-black/80 mb-10">
-        {transmissionRunning && (
-          <TransmissionSequence
-            key={transmissionKey}
-            message="gen cinematic drone shot of neon alley at night, rain-slicked streets"
-            onComplete={() => setTransmissionRunning(false)}
-          />
-        )}
-        {!transmissionRunning && (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-xs font-mono text-muted-foreground/40">Click REPLAY to trigger animation</span>
-          </div>
-        )}
-      </div>
-
-      {/* ── ScriptBlock (editable text block) ── */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptBlock</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Labeled editable text block with save/cancel controls. Click the text to enter edit mode. Edit the text to reveal save/cancel buttons.
-      </p>
-      <div className="max-w-2xl mb-10">
-        <ScriptBlock
-          label="Script"
-          content={scriptContent}
-          onChange={setScriptContent}
-          onSave={() => {}}
-          onCancel={() => setScriptContent(scriptOriginal)}
-          hasChanges={scriptHasChanges}
-          isSaving={false}
-          placeholder="Enter script content..."
-        />
-      </div>
-
-      {/* ── ScriptReadout (full component) ── */}
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ScriptReadout</p>
-      <p className="text-xs font-mono text-muted-foreground mb-4">
-        Full script viewer/editor with scanline overlay, pixel grid, corner accents, header with slug + Gen Video button,
-        and editable body. Click the script text to edit.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">with content</span>
-          <div className="h-[400px]">
-            <ScriptReadout
-              content={sampleScript}
-              slug="@hero-script"
-              onSave={() => {}}
-              onGenerateVideo={() => {}}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">generating video</span>
-          <div className="h-[400px]">
-            <ScriptReadout
-              content={sampleScript}
-              slug="@rendering-script"
-              isGenerating={true}
-              onSave={() => {}}
-              onGenerateVideo={() => {}}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
+      {/* Content */}
+      <div className="absolute inset-0 pt-10 pb-4 px-10">{children}</div>
+    </div>
   );
 }
 
-// ── Main Styleguide ──
-
-export function Styleguide() {
+function SlideNav({ current, total, onGoTo }: { current: number; total: number; onGoTo: (i: number) => void }) {
   return (
-    <div className="min-h-screen pt-8 px-8 pb-12 space-y-14">
-      <Toaster />
-      <header className="space-y-3">
-        <h1 className="text-3xl font-mono font-bold tracking-[0.15em]"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span> <span className="text-primary/80 font-semibold">STYLE GUIDE</span></h1>
-        <p className="text-muted-foreground font-mono text-sm leading-relaxed">
-          Media cards, overlays, and center-stage views in all states
-        </p>
-      </header>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+      {Array.from({ length: total }, (_, i) => (
+        <button
+          key={i}
+          onClick={() => onGoTo(i)}
+          className={cn(
+            'w-2.5 h-2.5 rounded-full transition-all duration-300 border',
+            i === current
+              ? 'bg-primary border-primary shadow-[0_0_8px_rgba(0,255,255,0.6)] scale-125'
+              : 'bg-transparent border-primary/30 hover:border-primary/60'
+          )}
+        />
+      ))}
+    </div>
+  );
+}
 
-      {/* App Layout Demo */}
-      <AppLayoutDemo />
+// ── Slide 1: Final Video Preview ──
 
-      <div className="mt-20 flex items-center gap-4 mb-3">
-        <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-        <h2 className="text-2xl font-mono font-black tracking-tight">Component Catalog</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-      </div>
-
-      {/* Header / Nav Bar */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">Header / Nav Bar</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-        <div className="rounded-xl border-2 border-border/60 overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.4)]">
-          <HeaderBar />
-        </div>
-      </section>
-
-      {/* Colors + Typography -- dramatic row */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-16">
-        {/* Colors */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-            <h2 className="text-2xl font-mono font-black tracking-tight">Colors</h2>
-            <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-          </div>
-          <div className="grid grid-cols-4 gap-5">
-            {colors.map((c) => (
-              <div key={c.name} className="space-y-2.5 group">
-                <div className={`${c.bg} rounded-lg h-20 border-2 border-border/40 shadow-lg transition-transform group-hover:scale-105`} />
-                <p className="text-sm font-bold leading-tight tracking-wide">{c.name}</p>
-                <p className="text-xs font-mono text-muted-foreground/80 leading-tight">{c.hex}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Typography */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-            <h2 className="text-2xl font-mono font-black tracking-tight">Typography</h2>
-            <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-          </div>
-          <div className="space-y-5">
-            <div className="pb-4 border-b border-border/20">
-              <p className="text-3xl font-bold">Rajdhani Bold</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-bold / 700</p>
+function Page1_FinalVideoPreview() {
+  return (
+    <div className="w-full h-full overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
+      <div className="grid grid-rows-[48px_1fr_auto] h-full">
+        <HeaderBar />
+        <div className="flex flex-row overflow-hidden">
+          {/* Left Sidebar — Assets */}
+          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+            <div className="flex-1 overflow-y-auto space-y-2">
+              <div className="w-full"><ImageCard item={demoImageMock} /></div>
+              <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
             </div>
-            <div className="pb-4 border-b border-border/20">
-              <p className="text-2xl font-semibold">Rajdhani Semibold</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-semibold / 600</p>
+            <div className="pt-2 mt-auto">
+              <Button variant="dashed" className="w-full" size="sm"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
             </div>
-            <div className="pb-4 border-b border-border/20">
-              <p className="text-xl font-normal">Rajdhani Regular</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-normal / 400</p>
+          </CollapsibleSidebar>
+
+          {/* Center Stage — Video Player */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-4 overflow-hidden flex flex-col">
+              <AssetViewShell fillParent>
+                <video
+                  src="/fixtures/video-frost.mp4"
+                  className="w-full h-full object-contain"
+                  controls
+                  loop
+                  muted
+                  playsInline
+                  poster="/styleguide-img-cover.jpg"
+                />
+              </AssetViewShell>
             </div>
-            <div className="pb-4 border-b border-border/20">
-              <p className="text-xl font-light text-foreground/70">Rajdhani Light</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-light / 300</p>
-            </div>
-            <div className="pb-4 border-b border-border/20">
-              <p className="font-mono text-lg tracking-wide">JetBrains Mono -- 0123456789</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / code</p>
-            </div>
-            <div>
-              <p className="font-mono text-sm text-primary/70 tracking-wide">const x = await fetchData();</p>
-              <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / inline code</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ==================== MEDIA CARD SECTIONS ==================== */}
-
-      {/* Cards -- unique overlays */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">Cards</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-        <div className="flex flex-wrap gap-6">
-          <div className="w-[200px]"><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
-          <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
-          <div className="w-[200px]"><PlanCard item={{ id: 'plan-ready-text', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour. Camera slowly pans right to reveal the protagonist standing on a rooftop.\n\nScene 2: Close-up of hands typing on a laptop. Cut to screen showing data visualization.\n\nScene 3: Interview segment with soft key light.' }} /></div>
-          {cardOverlayMocks.map(({ item, Component }) => (
-            <div key={item.id} className="w-[200px]"><Component item={item} /></div>
-          ))}
-        </div>
-      </section>
-
-      {/* ==================== FORMS & CONTROLS ==================== */}
-
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">Forms & Controls</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-
-        {/* Row 1 — 3-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          {/* Overlays & Menus */}
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Overlays &amp; Menus</p>
-            <div className="flex flex-wrap gap-2">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">Dialog</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>System Diagnostic</DialogTitle>
-                  </DialogHeader>
-                  <p className="text-sm text-muted-foreground">All subsystems nominal. Neural link integrity at 98.7%.</p>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="outline" size="sm">Dismiss</Button>
-                    </DialogClose>
-                    <Button size="sm">Confirm</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Settings className="w-3.5 h-3.5 mr-1.5" />
-                    Dropdown
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
-                  <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
-                  <DropdownMenuItem><Bell className="w-3.5 h-3.5" /> Notifications</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive"><LogOut className="w-3.5 h-3.5" /> Logout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Info className="w-3.5 h-3.5 mr-1.5" />
-                    Popover
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-mono font-bold text-primary">System Info</h4>
-                    <p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1<br />Uptime: 47h 23m<br />Memory: 12.4 GB / 16 GB</p>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm">Tooltip</Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Neural interface ready</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded successfully.' })}
-              >
-                Toast
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => toast({ title: 'SYSTEM ERROR', description: 'Neural link interrupted.', variant: 'destructive' })}
-              >
-                Toast Error
-              </Button>
-              <Button variant="dashed" size="sm" className="text-foreground">
-                <Upload className="w-3.5 h-3.5" />
-                UPLOAD_ASSET
-              </Button>
-              <Button variant="dashed" size="sm" className="text-foreground">
-                <Upload className="w-3.5 h-3.5" />
-                UPLOAD_CLIP
-              </Button>
-            </div>
-            <ContextMenuDemo />
-          </div>
-
-          {/* Inputs */}
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Inputs</p>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-mono text-muted-foreground/70">Default</p>
-                <Input placeholder="Enter text..." />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-mono text-muted-foreground/70">Email</p>
-                <Input type="email" placeholder="user@example.com" />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-mono text-muted-foreground/70">Disabled</p>
-                <Input placeholder="Disabled" disabled />
-              </div>
+            <div className="shrink-0 px-4 pb-3 pt-2">
+              <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
             </div>
           </div>
 
-          {/* Selection Controls */}
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Selection Controls</p>
-            <div className="space-y-4">
-              <div className="w-[200px]">
-                <SelectWithChevronDemo />
-              </div>
-              <GenToggleDemo />
-              <GenSelectDemo />
+          {/* Right Sidebar — Clips */}
+          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+              <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+              <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
             </div>
-          </div>
+          </CollapsibleSidebar>
         </div>
 
-        {/* Row 2 — 2-column grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Gen Text Fields */}
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Gen Text Fields</p>
-            <GenFieldDemo />
-          </div>
-
-          {/* Multi-Prompt Editor */}
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Multi-Prompt Editor</p>
-            <MultiPromptEditorDemo />
-          </div>
-        </div>
-
-        {/* Row 3 — ExecuteButton + CloseButton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">ExecuteButton</p>
-            <ExecuteButtonStatesDemo />
-          </div>
-          <div className="space-y-5">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">CloseButton</p>
-            <div className="flex items-center gap-6">
-              <div className="space-y-2 text-center">
-                <CloseButton onClick={() => {}} />
-                <p className="text-[11px] font-mono text-muted-foreground/70">enabled</p>
-              </div>
-              <div className="space-y-2 text-center">
-                <CloseButton onClick={() => {}} disabled />
-                <p className="text-[11px] font-mono text-muted-foreground/70">disabled</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Row 4 — Asset Drop Slots */}
-        <div className="space-y-5">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Asset Drop Slots</p>
-          <AssetDropSlotDemo />
-        </div>
-      </section>
-
-      {/* Badges */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">Badges</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-        <div className="flex flex-wrap gap-5">
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <SlugBadge slug="@hero-intro" colorScheme="cyan" isError={false} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <SlugBadge slug="@final-export" colorScheme="gold" isError={false} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <SlugBadge slug="@broken-clip" colorScheme="cyan" isError={true} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <SlugBadge slug="@processing" colorScheme="cyan" isError={false} isProcessing />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <DurationBadge duration="1:30" isProcessing={false} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <DurationBadge duration="0:45" isProcessing={true} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <ResolutionBadge width={1920} height={1080} />
-          </div>
-          <div className="relative w-[200px] h-[120px] bg-card border-2 border-border/40 rounded-lg overflow-hidden shadow-lg">
-            <ResolutionBadge width={3840} height={2160} />
-          </div>
-        </div>
-      </section>
-
-      {/* JsonSyntax */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">JsonSyntax</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-        <div className="max-w-xl bg-card border-2 border-border/40 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-          <JsonSyntax data={{
-            project: 'clipfirst',
-            version: 2.1,
-            active: true,
-            models: ['veo3', 'kling3', 'wan21'],
-            config: {
-              resolution: '1920x1080',
-              fps: 30,
-              hdr: null,
-            },
-          }} />
-        </div>
-      </section>
-
-      {/* Timeline Slots */}
-      <section className="space-y-8">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
-          <h2 className="text-2xl font-mono font-black tracking-tight">Timeline Slots</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          {/* Empty */}
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Empty</p>
-            <div className="h-28 flex gap-0.5">
-              <TimelineSlotDemo label="@s01" />
-            </div>
-          </div>
-
-          {/* Filled */}
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Filled</p>
-            <div className="h-28 flex gap-0.5">
-              <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" />
-            </div>
-          </div>
-
-          {/* Active */}
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Active (selected)</p>
-            <div className="h-28 flex gap-0.5">
-              <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive />
-            </div>
-          </div>
-
-          {/* Drag Over */}
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Drag Over</p>
-            <div className="h-28 flex gap-0.5">
-              <TimelineSlotDemo label="@s03" isDragOver />
-            </div>
-          </div>
-        </div>
-
-        {/* Multi-slot timeline with playhead */}
-        <div className="pt-2">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Multi-slot timeline with playhead</p>
-          <div className="relative h-28 flex gap-0.5 border border-border/30 rounded-md overflow-hidden">
+        {/* Timeline */}
+        <div className="border-t border-border bg-card/30">
+          <div className="relative h-28 flex gap-0.5">
             <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
             <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
             <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
             <TimelineSlotDemo label="@s04" flex={2} />
             <TimelineSlotDemo label="@s05" flex={2} />
-            {/* Playhead */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]"
-              style={{ left: '55%' }}
-            />
+            <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
+          </div>
+          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
+            <Music className="w-3.5 h-3.5" />
+            <span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
           </div>
         </div>
-      </section>
+      </div>
+    </div>
+  );
+}
 
-      {/* CenterStage: IdleScreen */}
-      <IdleScreenSection />
+// ── Slide 2: Video Generation (reuses AppLayoutDemo internals) ──
 
-      {/* CenterStage: AssetViewShell */}
-      <AssetViewShellSection />
+function Page2_VideoGeneration() {
+  return (
+    <div className="w-full h-full overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
+      <div className="grid grid-rows-[48px_1fr_auto] h-full">
+        <HeaderBar />
+        <div className="flex flex-row overflow-hidden">
+          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+            <div className="flex-1 overflow-y-auto space-y-2">
+              <div className="w-full"><ImageCard item={demoImageMock} /></div>
+            </div>
+            <div className="pt-2 mt-auto">
+              <Button variant="dashed" className="w-full" size="sm"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
+            </div>
+          </CollapsibleSidebar>
 
-      {/* CenterStage: TransmissionView */}
-      <CenterStageSection />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-4 overflow-y-auto flex flex-col">
+              {/* VIDEO_GENERATION Panel */}
+              <div className="relative w-full flex-1 overflow-hidden bg-gradient-to-b from-cyan-950/30 via-black to-black rounded flex flex-col">
+                <div className="absolute inset-0 pointer-events-none scanlines opacity-20 z-10" />
+                <div className="absolute inset-0 pointer-events-none opacity-5" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '4px 4px' }} />
+                <div className="relative z-20 flex-1 flex flex-col border-2 border-cyan-400/50 shadow-[0_0_30px_-10px_rgba(0,255,255,0.3)]">
+                  <div className="flex items-center justify-between pl-2.5 pr-2.5 py-1.5 shrink-0 border-b-2 border-inherit bg-black/50 backdrop-blur-sm">
+                    <div className="flex items-center gap-2">
+                      <Film className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#22d3ee]" />
+                      <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">VIDEO_GENERATION</span>
+                    </div>
+                    <button className="w-7 h-7 flex items-center justify-center text-primary/60 transition-all hover:bg-red-500/10 hover:text-red-400">
+                      <X className="w-5 h-5 stroke-[2.5]" />
+                    </button>
+                  </div>
+                  <div className="flex flex-row flex-1">
+                    <div className="flex-1 pl-4 pr-8 py-4 mr-2">
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center justify-between">
+                          <BracketLabel label="PROMPT" required />
+                          <button className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono font-bold tracking-wider text-primary bg-primary/20 border border-primary/40 rounded shadow-[0_0_8px_rgba(0,255,255,0.3)]">
+                            <Sparkles className="w-3 h-3" />Rewrite
+                          </button>
+                        </div>
+                        <textarea className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28" defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion." readOnly />
+                      </div>
+                      <div className="flex flex-wrap gap-x-6 gap-y-4 my-3">
+                        <div><BracketLabel label="ASPECT RATIO" /><div className="mt-1.5"><ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} /></div></div>
+                        <div><BracketLabel label="DURATION" /><div className="mt-1.5"><FakeDropdown text="8" /></div></div>
+                        <div><BracketLabel label="MODE" /><div className="mt-1.5"><ToggleGroup options={['std', 'pro']} activeIndex={0} /></div></div>
+                        <div><BracketLabel label="SOUND" /><div className="mt-1.5"><ToggleGroup options={['No', 'Yes']} activeIndex={1} /></div></div>
+                      </div>
+                    </div>
+                    <div className="w-44 border-l border-primary/20 bg-black/20 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <BracketLabel label="IMAGES" />
+                        <span className="text-[10px] font-mono text-primary/50">1/2</span>
+                      </div>
+                      <div className="relative aspect-video border-2 border-primary/50 bg-black/60 overflow-hidden">
+                        <img src="/styleguide-img-cover.jpg" alt="" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="relative aspect-video border-2 border-primary/30 border-dashed bg-black/60 overflow-hidden flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-primary/25 relative z-10" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
+                    <FakeDropdown text="Kling 3.0" />
+                    <button className="relative w-48 py-3 px-6 overflow-hidden font-bold text-sm tracking-[0.2em] uppercase border-2 rounded transition-all duration-300 bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_20px_rgba(34,211,238,0.5)]">
+                      <div className="relative flex items-center justify-center gap-2"><Zap className="w-5 h-5" /><span>GENERATE</span></div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="shrink-0 px-4 pb-3 pt-2">
+              <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} />
+            </div>
+          </div>
 
-      {/* CenterStage: RenderingReadout */}
-      <RenderingReadoutSection />
+          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+              <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+            </div>
+          </CollapsibleSidebar>
+        </div>
 
-      {/* VideoTrimView */}
-      <VideoTrimViewSection />
+        <div className="border-t border-border bg-card/30">
+          <div className="relative h-28 flex gap-0.5">
+            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlotDemo label="@s03" flex={2} />
+            <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '35%' }} />
+          </div>
+          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 h-14 min-h-14 border-border/40 text-muted-foreground/50">
+            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Player Interface */}
-      <PlayerInterfaceSection />
+// ── Slide 3: Media Catalog ──
 
-      {/* Audio Player */}
-      <AudioPlayerSection />
+function Page3_MediaCatalog() {
+  return (
+    <div className="w-full h-full flex flex-col gap-6">
+      <p className="text-xs font-mono text-zinc-400 leading-relaxed max-w-3xl">All 14 card states: receiving, plan, video, image, and final — every lifecycle phase at a glance.</p>
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="grid grid-cols-7 gap-4">
+          {/* Row 1 */}
+          <div><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
+          <div><PlanCard item={{ id: 'plan-empty', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready' }} /></div>
+          <div><PlanCard item={{ id: 'plan-filled', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour.\n\nScene 2: Close-up of hands typing.' }} /></div>
+          <div><VideoCard item={cardOverlayMocks[0].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[1].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[2].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[4].item} /></div>
+        </div>
+        <div className="grid grid-cols-7 gap-4 mt-4">
+          {/* Row 2 */}
+          <div><VideoCard item={cardOverlayMocks[6].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[7].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[8].item} /></div>
+          <div><VideoCard item={cardOverlayMocks[9].item} /></div>
+          <div><ImageCard item={cardOverlayMocks[3].item} /></div>
+          <div><ImageCard item={cardOverlayMocks[5].item} /></div>
+          <div />
+        </div>
+        <div className="flex justify-center gap-4 mt-4">
+          {/* Row 3 center */}
+          <div className="w-[240px]"><FinalVideoCard item={cardOverlayMocks[10].item} /></div>
+          <div className="w-[240px]"><FinalVideoCard item={cardOverlayMocks[11].item} /></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Audio Track */}
-      <AudioTrackSection />
+// ── Slide 4: Design System ──
 
-      {/* Timeline Scrubber */}
-      <TimelineScrubberSection />
+function Page4_DesignSystem() {
+  return (
+    <div className="w-full h-full flex gap-12">
+      {/* Left third: Colors */}
+      <div className="flex-1 flex flex-col">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70 mb-4">COLORS</h3>
+        <div className="grid grid-cols-4 gap-4 flex-1 content-start">
+          {colors.map((c) => (
+            <div key={c.name} className="space-y-2">
+              <div className={`${c.bg} rounded-lg h-16 border-2 border-border/40 shadow-lg`} />
+              <p className="text-sm font-bold leading-tight tracking-wide">{c.name}</p>
+              <p className="text-xs font-mono text-muted-foreground/80">{c.hex}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Center third: Typography */}
+      <div className="flex-1 flex flex-col">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70 mb-4">TYPOGRAPHY</h3>
+        <div className="space-y-4 flex-1">
+          <div className="pb-3 border-b border-border/20">
+            <p className="text-3xl font-bold">Rajdhani Bold</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-bold / 700</p>
+          </div>
+          <div className="pb-3 border-b border-border/20">
+            <p className="text-2xl font-semibold">Rajdhani Semibold</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-semibold / 600</p>
+          </div>
+          <div className="pb-3 border-b border-border/20">
+            <p className="text-xl font-normal">Rajdhani Regular</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-normal / 400</p>
+          </div>
+          <div className="pb-3 border-b border-border/20">
+            <p className="text-xl font-light text-foreground/70">Rajdhani Light</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">font-light / 300</p>
+          </div>
+          <div className="pb-3 border-b border-border/20">
+            <p className="font-mono text-lg tracking-wide">JetBrains Mono — 0123456789</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / code</p>
+          </div>
+          <div>
+            <p className="font-mono text-sm text-primary/70 tracking-wide">const x = await fetchData();</p>
+            <p className="text-xs font-mono text-muted-foreground/50 mt-1">monospace / inline code</p>
+          </div>
+        </div>
+      </div>
+      {/* Right third: Badges + JsonSyntax */}
+      <div className="flex-1 flex flex-col">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70 mb-4">BADGES & DATA</h3>
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><SlugBadge slug="@hero-intro" colorScheme="cyan" isError={false} /></div>
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><SlugBadge slug="@final-export" colorScheme="gold" isError={false} /></div>
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><SlugBadge slug="@broken-clip" colorScheme="cyan" isError={true} /></div>
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><SlugBadge slug="@processing" colorScheme="cyan" isError={false} isProcessing /></div>
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><DurationBadge duration="1:30" isProcessing={false} /></div>
+          <div className="relative h-[90px] bg-card border-2 border-border/40 rounded-lg overflow-hidden"><ResolutionBadge width={1920} height={1080} /></div>
+        </div>
+        <div className="bg-card border-2 border-border/40 rounded-xl p-4 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
+          <JsonSyntax data={{ project: 'clipfirst', version: 2.1, active: true, models: ['veo3', 'kling3', 'wan21'], config: { resolution: '1920x1080', fps: 30 } }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Video Settings Modal */}
-      <VideoSettingsModalSection />
+// ── Slide 5: Forms & Controls ──
 
-      {/* CollapsibleSidebar */}
-      <CollapsibleSidebarSection />
+function Page5_FormsControls() {
+  return (
+    <div className="w-full h-full flex gap-10">
+      {/* Left column: Overlays */}
+      <div className="w-[500px] shrink-0 flex flex-col gap-4 overflow-hidden">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70">OVERLAYS & MENUS</h3>
+        <div className="flex flex-wrap gap-2">
+          <Dialog>
+            <DialogTrigger asChild><Button variant="outline" size="sm">Dialog</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>System Diagnostic</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">All subsystems nominal.</p>
+              <DialogFooter><DialogClose asChild><Button variant="outline" size="sm">Dismiss</Button></DialogClose></DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Settings className="w-3.5 h-3.5 mr-1.5" />Dropdown</Button></DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Actions</DropdownMenuLabel><DropdownMenuSeparator />
+              <DropdownMenuItem><User className="w-3.5 h-3.5" /> Profile</DropdownMenuItem>
+              <DropdownMenuItem><Settings className="w-3.5 h-3.5" /> Settings</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Popover>
+            <PopoverTrigger asChild><Button variant="outline" size="sm"><Info className="w-3.5 h-3.5 mr-1.5" />Popover</Button></PopoverTrigger>
+            <PopoverContent><h4 className="text-sm font-mono font-bold text-primary">System Info</h4><p className="text-xs text-muted-foreground">Renderer: WebGPU v2.1</p></PopoverContent>
+          </Popover>
+          <TooltipProvider>
+            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="sm">Tooltip</Button></TooltipTrigger><TooltipContent><p>Neural interface ready</p></TooltipContent></Tooltip>
+          </TooltipProvider>
+          <Button variant="outline" size="sm" onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded.' })}>Toast</Button>
+          <Button variant="dashed" size="sm" className="text-foreground"><Upload className="w-3.5 h-3.5" />UPLOAD_ASSET</Button>
+        </div>
+        <ContextMenuDemo />
+        <div className="mt-2">
+          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">ExecuteButton</h4>
+          <ExecuteButtonStatesDemo />
+        </div>
+        <div className="flex items-center gap-4 mt-2">
+          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CloseButton</h4>
+          <CloseButton onClick={() => {}} />
+          <CloseButton onClick={() => {}} disabled />
+        </div>
+        <AssetDropSlotDemo />
+      </div>
+      {/* Center column: Inputs + Selects */}
+      <div className="w-[420px] shrink-0 flex flex-col gap-4 overflow-hidden">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70">INPUTS & SELECTION</h3>
+        <div className="space-y-3">
+          <div className="space-y-1.5"><p className="text-[11px] font-mono text-muted-foreground/70">Default</p><Input placeholder="Enter text..." /></div>
+          <div className="space-y-1.5"><p className="text-[11px] font-mono text-muted-foreground/70">Email</p><Input type="email" placeholder="user@example.com" /></div>
+          <div className="space-y-1.5"><p className="text-[11px] font-mono text-muted-foreground/70">Disabled</p><Input placeholder="Disabled" disabled /></div>
+        </div>
+        <div className="w-[200px]"><SelectWithChevronDemo /></div>
+        <GenToggleDemo />
+        <GenSelectDemo />
+      </div>
+      {/* Right column: GenField + MultiPromptEditor */}
+      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+        <h3 className="text-lg font-mono font-bold tracking-wider text-primary/70">GEN FIELDS</h3>
+        <GenFieldDemo />
+        <div className="mt-2">
+          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Multi-Prompt Editor</h4>
+          <MultiPromptEditorDemo />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* Gen System */}
-      <GenSystemSection />
+// ── Slide 6: Center Stage ──
 
-      {/* Pending Generations */}
-      <PendingGenerationsSection />
+function Page6_CenterStage() {
+  const [replayCount, setReplayCount] = useState(0);
+  const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
 
-      {/* Chat & Messaging */}
-      <ChatMessagingSection />
+  return (
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-6">
+      {/* Top-left: IdleScreen */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">IdleScreen</p>
+        <div className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15)] ring-1 ring-cyan-500/20 min-h-0">
+          <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
+        </div>
+      </div>
+      {/* Top-right: TransmissionView */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">TransmissionView</p>
+        <div className="flex-1 flex flex-col gap-3 min-h-0">
+          {centerStageMocks.map((mock) => (
+            <div key={`${mock.id}-${replayCount}`} className="flex-1 bg-black/60 rounded-xl overflow-hidden flex flex-col border border-cyan-500/20 ring-1 ring-cyan-500/20 min-h-0">
+              <TransmissionView message={mock.message} onComplete={handleComplete} />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Bottom-left: AssetViewShell */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AssetViewShell</p>
+        <div className="flex-1 flex gap-4 min-h-0">
+          {assetViewShellMocks.map((mock) => (
+            <div key={mock.id} className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 ring-1 ring-cyan-500/20 min-h-0">
+              <AssetViewShell fillParent={mock.fillParent}>
+                <div className="flex items-center justify-center w-full h-full">
+                  <span className="font-mono text-xs text-cyan-500/40 tracking-widest">CONTENT_AREA</span>
+                </div>
+              </AssetViewShell>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Bottom-right: RenderingReadout */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">RenderingReadout</p>
+        <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+          {renderingReadoutMocks.slice(0, 4).map((mock) => (
+            <div key={mock.id} className="bg-black/60 rounded-xl overflow-hidden border border-cyan-500/20 ring-1 ring-cyan-500/20 min-h-0">
+              <RenderingReadout asset={mock.asset} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
+// ── Slide 7: Video Editing ──
+
+function Page7_VideoEditing() {
+  return (
+    <div className="w-full h-full flex flex-col gap-6">
+      {/* Top 60%: VideoTrimView replica */}
+      <div className="flex-[3] min-h-0">
+        <div className="h-full bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 flex flex-col">
+          <div className="h-10 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Scissors className="w-3.5 h-3.5" />
+              <span className="font-mono text-[11px] tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <button className="px-3.5 py-1 text-[11px] font-bold tracking-[0.15em] uppercase border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_16px_rgba(34,211,238,0.4)] flex items-center gap-1.5">
+                <Scissors className="w-3 h-3" /><span>TRIM</span>
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-1 overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col px-3 py-2 overflow-hidden min-w-0">
+              <div className="flex-1 min-h-0 flex items-center justify-center">
+                <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
+                  <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
+                </div>
+              </div>
+              <div className="shrink-0 mt-2 px-4 py-2 bg-zinc-900/60 rounded-lg border border-zinc-800/40">
+                <div className="relative" style={{ height: 60 }}>
+                  <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 60 }}>
+                    <div className="absolute inset-0 rounded-md overflow-hidden">
+                      <StyleguideWaveform url="/fixtures/video-frost.mp4" height={60} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
+                    </div>
+                    {trimDemoCutRegions.map((region, i) => (
+                      <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
+                    ))}
+                  </div>
+                  <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 60, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
+                </div>
+              </div>
+            </div>
+            <div className="w-[260px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+              <div className="shrink-0 px-4 py-2 border-b border-zinc-700/50 bg-zinc-900/80">
+                <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-2 leading-relaxed scrollbar-hide">
+                <div className="leading-relaxed">
+                  {trimDemoWords.slice(0, 15).map((word, i) => {
+                    const isSelected = trimSelectedWordIndices.has(i);
+                    const isActive = i === trimActiveWordIndex;
+                    return (
+                      <span key={i}>
+                        <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
+                        {word.text.endsWith('.') && <br />}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Bottom 40%: PlayerInterface + Timeline Slots */}
+      <div className="flex-[2] min-h-0 flex gap-6">
+        <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+          {/* Landscape */}
+          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+              <RatioToggle active="16:9" />
+              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            </div>
+            <div className="flex-1 bg-black flex items-center justify-center min-h-0">
+              <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
+            </div>
+          </div>
+          {/* Portrait */}
+          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+              <RatioToggle active="9:16" />
+              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            </div>
+            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+              <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
+            </div>
+          </div>
+          {/* Square */}
+          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+              <RatioToggle active="1:1" />
+              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+            </div>
+            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+              <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
+            </div>
+          </div>
+          {/* Error */}
+          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+              <RatioToggle active="16:9" />
+              <span className="font-mono text-[10px] text-muted-foreground">@broken</span>
+            </div>
+            <div className="flex-1 bg-black flex flex-col items-center justify-center gap-1 text-destructive min-h-0">
+              <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
+            </div>
+          </div>
+        </div>
+        {/* Timeline slots column */}
+        <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
+          <div className="grid grid-cols-2 gap-3 flex-1">
+            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" /></div>
+            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
+            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
+            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s03" isDragOver /></div>
+          </div>
+          <div className="relative h-20 flex gap-0.5 border border-border/30 rounded-md overflow-hidden shrink-0">
+            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+            <TimelineSlotDemo label="@s04" flex={2} />
+            <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '55%' }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide 8: Audio System ──
+
+function Page8_AudioSystem() {
+  return (
+    <div className="w-full h-full flex flex-col gap-5">
+      {/* AudioPlayer */}
+      <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-violet-500/10">
+        <div className="shrink-0 px-5 py-2 border-b border-zinc-700/50 flex items-center justify-between bg-gradient-to-r from-zinc-900 to-zinc-950">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">VOCALS</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_12px_rgba(34,211,238,0.3)]"><Scissors className="w-3 h-3 inline mr-1" />TRIM</button>
+            <button className="px-3 py-1 text-xs font-bold tracking-wider border rounded bg-violet-500/20 text-violet-400 border-violet-500/40"><Mic className="w-3 h-3 inline mr-1" />ISOLATE VOCALS</button>
+          </div>
+        </div>
+        <div className="relative px-5 py-3" style={{ minHeight: 100 }}>
+          <div className="relative w-full" style={{ height: 60 }}>
+            <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={60} progress={0.4} />
+            <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: '15%' }} />
+            <div className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none" style={{ width: '25%' }} />
+            <div className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_6px_rgba(34,211,238,0.7)]" style={{ left: '40%' }} />
+          </div>
+        </div>
+        <div className="px-5 py-2 border-t border-zinc-700/50 flex items-center gap-4 bg-zinc-900/60">
+          <button className="w-8 h-8 rounded-full border border-primary/50 bg-primary/15 flex items-center justify-center text-primary"><Play className="w-3.5 h-3.5 ml-0.5" /></button>
+          <div className="font-mono text-sm tabular-nums"><span className="text-cyan-400">01:23</span><span className="text-zinc-600 mx-1">/</span><span className="text-zinc-500">03:45</span></div>
+        </div>
+      </div>
+
+      {/* AudioTrack states */}
+      <div className="flex-1 min-h-0 p-5 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-fuchsia-500/10 grid grid-cols-3 gap-4 content-start">
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Empty (default)</p>
+          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-14 border-zinc-600/40 text-muted-foreground/40">
+            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Collapsed</p>
+          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40">
+            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Assigning</p>
+          <div className="h-14 border border-zinc-700/40 bg-primary/5 rounded-md flex items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /><span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Active (cyan)</p>
+          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded-md overflow-hidden">
+            <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '10%', width: '60%' }}>
+              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" progressColor="rgba(0, 255, 255, 0.6)" /></div>
+              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Active (magenta)</p>
+          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded-md overflow-hidden">
+            <div className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden" style={{ left: '20%', width: '50%' }}>
+              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/sfx-hit.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" progressColor="rgba(217, 70, 239, 0.6)" /></div>
+              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@sfx-hit</span></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Multi-track</p>
+          <div className="relative h-14 border border-zinc-700/30 bg-zinc-950/40 rounded-md overflow-hidden">
+            <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '5%', width: '45%' }}>
+              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" /></div>
+              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@music</span></div>
+            </div>
+            <div className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden" style={{ left: '55%', width: '35%' }}>
+              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/sfx-click.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" /></div>
+              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@vo</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* TimelineScrubber */}
+      <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10">
+        <div className="relative h-24 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
+          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlotDemo label="@s04" flex={2} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
+        </div>
+        <div className="relative h-12 border-t border-zinc-700/50 bg-zinc-900/30">
+          <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '8%', width: '55%' }}>
+            <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={30} progress={0.42} /></div>
+            <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
+          </div>
+          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
+        </div>
+        <div className="border-t border-zinc-800/60">
+          <div className="border border-dashed flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40 m-0.5 rounded-md">
+            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">DROP_AUDIO_TRACK</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide 9: Generation System ──
+
+function Page9_GenSystem() {
+  return (
+    <div className="w-full h-full flex gap-8">
+      {/* Left: Gen Panel variants */}
+      <div className="flex-1 flex flex-col gap-4 min-h-0">
+        <div className="flex gap-4 h-[220px] shrink-0">
+          <div className="flex-1 flex flex-col gap-1">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — video</p>
+            <div className="flex-1">
+              <GenPanel label="VIDEO_GENERATION" icon={<Film className="w-5 h-5" />} onClose={genNoop} footer={<span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>}>
+                <div className="flex-1 flex items-center justify-center"><span className="font-mono text-xs text-primary/30">FORM_FIELDS</span></div>
+              </GenPanel>
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col gap-1">
+            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — image</p>
+            <div className="flex-1">
+              <GenPanel label="IMAGE_GENERATION" icon={<ImageIcon className="w-5 h-5" />} onClose={genNoop} closeDisabled footer={<span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>}>
+                <div className="flex-1 flex items-center justify-center"><span className="font-mono text-xs text-primary/30">FORM_FIELDS</span></div>
+              </GenPanel>
+            </div>
+          </div>
+        </div>
+        {/* Composed demo */}
+        <div className="flex-1 min-h-0">
+          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Composed GenPanel</p>
+          <div className="h-[calc(100%-20px)]">
+            <GenPanel label="VIDEO_GENERATION" icon={<Film className="w-5 h-5" />} onClose={genNoop} footer={
+              <div className="flex items-center gap-4">
+                <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
+                <div className="flex-1" />
+                <div className="w-48"><ExecuteButton state="ready" onClick={genNoop} /></div>
+              </div>
+            }>
+              <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
+                <div className="space-y-4">
+                  <GenField label="Prompt" required actions={<button className="h-5 px-1.5 font-bold text-[10px] tracking-wider shrink-0 rounded border bg-primary/20 border-primary/40 text-primary flex items-center gap-1"><Sparkles className="w-3 h-3" /><span>Rewrite</span></button>}>
+                    <GenTextarea value="A cinematic drone shot sweeping over a coastal city at golden hour" onChange={genNoop} rows={3} />
+                  </GenField>
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <GenField label="Aspect Ratio"><GenToggle value="16:9" onChange={genNoop} options={['16:9', '9:16'] as const} /></GenField>
+                    <GenField label="Duration"><GenToggle value="8" onChange={genNoop} options={['5', '8', '10'] as const} /></GenField>
+                  </div>
+                </div>
+              </div>
+            </GenPanel>
+          </div>
+        </div>
+      </div>
+
+      {/* Right: VideoSettingsModal */}
+      <div className="w-[700px] shrink-0 flex flex-col min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Video Settings Modal</p>
+        <div className="flex-1 overflow-y-auto relative rounded-lg border border-primary/40 bg-black/95 shadow-[0_0_30px_rgba(0,255,255,0.15)]" style={{ backgroundImage: 'linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px)', backgroundSize: '4px 4px' }}>
+          <div className="scanlines pointer-events-none absolute inset-0 opacity-20" />
+          <div className="relative px-6 pt-4 pb-2 border-b border-primary/20">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-primary/60 shadow-[0_0_8px_rgba(0,255,255,0.5)]" />
+              <h3 className="text-sm font-mono font-bold text-primary tracking-[0.2em] uppercase">Render Settings</h3>
+            </div>
+          </div>
+          <div className="relative px-6 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-4">
+                {/* Orientation */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2"><div className="w-0.5 h-3 bg-primary/50 rounded-full" /><span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Orientations</span></div>
+                  <div className="space-y-1.5">
+                    {['Landscape', 'Portrait'].map((opt) => (
+                      <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                        <div className="w-3.5 h-3.5 rounded-sm border flex items-center justify-center bg-primary/20 border-primary/50">
+                          <svg className="w-2 h-2 text-primary" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="2 6 5 9 10 3" /></svg>
+                        </div>
+                        <span className="text-sm text-foreground">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {/* Subtitles */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><div className="w-0.5 h-3 bg-primary/50 rounded-full" /><span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Subtitles</span></div>
+                    <button className="px-2 py-0.5 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded">ON</button>
+                  </div>
+                  <div className="space-y-2">
+                    <div><span className="text-xs text-muted-foreground block mb-1">Style</span><div className="flex gap-1.5">{['TikDance', 'Highlight'].map((o, i) => <button key={o} className={cn('flex-1 px-2 py-1 text-xs border rounded-sm', i === 0 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{o}</button>)}</div></div>
+                    <div><span className="text-xs text-muted-foreground block mb-1">Position</span><div className="flex gap-1.5">{['Top', 'Mid', 'Bottom'].map((o, i) => <button key={o} className={cn('flex-1 px-2 py-1 text-xs border rounded-sm', i === 2 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{o}</button>)}</div></div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {/* Audio */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2"><div className="w-0.5 h-3 bg-primary/50 rounded-full" /><span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">Audio</span></div>
+                  <div className="space-y-2">
+                    {[{ l: 'Fade In', v: 250 }, { l: 'Fade Out', v: 1000 }, { l: 'Volume', v: 60 }].map((f) => (
+                      <div key={f.l} className="flex items-center gap-2">
+                        <span className="text-xs w-14 shrink-0 text-muted-foreground">{f.l}</span>
+                        <input type="number" defaultValue={f.v} readOnly className="flex-1 bg-black/50 border border-white/15 text-xs font-mono px-2 py-1 rounded-md" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* OSG */}
+                <div className="relative border border-primary/20 bg-black/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><div className="w-0.5 h-3 bg-primary/50 rounded-full" /><span className="text-xs font-mono font-bold uppercase tracking-[0.15em] text-foreground">OSG</span></div>
+                    <button className="px-2 py-0.5 text-[10px] font-bold bg-primary/25 border border-primary/50 text-primary rounded">ON</button>
+                  </div>
+                  <div className="space-y-2">
+                    <div><span className="text-xs text-muted-foreground block mb-1">Position</span><div className="grid grid-cols-2 gap-1.5">{['TL', 'TR', 'BL', 'BR'].map((p, i) => <button key={p} className={cn('px-2 py-1 text-[10px] border rounded-sm', i === 1 ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/15 text-muted-foreground')}>{p}</button>)}</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="relative px-6 py-3 border-t border-primary/20">
+            <button className="w-full py-2 text-sm font-bold tracking-[0.2em] uppercase bg-primary/20 text-primary border border-primary/40 rounded-lg shadow-[0_0_25px_rgba(0,255,255,0.25)]">Apply Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide 10: Workflow ──
+
+function Page10_Workflow() {
+  return (
+    <div className="w-full h-full flex flex-col gap-6">
+      {/* Top row: Sidebars + PendingGenerations */}
+      <div className="flex gap-6 h-[440px] shrink-0">
+        {/* CollapsibleSidebar states */}
+        <div className="flex-1 flex flex-col gap-2">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CollapsibleSidebar</h3>
+          <div className="flex-1 grid grid-cols-4 gap-4 min-h-0">
+            <div className="flex flex-col gap-1 min-h-0">
+              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">left expanded</p>
+              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
+                <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+                  <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+                  <div className="flex-1 flex items-center justify-center"><span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span></div>
+                </CollapsibleSidebar>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 min-h-0">
+              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">left collapsed</p>
+              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
+                <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
+                  <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
+                </CollapsibleSidebar>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 min-h-0">
+              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">right expanded</p>
+              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
+                <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+                  <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
+                  <div className="flex-1 flex items-center justify-center"><span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span></div>
+                </CollapsibleSidebar>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 min-h-0">
+              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">right collapsed</p>
+              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
+                <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
+                  <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
+                </CollapsibleSidebar>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* PendingGenerations */}
+        <div className="w-[440px] shrink-0 flex flex-col gap-2">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Pending Generations</h3>
+          <div className="flex flex-wrap gap-4 mb-3">
+            {pendingGenButtonStates.map((s) => (
+              <div key={s.label} className="flex flex-col items-center gap-1">
+                <PendingGenerationsButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={() => {}} />
+                <span className="text-[9px] font-mono text-muted-foreground">{s.label}</span>
+              </div>
+            ))}
+          </div>
+          {/* Review tile previews */}
+          <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+            <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col min-h-0">
+              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" /></div>
+              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@hero-intro</span><span className="shrink-0">veo3</span></div>
+              <div className="flex border-t border-border/50 mt-auto">
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/20 bg-card/60 opacity-60 overflow-hidden flex flex-col min-h-0">
+              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-turret-cyber.jpg" alt="" className="w-full h-full object-cover" /></div>
+              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@product-shot</span><span className="shrink-0">kling3</span></div>
+              <div className="flex border-t border-border/50 mt-auto">
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom: Chat & Messaging */}
+      <div className="flex-1 min-h-0 flex flex-col gap-4">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Chat & Messaging</h3>
+        <div className="flex-1 flex gap-6 min-h-0">
+          {/* ScriptReadout */}
+          <div className="flex-1 flex gap-4 min-h-0">
+            <div className="flex-1 flex flex-col gap-1 min-h-0">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider shrink-0">with content</span>
+              <div className="flex-1 min-h-0">
+                <ScriptReadout content={sampleScript} slug="@hero-script" onSave={() => {}} onGenerateVideo={() => {}} />
+              </div>
+            </div>
+            <div className="flex-1 flex flex-col gap-1 min-h-0">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider shrink-0">generating video</span>
+              <div className="flex-1 min-h-0">
+                <ScriptReadout content={sampleScript} slug="@render-script" isGenerating onSave={() => {}} onGenerateVideo={() => {}} />
+              </div>
+            </div>
+          </div>
+          {/* ChatInput states */}
+          <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
+            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} /></div>
+            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading assetSlugs={[]} /></div>
+            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting assetSlugs={[]} /></div>
+            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled assetSlugs={[]} /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide Pages Array ──
+
+const SLIDE_PAGES = [
+  Page1_FinalVideoPreview,
+  Page2_VideoGeneration,
+  Page3_MediaCatalog,
+  Page4_DesignSystem,
+  Page5_FormsControls,
+  Page6_CenterStage,
+  Page7_VideoEditing,
+  Page8_AudioSystem,
+  Page9_GenSystem,
+  Page10_Workflow,
+];
+
+// ── Main Styleguide ──
+
+export function Styleguide() {
+  const scale = useSlideScale();
+  const { currentSlide, goTo } = useSlideNavigation(SLIDE_PAGES.length);
+
+  return (
+    <div
+      className="w-screen h-screen overflow-hidden relative"
+      style={{
+        backgroundColor: '#0a0c10',
+        backgroundImage: 'radial-gradient(circle, rgba(0,212,255,0.08) 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+      }}
+    >
+      <Toaster />
+      {/* Centered scaled slide */}
+      <div
+        className="absolute top-1/2 left-1/2"
+        style={{
+          width: 1920,
+          height: 1080,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          transformOrigin: 'center center',
+        }}
+      >
+        {SLIDE_PAGES.map((PageComponent, i) => (
+          <div
+            key={i}
+            className="absolute top-0 left-0 transition-opacity duration-500"
+            style={{
+              opacity: i === currentSlide ? 1 : 0,
+              pointerEvents: i === currentSlide ? 'auto' : 'none',
+            }}
+          >
+            <Slide title={SLIDE_TITLES[i]} pageNum={i + 1} totalPages={SLIDE_PAGES.length}>
+              <PageComponent />
+            </Slide>
+          </div>
+        ))}
+      </div>
+      <SlideNav current={currentSlide} total={SLIDE_PAGES.length} onGoTo={goTo} />
     </div>
   );
 }
