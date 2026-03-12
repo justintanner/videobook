@@ -37,7 +37,7 @@ import type { ExecuteButtonState, ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
-  Film, Grid3x3, Scissors, Music, MoreHorizontal,
+  Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
@@ -260,7 +260,7 @@ function HeaderBar() {
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <CommandButton command="/render_final" icon={<Scissors className="w-3.5 h-3.5" />} />
+        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
       </div>
     </div>
   );

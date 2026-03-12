@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clapperboard } from 'lucide-react';
+import { Mailbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FlashPhase = 'idle' | 'burst' | 'glow' | 'settle';
@@ -145,7 +145,7 @@ export function PendingGenerationsButton({
 
       {/* Icon zone */}
       <div className={cn('flex items-center justify-center gap-1 px-2 h-full transition-colors', styles.iconZone)}>
-        <Clapperboard className="w-3.5 h-3.5" />
+        <Mailbox className="w-3.5 h-3.5" />
         {badgeContent && (
           <span
             className={cn(
