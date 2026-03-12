@@ -579,6 +579,12 @@ const trimSelectedWordIndices = new Set([5, 6, 7]);
 // Active word index (currently playing)
 const trimActiveWordIndex = 11;
 
+const trimTimelineBadges = Array.from({ length: 6 }, (_, i) => ({
+  percent: ((i + 0.5) / 6) * 100,
+  src: i % 2 === 0 ? '/styleguide-img-cover.jpg' : '/styleguide-vid-purple-grind.jpg',
+  time: `0:${Math.round(((i + 0.5) / 6) * 10).toString().padStart(2, '0')}`,
+}));
+
 const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0px 4px, rgba(239,68,68,0.35) 4px 8px)';
 
 
@@ -1129,124 +1135,103 @@ function Page6_CenterStage() {
 
 // ── Slide 7: Video Editing ──
 
-function Page7_VideoEditing() {
+function Page7_Trimming() {
   return (
-    <div className="w-full h-full flex flex-col gap-6">
-      {/* Top 60%: VideoTrimView replica */}
-      <div className="flex-[3] min-h-0">
-        <div className="h-full bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 flex flex-col">
-          <div className="h-10 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
-            <div className="flex items-center gap-2 text-zinc-400">
-              <Scissors className="w-3.5 h-3.5" />
-              <span className="font-mono text-[11px] tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <button className="px-3.5 py-1 text-[11px] font-bold tracking-[0.15em] uppercase border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_16px_rgba(34,211,238,0.4)] flex items-center gap-1.5">
-                <Scissors className="w-3 h-3" /><span>TRIM</span>
-              </button>
-            </div>
+    <div className="w-full h-full flex flex-col">
+      <div className="h-full bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 flex flex-col">
+        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950">
+          <div className="flex items-center gap-2.5 text-zinc-400">
+            <Scissors className="w-4 h-4" />
+            <span className="font-mono text-xs tracking-widest uppercase">TRIMMING @HERO-INTRO</span>
           </div>
-          <div className="flex flex-1 overflow-hidden min-h-0">
-            <div className="flex-1 flex flex-col px-3 py-2 overflow-hidden min-w-0">
-              <div className="flex-1 min-h-0 flex items-center justify-center">
-                <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
-                  <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
-                </div>
+          <div className="flex items-center gap-3">
+            <button className="px-3.5 py-1.5 text-[11px] font-bold tracking-[0.15em] uppercase border rounded text-zinc-400 border-zinc-600 hover:border-zinc-500 flex items-center gap-1.5">
+              <Play className="w-3 h-3" /><span>PREVIEW</span>
+            </button>
+            <button className="px-3.5 py-1.5 text-[11px] font-bold tracking-[0.15em] uppercase border rounded bg-cyan-500/20 text-cyan-400 border-current shadow-[0_0_16px_rgba(34,211,238,0.4)] flex items-center gap-1.5">
+              <Scissors className="w-3 h-3" /><span>TRIM</span>
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          <div className="flex-1 flex flex-col px-4 py-3 overflow-hidden min-w-0">
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
+                <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
               </div>
-              <div className="shrink-0 mt-2 px-4 py-2 bg-zinc-900/60 rounded-lg border border-zinc-800/40">
-                <div className="relative" style={{ height: 60 }}>
-                  <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 60 }}>
-                    <div className="absolute inset-0 rounded-md overflow-hidden">
-                      <StyleguideWaveform url="/fixtures/video-frost.mp4" height={60} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
-                    </div>
-                    {trimDemoCutRegions.map((region, i) => (
-                      <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
-                    ))}
+            </div>
+            <div className="shrink-0 mt-3 px-4 py-3 bg-zinc-900/60 rounded-lg border border-zinc-800/40">
+              <div className="relative overflow-visible" style={{ height: 80 }}>
+                <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 80 }}>
+                  <div className="absolute inset-0 rounded-md overflow-hidden">
+                    <StyleguideWaveform url="/fixtures/video-frost.mp4" height={80} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
                   </div>
-                  <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 60, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
+                  {trimDemoCutRegions.map((region, i) => (
+                    <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
+                  ))}
                 </div>
+
+                {/* Thumbnail badges — mini thumbnails that expand on hover */}
+                {trimTimelineBadges.map((badge, i) => {
+                  const inCut = trimDemoCutRegions.some(
+                    (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
+                  );
+                  const isStuckHover = i === 2;
+                  return (
+                    <div
+                      key={i}
+                      className={cn('absolute z-20', !isStuckHover && 'group')}
+                      style={{
+                        left: `${badge.percent}%`,
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                    >
+                      {/* Timestamp label — visible on hover */}
+                      <div className={cn(
+                        'absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 transition-opacity',
+                        isStuckHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                      )}>
+                        <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
+                      </div>
+                      {/* Badge */}
+                      <div
+                        className={cn(
+                          'border border-cyan-500/30 bg-cover bg-center',
+                          isStuckHover
+                            ? 'w-24 h-[72px] -translate-y-[calc(100%+4px)] shadow-[0_0_12px_rgba(34,211,238,0.4)] border-cyan-400/60 z-40 rounded-md'
+                            : 'w-6 h-6 rounded-sm transition-all duration-200 ease-out group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)] group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40 group-hover:rounded-md',
+                          inCut && 'opacity-50',
+                        )}
+                        style={{ backgroundImage: `url(${badge.src})` }}
+                      />
+                    </div>
+                  );
+                })}
+
+                <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 80, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
               </div>
             </div>
-            <div className="w-[260px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
-              <div className="shrink-0 px-4 py-2 border-b border-zinc-700/50 bg-zinc-900/80">
-                <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
+          </div>
+          <div className="w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+            <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
+              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
+              <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 leading-relaxed scrollbar-hide">
+              <div className="leading-loose">
+                {trimDemoWords.map((word, i) => {
+                  const isSelected = trimSelectedWordIndices.has(i);
+                  const isActive = i === trimActiveWordIndex;
+                  return (
+                    <span key={i}>
+                      <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
+                      {word.text.endsWith('.') && <br />}
+                    </span>
+                  );
+                })}
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-2 leading-relaxed scrollbar-hide">
-                <div className="leading-relaxed">
-                  {trimDemoWords.slice(0, 15).map((word, i) => {
-                    const isSelected = trimSelectedWordIndices.has(i);
-                    const isActive = i === trimActiveWordIndex;
-                    return (
-                      <span key={i}>
-                        <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
-                        {word.text.endsWith('.') && <br />}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
-          </div>
-        </div>
-      </div>
-      {/* Bottom 40%: PlayerInterface + Timeline Slots */}
-      <div className="flex-[2] min-h-0 flex gap-6">
-        <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-          {/* Landscape */}
-          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="16:9" />
-              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
-            </div>
-            <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-              <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
-            </div>
-          </div>
-          {/* Portrait */}
-          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="9:16" />
-              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
-            </div>
-            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
-              <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
-            </div>
-          </div>
-          {/* Square */}
-          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="1:1" />
-              <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
-            </div>
-            <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
-              <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
-            </div>
-          </div>
-          {/* Error */}
-          <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-            <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
-              <RatioToggle active="16:9" />
-              <span className="font-mono text-[10px] text-muted-foreground">@broken</span>
-            </div>
-            <div className="flex-1 bg-black flex flex-col items-center justify-center gap-1 text-destructive min-h-0">
-              <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
-            </div>
-          </div>
-        </div>
-        {/* Timeline slots column */}
-        <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
-          <div className="grid grid-cols-2 gap-3 flex-1">
-            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" /></div>
-            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
-            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
-            <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s03" isDragOver /></div>
-          </div>
-          <div className="relative h-20 flex gap-0.5 border border-border/30 rounded-md overflow-hidden shrink-0">
-            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-            <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-            <TimelineSlotDemo label="@s04" flex={2} />
-            <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '55%' }} />
           </div>
         </div>
       </div>
@@ -1254,9 +1239,76 @@ function Page7_VideoEditing() {
   );
 }
 
-// ── Slide 8: Audio System ──
+// ── Slide 8: Video Editing ──
 
-function Page8_AudioSystem() {
+function Page8_VideoEditing() {
+  return (
+    <div className="w-full h-full flex gap-6">
+      <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+        {/* Landscape */}
+        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+            <RatioToggle active="16:9" />
+            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+          </div>
+          <div className="flex-1 bg-black flex items-center justify-center min-h-0">
+            <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
+          </div>
+        </div>
+        {/* Portrait */}
+        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+            <RatioToggle active="9:16" />
+            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+          </div>
+          <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+            <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
+          </div>
+        </div>
+        {/* Square */}
+        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+            <RatioToggle active="1:1" />
+            <span className="font-mono text-[10px] text-muted-foreground">@hero</span>
+          </div>
+          <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+            <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
+          </div>
+        </div>
+        {/* Error */}
+        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between">
+            <RatioToggle active="16:9" />
+            <span className="font-mono text-[10px] text-muted-foreground">@broken</span>
+          </div>
+          <div className="flex-1 bg-black flex flex-col items-center justify-center gap-1 text-destructive min-h-0">
+            <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
+          </div>
+        </div>
+      </div>
+      {/* Timeline slots column */}
+      <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
+        <div className="grid grid-cols-2 gap-3 flex-1">
+          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s03" isDragOver /></div>
+        </div>
+        <div className="relative h-20 flex gap-0.5 border border-border/30 rounded-md overflow-hidden shrink-0">
+          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlotDemo label="@s04" flex={2} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '55%' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide 9: Audio System ──
+
+function Page9_AudioSystem() {
   return (
     <div className="w-full h-full flex flex-col gap-5">
       {/* AudioPlayer */}
@@ -1364,9 +1416,9 @@ function Page8_AudioSystem() {
   );
 }
 
-// ── Slide 9: Generation System ──
+// ── Slide 10: Generation System ──
 
-function Page9_GenSystem() {
+function Page10_GenSystem() {
   return (
     <div className="w-full h-full flex gap-8">
       {/* Left: Gen Panel variants */}
@@ -1491,9 +1543,9 @@ function Page9_GenSystem() {
   );
 }
 
-// ── Slide 10: Workflow ──
+// ── Slide 11: Workflow ──
 
-function Page10_Workflow() {
+function Page11_Workflow() {
   return (
     <div className="w-full h-full flex flex-col gap-6">
       {/* Top row: Sidebars + PendingGenerations */}
@@ -1612,10 +1664,11 @@ const SLIDE_PAGES = [
   Page4_DesignSystem,
   Page5_FormsControls,
   Page6_CenterStage,
-  Page7_VideoEditing,
-  Page8_AudioSystem,
-  Page9_GenSystem,
-  Page10_Workflow,
+  Page7_Trimming,
+  Page8_VideoEditing,
+  Page9_AudioSystem,
+  Page10_GenSystem,
+  Page11_Workflow,
 ];
 
 // ── Main Styleguide ──
