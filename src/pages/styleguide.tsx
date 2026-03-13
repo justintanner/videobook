@@ -746,6 +746,7 @@ function Page1_FinalVideoPreview() {
               <ClipContextMenu>
                 <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
               </ClipContextMenu>
+              <UploadSlot />
             </div>
           </CollapsibleSidebar>
         </div>
