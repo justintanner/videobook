@@ -4,7 +4,6 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Input } from '@/components/ui/input'
 import { ProjectButton } from './ProjectButton'
 import { useListProjects } from '@/hooks/useListProjects'
-import { useSwitchProject } from '@/hooks/useSwitchProject'
 import { useRenameProject } from '@/hooks/useRenameProject'
 import { useCreateProject } from '@/hooks/useCreateProject'
 import { cn } from '@/lib/utils'
@@ -27,7 +26,6 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   const newInputRef = useRef<HTMLInputElement>(null)
 
   const { projects, refresh } = useListProjects(callTool)
-  const { switchProject } = useSwitchProject(callTool)
   const { renameProject } = useRenameProject(callTool)
   const { createProject } = useCreateProject(callTool)
 
@@ -59,7 +57,6 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   function handleSwitch(slug: string) {
     onProjectChange(slug)
     setOpen(false)
-    switchProject(slug)
   }
 
   async function handleRenameConfirm() {
@@ -86,7 +83,6 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
       onProjectChange(slug)
       cancelCreate()
       setOpen(false)
-      switchProject(slug)
     }
   }
 

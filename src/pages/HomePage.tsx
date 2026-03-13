@@ -19,6 +19,7 @@ import { useUploadFile } from '@/hooks/useUploadFile';
 import { useDefaultProject } from '@/hooks/useDefaultProject';
 import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
+import { useSwitchProject } from '@/hooks/useSwitchProject';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
 const TASK_TYPE_TO_STATE: Record<string, ClipState> = {
@@ -48,6 +49,7 @@ export function HomePage() {
   const { upload } = useUploadFile(callTool);
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result, setSyncResult } = useSync(callTool);
+  const { switchProject } = useSwitchProject(callTool);
 
   const mediaItems = useMemo(() => {
     if (!result?.assets) return [] as Array<MediaItem & { created_at: string }>;
@@ -106,10 +108,12 @@ export function HomePage() {
     Promise.allSettled(uploads).then(() => sync(projectSlug));
   }, [projectSlug, upload, sync]);
 
-  const handleProjectChange = useCallback((slug: string) => {
+  const handleProjectChange = useCallback(async (slug: string) => {
     setSyncResult(undefined);
     setProjectSlug(slug);
-  }, [setProjectSlug, setSyncResult]);
+    const result = await switchProject(slug);
+    if (result) setSyncResult(result);
+  }, [setProjectSlug, setSyncResult, switchProject]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
