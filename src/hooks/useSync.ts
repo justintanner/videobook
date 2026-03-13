@@ -25,7 +25,7 @@ interface UseSyncResult {
   result: SyncResult | undefined;
   error: string | undefined;
   syncCount: number;
-  setSyncResult: (result: SyncResult) => void;
+  setSyncResult: (result: SyncResult | undefined) => void;
 }
 
 export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
@@ -68,9 +68,9 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
     }
   }, []);
 
-  const setSyncResult = useCallback((newResult: SyncResult) => {
+  const setSyncResult = useCallback((newResult: SyncResult | undefined) => {
     setResult(newResult);
-    setSyncCount((c) => c + 1);
+    if (newResult) setSyncCount((c) => c + 1);
   }, []);
 
   return { sync, syncing, result, error, syncCount, setSyncResult };

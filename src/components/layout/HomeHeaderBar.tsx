@@ -2,13 +2,11 @@ import { Clapperboard } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import type { UseMcpResult } from 'use-mcp/react';
-import type { SyncResult } from '@/hooks/useSync';
-
 interface HomeHeaderBarProps {
   pulseKey: number;
   projectSlug: string | undefined;
   callTool: UseMcpResult['callTool'];
-  onProjectChange: (slug: string, syncResult?: SyncResult) => void;
+  onProjectChange: (slug: string) => void;
 }
 
 export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange }: HomeHeaderBarProps) {
