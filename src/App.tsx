@@ -20,12 +20,26 @@ function Dashboard() {
   )
 }
 
+function BlankIndex() {
+  return (
+    <div
+      className="w-screen h-screen"
+      style={{
+        backgroundColor: '#0a0c10',
+        backgroundImage: 'radial-gradient(circle, rgba(0,212,255,0.08) 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+      }}
+    />
+  )
+}
+
 function App() {
   return (
     <Switch>
       <Route path="/styleguide/:page" component={Styleguide} />
       <Route path="/styleguide" component={Styleguide} />
-      <Route path="/" component={Dashboard} />
+      <Route path="/up" component={Dashboard} />
+      <Route path="/" component={BlankIndex} />
     </Switch>
   )
 }
