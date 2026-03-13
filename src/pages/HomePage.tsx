@@ -47,7 +47,7 @@ export function HomePage() {
           {/* Center Stage */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              <IdleScreen label="CLIPFIRST" fillParent />
+              <IdleScreen label="WAITING FOR INPUT" fillParent />
             </div>
             <div className="shrink-0 px-4 pb-3 pt-2">
               <ChatInput assetSlugs={[]} />
