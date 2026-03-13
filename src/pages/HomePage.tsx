@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Grid3x3 } from 'lucide-react';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -7,14 +7,33 @@ import { IdleScreen } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
+import { DropzoneOverlay } from '@/components/DropzoneOverlay';
+import { useMcpConnection } from '@/hooks/useMcpConnection';
+import { useUploadFile } from '@/hooks/useUploadFile';
+import { useDefaultProject } from '@/hooks/useDefaultProject';
+import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
+  const { callTool, state } = useMcpConnection();
+  const { upload } = useUploadFile(callTool);
+  const { projectSlug } = useDefaultProject(callTool, state);
+
+  const handleDrop = useCallback((files: File[]) => {
+    if (!projectSlug) return;
+    for (const file of files) {
+      upload(projectSlug, file);
+    }
+  }, [projectSlug, upload]);
+
+  const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
+
   return (
     <div className="w-screen h-screen bg-background overflow-hidden">
+      <DropzoneOverlay isDragging={isDragging} />
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
         <HomeHeaderBar />
 
