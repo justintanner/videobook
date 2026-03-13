@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
+import { AudioCard } from '@/components/sidebar/cards/AudioCard';
+import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { ReceivingGhostCard } from '@/components/sidebar/cards/ReceivingGhostCard';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -253,7 +255,7 @@ function HeaderBar() {
         <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
 
         {/* Generations */}
-        <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
+        <InboxButton state="ready" generatingCount={0} readyCount={4} flashKey={0} onClick={() => {}} />
       </div>
 
       {/* Right side */}
@@ -777,6 +779,8 @@ function Page1_FinalVideoPreview() {
             <div className="flex-1 overflow-y-auto space-y-2">
               <div className="w-full"><ImageCard item={demoImageMock} /></div>
               <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
+              <div className="w-full"><ScriptCard item={{ id: 'demo-script', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} /></div>
+              <div className="w-full"><AudioCard item={{ id: 'demo-audio', type: 'audio', slug: '@bg-music', title: 'Background Music', filePath: '/audio.mp3', status: 'ready' }} /></div>
             </div>
             <div className="pt-2 mt-auto">
               <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
@@ -808,7 +812,13 @@ function Page1_FinalVideoPreview() {
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2">
               <ClipContextMenu>
-                <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+                <div className="w-full"><VideoCard item={{ id: 'clip-s01', type: 'video', slug: '@s01', title: 'Purple Grind', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }} /></div>
+              </ClipContextMenu>
+              <ClipContextMenu>
+                <div className="w-full"><VideoCard item={{ id: 'clip-s02', type: 'video', slug: '@s02', title: 'Neon Fox', filePath: '/styleguide-img-neon-fox.jpg', status: 'ready', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/styleguide-img-neon-fox.jpg' }} /></div>
+              </ClipContextMenu>
+              <ClipContextMenu>
+                <div className="w-full"><VideoCard item={{ id: 'clip-s03', type: 'video', slug: '@s03', title: 'Sky Ghost', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 75, origin: 'veo3', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' }} /></div>
               </ClipContextMenu>
               <ClipContextMenu>
                 <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
@@ -827,9 +837,12 @@ function Page1_FinalVideoPreview() {
             <TimelineSlotDemo label="@s05" flex={2} />
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
           </div>
-          <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 transition-colors h-14 min-h-14 border-border/40 text-muted-foreground/50">
-            <Music className="w-3.5 h-3.5" />
-            <span className="font-mono text-xs">/add_audio</span>
+          <div className="relative h-12 border-t border-border/30 bg-card/20">
+            <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '8%', width: '55%' }}>
+              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={30} progress={0.42} /></div>
+              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
+            </div>
+            <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
           </div>
         </div>
       </div>
