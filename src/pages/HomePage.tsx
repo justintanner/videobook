@@ -1,8 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Grid3x3 } from 'lucide-react';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
+import { ImageCard } from '@/components/sidebar/cards/ImageCard';
+import { AudioCard } from '@/components/sidebar/cards/AudioCard';
+import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
+import { PlanCard } from '@/components/sidebar/cards/PlanCard';
+import { VideoCard } from '@/components/sidebar/cards/VideoCard';
+import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { IdleScreen } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -13,6 +19,25 @@ import { useUploadFile } from '@/hooks/useUploadFile';
 import { useDefaultProject } from '@/hooks/useDefaultProject';
 import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
+import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
+
+const TASK_TYPE_TO_STATE: Record<string, ClipState> = {
+  generate: 'generating',
+  render: 'rendering',
+  download: 'downloading',
+  transcribe: 'transcribing',
+};
+
+const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
+const CLIP_TYPES = new Set<string>(['video', 'final']);
+
+function humanizeId(id: string): string {
+  const rawName = id.replace(/^[a-z]+-/, '');
+  return rawName
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -22,7 +47,50 @@ export function HomePage() {
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
-  const { sync, syncCount } = useSync(callTool);
+  const { sync, syncCount, result } = useSync(callTool);
+
+  const mediaItems = useMemo(() => {
+    if (!result?.assets) return [] as Array<MediaItem & { created_at: string }>;
+    const pendingMap = new Map<string, ClipState>();
+    const failedSet = new Set<string>();
+    for (const p of result.pending) {
+      pendingMap.set(p.assetId, TASK_TYPE_TO_STATE[p.taskType] ?? 'loading');
+    }
+    for (const f of result.failed) {
+      failedSet.add(f.assetId);
+    }
+
+    return result.assets.map((asset) => {
+      let status: ClipState = 'ready';
+      if (pendingMap.has(asset.id)) {
+        status = pendingMap.get(asset.id)!;
+      } else if (failedSet.has(asset.id)) {
+        status = 'error';
+      }
+      return {
+        id: asset.id,
+        type: asset.type as AssetType,
+        slug: `@${asset.id}`,
+        title: humanizeId(asset.id),
+        filePath: asset.media_url ?? '',
+        thumbnailSrc: asset.thumbnail_url,
+        status,
+        created_at: asset.created_at,
+      };
+    });
+  }, [result]);
+
+  const assets = useMemo(() => {
+    const items = mediaItems.filter((m) => ASSET_TYPES.has(m.type));
+    const sorted = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return sortOrder === 'newest' ? sorted.reverse() : sorted;
+  }, [mediaItems, sortOrder]);
+
+  const clips = useMemo(() => {
+    const items = mediaItems.filter((m) => CLIP_TYPES.has(m.type));
+    const sorted = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return sortOrder === 'newest' ? sorted.reverse() : sorted;
+  }, [mediaItems, sortOrder]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -72,6 +140,14 @@ export function HomePage() {
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
             <div className="flex-1 overflow-y-auto space-y-2">
+              {assets.map((item) => (
+                <div key={item.id} className="w-full">
+                  {item.type === 'image' && <ImageCard item={item} />}
+                  {item.type === 'audio' && <AudioCard item={item} />}
+                  {item.type === 'script' && <ScriptCard item={item} />}
+                  {item.type === 'plan' && <PlanCard item={item} />}
+                </div>
+              ))}
               <UploadSlot />
             </div>
           </CollapsibleSidebar>
@@ -106,6 +182,12 @@ export function HomePage() {
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+              {clips.map((item) => (
+                <div key={item.id} className="w-full">
+                  {item.type === 'video' && <VideoCard item={item} />}
+                  {item.type === 'final' && <FinalVideoCard item={item} />}
+                </div>
+              ))}
               <UploadSlot />
             </div>
           </CollapsibleSidebar>

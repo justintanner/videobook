@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
+import { readdir, access } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
@@ -12,14 +13,45 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { readAndAssessDialog } from "../dialog-quality.js";
 import type { ToolDef } from "./tool-def.js";
 
+type SyncAsset = {
+  id: string;
+  type: string;
+  created_at: string;
+  path: string;
+  media_url: string | null;
+  thumbnail_url: string | null;
+};
+
 type SyncResult = {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
-  assets: Array<{ id: string; type: string; created_at: string; path: string }>;
+  assets: SyncAsset[];
 };
+
+async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
+  try {
+    const files = await readdir(assetDir);
+    const video = files.find((f) => /^original\.(mp4|mov)$/i.test(f));
+    if (video) return video;
+    const image = files.find((f) => /^original\.(png|jpe?g|webp)$/i.test(f));
+    if (image) return image;
+    return files.find((f) => /^original\.(mp3|wav)$/i.test(f)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function findThumbnailFile(assetDir: string): Promise<boolean> {
+  try {
+    await access(join(assetDir, "original_frames", "0.00.jpg"));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function syncDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -86,7 +118,20 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
         result.auto_render.push({ assetId: action.assetId, jobId });
       }
 
-      result.assets = await fs.listAssets(project_slug);
+      const rawAssets = await fs.listAssets(project_slug);
+      result.assets = await Promise.all(
+        rawAssets.map(async (a): Promise<SyncAsset> => {
+          const mediaFile = await findPrimaryMediaFile(a.path);
+          const media_url = mediaFile
+            ? `/files/${project_slug}/${a.id}/${mediaFile}`
+            : null;
+          const hasThumbnail = await findThumbnailFile(a.path);
+          const thumbnail_url = hasThumbnail
+            ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
+            : media_url;
+          return { ...a, media_url, thumbnail_url };
+        }),
+      );
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],

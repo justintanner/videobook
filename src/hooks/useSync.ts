@@ -6,6 +6,8 @@ interface SyncAsset {
   type: string;
   created_at: string;
   path: string;
+  media_url: string | null;
+  thumbnail_url: string | null;
 }
 
 interface SyncResult {
