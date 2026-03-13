@@ -10,7 +10,7 @@ interface SyncAsset {
   thumbnail_url: string | null;
 }
 
-interface SyncResult {
+export interface SyncResult {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
@@ -25,6 +25,7 @@ interface UseSyncResult {
   result: SyncResult | undefined;
   error: string | undefined;
   syncCount: number;
+  setSyncResult: (result: SyncResult) => void;
 }
 
 export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
@@ -67,5 +68,10 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
     }
   }, []);
 
-  return { sync, syncing, result, error, syncCount };
+  const setSyncResult = useCallback((newResult: SyncResult) => {
+    setResult(newResult);
+    setSyncCount((c) => c + 1);
+  }, []);
+
+  return { sync, syncing, result, error, syncCount, setSyncResult };
 }

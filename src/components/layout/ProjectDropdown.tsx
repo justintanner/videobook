@@ -9,11 +9,12 @@ import { useRenameProject } from '@/hooks/useRenameProject'
 import { useCreateProject } from '@/hooks/useCreateProject'
 import { cn } from '@/lib/utils'
 import type { UseMcpResult } from 'use-mcp/react'
+import type { SyncResult } from '@/hooks/useSync'
 
 interface ProjectDropdownProps {
   projectSlug: string | undefined
   callTool: UseMcpResult['callTool']
-  onProjectChange: (slug: string) => void
+  onProjectChange: (slug: string, syncResult?: SyncResult) => void
 }
 
 export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: ProjectDropdownProps) {
@@ -54,9 +55,9 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   }
 
   async function handleSwitch(slug: string) {
-    const ok = await switchProject(slug)
-    if (ok) {
-      onProjectChange(slug)
+    const syncResult = await switchProject(slug)
+    if (syncResult) {
+      onProjectChange(slug, syncResult)
       setOpen(false)
     }
   }
@@ -82,9 +83,9 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
     }
     const created = await createProject(slug)
     if (created) {
-      const switched = await switchProject(slug)
-      if (switched) {
-        onProjectChange(slug)
+      const syncResult = await switchProject(slug)
+      if (syncResult) {
+        onProjectChange(slug, syncResult)
         cancelCreate()
         setOpen(false)
       }

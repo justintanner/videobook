@@ -19,6 +19,7 @@ import { useUploadFile } from '@/hooks/useUploadFile';
 import { useDefaultProject } from '@/hooks/useDefaultProject';
 import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
+import type { SyncResult } from '@/hooks/useSync';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
 const TASK_TYPE_TO_STATE: Record<string, ClipState> = {
@@ -47,7 +48,7 @@ export function HomePage() {
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
-  const { sync, syncCount, result } = useSync(callTool);
+  const { sync, syncCount, result, setSyncResult } = useSync(callTool);
 
   const mediaItems = useMemo(() => {
     if (!result?.assets) return [] as Array<MediaItem & { created_at: string }>;
@@ -106,6 +107,11 @@ export function HomePage() {
     Promise.allSettled(uploads).then(() => sync(projectSlug));
   }, [projectSlug, upload, sync]);
 
+  const handleProjectChange = useCallback((slug: string, syncResult?: SyncResult) => {
+    setProjectSlug(slug);
+    if (syncResult) setSyncResult(syncResult);
+  }, [setProjectSlug, setSyncResult]);
+
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
   return (
@@ -116,7 +122,7 @@ export function HomePage() {
           pulseKey={syncCount}
           projectSlug={projectSlug}
           callTool={callTool}
-          onProjectChange={setProjectSlug}
+          onProjectChange={handleProjectChange}
         />
 
         <div className="flex flex-row overflow-hidden">
