@@ -21,7 +21,7 @@ export function HomePage() {
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
-  const { projectSlug } = useDefaultProject(callTool, state);
+  const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount } = useSync(callTool);
 
   // Sync on mount + poll every 5s while page is active
@@ -44,7 +44,12 @@ export function HomePage() {
     <div className="w-screen h-screen bg-background overflow-hidden">
       <DropzoneOverlay isDragging={isDragging} />
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HomeHeaderBar pulseKey={syncCount} projectSlug={projectSlug} />
+        <HomeHeaderBar
+          pulseKey={syncCount}
+          projectSlug={projectSlug}
+          callTool={callTool}
+          onProjectChange={setProjectSlug}
+        />
 
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets */}

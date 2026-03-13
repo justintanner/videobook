@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 
 interface UseDefaultProjectResult {
   projectSlug: string | undefined;
+  setProjectSlug: React.Dispatch<React.SetStateAction<string | undefined>>;
   loading: boolean;
   error: string | undefined;
 }
@@ -41,5 +42,5 @@ export function useDefaultProject(
     }
   }, [state, resolve]);
 
-  return { projectSlug, loading, error };
+  return { projectSlug, setProjectSlug, loading, error };
 }

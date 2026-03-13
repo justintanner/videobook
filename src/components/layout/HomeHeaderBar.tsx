@@ -1,8 +1,16 @@
 import { Clapperboard } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
-import { ProjectButton } from './ProjectButton';
+import { ProjectDropdown } from './ProjectDropdown';
+import type { UseMcpResult } from 'use-mcp/react';
 
-export function HomeHeaderBar({ pulseKey, projectSlug }: { pulseKey: number; projectSlug: string | undefined }) {
+interface HomeHeaderBarProps {
+  pulseKey: number;
+  projectSlug: string | undefined;
+  callTool: UseMcpResult['callTool'];
+  onProjectChange: (slug: string) => void;
+}
+
+export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -16,7 +24,11 @@ export function HomeHeaderBar({ pulseKey, projectSlug }: { pulseKey: number; pro
         </div>
 
         {/* Project selector */}
-        <ProjectButton projectSlug={projectSlug} />
+        <ProjectDropdown
+          projectSlug={projectSlug}
+          callTool={callTool}
+          onProjectChange={onProjectChange}
+        />
 
         {/* Generations */}
         <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />

@@ -41,10 +41,11 @@ import {
   FolderOpen, X, ChevronDown, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
-  AlertTriangle, AudioLines, Plus,
+  AlertTriangle, AudioLines, Plus, Pencil,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
   Check,
 } from 'lucide-react';
+import { ProjectButton } from '@/components/layout/ProjectButton';
 
 const colors = [
   { name: 'Primary', bg: 'bg-primary', hex: '#00D4FF' },
@@ -1633,6 +1634,115 @@ function Page11_Workflow() {
   );
 }
 
+// ── Slide 12: Project Dropdown ──
+
+const mockProjects = [
+  { slug: 'summer-campaign', active: false },
+  { slug: 'product-launch', active: true },
+  { slug: 'brand-refresh', active: false },
+  { slug: 'q4-video-ads', active: false },
+];
+
+function Page12_ProjectDropdown() {
+  return (
+    <div className="w-full h-full flex gap-10">
+      {/* Column 1: Closed button */}
+      <div className="w-[280px] shrink-0 flex flex-col gap-4">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Closed State</h3>
+        <div className="flex flex-col gap-3">
+          <ProjectButton projectSlug="product-launch" />
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">click to open popover</p>
+        </div>
+      </div>
+
+      {/* Column 2: Open popover panel */}
+      <div className="w-[280px] shrink-0 flex flex-col gap-4">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Open — Project List</h3>
+        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+          <div className="py-1">
+            {mockProjects.map((p) => (
+              <div
+                key={p.slug}
+                className={cn(
+                  'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
+                  'hover:bg-primary/10',
+                  p.active && 'bg-primary/5'
+                )}
+              >
+                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-primary' : 'bg-transparent')} />
+                <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">{p.slug}</span>
+                <button className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all">
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border/40" />
+          <div className="py-1">
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10 transition-colors">
+              <Plus className="w-3.5 h-3.5 text-primary/60" />
+              <span className="font-mono text-xs tracking-wide text-primary/60">New Project</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Column 3: Rename editing mode */}
+      <div className="w-[280px] shrink-0 flex flex-col gap-4">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Rename Mode</h3>
+        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+          <div className="py-1">
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
+              <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">summer-campaign</span>
+            </div>
+            {/* Editing row */}
+            <div className="flex items-center gap-1 px-2 py-1">
+              <Input defaultValue="product-launch-v2" className="h-7 text-xs font-mono flex-1" />
+              <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+              <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
+              <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">brand-refresh</span>
+            </div>
+          </div>
+          <div className="border-t border-border/40" />
+          <div className="py-1">
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+              <Plus className="w-3.5 h-3.5 text-primary/60" />
+              <span className="font-mono text-xs tracking-wide text-primary/60">New Project</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Column 4: New project inline input */}
+      <div className="w-[280px] shrink-0 flex flex-col gap-4">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">New Project Mode</h3>
+        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+          <div className="py-1">
+            {mockProjects.slice(0, 2).map((p) => (
+              <div key={p.slug} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-primary' : 'bg-transparent')} />
+                <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">{p.slug}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border/40" />
+          <div className="py-1">
+            <div className="flex items-center gap-1 px-2 py-1">
+              <Input defaultValue="holiday-promo" placeholder="project-slug" className="h-7 text-xs font-mono flex-1" />
+              <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+              <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -1647,6 +1757,7 @@ const SLIDE_PAGES = [
   Page9_AudioSystem,
   Page10_GenSystem,
   Page11_Workflow,
+  Page12_ProjectDropdown,
 ];
 
 // ── Main Styleguide ──
