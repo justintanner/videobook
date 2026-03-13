@@ -1658,30 +1658,30 @@ function Page12_ProjectDropdown() {
       {/* Column 2: Open popover panel */}
       <div className="w-[280px] shrink-0 flex flex-col gap-4">
         <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Open — Project List</h3>
-        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
           <div className="py-1">
             {mockProjects.map((p) => (
               <div
                 key={p.slug}
                 className={cn(
                   'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
-                  'hover:bg-primary/10',
-                  p.active && 'bg-primary/5'
+                  'hover:bg-emerald-500/10',
+                  p.active && 'bg-emerald-500/5'
                 )}
               >
-                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-primary' : 'bg-transparent')} />
-                <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">{p.slug}</span>
+                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
                 <button className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all">
                   <Pencil className="w-3 h-3" />
                 </button>
               </div>
             ))}
           </div>
-          <div className="border-t border-border/40" />
+          <div className="border-t border-emerald-500/20" />
           <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10 transition-colors">
-              <Plus className="w-3.5 h-3.5 text-primary/60" />
-              <span className="font-mono text-xs tracking-wide text-primary/60">New Project</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10 transition-colors">
+              <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+              <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
             </div>
           </div>
         </div>
@@ -1690,11 +1690,11 @@ function Page12_ProjectDropdown() {
       {/* Column 3: Rename editing mode */}
       <div className="w-[280px] shrink-0 flex flex-col gap-4">
         <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Rename Mode</h3>
-        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
           <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
               <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
-              <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">summer-campaign</span>
+              <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">summer-campaign</span>
             </div>
             {/* Editing row */}
             <div className="flex items-center gap-1 px-2 py-1">
@@ -1702,16 +1702,16 @@ function Page12_ProjectDropdown() {
               <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
               <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
               <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
-              <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">brand-refresh</span>
+              <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">brand-refresh</span>
             </div>
           </div>
-          <div className="border-t border-border/40" />
+          <div className="border-t border-emerald-500/20" />
           <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
-              <Plus className="w-3.5 h-3.5 text-primary/60" />
-              <span className="font-mono text-xs tracking-wide text-primary/60">New Project</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+              <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+              <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
             </div>
           </div>
         </div>
@@ -1720,16 +1720,16 @@ function Page12_ProjectDropdown() {
       {/* Column 4: New project inline input */}
       <div className="w-[280px] shrink-0 flex flex-col gap-4">
         <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">New Project Mode</h3>
-        <div className="rounded-md border border-border/60 bg-card w-64 overflow-hidden">
+        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
           <div className="py-1">
             {mockProjects.slice(0, 2).map((p) => (
-              <div key={p.slug} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10">
-                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-primary' : 'bg-transparent')} />
-                <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">{p.slug}</span>
+              <div key={p.slug} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
               </div>
             ))}
           </div>
-          <div className="border-t border-border/40" />
+          <div className="border-t border-emerald-500/20" />
           <div className="py-1">
             <div className="flex items-center gap-1 px-2 py-1">
               <Input defaultValue="holiday-promo" placeholder="project-slug" className="h-7 text-xs font-mono flex-1" />

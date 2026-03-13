@@ -98,7 +98,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-64 p-0 bg-card border-border/60"
+        className="w-64 p-0 bg-card border-emerald-500/25"
       >
         {/* Project list */}
         <div className="max-h-60 overflow-y-auto py-1">
@@ -140,18 +140,18 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                 key={project.slug}
                 className={cn(
                   'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
-                  'hover:bg-primary/10',
-                  isActive && 'bg-primary/5'
+                  'hover:bg-emerald-500/10',
+                  isActive && 'bg-emerald-500/5'
                 )}
                 onClick={() => handleSwitch(project.slug)}
               >
                 <div
                   className={cn(
                     'w-1.5 h-1.5 rounded-full shrink-0',
-                    isActive ? 'bg-primary' : 'bg-transparent'
+                    isActive ? 'bg-emerald-400' : 'bg-transparent'
                   )}
                 />
-                <span className="font-mono text-xs tracking-wide text-foreground/80 flex-1 truncate">
+                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">
                   {project.slug}
                 </span>
                 <button
@@ -170,7 +170,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
         </div>
 
         {/* Separator */}
-        <div className="border-t border-border/40" />
+        <div className="border-t border-emerald-500/20" />
 
         {/* New project */}
         <div className="py-1">
@@ -202,11 +202,11 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
             </div>
           ) : (
             <div
-              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-primary/10 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10 transition-colors"
               onClick={() => setCreatingNew(true)}
             >
-              <Plus className="w-3.5 h-3.5 text-primary/60" />
-              <span className="font-mono text-xs tracking-wide text-primary/60">
+              <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+              <span className="font-mono text-xs tracking-wide text-emerald-400/60">
                 New Project
               </span>
             </div>
