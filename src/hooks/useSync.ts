@@ -70,7 +70,11 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
 
   const setSyncResult = useCallback((newResult: SyncResult | undefined) => {
     setResult(newResult);
-    if (newResult) setSyncCount((c) => c + 1);
+    if (newResult) {
+      setSyncCount((c) => c + 1);
+    } else {
+      syncingRef.current = false;
+    }
   }, []);
 
   return { sync, syncing, result, error, syncCount, setSyncResult };

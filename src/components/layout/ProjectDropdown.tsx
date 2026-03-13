@@ -52,12 +52,10 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
     setNewSlugValue('')
   }
 
-  async function handleSwitch(slug: string) {
-    const ok = await switchProject(slug)
-    if (ok) {
-      onProjectChange(slug)
-      setOpen(false)
-    }
+  function handleSwitch(slug: string) {
+    onProjectChange(slug)
+    setOpen(false)
+    switchProject(slug)
   }
 
   async function handleRenameConfirm() {
@@ -81,12 +79,10 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
     }
     const created = await createProject(slug)
     if (created) {
-      const ok = await switchProject(slug)
-      if (ok) {
-        onProjectChange(slug)
-        cancelCreate()
-        setOpen(false)
-      }
+      onProjectChange(slug)
+      cancelCreate()
+      setOpen(false)
+      switchProject(slug)
     }
   }
 
