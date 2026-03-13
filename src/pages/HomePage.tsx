@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Grid3x3 } from 'lucide-react';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -12,6 +12,7 @@ import { useMcpConnection } from '@/hooks/useMcpConnection';
 import { useUploadFile } from '@/hooks/useUploadFile';
 import { useDefaultProject } from '@/hooks/useDefaultProject';
 import { useWindowDropzone } from '@/hooks/useWindowDropzone';
+import { useSync } from '@/hooks/useSync';
 
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -21,13 +22,21 @@ export function HomePage() {
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
   const { projectSlug } = useDefaultProject(callTool, state);
+  const { sync, syncCount } = useSync(callTool);
+
+  // Sync on mount + poll every 5s while page is active
+  useEffect(() => {
+    if (!projectSlug) return;
+    sync(projectSlug);
+    const id = setInterval(() => sync(projectSlug), 5_000);
+    return () => clearInterval(id);
+  }, [projectSlug, sync]);
 
   const handleDrop = useCallback((files: File[]) => {
     if (!projectSlug) return;
-    for (const file of files) {
-      upload(projectSlug, file);
-    }
-  }, [projectSlug, upload]);
+    const uploads = files.map((file) => upload(projectSlug, file));
+    Promise.allSettled(uploads).then(() => sync(projectSlug));
+  }, [projectSlug, upload, sync]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
@@ -35,7 +44,7 @@ export function HomePage() {
     <div className="w-screen h-screen bg-background overflow-hidden">
       <DropzoneOverlay isDragging={isDragging} />
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HomeHeaderBar />
+        <HomeHeaderBar pulseKey={syncCount} />
 
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets */}

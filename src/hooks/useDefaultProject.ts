@@ -25,8 +25,8 @@ export function useDefaultProject(
         setError(content[0].text);
       } else {
         const content = result.content as Array<{ type: string; text: string }>;
-        const parsed = JSON.parse(content[0].text) as { slug: string };
-        setProjectSlug(parsed.slug);
+        const parsed = JSON.parse(content[0].text) as { metadata: { slug: string } };
+        setProjectSlug(parsed.metadata.slug);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));

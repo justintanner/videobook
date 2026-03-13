@@ -18,6 +18,7 @@ type SyncResult = {
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
+  assets: Array<{ id: string; type: string; created_at: string; path: string }>;
 };
 
 export function syncDef(fs: ClipfirstFs): ToolDef {
@@ -32,7 +33,7 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
 
       const result: SyncResult = {
         pending: [], completed: [], failed: [],
-        external_uploads: [], auto_render: [],
+        external_uploads: [], auto_render: [], assets: [],
       };
 
       // Process external uploads (always runs, no API key needed)
@@ -84,6 +85,8 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
         });
         result.auto_render.push({ assetId: action.assetId, jobId });
       }
+
+      result.assets = await fs.listAssets(project_slug);
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],

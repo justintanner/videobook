@@ -12,9 +12,16 @@ Guidance for AI coding agents working in the Clipfirst repository.
 | `npm run build` | Type-check with tsc -b, then Vite build |
 | `npm run build:server` | Compile server TypeScript to server/dist/ |
 | `npm run lint` | Run ESLint across all *.ts/*.tsx files |
-| `npm run test` | Run vitest integration tests |
+| `npm run test` | Run all vitest integration tests |
 | `npm run test:watch` | Run vitest in watch mode |
+| `npm run test:e2e` | Run e2e tests with vitest.e2e.config.ts |
 | `npm run preview` | Preview production build locally |
+
+### Running a Single Test
+- `npx vitest run server/src/tools/create-project.test.ts` (specific test file)
+- `npm run test -- server/src/tools/create-project.test.ts` (via npm)
+- `npx vitest run -t "creates a project"` (filter by test name)
+- Tests use real dependencies (no mocks) per CLAUDE.md
 
 ## Architecture
 
@@ -35,10 +42,12 @@ Guidance for AI coding agents working in the Clipfirst repository.
 
 ## Code Style
 
+Follow CLAUDE.md rules: Use explicit named types (no `any`), keep functions flat (extract helpers, avoid deep nesting), build modular single-responsibility code, prefer functional style/pure functions when objects add no value. Write integration tests with real dependencies (zero mocks). Store secrets only in env vars.
+
 ### TypeScript Configuration
 - **Strict mode enabled** - all strict compiler flags on
 - **Target:** ES2022 (client), ES2023 (Vite config)
-- **Module:** ESNext with bundler resolution
+- **Module:** ESNext with bundler resolution (Node16 for server)
 - **erasableSyntaxOnly:** true - use `type` imports explicitly
 - **verbatimModuleSyntax:** true - no `import type { ... }` auto-conversion
 
@@ -69,19 +78,22 @@ Guidance for AI coding agents working in the Clipfirst repository.
 ### Error Handling
 - Prefer returning error states from hooks (e.g., `{ error, retry }`)
 - Use early returns for guard clauses
-- MCP tools should return structured error responses via the protocol
+- MCP tools should return structured error responses via the protocol (use `isError: true`)
 
 ### React Patterns
 - Use functional components with hooks
 - Wrap app in `StrictMode` in development
 - Destructure props/hook results for clarity
-- Inline styles are acceptable for simple components
+- Inline styles acceptable for simple components
+- Local-first state: start in consuming component
 
 ### Linting
 - ESLint flat config (`eslint.config.js`)
 - Plugins: typescript-eslint, react-hooks, react-refresh
 - Ignores: `dist/` directories
 - Only lints `*.ts` and `*.tsx` files
+
+**IMPORTANT:** DO NOT ADD COMMENTS unless asked. Follow security best practices - never log or commit secrets.
 
 ## MCP Tool Development
 
