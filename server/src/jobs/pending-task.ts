@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 
 export type PendingKieTask = {
   taskId: string;
@@ -24,14 +24,9 @@ export async function deletePendingTask(fs: ClipfirstFs, assetId: string, projec
   await fs.deleteFile(assetId, ".kie-task.json", projectSlug).catch(() => {});
 }
 
-export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string): Promise<PendingKieTask[]> {
-  const assets = await fs.listAssets(projectSlug);
-  const tasks: PendingKieTask[] = [];
-
-  for (const asset of assets) {
-    const task = await readPendingTask(fs, asset.id, projectSlug);
-    if (task) tasks.push(task);
-  }
-
-  return tasks;
+export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[]): Promise<PendingKieTask[]> {
+  const results = await Promise.all(
+    assets.map((asset) => readPendingTask(fs, asset.id, projectSlug))
+  );
+  return results.filter((t): t is PendingKieTask => t !== null);
 }

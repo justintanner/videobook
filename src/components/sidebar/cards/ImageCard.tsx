@@ -23,6 +23,7 @@ export function ImageCard({ item }: ImageCardProps) {
         <img
           src={item.filePath}
           alt={item.title}
+          loading="lazy"
           draggable={false}
           className="w-full h-full object-cover transition-opacity"
         />

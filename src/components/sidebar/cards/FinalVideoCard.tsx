@@ -30,6 +30,7 @@ export function FinalVideoCard({ item }: FinalVideoCardProps) {
         <img
           src={thumbSrc}
           alt={item.title}
+          loading="lazy"
           draggable={false}
           className="w-full h-full object-cover transition-opacity"
           onError={(e) => {

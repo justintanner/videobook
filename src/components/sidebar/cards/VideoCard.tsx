@@ -41,6 +41,7 @@ export function VideoCard({ item }: VideoCardProps) {
         <img
           src={thumbSrc}
           alt={item.title}
+          loading="lazy"
           draggable={false}
           className={cn('w-full h-full object-cover transition-opacity', isProcessing && 'opacity-80')}
           onError={(e) => {

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 
@@ -29,37 +29,36 @@ function getMediaType(ext: string): "video" | "image" | "audio" | null {
 export async function findUnprocessedUploads(
   fs: ClipfirstFs,
   projectSlug: string,
+  assets: AssetEntry[],
 ): Promise<UnprocessedUpload[]> {
-  const assets = await fs.listAssets(projectSlug);
-  const uploads: UnprocessedUpload[] = [];
+  const results = await Promise.all(
+    assets.map(async (asset): Promise<UnprocessedUpload | null> => {
+      const manifest = await fs.getManifest(asset.id, projectSlug);
+      if (!manifest.ok) return null;
 
-  for (const asset of assets) {
-    const manifest = await fs.getManifest(asset.id, projectSlug);
-    if (!manifest.ok) continue;
+      const hasOrigin = manifest.value.files.some((f) => f.name === ".original.json");
+      if (hasOrigin) return null;
 
-    const hasOrigin = manifest.value.files.some((f) => f.name === ".original.json");
-    if (hasOrigin) continue;
+      const mediaFile = manifest.value.files.find((f) => {
+        const ext = path.extname(f.name).toLowerCase();
+        return MEDIA_EXTENSIONS.has(ext);
+      });
+      if (!mediaFile) return null;
 
-    const mediaFile = manifest.value.files.find((f) => {
-      const ext = path.extname(f.name).toLowerCase();
-      return MEDIA_EXTENSIONS.has(ext);
-    });
-    if (!mediaFile) continue;
+      const ext = path.extname(mediaFile.name).toLowerCase();
+      const mediaType = getMediaType(ext);
+      if (!mediaType) return null;
 
-    const ext = path.extname(mediaFile.name).toLowerCase();
-    const mediaType = getMediaType(ext);
-    if (!mediaType) continue;
-
-    uploads.push({
-      assetId: asset.id,
-      assetDir: asset.path,
-      mediaFilename: mediaFile.name,
-      extension: ext,
-      mediaType,
-    });
-  }
-
-  return uploads;
+      return {
+        assetId: asset.id,
+        assetDir: asset.path,
+        mediaFilename: mediaFile.name,
+        extension: ext,
+        mediaType,
+      };
+    })
+  );
+  return results.filter((u): u is UnprocessedUpload => u !== null);
 }
 
 export async function processExternalUpload(

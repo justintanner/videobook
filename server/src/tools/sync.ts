@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
 import { readdir, access } from "node:fs/promises";
@@ -53,36 +53,57 @@ async function findThumbnailFile(assetDir: string): Promise<boolean> {
   }
 }
 
+export async function buildAssetList(fs: ClipfirstFs, project_slug: string): Promise<SyncAsset[]> {
+  const assets = await fs.listAssets(project_slug);
+  return Promise.all(
+    assets.map(async (a): Promise<SyncAsset> => {
+      const mediaFile = await findPrimaryMediaFile(a.path);
+      const media_url = mediaFile
+        ? `/files/${project_slug}/${a.id}/${mediaFile}`
+        : null;
+      const hasThumbnail = await findThumbnailFile(a.path);
+      const isImage = a.type === "image";
+      const thumbnail_url = hasThumbnail
+        ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
+        : isImage ? media_url : null;
+      return { ...a, media_url, thumbnail_url };
+    }),
+  );
+}
+
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
     external_uploads: [], auto_render: [], assets: [],
   };
 
-  // Process external uploads (always runs, no API key needed)
-  const uploads = await findUnprocessedUploads(fs, project_slug);
+  // Single listAssets call, shared by all consumers
+  const assets = await fs.listAssets(project_slug);
+
+  // Run all three discovery steps in parallel
+  const [uploads, tasks, renderActions] = await Promise.all([
+    findUnprocessedUploads(fs, project_slug, assets),
+    findPendingTasks(fs, project_slug, assets),
+    findAutoRenderActions(fs, project_slug, assets),
+  ]);
+
+  // Process external uploads
   for (const upload of uploads) {
     await processExternalUpload(fs, upload, project_slug);
     result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
   }
 
   // Poll KIE tasks (only if API key is set)
-  if (process.env.KIE_API_KEY) {
-    const tasks = await findPendingTasks(fs, project_slug);
+  if (process.env.KIE_API_KEY && tasks.length > 0) {
+    const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
-    if (tasks.length > 0) {
-      const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
-
-      for (const task of tasks) {
-        const taskInfo = await provider.getTask(task.taskId);
-        await processSyncedTask(task, taskInfo, result);
-      }
-    }
+    await Promise.all(tasks.map(async (task) => {
+      const taskInfo = await provider.getTask(task.taskId);
+      await processSyncedTask(task, taskInfo, result);
+    }));
   }
 
   // Auto-pipeline: advance whitelisted videos through render
-  const renderActions = await findAutoRenderActions(fs, project_slug);
-
   for (const action of renderActions) {
     const jobId = `auto-render-${action.assetId}-${Date.now()}`;
     await queue.enqueue(jobId, {
@@ -109,21 +130,8 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     result.auto_render.push({ assetId: action.assetId, jobId });
   }
 
-  const rawAssets = await fs.listAssets(project_slug);
-  result.assets = await Promise.all(
-    rawAssets.map(async (a): Promise<SyncAsset> => {
-      const mediaFile = await findPrimaryMediaFile(a.path);
-      const media_url = mediaFile
-        ? `/files/${project_slug}/${a.id}/${mediaFile}`
-        : null;
-      const hasThumbnail = await findThumbnailFile(a.path);
-      const isImage = a.type === "image";
-      const thumbnail_url = hasThumbnail
-        ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
-        : isImage ? media_url : null;
-      return { ...a, media_url, thumbnail_url };
-    }),
-  );
+  // Build asset list from the already-fetched assets
+  result.assets = await buildAssetList(fs, project_slug);
 
   return result;
 }
@@ -192,57 +200,55 @@ type RenderAction = {
 async function findAutoRenderActions(
   fs: ClipfirstFs,
   projectSlug: string,
+  assets: AssetEntry[],
 ): Promise<RenderAction[]> {
-  const actions: RenderAction[] = [];
-  const assets = await fs.listAssets(projectSlug);
+  const candidates = await Promise.all(
+    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<RenderAction | null> => {
+      const manifestResult = await fs.getManifest(asset.id, projectSlug);
+      if (!manifestResult.ok) return null;
 
-  for (const asset of assets) {
-    if (!asset.id.startsWith("vid-")) continue;
+      const manifest = manifestResult.value;
+      const files = manifest.files;
+      const fileNames = new Set(files.map((f) => f.name));
 
-    const manifestResult = await fs.getManifest(asset.id, projectSlug);
-    if (!manifestResult.ok) continue;
+      // Skip: not whitelisted
+      if (!fileNames.has(".whitelisted_at")) return null;
+      // Skip: process_video incomplete
+      if (!fileNames.has(".original.analysis.json")) return null;
 
-    const manifest = manifestResult.value;
-    const files = manifest.files;
-    const fileNames = new Set(files.map((f) => f.name));
+      const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
 
-    // Skip: not whitelisted
-    if (!fileNames.has(".whitelisted_at")) continue;
-    // Skip: process_video incomplete
-    if (!fileNames.has(".original.analysis.json")) continue;
-
-    const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
-
-    if (dialogQuality.hasDialog) {
-      // Has dialog — only render after transcription is done
-      const hasElevenlabs = fileNames.has("elevenlabs.json");
-      if (hasElevenlabs) {
+      if (dialogQuality.hasDialog) {
+        // Has dialog — only render after transcription is done
+        const hasElevenlabs = fileNames.has("elevenlabs.json");
+        if (hasElevenlabs) {
+          const videoFile = findVideoFile(files);
+          if (videoFile && !await fs.isLocked(manifest.path)) {
+            return {
+              assetId: asset.id,
+              assetDir: manifest.path,
+              videoPath: join(manifest.path, videoFile.name),
+              videoFilename: videoFile.name,
+            };
+          }
+        }
+        return null;
+      } else {
+        // No dialog — render directly (no subtitles)
         const videoFile = findVideoFile(files);
         if (videoFile && !await fs.isLocked(manifest.path)) {
-          actions.push({
+          return {
             assetId: asset.id,
             assetDir: manifest.path,
             videoPath: join(manifest.path, videoFile.name),
             videoFilename: videoFile.name,
-          });
+          };
         }
+        return null;
       }
-      // No elevenlabs yet => whitelist tool handles transcription trigger, skip
-    } else {
-      // No dialog — render directly (no subtitles)
-      const videoFile = findVideoFile(files);
-      if (videoFile && !await fs.isLocked(manifest.path)) {
-        actions.push({
-          assetId: asset.id,
-          assetDir: manifest.path,
-          videoPath: join(manifest.path, videoFile.name),
-          videoFilename: videoFile.name,
-        });
-      }
-    }
-  }
-
-  return actions;
+    })
+  );
+  return candidates.filter((c): c is RenderAction => c !== null);
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {

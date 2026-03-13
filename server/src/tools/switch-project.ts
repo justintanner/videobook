@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { performSync } from "./sync.js";
+import { buildAssetList } from "./sync.js";
 
 export function switchProjectDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -15,7 +15,12 @@ export function switchProjectDef(fs: ClipfirstFs): ToolDef {
       const { project_slug } = args as { project_slug: string };
       const result = await fs.switchProject(project_slug);
       if (result.ok) {
-        const syncResult = await performSync(fs, project_slug);
+        const assets = await buildAssetList(fs, project_slug);
+        const syncResult = {
+          pending: [], completed: [], failed: [],
+          external_uploads: [], auto_render: [],
+          assets,
+        };
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(syncResult) },
