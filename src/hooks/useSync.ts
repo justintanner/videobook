@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 interface SyncAsset {
@@ -30,14 +30,18 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
   const [result, setResult] = useState<SyncResult | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [syncCount, setSyncCount] = useState(0);
+  const callToolRef = useRef(callTool);
+  callToolRef.current = callTool;
+  const syncingRef = useRef(false);
 
   const sync = useCallback(async (projectSlug: string) => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
-    setResult(undefined);
     setError(undefined);
     console.log("[sync] calling sync for", projectSlug);
     try {
-      const toolResult = await callTool("sync", { project_slug: projectSlug });
+      const toolResult = await callToolRef.current("sync", { project_slug: projectSlug });
       if (toolResult.isError) {
         const content = toolResult.content as Array<{ type: string; text: string }>;
         const msg = content[0].text;
@@ -56,9 +60,10 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
       console.error("[sync] exception:", msg);
       setError(msg);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  }, [callTool]);
+  }, []);
 
   return { sync, syncing, result, error, syncCount };
 }
