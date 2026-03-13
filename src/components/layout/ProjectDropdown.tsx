@@ -21,6 +21,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   const [editValue, setEditValue] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
   const [newSlugValue, setNewSlugValue] = useState('')
+  const [snapshotSlug, setSnapshotSlug] = useState(projectSlug)
 
   const editInputRef = useRef<HTMLInputElement>(null)
   const newInputRef = useRef<HTMLInputElement>(null)
@@ -31,8 +32,11 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   const { createProject } = useCreateProject(callTool)
 
   useEffect(() => {
-    if (open) refresh()
-  }, [open, refresh])
+    if (open) {
+      setSnapshotSlug(projectSlug)
+      refresh()
+    }
+  }, [open, refresh, projectSlug])
 
   useEffect(() => {
     if (editingSlug) editInputRef.current?.focus()
@@ -98,7 +102,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
         {/* Project list */}
         <div className="max-h-60 overflow-y-auto py-1">
           {projects.map((project) => {
-            const isActive = project.slug === projectSlug
+            const isActive = project.slug === snapshotSlug
             const isEditing = editingSlug === project.slug
 
             if (isEditing) {
