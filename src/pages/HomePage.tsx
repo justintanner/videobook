@@ -44,7 +44,7 @@ export function HomePage() {
     <div className="w-screen h-screen bg-background overflow-hidden">
       <DropzoneOverlay isDragging={isDragging} />
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HomeHeaderBar pulseKey={syncCount} />
+        <HomeHeaderBar pulseKey={syncCount} projectSlug={projectSlug} />
 
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets */}

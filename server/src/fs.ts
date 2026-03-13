@@ -1,8 +1,8 @@
 import { createFs } from "clipfirst-fs";
 
-const OUTPUT_DIR = process.env.CLIPFIRST_OUTPUT_DIR ?? "output";
-export const fs = createFs({ outputDir: OUTPUT_DIR });
+const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
+export const fs = createFs({ projectsDir: PROJECTS_DIR });
 
-export function createFsForTest(outputDir: string) {
-  return createFs({ outputDir });
+export function createFsForTest(projectsDir: string) {
+  return createFs({ projectsDir });
 }

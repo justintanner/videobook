@@ -1,7 +1,8 @@
-import { FolderOpen, Clapperboard } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
+import { ProjectButton } from './ProjectButton';
 
-export function HomeHeaderBar({ pulseKey }: { pulseKey: number }) {
+export function HomeHeaderBar({ pulseKey, projectSlug }: { pulseKey: number; projectSlug: string | undefined }) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -15,7 +16,7 @@ export function HomeHeaderBar({ pulseKey }: { pulseKey: number }) {
         </div>
 
         {/* Project selector */}
-        <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
+        <ProjectButton projectSlug={projectSlug} />
 
         {/* Generations */}
         <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />

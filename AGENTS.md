@@ -37,7 +37,7 @@ Guidance for AI coding agents working in the Clipfirst repository.
 
 **Filesystem Layer** (`clipfirst-fs`): Local dependency at `../clipfirst-fs`.
 - Provides project/asset management with git versioning
-- Entry: `createFs({ outputDir })` returns a `ClipfirstFs` instance
+- Entry: `createFs({ projectsDir })` returns a `ClipfirstFs` instance
 - All project, asset, and file operations MUST go through this package — never use `node:fs` directly for these
 
 ## Code Style
@@ -125,7 +125,7 @@ Example:
 ```typescript
 import { createFs } from "clipfirst-fs";
 
-const fs = createFs({ outputDir: "/path/to/output" });
+const fs = createFs({ projectsDir: "/path/to/projects" });
 const project = await fs.createProject("my-project");
 const asset = await fs.createAsset("vid", "intro clip", "my-project");
 await fs.writeFile(asset.value.assetId, "original.mp4", buffer, "my-project");

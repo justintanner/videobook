@@ -4,8 +4,8 @@ import { createServer } from "./server.js";
 import { createFsForTest } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 
-export async function createTestClient(outputDir?: string): Promise<Client> {
-  const fs = outputDir ? createFsForTest(outputDir) : undefined;
+export async function createTestClient(projectsDir?: string): Promise<Client> {
+  const fs = projectsDir ? createFsForTest(projectsDir) : undefined;
   registerAllJobHandlers(fs!);
   const server = createServer(fs);
   const client = new Client(
