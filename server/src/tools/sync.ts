@@ -117,9 +117,10 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
         : null;
       const hasThumbnail = await findThumbnailFile(a.path);
+      const isImage = a.type === "image";
       const thumbnail_url = hasThumbnail
         ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
-        : media_url;
+        : isImage ? media_url : null;
       return { ...a, media_url, thumbnail_url };
     }),
   );
