@@ -36,8 +36,9 @@ import { CloseButton, GenPanel, ModelSelector } from '@/components/gen/ui';
 import type { ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
+import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
-  FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
+  FolderOpen, X, ChevronDown, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus,
@@ -705,9 +706,7 @@ function Page1_FinalVideoPreview() {
               <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
               <div className="w-full"><ScriptCard item={{ id: 'demo-script', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} /></div>
               <div className="w-full"><AudioCard item={{ id: 'demo-audio', type: 'audio', slug: '@bg-music', title: 'Background Music', filePath: '/audio.mp3', status: 'ready' }} /></div>
-            </div>
-            <div className="pt-2 mt-auto">
-              <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
+              <UploadSlot />
             </div>
           </CollapsibleSidebar>
 
@@ -786,9 +785,7 @@ function Page2_VideoGeneration() {
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2">
               <div className="w-full"><ImageCard item={demoImageMock} /></div>
-            </div>
-            <div className="pt-2 mt-auto">
-              <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
+              <UploadSlot />
             </div>
           </CollapsibleSidebar>
 
@@ -1010,7 +1007,7 @@ function Page5_FormsControls() {
             <Tooltip><TooltipTrigger asChild><Button variant="outline" size="sm">Tooltip</Button></TooltipTrigger><TooltipContent><p>Neural interface ready</p></TooltipContent></Tooltip>
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded.' })}>Toast</Button>
-          <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} />
+          <UploadSlot />
         </div>
         <ContextMenuDemo />
         <div className="mt-2">

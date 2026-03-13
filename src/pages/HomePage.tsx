@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Grid3x3, Upload } from 'lucide-react';
-import { CommandButton } from '@/components/commands';
+import { Grid3x3 } from 'lucide-react';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
+import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import { IdleScreen } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -38,9 +38,8 @@ export function HomePage() {
               sortOrder={sortOrder}
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
-            <div className="flex-1 overflow-y-auto space-y-2" />
-            <div className="pt-2 mt-auto">
-              <CommandButton command="/upload" icon={<Upload className="w-3.5 h-3.5" />} className="w-full" />
+            <div className="flex-1 overflow-y-auto space-y-2">
+              <UploadSlot />
             </div>
           </CollapsibleSidebar>
 
@@ -73,7 +72,9 @@ export function HomePage() {
               sortOrder={sortOrder}
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
-            <div className="flex-1 overflow-y-auto space-y-2 mt-2" />
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+              <UploadSlot />
+            </div>
           </CollapsibleSidebar>
         </div>
 
