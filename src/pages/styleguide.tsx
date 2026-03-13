@@ -1362,8 +1362,6 @@ function Page9_AudioSystem() {
             <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">VOCALS</span>
           </div>
           <div className="flex items-center gap-2">
-            <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
-            <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
             <CommandButton command="/trim_audio" icon={<Scissors className="w-3.5 h-3.5" />} />
             <CommandButton command="/isolate_vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
           </div>

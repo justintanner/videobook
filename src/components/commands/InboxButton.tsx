@@ -97,6 +97,7 @@ export function InboxButton({
       onClick={onClick}
       className={cn(
         'group relative flex items-center gap-0 h-8 border rounded',
+        'bg-amber-500/10',
         'transition-all duration-300 cursor-pointer',
         styles.outer,
         'focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none'
