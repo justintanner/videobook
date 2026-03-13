@@ -35,9 +35,10 @@ import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { CloseButton, GenPanel, ModelSelector } from '@/components/gen/ui';
 import type { ModelOption } from '@/components/gen/types';
 import type { MediaItem } from '@/components/sidebar/types';
+import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import {
   FolderOpen, X, ChevronDown, Download, Upload, Sparkles,
-  Film, Grid3x3, Scissors, Music, MoreHorizontal, Clapperboard,
+  Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
@@ -150,83 +151,6 @@ function FakeDropdown({ text }: { text: string }) {
     <div className="bg-black/60 border border-primary/30 rounded px-3 py-2.5 text-xs font-mono font-bold tracking-wide text-primary/90 flex items-center gap-2">
       {text}
       <ChevronDown className="w-3 h-3 text-primary/50" />
-    </div>
-  );
-}
-
-function TimelineSlotDemo({
-  label,
-  isActive = false,
-  isDragOver = false,
-  hasContent = false,
-  thumbnailSrc,
-  assetId,
-  flex = 1,
-}: {
-  label: string;
-  isActive?: boolean;
-  isDragOver?: boolean;
-  hasContent?: boolean;
-  thumbnailSrc?: string;
-  assetId?: string;
-  flex?: number;
-}) {
-  return (
-    <div
-      className={cn(
-        'relative h-full border bg-card/30 backdrop-blur-sm flex flex-col cursor-pointer transition-all duration-150 group overflow-hidden',
-        isDragOver
-          ? 'border-2 border-dashed border-primary bg-primary/10 scale-y-[1.02] shadow-[0_0_15px_rgba(0,255,255,0.3)]'
-          : isActive
-            ? 'border-primary bg-primary/5'
-            : 'border-border/50 hover:border-primary/30',
-        hasContent && !isDragOver && 'cursor-grab active:cursor-grabbing'
-      )}
-      style={{ flex: `${flex} 1 0`, minWidth: '60px' }}
-    >
-      {/* Slot label badge */}
-      <div className="absolute top-1.5 left-1.5 z-30">
-        <span className="text-[10px] font-mono text-primary font-bold px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-primary/15 whitespace-nowrap tracking-wide">
-          {label}
-        </span>
-      </div>
-
-      {/* Context menu button */}
-      <div className="absolute top-1.5 right-1.5 z-30">
-        <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-          <MoreHorizontal className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Content */}
-      {hasContent ? (
-        <div className="absolute inset-0 w-full h-full">
-          <div className="absolute inset-0 bg-primary/5" />
-          {thumbnailSrc && (
-            <img src={thumbnailSrc} draggable={false} className="w-full h-full object-cover opacity-50" alt="" />
-          )}
-        </div>
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center opacity-15 group-hover:opacity-35 transition-opacity duration-200">
-          <div className="w-7 h-7 border border-dashed border-foreground/60 rounded-full flex items-center justify-center">
-            <span className="text-[10px] text-foreground/60">+</span>
-          </div>
-        </div>
-      )}
-
-      {/* Asset ID label */}
-      {assetId && (
-        <div className="absolute bottom-1.5 left-1.5 z-20 max-w-[calc(100%-12px)]">
-          <span className="text-[9px] font-mono text-muted-foreground/60 px-1 py-0.5 rounded bg-black/70 truncate block leading-tight">
-            {assetId}
-          </span>
-        </div>
-      )}
-
-      {/* Active Indicator */}
-      {isActive && (
-        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary shadow-[0_0_10px_var(--color-primary)]" />
-      )}
     </div>
   );
 }
@@ -830,11 +754,11 @@ function Page1_FinalVideoPreview() {
         {/* Timeline */}
         <div className="border-t border-border bg-card/30">
           <div className="relative h-28 flex gap-0.5">
-            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-            <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-            <TimelineSlotDemo label="@s04" flex={2} />
-            <TimelineSlotDemo label="@s05" flex={2} />
+            <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+            <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+            <TimelineSlot label="@s04" flex={2} />
+            <TimelineSlot label="@s05" flex={2} />
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
           </div>
           <div className="relative h-12 border-t border-border/30 bg-card/20">
@@ -935,9 +859,9 @@ function Page2_VideoGeneration() {
 
         <div className="border-t border-border bg-card/30">
           <div className="relative h-28 flex gap-0.5">
-            <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-            <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-            <TimelineSlotDemo label="@s03" flex={2} />
+            <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+            <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlot label="@s03" flex={2} />
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '35%' }} />
           </div>
           <div className="border-2 border-dashed rounded flex items-center justify-center gap-2 h-14 min-h-14 border-border/40 text-muted-foreground/50">
@@ -1345,16 +1269,16 @@ function Page8_VideoEditing() {
       {/* Timeline slots column */}
       <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
         <div className="grid grid-cols-2 gap-3 flex-1">
-          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlotDemo label="@s03" isDragOver /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlot label="@s01" /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
+          <div className="h-full flex gap-0.5"><TimelineSlot label="@s03" isDragOver /></div>
         </div>
         <div className="relative h-20 flex gap-0.5 border border-border/30 rounded-md overflow-hidden shrink-0">
-          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-          <TimelineSlotDemo label="@s04" flex={2} />
+          <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+          <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+          <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlot label="@s04" flex={2} />
           <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '55%' }} />
         </div>
       </div>
@@ -1449,10 +1373,10 @@ function Page9_AudioSystem() {
       {/* TimelineScrubber */}
       <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10">
         <div className="relative h-24 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
-          <TimelineSlotDemo label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-          <TimelineSlotDemo label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-          <TimelineSlotDemo label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-          <TimelineSlotDemo label="@s04" flex={2} />
+          <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
+          <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+          <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlot label="@s04" flex={2} />
           <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
         </div>
         <div className="relative h-12 border-t border-zinc-700/50 bg-zinc-900/30">

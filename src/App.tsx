@@ -3,6 +3,7 @@ import { McpStatus } from './components/McpStatus';
 import { FileUpload } from './components/FileUpload';
 import { useMcpConnection } from './hooks/useMcpConnection';
 import { Styleguide } from '@/pages/styleguide';
+import { HomePage } from '@/pages/HomePage';
 
 function Dashboard() {
   const { state, tools, error, retry, callTool } = useMcpConnection()
@@ -20,26 +21,13 @@ function Dashboard() {
   )
 }
 
-function BlankIndex() {
-  return (
-    <div
-      className="w-screen h-screen"
-      style={{
-        backgroundColor: '#0a0c10',
-        backgroundImage: 'radial-gradient(circle, rgba(0,212,255,0.08) 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
-      }}
-    />
-  )
-}
-
 function App() {
   return (
     <Switch>
       <Route path="/styleguide/:page" component={Styleguide} />
       <Route path="/styleguide" component={Styleguide} />
       <Route path="/up" component={Dashboard} />
-      <Route path="/" component={BlankIndex} />
+      <Route path="/" component={HomePage} />
     </Switch>
   )
 }
