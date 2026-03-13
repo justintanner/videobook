@@ -3,6 +3,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { createProjectDef } from "./create-project.js";
+import { renameProjectDef } from "./rename-project.js";
 import { listProjectsDef } from "./list-projects.js";
 import { getDefaultProjectDef } from "./get-default-project.js";
 import { uploadFileDef } from "./upload-file.js";
@@ -50,6 +51,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
   return [
     apiStatusDef(),
     createProjectDef(fs),
+    renameProjectDef(fs),
     listProjectsDef(fs),
     getDefaultProjectDef(fs),
     uploadFileDef(fs),
