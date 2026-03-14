@@ -3,17 +3,20 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import { SlugBadge } from './badges';
 
+import type { ReactNode } from 'react';
+
 interface AudioCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function AudioCard({ item }: AudioCardProps) {
+export function AudioCard({ item, contextMenuContent }: AudioCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Audio icon */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

@@ -13,18 +13,21 @@ function isRenderingState(status: string): boolean {
     status === 'render-queued-square';
 }
 
+import type { ReactNode } from 'react';
+
 interface FinalVideoCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function FinalVideoCard({ item }: FinalVideoCardProps) {
+export function FinalVideoCard({ item, contextMenuContent }: FinalVideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const showElfOverlay = isRenderingState(status);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

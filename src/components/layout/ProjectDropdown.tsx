@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Pencil, Check, X, Plus } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -29,12 +29,13 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   const { renameProject } = useRenameProject(callTool)
   const { createProject } = useCreateProject(callTool)
 
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (nextOpen) {
       setSnapshotSlug(projectSlug)
       refresh()
     }
-  }, [open, refresh, projectSlug])
+  }, [projectSlug, refresh])
 
   useEffect(() => {
     if (editingSlug) editInputRef.current?.focus()
@@ -87,7 +88,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <ProjectButton projectSlug={projectSlug} />
       </PopoverTrigger>

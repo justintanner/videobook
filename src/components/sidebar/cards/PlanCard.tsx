@@ -3,18 +3,21 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import { SlugBadge } from './badges';
 
+import type { ReactNode } from 'react';
+
 interface PlanCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function PlanCard({ item }: PlanCardProps) {
+export function PlanCard({ item, contextMenuContent }: PlanCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const planText = item.prompt;
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Blueprint aesthetic */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Indigo-to-navy gradient background */}

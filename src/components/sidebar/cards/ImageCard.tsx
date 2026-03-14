@@ -2,11 +2,14 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import { SlugBadge, ResolutionBadge } from './badges';
 
+import type { ReactNode } from 'react';
+
 interface ImageCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function ImageCard({ item }: ImageCardProps) {
+export function ImageCard({ item, contextMenuContent }: ImageCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
@@ -17,7 +20,7 @@ export function ImageCard({ item }: ImageCardProps) {
   const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Image */}
       {item.filePath && (
         <img

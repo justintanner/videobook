@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+} from '@/components/ui/context-menu';
 import type { MediaItem, ClipState } from '../types';
 import {
   UploadingOverlay,
@@ -17,6 +22,7 @@ import {
 export interface CardShellProps {
   item: MediaItem;
   children: ReactNode;
+  contextMenuContent?: ReactNode;
 }
 
 function isRenderingState(status: string): boolean {
@@ -85,7 +91,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
   return (status && stateColors[status]) ?? 'var(--color-primary)';
 }
 
-export function CardShell({ item, children }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent }: CardShellProps) {
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
@@ -114,7 +120,7 @@ export function CardShell({ item, children }: CardShellProps) {
     !isGold && !isError && isReady && 'group-hover:opacity-100',
   );
 
-  return (
+  const card = (
     <div className={classes}>
       {/* Bottom border accent */}
       <div className={accentClasses} />
@@ -143,5 +149,14 @@ export function CardShell({ item, children }: CardShellProps) {
         />
       </svg>
     </div>
+  );
+
+  if (!contextMenuContent) return card;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{card}</ContextMenuTrigger>
+      <ContextMenuContent>{contextMenuContent}</ContextMenuContent>
+    </ContextMenu>
   );
 }

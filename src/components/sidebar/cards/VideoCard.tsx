@@ -12,11 +12,14 @@ function formatDuration(seconds: number | null | undefined): string | null {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+import type { ReactNode } from 'react';
+
 interface VideoCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function VideoCard({ item }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isReady = status === 'ready';
   const isError = status === 'error';
@@ -35,7 +38,7 @@ export function VideoCard({ item }: VideoCardProps) {
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

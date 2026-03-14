@@ -2,18 +2,21 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import { SlugBadge } from './badges';
 
+import type { ReactNode } from 'react';
+
 interface ScriptCardProps {
   item: MediaItem;
+  contextMenuContent?: ReactNode;
 }
 
-export function ScriptCard({ item }: ScriptCardProps) {
+export function ScriptCard({ item, contextMenuContent }: ScriptCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const scriptText = item.prompt;
 
   return (
-    <CardShell item={item}>
+    <CardShell item={item} contextMenuContent={contextMenuContent}>
       {/* CONTENT - Script */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

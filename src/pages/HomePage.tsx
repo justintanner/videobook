@@ -9,6 +9,8 @@ import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
+import { ContextMenuItem } from '@/components/ui/context-menu';
+import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -140,14 +142,23 @@ export function HomePage() {
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
             <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              {assets.map((item) => (
-                <div key={item.id} className="w-full">
-                  {item.type === 'image' && <ImageCard item={item} />}
-                  {item.type === 'audio' && <AudioCard item={item} />}
-                  {item.type === 'script' && <ScriptCard item={item} />}
-                  {item.type === 'plan' && <PlanCard item={item} />}
-                </div>
-              ))}
+              {assets.map((item) => {
+                const menu = (
+                  <AssetMenu
+                    slug={item.slug}
+                    onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    MenuItem={ContextMenuItem}
+                  />
+                );
+                return (
+                  <div key={item.id} className="w-full">
+                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} />}
+                  </div>
+                );
+              })}
               <UploadSlot />
             </div>
           </CollapsibleSidebar>
@@ -182,12 +193,21 @@ export function HomePage() {
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
-              {clips.map((item) => (
-                <div key={item.id} className="w-full">
-                  {item.type === 'video' && <VideoCard item={item} />}
-                  {item.type === 'final' && <FinalVideoCard item={item} />}
-                </div>
-              ))}
+              {clips.map((item) => {
+                const menu = (
+                  <AssetMenu
+                    slug={item.slug}
+                    onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    MenuItem={ContextMenuItem}
+                  />
+                );
+                return (
+                  <div key={item.id} className="w-full">
+                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} />}
+                  </div>
+                );
+              })}
               <UploadSlot />
             </div>
           </CollapsibleSidebar>
