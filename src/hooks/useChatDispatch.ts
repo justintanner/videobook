@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
-import type { Skill, SkillParam } from './useSkills';
+import type { Command, CommandParam } from './useCommands';
 
 interface ChatDispatchHandlers {
   onOpenInbox: () => void;
@@ -14,7 +14,7 @@ interface UseChatDispatchResult {
   dispatch: (input: string) => Promise<void>;
 }
 
-export function parseSkillArgs(rest: string, params: SkillParam[]): Record<string, string> {
+export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, string> {
   if (!rest || params.length === 0) return {};
 
   const tokens = rest.split(/\s+/);
@@ -36,12 +36,12 @@ export function parseSkillArgs(rest: string, params: SkillParam[]): Record<strin
   return args;
 }
 
-export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers): UseChatDispatchResult {
+export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandlers): UseChatDispatchResult {
   const handlersRef = useRef(handlers);
-  const skillsRef = useRef(skills);
+  const commandsRef = useRef(commands);
 
   useEffect(() => { handlersRef.current = handlers; });
-  useEffect(() => { skillsRef.current = skills; });
+  useEffect(() => { commandsRef.current = commands; });
 
   const dispatch = useCallback(async (input: string) => {
     const trimmed = input.trim();
@@ -54,31 +54,31 @@ export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers)
     const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
 
     if (command.startsWith('/')) {
-      const matchedSkill = skillsRef.current.find((s) => s.command === command);
+      const matchedCommand = commandsRef.current.find((s) => s.command === command);
 
-      if (matchedSkill?.category === 'project') {
+      if (matchedCommand?.category === 'project') {
         onSwitchProject(command.slice(1));
         return;
       }
 
-      if (matchedSkill?.uiAction) {
+      if (matchedCommand?.uiAction) {
         const uiHandlers: Record<string, (r: string) => void> = {
           open_inbox: () => onOpenInbox(),
           open_upload: () => onUpload(),
           copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
         };
-        uiHandlers[matchedSkill.uiAction]?.(rest);
+        uiHandlers[matchedCommand.uiAction]?.(rest);
         return;
       }
 
-      if (matchedSkill?.mcpTool) {
-        const args = parseSkillArgs(rest, matchedSkill.params);
-        for (const key of matchedSkill.mcpTool.autoInject ?? []) {
+      if (matchedCommand?.mcpTool) {
+        const args = parseCommandArgs(rest, matchedCommand.params);
+        for (const key of matchedCommand.mcpTool.autoInject ?? []) {
           if (key === 'project_slug' && projectSlug) {
             args[key] = projectSlug;
           }
         }
-        await callTool(matchedSkill.mcpTool.tool, args);
+        await callTool(matchedCommand.mcpTool.tool, args);
         return;
       }
     }

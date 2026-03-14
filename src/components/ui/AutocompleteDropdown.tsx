@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { CommandBadge } from './CommandBadge';
-import { resolveIcon } from '@/lib/skill-icons';
+import { resolveIcon } from '@/lib/command-icons';
 
 type ColorScheme = 'cyan' | 'amber' | 'violet';
 

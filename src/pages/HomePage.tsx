@@ -25,7 +25,7 @@ import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
-import { useSkills } from '@/hooks/useSkills';
+import { useCommands } from '@/hooks/useCommands';
 import { useChatDispatch } from '@/hooks/useChatDispatch';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
@@ -58,7 +58,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { skills, refresh: refreshSkills } = useSkills(callTool);
+  const { commands, refresh: refreshCommands } = useCommands(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -68,10 +68,10 @@ export function HomePage() {
     prevInboxOpenRef.current = inboxOpen;
   }, [inboxOpen]);
 
-  // Refresh skills when MCP becomes ready
+  // Refresh commands when MCP becomes ready
   useEffect(() => {
-    if (state === 'ready') refreshSkills();
-  }, [state, refreshSkills]);
+    if (state === 'ready') refreshCommands();
+  }, [state, refreshCommands]);
 
   // Refresh assets after each sync or sort change
   useEffect(() => {
@@ -166,7 +166,7 @@ export function HomePage() {
     await listAssets(slug, sortOrder);
   }, [setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
 
-  const { dispatch } = useChatDispatch(skills, {
+  const { dispatch } = useChatDispatch(commands, {
     onOpenInbox: () => setInboxOpen(true),
     onUpload: triggerUpload,
     onSwitchProject: handleProjectChange,
@@ -275,7 +275,7 @@ export function HomePage() {
                 ref={chatInputRef}
                 onSend={dispatch}
                 assetSlugs={assetSlugs}
-                skills={skills}
+                commands={commands}
                 callTool={callTool}
                 projectSlug={projectSlug}
               />

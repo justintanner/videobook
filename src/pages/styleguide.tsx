@@ -28,7 +28,7 @@ import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
-import type { Skill } from '@/hooks/useSkills';
+import type { Command } from '@/hooks/useCommands';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
@@ -1597,7 +1597,7 @@ const mockProjects = [
   { slug: 'q4-video-ads', active: false },
 ];
 
-const mockSkills: Skill[] = [
+const mockCommands: Command[] = [
   { command: '/generate', description: 'Generate content from prompt', example: '/generate video of a dog on a skateboard @bg-neon', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
   { command: '/rewrite-prompt', description: 'Optimize a prompt', example: '/rewrite-prompt "make it more cinematic"', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
   { command: '/trim', description: 'Trim video clip', example: '/trim @hero-intro 0:05 0:12', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },
@@ -1803,7 +1803,7 @@ function Page12_CommandSystem() {
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">/command</span>
             <div className="relative">
               <AutocompleteDropdown
-                items={mockSkills.map((s) => ({
+                items={mockCommands.map((s) => ({
                   type: 'command' as const,
                   value: s.command,
                   label: s.command,
@@ -1817,7 +1817,7 @@ function Page12_CommandSystem() {
                 onSelect={() => {}}
                 onHover={() => {}}
               />
-              <ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} />
+              <ChatInput commands={mockCommands} assetSlugs={mockAssetSlugs} />
             </div>
           </div>
 
@@ -1837,7 +1837,7 @@ function Page12_CommandSystem() {
                 onSelect={() => {}}
                 onHover={() => {}}
               />
-              <ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} />
+              <ChatInput commands={mockCommands} assetSlugs={mockAssetSlugs} />
             </div>
           </div>
         </div>
@@ -1847,10 +1847,10 @@ function Page12_CommandSystem() {
       <div className="shrink-0 flex flex-col gap-2">
         <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ChatInput</h3>
         <div className="grid grid-cols-4 gap-4">
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput commands={mockCommands} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading commands={mockCommands} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting commands={mockCommands} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled commands={mockCommands} assetSlugs={mockAssetSlugs} /></div>
         </div>
       </div>
     </div>

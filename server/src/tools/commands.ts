@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import type { ToolDef } from "./tool-def.js";
 
-interface SkillParam {
+interface CommandParam {
   name: string;
   type: "string" | "number" | "boolean";
   required: boolean;
@@ -13,7 +13,7 @@ interface McpToolBinding {
   autoInject?: string[];
 }
 
-interface Skill {
+interface Command {
   command: string;
   description: string;
   example?: string;
@@ -22,12 +22,12 @@ interface Skill {
   size: "sm" | "default" | "lg";
   variant: "default" | "violet";
   chevron: "right" | "down";
-  params: SkillParam[];
+  params: CommandParam[];
   mcpTool?: McpToolBinding;
   uiAction?: string;
 }
 
-const HARDCODED_SKILLS: Skill[] = [
+const HARDCODED_COMMANDS: Command[] = [
   {
     command: "/generate",
     description: "Generate content from prompt",
@@ -235,14 +235,14 @@ const HARDCODED_SKILLS: Skill[] = [
   },
 ];
 
-export function skillsDef(fs: ClipfirstFs): ToolDef {
+export function commandsDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "skills",
-    description: "List all available slash commands (hardcoded actions and dynamic project skills)",
+    name: "commands",
+    description: "List all available slash commands (hardcoded actions and dynamic project commands)",
     schema: {},
     handler: async () => {
       const projects = await fs.listProjects({ sort: "newest" });
-      const projectSkills: Skill[] = projects.map((p) => ({
+      const projectCommands: Command[] = projects.map((p) => ({
         command: `/${p.slug}`,
         description: `Switch to project ${p.slug}`,
         category: "project" as const,
@@ -252,9 +252,9 @@ export function skillsDef(fs: ClipfirstFs): ToolDef {
         chevron: "down" as const,
         params: [],
       }));
-      const allSkills = [...HARDCODED_SKILLS, ...projectSkills];
+      const allCommands = [...HARDCODED_COMMANDS, ...projectCommands];
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(allSkills) }],
+        content: [{ type: "text" as const, text: JSON.stringify(allCommands) }],
       };
     },
   };

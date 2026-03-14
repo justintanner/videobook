@@ -6,12 +6,12 @@ import { CommandBadge } from './CommandBadge';
 import { useAnimateType } from '@/hooks/useAnimateType';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import type { AutocompleteItem, ColorScheme } from './AutocompleteDropdown';
-import type { Skill } from '@/hooks/useSkills';
+import type { Command } from '@/hooks/useCommands';
 import type { UseMcpResult } from 'use-mcp/react';
 
 const stripSlugPrefix = (s: string) => s.replace(/^[a-z]_/, '');
 
-const SKILL_COLORS: Record<string, ColorScheme> = {
+const COMMAND_COLORS: Record<string, ColorScheme> = {
   action: 'cyan',
   project: 'amber',
   context_menu: 'violet',
@@ -30,14 +30,14 @@ interface TokenSegment {
   colorScheme?: ColorScheme;
 }
 
-function extractTokens(text: string, skills: Skill[], assetSlugs: string[]): ConfirmedToken[] {
+function extractTokens(text: string, commands: Command[], assetSlugs: string[]): ConfirmedToken[] {
   const tokens: ConfirmedToken[] = [];
-  const skillCommands = new Set(skills.map((s) => s.command));
+  const commandSet = new Set(commands.map((s) => s.command));
 
   // Match /command tokens (at start or after whitespace)
   for (const m of text.matchAll(/(^|\s)(\/[\w-]+)/g)) {
     const value = m[2];
-    if (skillCommands.has(value)) {
+    if (commandSet.has(value)) {
       const start = m.index! + m[1].length;
       tokens.push({ type: 'command', value, start, end: start + value.length });
     }
@@ -54,7 +54,7 @@ function extractTokens(text: string, skills: Skill[], assetSlugs: string[]): Con
   return tokens;
 }
 
-function parseTokens(text: string, confirmedTokens: ConfirmedToken[], skills: Skill[]): TokenSegment[] {
+function parseTokens(text: string, confirmedTokens: ConfirmedToken[], commands: Command[]): TokenSegment[] {
   if (confirmedTokens.length === 0) return [{ type: 'text', value: text }];
 
   const sorted = [...confirmedTokens].sort((a, b) => a.start - b.start);
@@ -67,8 +67,8 @@ function parseTokens(text: string, confirmedTokens: ConfirmedToken[], skills: Sk
     }
     let colorScheme: ColorScheme = 'cyan';
     if (token.type === 'command') {
-      const skill = skills.find((s) => s.command === token.value);
-      colorScheme = SKILL_COLORS[skill?.category ?? 'action'] ?? 'cyan';
+      const cmd = commands.find((s) => s.command === token.value);
+      colorScheme = COMMAND_COLORS[cmd?.category ?? 'action'] ?? 'cyan';
     }
     segments.push({ type: token.type, value: token.value, colorScheme });
     cursor = token.end;
@@ -94,7 +94,7 @@ interface ChatInputProps {
   isTransmitting?: boolean;
   disabled?: boolean;
   assetSlugs?: string[];
-  skills?: Skill[];
+  commands?: Command[];
   callTool?: UseMcpResult['callTool'];
   projectSlug?: string;
 }
@@ -108,7 +108,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     isTransmitting = false,
     disabled = false,
     assetSlugs = [],
-    skills = [],
+    commands = [],
     callTool,
     projectSlug,
   },
@@ -171,7 +171,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
     if (triggerMatch.type === 'command') {
       const filter = triggerMatch.filter.toLowerCase();
-      return skills
+      return commands
         .filter((s) => s.command.slice(1).toLowerCase().includes(filter))
         .map((s) => ({
           type: 'command' as const,
@@ -181,7 +181,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           example: s.example,
           category: s.category,
           icon: s.icon,
-          colorScheme: SKILL_COLORS[s.category] ?? ('cyan' as ColorScheme),
+          colorScheme: COMMAND_COLORS[s.category] ?? ('cyan' as ColorScheme),
         }));
     }
 
@@ -196,7 +196,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         description: '',
         colorScheme: 'cyan' as ColorScheme,
       }));
-  }, [triggerMatch, skills, assetSlugs]);
+  }, [triggerMatch, commands, assetSlugs]);
 
   // Reset dismissed/selectedIndex when trigger text changes
   const triggerKey = triggerMatch ? `${triggerMatch.type}:${triggerMatch.filter}` : null;
@@ -282,7 +282,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       if (result !== null) {
         e.preventDefault();
         setChatInput(result);
-        setConfirmedTokens(extractTokens(result, skills, assetSlugs));
+        setConfirmedTokens(extractTokens(result, commands, assetSlugs));
         setHistorySlide('up');
       }
     } else if (
@@ -293,7 +293,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       if (result !== null) {
         e.preventDefault();
         setChatInput(result);
-        setConfirmedTokens(extractTokens(result, skills, assetSlugs));
+        setConfirmedTokens(extractTokens(result, commands, assetSlugs));
         setHistorySlide('down');
       }
     }
@@ -315,8 +315,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   // Parse tokens for the overlay
   const tokenSegments = useMemo(
-    () => parseTokens(displayText, isAnimating ? [] : confirmedTokens, skills),
-    [displayText, confirmedTokens, skills, isAnimating]
+    () => parseTokens(displayText, isAnimating ? [] : confirmedTokens, commands),
+    [displayText, confirmedTokens, commands, isAnimating]
   );
 
   const hasConfirmedTokens = confirmedTokens.length > 0 && !isAnimating;

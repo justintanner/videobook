@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
-interface SkillParam {
+interface CommandParam {
   name: string;
   type: "string" | "number" | "boolean";
   required: boolean;
@@ -13,7 +13,7 @@ interface McpToolBinding {
   autoInject?: string[];
 }
 
-interface Skill {
+interface Command {
   command: string;
   description: string;
   example?: string;
@@ -22,22 +22,22 @@ interface Skill {
   size: "sm" | "default" | "lg";
   variant: "default" | "violet";
   chevron: "right" | "down";
-  params: SkillParam[];
+  params: CommandParam[];
   mcpTool?: McpToolBinding;
   uiAction?: string;
 }
 
-interface UseSkillsResult {
-  skills: Skill[];
+interface UseCommandsResult {
+  commands: Command[];
   loading: boolean;
   error: string | undefined;
   refresh: () => void;
 }
 
-let cachedSkills: Skill[] = [];
+let cachedCommands: Command[] = [];
 
-export function useSkills(callTool: UseMcpResult["callTool"]): UseSkillsResult {
-  const [skills, setSkills] = useState<Skill[]>(cachedSkills);
+export function useCommands(callTool: UseMcpResult["callTool"]): UseCommandsResult {
+  const [commands, setCommands] = useState<Command[]>(cachedCommands);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -45,15 +45,15 @@ export function useSkills(callTool: UseMcpResult["callTool"]): UseSkillsResult {
     setLoading(true);
     setError(undefined);
     try {
-      const result = await callTool("skills", {});
+      const result = await callTool("commands", {});
       const content = result.content as Array<{ type: string; text: string }>;
-      const parsed: Skill[] = JSON.parse(content[0].text);
+      const parsed: Command[] = JSON.parse(content[0].text);
       const changed =
-        parsed.length !== cachedSkills.length ||
-        parsed.some((s, i) => s.command !== cachedSkills[i].command);
+        parsed.length !== cachedCommands.length ||
+        parsed.some((s, i) => s.command !== cachedCommands[i].command);
       if (changed) {
-        cachedSkills = parsed;
-        setSkills(parsed);
+        cachedCommands = parsed;
+        setCommands(parsed);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -62,7 +62,7 @@ export function useSkills(callTool: UseMcpResult["callTool"]): UseSkillsResult {
     }
   }, [callTool]);
 
-  return { skills, loading, error, refresh };
+  return { commands, loading, error, refresh };
 }
 
-export type { Skill, SkillParam, McpToolBinding };
+export type { Command, CommandParam, McpToolBinding };

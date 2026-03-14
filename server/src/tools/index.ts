@@ -41,7 +41,7 @@ import { editTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
 import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
 import { openFolderDef } from "./open-folder.js";
-import { skillsDef } from "./skills.js";
+import { commandsDef } from "./commands.js";
 import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { withLogging } from "./log-wrapper.js";
@@ -95,7 +95,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     renderTimelineDef(fs),
     redesignStyleguidePageDef(),
     openFolderDef(fs),
-    skillsDef(fs),
+    commandsDef(fs),
     slugsDef(fs),
     pushChatHistoryDef(fs),
     listChatHistoryDef(fs),
