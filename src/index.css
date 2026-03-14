@@ -273,6 +273,28 @@
     border-color: rgba(0, 255, 255, 0.6);
   }
 
+  .chat-input-accepted {
+    animation: chat-input-accept-flash 1.2s ease-out forwards;
+  }
+
+  .chat-input-rejected {
+    animation:
+      chat-input-reject-shake 0.4s ease-out,
+      chat-input-reject-glow 1.8s ease-out forwards;
+  }
+
+  .chat-input-scan-bar {
+    animation: chat-input-scan-sweep 1.5s linear infinite;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(0, 255, 255, 0.08),
+      rgba(0, 255, 255, 0.15),
+      rgba(0, 255, 255, 0.08),
+      transparent
+    );
+  }
+
   .chat-input-idle {
     animation: chat-input-idle-glow 4s ease-in-out infinite;
   }
@@ -1006,6 +1028,73 @@
   50% {
     box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.06), 0 0 8px rgba(0, 255, 255, 0.1);
   }
+}
+
+/* Chat input — accepted flash (emerald bloom fading to idle cyan) */
+@keyframes chat-input-accept-flash {
+  0% {
+    border-color: rgba(52, 211, 153, 0.9);
+    box-shadow:
+      inset 0 0 20px rgba(52, 211, 153, 0.3),
+      0 0 30px rgba(52, 211, 153, 0.5),
+      0 0 60px rgba(52, 211, 153, 0.2);
+  }
+  30% {
+    border-color: rgba(52, 211, 153, 0.5);
+    box-shadow:
+      inset 0 0 12px rgba(52, 211, 153, 0.15),
+      0 0 15px rgba(52, 211, 153, 0.25);
+  }
+  100% {
+    border-color: rgba(0, 255, 255, 0.3);
+    box-shadow:
+      inset 0 0 6px rgba(0, 255, 255, 0.03),
+      0 0 4px rgba(0, 255, 255, 0.05);
+  }
+}
+
+/* Chat input — rejected shake (damped horizontal) */
+@keyframes chat-input-reject-shake {
+  0% { transform: translateX(0); }
+  10% { transform: translateX(-6px); }
+  20% { transform: translateX(5px); }
+  30% { transform: translateX(-4px); }
+  40% { transform: translateX(3px); }
+  55% { transform: translateX(-1px); }
+  70% { transform: translateX(1px); }
+  100% { transform: translateX(0); }
+}
+
+/* Chat input — rejected glow (rose/magenta with chromatic aberration) */
+@keyframes chat-input-reject-glow {
+  0% {
+    border-color: rgba(244, 63, 94, 0.9);
+    box-shadow:
+      inset 0 0 20px rgba(244, 63, 94, 0.3),
+      0 0 25px rgba(244, 63, 94, 0.5),
+      -3px 0 15px rgba(0, 255, 255, 0.15),
+      3px 0 15px rgba(255, 0, 128, 0.15);
+  }
+  25% {
+    border-color: rgba(244, 63, 94, 0.6);
+    box-shadow:
+      inset 0 0 15px rgba(244, 63, 94, 0.2),
+      0 0 18px rgba(244, 63, 94, 0.3),
+      -2px 0 10px rgba(0, 255, 255, 0.1),
+      2px 0 10px rgba(255, 0, 128, 0.1);
+  }
+  100% {
+    border-color: rgba(0, 255, 255, 0.3);
+    box-shadow:
+      inset 0 0 6px rgba(0, 255, 255, 0.03),
+      0 0 4px rgba(0, 255, 255, 0.05);
+  }
+}
+
+/* Chat input — scan bar sweep (horizontal, left to right) */
+@keyframes chat-input-scan-sweep {
+  0% { transform: translateX(-100%); left: 0; }
+  100% { transform: translateX(0); left: 100%; }
 }
 
 /* Chat history navigation — slide + fade flash */

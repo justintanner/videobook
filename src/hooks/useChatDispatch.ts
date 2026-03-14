@@ -11,7 +11,7 @@ interface ChatDispatchHandlers {
 }
 
 interface UseChatDispatchResult {
-  dispatch: (input: string) => Promise<void>;
+  dispatch: (input: string) => Promise<boolean>;
 }
 
 export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, string> {
@@ -43,49 +43,56 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
   useEffect(() => { handlersRef.current = handlers; });
   useEffect(() => { commandsRef.current = commands; });
 
-  const dispatch = useCallback(async (input: string) => {
+  const dispatch = useCallback(async (input: string): Promise<boolean> => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
 
     const { onOpenInbox, onUpload, onSwitchProject, callTool, projectSlug } = handlersRef.current;
 
-    const firstSpace = trimmed.indexOf(' ');
-    const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
-    const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
+    try {
+      const firstSpace = trimmed.indexOf(' ');
+      const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+      const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
 
-    if (command.startsWith('/')) {
-      const matchedCommand = commandsRef.current.find((s) => s.command === command);
+      if (command.startsWith('/')) {
+        const matchedCommand = commandsRef.current.find((s) => s.command === command);
 
-      if (matchedCommand?.category === 'project') {
-        onSwitchProject(command.slice(1));
-        return;
-      }
-
-      if (matchedCommand?.uiAction) {
-        const uiHandlers: Record<string, (r: string) => void> = {
-          open_inbox: () => onOpenInbox(),
-          open_upload: () => onUpload(),
-          copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
-        };
-        uiHandlers[matchedCommand.uiAction]?.(rest);
-        return;
-      }
-
-      if (matchedCommand?.mcpTool) {
-        const args = parseCommandArgs(rest, matchedCommand.params);
-        for (const key of matchedCommand.mcpTool.autoInject ?? []) {
-          if (key === 'project_slug' && projectSlug) {
-            args[key] = projectSlug;
-          }
+        if (matchedCommand?.category === 'project') {
+          onSwitchProject(command.slice(1));
+          return true;
         }
-        await callTool(matchedCommand.mcpTool.tool, args);
-        return;
-      }
-    }
 
-    // Default: forward to chat LLM
-    if (projectSlug) {
-      await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
+        if (matchedCommand?.uiAction) {
+          const uiHandlers: Record<string, (r: string) => void> = {
+            open_inbox: () => onOpenInbox(),
+            open_upload: () => onUpload(),
+            copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
+          };
+          uiHandlers[matchedCommand.uiAction]?.(rest);
+          return true;
+        }
+
+        if (matchedCommand?.mcpTool) {
+          const args = parseCommandArgs(rest, matchedCommand.params);
+          for (const key of matchedCommand.mcpTool.autoInject ?? []) {
+            if (key === 'project_slug' && projectSlug) {
+              args[key] = projectSlug;
+            }
+          }
+          const result = await callTool(matchedCommand.mcpTool.tool, args);
+          return !result.isError;
+        }
+      }
+
+      // Default: forward to chat LLM
+      if (projectSlug) {
+        const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
+        return !result.isError;
+      }
+
+      return false;
+    } catch {
+      return false;
     }
   }, []);
 

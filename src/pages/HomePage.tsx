@@ -109,19 +109,23 @@ export function HomePage() {
   [mediaItems]);
 
   const clips = useMemo(() =>
+    mediaItems.filter((m) => CLIP_TYPES.has(m.type) && m.status !== 'unreviewed'),
+  [mediaItems]);
+
+  const allClipItems = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
 
-  const readyClips = useMemo(() =>
-    clips.filter(c => c.status === 'ready'),
-  [clips]);
+  const unreviewedClips = useMemo(() =>
+    allClipItems.filter(c => c.status === 'unreviewed'),
+  [allClipItems]);
 
   const pendingClips = useMemo(() =>
-    clips.filter(c => GENERATING_STATUSES.has(c.status ?? '')),
-  [clips]);
+    allClipItems.filter(c => GENERATING_STATUSES.has(c.status ?? '')),
+  [allClipItems]);
 
   const inboxState: 'inactive' | 'generating' | 'ready' =
-    readyClips.length > 0 ? 'ready'
+    unreviewedClips.length > 0 ? 'ready'
     : pendingClips.length > 0 ? 'generating'
     : 'inactive';
 
@@ -201,7 +205,7 @@ export function HomePage() {
       <InboxDrawer
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}
-        videos={readyClips}
+        videos={unreviewedClips}
         pendingVideos={pendingClips}
         onApprove={handleApprove}
         onReject={handleReject}
@@ -214,7 +218,7 @@ export function HomePage() {
           onProjectChange={handleProjectChange}
           inboxState={inboxState}
           generatingCount={pendingClips.length}
-          readyCount={readyClips.length}
+          readyCount={unreviewedClips.length}
           onInboxClick={() => setInboxOpen(true)}
         />
 

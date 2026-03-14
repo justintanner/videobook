@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Rocket, Loader2 } from 'lucide-react';
+import { Rocket, Loader2, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AutocompleteDropdown } from './AutocompleteDropdown';
 import { CommandBadge } from './CommandBadge';
@@ -86,8 +86,10 @@ export interface ChatInputHandle {
   focus: () => void;
 }
 
+type CommandResultPhase = 'transmitting' | 'accepted' | 'rejected' | null;
+
 interface ChatInputProps {
-  onSend?: (message: string) => void;
+  onSend?: (message: string) => Promise<boolean>;
   placeholder?: string;
   className?: string;
   isLoading?: boolean;
@@ -119,11 +121,34 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [confirmedTokens, setConfirmedTokens] = useState<ConfirmedToken[]>([]);
   const [historySlide, setHistorySlide] = useState<'up' | 'down' | null>(null);
+  const [commandResult, setCommandResult] = useState<CommandResultPhase>(null);
+  const [resultText, setResultText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTriggerRef = useRef<string | null>(null);
+  const resultTimeoutRef = useRef<number>(0);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
   const history = useChatHistory(callTool, projectSlug);
+
+  const runResultSequence = useCallback(async (text: string) => {
+    clearTimeout(resultTimeoutRef.current);
+    setResultText(text);
+    setCommandResult('transmitting');
+
+    let success = false;
+    if (onSend) {
+      success = await onSend(text);
+    }
+
+    const phase: CommandResultPhase = success ? 'accepted' : 'rejected';
+    const duration = success ? 1200 : 1800;
+    setCommandResult(phase);
+
+    resultTimeoutRef.current = window.setTimeout(() => {
+      setCommandResult(null);
+      setResultText('');
+    }, duration);
+  }, [onSend]);
 
   // Expose imperative handle for animate-and-send
   useImperativeHandle(ref, () => ({
@@ -132,18 +157,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       setChatInput('');
       setConfirmedTokens([]);
       startAnimation(text, () => {
-        if (onSend) onSend(text);
         setChatInput('');
         setConfirmedTokens([]);
+        runResultSequence(text);
       });
     },
     focus() {
       inputRef.current?.focus();
     },
-  }), [onSend, startAnimation, history]);
+  }), [runResultSequence, startAnimation, history]);
 
-  // The displayed text is either animating text or user input
-  const displayText = isAnimating ? animatingText : chatInput;
+  // The displayed text is either animating text, result text, or user input
+  const displayText = isAnimating ? animatingText : commandResult ? resultText : chatInput;
 
   // Detect active trigger: / at start or after whitespace, or @ anywhere
   const triggerMatch = useMemo(() => {
@@ -248,11 +273,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   const handleSend = useCallback(() => {
     if (!chatInput.trim() || disabled) return;
-    history.push(chatInput);
-    if (onSend) onSend(chatInput);
+    const text = chatInput;
+    history.push(text);
     setChatInput('');
     setConfirmedTokens([]);
-  }, [chatInput, disabled, onSend, history]);
+    runResultSequence(text);
+  }, [chatInput, disabled, runResultSequence, history]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (showSuggestions && autocompleteItems.length > 0) {
@@ -336,18 +362,29 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       {/* Input container */}
       <div
         className={cn(
-          'relative flex items-center gap-2 px-3 py-2.5',
+          'relative flex items-center gap-2 px-3 py-2.5 overflow-hidden',
           'bg-black/40 border-2 border-primary/30 rounded-lg',
           'shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
           'focus-within:border-primary/60 focus-within:shadow-[inset_0_0_15px_rgba(0,255,255,0.1),0_0_20px_rgba(0,255,255,0.15)]',
           'transition-all duration-300',
-          isTransmitting && 'chat-input-transmitting',
-          isAnimating && 'chat-input-animating',
-          !isTransmitting && !isAnimating && !isLoading && !disabled && 'chat-input-idle',
+          commandResult === 'transmitting' && 'chat-input-transmitting',
+          commandResult === 'accepted' && 'chat-input-accepted',
+          commandResult === 'rejected' && 'chat-input-rejected',
+          !commandResult && isTransmitting && 'chat-input-transmitting',
+          !commandResult && isAnimating && 'chat-input-animating',
+          !commandResult && !isTransmitting && !isAnimating && !isLoading && !disabled && 'chat-input-idle',
         )}
       >
         {/* Prompt indicator */}
-        <span className="text-primary/60 font-mono text-base font-bold select-none drop-shadow-[0_0_3px_rgba(0,255,255,0.4)]">&rsaquo;</span>
+        <span className={cn(
+          'font-mono text-base font-bold select-none transition-colors duration-200',
+          commandResult === 'accepted' && 'text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]',
+          commandResult === 'rejected' && 'text-rose-400 drop-shadow-[0_0_6px_rgba(244,63,94,0.6)]',
+          commandResult === 'transmitting' && 'text-primary/80 drop-shadow-[0_0_3px_rgba(0,255,255,0.4)]',
+          !commandResult && 'text-primary/60 drop-shadow-[0_0_3px_rgba(0,255,255,0.4)]',
+        )}>
+          {commandResult === 'accepted' ? '✓' : commandResult === 'rejected' ? '✗' : '›'}
+        </span>
 
         {/* Input + overlay wrapper */}
         <div
@@ -371,20 +408,30 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             className={cn(
               'w-full bg-transparent text-sm font-mono placeholder:text-muted-foreground/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed',
               hasConfirmedTokens ? 'text-transparent caret-foreground/80' : 'text-foreground/80',
-              isAnimating && 'text-transparent caret-transparent'
+              isAnimating && 'text-transparent caret-transparent',
+              commandResult && 'text-transparent caret-transparent'
             )}
             data-testid="input-chat"
-            disabled={disabled || isLoading || isTransmitting || isAnimating}
+            disabled={disabled || isLoading || isTransmitting || isAnimating || !!commandResult}
           />
 
           {/* Token overlay — pointer-events-none, styled badges */}
-          {(hasConfirmedTokens || isAnimating) && (
+          {(hasConfirmedTokens || isAnimating || commandResult) && (
             <div
               className="absolute inset-0 flex items-center pointer-events-none text-sm font-mono whitespace-pre"
               aria-hidden="true"
             >
               {isAnimating ? (
                 <span className="text-primary/90">{animatingText}</span>
+              ) : commandResult ? (
+                <span className={cn(
+                  'transition-colors duration-200',
+                  commandResult === 'accepted' && 'text-emerald-400',
+                  commandResult === 'rejected' && 'text-rose-400',
+                  commandResult === 'transmitting' && 'text-primary/90',
+                )}>
+                  {resultText}
+                </span>
               ) : (
                 tokenSegments.map((seg, i) =>
                   seg.type === 'text' ? (
@@ -407,20 +454,37 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           className={cn(
             'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200',
             'border border-primary/20',
-            chatInput.trim() && !disabled && !isLoading && !isTransmitting && !isAnimating
-              ? 'text-primary bg-primary/10 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_12px_rgba(0,255,255,0.3)] hover:scale-110'
-              : 'text-primary/30',
+            commandResult === 'accepted'
+              ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30'
+              : commandResult === 'rejected'
+                ? 'text-rose-400 bg-rose-400/10 border-rose-400/30'
+                : commandResult === 'transmitting'
+                  ? 'text-primary/60'
+                  : chatInput.trim() && !disabled && !isLoading && !isTransmitting && !isAnimating
+                    ? 'text-primary bg-primary/10 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_12px_rgba(0,255,255,0.3)] hover:scale-110'
+                    : 'text-primary/30',
             'disabled:opacity-30 disabled:cursor-not-allowed'
           )}
           onClick={handleSend}
-          disabled={isLoading || isTransmitting || disabled || isAnimating || !chatInput.trim()}
+          disabled={isLoading || isTransmitting || disabled || isAnimating || !!commandResult || !chatInput.trim()}
         >
-          {isLoading ? (
+          {commandResult === 'accepted' ? (
+            <Check className="w-4 h-4" />
+          ) : commandResult === 'rejected' ? (
+            <X className="w-4 h-4" />
+          ) : isLoading || commandResult === 'transmitting' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <Rocket className="w-4 h-4 -rotate-45" />
           )}
         </button>
+
+        {/* Scan bar sweep during transmitting */}
+        {commandResult === 'transmitting' && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
+            <div className="absolute inset-y-0 w-24 chat-input-scan-bar" />
+          </div>
+        )}
       </div>
     </div>
   );

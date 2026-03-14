@@ -64,16 +64,26 @@ async function isWhitelisted(assetDir: string): Promise<boolean> {
   }
 }
 
+async function hasRenderMetadata(assetDir: string): Promise<boolean> {
+  try {
+    await access(join(assetDir, ".render.json"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
         readPendingTask(fs, a.id, project_slug),
         isWhitelisted(a.path),
+        hasRenderMetadata(a.path),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -90,7 +100,13 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       } else if (pendingTask) {
         status = pendingTask.taskType === "transcribe" ? "transcribing" : "generating";
       } else if (mediaFile) {
-        status = whitelisted ? "approved" : "ready";
+        if (!whitelisted) {
+          status = "unreviewed";
+        } else if (rendered) {
+          status = "ready";
+        } else {
+          status = "approved";
+        }
       } else {
         status = "loading";
       }
@@ -239,6 +255,8 @@ async function findAutoRenderActions(
 
       // Skip: not whitelisted
       if (!fileNames.has(".whitelisted_at")) return null;
+      // Skip: already rendered
+      if (fileNames.has(".render.json")) return null;
       // Skip: process_video incomplete
       if (!fileNames.has(".original.analysis.json")) return null;
 
