@@ -17,7 +17,8 @@ export type ClipState =
   | 'untranscribed'
   | 'corrupt'
   | 'error'
-  | 'ready';
+  | 'ready'
+  | 'approved';
 
 export interface MediaItem {
   id: string;

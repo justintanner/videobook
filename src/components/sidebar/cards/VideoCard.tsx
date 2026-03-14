@@ -21,7 +21,7 @@ interface VideoCardProps {
 
 export function VideoCard({ item, contextMenuContent }: VideoCardProps) {
   const status = item.status ?? 'ready';
-  const isReady = status === 'ready';
+  const isReady = status === 'ready' || status === 'approved';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const isUploading = status === 'uploading';
