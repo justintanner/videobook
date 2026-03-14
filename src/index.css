@@ -276,6 +276,32 @@
   .chat-input-idle {
     animation: chat-input-idle-glow 4s ease-in-out infinite;
   }
+
+  .flip-card-perspective {
+    perspective: 1200px;
+  }
+  .flip-card-inner {
+    transform-style: preserve-3d;
+    transition: transform 550ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+  .flip-card-inner.flipped {
+    transform: rotateY(180deg);
+  }
+  .flip-card-face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .flip-card-back {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: rotateY(180deg);
+  }
+  .terminal-scanlines {
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0, 255, 255, 0.04) 2px, rgba(0, 255, 255, 0.04) 4px
+    );
+  }
 }
 
 /* ==================== KEYFRAME ANIMATIONS ==================== */

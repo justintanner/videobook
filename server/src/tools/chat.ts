@@ -23,14 +23,13 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
     description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",
     schema: {
       prompt: z.string().describe("Natural language query with optional @asset tags"),
-      project_slug: z.string().optional().describe("Project slug (defaults to 'default')"),
+      project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { prompt, project_slug } = args as {
+      const { prompt, project_slug: slug } = args as {
         prompt: string;
-        project_slug?: string;
+        project_slug: string;
       };
-      const slug = project_slug ?? "default";
 
       // 1. Resolve @asset tags
       const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(prompt, fs, slug);

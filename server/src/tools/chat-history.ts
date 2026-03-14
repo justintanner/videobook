@@ -10,15 +10,13 @@ export function pushChatHistoryDef(fs: ClipfirstFs): ToolDef {
       message: z.string().describe("The chat message to store"),
       project_slug: z
         .string()
-        .optional()
-        .describe("Project slug (defaults to 'default')"),
+        .describe("Project slug"),
     },
     handler: async (args) => {
-      const { message, project_slug } = args as {
+      const { message, project_slug: slug } = args as {
         message: string;
-        project_slug?: string;
+        project_slug: string;
       };
-      const slug = project_slug ?? "default";
       const result = await fs.appendLog(
         "chat-input-history",
         { message, ts: Date.now() },
@@ -44,19 +42,17 @@ export function listChatHistoryDef(fs: ClipfirstFs): ToolDef {
     schema: {
       project_slug: z
         .string()
-        .optional()
-        .describe("Project slug (defaults to 'default')"),
+        .describe("Project slug"),
       limit: z
         .number()
         .optional()
         .describe("Max entries to return (default 100)"),
     },
     handler: async (args) => {
-      const { project_slug, limit } = args as {
-        project_slug?: string;
+      const { project_slug: slug, limit } = args as {
+        project_slug: string;
         limit?: number;
       };
-      const slug = project_slug ?? "default";
       const entries = await fs.readLog("chat-input-history", slug, {
         limit: limit ?? 100,
       });

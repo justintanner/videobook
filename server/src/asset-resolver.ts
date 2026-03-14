@@ -25,12 +25,12 @@ function stripAssetTags(text: string): string {
 async function resolveAllAssets(
   text: string,
   fs: ClipfirstFs,
-  projectSlug?: string,
+  projectSlug: string,
 ): Promise<{ resolved: ResolvedAsset[]; unresolved: string[] }> {
   const tags = parseAssetTags(text);
   if (tags.length === 0) return { resolved: [], unresolved: [] };
 
-  const slug = projectSlug ?? "default";
+  const slug = projectSlug;
   const allAssets = await fs.listAssets(slug);
 
   const assetIds = new Set(allAssets.map((a) => a.id));

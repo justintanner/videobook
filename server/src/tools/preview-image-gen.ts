@@ -30,14 +30,13 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
       "Route a natural language prompt to the best image generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available image models.",
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'generate an image of a sunset')"),
-      project_slug: z.string().optional().describe("Project slug (defaults to 'default')"),
+      project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { prompt, project_slug } = args as {
+      const { prompt, project_slug: slug } = args as {
         prompt: string;
-        project_slug?: string;
+        project_slug: string;
       };
-      const slug = project_slug ?? "default";
 
       // 1. Resolve @asset tags
       const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(prompt, fs, slug);
