@@ -4,6 +4,7 @@ import type { Skill, SkillParam } from './useSkills';
 
 interface ChatDispatchHandlers {
   onOpenInbox: () => void;
+  onUpload: () => void;
   onSwitchProject: (slug: string) => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
@@ -46,7 +47,7 @@ export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers)
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    const { onOpenInbox, onSwitchProject, callTool, projectSlug } = handlersRef.current;
+    const { onOpenInbox, onUpload, onSwitchProject, callTool, projectSlug } = handlersRef.current;
 
     const firstSpace = trimmed.indexOf(' ');
     const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
@@ -63,6 +64,7 @@ export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers)
       if (matchedSkill?.uiAction) {
         const uiHandlers: Record<string, (r: string) => void> = {
           open_inbox: () => onOpenInbox(),
+          open_upload: () => onUpload(),
           copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
         };
         uiHandlers[matchedSkill.uiAction]?.(rest);

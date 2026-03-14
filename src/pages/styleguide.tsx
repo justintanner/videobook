@@ -1030,10 +1030,6 @@ function Page5_FormsControls() {
           <UploadSlot />
         </div>
         <ContextMenuDemo />
-        <div className="mt-2">
-          <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">CommandButton lg</h4>
-          <ExecuteButtonStatesDemo />
-        </div>
         <div className="flex items-center gap-4 mt-2">
           <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CloseButton</h4>
           <CloseButton onClick={() => {}} />
@@ -1587,37 +1583,6 @@ function Page11_Workflow() {
             </div>
           </div>
         </div>
-        {/* Inbox */}
-        <div className="w-[440px] shrink-0 flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Inbox</h3>
-          <div className="flex flex-wrap gap-4 mb-3">
-            {pendingGenButtonStates.map((s) => (
-              <div key={s.label} className="flex flex-col items-center gap-1">
-                <InboxButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={() => {}} />
-                <span className="text-[9px] font-mono text-muted-foreground">{s.label}</span>
-              </div>
-            ))}
-          </div>
-          {/* Review tile previews */}
-          <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-            <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col min-h-0">
-              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" /></div>
-              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@hero-intro</span><span className="shrink-0">veo3</span></div>
-              <div className="flex border-t border-border/50 mt-auto">
-                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
-                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/20 bg-card/60 opacity-60 overflow-hidden flex flex-col min-h-0">
-              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-turret-cyber.jpg" alt="" className="w-full h-full object-cover" /></div>
-              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@product-shot</span><span className="shrink-0">kling3</span></div>
-              <div className="flex border-t border-border/50 mt-auto">
-                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
-                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Bottom: Chat & Messaging */}
@@ -1639,20 +1604,13 @@ function Page11_Workflow() {
               </div>
             </div>
           </div>
-          {/* ChatInput states */}
-          <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
-            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} /></div>
-            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading assetSlugs={[]} /></div>
-            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting assetSlugs={[]} /></div>
-            <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled assetSlugs={[]} /></div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Slide 12: Project Dropdown ──
+// ── Slide 12: Command System ──
 
 const mockProjects = [
   { slug: 'summer-campaign', active: false },
@@ -1661,100 +1619,186 @@ const mockProjects = [
   { slug: 'q4-video-ads', active: false },
 ];
 
-function Page12_ProjectDropdown() {
+function Page12_CommandSystem() {
   return (
-    <div className="w-full h-full flex gap-10">
-      {/* Column 1: Closed button */}
-      <div className="w-[280px] shrink-0 flex flex-col gap-4">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Closed State</h3>
-        <div className="flex flex-col gap-3">
+    <div className="w-full h-full flex flex-col gap-5">
+      {/* Row 1: ProjectButton + ProjectDropdown + InboxButton */}
+      <div className="flex gap-6 shrink-0">
+        {/* ProjectButton */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectButton</h3>
+          </div>
           <ProjectButton projectSlug="product-launch" />
-          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">click to open popover</p>
         </div>
-      </div>
 
-      {/* Column 2: Open popover panel */}
-      <div className="w-[280px] shrink-0 flex flex-col gap-4">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Open — Project List</h3>
-        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
-          <div className="py-1">
-            {mockProjects.map((p) => (
-              <div
-                key={p.slug}
-                className={cn(
-                  'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
-                  'hover:bg-emerald-500/10',
-                  p.active && 'bg-emerald-500/5'
-                )}
-              >
-                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
-                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
-                <button className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all">
-                  <Pencil className="w-3 h-3" />
-                </button>
+        {/* ProjectDropdown — Open */}
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — Open</h3>
+          <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
+            <div className="py-1">
+              {mockProjects.map((p) => (
+                <div
+                  key={p.slug}
+                  className={cn(
+                    'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
+                    'hover:bg-emerald-500/10',
+                    p.active && 'bg-emerald-500/5'
+                  )}
+                >
+                  <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
+                  <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
+                  <button className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all">
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-emerald-500/20" />
+            <div className="py-1">
+              <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10 transition-colors">
+                <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ProjectDropdown — Rename */}
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — Rename</h3>
+          <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
+            <div className="py-1">
+              <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">summer-campaign</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1">
+                <Input defaultValue="product-launch-v2" className="h-7 text-xs font-mono flex-1" />
+                <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+                <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">brand-refresh</span>
+              </div>
+            </div>
+            <div className="border-t border-emerald-500/20" />
+            <div className="py-1">
+              <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+                <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+                <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ProjectDropdown — New */}
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — New</h3>
+          <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
+            <div className="py-1">
+              {mockProjects.slice(0, 2).map((p) => (
+                <div key={p.slug} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
+                  <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
+                  <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-emerald-500/20" />
+            <div className="py-1">
+              <div className="flex items-center gap-1 px-2 py-1">
+                <Input defaultValue="holiday-promo" placeholder="project-slug" className="h-7 text-xs font-mono flex-1" />
+                <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+                <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* InboxButton */}
+        <div className="flex flex-col gap-2 ml-auto">
+          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">InboxButton</h3>
+          <div className="flex gap-4">
+            {pendingGenButtonStates.map((s) => (
+              <div key={s.label} className="flex flex-col items-center gap-1">
+                <InboxButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={() => {}} />
+                <span className="text-[9px] font-mono text-muted-foreground">{s.label}</span>
               </div>
             ))}
           </div>
-          <div className="border-t border-emerald-500/20" />
-          <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10 transition-colors">
-              <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
-              <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Column 3: Rename editing mode */}
-      <div className="w-[280px] shrink-0 flex flex-col gap-4">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Rename Mode</h3>
-        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
-          <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
-              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
-              <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">summer-campaign</span>
-            </div>
-            {/* Editing row */}
-            <div className="flex items-center gap-1 px-2 py-1">
-              <Input defaultValue="product-launch-v2" className="h-7 text-xs font-mono flex-1" />
-              <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
-              <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
-              <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-transparent" />
-              <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">brand-refresh</span>
-            </div>
-          </div>
-          <div className="border-t border-emerald-500/20" />
-          <div className="py-1">
-            <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
-              <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
-              <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Column 4: New project inline input */}
-      <div className="w-[280px] shrink-0 flex flex-col gap-4">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">New Project Mode</h3>
-        <div className="rounded-md border border-emerald-500/25 bg-card w-64 overflow-hidden">
-          <div className="py-1">
-            {mockProjects.slice(0, 2).map((p) => (
-              <div key={p.slug} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
-                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
-                <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
+      {/* Row 2: CommandButton */}
+      <div className="flex-1 min-h-0 flex flex-col gap-2">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CommandButton</h3>
+        <div className="flex gap-8 flex-1 min-h-0">
+          {/* Sizes */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">sizes</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">sm</span>
+                <CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />
               </div>
-            ))}
-          </div>
-          <div className="border-t border-emerald-500/20" />
-          <div className="py-1">
-            <div className="flex items-center gap-1 px-2 py-1">
-              <Input defaultValue="holiday-promo" placeholder="project-slug" className="h-7 text-xs font-mono flex-1" />
-              <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
-              <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
+                <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">lg</span>
+                <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" />
+              </div>
             </div>
           </div>
+
+          {/* Variants */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">variants</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
+                <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
+                <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+              </div>
+            </div>
+          </div>
+
+          {/* Chevrons */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">chevrons</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">right</span>
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">down</span>
+                <CommandButton command="/inbox" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
+              </div>
+            </div>
+          </div>
+
+          {/* States (lg) */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">states (lg)</p>
+            <ExecuteButtonStatesDemo />
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: ChatInput */}
+      <div className="shrink-0 flex flex-col gap-2">
+        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ChatInput</h3>
+        <div className="grid grid-cols-4 gap-4">
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading assetSlugs={[]} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting assetSlugs={[]} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled assetSlugs={[]} /></div>
         </div>
       </div>
     </div>
@@ -1874,7 +1918,7 @@ const SLIDE_PAGES = [
   Page9_AudioSystem,
   Page10_GenSystem,
   Page11_Workflow,
-  Page12_ProjectDropdown,
+  Page12_CommandSystem,
   Page13_InboxReview,
 ];
 

@@ -48,6 +48,7 @@ export function HomePage() {
   const [inboxOpen, setInboxOpen] = useState(false);
 
   const chatInputRef = useRef<ChatInputHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
@@ -122,6 +123,10 @@ export function HomePage() {
     return () => clearInterval(id);
   }, [projectSlug, sync]);
 
+  const triggerUpload = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
   const handleDrop = useCallback((files: File[]) => {
     if (!projectSlug) return;
     const uploads = files.map((file) => upload(projectSlug, file));
@@ -147,6 +152,7 @@ export function HomePage() {
 
   const { dispatch } = useChatDispatch(skills, {
     onOpenInbox: () => setInboxOpen(true),
+    onUpload: triggerUpload,
     onSwitchProject: handleProjectChange,
     callTool,
     projectSlug,
@@ -162,6 +168,19 @@ export function HomePage() {
 
   return (
     <div className="w-screen h-screen bg-background overflow-hidden">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length > 0) {
+            handleDrop(Array.from(files));
+          }
+          e.target.value = '';
+        }}
+      />
       <DropzoneOverlay isDragging={isDragging} />
       <InboxDrawer
         open={inboxOpen}
@@ -222,7 +241,7 @@ export function HomePage() {
                   </div>
                 );
               })}
-              <UploadSlot />
+              <UploadSlot onClick={triggerUpload} />
             </div>
           </CollapsibleSidebar>
 
@@ -277,7 +296,7 @@ export function HomePage() {
                   </div>
                 );
               })}
-              <UploadSlot />
+              <UploadSlot onClick={triggerUpload} />
             </div>
           </CollapsibleSidebar>
         </div>

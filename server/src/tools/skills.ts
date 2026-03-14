@@ -113,6 +113,17 @@ const HARDCODED_SKILLS: Skill[] = [
     params: [],
   },
   {
+    command: "/upload",
+    description: "Upload a file",
+    category: "action",
+    icon: "Upload",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [],
+    uiAction: "open_upload",
+  },
+  {
     command: "/inbox",
     description: "View generations inbox",
     category: "action",
