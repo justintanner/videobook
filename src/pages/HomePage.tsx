@@ -50,6 +50,7 @@ export function HomePage() {
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevInboxOpenRef = useRef(false);
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
@@ -58,6 +59,14 @@ export function HomePage() {
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
   const { skills, refresh: refreshSkills } = useSkills(callTool);
+
+  // Refocus ChatInput after InboxDrawer closes
+  useEffect(() => {
+    if (prevInboxOpenRef.current && !inboxOpen) {
+      chatInputRef.current?.focus();
+    }
+    prevInboxOpenRef.current = inboxOpen;
+  }, [inboxOpen]);
 
   // Refresh skills when MCP becomes ready
   useEffect(() => {
@@ -256,7 +265,10 @@ export function HomePage() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
               {activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} onClose={() => setSelectedItem(null)} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} onClose={() => {
+                  setSelectedItem(null);
+                  setTimeout(() => chatInputRef.current?.focus(), 0);
+                }} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}

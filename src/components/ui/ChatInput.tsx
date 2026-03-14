@@ -57,6 +57,7 @@ function parseTokens(text: string, confirmedTokens: ConfirmedToken[], skills: Sk
 
 export interface ChatInputHandle {
   animateAndSend: (text: string) => void;
+  focus: () => void;
 }
 
 interface ChatInputProps {
@@ -102,6 +103,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         setChatInput('');
         setConfirmedTokens([]);
       });
+    },
+    focus() {
+      inputRef.current?.focus();
     },
   }), [onSend, startAnimation]);
 
@@ -294,6 +298,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           <input
             ref={inputRef}
             type="text"
+            autoFocus
             value={displayText}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}

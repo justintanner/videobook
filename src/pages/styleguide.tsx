@@ -1224,78 +1224,54 @@ function Page7_Trimming() {
 
 // ── Slide 8: Video Editing ──
 
+function VideoRenderPanel({ slug, activeRatio, children }: {
+  slug: string;
+  activeRatio: '9:16' | '16:9' | '1:1';
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
+      <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+        <RatioToggle active={activeRatio} />
+        <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">{slug}</span>
+        <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+          <Settings className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="flex-1 bg-black flex items-center justify-center min-h-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function Page8_VideoEditing() {
   return (
-    <div className="w-full h-full flex gap-6">
+    <div className="w-full h-full flex flex-col gap-2">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoRenderPanel</p>
       <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-        {/* Landscape */}
-        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <RatioToggle active="16:9" />
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
-            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-            <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
-          </div>
-        </div>
-        {/* Portrait */}
-        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <RatioToggle active="9:16" />
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
-            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+        {/* Landscape — ready */}
+        <VideoRenderPanel slug="@hero" activeRatio="16:9">
+          <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
+        </VideoRenderPanel>
+        {/* Portrait — empty */}
+        <VideoRenderPanel slug="@hero" activeRatio="9:16">
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
           </div>
-        </div>
-        {/* Square */}
-        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <RatioToggle active="1:1" />
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@hero</span>
-            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="flex-1 bg-black/90 flex flex-col items-center justify-center gap-2 text-muted-foreground min-h-0">
+        </VideoRenderPanel>
+        {/* Square — rendering */}
+        <VideoRenderPanel slug="@hero" activeRatio="1:1">
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
           </div>
-        </div>
+        </VideoRenderPanel>
         {/* Error */}
-        <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-          <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <RatioToggle active="16:9" />
-            <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">@broken</span>
-            <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="flex-1 bg-black flex flex-col items-center justify-center gap-1 text-destructive min-h-0">
+        <VideoRenderPanel slug="@broken" activeRatio="16:9">
+          <div className="flex flex-col items-center justify-center gap-1 text-destructive">
             <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
           </div>
-        </div>
-      </div>
-      {/* Timeline slots column */}
-      <div className="w-[500px] shrink-0 flex flex-col gap-3 min-h-0">
-        <div className="grid grid-cols-2 gap-3 flex-1">
-          <div className="h-full flex gap-0.5"><TimelineSlot label="@s01" /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive /></div>
-          <div className="h-full flex gap-0.5"><TimelineSlot label="@s03" isDragOver /></div>
-        </div>
-        <div className="relative h-20 flex gap-0.5 border border-border/30 rounded-md overflow-hidden shrink-0">
-          <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-          <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-          <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
-          <TimelineSlot label="@s04" flex={2} />
-          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '55%' }} />
-        </div>
+        </VideoRenderPanel>
       </div>
     </div>
   );
