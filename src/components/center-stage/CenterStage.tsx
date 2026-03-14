@@ -45,9 +45,17 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   }
 
   if (type === 'video' || type === 'final') {
-    return thumbSrc ? (
-      <img src={thumbSrc} alt={item.title} className="w-full h-full object-contain" draggable={false} />
-    ) : null;
+    if (!item.filePath) return null;
+    return (
+      <video
+        key={item.id}
+        src={item.filePath}
+        poster={thumbSrc ?? undefined}
+        controls
+        className="w-full h-full object-contain"
+        draggable={false}
+      />
+    );
   }
 
   if (type === 'audio') {
