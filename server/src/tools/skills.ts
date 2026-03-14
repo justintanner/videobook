@@ -8,6 +8,11 @@ interface SkillParam {
   description: string;
 }
 
+interface McpToolBinding {
+  tool: string;
+  autoInject?: string[];
+}
+
 interface Skill {
   command: string;
   description: string;
@@ -17,6 +22,8 @@ interface Skill {
   variant: "default" | "violet";
   chevron: "right" | "down";
   params: SkillParam[];
+  mcpTool?: McpToolBinding;
+  uiAction?: string;
 }
 
 const HARDCODED_SKILLS: Skill[] = [
@@ -114,6 +121,7 @@ const HARDCODED_SKILLS: Skill[] = [
     variant: "default",
     chevron: "down",
     params: [],
+    uiAction: "open_inbox",
   },
   {
     command: "/copy-name",
@@ -126,6 +134,7 @@ const HARDCODED_SKILLS: Skill[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset whose name to copy" },
     ],
+    uiAction: "copy_clipboard",
   },
   {
     command: "/open-folder",
@@ -137,8 +146,49 @@ const HARDCODED_SKILLS: Skill[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to open folder for" },
-      { name: "project_slug", type: "string", required: true, description: "Project containing the asset" },
     ],
+    mcpTool: { tool: "open_folder", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/duplicate",
+    description: "Duplicate an asset",
+    category: "context_menu",
+    icon: "Copy",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to duplicate" },
+      { name: "new_name", type: "string", required: false, description: "Optional name for the copy" },
+    ],
+    mcpTool: { tool: "duplicate_asset", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/delete",
+    description: "Delete an asset",
+    category: "context_menu",
+    icon: "Trash2",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to delete" },
+    ],
+    mcpTool: { tool: "delete_asset", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/rename",
+    description: "Rename an asset",
+    category: "context_menu",
+    icon: "Pencil",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to rename" },
+      { name: "new_name", type: "string", required: true, description: "New name for the asset" },
+    ],
+    mcpTool: { tool: "rename_asset", autoInject: ["project_slug"] },
   },
 ];
 

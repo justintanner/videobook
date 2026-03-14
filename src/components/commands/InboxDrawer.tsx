@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Check, Loader2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -83,58 +83,40 @@ export function InboxDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
 
-  const handleVideoEnded = useCallback(
-    (videoId: string) => {
-      const idx = liveVideos.findIndex((v) => v.id === videoId);
-      if (idx === -1 || liveVideos.length <= 1) return;
-      const nextIdx = (idx + 1) % liveVideos.length;
-      setActiveVideoId(liveVideos[nextIdx].id);
-    },
-    [liveVideos]
-  );
+  const handleVideoEnded = (videoId: string) => {
+    const idx = liveVideos.findIndex((v) => v.id === videoId);
+    if (idx === -1 || liveVideos.length <= 1) return;
+    const nextIdx = (idx + 1) % liveVideos.length;
+    setActiveVideoId(liveVideos[nextIdx].id);
+  };
 
-  const advanceActiveIfNeeded = useCallback(
-    (removedId: string) => {
-      if (activeVideoId !== removedId) return;
-      const remaining = liveVideos.filter((v) => v.id !== removedId);
-      if (remaining.length === 0) {
-        setActiveVideoId(null);
-        return;
-      }
-      const oldIdx = liveVideos.findIndex((v) => v.id === removedId);
-      const nextIdx = Math.min(oldIdx, remaining.length - 1);
-      setActiveVideoId(remaining[nextIdx].id);
-    },
-    [activeVideoId, liveVideos]
-  );
+  const advanceActiveIfNeeded = (removedId: string) => {
+    if (activeVideoId !== removedId) return;
+    const remaining = liveVideos.filter((v) => v.id !== removedId);
+    if (remaining.length === 0) {
+      setActiveVideoId(null);
+      return;
+    }
+    const oldIdx = liveVideos.findIndex((v) => v.id === removedId);
+    const nextIdx = Math.min(oldIdx, remaining.length - 1);
+    setActiveVideoId(remaining[nextIdx].id);
+  };
 
-  const handleExitComplete = useCallback(
-    (videoId: string) => {
-      setExitingIds((prev) => { const next = new Set(prev); next.delete(videoId); return next; });
-      setRemovedIds((prev) => new Set(prev).add(videoId));
-    },
-    []
-  );
+  const handleExitComplete = (videoId: string) => {
+    setExitingIds((prev) => { const next = new Set(prev); next.delete(videoId); return next; });
+    setRemovedIds((prev) => new Set(prev).add(videoId));
+  };
 
-  const handleMutate = useCallback(
-    (video: MediaItem, action: (v: MediaItem) => void) => {
-      if (exitingIds.has(video.id) || removedIds.has(video.id)) return;
-      advanceActiveIfNeeded(video.id);
-      setExitingIds((prev) => new Set(prev).add(video.id));
-      action(video);
-    },
-    [exitingIds, removedIds, advanceActiveIfNeeded]
-  );
+  const handleMutate = (video: MediaItem, action: (v: MediaItem) => void) => {
+    if (exitingIds.has(video.id) || removedIds.has(video.id)) return;
+    advanceActiveIfNeeded(video.id);
+    setExitingIds((prev) => new Set(prev).add(video.id));
+    action(video);
+  };
 
-  const handleApprove = useCallback(
-    (video: MediaItem) => handleMutate(video, onApprove),
-    [handleMutate, onApprove]
-  );
+  const handleApprove = (video: MediaItem) => handleMutate(video, onApprove);
 
-  const handleReject = useCallback(
-    (video: MediaItem) => handleMutate(video, onReject),
-    [handleMutate, onReject]
-  );
+  const handleReject = (video: MediaItem) => handleMutate(video, onReject);
 
   const activeIndex = liveVideos.findIndex((v) => v.id === activeVideoId);
 

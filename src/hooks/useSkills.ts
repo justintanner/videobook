@@ -8,6 +8,11 @@ interface SkillParam {
   description: string;
 }
 
+interface McpToolBinding {
+  tool: string;
+  autoInject?: string[];
+}
+
 interface Skill {
   command: string;
   description: string;
@@ -17,6 +22,8 @@ interface Skill {
   variant: "default" | "violet";
   chevron: "right" | "down";
   params: SkillParam[];
+  mcpTool?: McpToolBinding;
+  uiAction?: string;
 }
 
 interface UseSkillsResult {
@@ -57,4 +64,4 @@ export function useSkills(callTool: UseMcpResult["callTool"]): UseSkillsResult {
   return { skills, loading, error, refresh };
 }
 
-export type { Skill, SkillParam };
+export type { Skill, SkillParam, McpToolBinding };

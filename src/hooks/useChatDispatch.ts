@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
-import type { Skill } from './useSkills';
+import type { Skill, SkillParam } from './useSkills';
 
 interface ChatDispatchHandlers {
   onOpenInbox: () => void;
@@ -11,6 +11,28 @@ interface ChatDispatchHandlers {
 
 interface UseChatDispatchResult {
   dispatch: (input: string) => Promise<void>;
+}
+
+export function parseSkillArgs(rest: string, params: SkillParam[]): Record<string, string> {
+  if (!rest || params.length === 0) return {};
+
+  const tokens = rest.split(/\s+/);
+  const args: Record<string, string> = {};
+
+  for (let i = 0; i < params.length; i++) {
+    if (i >= tokens.length) break;
+
+    if (i === params.length - 1 && params[i].type === 'string') {
+      // Last string param gets all remaining tokens joined
+      const raw = tokens.slice(i).join(' ');
+      args[params[i].name] = raw.startsWith('@') ? raw.slice(1) : raw;
+    } else {
+      const raw = tokens[i];
+      args[params[i].name] = raw.startsWith('@') ? raw.slice(1) : raw;
+    }
+  }
+
+  return args;
 }
 
 export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers): UseChatDispatchResult {
@@ -26,46 +48,40 @@ export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers)
 
     const { onOpenInbox, onSwitchProject, callTool, projectSlug } = handlersRef.current;
 
-    // Extract first token as potential command
     const firstSpace = trimmed.indexOf(' ');
     const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+    const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
 
     if (command.startsWith('/')) {
-      // Check for /inbox — pure UI command
-      if (command === '/inbox') {
-        onOpenInbox();
-        return;
-      }
-
-      // Check for project-switch skill
       const matchedSkill = skillsRef.current.find((s) => s.command === command);
+
       if (matchedSkill?.category === 'project') {
-        const slug = command.slice(1); // strip leading /
-        onSwitchProject(slug);
+        onSwitchProject(command.slice(1));
         return;
       }
 
-      // /copy-name @slug — clipboard copy
-      if (command === '/copy-name') {
-        const rest = trimmed.slice(firstSpace + 1).trim();
-        if (rest) {
-          await navigator.clipboard.writeText(rest);
-        }
+      if (matchedSkill?.uiAction) {
+        const uiHandlers: Record<string, (r: string) => void> = {
+          open_inbox: () => onOpenInbox(),
+          copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
+        };
+        uiHandlers[matchedSkill.uiAction]?.(rest);
         return;
       }
 
-      // /open-folder @slug — delegate to MCP
-      if (command === '/open-folder') {
-        const rest = trimmed.slice(firstSpace + 1).trim();
-        const assetId = rest.startsWith('@') ? rest.slice(1) : rest;
-        if (assetId && projectSlug) {
-          await callTool('open_folder', { asset_id: assetId, project_slug: projectSlug });
+      if (matchedSkill?.mcpTool) {
+        const args = parseSkillArgs(rest, matchedSkill.params);
+        for (const key of matchedSkill.mcpTool.autoInject ?? []) {
+          if (key === 'project_slug' && projectSlug) {
+            args[key] = projectSlug;
+          }
         }
+        await callTool(matchedSkill.mcpTool.tool, args);
         return;
       }
     }
 
-    // Default: forward everything to the chat MCP tool
+    // Default: forward to chat LLM
     if (projectSlug) {
       await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
     }
