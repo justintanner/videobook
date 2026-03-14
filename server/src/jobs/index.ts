@@ -16,7 +16,6 @@ import { registerProcessVideoJob } from "./process-video.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
-import { registerRedesignStyleguidePageJob } from "./redesign-styleguide-page.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -36,5 +35,4 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeVideoAudioJob(fs);
   registerAnalyzeVideoJob(fs);
   registerRenderTimelineJob(fs);
-  registerRedesignStyleguidePageJob(fs);
 }
