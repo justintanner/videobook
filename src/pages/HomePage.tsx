@@ -10,7 +10,6 @@ import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { IdleScreen } from '@/components/center-stage';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
@@ -45,11 +44,10 @@ export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
-  const [switching, setSwitching] = useState(false);
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
-  const { projectSlug, setProjectSlug, error } = useDefaultProject(callTool, state);
+  const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result, setSyncResult } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
 
@@ -111,24 +109,13 @@ export function HomePage() {
   }, [projectSlug, upload, sync]);
 
   const handleProjectChange = useCallback(async (slug: string) => {
-    setSwitching(true);
     setSyncResult(undefined);
     setProjectSlug(slug);
-    try {
-      const result = await switchProject(slug);
-      if (result) setSyncResult(result);
-    } finally {
-      setSwitching(false);
-    }
+    const result = await switchProject(slug);
+    if (result) setSyncResult(result);
   }, [setProjectSlug, setSyncResult, switchProject]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
-
-  const isLoading = state !== 'ready' || (!projectSlug && !error) || switching;
-
-  if (isLoading) {
-    return <LoadingScreen label={switching ? 'SWITCHING PROJECT' : 'INITIALIZING'} />;
-  }
 
   return (
     <div className="w-screen h-screen bg-background overflow-hidden">
