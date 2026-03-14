@@ -1614,7 +1614,7 @@ function Page11_Workflow() {
 
 const mockProjects = [
   { slug: 'summer-campaign', active: false },
-  { slug: 'product-launch', active: true },
+  { slug: 'prod', active: true },
   { slug: 'brand-refresh', active: false },
   { slug: 'q4-video-ads', active: false },
 ];
@@ -1627,14 +1627,14 @@ function Page12_CommandSystem() {
         {/* ProjectButton */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectButton</h3>
+            <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ProjectButton</h3>
           </div>
-          <ProjectButton projectSlug="product-launch" />
+          <ProjectButton projectSlug="prod" />
         </div>
 
         {/* ProjectDropdown — Open */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — Open</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ProjectDropdown — Open</h3>
           <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
             <div className="py-1">
               {mockProjects.map((p) => (
@@ -1666,7 +1666,7 @@ function Page12_CommandSystem() {
 
         {/* ProjectDropdown — Rename */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — Rename</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ProjectDropdown — Rename</h3>
           <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
             <div className="py-1">
               <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10">
@@ -1674,7 +1674,7 @@ function Page12_CommandSystem() {
                 <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">summer-campaign</span>
               </div>
               <div className="flex items-center gap-1 px-2 py-1">
-                <Input defaultValue="product-launch-v2" className="h-7 text-xs font-mono flex-1" />
+                <Input defaultValue="prod-v2" className="h-7 text-xs font-mono flex-1" />
                 <button className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
                 <button className="p-1 text-red-400 hover:text-red-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
               </div>
@@ -1695,7 +1695,7 @@ function Page12_CommandSystem() {
 
         {/* ProjectDropdown — New */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectDropdown — New</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ProjectDropdown — New</h3>
           <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
             <div className="py-1">
               {mockProjects.slice(0, 2).map((p) => (
@@ -1716,9 +1716,9 @@ function Page12_CommandSystem() {
           </div>
         </div>
 
-        {/* InboxButton */}
+        {/* InboxButton + InboxDrawer tiles */}
         <div className="flex flex-col gap-2 ml-auto">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">InboxButton</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">InboxButton</h3>
           <div className="flex gap-4">
             {pendingGenButtonStates.map((s) => (
               <div key={s.label} className="flex flex-col items-center gap-1">
@@ -1727,12 +1727,31 @@ function Page12_CommandSystem() {
               </div>
             ))}
           </div>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest mt-2">InboxDrawer — Review Tiles</h3>
+          <div className="grid grid-cols-2 gap-3 min-h-0">
+            <div className="rounded-lg border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)] overflow-hidden flex flex-col min-h-0">
+              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" /></div>
+              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@hero-intro</span><span className="shrink-0">veo3</span></div>
+              <div className="flex border-t border-border/50 mt-auto">
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/20 bg-card/60 opacity-60 overflow-hidden flex flex-col min-h-0">
+              <div className="aspect-video bg-black relative shrink-0"><img src="/styleguide-vid-turret-cyber.jpg" alt="" className="w-full h-full object-cover" /></div>
+              <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-mono text-muted-foreground"><span className="text-primary/70 truncate">@product-shot</span><span className="shrink-0">kling3</span></div>
+              <div className="flex border-t border-border/50 mt-auto">
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-red-400 border-r border-border/50"><X className="w-3 h-3" />REJECT</div>
+                <div className="flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-mono font-bold text-primary"><Check className="w-3 h-3" />APPROVE</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Row 2: CommandButton */}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CommandButton</h3>
+        <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">CommandButton</h3>
         <div className="flex gap-8 flex-1 min-h-0">
           {/* Sizes */}
           <div className="flex flex-col gap-3">
@@ -1793,7 +1812,7 @@ function Page12_CommandSystem() {
 
       {/* Row 3: ChatInput */}
       <div className="shrink-0 flex flex-col gap-2">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ChatInput</h3>
+        <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ChatInput</h3>
         <div className="grid grid-cols-4 gap-4">
           <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} /></div>
           <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading assetSlugs={[]} /></div>
