@@ -49,7 +49,7 @@ const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> =
     ready: null,
     charging: '/charging...',
     submitting: '/initializing...',
-    queued: '/in_queue...',
+    queued: '/in-queue...',
     processing: '/generating...',
     success: '/complete',
   },

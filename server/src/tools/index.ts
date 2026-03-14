@@ -41,6 +41,7 @@ import { editTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
 import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
 import { openFolderDef } from "./open-folder.js";
+import { skillsDef } from "./skills.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -92,5 +93,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     renderTimelineDef(fs),
     redesignStyleguidePageDef(),
     openFolderDef(fs),
+    skillsDef(fs),
   ];
 }

@@ -27,14 +27,14 @@ export function AssetMenu({ slug, onOpenFolder, MenuItem }: AssetMenuProps) {
     <>
       <CommandMenuItem
         icon={<ClipboardCopy className="h-3 w-3" />}
-        command="/copy_name"
+        command="/copy-name"
         onSelect={() => navigator.clipboard.writeText(slug)}
         MenuItem={MenuItem}
       />
       <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
         icon={<FolderOpen className="h-3 w-3" />}
-        command="/open_folder"
+        command="/open-folder"
         onSelect={onOpenFolder}
         MenuItem={MenuItem}
       />

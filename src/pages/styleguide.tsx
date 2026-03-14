@@ -76,6 +76,24 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
   { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
 ];
 
+const reviewQueueItems: MediaItem[] = [
+  { id: 'rq-1', type: 'video', slug: '@hero-intro', title: 'Hero Intro', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 12, width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' },
+  { id: 'rq-2', type: 'video', slug: '@product-shot', title: 'Product Shot', filePath: '/styleguide-vid-turret-cyber.jpg', status: 'ready', durationSeconds: 8, width: 1080, height: 1080, origin: 'kling3', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg' },
+  { id: 'rq-3', type: 'video', slug: '@sky-transition', title: 'Sky Transition', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 5, width: 1920, height: 1080, origin: 'wan21', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' },
+  { id: 'rq-4', type: 'video', slug: '@neon-overlay', title: 'Neon Overlay', filePath: '/styleguide-img-neon-fox.jpg', status: 'ready', durationSeconds: 15, width: 1080, height: 1920, origin: 'nano_banana', thumbnailSrc: '/styleguide-img-neon-fox.jpg' },
+  { id: 'rq-5', type: 'video', slug: '@cyber-montage', title: 'Cyber Montage', filePath: '/styleguide-img-cyber-fresh.jpg', status: 'ready', durationSeconds: 10, width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-img-cyber-fresh.jpg' },
+  { id: 'rq-6', type: 'video', slug: '@brand-reveal', title: 'Brand Reveal', filePath: '/styleguide-img-cover.jpg', status: 'ready', durationSeconds: 6, width: 1080, height: 1080, origin: 'kling3', thumbnailSrc: '/styleguide-img-cover.jpg' },
+  { id: 'rq-7', type: 'video', slug: '@final-hook', title: 'Final Hook', filePath: '/styleguide-final-thumb.jpg', status: 'ready', durationSeconds: 18, width: 1080, height: 1920, origin: 'wan21', thumbnailSrc: '/styleguide-final-thumb.jpg' },
+  { id: 'rq-8', type: 'video', slug: '@outro-fade', title: 'Outro Fade', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 9, width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' },
+];
+
+const pendingQueueItems = [
+  { id: 'pq-1', slug: '@intro-v2', tag: 'GEN' },
+  { id: 'pq-2', slug: '@b-roll-city', tag: 'DL' },
+  { id: 'pq-3', slug: '@cta-end', tag: 'GEN' },
+  { id: 'pq-4', slug: '@ambient-loop', tag: 'GEN' },
+];
+
 // ── Helper Components ──
 
 function StyleguideWaveform({
@@ -812,7 +830,7 @@ function Page2_VideoGeneration() {
                       <div className="space-y-2 mb-3">
                         <div className="flex items-center justify-between">
                           <BracketLabel label="PROMPT" required />
-                          <CommandButton size="sm" command="/rewrite_prompt" icon={<Sparkles className="w-3 h-3" />} />
+                          <CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />
                         </div>
                         <textarea className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28" defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion." readOnly />
                       </div>
@@ -1298,8 +1316,8 @@ function Page9_AudioSystem() {
             <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">VOCALS</span>
           </div>
           <div className="flex items-center gap-2">
-            <CommandButton command="/trim_audio" icon={<Scissors className="w-3.5 h-3.5" />} />
-            <CommandButton command="/isolate_vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+            <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
+            <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
           </div>
         </div>
         <div className="relative px-5 py-3" style={{ minHeight: 100 }}>
@@ -1433,7 +1451,7 @@ function Page10_GenSystem() {
             }>
               <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
                 <div className="space-y-4">
-                  <GenField label="Prompt" required actions={<CommandButton size="sm" command="/rewrite_prompt" icon={<Sparkles className="w-3 h-3" />} />}>
+                  <GenField label="Prompt" required actions={<CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />}>
                     <GenTextarea value="A cinematic drone shot sweeping over a coastal city at golden hour" onChange={genNoop} rows={3} />
                   </GenField>
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -1743,6 +1761,105 @@ function Page12_ProjectDropdown() {
   );
 }
 
+function Page13_InboxReview() {
+  const activeIndex = 2; // 3rd tile is active (0-based)
+  return (
+    <div className="w-full h-full flex flex-col bg-background">
+      {/* ReviewHeader */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
+        <span className="text-xs font-mono font-bold tracking-widest text-primary/70 uppercase">REVIEW_QUEUE</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-muted-foreground">{activeIndex + 1}/{reviewQueueItems.length}</span>
+          <button className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex flex-wrap gap-4">
+          {reviewQueueItems.map((item, i) => {
+            const isActive = i === activeIndex;
+            const durationLabel = item.durationSeconds != null
+              ? `0:${String(item.durationSeconds).padStart(2, '0')}`
+              : null;
+            const w = item.width ?? 1920;
+            const h = item.height ?? 1080;
+            const isPortrait = h > w;
+            const isSquare = w === h;
+            const ratioLabel = isPortrait ? '9:16' : isSquare ? '1:1' : '16:9';
+            const cardWidth = isPortrait ? 'w-[160px]' : isSquare ? 'w-[220px]' : 'w-[300px]';
+            return (
+              <div
+                key={item.id}
+                className={cn(
+                  cardWidth,
+                  'rounded-lg overflow-hidden flex flex-col transition-all duration-300 shrink-0',
+                  isActive
+                    ? 'border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)]'
+                    : 'border border-border/20 bg-card/60 opacity-60'
+                )}
+              >
+                <div className="bg-black relative" style={{ aspectRatio: `${w}/${h}` }}>
+                  <img src={item.thumbnailSrc ?? ''} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
+                  <span className="text-primary/70 truncate">{item.slug}</span>
+                  {durationLabel && (
+                    <>
+                      <span className="text-border">&middot;</span>
+                      <span className="shrink-0">{durationLabel}</span>
+                    </>
+                  )}
+                  {item.origin && (
+                    <>
+                      <span className="text-border">&middot;</span>
+                      <span className="shrink-0">{item.origin}</span>
+                    </>
+                  )}
+                  <span className="text-border">&middot;</span>
+                  <span className={cn(
+                    'shrink-0 text-[10px] px-1 rounded',
+                    isPortrait ? 'bg-violet-500/15 text-violet-400/80'
+                      : isSquare ? 'bg-amber-500/15 text-amber-400/80'
+                      : 'bg-primary/10 text-primary/60'
+                  )}>{ratioLabel}</span>
+                </div>
+                <div className="flex border-t border-border/50">
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 border-r border-border/50">
+                    <X className="w-3.5 h-3.5" />REJECT
+                  </div>
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary">
+                    <Check className="w-3.5 h-3.5" />APPROVE
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* PendingSection */}
+      <div className="border-t border-border/50 shrink-0">
+        <div className="flex items-center gap-2 px-6 py-2">
+          <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
+          <span className="text-[10px] font-mono text-muted-foreground">{pendingQueueItems.length}</span>
+        </div>
+        <div className="max-h-32 overflow-y-auto px-6 pb-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {pendingQueueItems.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+              <Loader2 className="w-3 h-3 animate-spin text-amber-500/60 shrink-0" />
+              <span className="truncate text-foreground/70">{item.slug}</span>
+              <span className="text-[10px] bg-amber-500/15 text-amber-500/70 px-1.5 rounded shrink-0">{item.tag}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -1758,6 +1875,7 @@ const SLIDE_PAGES = [
   Page10_GenSystem,
   Page11_Workflow,
   Page12_ProjectDropdown,
+  Page13_InboxReview,
 ];
 
 // ── Main Styleguide ──
