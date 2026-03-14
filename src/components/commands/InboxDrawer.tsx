@@ -20,18 +20,19 @@ export function InboxDrawer({
   onApprove,
   onReject,
 }: InboxDrawerProps) {
-  const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [allClear, setAllClear] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
 
+  const visibleVideos = videos.filter((v) => !dismissedIds.has(v.id));
   const hasPending = pendingVideos.length > 0;
 
   // Two-phase open: mount then animate in
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => {
-        setMutatingIds(new Set());
+        setDismissedIds(new Set());
         setAllClear(false);
         setActiveVideoId(null);
         setVisible(true);
@@ -45,20 +46,20 @@ export function InboxDrawer({
 
   // Initialize active video to first, and recover if active video is removed
   useEffect(() => {
-    if (!open || videos.length === 0) return;
-    if (activeVideoId === null || !videos.some((v) => v.id === activeVideoId)) {
-      const t = setTimeout(() => setActiveVideoId(videos[0].id), 0);
+    if (!open || visibleVideos.length === 0) return;
+    if (activeVideoId === null || !visibleVideos.some((v) => v.id === activeVideoId)) {
+      const t = setTimeout(() => setActiveVideoId(visibleVideos[0].id), 0);
       return () => clearTimeout(t);
     }
-  }, [open, videos, activeVideoId]);
+  }, [open, visibleVideos, activeVideoId]);
 
-  // All-clear detection: both arrays empty + no in-flight mutations
+  // All-clear detection: all videos dismissed/gone + no pending
   useEffect(() => {
-    if (open && videos.length === 0 && pendingVideos.length === 0 && mutatingIds.size === 0) {
+    if (open && visibleVideos.length === 0 && pendingVideos.length === 0) {
       const t = setTimeout(() => setAllClear(true), 0);
       return () => clearTimeout(t);
     }
-  }, [open, videos.length, pendingVideos.length, mutatingIds.size]);
+  }, [open, visibleVideos.length, pendingVideos.length]);
 
   // Auto-close after all clear
   useEffect(() => {
@@ -79,44 +80,37 @@ export function InboxDrawer({
 
   const handleVideoEnded = useCallback(
     (videoId: string) => {
-      const idx = videos.findIndex((v) => v.id === videoId);
-      if (idx === -1 || videos.length <= 1) return;
-      const nextIdx = (idx + 1) % videos.length;
-      setActiveVideoId(videos[nextIdx].id);
+      const idx = visibleVideos.findIndex((v) => v.id === videoId);
+      if (idx === -1 || visibleVideos.length <= 1) return;
+      const nextIdx = (idx + 1) % visibleVideos.length;
+      setActiveVideoId(visibleVideos[nextIdx].id);
     },
-    [videos]
+    [visibleVideos]
   );
 
   const advanceActiveIfNeeded = useCallback(
     (removedId: string) => {
       if (activeVideoId !== removedId) return;
-      const remaining = videos.filter((v) => v.id !== removedId);
+      const remaining = visibleVideos.filter((v) => v.id !== removedId);
       if (remaining.length === 0) {
         setActiveVideoId(null);
         return;
       }
-      const oldIdx = videos.findIndex((v) => v.id === removedId);
+      const oldIdx = visibleVideos.findIndex((v) => v.id === removedId);
       const nextIdx = Math.min(oldIdx, remaining.length - 1);
       setActiveVideoId(remaining[nextIdx].id);
     },
-    [activeVideoId, videos]
+    [activeVideoId, visibleVideos]
   );
 
   const handleMutate = useCallback(
     (video: MediaItem, action: (v: MediaItem) => void) => {
-      if (mutatingIds.has(video.id)) return;
+      if (dismissedIds.has(video.id)) return;
       advanceActiveIfNeeded(video.id);
-      setMutatingIds((prev) => new Set(prev).add(video.id));
+      setDismissedIds((prev) => new Set(prev).add(video.id));
       action(video);
-      setTimeout(() => {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(video.id);
-          return next;
-        });
-      }, 600);
     },
-    [mutatingIds, advanceActiveIfNeeded]
+    [dismissedIds, advanceActiveIfNeeded]
   );
 
   const handleApprove = useCallback(
@@ -129,7 +123,7 @@ export function InboxDrawer({
     [handleMutate, onReject]
   );
 
-  const activeIndex = videos.findIndex((v) => v.id === activeVideoId);
+  const activeIndex = visibleVideos.findIndex((v) => v.id === activeVideoId);
 
   if (!open) return null;
 
@@ -159,18 +153,18 @@ export function InboxDrawer({
           </div>
         ) : (
           <>
-            <ReviewHeader activeIndex={activeIndex} videoCount={videos.length} onClose={onClose} />
+            <ReviewHeader activeIndex={activeIndex} videoCount={visibleVideos.length} onClose={onClose} />
 
             {/* Scrollable grid */}
             <div className="flex-1 overflow-y-auto p-6">
-              {videos.length > 0 ? (
+              {visibleVideos.length > 0 ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
-                  {videos.map((video) => (
+                  {visibleVideos.map((video) => (
                     <ReviewTile
                       key={video.id}
                       video={video}
                       isActive={video.id === activeVideoId}
-                      isMutating={mutatingIds.has(video.id)}
+                      isMutating={false}
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onVideoEnded={handleVideoEnded}
