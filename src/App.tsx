@@ -4,6 +4,7 @@ import { FileUpload } from './components/FileUpload';
 import { useMcpConnection } from './hooks/useMcpConnection';
 import { Styleguide } from '@/pages/styleguide';
 import { HomePage } from '@/pages/HomePage';
+import { Toaster } from '@/components/ui/toaster';
 
 function Dashboard() {
   const { state, tools, error, retry, callTool } = useMcpConnection()
@@ -23,12 +24,15 @@ function Dashboard() {
 
 function App() {
   return (
-    <Switch>
-      <Route path="/styleguide/:page" component={Styleguide} />
-      <Route path="/styleguide" component={Styleguide} />
-      <Route path="/up" component={Dashboard} />
-      <Route path="/" component={HomePage} />
-    </Switch>
+    <>
+      <Switch>
+        <Route path="/styleguide/:page" component={Styleguide} />
+        <Route path="/styleguide" component={Styleguide} />
+        <Route path="/up" component={Dashboard} />
+        <Route path="/" component={HomePage} />
+      </Switch>
+      <Toaster />
+    </>
   )
 }
 

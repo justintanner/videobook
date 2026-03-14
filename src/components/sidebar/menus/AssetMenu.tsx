@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react';
 import { ClipboardCopy, FolderOpen } from 'lucide-react';
+import { toast } from '@/hooks/useToast';
 
 interface AssetMenuProps {
   slug: string;
@@ -29,7 +30,10 @@ export function AssetMenu({ slug, onOpenFolder, MenuItem }: AssetMenuProps) {
       <CommandMenuItem
         icon={<ClipboardCopy className="h-3 w-3" />}
         command="/copy-name"
-        onSelect={() => navigator.clipboard.writeText(slug)}
+        onSelect={() => {
+          navigator.clipboard.writeText(slug);
+          toast({ title: 'Copied', description: slug, duration: 2000 });
+        }}
         MenuItem={MenuItem}
       />
       <div className="-mx-1 my-1 h-px bg-border" />
