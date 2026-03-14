@@ -23,6 +23,7 @@ export interface CardShellProps {
   item: MediaItem;
   children: ReactNode;
   contextMenuContent?: ReactNode;
+  selected?: boolean;
   onClick?: () => void;
 }
 
@@ -92,7 +93,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
   return (status && stateColors[status]) ?? 'var(--color-primary)';
 }
 
-export function CardShell({ item, children, contextMenuContent, onClick }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent, selected, onClick }: CardShellProps) {
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
@@ -113,12 +114,14 @@ export function CardShell({ item, children, contextMenuContent, onClick }: CardS
     // Final golden styling
     isGold && !isError && 'clip-state-final !border-2 !border-amber-400/50',
     !isGold && !isError && !isReady && 'border-0',
+    // Selected state
+    selected && !isError && 'border-2 border-primary shadow-[0_0_12px_rgba(0,255,255,0.3)]',
   );
 
   const accentClasses = cn(
     'absolute bottom-0 inset-x-0 h-1 transition-opacity z-40',
-    isError ? 'bg-red-500 opacity-100' : isGold ? 'bg-amber-400 opacity-100' : 'bg-primary opacity-0',
-    !isGold && !isError && isReady && 'group-hover:opacity-100',
+    isError ? 'bg-red-500 opacity-100' : isGold ? 'bg-amber-400 opacity-100' : selected ? 'bg-primary opacity-100' : 'bg-primary opacity-0',
+    !isGold && !isError && !selected && isReady && 'group-hover:opacity-100',
   );
 
   const card = (

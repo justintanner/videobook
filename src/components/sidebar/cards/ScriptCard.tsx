@@ -7,17 +7,18 @@ import type { ReactNode } from 'react';
 interface ScriptCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  selected?: boolean;
   onClick?: () => void;
 }
 
-export function ScriptCard({ item, contextMenuContent, onClick }: ScriptCardProps) {
+export function ScriptCard({ item, contextMenuContent, selected, onClick }: ScriptCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const scriptText = item.prompt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
       {/* CONTENT - Script */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

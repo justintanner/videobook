@@ -18,17 +18,18 @@ import type { ReactNode } from 'react';
 interface FinalVideoCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  selected?: boolean;
   onClick?: () => void;
 }
 
-export function FinalVideoCard({ item, contextMenuContent, onClick }: FinalVideoCardProps) {
+export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: FinalVideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const showElfOverlay = isRenderingState(status);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

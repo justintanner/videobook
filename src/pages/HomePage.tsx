@@ -254,10 +254,10 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
                   </div>
                 );
               })}
@@ -317,8 +317,8 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
                   </div>
                 );
               })}

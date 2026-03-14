@@ -17,10 +17,11 @@ import type { ReactNode } from 'react';
 interface VideoCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  selected?: boolean;
   onClick?: () => void;
 }
 
-export function VideoCard({ item, contextMenuContent, onClick }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isReady = status === 'ready' || status === 'approved';
   const isError = status === 'error';
@@ -39,7 +40,7 @@ export function VideoCard({ item, contextMenuContent, onClick }: VideoCardProps)
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

@@ -8,16 +8,17 @@ import type { ReactNode } from 'react';
 interface AudioCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  selected?: boolean;
   onClick?: () => void;
 }
 
-export function AudioCard({ item, contextMenuContent, onClick }: AudioCardProps) {
+export function AudioCard({ item, contextMenuContent, selected, onClick }: AudioCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
       {/* CONTENT - Audio icon */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

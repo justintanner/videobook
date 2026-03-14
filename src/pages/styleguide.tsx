@@ -45,7 +45,7 @@ import {
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus, Pencil,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
-  Check,
+  Check, History, RotateCcw, Upload,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
 
@@ -628,6 +628,90 @@ The figure stops, looking up at a massive screen displaying a countdown timer.
 NARRATOR (V.O.)
 But some things never change. The need to create. To tell stories. To be heard.`;
 
+
+// ── Git History Mock Data ──
+
+type CommitOperation = 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename';
+
+interface MockCommit {
+  hash: string;
+  message: string;
+  timestamp: string;
+}
+
+const OPERATION_STYLES: Record<CommitOperation, { dot: string; label: string }> = {
+  create:   { dot: 'bg-emerald-500', label: 'text-emerald-400' },
+  generate: { dot: 'bg-primary',     label: 'text-primary' },
+  upload:   { dot: 'bg-blue-500',    label: 'text-blue-400' },
+  render:   { dot: 'bg-amber-500',   label: 'text-amber-400' },
+  restore:  { dot: 'bg-violet-500',  label: 'text-violet-400' },
+  delete:   { dot: 'bg-red-500',     label: 'text-red-400' },
+  rename:   { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
+};
+
+function extractOperation(message: string): CommitOperation {
+  const first = message.split(/[\s:(]/)[0].toLowerCase();
+  if (first in OPERATION_STYLES) return first as CommitOperation;
+  return 'create';
+}
+
+const mockCommits: MockCommit[] = [
+  { hash: 'a3f8c1d', message: 'generate: re-generate hero intro with updated prompt',       timestamp: '18 min ago' },
+  { hash: 'b1e2d3c', message: 'restore: reverted to version c2d3e4f',                       timestamp: 'yesterday' },
+  { hash: 'c2d3e4f', message: 'render: composite with background music track',               timestamp: 'yesterday' },
+  { hash: 'd3e4f5a', message: 'generate: initial hero intro generation',                     timestamp: '2 days ago' },
+  { hash: 'e4f5a6b', message: 'generate: test generation with alternate prompt',             timestamp: '2 days ago' },
+  { hash: 'f5a6b7c', message: 'upload: uploaded raw footage from camera',                    timestamp: '3 days ago' },
+  { hash: 'a6b7c8d', message: 'rename: renamed from untitled-clip-003',                      timestamp: '4 days ago' },
+  { hash: 'b7c8d9e', message: 'create: asset created',                                       timestamp: '4 days ago' },
+];
+
+function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-mono font-bold tracking-widest text-muted-foreground/50 uppercase">{label}</span>
+      <span className="text-sm font-mono text-foreground/80">{children}</span>
+    </div>
+  );
+}
+
+function TimelineNode({ commit, isHead }: { commit: MockCommit; isHead: boolean }) {
+  const op = extractOperation(commit.message);
+  const style = OPERATION_STYLES[op];
+  return (
+    <div className="relative flex items-start gap-4 pl-[15px] py-2 group">
+      {/* Vertical line */}
+      <div className="absolute left-[15px] top-0 bottom-0 w-px bg-border/40" />
+      {/* Dot */}
+      <div className="relative z-10 shrink-0 flex items-center justify-center" style={{ width: 12, height: 24 }}>
+        {isHead ? (
+          <div className="relative">
+            <div className={cn('w-3 h-3 rounded-full', style.dot)} />
+            <div className={cn('absolute inset-0 w-3 h-3 rounded-full animate-ping opacity-40', style.dot)} />
+          </div>
+        ) : (
+          <div className={cn('w-2 h-2 rounded-full', style.dot)} />
+        )}
+      </div>
+      {/* Content */}
+      <div className="flex-1 flex items-baseline justify-between gap-3 min-w-0">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className={cn('text-xs font-mono font-bold', style.label)}>{op}</span>
+          <span className="text-[11px] font-mono text-muted-foreground/60">{commit.hash}</span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-[11px] font-mono text-muted-foreground/50">{commit.timestamp}</span>
+          {!isHead && (
+            <button className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-colors uppercase">
+              <RotateCcw className="w-3 h-3" />
+              Restore
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Slide Deck Infrastructure ──
 

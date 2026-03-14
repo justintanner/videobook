@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Info, ChevronDown, RotateCcw, AudioLines, FileText } from 'lucide-react';
+import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -32,10 +32,7 @@ function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc
 }
 
 function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
-  const type = item.type;
-  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
-
-  if (type === 'image') {
+  if (item.type === 'image') {
     if (!item.filePath) return null;
     const cropFile = size === 'landscape' ? 'image_1920x1080.jpg' : 'image_1080x1920.jpg';
     const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
@@ -44,21 +41,7 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
     );
   }
 
-  if (type === 'video' || type === 'final') {
-    if (!item.filePath) return null;
-    return (
-      <video
-        key={item.id}
-        src={item.filePath}
-        poster={thumbSrc ?? undefined}
-        controls
-        className="w-full h-full object-contain"
-        draggable={false}
-      />
-    );
-  }
-
-  if (type === 'audio') {
+  if (item.type === 'audio') {
     return (
       <div className="flex items-center justify-center w-full h-full">
         <AudioLines className="w-16 h-16 text-primary/30" />
@@ -66,7 +49,7 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
     );
   }
 
-  if (type === 'script' || type === 'plan') {
+  if (item.type === 'script' || item.type === 'plan') {
     return (
       <div className="flex items-center justify-center w-full h-full p-6">
         {item.prompt ? (
@@ -79,6 +62,21 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   }
 
   return null;
+}
+
+function ClipViewer({ item }: { item: MediaItem }) {
+  if (!item.filePath) return null;
+  const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg');
+  return (
+    <video
+      key={item.id}
+      src={item.filePath}
+      poster={thumbSrc}
+      controls
+      className="w-full h-full object-contain"
+      draggable={false}
+    />
+  );
 }
 
 function RatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
@@ -95,6 +93,32 @@ function RatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: V
         <DropdownMenuItem onClick={() => onSelect('portrait')}>Portrait (1080×1920)</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+const clipRatioItems: Array<{ icon: typeof Monitor; label: string; value: ViewerSize }> = [
+  { icon: Monitor, label: '16:9', value: 'landscape' },
+  { icon: Smartphone, label: '9:16', value: 'portrait' },
+];
+
+function ClipRatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
+  return (
+    <div className="inline-flex gap-0.5 rounded-sm bg-black/60 p-0.5">
+      {clipRatioItems.map(({ icon: Icon, label, value }) => (
+        <button
+          key={value}
+          onClick={() => onSelect(value)}
+          className={cn(
+            'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
+            value === active
+              ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
+              : 'text-white/40 hover:text-white/70 hover:bg-white/5',
+          )}
+        >
+          <Icon className="w-3 h-3" />{label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -182,6 +206,7 @@ export function AssetViewer({ item, projectSlug }: {
   item: MediaItem;
   projectSlug: string;
 }) {
+  const isClip = item.type === 'video' || item.type === 'final';
   const [size, setSize] = useState<ViewerSize>('landscape');
   const [flipped, setFlipped] = useState(false);
   const [metadata, setMetadata] = useState<string | null>(null);
@@ -231,9 +256,11 @@ export function AssetViewer({ item, projectSlug }: {
             'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
             'border border-zinc-600/50',
           )}>
-            {/* Top bar — ClipViewer style */}
+            {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <RatioToggle active={size} onSelect={setSize} />
+              {isClip
+                ? <ClipRatioToggle active={size} onSelect={setSize} />
+                : <RatioToggle active={size} onSelect={setSize} />}
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -251,7 +278,9 @@ export function AssetViewer({ item, projectSlug }: {
 
             {/* Content */}
             <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-              <ImageViewer item={item} size={size} />
+              {isClip
+                ? <ClipViewer item={item} />
+                : <ImageViewer item={item} size={size} />}
             </div>
           </div>
 
