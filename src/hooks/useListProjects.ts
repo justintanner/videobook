@@ -13,8 +13,10 @@ interface UseListProjectsResult {
   refresh: () => void;
 }
 
+let cachedProjects: Project[] = [];
+
 export function useListProjects(callTool: UseMcpResult["callTool"]): UseListProjectsResult {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<Project[]>(cachedProjects);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -25,6 +27,7 @@ export function useListProjects(callTool: UseMcpResult["callTool"]): UseListProj
       const result = await callTool("list_projects", {});
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed: Project[] = JSON.parse(content[0].text);
+      cachedProjects = parsed;
       setProjects(parsed);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
