@@ -14,6 +14,7 @@ import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
+import { InboxDrawer } from '@/components/commands';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -27,6 +28,7 @@ import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
+const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'transcribing']);
 
 function humanizeId(id: string): string {
   const rawName = id.replace(/^[a-z]+-/, '');
@@ -40,6 +42,7 @@ export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [inboxOpen, setInboxOpen] = useState(false);
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
