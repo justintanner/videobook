@@ -7,7 +7,7 @@ import { z } from "zod";
 import { openai } from "@nakedapi/openai";
 import { resolveAllAssets } from "../asset-resolver.js";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
-import { getRecentHistory, formatHistoryForPrompt } from "../chat-history.js";
+import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "../chat-log.js";
 import { parseTime } from "../time-parse.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -160,9 +160,8 @@ Determine which tool to use and what parameters to pass.`;
       const handlerResult = await targetDef.handler(params as Record<string, unknown>);
 
       // 9. Log chat history (fire-and-forget)
-      const now = Date.now();
-      fs.appendLog("chat", { role: "user", text: prompt, ts: now }, slug).catch(() => {});
-      fs.appendLog("chat", { role: "assistant", tool: decision.tool, params: decision.params, message: decision.message, error: Boolean(handlerResult.isError), ts: now + 1 }, slug).catch(() => {});
+      logUserTurn(fs, slug, prompt);
+      logAssistantTurn(fs, slug, decision.tool, decision.params, decision.message, Boolean(handlerResult.isError));
 
       // 10. Return based on category
       if (routableTool.category === "generation") {
