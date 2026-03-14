@@ -1982,14 +1982,14 @@ function Page14_AssetViewer() {
     <div className="w-full h-full grid grid-cols-2 gap-6">
       {/* Left: Landscape viewer */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AssetViewer — Landscape</p>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15)] ring-1 ring-cyan-500/20 min-h-0">
           <AssetViewer item={assetViewerMockImage} projectSlug="demo" onClose={() => {}} />
         </div>
       </div>
       {/* Right: Portrait viewer */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AssetViewer — Portrait</p>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15)] ring-1 ring-cyan-500/20 min-h-0">
           <AssetViewer item={assetViewerMockVideo} projectSlug="demo" onClose={() => {}} />
         </div>

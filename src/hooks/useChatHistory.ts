@@ -1,4 +1,5 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
+import type { UseMcpResult } from 'use-mcp/react';
 
 export interface UseChatHistoryResult {
   push: (message: string) => void;
@@ -7,16 +8,44 @@ export interface UseChatHistoryResult {
   reset: () => void;
 }
 
-export function useChatHistory(): UseChatHistoryResult {
+export function useChatHistory(
+  callTool: UseMcpResult['callTool'],
+  projectSlug: string | undefined,
+): UseChatHistoryResult {
   const historyRef = useRef<string[]>([]);
   const cursorRef = useRef<number>(-1);
   const draftRef = useRef<string>('');
+  const loadedSlugRef = useRef<string | null>(null);
+  const callToolRef = useRef(callTool);
+  const projectSlugRef = useRef(projectSlug);
+
+  useEffect(() => { callToolRef.current = callTool; });
+  useEffect(() => { projectSlugRef.current = projectSlug; });
+
+  // Load persisted history when project changes
+  useEffect(() => {
+    if (!projectSlug || projectSlug === loadedSlugRef.current) return;
+    loadedSlugRef.current = projectSlug;
+
+    callToolRef.current('list_chat_history', { project_slug: projectSlug, limit: 100 })
+      .then((result) => {
+        if (result.isError) return;
+        const parsed = JSON.parse(result.content[0].text) as { messages: string[] };
+        historyRef.current = parsed.messages;
+        cursorRef.current = -1;
+      })
+      .catch(() => {});
+  }, [projectSlug]);
 
   const push = useCallback((message: string) => {
-    if (message.trim()) {
-      historyRef.current.push(message);
-    }
+    if (!message.trim()) return;
+    historyRef.current.push(message);
     cursorRef.current = -1;
+
+    const slug = projectSlugRef.current;
+    if (slug) {
+      callToolRef.current('push_chat_history', { message, project_slug: slug }).catch(() => {});
+    }
   }, []);
 
   const navigateBack = useCallback((currentDraft: string): string | null => {

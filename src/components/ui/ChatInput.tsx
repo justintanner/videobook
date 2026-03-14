@@ -7,6 +7,7 @@ import { useAnimateType } from '@/hooks/useAnimateType';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import type { AutocompleteItem, ColorScheme } from './AutocompleteDropdown';
 import type { Skill } from '@/hooks/useSkills';
+import type { UseMcpResult } from 'use-mcp/react';
 
 const stripSlugPrefix = (s: string) => s.replace(/^[a-z]_/, '');
 
@@ -70,6 +71,8 @@ interface ChatInputProps {
   disabled?: boolean;
   assetSlugs?: string[];
   skills?: Skill[];
+  callTool: UseMcpResult['callTool'];
+  projectSlug: string | undefined;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
@@ -82,6 +85,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     disabled = false,
     assetSlugs = [],
     skills = [],
+    callTool,
+    projectSlug,
   },
   ref
 ) {
