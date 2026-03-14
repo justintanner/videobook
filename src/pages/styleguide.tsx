@@ -700,9 +700,9 @@ function Page1_FinalVideoPreview() {
         <HeaderBar />
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets */}
-          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
               <div className="w-full"><ImageCard item={demoImageMock} /></div>
               <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
               <div className="w-full"><ScriptCard item={{ id: 'demo-script', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} /></div>
@@ -732,9 +732,9 @@ function Page1_FinalVideoPreview() {
           </div>
 
           {/* Right Sidebar — Clips */}
-          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
-            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
               <ClipContextMenu>
                 <div className="w-full"><VideoCard item={{ id: 'clip-s01', type: 'video', slug: '@s01', title: 'Purple Grind', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }} /></div>
               </ClipContextMenu>
@@ -783,9 +783,9 @@ function Page2_VideoGeneration() {
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
         <HeaderBar />
         <div className="flex flex-row overflow-hidden">
-          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
               <div className="w-full"><ImageCard item={demoImageMock} /></div>
               <UploadSlot />
             </div>
@@ -848,9 +848,9 @@ function Page2_VideoGeneration() {
             </div>
           </div>
 
-          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="210px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+          <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
-            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
               <div className="w-full"><VideoCard item={demoVideoMock} /></div>
             </div>
           </CollapsibleSidebar>

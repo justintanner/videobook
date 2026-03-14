@@ -94,7 +94,7 @@ export function CardShell({ item, children }: CardShellProps) {
 
   const classes = cn(
     'relative group overflow-hidden bg-card/30 backdrop-blur-sm clip-corner-br',
-    'h-32 w-full shrink-0',
+    'aspect-video w-full shrink-0',
     // State classes (skip for final on non-rendering states)
     !isFinal && status !== 'ready' && status !== 'error' && stateClassMap[status],
     isRenderingState(status) && stateClassMap.rendering,

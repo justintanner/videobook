@@ -140,7 +140,7 @@ export function HomePage() {
             side="left"
             collapsed={leftCollapsed}
             onToggle={() => setLeftCollapsed(c => !c)}
-            expandedWidth="210px"
+            expandedWidth="240px"
             collapsedWidth="40px"
             padding="px-2 pt-2 pb-2"
             gap="gap-0"
@@ -154,7 +154,7 @@ export function HomePage() {
               sortOrder={sortOrder}
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
               {assets.map((item) => (
                 <div key={item.id} className="w-full">
                   {item.type === 'image' && <ImageCard item={item} />}
@@ -182,7 +182,7 @@ export function HomePage() {
             side="right"
             collapsed={rightCollapsed}
             onToggle={() => setRightCollapsed(c => !c)}
-            expandedWidth="210px"
+            expandedWidth="240px"
             collapsedWidth="40px"
             padding="px-2 pt-2 pb-2"
             gap="gap-0"
@@ -196,7 +196,7 @@ export function HomePage() {
               sortOrder={sortOrder}
               onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
             />
-            <div className="flex-1 overflow-y-auto space-y-2 mt-2">
+            <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
               {clips.map((item) => (
                 <div key={item.id} className="w-full">
                   {item.type === 'video' && <VideoCard item={item} />}

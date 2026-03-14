@@ -10,7 +10,7 @@ export function ReceivingGhostCard({ filename }: ReceivingGhostCardProps) {
   return (
     <div
       className={cn(
-        'relative h-32 w-full overflow-hidden clip-corner-br',
+        'relative aspect-video w-full overflow-hidden clip-corner-br',
         'bg-card/90 backdrop-blur-sm',
         'border border-primary/20',
         'v4-hud-glow'

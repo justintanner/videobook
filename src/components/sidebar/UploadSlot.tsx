@@ -14,7 +14,7 @@ export function UploadSlot({ onClick, loading }: UploadSlotProps) {
       onClick={onClick}
       disabled={loading}
       className={cn(
-        'w-full h-32 flex flex-col items-center justify-center gap-2',
+        'w-full aspect-video flex flex-col items-center justify-center gap-2',
         'border-2 border-dashed border-border/50 rounded-md',
         'text-xs font-mono text-muted-foreground',
         'transition-colors cursor-pointer',
