@@ -27,8 +27,13 @@ export function useListProjects(callTool: UseMcpResult["callTool"]): UseListProj
       const result = await callTool("list_projects", {});
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed: Project[] = JSON.parse(content[0].text);
-      cachedProjects = parsed;
-      setProjects(parsed);
+      const changed =
+        parsed.length !== cachedProjects.length ||
+        parsed.some((p, i) => p.slug !== cachedProjects[i].slug);
+      if (changed) {
+        cachedProjects = parsed;
+        setProjects(parsed);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
