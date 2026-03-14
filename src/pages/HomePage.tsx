@@ -265,10 +265,7 @@ export function HomePage() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
               {activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} onClose={() => {
-                  setSelectedItem(null);
-                  setTimeout(() => chatInputRef.current?.focus(), 0);
-                }} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}

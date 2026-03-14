@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Info, ChevronDown, RotateCcw, AudioLines, FileText } from 'lucide-react';
+import { Info, ChevronDown, RotateCcw, AudioLines, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -50,13 +50,30 @@ function ImageViewer({ item }: { item: MediaItem }) {
   return null;
 }
 
+function RatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
+          {active === 'landscape' ? 'Landscape (1920×1080)' : 'Portrait (1080×1920)'}
+          <ChevronDown className="w-3 h-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onClick={() => onSelect('landscape')}>Landscape (1920×1080)</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSelect('portrait')}>Portrait (1080×1920)</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function JsonNode({ data, indent = 0 }: { data: unknown; indent?: number }) {
   const pad = '  '.repeat(indent);
   const bracketClass = 'text-primary/30';
   const punctClass = 'text-zinc-600';
 
   if (data === null) return <span style={{ color: '#ff4060' }}>null</span>;
-  if (typeof data === 'boolean') return <span className="text-accent">{String(data)}</span>;
+  if (typeof data === 'boolean') return <span style={{ color: '#ffcc00' }}>{String(data)}</span>;
   if (typeof data === 'number') return <span style={{ color: '#ff00ff' }}>{data}</span>;
   if (typeof data === 'string') return <span style={{ color: '#39ff14' }}>"{data}"</span>;
 
@@ -85,7 +102,7 @@ function JsonNode({ data, indent = 0 }: { data: unknown; indent?: number }) {
         <span className={bracketClass}>{'{'}</span>{'\n'}
         {entries.map(([key, val], i) => (
           <span key={key}>
-            {pad}  <span className="text-primary">"{key}"</span>
+            {pad}  <span style={{ color: '#00e5ff' }}>"{key}"</span>
             <span className={punctClass}>: </span>
             <JsonNode data={val} indent={indent + 1} />
             {i < entries.length - 1 && <span className={punctClass}>,</span>}
@@ -102,10 +119,15 @@ function JsonNode({ data, indent = 0 }: { data: unknown; indent?: number }) {
 
 function JsonTerminal({ data, loading }: { data: string | null; loading: boolean }) {
   if (loading) {
-    return <p className="text-sm text-primary/50 font-mono animate-pulse">Loading metadata...</p>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-8">
+        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-primary/50 font-mono uppercase tracking-widest">Decrypting...</p>
+      </div>
+    );
   }
   if (data === null) {
-    return <p className="text-sm text-muted-foreground font-mono">No metadata available.</p>;
+    return <p className="text-sm text-muted-foreground/50 font-mono text-center py-8">No data found.</p>;
   }
   if (data.startsWith('Error:')) {
     return <p className="text-sm font-mono" style={{ color: '#ff4060' }}>{data}</p>;
@@ -125,10 +147,9 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   );
 }
 
-export function AssetViewer({ item, projectSlug, onClose }: {
+export function AssetViewer({ item, projectSlug }: {
   item: MediaItem;
   projectSlug: string;
-  onClose: () => void;
 }) {
   const [size, setSize] = useState<ViewerSize>('landscape');
   const [flipped, setFlipped] = useState(false);
@@ -152,7 +173,6 @@ export function AssetViewer({ item, projectSlug, onClose }: {
     }
   }, [projectSlug, item.id]);
 
-  // Reset flip and metadata when item changes
   useEffect(() => {
     setFlipped(false);
     setMetadata(null);
@@ -171,92 +191,84 @@ export function AssetViewer({ item, projectSlug, onClose }: {
           size === 'landscape' ? 'aspect-video w-full h-full' : 'aspect-[9/16] h-full',
         )}
       >
-        <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
+        <div className={cn(
+          'flip-card-inner w-full h-full relative',
+          flipped && 'flipped',
+        )}>
           {/* FRONT FACE */}
-          <div className="flip-card-face absolute inset-0 flex flex-col rounded-xl overflow-hidden border border-border/50">
-            {/* Solid top bar */}
-            <div className="relative flex items-center justify-between px-3 py-2 bg-black/60 border-b border-zinc-800/60">
-              {/* Left: Size dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-white/80 hover:bg-white/10 transition-colors">
-                    {size === 'landscape' ? 'Landscape' : 'Portrait'}
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setSize('landscape')}>Landscape</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSize('portrait')}>Portrait</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          <div className={cn(
+            'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
+            'border border-zinc-600/50',
+          )}>
+            {/* Top bar — ClipViewer style */}
+            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+              <RatioToggle active={size} onSelect={setSize} />
 
-              {/* Center: slug */}
+              {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-xs font-mono text-primary/80 truncate max-w-[50%]">{item.slug}</span>
+                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{item.slug}</span>
               </span>
 
-              {/* Right: Info + Close */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleFlipToBack}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
-                  <Info className="w-4 h-4 text-white/80" />
-                </button>
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
-                  <X className="w-4 h-4 text-white/80" />
-                </button>
-              </div>
+              {/* Info button */}
+              <button
+                onClick={handleFlipToBack}
+                className="viewer-info-btn w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Content area */}
-            <div className="flex-1 bg-black">
+            {/* Content */}
+            <div className="flex-1 bg-black flex items-center justify-center min-h-0">
               <ImageViewer item={item} />
             </div>
           </div>
 
           {/* BACK FACE */}
-          <div className="flip-card-back absolute inset-0 flex flex-col rounded-xl overflow-hidden border border-border/50">
-            {/* Solid top bar */}
-            <div className="relative flex items-center justify-between px-3 py-2 bg-black/60 border-b border-zinc-800/60">
-              {/* Left: METADATA label */}
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-primary">METADATA</span>
+          <div className={cn(
+            'flip-card-back absolute inset-0 flex flex-col overflow-hidden',
+            'viewer-back-face',
+          )}>
+            {/* Top bar — data core style */}
+            <div className="shrink-0 px-3 py-1 bg-black/80 border-b border-primary/20 flex items-center justify-between relative">
+              {/* Left: SYS.DATA label */}
+              <div className="flex items-center gap-2">
+                <span className="viewer-data-label text-[10px] font-mono font-bold uppercase tracking-[0.2em]">SYS.DATA</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 viewer-status-dot" />
+              </div>
 
-              {/* Center: slug */}
+              {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-xs font-mono text-primary/80 truncate max-w-[50%]">{item.slug}</span>
+                <span className="font-mono text-[10px] text-primary/40 truncate max-w-[50%]">{item.slug}</span>
               </span>
 
-              {/* Right: Flip back + Close */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setFlipped(false)}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4 text-white/80" />
-                </button>
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
-                  <X className="w-4 h-4 text-white/80" />
-                </button>
-              </div>
+              {/* Flip back */}
+              <button
+                onClick={() => setFlipped(false)}
+                className="w-5 h-5 flex items-center justify-center text-primary/40 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Terminal area */}
-            <div className="flex-1 relative overflow-auto p-4" style={{ backgroundColor: 'hsl(220, 20%, 5%)' }}>
-              {/* Scanlines overlay */}
-              <div className="terminal-scanlines absolute inset-0 pointer-events-none" />
-              {/* Vignette overlay */}
+            {/* Terminal body */}
+            <div className="flex-1 relative overflow-auto viewer-terminal-body">
+              {/* Pixel grid */}
+              <div className="absolute inset-0 pointer-events-none viewer-pixel-grid" />
+              {/* Scanlines */}
+              <div className="absolute inset-0 pointer-events-none terminal-scanlines" />
+              {/* Vignette */}
               <div
                 className="absolute inset-0 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%)' }}
+                style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)' }}
               />
-              <div className="relative z-10">
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-primary/30 pointer-events-none" />
+              <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-primary/30 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-primary/30 pointer-events-none" />
+              <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-primary/30 pointer-events-none" />
+
+              <div className="relative z-10 p-4">
                 <JsonTerminal data={metadata} loading={metaLoading} />
               </div>
             </div>

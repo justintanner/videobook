@@ -30,6 +30,30 @@ interface TokenSegment {
   colorScheme?: ColorScheme;
 }
 
+function extractTokens(text: string, skills: Skill[], assetSlugs: string[]): ConfirmedToken[] {
+  const tokens: ConfirmedToken[] = [];
+  const skillCommands = new Set(skills.map((s) => s.command));
+
+  // Match /command tokens (at start or after whitespace)
+  for (const m of text.matchAll(/(^|\s)(\/[\w-]+)/g)) {
+    const value = m[2];
+    if (skillCommands.has(value)) {
+      const start = m.index! + m[1].length;
+      tokens.push({ type: 'command', value, start, end: start + value.length });
+    }
+  }
+
+  // Match slug tokens (bare word matching a known asset slug)
+  for (const slug of assetSlugs) {
+    const re = new RegExp(`(?<=^|\\s)${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g');
+    for (const m of text.matchAll(re)) {
+      tokens.push({ type: 'slug', value: slug, start: m.index!, end: m.index! + slug.length });
+    }
+  }
+
+  return tokens;
+}
+
 function parseTokens(text: string, confirmedTokens: ConfirmedToken[], skills: Skill[]): TokenSegment[] {
   if (confirmedTokens.length === 0) return [{ type: 'text', value: text }];
 
@@ -258,7 +282,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       if (result !== null) {
         e.preventDefault();
         setChatInput(result);
-        setConfirmedTokens([]);
+        setConfirmedTokens(extractTokens(result, skills, assetSlugs));
         setHistorySlide('up');
       }
     } else if (
@@ -269,7 +293,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       if (result !== null) {
         e.preventDefault();
         setChatInput(result);
-        setConfirmedTokens([]);
+        setConfirmedTokens(extractTokens(result, skills, assetSlugs));
         setHistorySlide('down');
       }
     }
