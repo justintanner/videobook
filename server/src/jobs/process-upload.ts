@@ -90,6 +90,15 @@ export async function processExternalUpload(
       projectSlug,
       provenance,
     } as unknown as Record<string, unknown>);
+  } else if (upload.mediaType === "image") {
+    const jobId = `process-image-${upload.assetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "process_image",
+      assetId: upload.assetId,
+      projectSlug,
+      extension: upload.extension,
+      provenance,
+    } as unknown as Record<string, unknown>);
   } else {
     await fs.writeMetadata(upload.assetId, "original", provenance, projectSlug);
   }

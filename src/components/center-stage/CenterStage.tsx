@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Info, ChevronDown, RotateCcw, AudioLines, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -11,14 +11,42 @@ import type { MediaItem } from '@/components/sidebar/types';
 
 type ViewerSize = 'landscape' | 'portrait';
 
-function ImageViewer({ item }: { item: MediaItem }) {
+function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc: string; alt: string }) {
+  const fell = useRef(false);
+  const [src, setSrc] = useState(cropSrc);
+
+  useEffect(() => {
+    fell.current = false;
+    setSrc(cropSrc);
+  }, [cropSrc]);
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full h-full object-cover"
+      draggable={false}
+      onError={() => {
+        if (!fell.current) {
+          fell.current = true;
+          setSrc(fallbackSrc);
+        }
+      }}
+    />
+  );
+}
+
+function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   const type = item.type;
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
   if (type === 'image') {
-    return item.filePath ? (
-      <img src={item.filePath} alt={item.title} className="w-full h-full object-contain" draggable={false} />
-    ) : null;
+    if (!item.filePath) return null;
+    const cropFile = size === 'landscape' ? 'image_1920x1080.jpg' : 'image_1080x1920.jpg';
+    const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
+    return (
+      <CropImage cropSrc={cropSrc} fallbackSrc={item.filePath} alt={item.title} />
+    );
   }
 
   if (type === 'video' || type === 'final') {
@@ -220,7 +248,7 @@ export function AssetViewer({ item, projectSlug }: {
 
             {/* Content */}
             <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-              <ImageViewer item={item} />
+              <ImageViewer item={item} size={size} />
             </div>
           </div>
 

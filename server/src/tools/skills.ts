@@ -121,6 +121,23 @@ const HARDCODED_SKILLS: Skill[] = [
     params: [],
   },
   {
+    command: "/download",
+    description: "Download video from URL",
+    example: "/download https://youtube.com/watch?v=abc123",
+    category: "action",
+    icon: "Download",
+    size: "lg",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "url", type: "string", required: true, description: "Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)" },
+      { name: "start_time", type: "string", required: false, description: "Start time (e.g. '30', '1:30', '2m20s')" },
+      { name: "end_time", type: "string", required: false, description: "End time (e.g. '60', '2:00', '3m')" },
+      { name: "full", type: "boolean", required: false, description: "Download entire video (no 3-min cap)" },
+    ],
+    mcpTool: { tool: "download_video_file", autoInject: ["project_slug"] },
+  },
+  {
     command: "/upload",
     description: "Upload a file",
     example: "/upload",

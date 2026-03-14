@@ -81,6 +81,15 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
           projectSlug: project_slug,
           provenance,
         } as unknown as Record<string, unknown>);
+      } else if (assetId.startsWith("img-")) {
+        const jobId = `process-image-${assetId}-${Date.now()}`;
+        await queue.enqueue(jobId, {
+          type: "process_image",
+          assetId,
+          projectSlug: project_slug,
+          extension: ext,
+          provenance,
+        } as unknown as Record<string, unknown>);
       } else {
         await fs.writeMetadata(assetId, "original", provenance, project_slug);
       }

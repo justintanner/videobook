@@ -75,7 +75,14 @@ async function completeNanoBananaImage(
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fs.writeMetadata(assetId, "original", origin, projectSlug);
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: `.${ext}`,
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeGrokImagineVideo(
@@ -139,7 +146,14 @@ async function completeGrokImagineImage(
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fs.writeMetadata(assetId, "original", origin, projectSlug);
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: ".png",
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeGptImage(
@@ -166,7 +180,14 @@ async function completeGptImage(
     ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
     generated_at: new Date().toISOString(),
   };
-  await fs.writeMetadata(assetId, "original", origin, projectSlug);
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: ".png",
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeTranscribe(

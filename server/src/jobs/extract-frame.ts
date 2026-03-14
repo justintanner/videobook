@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -63,6 +63,15 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         height,
       };
       await fs.writeMetadata(imageAssetId, "original", origin, projectSlug);
+
+      const jobId = `process-image-${imageAssetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "process_image",
+        assetId: imageAssetId,
+        projectSlug,
+        extension: ".jpg",
+        provenance: origin,
+      } as unknown as Record<string, unknown>);
 
       return { success: true };
     } finally {

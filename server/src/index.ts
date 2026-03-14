@@ -12,7 +12,7 @@ const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
 
 const app = express();
 app.use(cors());
-app.use("/files", express.static(resolve(PROJECTS_DIR)));
+app.use("/files", express.static(resolve(PROJECTS_DIR), { dotfiles: "allow" }));
 app.use(express.json({ limit: "50mb" }));
 
 app.post("/mcp", async (req, res) => {
