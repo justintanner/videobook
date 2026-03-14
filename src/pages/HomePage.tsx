@@ -54,24 +54,16 @@ export function HomePage() {
 
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
-    const pendingMap = new Map<string, ClipState>();
     const failedSet = new Set<string>();
     if (result) {
-      for (const p of result.pending) {
-        pendingMap.set(p.assetId, TASK_TYPE_TO_STATE[p.taskType] ?? 'loading');
-      }
       for (const f of result.failed) {
         failedSet.add(f.assetId);
       }
     }
 
     return assetList.map((asset) => {
-      let status: ClipState = 'ready';
-      if (pendingMap.has(asset.id)) {
-        status = pendingMap.get(asset.id)!;
-      } else if (failedSet.has(asset.id)) {
-        status = 'error';
-      }
+      let status: ClipState = (asset.status ?? 'ready') as ClipState;
+      if (failedSet.has(asset.id)) status = 'error';
       return {
         id: asset.id,
         type: asset.type as AssetType,
