@@ -55,8 +55,7 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId, path: assetPath } = assetResult.value;
-      const isScript = prefix === "script";
-      const writtenFilename = isScript ? filename : `original${ext}`;
+      const writtenFilename = `original${ext}`;
       const writeResult = await fs.writeFile(
         assetId,
         writtenFilename,
@@ -70,22 +69,20 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (!isScript) {
-        const provenance = { origin: "upload", processed_at: new Date().toISOString() };
-        if (assetId.startsWith("vid-")) {
-          const videoPath = path.join(assetPath, writtenFilename);
-          const jobId = `process-video-${assetId}-${Date.now()}`;
-          await queue.enqueue(jobId, {
-            type: "process_video",
-            videoPath,
-            assetId,
-            assetDir: assetPath,
-            projectSlug: project_slug,
-            provenance,
-          } as unknown as Record<string, unknown>);
-        } else {
-          await fs.writeMetadata(assetId, "original", provenance, project_slug);
-        }
+      const provenance = { origin: "upload", processed_at: new Date().toISOString() };
+      if (assetId.startsWith("vid-")) {
+        const videoPath = path.join(assetPath, writtenFilename);
+        const jobId = `process-video-${assetId}-${Date.now()}`;
+        await queue.enqueue(jobId, {
+          type: "process_video",
+          videoPath,
+          assetId,
+          assetDir: assetPath,
+          projectSlug: project_slug,
+          provenance,
+        } as unknown as Record<string, unknown>);
+      } else {
+        await fs.writeMetadata(assetId, "original", provenance, project_slug);
       }
 
       return {

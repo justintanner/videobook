@@ -38,7 +38,9 @@ async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
     if (video) return video;
     const image = files.find((f) => /^original\.(png|jpe?g|webp)$/i.test(f));
     if (image) return image;
-    return files.find((f) => /^original\.(mp3|wav)$/i.test(f)) ?? null;
+    const audio = files.find((f) => /^original\.(mp3|wav)$/i.test(f));
+    if (audio) return audio;
+    return files.find((f) => /^original\.md$/i.test(f)) ?? null;
   } catch {
     return null;
   }

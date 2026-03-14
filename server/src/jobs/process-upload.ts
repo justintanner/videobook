@@ -8,6 +8,11 @@ const MEDIA_EXTENSIONS = new Set([
   ".mp3", ".wav", ".aac", ".flac", ".ogg",
 ]);
 
+const SUPPORTED_EXTENSIONS = new Set([
+  ...MEDIA_EXTENSIONS,
+  ".md",
+]);
+
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv"]);
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".aac", ".flac", ".ogg"]);
 
@@ -16,13 +21,14 @@ export type UnprocessedUpload = {
   assetDir: string;
   mediaFilename: string;
   extension: string;
-  mediaType: "video" | "image" | "audio";
+  mediaType: "video" | "image" | "audio" | "script";
 };
 
-function getMediaType(ext: string): "video" | "image" | "audio" | null {
+function getMediaType(ext: string): "video" | "image" | "audio" | "script" | null {
   if (VIDEO_EXTENSIONS.has(ext)) return "video";
   if (AUDIO_EXTENSIONS.has(ext)) return "audio";
-  if (MEDIA_EXTENSIONS.has(ext)) return "image";
+  if (ext === ".md") return "script";
+  if (SUPPORTED_EXTENSIONS.has(ext)) return "image";
   return null;
 }
 
@@ -36,12 +42,12 @@ export async function findUnprocessedUploads(
       const manifest = await fs.getManifest(asset.id, projectSlug);
       if (!manifest.ok) return null;
 
-      const hasOrigin = manifest.value.files.some((f) => f.name === ".original.json");
-      if (hasOrigin) return null;
+      const originResult = await fs.readMetadata(asset.id, "original", projectSlug);
+      if (originResult.ok) return null;
 
       const mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
-        return MEDIA_EXTENSIONS.has(ext);
+        return SUPPORTED_EXTENSIONS.has(ext);
       });
       if (!mediaFile) return null;
 
