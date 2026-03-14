@@ -33,11 +33,11 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const { downloadUrl } = await provider.uploadMedia({ file: blob, filename });
+      const { downloadUrl } = await provider.api.fileStreamUpload({ file: blob, filename });
       uploadedUrls.push(downloadUrl);
     }
 
-    const { taskId } = await provider.createTask({
+    const { taskId } = await provider.api.v1.jobs.createTask({
       model: "nano-banana-pro",
       input: {
         prompt,

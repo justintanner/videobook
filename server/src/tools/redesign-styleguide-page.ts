@@ -116,7 +116,7 @@ export function redesignStyleguidePageDef(fs: ClipfirstFs): ToolDef {
       ];
 
       const provider = openai({ apiKey: process.env.OPENAI_API_KEY, timeout: 180_000 });
-      const chatResult = await provider.chat({
+      const chatResult = await provider.v1.chat.completions({
         model: "gpt-5.4",
         messages: [
           { role: "system", content: buildSystemPrompt(focus) },

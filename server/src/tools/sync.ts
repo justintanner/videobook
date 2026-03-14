@@ -98,7 +98,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
     await Promise.all(tasks.map(async (task) => {
-      const taskInfo = await provider.getTask(task.taskId);
+      const taskInfo = await provider.api.v1.jobs.recordInfo(task.taskId);
       await processSyncedTask(task, taskInfo, result);
     }));
   }

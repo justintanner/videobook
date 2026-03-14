@@ -89,7 +89,7 @@ Determine which tool to use and what parameters to pass.`;
       let decision: ChatDecision;
       try {
         const provider = openai({ apiKey, timeout: 15_000 });
-        const result = await provider.chat({
+        const result = await provider.v1.chat.completions({
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },

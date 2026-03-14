@@ -30,12 +30,12 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
     const blob = new Blob([new Uint8Array(readResult.value)]);
 
-    const { downloadUrl } = await provider.uploadMedia({
+    const { downloadUrl } = await provider.api.fileStreamUpload({
       file: blob,
       filename: imageFilename,
     });
 
-    const { taskId } = await provider.createTask({
+    const { taskId } = await provider.api.v1.jobs.createTask({
       model: "grok-imagine/image-to-image",
       input: {
         image_urls: [downloadUrl],

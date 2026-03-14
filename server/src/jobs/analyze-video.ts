@@ -103,7 +103,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     ];
 
     const provider = openai({ apiKey, timeout: 180_000 });
-    const result = await provider.chat({
+    const result = await provider.v1.chat.completions({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userContent },

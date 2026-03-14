@@ -39,10 +39,10 @@ export function registerRedesignStyleguidePageJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
 
     const blob = new Blob([new Uint8Array(readResult.value)]);
-    const { downloadUrl } = await provider.uploadMedia({ file: blob, filename: screenshotFilename });
+    const { downloadUrl } = await provider.api.fileStreamUpload({ file: blob, filename: screenshotFilename });
 
     // 2. Create nano-banana-pro task
-    const { taskId } = await provider.createTask({
+    const { taskId } = await provider.api.v1.jobs.createTask({
       model: "nano-banana-pro",
       input: {
         prompt,
@@ -55,7 +55,7 @@ export function registerRedesignStyleguidePageJob(fs: ClipfirstFs): void {
     // 3. Poll for completion
     const start = Date.now();
     while (Date.now() - start < POLL_TIMEOUT_MS) {
-      const taskInfo = await provider.getTask(taskId);
+      const taskInfo = await provider.api.v1.jobs.recordInfo(taskId);
 
       if (taskInfo.state === "success") {
         const imageUrl = taskInfo.result?.resultUrls[0];

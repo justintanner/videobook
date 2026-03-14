@@ -29,7 +29,7 @@ export function registerTranscribeVideoAudioJob(fs: ClipfirstFs): void {
 
     const file = new File([new Uint8Array(readResult.value)], "original.mp3", { type: "audio/mpeg" });
     const provider = openai({ apiKey, timeout: 120_000 });
-    const result = await provider.transcribe({
+    const result = await provider.v1.audio.transcriptions({
       file,
       model: "gpt-4o-mini-transcribe",
     });

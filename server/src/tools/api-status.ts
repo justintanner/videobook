@@ -18,7 +18,7 @@ export function apiStatusDef(): ToolDef {
 
       try {
         const provider = kimicoding({ apiKey });
-        await provider.chat({
+        await provider.coding.v1.messages({
           model: "k2p5",
           messages: [{ role: "user", content: "hi" }],
         });
