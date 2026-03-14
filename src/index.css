@@ -296,12 +296,6 @@
     -webkit-backface-visibility: hidden;
     transform: rotateY(180deg);
   }
-  .terminal-scanlines {
-    background: repeating-linear-gradient(
-      0deg, transparent, transparent 2px,
-      rgba(0, 255, 255, 0.04) 2px, rgba(0, 255, 255, 0.04) 4px
-    );
-  }
 }
 
 /* ==================== KEYFRAME ANIMATIONS ==================== */

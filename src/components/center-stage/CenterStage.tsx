@@ -122,7 +122,7 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8">
         <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-        <p className="text-xs text-primary/50 font-mono uppercase tracking-widest">Decrypting...</p>
+        <p className="text-xs text-muted-foreground/50 font-mono">Loading...</p>
       </div>
     );
   }
@@ -188,7 +188,7 @@ export function AssetViewer({ item, projectSlug }: {
       <div
         className={cn(
           'flip-card-perspective',
-          size === 'landscape' ? 'aspect-video w-full h-full' : 'aspect-[9/16] h-full',
+          size === 'landscape' ? 'aspect-video w-full h-full' : 'aspect-[9/16] max-h-full max-w-full',
         )}
       >
         <div className={cn(
@@ -212,9 +212,9 @@ export function AssetViewer({ item, projectSlug }: {
               {/* Info button */}
               <button
                 onClick={handleFlipToBack}
-                className="viewer-info-btn w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
-                <Info className="w-3.5 h-3.5" />
+                <Info className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
@@ -225,52 +225,28 @@ export function AssetViewer({ item, projectSlug }: {
           </div>
 
           {/* BACK FACE */}
-          <div className={cn(
-            'flip-card-back absolute inset-0 flex flex-col overflow-hidden',
-            'viewer-back-face',
-          )}>
-            {/* Top bar — data core style */}
-            <div className="shrink-0 px-3 py-1 bg-black/80 border-b border-primary/20 flex items-center justify-between relative">
-              {/* Left: SYS.DATA label */}
-              <div className="flex items-center gap-2">
-                <span className="viewer-data-label text-[10px] font-mono font-bold uppercase tracking-[0.2em]">SYS.DATA</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 viewer-status-dot" />
-              </div>
+          <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
+            {/* Top bar — matches front */}
+            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+              <span className="text-xs font-mono font-bold text-muted-foreground">Metadata</span>
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-[10px] text-primary/40 truncate max-w-[50%]">{item.slug}</span>
+                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{item.slug}</span>
               </span>
 
               {/* Flip back */}
               <button
                 onClick={() => setFlipped(false)}
-                className="w-5 h-5 flex items-center justify-center text-primary/40 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
-            {/* Terminal body */}
-            <div className="flex-1 relative overflow-auto viewer-terminal-body">
-              {/* Pixel grid */}
-              <div className="absolute inset-0 pointer-events-none viewer-pixel-grid" />
-              {/* Scanlines */}
-              <div className="absolute inset-0 pointer-events-none terminal-scanlines" />
-              {/* Vignette */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)' }}
-              />
-              {/* Corner accents */}
-              <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-primary/30 pointer-events-none" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-primary/30 pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-primary/30 pointer-events-none" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-primary/30 pointer-events-none" />
-
-              <div className="relative z-10 p-4">
-                <JsonTerminal data={metadata} loading={metaLoading} />
-              </div>
+            {/* Body */}
+            <div className="flex-1 bg-black overflow-auto p-4">
+              <JsonTerminal data={metadata} loading={metaLoading} />
             </div>
           </div>
         </div>
