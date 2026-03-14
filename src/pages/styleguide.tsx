@@ -27,6 +27,8 @@ import { GenSelect } from '@/components/ui/GenSelect';
 import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
+import type { Skill } from '@/hooks/useSkills';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
@@ -1619,6 +1621,15 @@ const mockProjects = [
   { slug: 'q4-video-ads', active: false },
 ];
 
+const mockSkills: Skill[] = [
+  { command: '/generate', description: 'Generate content from prompt', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
+  { command: '/rewrite-prompt', description: 'Optimize a prompt', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
+  { command: '/trim', description: 'Trim video clip', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },
+  { command: '/isolate-vocals', description: 'Isolate vocals from audio', category: 'action', icon: 'Mic', size: 'default', variant: 'violet', chevron: 'right', params: [] },
+  { command: '/inbox', description: 'View generations inbox', category: 'action', icon: 'Mailbox', size: 'default', variant: 'default', chevron: 'down', params: [] },
+];
+const mockAssetSlugs = ['@hero-intro', '@product-shot', '@bg-neon', '@outro-clip', '@voiceover-main'];
+
 function Page12_CommandSystem() {
   return (
     <div className="w-full h-full flex flex-col gap-5">
@@ -1749,9 +1760,12 @@ function Page12_CommandSystem() {
         </div>
       </div>
 
-      {/* Row 2: CommandButton */}
+      {/* Row 2: CommandButton + AutocompleteDropdown */}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
-        <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">CommandButton</h3>
+        <div className="flex items-baseline gap-6">
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">CommandButton</h3>
+          <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest ml-auto">AutocompleteDropdown</h3>
+        </div>
         <div className="flex gap-8 flex-1 min-h-0">
           {/* Sizes */}
           <div className="flex flex-col gap-3">
@@ -1807,17 +1821,59 @@ function Page12_CommandSystem() {
             <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">states (lg)</p>
             <ExecuteButtonStatesDemo />
           </div>
+
+          {/* /command autocomplete */}
+          <div className="flex flex-col gap-1 flex-1 min-w-0 justify-end">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">/command</span>
+            <div className="relative">
+              <AutocompleteDropdown
+                items={mockSkills.map((s) => ({
+                  type: 'command' as const,
+                  value: s.command,
+                  label: s.command,
+                  description: s.description,
+                  category: s.category,
+                  icon: s.icon,
+                  colorScheme: 'cyan' as const,
+                }))}
+                selectedIndex={1}
+                onSelect={() => {}}
+                onHover={() => {}}
+              />
+              <ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} />
+            </div>
+          </div>
+
+          {/* @slug autocomplete */}
+          <div className="flex flex-col gap-1 flex-1 min-w-0 justify-end">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">@slug</span>
+            <div className="relative">
+              <AutocompleteDropdown
+                items={mockAssetSlugs.map((slug) => ({
+                  type: 'slug' as const,
+                  value: slug,
+                  label: slug,
+                  description: '',
+                  colorScheme: 'cyan' as const,
+                }))}
+                selectedIndex={2}
+                onSelect={() => {}}
+                onHover={() => {}}
+              />
+              <ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Row 3: ChatInput */}
+      {/* Row 4: ChatInput States */}
       <div className="shrink-0 flex flex-col gap-2">
         <h3 className="text-[11px] font-mono text-zinc-500 tracking-widest">ChatInput</h3>
         <div className="grid grid-cols-4 gap-4">
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading assetSlugs={[]} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting assetSlugs={[]} /></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled assetSlugs={[]} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">default</span><ChatInput skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">loading</span><ChatInput isLoading skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">transmitting</span><ChatInput isTransmitting skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">disabled</span><ChatInput disabled skills={mockSkills} assetSlugs={mockAssetSlugs} /></div>
         </div>
       </div>
     </div>

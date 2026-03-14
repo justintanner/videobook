@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { Rocket, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AutocompleteDropdown } from './AutocompleteDropdown';
 import { CommandBadge } from './CommandBadge';
@@ -274,15 +274,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       {/* Input container */}
       <div
         className={cn(
-          'relative flex items-center gap-2 px-3 py-2',
+          'relative flex items-center gap-2 px-3 py-2.5',
           'bg-black/40 border-2 border-primary/30 rounded-lg',
-          'focus-within:border-primary/50 transition-colors',
+          'shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
+          'focus-within:border-primary/60 focus-within:shadow-[inset_0_0_15px_rgba(0,255,255,0.1),0_0_20px_rgba(0,255,255,0.15)]',
+          'transition-all duration-300',
           isTransmitting && 'chat-input-transmitting',
-          isAnimating && 'chat-input-animating'
+          isAnimating && 'chat-input-animating',
+          !isTransmitting && !isAnimating && !isLoading && !disabled && 'chat-input-idle',
         )}
       >
         {/* Prompt indicator */}
-        <span className="text-primary/40 font-mono text-sm select-none">&rsaquo;</span>
+        <span className="text-primary/60 font-mono text-base font-bold select-none drop-shadow-[0_0_3px_rgba(0,255,255,0.4)]">&rsaquo;</span>
 
         {/* Input + overlay wrapper */}
         <div className="relative flex-1">
@@ -331,14 +334,21 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           data-testid="button-generate"
           aria-label={isLoading ? 'Generating' : 'Send message'}
           className={cn(
-            'w-6 h-6 rounded-full flex items-center justify-center transition-colors',
-            'text-primary/40 hover:text-primary hover:bg-primary/10',
+            'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200',
+            'border border-primary/20',
+            chatInput.trim() && !disabled && !isLoading && !isTransmitting && !isAnimating
+              ? 'text-primary bg-primary/10 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_12px_rgba(0,255,255,0.3)] hover:scale-110'
+              : 'text-primary/30',
             'disabled:opacity-30 disabled:cursor-not-allowed'
           )}
           onClick={handleSend}
           disabled={isLoading || isTransmitting || disabled || isAnimating || !chatInput.trim()}
         >
-          {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUp className="w-3 h-3" />}
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Rocket className="w-4 h-4 -rotate-45" />
+          )}
         </button>
       </div>
     </div>

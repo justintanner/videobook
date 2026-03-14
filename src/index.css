@@ -267,6 +267,15 @@
     animation: chat-input-animate-glow 1.5s ease-in-out infinite;
     border-color: rgba(0, 255, 255, 0.5);
   }
+
+  .chat-input-transmitting {
+    animation: chat-input-transmit-pulse 1.5s ease-in-out infinite;
+    border-color: rgba(0, 255, 255, 0.6);
+  }
+
+  .chat-input-idle {
+    animation: chat-input-idle-glow 4s ease-in-out infinite;
+  }
 }
 
 /* ==================== KEYFRAME ANIMATIONS ==================== */
@@ -956,6 +965,26 @@
       inset 0 0 15px rgba(0, 255, 255, 0.2),
       0 0 20px rgba(0, 255, 255, 0.3);
     border-color: rgba(0, 255, 255, 0.6);
+  }
+}
+
+@keyframes chat-input-transmit-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.15), 0 0 12px rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow: inset 0 0 18px rgba(0, 255, 255, 0.25), 0 0 25px rgba(0, 255, 255, 0.4);
+    border-color: rgba(0, 255, 255, 0.7);
+  }
+}
+
+@keyframes chat-input-idle-glow {
+  0%, 100% {
+    box-shadow: inset 0 0 6px rgba(0, 255, 255, 0.03), 0 0 4px rgba(0, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.06), 0 0 8px rgba(0, 255, 255, 0.1);
   }
 }
 
