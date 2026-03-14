@@ -53,11 +53,11 @@ export function HomePage() {
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
 
-  // Refresh assets after each sync
+  // Refresh assets after each sync or sort change
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
-    listAssets(projectSlug);
-  }, [projectSlug, syncCount, listAssets]);
+    listAssets(projectSlug, sortOrder);
+  }, [projectSlug, syncCount, sortOrder, listAssets]);
 
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
@@ -92,17 +92,13 @@ export function HomePage() {
     });
   }, [assetList, result]);
 
-  const assets = useMemo(() => {
-    const items = mediaItems.filter((m) => ASSET_TYPES.has(m.type));
-    const sorted = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return sortOrder === 'newest' ? sorted.reverse() : sorted;
-  }, [mediaItems, sortOrder]);
+  const assets = useMemo(() =>
+    mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
+  [mediaItems]);
 
-  const clips = useMemo(() => {
-    const items = mediaItems.filter((m) => CLIP_TYPES.has(m.type));
-    const sorted = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return sortOrder === 'newest' ? sorted.reverse() : sorted;
-  }, [mediaItems, sortOrder]);
+  const clips = useMemo(() =>
+    mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
+  [mediaItems]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -122,8 +118,8 @@ export function HomePage() {
     clearAssets();
     setProjectSlug(slug);
     await switchProject(slug);
-    await listAssets(slug);
-  }, [setProjectSlug, clearAssets, switchProject, listAssets]);
+    await listAssets(slug, sortOrder);
+  }, [setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 

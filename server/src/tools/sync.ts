@@ -52,8 +52,8 @@ async function findThumbnailFile(assetDir: string): Promise<boolean> {
   }
 }
 
-export async function buildAssetList(fs: ClipfirstFs, project_slug: string): Promise<SyncAsset[]> {
-  const assets = await fs.listAssets(project_slug);
+export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
+  const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
       const mediaFile = await findPrimaryMediaFile(a.path);

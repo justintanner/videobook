@@ -11,7 +11,7 @@ export interface ListAsset {
 }
 
 interface UseListAssetsResult {
-  listAssets: (projectSlug: string) => Promise<ListAsset[] | null>;
+  listAssets: (projectSlug: string, sort?: "newest" | "oldest") => Promise<ListAsset[] | null>;
   assets: ListAsset[] | undefined;
   clearAssets: () => void;
 }
@@ -21,9 +21,9 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const listAssets = useCallback(async (projectSlug: string): Promise<ListAsset[] | null> => {
+  const listAssets = useCallback(async (projectSlug: string, sort?: "newest" | "oldest"): Promise<ListAsset[] | null> => {
     try {
-      const result = await callToolRef.current("list_assets", { project_slug: projectSlug });
+      const result = await callToolRef.current("list_assets", { project_slug: projectSlug, sort });
       if (result.isError) return null;
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed: { assets: ListAsset[] } = JSON.parse(content[0].text);
