@@ -90,6 +90,19 @@ export function HomePage() {
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
 
+  const readyClips = useMemo(() =>
+    clips.filter(c => c.status === 'ready'),
+  [clips]);
+
+  const pendingClips = useMemo(() =>
+    clips.filter(c => GENERATING_STATUSES.has(c.status ?? '')),
+  [clips]);
+
+  const inboxState: 'inactive' | 'generating' | 'ready' =
+    readyClips.length > 0 ? 'ready'
+    : pendingClips.length > 0 ? 'generating'
+    : 'inactive';
+
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
     if (!projectSlug) return;
@@ -104,6 +117,16 @@ export function HomePage() {
     Promise.allSettled(uploads).then(() => sync(projectSlug));
   }, [projectSlug, upload, sync]);
 
+  const handleApprove = useCallback((video: MediaItem) => {
+    if (!projectSlug) return;
+    callTool('whitelist', { asset_id: video.id, project_slug: projectSlug });
+  }, [callTool, projectSlug]);
+
+  const handleReject = useCallback((video: MediaItem) => {
+    if (!projectSlug) return;
+    callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
+  }, [callTool, projectSlug]);
+
   const handleProjectChange = useCallback(async (slug: string) => {
     clearAssets();
     setProjectSlug(slug);
@@ -116,12 +139,24 @@ export function HomePage() {
   return (
     <div className="w-screen h-screen bg-background overflow-hidden">
       <DropzoneOverlay isDragging={isDragging} />
+      <InboxDrawer
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        videos={readyClips}
+        pendingVideos={pendingClips}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
         <HomeHeaderBar
           pulseKey={syncCount}
           projectSlug={projectSlug}
           callTool={callTool}
           onProjectChange={handleProjectChange}
+          inboxState={inboxState}
+          generatingCount={pendingClips.length}
+          readyCount={readyClips.length}
+          onInboxClick={() => setInboxOpen(true)}
         />
 
         <div className="flex flex-row overflow-hidden">

@@ -7,9 +7,13 @@ interface HomeHeaderBarProps {
   projectSlug: string | undefined;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
+  inboxState: 'inactive' | 'generating' | 'ready';
+  generatingCount: number;
+  readyCount: number;
+  onInboxClick: () => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -30,7 +34,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         />
 
         {/* Generations */}
-        <InboxButton state="inactive" generatingCount={0} readyCount={0} flashKey={0} onClick={() => {}} />
+        <InboxButton state={inboxState} generatingCount={generatingCount} readyCount={readyCount} flashKey={readyCount} onClick={onInboxClick} />
       </div>
 
       {/* Right side */}
