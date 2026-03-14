@@ -7,6 +7,7 @@ import { z } from "zod";
 import { openai } from "@nakedapi/openai";
 import { resolveAllAssets } from "../asset-resolver.js";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
+import { getRecentHistory, formatHistoryForPrompt } from "../chat-history.js";
 import { parseTime } from "../time-parse.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -65,13 +66,17 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
         }
       }
 
-      // 3. Call GPT 5.4 for routing
+      // 3. Read recent history for context
+      const historyLines = await getRecentHistory(fs, slug);
+      const historyContext = formatHistoryForPrompt(historyLines);
+
+      // 4. Call GPT 5.4 for routing
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return error("OPENAI_API_KEY environment variable is not set");
       }
 
-      const systemPrompt = buildChatRoutingPrompt(slug);
+      const systemPrompt = buildChatRoutingPrompt(slug, historyContext || undefined);
       const userMessage = `User query: ${prompt}
 
 Referenced assets:
@@ -109,13 +114,13 @@ Determine which tool to use and what parameters to pass.`;
         return error("Could not determine which tool to use. Please rephrase.");
       }
 
-      // 4. Validate tool exists in routable registry
+      // 5. Validate tool exists in routable registry
       const routableTool = getRoutableTool(decision.tool);
       if (!routableTool) {
         return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
       }
 
-      // 5. Apply fixups
+      // 6. Apply fixups
       const params = decision.params ?? {};
 
       // Inject project_slug
@@ -141,7 +146,7 @@ Determine which tool to use and what parameters to pass.`;
         params.prompt = combinedScript;
       }
 
-      // 6. Look up handler from tool defs
+      // 7. Look up handler from tool defs
       // Lazy import to avoid circular dependency at module load time
       const { getAllToolDefs } = await import("./index.js");
       const allDefs = getAllToolDefs(fs);
@@ -151,10 +156,15 @@ Determine which tool to use and what parameters to pass.`;
         return error(`Tool handler not found: ${routableTool.actualTool}`);
       }
 
-      // 7. Execute
+      // 8. Execute
       const handlerResult = await targetDef.handler(params as Record<string, unknown>);
 
-      // 8. Return based on category
+      // 9. Log chat history (fire-and-forget)
+      const now = Date.now();
+      fs.appendLog("chat", { role: "user", text: prompt, ts: now }, slug).catch(() => {});
+      fs.appendLog("chat", { role: "assistant", tool: decision.tool, params: decision.params, message: decision.message, error: Boolean(handlerResult.isError), ts: now + 1 }, slug).catch(() => {});
+
+      // 10. Return based on category
       if (routableTool.category === "generation") {
         // Return the preview JSON from the generation handler
         return handlerResult;

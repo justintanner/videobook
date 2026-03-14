@@ -1622,11 +1622,11 @@ const mockProjects = [
 ];
 
 const mockSkills: Skill[] = [
-  { command: '/generate', description: 'Generate content from prompt', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
-  { command: '/rewrite-prompt', description: 'Optimize a prompt', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
-  { command: '/trim', description: 'Trim video clip', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },
-  { command: '/isolate-vocals', description: 'Isolate vocals from audio', category: 'action', icon: 'Mic', size: 'default', variant: 'violet', chevron: 'right', params: [] },
-  { command: '/inbox', description: 'View generations inbox', category: 'action', icon: 'Mailbox', size: 'default', variant: 'default', chevron: 'down', params: [] },
+  { command: '/generate', description: 'Generate content from prompt', example: '/generate video of a dog on a skateboard @bg-neon', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
+  { command: '/rewrite-prompt', description: 'Optimize a prompt', example: '/rewrite-prompt "make it more cinematic"', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
+  { command: '/trim', description: 'Trim video clip', example: '/trim @hero-intro 0:05 0:12', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },
+  { command: '/isolate-vocals', description: 'Isolate vocals from audio', example: '/isolate-vocals @voiceover-main', category: 'action', icon: 'Mic', size: 'default', variant: 'violet', chevron: 'right', params: [] },
+  { command: '/inbox', description: 'View generations inbox', example: '/inbox', category: 'action', icon: 'Mailbox', size: 'default', variant: 'default', chevron: 'down', params: [] },
 ];
 const mockAssetSlugs = ['@hero-intro', '@product-shot', '@bg-neon', '@outro-clip', '@voiceover-main'];
 
@@ -1832,6 +1832,7 @@ function Page12_CommandSystem() {
                   value: s.command,
                   label: s.command,
                   description: s.description,
+                  example: s.example,
                   category: s.category,
                   icon: s.icon,
                   colorScheme: 'cyan' as const,

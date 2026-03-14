@@ -111,10 +111,14 @@ const TIMESTAMP_PARAMS: Record<string, string[]> = {
   download_video_file: ["start_time", "end_time"],
 };
 
-function buildChatRoutingPrompt(slug: string): string {
+function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
   const toolLines = ROUTABLE_TOOLS.map(
     (t) => `- ${t.name}: ${t.description} (params: ${t.params.join(", ")})`,
   ).join("\n");
+
+  const historyBlock = historyContext
+    ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
+    : "";
 
   return `You are a routing assistant for the clipfirst media system.
 
@@ -122,7 +126,7 @@ Available tools:
 ${toolLines}
 
 Current project: ${slug}
-
+${historyBlock}
 Given a user query (possibly with @asset references), determine:
 1. tool: Which tool to use
 2. params: Parameters to pass

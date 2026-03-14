@@ -16,6 +16,7 @@ interface McpToolBinding {
 interface Skill {
   command: string;
   description: string;
+  example?: string;
   category: "action" | "project" | "context_menu";
   icon: string;
   size: "sm" | "default" | "lg";

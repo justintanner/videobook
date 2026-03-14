@@ -10,6 +10,7 @@ interface AutocompleteItem {
   value: string;
   label: string;
   description: string;
+  example?: string;
   category?: 'action' | 'project' | 'context_menu';
   icon?: string;
   colorScheme: ColorScheme;
@@ -53,7 +54,11 @@ function AutocompleteDropdown({ items, selectedIndex, onSelect, onHover }: Autoc
               onMouseEnter={() => onHover(index)}
             >
               <CommandBadge value={item.label} colorScheme={item.colorScheme} />
-              <span className="text-muted-foreground text-xs truncate">{item.description}</span>
+              {item.example ? (
+                <span className="text-muted-foreground/50 text-xs font-mono truncate">{item.example}</span>
+              ) : (
+                <span className="text-muted-foreground text-xs truncate">{item.description}</span>
+              )}
               {Icon && <Icon className="ml-auto h-3 w-3 shrink-0 opacity-50" />}
             </button>
           );

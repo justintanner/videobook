@@ -16,6 +16,7 @@ interface McpToolBinding {
 interface Skill {
   command: string;
   description: string;
+  example?: string;
   category: "action" | "project" | "context_menu";
   icon: string;
   size: "sm" | "default" | "lg";
@@ -30,6 +31,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/generate",
     description: "Generate content from prompt",
+    example: "/generate video of a dog on a skateboard @bg-neon",
     category: "action",
     icon: "Zap",
     size: "lg",
@@ -43,6 +45,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/rewrite-prompt",
     description: "Optimize a prompt",
+    example: '/rewrite-prompt "make it more cinematic"',
     category: "action",
     icon: "Sparkles",
     size: "sm",
@@ -55,6 +58,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/trim",
     description: "Trim video clip",
+    example: "/trim @hero-intro 0:05 0:12",
     category: "action",
     icon: "Scissors",
     size: "lg",
@@ -69,6 +73,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/trim-audio",
     description: "Trim audio clip",
+    example: "/trim-audio @voiceover-main 0:00 0:30",
     category: "action",
     icon: "Scissors",
     size: "default",
@@ -83,6 +88,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/isolate-vocals",
     description: "Isolate vocals from audio",
+    example: "/isolate-vocals @voiceover-main",
     category: "action",
     icon: "Mic",
     size: "default",
@@ -95,6 +101,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/apply",
     description: "Apply current action",
+    example: "/apply",
     category: "action",
     icon: "Check",
     size: "lg",
@@ -105,6 +112,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/final",
     description: "Finalize and export",
+    example: "/final",
     category: "action",
     icon: "Clapperboard",
     size: "default",
@@ -115,6 +123,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/upload",
     description: "Upload a file",
+    example: "/upload",
     category: "action",
     icon: "Upload",
     size: "default",
@@ -126,6 +135,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/inbox",
     description: "View generations inbox",
+    example: "/inbox",
     category: "action",
     icon: "Mailbox",
     size: "default",
@@ -137,6 +147,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/copy-name",
     description: "Copy asset name",
+    example: "/copy-name @hero-intro",
     category: "context_menu",
     icon: "ClipboardCopy",
     size: "default",
@@ -150,6 +161,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/open-folder",
     description: "Open asset folder",
+    example: "/open-folder @product-shot",
     category: "context_menu",
     icon: "FolderOpen",
     size: "default",
@@ -163,6 +175,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/duplicate",
     description: "Duplicate an asset",
+    example: "/duplicate @hero-intro hero-intro-v2",
     category: "context_menu",
     icon: "Copy",
     size: "default",
@@ -177,6 +190,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/delete",
     description: "Delete an asset",
+    example: "/delete @outro-clip",
     category: "context_menu",
     icon: "Trash2",
     size: "default",
@@ -190,6 +204,7 @@ const HARDCODED_SKILLS: Skill[] = [
   {
     command: "/rename",
     description: "Rename an asset",
+    example: "/rename @product-shot product-hero",
     category: "context_menu",
     icon: "Pencil",
     size: "default",

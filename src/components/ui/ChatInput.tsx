@@ -141,6 +141,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           value: s.command,
           label: s.command,
           description: s.description,
+          example: s.example,
           category: s.category,
           icon: s.icon,
           colorScheme: SKILL_COLORS[s.category] ?? ('cyan' as ColorScheme),
