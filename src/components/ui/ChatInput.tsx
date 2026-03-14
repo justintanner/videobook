@@ -366,6 +366,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             value={displayText}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onBlur={() => setDismissed(true)}
             placeholder={disabled ? 'Loading project...' : placeholder}
             className={cn(
               'w-full bg-transparent text-sm font-mono placeholder:text-muted-foreground/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed',

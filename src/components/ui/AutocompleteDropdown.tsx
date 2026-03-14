@@ -39,6 +39,7 @@ function AutocompleteDropdown({ items, selectedIndex, onSelect, onHover }: Autoc
         'animate-in fade-in-0 zoom-in-95 duration-150',
         'origin-bottom'
       )}
+      onMouseDown={(e) => e.preventDefault()}
     >
       <div ref={listRef} className="max-h-48 overflow-y-auto">
         {items.map((item, index) => {
