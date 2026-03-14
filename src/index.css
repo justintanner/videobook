@@ -261,6 +261,12 @@
   .logo-dot-pulse {
     animation: logo-dot-pulse 0.6s ease-in-out 1;
   }
+
+  /* Chat input — animate-type glow */
+  .chat-input-animating {
+    animation: chat-input-animate-glow 1.5s ease-in-out infinite;
+    border-color: rgba(0, 255, 255, 0.5);
+  }
 }
 
 /* ==================== KEYFRAME ANIMATIONS ==================== */
@@ -935,5 +941,21 @@
 @keyframes logo-dot-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Chat input — animate-type border glow */
+@keyframes chat-input-animate-glow {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 8px rgba(0, 255, 255, 0.1),
+      0 0 10px rgba(0, 255, 255, 0.15);
+    border-color: rgba(0, 255, 255, 0.4);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 15px rgba(0, 255, 255, 0.2),
+      0 0 20px rgba(0, 255, 255, 0.3);
+    border-color: rgba(0, 255, 255, 0.6);
+  }
 }
 

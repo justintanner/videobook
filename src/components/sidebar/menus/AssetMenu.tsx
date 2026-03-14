@@ -4,6 +4,7 @@ import { ClipboardCopy, FolderOpen } from 'lucide-react';
 interface AssetMenuProps {
   slug: string;
   onOpenFolder: () => void;
+  onAnimateCommand?: (text: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
 

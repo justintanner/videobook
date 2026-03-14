@@ -90,7 +90,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTriggerRef = useRef<string | null>(null);
 
-  const { animatingText, isAnimating, startAnimation, cancelAnimation } = useAnimateType();
+  const { animatingText, isAnimating, startAnimation } = useAnimateType();
 
   // Expose imperative handle for animate-and-send
   useImperativeHandle(ref, () => ({

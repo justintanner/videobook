@@ -20,19 +20,24 @@ export function InboxDrawer({
   onApprove,
   onReject,
 }: InboxDrawerProps) {
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [allClear, setAllClear] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
 
-  const visibleVideos = videos.filter((v) => !dismissedIds.has(v.id));
+  // Still rendered (includes exiting cards for animation)
+  const renderedVideos = videos.filter((v) => !removedIds.has(v.id));
+  // Logically present (excludes exiting cards for counter/active selection)
+  const liveVideos = renderedVideos.filter((v) => !exitingIds.has(v.id));
   const hasPending = pendingVideos.length > 0;
 
   // Two-phase open: mount then animate in
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => {
-        setDismissedIds(new Set());
+        setExitingIds(new Set());
+        setRemovedIds(new Set());
         setAllClear(false);
         setActiveVideoId(null);
         setVisible(true);
@@ -46,20 +51,20 @@ export function InboxDrawer({
 
   // Initialize active video to first, and recover if active video is removed
   useEffect(() => {
-    if (!open || visibleVideos.length === 0) return;
-    if (activeVideoId === null || !visibleVideos.some((v) => v.id === activeVideoId)) {
-      const t = setTimeout(() => setActiveVideoId(visibleVideos[0].id), 0);
+    if (!open || liveVideos.length === 0) return;
+    if (activeVideoId === null || !liveVideos.some((v) => v.id === activeVideoId)) {
+      const t = setTimeout(() => setActiveVideoId(liveVideos[0].id), 0);
       return () => clearTimeout(t);
     }
-  }, [open, visibleVideos, activeVideoId]);
+  }, [open, liveVideos, activeVideoId]);
 
-  // All-clear detection: all videos dismissed/gone + no pending
+  // All-clear detection: all videos gone + no pending
   useEffect(() => {
-    if (open && visibleVideos.length === 0 && pendingVideos.length === 0) {
+    if (open && liveVideos.length === 0 && pendingVideos.length === 0) {
       const t = setTimeout(() => setAllClear(true), 0);
       return () => clearTimeout(t);
     }
-  }, [open, visibleVideos.length, pendingVideos.length]);
+  }, [open, liveVideos.length, pendingVideos.length]);
 
   // Auto-close after all clear
   useEffect(() => {
@@ -80,37 +85,45 @@ export function InboxDrawer({
 
   const handleVideoEnded = useCallback(
     (videoId: string) => {
-      const idx = visibleVideos.findIndex((v) => v.id === videoId);
-      if (idx === -1 || visibleVideos.length <= 1) return;
-      const nextIdx = (idx + 1) % visibleVideos.length;
-      setActiveVideoId(visibleVideos[nextIdx].id);
+      const idx = liveVideos.findIndex((v) => v.id === videoId);
+      if (idx === -1 || liveVideos.length <= 1) return;
+      const nextIdx = (idx + 1) % liveVideos.length;
+      setActiveVideoId(liveVideos[nextIdx].id);
     },
-    [visibleVideos]
+    [liveVideos]
   );
 
   const advanceActiveIfNeeded = useCallback(
     (removedId: string) => {
       if (activeVideoId !== removedId) return;
-      const remaining = visibleVideos.filter((v) => v.id !== removedId);
+      const remaining = liveVideos.filter((v) => v.id !== removedId);
       if (remaining.length === 0) {
         setActiveVideoId(null);
         return;
       }
-      const oldIdx = visibleVideos.findIndex((v) => v.id === removedId);
+      const oldIdx = liveVideos.findIndex((v) => v.id === removedId);
       const nextIdx = Math.min(oldIdx, remaining.length - 1);
       setActiveVideoId(remaining[nextIdx].id);
     },
-    [activeVideoId, visibleVideos]
+    [activeVideoId, liveVideos]
+  );
+
+  const handleExitComplete = useCallback(
+    (videoId: string) => {
+      setExitingIds((prev) => { const next = new Set(prev); next.delete(videoId); return next; });
+      setRemovedIds((prev) => new Set(prev).add(videoId));
+    },
+    []
   );
 
   const handleMutate = useCallback(
     (video: MediaItem, action: (v: MediaItem) => void) => {
-      if (dismissedIds.has(video.id)) return;
+      if (exitingIds.has(video.id) || removedIds.has(video.id)) return;
       advanceActiveIfNeeded(video.id);
-      setDismissedIds((prev) => new Set(prev).add(video.id));
+      setExitingIds((prev) => new Set(prev).add(video.id));
       action(video);
     },
-    [dismissedIds, advanceActiveIfNeeded]
+    [exitingIds, removedIds, advanceActiveIfNeeded]
   );
 
   const handleApprove = useCallback(
@@ -123,7 +136,7 @@ export function InboxDrawer({
     [handleMutate, onReject]
   );
 
-  const activeIndex = visibleVideos.findIndex((v) => v.id === activeVideoId);
+  const activeIndex = liveVideos.findIndex((v) => v.id === activeVideoId);
 
   if (!open) return null;
 
@@ -153,22 +166,23 @@ export function InboxDrawer({
           </div>
         ) : (
           <>
-            <ReviewHeader activeIndex={activeIndex} videoCount={visibleVideos.length} onClose={onClose} />
+            <ReviewHeader activeIndex={activeIndex} videoCount={liveVideos.length} onClose={onClose} />
 
             {/* Scrollable grid */}
             <div className="flex-1 overflow-y-auto p-6">
-              {visibleVideos.length > 0 ? (
+              {renderedVideos.length > 0 ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
-                  {visibleVideos.map((video) => (
+                  {renderedVideos.map((video) => (
                     <ReviewTile
                       key={video.id}
                       video={video}
                       isActive={video.id === activeVideoId}
-                      isMutating={false}
+                      isExiting={exitingIds.has(video.id)}
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onVideoEnded={handleVideoEnded}
                       onActivate={setActiveVideoId}
+                      onExitComplete={handleExitComplete}
                     />
                   ))}
                 </div>
@@ -231,14 +245,15 @@ function ReviewHeader({
 interface ReviewTileProps {
   video: MediaItem;
   isActive: boolean;
-  isMutating: boolean;
+  isExiting: boolean;
   onApprove: (video: MediaItem) => void;
   onReject: (video: MediaItem) => void;
   onVideoEnded: (videoId: string) => void;
   onActivate: (videoId: string) => void;
+  onExitComplete: (videoId: string) => void;
 }
 
-function ReviewTile({ video, isActive, isMutating, onApprove, onReject, onVideoEnded, onActivate }: ReviewTileProps) {
+function ReviewTile({ video, isActive, isExiting, onApprove, onReject, onVideoEnded, onActivate, onExitComplete }: ReviewTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const tileRef = useRef<HTMLDivElement>(null);
 
@@ -246,20 +261,20 @@ function ReviewTile({ video, isActive, isMutating, onApprove, onReject, onVideoE
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (isActive) {
+    if (isActive && !isExiting) {
       el.currentTime = 0;
       el.play().catch(() => {});
     } else {
       el.pause();
     }
-  }, [isActive]);
+  }, [isActive, isExiting]);
 
   // Auto-scroll active tile into view
   useEffect(() => {
-    if (isActive && tileRef.current) {
+    if (isActive && !isExiting && tileRef.current) {
       tileRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-  }, [isActive]);
+  }, [isActive, isExiting]);
 
   const durationLabel = video.durationSeconds
     ? `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, '0')}`
@@ -270,15 +285,20 @@ function ReviewTile({ video, isActive, isMutating, onApprove, onReject, onVideoE
       ref={tileRef}
       className={cn(
         'rounded-lg overflow-hidden flex flex-col transition-all duration-300',
-        isActive
-          ? 'border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)]'
-          : 'border border-border/20 bg-card/60 opacity-60'
+        isExiting && 'opacity-0 scale-90 pointer-events-none',
+        !isExiting && isActive && 'border border-primary/60 bg-card/95 shadow-[0_0_15px_rgba(0,255,255,0.15)]',
+        !isExiting && !isActive && 'border border-border/20 bg-card/60 opacity-60'
       )}
+      onTransitionEnd={(e) => {
+        if (isExiting && e.propertyName === 'opacity') {
+          onExitComplete(video.id);
+        }
+      }}
     >
       {/* Video area — click inactive tiles to activate */}
       <div
-        className={cn('aspect-video bg-black relative', !isActive && 'cursor-pointer')}
-        onClick={isActive ? undefined : () => onActivate(video.id)}
+        className={cn('aspect-video bg-black relative', !isActive && !isExiting && 'cursor-pointer')}
+        onClick={isActive || isExiting ? undefined : () => onActivate(video.id)}
       >
         {video.filePath ? (
           <video
@@ -318,20 +338,20 @@ function ReviewTile({ video, isActive, isMutating, onApprove, onReject, onVideoE
       <div className="flex border-t border-border/50">
         <button
           onClick={() => onReject(video)}
-          disabled={isMutating}
+          disabled={isExiting}
           aria-label={`Reject ${video.slug}`}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-r border-border/50"
         >
-          {isMutating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+          <X className="w-3.5 h-3.5" />
           REJECT
         </button>
         <button
           onClick={() => onApprove(video)}
-          disabled={isMutating}
+          disabled={isExiting}
           aria-label={`Approve ${video.slug}`}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isMutating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          <Check className="w-3.5 h-3.5" />
           APPROVE
         </button>
       </div>

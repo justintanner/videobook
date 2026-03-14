@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { Skill } from './useSkills';
 
@@ -15,10 +15,10 @@ interface UseChatDispatchResult {
 
 export function useChatDispatch(skills: Skill[], handlers: ChatDispatchHandlers): UseChatDispatchResult {
   const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
-
   const skillsRef = useRef(skills);
-  skillsRef.current = skills;
+
+  useEffect(() => { handlersRef.current = handlers; });
+  useEffect(() => { skillsRef.current = skills; });
 
   const dispatch = useCallback(async (input: string) => {
     const trimmed = input.trim();
