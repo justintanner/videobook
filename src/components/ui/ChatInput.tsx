@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { AutocompleteDropdown } from './AutocompleteDropdown';
 import { CommandBadge } from './CommandBadge';
 import { useAnimateType } from '@/hooks/useAnimateType';
+import { useChatHistory } from '@/hooks/useChatHistory';
 import type { AutocompleteItem, ColorScheme } from './AutocompleteDropdown';
 import type { Skill } from '@/hooks/useSkills';
 
@@ -88,14 +89,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [dismissed, setDismissed] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [confirmedTokens, setConfirmedTokens] = useState<ConfirmedToken[]>([]);
+  const [historySlide, setHistorySlide] = useState<'up' | 'down' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTriggerRef = useRef<string | null>(null);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
+  const history = useChatHistory();
 
   // Expose imperative handle for animate-and-send
   useImperativeHandle(ref, () => ({
     animateAndSend(text: string) {
+      history.push(text);
       setChatInput('');
       setConfirmedTokens([]);
       startAnimation(text, () => {
@@ -107,7 +111,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     focus() {
       inputRef.current?.focus();
     },
-  }), [onSend, startAnimation]);
+  }), [onSend, startAnimation, history]);
 
   // The displayed text is either animating text or user input
   const displayText = isAnimating ? animatingText : chatInput;
@@ -215,10 +219,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   const handleSend = useCallback(() => {
     if (!chatInput.trim() || disabled) return;
+    history.push(chatInput);
     if (onSend) onSend(chatInput);
     setChatInput('');
     setConfirmedTokens([]);
-  }, [chatInput, disabled, onSend]);
+  }, [chatInput, disabled, onSend, history]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (showSuggestions && autocompleteItems.length > 0) {
@@ -240,12 +245,35 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       }
     } else if (e.key === 'Enter') {
       handleSend();
+    } else if (
+      (e.key === 'ArrowUp' && !showSuggestions) ||
+      (e.key === 'p' && e.ctrlKey)
+    ) {
+      const result = history.navigateBack(chatInput);
+      if (result !== null) {
+        e.preventDefault();
+        setChatInput(result);
+        setConfirmedTokens([]);
+        setHistorySlide('up');
+      }
+    } else if (
+      (e.key === 'ArrowDown' && !showSuggestions) ||
+      (e.key === 'n' && e.ctrlKey)
+    ) {
+      const result = history.navigateForward();
+      if (result !== null) {
+        e.preventDefault();
+        setChatInput(result);
+        setConfirmedTokens([]);
+        setHistorySlide('down');
+      }
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setChatInput(newValue);
+    history.reset();
 
     // Remove confirmed tokens whose text no longer matches
     setConfirmedTokens((prev) =>
@@ -293,7 +321,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         <span className="text-primary/60 font-mono text-base font-bold select-none drop-shadow-[0_0_3px_rgba(0,255,255,0.4)]">&rsaquo;</span>
 
         {/* Input + overlay wrapper */}
-        <div className="relative flex-1">
+        <div
+          className={cn(
+            'relative flex-1',
+            historySlide === 'up' && 'chat-history-up',
+            historySlide === 'down' && 'chat-history-down',
+          )}
+          onAnimationEnd={() => setHistorySlide(null)}
+        >
           {/* Real input — transparent text when overlay is active */}
           <input
             ref={inputRef}

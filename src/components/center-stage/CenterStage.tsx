@@ -17,7 +17,7 @@ import type { MediaItem } from '@/components/sidebar/types';
 
 type ViewerSize = 'landscape' | 'portrait';
 
-function AssetContent({ item }: { item: MediaItem }) {
+function ImageViewer({ item }: { item: MediaItem }) {
   const type = item.type;
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
 
@@ -102,7 +102,7 @@ export function AssetViewer({ item, projectSlug, onClose }: {
       >
         {/* Content */}
         <div className="w-full h-full bg-zinc-900">
-          <AssetContent item={item} />
+          <ImageViewer item={item} />
         </div>
 
         {/* Top bar overlay */}

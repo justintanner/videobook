@@ -706,7 +706,7 @@ function useSlideNavigation(totalSlides: number) {
 function Slide({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative w-[1920px] h-[1080px] bg-background overflow-hidden">
-      <div className="absolute inset-0 py-6 px-6">{children}</div>
+      <div className="absolute inset-0 py-6 px-6 flex flex-col overflow-hidden">{children}</div>
     </div>
   );
 }
@@ -1224,7 +1224,7 @@ function Page7_Trimming() {
 
 // ── Slide 8: Video Editing ──
 
-function VideoRenderPanel({ slug, activeRatio, children }: {
+function ClipViewer({ slug, activeRatio, children }: {
   slug: string;
   activeRatio: '9:16' | '16:9' | '1:1';
   children: React.ReactNode;
@@ -1248,30 +1248,30 @@ function VideoRenderPanel({ slug, activeRatio, children }: {
 function Page8_VideoEditing() {
   return (
     <div className="w-full h-full flex flex-col gap-2">
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoRenderPanel</p>
-      <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
+      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ClipViewer</p>
+      <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 min-h-0 overflow-hidden">
         {/* Landscape — ready */}
-        <VideoRenderPanel slug="@hero" activeRatio="16:9">
+        <ClipViewer slug="@hero" activeRatio="16:9">
           <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
-        </VideoRenderPanel>
+        </ClipViewer>
         {/* Portrait — empty */}
-        <VideoRenderPanel slug="@hero" activeRatio="9:16">
+        <ClipViewer slug="@hero" activeRatio="9:16">
           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
           </div>
-        </VideoRenderPanel>
+        </ClipViewer>
         {/* Square — rendering */}
-        <VideoRenderPanel slug="@hero" activeRatio="1:1">
+        <ClipViewer slug="@hero" activeRatio="1:1">
           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
           </div>
-        </VideoRenderPanel>
+        </ClipViewer>
         {/* Error */}
-        <VideoRenderPanel slug="@broken" activeRatio="16:9">
+        <ClipViewer slug="@broken" activeRatio="16:9">
           <div className="flex flex-col items-center justify-center gap-1 text-destructive">
             <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
           </div>
-        </VideoRenderPanel>
+        </ClipViewer>
       </div>
     </div>
   );
@@ -2034,15 +2034,15 @@ export function Styleguide() {
       }}
     >
       <Toaster />
-      {/* Scaled wrapper */}
+      {/* Scaled wrapper — sized to visual dimensions so flex-centering works without clipping */}
       <div
         style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
+          width: 1920 * scale,
+          height: 1080 * scale,
         }}
       >
         {/* 1080p slide area */}
-        <div className="relative" style={{ width: 1920, height: 1080 }}>
+        <div className="relative" style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
           {SLIDE_PAGES.map((PageComponent, i) => (
             <div
               key={i}

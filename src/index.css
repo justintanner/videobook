@@ -988,3 +988,24 @@
   }
 }
 
+/* Chat history navigation — slide + fade flash */
+@keyframes chat-history-slide-up {
+  0%   { transform: translateY(0); opacity: 1; }
+  40%  { transform: translateY(-6px); opacity: 0.3; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes chat-history-slide-down {
+  0%   { transform: translateY(0); opacity: 1; }
+  40%  { transform: translateY(6px); opacity: 0.3; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.chat-history-up {
+  animation: chat-history-slide-up 180ms ease-out;
+}
+
+.chat-history-down {
+  animation: chat-history-slide-down 180ms ease-out;
+}
+

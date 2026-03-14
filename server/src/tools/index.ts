@@ -43,6 +43,7 @@ import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
 import { openFolderDef } from "./open-folder.js";
 import { skillsDef } from "./skills.js";
 import { slugsDef } from "./slugs.js";
+import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -96,5 +97,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     openFolderDef(fs),
     skillsDef(fs),
     slugsDef(fs),
+    pushChatHistoryDef(fs),
+    listChatHistoryDef(fs),
   ];
 }
