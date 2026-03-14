@@ -9,7 +9,7 @@ export interface UseChatHistoryResult {
 }
 
 export function useChatHistory(
-  callTool: UseMcpResult['callTool'],
+  callTool: UseMcpResult['callTool'] | undefined,
   projectSlug: string | undefined,
 ): UseChatHistoryResult {
   const historyRef = useRef<string[]>([]);
@@ -24,10 +24,11 @@ export function useChatHistory(
 
   // Load persisted history when project changes
   useEffect(() => {
-    if (!projectSlug || projectSlug === loadedSlugRef.current) return;
+    const ct = callToolRef.current;
+    if (!ct || !projectSlug || projectSlug === loadedSlugRef.current) return;
     loadedSlugRef.current = projectSlug;
 
-    callToolRef.current('list_chat_history', { project_slug: projectSlug, limit: 100 })
+    ct('list_chat_history', { project_slug: projectSlug, limit: 100 })
       .then((result) => {
         if (result.isError) return;
         const parsed = JSON.parse(result.content[0].text) as { messages: string[] };
@@ -43,8 +44,9 @@ export function useChatHistory(
     cursorRef.current = -1;
 
     const slug = projectSlugRef.current;
-    if (slug) {
-      callToolRef.current('push_chat_history', { message, project_slug: slug }).catch(() => {});
+    const ct = callToolRef.current;
+    if (slug && ct) {
+      ct('push_chat_history', { message, project_slug: slug }).catch(() => {});
     }
   }, []);
 

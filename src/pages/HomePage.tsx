@@ -279,6 +279,8 @@ export function HomePage() {
                 onSend={dispatch}
                 assetSlugs={assetSlugs}
                 skills={skills}
+                callTool={callTool}
+                projectSlug={projectSlug}
               />
             </div>
           </div>

@@ -71,8 +71,8 @@ interface ChatInputProps {
   disabled?: boolean;
   assetSlugs?: string[];
   skills?: Skill[];
-  callTool: UseMcpResult['callTool'];
-  projectSlug: string | undefined;
+  callTool?: UseMcpResult['callTool'];
+  projectSlug?: string;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
@@ -99,7 +99,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const prevTriggerRef = useRef<string | null>(null);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
-  const history = useChatHistory();
+  const history = useChatHistory(callTool, projectSlug);
 
   // Expose imperative handle for animate-and-send
   useImperativeHandle(ref, () => ({
