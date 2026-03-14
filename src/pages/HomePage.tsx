@@ -116,11 +116,10 @@ export function HomePage() {
     : pendingClips.length > 0 ? 'generating'
     : 'inactive';
 
-  // Clear selection if item no longer exists in the list
-  useEffect(() => {
-    if (selectedItem && !mediaItems.some(m => m.id === selectedItem.id)) {
-      setSelectedItem(null);
-    }
+  // Derive the active selection — clear if item was removed from list
+  const activeSelection = useMemo(() => {
+    if (!selectedItem) return null;
+    return mediaItems.find(m => m.id === selectedItem.id) ?? null;
   }, [mediaItems, selectedItem]);
 
   // Sync on mount + poll every 5s while page is active
@@ -256,8 +255,8 @@ export function HomePage() {
           {/* Center Stage */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              {selectedItem ? (
-                <AssetViewer item={selectedItem} projectSlug={projectSlug} onClose={() => setSelectedItem(null)} />
+              {activeSelection ? (
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} onClose={() => setSelectedItem(null)} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}

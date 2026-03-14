@@ -97,9 +97,8 @@ export function AssetViewer({ item, projectSlug, onClose }: {
       <div
         className={cn(
           'relative bg-card/30 backdrop-blur-sm clip-corner-br border border-border/50 shadow-lg overflow-hidden',
-          size === 'landscape' ? 'aspect-video w-full max-w-4xl' : 'aspect-[9/16] max-h-full',
+          size === 'landscape' ? 'aspect-video w-full h-full' : 'aspect-[9/16] h-full',
         )}
-        style={size === 'portrait' ? { height: '100%' } : undefined}
       >
         {/* Content */}
         <div className="w-full h-full bg-zinc-900">
@@ -108,12 +107,12 @@ export function AssetViewer({ item, projectSlug, onClose }: {
 
         {/* Top bar overlay */}
         <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-3 py-2 bg-gradient-to-b from-black/60 to-transparent">
-          {/* Close */}
+          {/* Info button */}
           <button
-            onClick={onClose}
+            onClick={() => setInfoOpen(true)}
             className="p-1.5 rounded hover:bg-white/10 transition-colors"
           >
-            <X className="w-4 h-4 text-white/80" />
+            <Info className="w-4 h-4 text-white/80" />
           </button>
 
           {/* Size dropdown */}
@@ -130,12 +129,12 @@ export function AssetViewer({ item, projectSlug, onClose }: {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Info button */}
+          {/* Close */}
           <button
-            onClick={() => setInfoOpen(true)}
+            onClick={onClose}
             className="p-1.5 rounded hover:bg-white/10 transition-colors"
           >
-            <Info className="w-4 h-4 text-white/80" />
+            <X className="w-4 h-4 text-white/80" />
           </button>
         </div>
 
