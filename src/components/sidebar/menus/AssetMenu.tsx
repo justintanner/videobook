@@ -1,11 +1,12 @@
 import type { ComponentType, ReactNode } from 'react';
-import { ClipboardCopy, FolderOpen, Trash2 } from 'lucide-react';
+import { ClipboardCopy, FolderOpen, History, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 
 interface AssetMenuProps {
   slug: string;
   onOpenFolder: () => void;
+  onShowHistory?: () => void;
   onAnimateCommand?: (text: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
@@ -26,7 +27,7 @@ function CommandMenuItem({ icon, command, onSelect, MenuItem, className }: {
   );
 }
 
-export function AssetMenu({ slug, onOpenFolder, onAnimateCommand, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, onOpenFolder, onShowHistory, onAnimateCommand, MenuItem }: AssetMenuProps) {
   return (
     <>
       <CommandMenuItem
@@ -44,6 +45,14 @@ export function AssetMenu({ slug, onOpenFolder, onAnimateCommand, MenuItem }: As
         onSelect={onOpenFolder}
         MenuItem={MenuItem}
       />
+      {onShowHistory && (
+        <CommandMenuItem
+          icon={<History className="h-3 w-3" />}
+          command="/history"
+          onSelect={onShowHistory}
+          MenuItem={MenuItem}
+        />
+      )}
       <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
         icon={<Trash2 className="h-3 w-3" />}

@@ -12,6 +12,7 @@ import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer } from '@/components/center-stage';
+import { GitHistoryPanel } from '@/components/center-stage/GitHistoryPanel';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -47,6 +48,7 @@ export function HomePage() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -248,6 +250,7 @@ export function HomePage() {
                   <AssetMenu
                     slug={item.slug}
                     onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    onShowHistory={() => setHistoryItem(item)}
                     onAnimateCommand={handleAnimateCommand}
                     MenuItem={ContextMenuItem}
                   />
@@ -268,7 +271,14 @@ export function HomePage() {
           {/* Center Stage */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              {activeSelection ? (
+              {historyItem ? (
+                <GitHistoryPanel
+                  item={historyItem}
+                  projectSlug={projectSlug ?? ''}
+                  callTool={callTool}
+                  onClose={() => setHistoryItem(null)}
+                />
+              ) : activeSelection ? (
                 <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
@@ -311,6 +321,7 @@ export function HomePage() {
                   <AssetMenu
                     slug={item.slug}
                     onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    onShowHistory={() => setHistoryItem(item)}
                     onAnimateCommand={handleAnimateCommand}
                     MenuItem={ContextMenuItem}
                   />

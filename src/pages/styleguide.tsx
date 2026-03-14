@@ -45,7 +45,7 @@ import {
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AlertTriangle, AudioLines, Plus, Pencil,
   Smartphone, Monitor, Square, Play, Loader2, Mic,
-  Check, History, RotateCcw, Upload,
+  Check, History, RotateCcw,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
 
@@ -2082,6 +2082,74 @@ function Page14_AssetViewer() {
   );
 }
 
+// ── Slide 15: Git History ──
+
+function Page15_GitHistory() {
+  const headCommit = mockCommits[0];
+  const headOp = extractOperation(headCommit.message);
+  return (
+    <div className="w-full h-full flex flex-col bg-background">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
+        <div className="flex items-center gap-3">
+          <History className="w-4 h-4 text-primary/70" />
+          <span className="text-xs font-mono font-bold tracking-widest text-primary/70 uppercase">ASSET_HISTORY</span>
+          <span className="text-xs font-mono text-muted-foreground/60">vid-hero-intro</span>
+        </div>
+        <button className="text-muted-foreground hover:text-foreground transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Two-panel body */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left panel — asset info */}
+        <div className="w-[280px] shrink-0 border-r border-border/50 flex flex-col gap-6 px-6 py-6">
+          {/* Thumbnail */}
+          <div className="w-full aspect-video rounded-lg overflow-hidden bg-card border border-border/30">
+            <img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" />
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <MetaRow label="ASSET_ID">vid-hero-intro</MetaRow>
+            <MetaRow label="TYPE">
+              <span className="flex items-center gap-1.5">
+                <Film className="w-3.5 h-3.5 text-primary/60" />
+                VIDEO
+              </span>
+            </MetaRow>
+            <MetaRow label="COMMITS">{mockCommits.length}</MetaRow>
+            <MetaRow label="CREATED">3/10</MetaRow>
+            <MetaRow label="MODIFIED">18m ago</MetaRow>
+          </div>
+
+          {/* Active version card */}
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 shadow-[0_0_12px_rgba(0,212,255,0.08)]">
+            <span className="text-[10px] font-mono font-bold tracking-widest text-primary/50 uppercase">ACTIVE_VER</span>
+            <div className="mt-1.5 flex items-baseline gap-2">
+              <span className="text-sm font-mono text-primary/90 font-bold">{headCommit.hash}</span>
+              <span className={cn('text-xs font-mono', OPERATION_STYLES[headOp].label)}>{headOp}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right panel — commit log */}
+        <div className="flex-1 flex flex-col min-h-0 px-6 py-6">
+          <div className="flex items-baseline gap-3 mb-4 shrink-0">
+            <span className="text-xs font-mono font-bold tracking-widest text-muted-foreground/70 uppercase">COMMIT_LOG</span>
+            <span className="text-[11px] font-mono text-muted-foreground/40">&middot; {mockCommits.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {mockCommits.map((commit, i) => (
+              <TimelineNode key={commit.hash} commit={commit} isHead={i === 0} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -2099,6 +2167,7 @@ const SLIDE_PAGES = [
   Page12_CommandSystem,
   Page13_InboxReview,
   Page14_AssetViewer,
+  Page15_GitHistory,
 ];
 
 // ── Main Styleguide ──
