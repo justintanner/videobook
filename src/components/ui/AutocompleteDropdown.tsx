@@ -54,8 +54,8 @@ function AutocompleteDropdown({ items, selectedIndex, onSelect, onHover }: Autoc
               onMouseEnter={() => onHover(index)}
             >
               <CommandBadge value={item.label} colorScheme={item.colorScheme} />
-              {item.example ? (
-                <span className="text-muted-foreground/50 text-xs font-mono truncate">{item.example}</span>
+              {item.example && item.example !== item.value ? (
+                <span className="text-muted-foreground/50 text-xs font-mono truncate">{item.example.replace(item.value, '').trimStart()}</span>
               ) : (
                 <span className="text-muted-foreground text-xs truncate">{item.description}</span>
               )}
