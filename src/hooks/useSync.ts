@@ -1,22 +1,12 @@
 import { useState, useCallback, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
-interface SyncAsset {
-  id: string;
-  type: string;
-  created_at: string;
-  path: string;
-  media_url: string | null;
-  thumbnail_url: string | null;
-}
-
 export interface SyncResult {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
-  assets: SyncAsset[];
 }
 
 interface UseSyncResult {
@@ -25,7 +15,6 @@ interface UseSyncResult {
   result: SyncResult | undefined;
   error: string | undefined;
   syncCount: number;
-  setSyncResult: (result: SyncResult | undefined) => void;
 }
 
 export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
@@ -54,7 +43,6 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
         const content = toolResult.content as Array<{ type: string; text: string }>;
         const parsed: SyncResult = JSON.parse(content[0].text);
         console.log("[sync] result:", parsed);
-        console.log("[sync] assets:", parsed.assets.length, "items");
         setResult(parsed);
         setSyncCount((c) => c + 1);
       }
@@ -68,14 +56,5 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
     }
   }, []);
 
-  const setSyncResult = useCallback((newResult: SyncResult | undefined) => {
-    setResult(newResult);
-    if (newResult) {
-      setSyncCount((c) => c + 1);
-    } else {
-      syncingRef.current = false;
-    }
-  }, []);
-
-  return { sync, syncing, result, error, syncCount, setSyncResult };
+  return { sync, syncing, result, error, syncCount };
 }

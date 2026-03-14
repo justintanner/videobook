@@ -20,6 +20,7 @@ import { useDefaultProject } from '@/hooks/useDefaultProject';
 import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
+import { useListAssets } from '@/hooks/useListAssets';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
 const TASK_TYPE_TO_STATE: Record<string, ClipState> = {
@@ -48,21 +49,30 @@ export function HomePage() {
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
-  const { sync, syncCount, result, setSyncResult } = useSync(callTool);
+  const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
+  const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
+
+  // Refresh assets after each sync
+  useEffect(() => {
+    if (!projectSlug || syncCount === 0) return;
+    listAssets(projectSlug);
+  }, [projectSlug, syncCount, listAssets]);
 
   const mediaItems = useMemo(() => {
-    if (!result?.assets) return [] as Array<MediaItem & { created_at: string }>;
+    if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
     const pendingMap = new Map<string, ClipState>();
     const failedSet = new Set<string>();
-    for (const p of result.pending) {
-      pendingMap.set(p.assetId, TASK_TYPE_TO_STATE[p.taskType] ?? 'loading');
-    }
-    for (const f of result.failed) {
-      failedSet.add(f.assetId);
+    if (result) {
+      for (const p of result.pending) {
+        pendingMap.set(p.assetId, TASK_TYPE_TO_STATE[p.taskType] ?? 'loading');
+      }
+      for (const f of result.failed) {
+        failedSet.add(f.assetId);
+      }
     }
 
-    return result.assets.map((asset) => {
+    return assetList.map((asset) => {
       let status: ClipState = 'ready';
       if (pendingMap.has(asset.id)) {
         status = pendingMap.get(asset.id)!;
@@ -80,7 +90,7 @@ export function HomePage() {
         created_at: asset.created_at,
       };
     });
-  }, [result]);
+  }, [assetList, result]);
 
   const assets = useMemo(() => {
     const items = mediaItems.filter((m) => ASSET_TYPES.has(m.type));
@@ -109,11 +119,11 @@ export function HomePage() {
   }, [projectSlug, upload, sync]);
 
   const handleProjectChange = useCallback(async (slug: string) => {
-    setSyncResult(undefined);
+    clearAssets();
     setProjectSlug(slug);
-    const result = await switchProject(slug);
-    if (result) setSyncResult(result);
-  }, [setProjectSlug, setSyncResult, switchProject]);
+    await switchProject(slug);
+    await listAssets(slug);
+  }, [setProjectSlug, clearAssets, switchProject, listAssets]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 

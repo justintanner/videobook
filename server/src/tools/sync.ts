@@ -13,7 +13,7 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { readAndAssessDialog } from "../dialog-quality.js";
 import type { ToolDef } from "./tool-def.js";
 
-type SyncAsset = {
+export type SyncAsset = {
   id: string;
   type: string;
   created_at: string;
@@ -28,7 +28,6 @@ export type SyncResult = {
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
-  assets: SyncAsset[];
 };
 
 async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
@@ -74,7 +73,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string): Pro
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], assets: [],
+    external_uploads: [], auto_render: [],
   };
 
   // Single listAssets call, shared by all consumers
@@ -129,9 +128,6 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     });
     result.auto_render.push({ assetId: action.assetId, jobId });
   }
-
-  // Build asset list from the already-fetched assets
-  result.assets = await buildAssetList(fs, project_slug);
 
   return result;
 }
