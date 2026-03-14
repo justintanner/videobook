@@ -15,11 +15,6 @@ function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc
   const fell = useRef(false);
   const [src, setSrc] = useState(cropSrc);
 
-  useEffect(() => {
-    fell.current = false;
-    setSrc(cropSrc);
-  }, [cropSrc]);
-
   return (
     <img
       src={src}
@@ -45,7 +40,7 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
     const cropFile = size === 'landscape' ? 'image_1920x1080.jpg' : 'image_1080x1920.jpg';
     const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
     return (
-      <CropImage cropSrc={cropSrc} fallbackSrc={item.filePath} alt={item.title} />
+      <CropImage key={cropSrc} cropSrc={cropSrc} fallbackSrc={item.filePath} alt={item.title} />
     );
   }
 
