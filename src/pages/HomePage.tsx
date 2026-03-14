@@ -23,13 +23,6 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
-const TASK_TYPE_TO_STATE: Record<string, ClipState> = {
-  generate: 'generating',
-  render: 'rendering',
-  download: 'downloading',
-  transcribe: 'transcribing',
-};
-
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
 

@@ -8,6 +8,7 @@ export interface ListAsset {
   path: string;
   media_url: string | null;
   thumbnail_url: string | null;
+  status: string;
 }
 
 interface UseListAssetsResult {

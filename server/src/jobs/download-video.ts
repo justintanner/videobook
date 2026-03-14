@@ -55,7 +55,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
       title, uploader, description, webpageUrl, platform, thumbnail,
     } = payload as DownloadVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {

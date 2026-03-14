@@ -90,7 +90,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
       osgPosition,
     } = payload as RenderVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "rendering" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {

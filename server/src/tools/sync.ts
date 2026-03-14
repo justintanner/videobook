@@ -7,7 +7,7 @@ import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
-import { findPendingTasks } from "../jobs/pending-task.js";
+import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -20,6 +20,7 @@ export type SyncAsset = {
   path: string;
   media_url: string | null;
   thumbnail_url: string | null;
+  status: string;
 };
 
 export type SyncResult = {
@@ -56,16 +57,31 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const mediaFile = await findPrimaryMediaFile(a.path);
+      const [mediaFile, hasThumbnail, lockData, pendingTask] = await Promise.all([
+        findPrimaryMediaFile(a.path),
+        findThumbnailFile(a.path),
+        fs.getLockData(a.path),
+        readPendingTask(fs, a.id, project_slug),
+      ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
         : null;
-      const hasThumbnail = await findThumbnailFile(a.path);
       const isImage = a.type === "image";
       const thumbnail_url = hasThumbnail
         ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
         : isImage ? media_url : null;
-      return { ...a, media_url, thumbnail_url };
+
+      let status: string;
+      const isLockActive = lockData && (Date.now() / 1000) < lockData.timeout_at;
+      if (isLockActive) {
+        status = (lockData.state as string) ?? "loading";
+      } else if (pendingTask) {
+        status = pendingTask.taskType === "transcribe" ? "transcribing" : "generating";
+      } else {
+        status = mediaFile ? "ready" : "loading";
+      }
+
+      return { ...a, media_url, thumbnail_url, status };
     }),
   );
 }
