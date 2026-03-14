@@ -85,8 +85,22 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "asset_manifest",
     actualTool: "asset_manifest",
-    description: "Show all files and details of an asset",
+    description: "Show all files and details of a specific asset",
     params: ["asset_id"],
+    category: "action",
+  },
+  {
+    name: "list_assets",
+    actualTool: "list_assets",
+    description: "List all assets in the current project",
+    params: ["sort"],
+    category: "action",
+  },
+  {
+    name: "list_projects",
+    actualTool: "list_projects",
+    description: "List all projects",
+    params: ["sort"],
     category: "action",
   },
   // --- Generation tools ---

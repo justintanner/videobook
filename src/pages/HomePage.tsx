@@ -11,7 +11,7 @@ import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen } from '@/components/center-stage';
+import { IdleScreen, AssetViewer } from '@/components/center-stage';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -46,6 +46,7 @@ export function HomePage() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +115,13 @@ export function HomePage() {
     readyClips.length > 0 ? 'ready'
     : pendingClips.length > 0 ? 'generating'
     : 'inactive';
+
+  // Clear selection if item no longer exists in the list
+  useEffect(() => {
+    if (selectedItem && !mediaItems.some(m => m.id === selectedItem.id)) {
+      setSelectedItem(null);
+    }
+  }, [mediaItems, selectedItem]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -234,10 +242,10 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} />}
-                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} />}
-                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} />}
-                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
                   </div>
                 );
               })}
@@ -248,7 +256,11 @@ export function HomePage() {
           {/* Center Stage */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              <IdleScreen label="WAITING FOR INPUT" fillParent />
+              {selectedItem ? (
+                <AssetViewer item={selectedItem} projectSlug={projectSlug} onClose={() => setSelectedItem(null)} />
+              ) : (
+                <IdleScreen label="WAITING FOR INPUT" fillParent />
+              )}
             </div>
             <div className="shrink-0 px-4 pb-3 pt-2">
               <ChatInput
@@ -291,8 +303,8 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} />}
-                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} />}
+                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} onClick={() => setSelectedItem(item)} />}
                   </div>
                 );
               })}

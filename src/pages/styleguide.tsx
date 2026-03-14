@@ -30,7 +30,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { Skill } from '@/hooks/useSkills';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';

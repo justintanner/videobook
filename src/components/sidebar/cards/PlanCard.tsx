@@ -8,16 +8,17 @@ import type { ReactNode } from 'react';
 interface PlanCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  onClick?: () => void;
 }
 
-export function PlanCard({ item, contextMenuContent }: PlanCardProps) {
+export function PlanCard({ item, contextMenuContent, onClick }: PlanCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const planText = item.prompt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
       {/* CONTENT - Blueprint aesthetic */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Indigo-to-navy gradient background */}

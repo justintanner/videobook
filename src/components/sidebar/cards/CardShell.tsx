@@ -23,6 +23,7 @@ export interface CardShellProps {
   item: MediaItem;
   children: ReactNode;
   contextMenuContent?: ReactNode;
+  onClick?: () => void;
 }
 
 function isRenderingState(status: string): boolean {
@@ -91,7 +92,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
   return (status && stateColors[status]) ?? 'var(--color-primary)';
 }
 
-export function CardShell({ item, children, contextMenuContent }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent, onClick }: CardShellProps) {
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
@@ -121,7 +122,7 @@ export function CardShell({ item, children, contextMenuContent }: CardShellProps
   );
 
   const card = (
-    <div className={classes}>
+    <div className={classes} onClick={onClick}>
       {/* Bottom border accent */}
       <div className={accentClasses} />
 

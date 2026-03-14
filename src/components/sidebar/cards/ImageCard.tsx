@@ -7,9 +7,10 @@ import type { ReactNode } from 'react';
 interface ImageCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
+  onClick?: () => void;
 }
 
-export function ImageCard({ item, contextMenuContent }: ImageCardProps) {
+export function ImageCard({ item, contextMenuContent, onClick }: ImageCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
@@ -20,7 +21,7 @@ export function ImageCard({ item, contextMenuContent }: ImageCardProps) {
   const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} onClick={onClick}>
       {/* CONTENT - Image */}
       {item.filePath && (
         <img
