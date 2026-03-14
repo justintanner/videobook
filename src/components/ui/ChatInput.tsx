@@ -73,7 +73,7 @@ interface ChatInputProps {
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
   {
     onSend,
-    placeholder = 'gen image of a dancing banana',
+    placeholder = 'make a viral video of a dog on a skateboard',
     className,
     isLoading = false,
     isTransmitting = false,
