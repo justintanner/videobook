@@ -550,7 +550,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <span className="text-xs font-mono font-bold text-muted-foreground">Files</span>
+              <span className="text-xs font-mono font-bold text-muted-foreground">/files</span>
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
