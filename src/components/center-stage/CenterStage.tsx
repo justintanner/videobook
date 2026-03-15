@@ -89,25 +89,44 @@ function ClipViewer({ item }: { item: MediaItem }) {
   );
 }
 
-const ratioLabels: Record<ViewerSize, string> = {
-  original: '/original',
-  landscape: '/landscape',
-  portrait: '/portrait',
+function ratioLabel(size: ViewerSize, item: MediaItem): string {
+  switch (size) {
+    case 'original':
+      return item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
+    case 'landscape':
+      return '/landscape 1920x1080';
+    case 'portrait':
+      return '/portrait 1080x1920';
+  }
+}
+
+const ratioIcons: Record<ViewerSize, typeof Monitor> = {
+  original: Monitor,
+  landscape: Monitor,
+  portrait: Smartphone,
 };
 
-function RatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
+function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect: (s: ViewerSize) => void; item: MediaItem }) {
+  const sizes: ViewerSize[] = ['original', 'landscape', 'portrait'];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
-          {ratioLabels[active]}
+          {ratioLabel(active, item)}
           <ChevronDown className="w-3 h-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onSelect('original')}>/original</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSelect('landscape')}>/landscape</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSelect('portrait')}>/portrait</DropdownMenuItem>
+        {sizes.map((size) => {
+          const Icon = ratioIcons[size];
+          return (
+            <DropdownMenuItem key={size} onClick={() => onSelect(size)} className="py-2.5">
+              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{ratioLabel(size, item)}</span>
+              <span className="ml-2 opacity-80 flex items-center"><Icon className="h-3 w-3" /></span>
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -281,7 +300,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
                 ? <ClipRatioToggle active={size} onSelect={onSizeChange} />
-                : <RatioToggle active={size} onSelect={onSizeChange} />}
+                : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
