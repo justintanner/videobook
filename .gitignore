@@ -34,5 +34,8 @@ public/fixtures/
 # Projects directory
 projects/
 
+# TypeScript build info
+*.tsbuildinfo
+
 # Claude Code
 .claude/worktrees/
