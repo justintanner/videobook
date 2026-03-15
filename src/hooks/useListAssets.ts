@@ -9,6 +9,10 @@ export interface ListAsset {
   media_url: string | null;
   thumbnail_url: string | null;
   status: string;
+  width: number | null;
+  height: number | null;
+  origin: string | null;
+  prompt: string | null;
 }
 
 interface UseListAssetsResult {

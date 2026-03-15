@@ -153,6 +153,10 @@ export function HomePage() {
         thumbnailSrc: asset.thumbnail_url,
         status,
         created_at: asset.created_at,
+        width: asset.width,
+        height: asset.height,
+        origin: asset.origin,
+        prompt: asset.prompt,
       };
     });
   }, [assetList, result]);

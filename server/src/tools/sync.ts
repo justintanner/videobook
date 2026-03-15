@@ -21,6 +21,10 @@ export type SyncAsset = {
   media_url: string | null;
   thumbnail_url: string | null;
   status: string;
+  width: number | null;
+  height: number | null;
+  origin: string | null;
+  prompt: string | null;
 };
 
 export type SyncResult = {
@@ -77,13 +81,14 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
         readPendingTask(fs, a.id, project_slug),
         isWhitelisted(a.path),
         hasRenderMetadata(a.path),
+        fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -115,7 +120,17 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         status = "loading";
       }
 
-      return { ...a, media_url, thumbnail_url, status };
+      const meta = metadata.ok ? metadata.value : null;
+      return {
+        ...a,
+        media_url,
+        thumbnail_url,
+        status,
+        width: (meta?.width as number) ?? null,
+        height: (meta?.height as number) ?? null,
+        origin: (meta?.origin as string) ?? null,
+        prompt: (meta?.prompt as string) ?? null,
+      };
     }),
   );
 }
