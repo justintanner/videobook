@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone } from 'lucide-react';
+import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -7,9 +7,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 import type { MediaItem } from '@/components/sidebar/types';
+import type { Orientation } from '@/hooks/useTimeline';
 
-export type ViewerSize = 'landscape' | 'portrait' | 'original';
+export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc: string; alt: string }) {
   const fell = useRef(false);
@@ -44,7 +49,9 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
         />
       );
     }
-    const cropFile = size === 'landscape' ? 'image_1920x1080.jpg' : 'image_1080x1920.jpg';
+    const cropFile = size === 'landscape' ? 'image_1920x1080.jpg'
+      : size === 'portrait' ? 'image_1080x1920.jpg'
+      : 'image_1080x1080.jpg';
     const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
     return (
       <CropImage key={cropSrc} cropSrc={cropSrc} fallbackSrc={item.filePath} alt={item.title} />
@@ -74,20 +81,44 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   return null;
 }
 
-function ClipViewer({ item }: { item: MediaItem }) {
-  if (!item.filePath) return null;
+function ClipViewerInner({ item, orientedFile, derivedSrc }: {
+  item: MediaItem; orientedFile: string | null; derivedSrc: string;
+}) {
+  const fell = useRef(false);
+  const [src, setSrc] = useState(derivedSrc);
   const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg');
+
   return (
     <video
-      key={item.id}
-      src={item.filePath}
+      src={src}
       poster={thumbSrc}
       controls
       tabIndex={-1}
       className="w-full h-full object-contain"
       draggable={false}
+      onError={() => {
+        if (!fell.current && orientedFile) {
+          fell.current = true;
+          setSrc(item.filePath);
+        }
+      }}
     />
   );
+}
+
+function ClipViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
+  if (!item.filePath) return null;
+
+  const orientedFile = size === 'landscape' ? '1920x1080_landscape.mp4'
+    : size === 'portrait' ? '1080x1920_portrait.mp4'
+    : size === 'square' ? '1080x1080_square.mp4'
+    : null;
+
+  const derivedSrc = orientedFile
+    ? item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`)
+    : item.filePath;
+
+  return <ClipViewerInner key={`${item.id}-${size}`} item={item} orientedFile={orientedFile} derivedSrc={derivedSrc} />;
 }
 
 function ratioLabel(size: ViewerSize, item: MediaItem): string {
@@ -98,6 +129,8 @@ function ratioLabel(size: ViewerSize, item: MediaItem): string {
       return '/landscape 1920x1080';
     case 'portrait':
       return '/portrait 1080x1920';
+    case 'square':
+      return '/square 1080x1080';
   }
 }
 
@@ -105,6 +138,7 @@ const ratioIcons: Record<ViewerSize, typeof Monitor> = {
   original: Monitor,
   landscape: Monitor,
   portrait: Smartphone,
+  square: Square,
 };
 
 function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect: (s: ViewerSize) => void; item: MediaItem }) {
@@ -133,30 +167,86 @@ function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect:
   );
 }
 
-const clipRatioItems: Array<{ icon: typeof Monitor; label: string; value: ViewerSize }> = [
+const clipOrientationItems: Array<{ icon: typeof Monitor; label: string; value: Orientation }> = [
   { icon: Monitor, label: '16:9', value: 'landscape' },
   { icon: Smartphone, label: '9:16', value: 'portrait' },
+  { icon: Square, label: '1:1', value: 'square' },
 ];
 
-function ClipRatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
+function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrientation }: {
+  active: ViewerSize;
+  onSelect: (s: ViewerSize) => void;
+  renderOrientations: Orientation[];
+  onAddOrientation: (orient: Orientation) => void;
+}) {
+  const rendered = new Set(renderOrientations);
   return (
     <div className="inline-flex gap-0.5 rounded-sm bg-black/60 p-0.5">
-      {clipRatioItems.map(({ icon: Icon, label, value }) => (
-        <button
-          key={value}
-          tabIndex={-1}
-          onClick={() => onSelect(value)}
-          className={cn(
-            'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
-            value === active
-              ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
-              : 'text-white/40 hover:text-white/70 hover:bg-white/5',
-          )}
-        >
-          <Icon className="w-3 h-3" />{label}
-        </button>
-      ))}
+      {clipOrientationItems.map(({ icon: Icon, label, value }) => {
+        const exists = rendered.has(value);
+        return (
+          <button
+            key={value}
+            tabIndex={-1}
+            onClick={() => exists ? onSelect(value) : onAddOrientation(value)}
+            className={cn(
+              'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
+              exists
+                ? value === active
+                  ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                : 'text-white/20 hover:text-white/40',
+            )}
+          >
+            <Icon className="w-3 h-3" />{label}
+            {!exists && <Plus className="w-2 h-2" />}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+const orientationLabels: Record<Orientation, string> = {
+  landscape: '/landscape 1920x1080',
+  portrait: '/portrait 1080x1920',
+  square: '/square 1080x1080',
+};
+
+function AddOrientationDialog({ open, orientation, assetCount, onConfirm, onCancel }: {
+  open: boolean;
+  orientation: Orientation | null;
+  assetCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="bg-zinc-950 border border-primary/30 rounded-lg ring-1 ring-primary/20 shadow-[0_0_30px_rgba(0,255,255,0.08)] p-0 gap-0 max-w-sm [&>button]:hidden">
+        <div className="p-6 space-y-3">
+          <h2 className="font-mono text-sm uppercase tracking-widest text-primary">
+            Add <span className="font-bold">{orientation ? orientationLabels[orientation] : ''}</span>
+          </h2>
+          <p className="font-mono text-xs text-zinc-400">
+            {assetCount} {assetCount === 1 ? 'asset' : 'assets'} will be re-rendered
+          </p>
+        </div>
+        <div className="flex border-t border-primary/20">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3 text-zinc-500 hover:text-zinc-300 font-mono text-[10px] uppercase tracking-widest font-bold transition-colors border-r border-primary/20"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3 text-primary font-mono text-[10px] uppercase tracking-widest font-bold transition-colors hover:shadow-[0_0_12px_rgba(0,255,255,0.15)]"
+          >
+            Confirm
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -344,7 +434,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, focusFileIndex }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, focusFileIndex, renderOrientations, videoAssetCount, onAddOrientation }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -352,8 +442,12 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
   focusFileIndex?: { index: number; seq: number };
+  renderOrientations: Orientation[];
+  videoAssetCount: number;
+  onAddOrientation: (orient: Orientation) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
+  const [pendingAddOrientation, setPendingAddOrientation] = useState<Orientation | null>(null);
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState('.original.json');
@@ -421,7 +515,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setFileContent(null);
   }, [item.id, onFlippedChange]);
 
-  // Handle focusFileIndex: flip to back, load manifest if needed, select file by 1-based index
+  // Handle focusFileIndex
   useEffect(() => {
     if (!focusFileIndex) return;
     pendingFocusRef.current = focusFileIndex.index;
@@ -429,7 +523,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     if (manifest === null) {
       fetchManifest();
     } else {
-      // Manifest already loaded — apply immediately
       const idx = Math.max(0, Math.min(focusFileIndex.index - 1, manifest.length - 1));
       const fileName = manifest[idx].name;
       pendingFocusRef.current = undefined;
@@ -493,6 +586,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           'flip-card-perspective',
           size === 'original' ? 'w-full h-full'
             : size === 'landscape' ? 'aspect-video w-full h-full'
+            : size === 'square' ? 'aspect-square w-full h-full'
             : 'w-full h-full',
         )}
       >
@@ -508,7 +602,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
-                ? <ClipRatioToggle active={size} onSelect={onSizeChange} />
+                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientations={renderOrientations} onAddOrientation={(o) => setPendingAddOrientation(o)} />
                 : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
 
               {/* Center slug */}
@@ -530,17 +624,23 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Content */}
             <div className={cn(
               'flex-1 bg-black flex items-center justify-center min-h-0',
-              size === 'portrait' && 'py-2',
+              (size === 'portrait' || size === 'square') && 'py-2',
             )}>
               {size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
                   {isClip
-                    ? <ClipViewer item={item} />
+                    ? <ClipViewer item={item} size={size} />
+                    : <ImageViewer item={item} size={size} />}
+                </div>
+              ) : size === 'square' ? (
+                <div className="aspect-square h-full max-w-full">
+                  {isClip
+                    ? <ClipViewer item={item} size={size} />
                     : <ImageViewer item={item} size={size} />}
                 </div>
               ) : (
                 isClip
-                  ? <ClipViewer item={item} />
+                  ? <ClipViewer item={item} size={size} />
                   : <ImageViewer item={item} size={size} />
               )}
             </div>
@@ -594,6 +694,16 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           </div>
         </div>
       </div>
+      <AddOrientationDialog
+        open={pendingAddOrientation !== null}
+        orientation={pendingAddOrientation}
+        assetCount={videoAssetCount}
+        onConfirm={() => {
+          if (pendingAddOrientation) onAddOrientation(pendingAddOrientation);
+          setPendingAddOrientation(null);
+        }}
+        onCancel={() => setPendingAddOrientation(null)}
+      />
     </div>
   );
 }

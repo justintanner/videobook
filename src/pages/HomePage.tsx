@@ -27,6 +27,8 @@ import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
+import { useTimeline } from '@/hooks/useTimeline';
+import type { Orientation } from '@/hooks/useTimeline';
 import { useCommands } from '@/hooks/useCommands';
 import { useChatDispatch } from '@/hooks/useChatDispatch';
 import type { Command } from '@/hooks/useCommands';
@@ -113,7 +115,6 @@ export function HomePage() {
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
   const [focusFileTarget, setFocusFileTarget] = useState<{ index: number; seq: number } | undefined>();
-
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -125,6 +126,7 @@ export function HomePage() {
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
   const { commands, refresh: refreshCommands } = useCommands(callTool);
+  const { timeline, fetchTimeline, addOrientation } = useTimeline(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -210,6 +212,28 @@ export function HomePage() {
     setViewerSize('original');
   }, []);
 
+  const renderOrientations = useMemo<Orientation[]>(
+    () => timeline?.render ?? ['landscape'],
+    [timeline],
+  );
+
+  const videoAssetCount = useMemo(
+    () => mediaItems.filter(m => m.type === 'video').length,
+    [mediaItems],
+  );
+
+  const handleAddOrientation = useCallback(async (orient: Orientation) => {
+    if (!projectSlug) return;
+    const ok = await addOrientation(projectSlug, orient);
+    if (!ok) return;
+    // Fire-and-forget render jobs for each video asset
+    const videos = mediaItems.filter(m => m.type === 'video');
+    for (const v of videos) {
+      callTool('render_video', { asset_id: v.id, project_slug: projectSlug, orientation: orient });
+    }
+    sync(projectSlug);
+  }, [projectSlug, addOrientation, mediaItems, callTool, sync]);
+
   const mergedCommands = useMemo(() => {
     const selectedPrefix = activeSelection?.id?.split('-')[0];
     const filtered = commands.filter((cmd) => {
@@ -228,9 +252,10 @@ export function HomePage() {
   useEffect(() => {
     if (!projectSlug) return;
     sync(projectSlug);
+    fetchTimeline(projectSlug);
     const id = setInterval(() => sync(projectSlug), 5_000);
     return () => clearInterval(id);
-  }, [projectSlug, sync]);
+  }, [projectSlug, sync, fetchTimeline]);
 
   const triggerUpload = useCallback(() => {
     fileInputRef.current?.click();
@@ -387,7 +412,7 @@ export function HomePage() {
                   onClose={() => setHistoryItem(null)}
                 />
               ) : activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} focusFileIndex={focusFileTarget} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} focusFileIndex={focusFileTarget} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}
