@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import { useRegisterCommands } from '@/hooks/useRegisterCommands';
+import type { RegisteredCommand } from '@/lib/command-registry';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
@@ -434,14 +436,13 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, focusFileIndex, renderOrientations, videoAssetCount, onAddOrientation }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientations, videoAssetCount, onAddOrientation }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
-  focusFileIndex?: { index: number; seq: number };
   renderOrientations: Orientation[];
   videoAssetCount: number;
   onAddOrientation: (orient: Orientation) => void;
@@ -515,24 +516,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setFileContent(null);
   }, [item.id, onFlippedChange]);
 
-  // Handle focusFileIndex
-  useEffect(() => {
-    if (!focusFileIndex) return;
-    pendingFocusRef.current = focusFileIndex.index;
-    onFlippedChange(true);
-    if (manifest === null) {
-      fetchManifest();
-    } else {
-      const idx = Math.max(0, Math.min(focusFileIndex.index - 1, manifest.length - 1));
-      const fileName = manifest[idx].name;
-      pendingFocusRef.current = undefined;
-      setSelectedFile(fileName);
-      setFileContent(null);
-      fetchFileContent(fileName);
-      document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
-    }
-  }, [focusFileIndex]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Apply pending focus once manifest loads
   useEffect(() => {
     if (pendingFocusRef.current === undefined || !manifest || manifest.length === 0) return;
@@ -552,6 +535,89 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       fetchFileContent('.original.json');
     }
   };
+
+  const viewerCommands: RegisteredCommand[] = [
+    {
+      command: '/original',
+      description: 'Show original uncropped image',
+      category: 'action',
+      icon: 'image',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: () => { onSizeChange('original'); return true; },
+    },
+    {
+      command: '/landscape',
+      description: 'Show landscape crop (1920x1080)',
+      category: 'action',
+      icon: 'monitor',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: () => { onSizeChange('landscape'); return true; },
+    },
+    {
+      command: '/portrait',
+      description: 'Show portrait crop (1080x1920)',
+      category: 'action',
+      icon: 'smartphone',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: () => { onSizeChange('portrait'); return true; },
+    },
+    {
+      command: '/info',
+      description: 'Show asset metadata',
+      category: 'action',
+      icon: 'info',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: () => {
+        if (flipped) {
+          onFlippedChange(false);
+        } else {
+          handleFlipToBack();
+        }
+        return true;
+      },
+    },
+    {
+      command: '/files',
+      description: 'Focus file by position',
+      example: '/files 3',
+      category: 'action',
+      icon: 'file',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [{ name: 'position', type: 'number' as const, required: true, description: '1-based file position' }],
+      handler: ({ args }: { args: Record<string, string> }) => {
+        const position = parseInt(args.position, 10) || 1;
+        pendingFocusRef.current = position;
+        onFlippedChange(true);
+        if (manifest === null) {
+          fetchManifest();
+        } else {
+          const idx = Math.max(0, Math.min(position - 1, manifest.length - 1));
+          const fileName = manifest[idx].name;
+          pendingFocusRef.current = undefined;
+          setSelectedFile(fileName);
+          setFileContent(null);
+          fetchFileContent(fileName);
+          document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
+        }
+        return true;
+      },
+    },
+  ];
+  useRegisterCommands(viewerCommands);
 
   const handleSelectFile = (fileName: string) => {
     setSelectedFile(fileName);

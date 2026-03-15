@@ -6,7 +6,8 @@ import { CommandBadge } from './CommandBadge';
 import { useAnimateType } from '@/hooks/useAnimateType';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import type { AutocompleteItem, ColorScheme } from './AutocompleteDropdown';
-import type { Command } from '@/hooks/useCommands';
+import { useCommandDispatch } from '@/hooks/useCommandDispatch';
+import type { CommandDescriptor } from '@/lib/command-registry';
 import type { UseMcpResult } from 'use-mcp/react';
 
 const stripSlugPrefix = (s: string) => s.replace(/^[a-z]_/, '');
@@ -30,7 +31,7 @@ interface TokenSegment {
   colorScheme?: ColorScheme;
 }
 
-function extractTokens(text: string, commands: Command[], assetSlugs: string[]): ConfirmedToken[] {
+function extractTokens(text: string, commands: CommandDescriptor[], assetSlugs: string[]): ConfirmedToken[] {
   const tokens: ConfirmedToken[] = [];
   const commandSet = new Set(commands.map((s) => s.command));
 
@@ -54,7 +55,7 @@ function extractTokens(text: string, commands: Command[], assetSlugs: string[]):
   return tokens;
 }
 
-function parseTokens(text: string, confirmedTokens: ConfirmedToken[], commands: Command[]): TokenSegment[] {
+function parseTokens(text: string, confirmedTokens: ConfirmedToken[], commands: CommandDescriptor[]): TokenSegment[] {
   if (confirmedTokens.length === 0) return [{ type: 'text', value: text }];
 
   const sorted = [...confirmedTokens].sort((a, b) => a.start - b.start);
@@ -96,26 +97,30 @@ interface ChatInputProps {
   isTransmitting?: boolean;
   disabled?: boolean;
   assetSlugs?: string[];
-  commands?: Command[];
+  commands?: CommandDescriptor[];
   callTool?: UseMcpResult['callTool'];
   projectSlug?: string;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
   {
-    onSend,
+    onSend: onSendProp,
     placeholder = 'make a viral video of a dog on a skateboard',
     className,
     isLoading = false,
     isTransmitting = false,
     disabled = false,
     assetSlugs = [],
-    commands = [],
+    commands: commandsProp = [],
     callTool,
     projectSlug,
   },
   ref
 ) {
+  const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch();
+  const onSend = onSendProp ?? contextDispatch;
+  const commands = commandsProp.length > 0 ? commandsProp : contextCommands;
+
   const [chatInput, setChatInput] = useState('');
   const [dismissed, setDismissed] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);

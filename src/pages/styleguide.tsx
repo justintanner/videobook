@@ -28,7 +28,7 @@ import { MultiPromptEditor } from '@/components/ui/MultiPromptEditor';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
-import type { Command } from '@/hooks/useCommands';
+import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
@@ -1681,7 +1681,7 @@ const mockProjects = [
   { slug: 'q4-video-ads', active: false },
 ];
 
-const mockCommands: Command[] = [
+const mockCommands: CommandDescriptor[] = [
   { command: '/generate', description: 'Generate content from prompt', example: '/generate video of a dog on a skateboard @bg-neon', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
   { command: '/rewrite-prompt', description: 'Optimize a prompt', example: '/rewrite-prompt "make it more cinematic"', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
   { command: '/trim', description: 'Trim video clip', example: '/trim @hero-intro 0:05 0:12', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },

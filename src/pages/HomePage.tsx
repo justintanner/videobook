@@ -29,9 +29,12 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useTimeline } from '@/hooks/useTimeline';
 import type { Orientation } from '@/hooks/useTimeline';
-import { useCommands } from '@/hooks/useCommands';
-import { useChatDispatch } from '@/hooks/useChatDispatch';
-import type { Command } from '@/hooks/useCommands';
+import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
+import { useRegisterCommands } from '@/hooks/useRegisterCommands';
+import { useRegisterProjectCommands } from '@/hooks/useRegisterProjectCommands';
+import { parseCommandArgs } from '@/lib/command-registry';
+import type { RegisteredCommand } from '@/lib/command-registry';
+import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
@@ -46,64 +49,342 @@ function humanizeId(id: string): string {
     .join(' ');
 }
 
-const VIEWER_COMMANDS: Command[] = [
-  {
-    command: '/original',
-    description: 'Show original uncropped image',
-    category: 'action',
-    icon: 'image',
-    size: 'sm',
-    variant: 'default',
-    chevron: 'right',
-    params: [],
-    uiAction: 'set_viewer_original',
-  },
-  {
-    command: '/landscape',
-    description: 'Show landscape crop (1920x1080)',
-    category: 'action',
-    icon: 'monitor',
-    size: 'sm',
-    variant: 'default',
-    chevron: 'right',
-    params: [],
-    uiAction: 'set_viewer_landscape',
-  },
-  {
-    command: '/portrait',
-    description: 'Show portrait crop (1080x1920)',
-    category: 'action',
-    icon: 'smartphone',
-    size: 'sm',
-    variant: 'default',
-    chevron: 'right',
-    params: [],
-    uiAction: 'set_viewer_portrait',
-  },
-  {
-    command: '/info',
-    description: 'Show asset metadata',
-    category: 'action',
-    icon: 'info',
-    size: 'sm',
-    variant: 'default',
-    chevron: 'right',
-    params: [],
-    uiAction: 'toggle_info',
-  },
-  {
-    command: '/files',
-    description: 'Focus file by position',
-    example: '/files 3',
-    category: 'action',
-    icon: 'file',
-    size: 'sm',
-    variant: 'default',
-    chevron: 'right',
-    params: [{ name: 'position', type: 'number', required: true, description: '1-based file position' }],
-    uiAction: 'focus_file',
-  },
-];
+function HomeCommands({
+  callTool,
+  projectSlug,
+  state,
+  triggerUpload,
+  onOpenInbox,
+  onShowHistory,
+  onOpenAsset,
+  onProjectChange,
+}: {
+  callTool: UseMcpResult['callTool'];
+  projectSlug: string | undefined;
+  state: string;
+  triggerUpload: () => void;
+  onOpenInbox: () => void;
+  onShowHistory: (assetId: string) => void;
+  onOpenAsset: (assetId: string) => void;
+  onProjectChange: (slug: string) => void;
+}) {
+  const cmds: RegisteredCommand[] = [
+    {
+      command: '/generate',
+      description: 'Generate content from prompt',
+      example: '/generate video of a dog on a skateboard @bg-neon',
+      category: 'action',
+      icon: 'Zap',
+      size: 'lg',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'prompt', type: 'string', required: true, description: 'The prompt to generate from' },
+        { name: 'model', type: 'string', required: false, description: 'Model to use for generation' },
+      ],
+      handler: async ({ raw }) => {
+        if (!projectSlug) return false;
+        const result = await callTool('chat', { prompt: `/generate ${raw}`.trim(), project_slug: projectSlug });
+        return !result.isError;
+      },
+    },
+    {
+      command: '/trim',
+      description: 'Trim video clip',
+      example: '/trim @hero-intro 0:05 0:12',
+      category: 'action',
+      icon: 'Scissors',
+      size: 'lg',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to trim' },
+        { name: 'start', type: 'string', required: false, description: 'Start timestamp' },
+        { name: 'end', type: 'string', required: false, description: 'End timestamp' },
+      ],
+      handler: async ({ raw }) => {
+        if (!projectSlug) return false;
+        const result = await callTool('chat', { prompt: `/trim ${raw}`.trim(), project_slug: projectSlug });
+        return !result.isError;
+      },
+    },
+    {
+      command: '/trim-audio',
+      description: 'Trim audio clip',
+      example: '/trim-audio @voiceover-main 0:00 0:30',
+      category: 'action',
+      icon: 'Scissors',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to trim' },
+        { name: 'start', type: 'string', required: false, description: 'Start timestamp' },
+        { name: 'end', type: 'string', required: false, description: 'End timestamp' },
+      ],
+      handler: async ({ raw }) => {
+        if (!projectSlug) return false;
+        const result = await callTool('chat', { prompt: `/trim-audio ${raw}`.trim(), project_slug: projectSlug });
+        return !result.isError;
+      },
+    },
+    {
+      command: '/final',
+      description: 'Finalize and export',
+      example: '/final',
+      category: 'action',
+      icon: 'Clapperboard',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: async ({ raw }) => {
+        if (!projectSlug) return false;
+        const result = await callTool('chat', { prompt: `/final ${raw}`.trim(), project_slug: projectSlug });
+        return !result.isError;
+      },
+    },
+    {
+      command: '/download',
+      description: 'Download video from URL',
+      example: '/download https://youtube.com/watch?v=abc123',
+      category: 'action',
+      icon: 'Download',
+      size: 'lg',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'url', type: 'string', required: true, description: 'Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)' },
+        { name: 'start_time', type: 'string', required: false, description: "Start time (e.g. '30', '1:30', '2m20s')" },
+        { name: 'end_time', type: 'string', required: false, description: "End time (e.g. '60', '2:00', '3m')" },
+        { name: 'full', type: 'boolean', required: false, description: 'Download entire video (no 3-min cap)' },
+      ],
+      handler: async ({ raw }) => {
+        const args = parseCommandArgs(raw, [
+          { name: 'url', type: 'string', required: true, description: '' },
+          { name: 'start_time', type: 'string', required: false, description: '' },
+          { name: 'end_time', type: 'string', required: false, description: '' },
+          { name: 'full', type: 'boolean', required: false, description: '' },
+        ]);
+        if (projectSlug) args.project_slug = projectSlug;
+        const result = await callTool('download_video_file', args);
+        return !result.isError;
+      },
+    },
+    {
+      command: '/upload',
+      description: 'Upload a file',
+      example: '/upload',
+      category: 'action',
+      icon: 'Upload',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [],
+      handler: () => { triggerUpload(); return true; },
+    },
+    {
+      command: '/inbox',
+      description: 'View generations inbox',
+      example: '/inbox',
+      category: 'action',
+      icon: 'Mailbox',
+      size: 'default',
+      variant: 'default',
+      chevron: 'down',
+      params: [],
+      handler: () => { onOpenInbox(); return true; },
+    },
+    {
+      command: '/copy-name',
+      description: 'Copy asset name',
+      example: '/copy-name @hero-intro',
+      category: 'context_menu',
+      icon: 'ClipboardCopy',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset whose name to copy' },
+      ],
+      handler: ({ raw }) => { navigator.clipboard.writeText(raw); return true; },
+    },
+    {
+      command: '/show-folder',
+      description: 'Show asset folder',
+      example: '/show-folder @product-shot',
+      category: 'context_menu',
+      icon: 'FolderOpen',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to open folder for' },
+      ],
+      handler: async ({ args }) => {
+        const toolArgs: Record<string, string> = { asset_id: args.asset_id };
+        if (projectSlug) toolArgs.project_slug = projectSlug;
+        const result = await callTool('show_folder', toolArgs);
+        return !result.isError;
+      },
+    },
+    {
+      command: '/duplicate',
+      description: 'Duplicate an asset',
+      example: '/duplicate @hero-intro hero-intro-v2',
+      category: 'context_menu',
+      icon: 'Copy',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to duplicate' },
+        { name: 'new_name', type: 'string', required: false, description: 'Optional name for the copy' },
+      ],
+      handler: async ({ args }) => {
+        const toolArgs: Record<string, string> = { asset_id: args.asset_id };
+        if (args.new_name) toolArgs.new_name = args.new_name;
+        if (projectSlug) toolArgs.project_slug = projectSlug;
+        const result = await callTool('duplicate_asset', toolArgs);
+        return !result.isError;
+      },
+    },
+    {
+      command: '/history',
+      description: 'View asset version history',
+      example: '/history @hero-intro',
+      category: 'context_menu',
+      icon: 'History',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to view history for' },
+      ],
+      handler: ({ args }) => { onShowHistory(args.asset_id); return true; },
+    },
+    {
+      command: '/open',
+      description: 'Open asset in viewer',
+      example: '/open @hero-intro',
+      category: 'context_menu',
+      icon: 'Eye',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to open' },
+      ],
+      handler: ({ args }) => { onOpenAsset(args.asset_id); return true; },
+    },
+    {
+      command: '/delete',
+      description: 'Delete an asset',
+      example: '/delete @outro-clip',
+      category: 'context_menu',
+      icon: 'Trash2',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to delete' },
+      ],
+      handler: async ({ args }) => {
+        const toolArgs: Record<string, string> = { asset_id: args.asset_id };
+        if (projectSlug) toolArgs.project_slug = projectSlug;
+        const result = await callTool('delete_asset', toolArgs);
+        return !result.isError;
+      },
+    },
+    {
+      command: '/rename',
+      description: 'Rename an asset',
+      example: '/rename @product-shot product-hero',
+      category: 'context_menu',
+      icon: 'Pencil',
+      size: 'default',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to rename' },
+        { name: 'new_name', type: 'string', required: true, description: 'New name for the asset' },
+      ],
+      handler: async ({ args }) => {
+        const toolArgs: Record<string, string> = { asset_id: args.asset_id, new_name: args.new_name };
+        if (projectSlug) toolArgs.project_slug = projectSlug;
+        const result = await callTool('rename_asset', toolArgs);
+        return !result.isError;
+      },
+    },
+  ];
+
+  useRegisterCommands(cmds);
+  useRegisterProjectCommands(callTool, state, onProjectChange);
+  return null;
+}
+
+function PrefixCommands({
+  prefix,
+  callTool,
+  projectSlug,
+}: {
+  prefix: string;
+  callTool: UseMcpResult['callTool'];
+  projectSlug: string;
+}) {
+  const cmds: RegisteredCommand[] = [];
+
+  if (['vid', 'img'].includes(prefix)) {
+    cmds.push({
+      command: '/rewrite-prompt',
+      description: 'Optimize a prompt',
+      example: '/rewrite-prompt "make it more cinematic"',
+      category: 'action',
+      icon: 'Sparkles',
+      size: 'sm',
+      variant: 'default',
+      chevron: 'right',
+      params: [
+        { name: 'prompt', type: 'string', required: true, description: 'The prompt to rewrite' },
+      ],
+      handler: async ({ raw }) => {
+        const args = parseCommandArgs(raw, [
+          { name: 'prompt', type: 'string', required: true, description: '' },
+        ]);
+        args.project_slug = projectSlug;
+        const result = await callTool('rewrite_prompt', args);
+        return !result.isError;
+      },
+    });
+  }
+
+  if (['vid', 'aud'].includes(prefix)) {
+    cmds.push({
+      command: '/isolate-vocals',
+      description: 'Isolate vocals from audio',
+      example: '/isolate-vocals @voiceover-main',
+      category: 'action',
+      icon: 'Mic',
+      size: 'default',
+      variant: 'violet',
+      chevron: 'right',
+      params: [
+        { name: 'asset_id', type: 'string', required: true, description: 'Asset to isolate vocals from' },
+      ],
+      handler: async ({ raw }) => {
+        const args = parseCommandArgs(raw, [
+          { name: 'asset_id', type: 'string', required: true, description: '' },
+        ]);
+        args.project_slug = projectSlug;
+        const result = await callTool('isolate_vocals', args);
+        return !result.isError;
+      },
+    });
+  }
+
+  useRegisterCommands(cmds);
+  return null;
+}
 
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -114,7 +395,6 @@ export function HomePage() {
   const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
-  const [focusFileTarget, setFocusFileTarget] = useState<{ index: number; seq: number } | undefined>();
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -125,7 +405,6 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { commands, refresh: refreshCommands } = useCommands(callTool);
   const { timeline, fetchTimeline, addOrientation } = useTimeline(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
@@ -135,11 +414,6 @@ export function HomePage() {
     }
     prevInboxOpenRef.current = inboxOpen;
   }, [inboxOpen]);
-
-  // Refresh commands when MCP becomes ready
-  useEffect(() => {
-    if (state === 'ready') refreshCommands();
-  }, [state, refreshCommands]);
 
   // Refresh assets after each sync or sort change
   useEffect(() => {
@@ -234,19 +508,7 @@ export function HomePage() {
     sync(projectSlug);
   }, [projectSlug, addOrientation, mediaItems, callTool, sync]);
 
-  const mergedCommands = useMemo(() => {
-    const selectedPrefix = activeSelection?.id?.split('-')[0];
-    const filtered = commands.filter((cmd) => {
-      if (!cmd.visibleWhen) return true;
-      if (cmd.visibleWhen.assetPrefix) {
-        if (!selectedPrefix) return false;
-        return cmd.visibleWhen.assetPrefix.includes(selectedPrefix);
-      }
-      return true;
-    });
-    if (activeSelection) return [...filtered, ...VIEWER_COMMANDS];
-    return filtered;
-  }, [commands, activeSelection]);
+  const selectedPrefix = activeSelection?.id?.split('-')[0] ?? null;
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -294,25 +556,6 @@ export function HomePage() {
     if (item) handleSelectItem(item);
   }, [mediaItems, handleSelectItem]);
 
-  const focusFileSeqRef = useRef(0);
-  const handleFocusFile = useCallback((position: number) => {
-    focusFileSeqRef.current += 1;
-    setFocusFileTarget({ index: position, seq: focusFileSeqRef.current });
-  }, []);
-
-  const { dispatch } = useChatDispatch(mergedCommands, {
-    onOpenInbox: () => setInboxOpen(true),
-    onUpload: triggerUpload,
-    onShowHistory: handleShowHistory,
-    onOpenAsset: handleOpenAsset,
-    onSwitchProject: handleProjectChange,
-    onSetViewerSize: (s) => setViewerSize(s as ViewerSize),
-    onToggleInfo: () => setViewerFlipped(f => !f),
-    onFocusFile: handleFocusFile,
-    callTool,
-    projectSlug,
-  });
-
   const handleAnimateCommand = useCallback((text: string) => {
     chatInputRef.current?.animateAndSend(text);
   }, []);
@@ -321,168 +564,191 @@ export function HomePage() {
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
-  return (
-    <div className="w-screen h-screen bg-background overflow-hidden">
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const files = e.target.files;
-          if (files && files.length > 0) {
-            handleDrop(Array.from(files));
-          }
-          e.target.value = '';
-        }}
-      />
-      <DropzoneOverlay isDragging={isDragging} />
-      <InboxDrawer
-        open={inboxOpen}
-        onClose={() => setInboxOpen(false)}
-        videos={unreviewedClips}
-        pendingVideos={pendingClips}
-        onApprove={handleApprove}
-        onReject={handleReject}
-      />
-      <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HomeHeaderBar
-          pulseKey={syncCount}
-          projectSlug={projectSlug}
-          callTool={callTool}
-          onProjectChange={handleProjectChange}
-          inboxState={inboxState}
-          generatingCount={pendingClips.length}
-          readyCount={unreviewedClips.length}
-          onInboxClick={() => setInboxOpen(true)}
-        />
+  const chatFallback = useCallback(async (input: string) => {
+    if (!projectSlug) return false;
+    const result = await callTool('chat', { prompt: input, project_slug: projectSlug });
+    return !result.isError;
+  }, [callTool, projectSlug]);
 
-        <div className="flex flex-row overflow-hidden">
-          {/* Left Sidebar — Assets */}
-          <CollapsibleSidebar
-            side="left"
-            collapsed={leftCollapsed}
-            onToggle={() => setLeftCollapsed(c => !c)}
-            expandedWidth="240px"
-            collapsedWidth="40px"
-            padding="px-2 pt-2 pb-2"
-            gap="gap-0"
-          >
-            <SidebarHeader
-              icon={<Grid3x3 className="w-3.5 h-3.5" />}
-              title="Assets"
+  return (
+    <CommandRegistryProvider chatFallback={chatFallback}>
+      <HomeCommands
+        callTool={callTool}
+        projectSlug={projectSlug}
+        state={state}
+        triggerUpload={triggerUpload}
+        onOpenInbox={() => setInboxOpen(true)}
+        onShowHistory={handleShowHistory}
+        onOpenAsset={handleOpenAsset}
+        onProjectChange={handleProjectChange}
+      />
+      {selectedPrefix && (
+        <PrefixCommands
+          prefix={selectedPrefix}
+          callTool={callTool}
+          projectSlug={projectSlug ?? ''}
+        />
+      )}
+      <div className="w-screen h-screen bg-background overflow-hidden">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+              handleDrop(Array.from(files));
+            }
+            e.target.value = '';
+          }}
+        />
+        <DropzoneOverlay isDragging={isDragging} />
+        <InboxDrawer
+          open={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          videos={unreviewedClips}
+          pendingVideos={pendingClips}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
+        <div className="grid grid-rows-[48px_1fr_auto] h-full">
+          <HomeHeaderBar
+            pulseKey={syncCount}
+            projectSlug={projectSlug}
+            callTool={callTool}
+            onProjectChange={handleProjectChange}
+            inboxState={inboxState}
+            generatingCount={pendingClips.length}
+            readyCount={unreviewedClips.length}
+            onInboxClick={() => setInboxOpen(true)}
+          />
+
+          <div className="flex flex-row overflow-hidden">
+            {/* Left Sidebar — Assets */}
+            <CollapsibleSidebar
+              side="left"
               collapsed={leftCollapsed}
               onToggle={() => setLeftCollapsed(c => !c)}
-              side="left"
-              sortOrder={sortOrder}
-              onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
-            />
-            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              {assets.map((item) => {
-                const menu = (
-                  <AssetMenu
-                    slug={item.slug}
-                    onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-                    onShowHistory={() => setHistoryItem(item)}
-                    onAnimateCommand={handleAnimateCommand}
-                    MenuItem={ContextMenuItem}
-                  />
-                );
-                return (
-                  <div key={item.id} className="w-full">
-                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                  </div>
-                );
-              })}
-              <UploadSlot onClick={triggerUpload} />
-            </div>
-          </CollapsibleSidebar>
-
-          {/* Center Stage */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 p-4 overflow-hidden flex flex-col">
-              {historyItem ? (
-                <GitHistoryPanel
-                  item={historyItem}
-                  projectSlug={projectSlug ?? ''}
-                  callTool={callTool}
-                  onClose={() => setHistoryItem(null)}
-                />
-              ) : activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} focusFileIndex={focusFileTarget} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} />
-              ) : (
-                <IdleScreen label="WAITING FOR INPUT" fillParent />
-              )}
-            </div>
-            <div className="shrink-0 px-4 pb-3 pt-2">
-              <ChatInput
-                ref={chatInputRef}
-                onSend={dispatch}
-                assetSlugs={assetSlugs}
-                commands={mergedCommands}
-                callTool={callTool}
-                projectSlug={projectSlug}
+              expandedWidth="240px"
+              collapsedWidth="40px"
+              padding="px-2 pt-2 pb-2"
+              gap="gap-0"
+            >
+              <SidebarHeader
+                icon={<Grid3x3 className="w-3.5 h-3.5" />}
+                title="Assets"
+                collapsed={leftCollapsed}
+                onToggle={() => setLeftCollapsed(c => !c)}
+                side="left"
+                sortOrder={sortOrder}
+                onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
               />
-            </div>
-          </div>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                {assets.map((item) => {
+                  const menu = (
+                    <AssetMenu
+                      slug={item.slug}
+                      onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
+                      onShowHistory={() => setHistoryItem(item)}
+                      onAnimateCommand={handleAnimateCommand}
+                      MenuItem={ContextMenuItem}
+                    />
+                  );
+                  return (
+                    <div key={item.id} className="w-full">
+                      {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    </div>
+                  );
+                })}
+                <UploadSlot onClick={triggerUpload} />
+              </div>
+            </CollapsibleSidebar>
 
-          {/* Right Sidebar — Clips */}
-          <CollapsibleSidebar
-            side="right"
-            collapsed={rightCollapsed}
-            onToggle={() => setRightCollapsed(c => !c)}
-            expandedWidth="240px"
-            collapsedWidth="40px"
-            padding="px-2 pt-2 pb-2"
-            gap="gap-0"
-          >
-            <SidebarHeader
-              icon={<Grid3x3 className="w-3.5 h-3.5" />}
-              title="Clips"
+            {/* Center Stage */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 p-4 overflow-hidden flex flex-col">
+                {historyItem ? (
+                  <GitHistoryPanel
+                    item={historyItem}
+                    projectSlug={projectSlug ?? ''}
+                    callTool={callTool}
+                    onClose={() => setHistoryItem(null)}
+                  />
+                ) : activeSelection ? (
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} />
+                ) : (
+                  <IdleScreen label="WAITING FOR INPUT" fillParent />
+                )}
+              </div>
+              <div className="shrink-0 px-4 pb-3 pt-2">
+                <ChatInput
+                  ref={chatInputRef}
+                  assetSlugs={assetSlugs}
+                  callTool={callTool}
+                  projectSlug={projectSlug}
+                />
+              </div>
+            </div>
+
+            {/* Right Sidebar — Clips */}
+            <CollapsibleSidebar
+              side="right"
               collapsed={rightCollapsed}
               onToggle={() => setRightCollapsed(c => !c)}
-              side="right"
-              sortOrder={sortOrder}
-              onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
-            />
-            <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
-              {clips.map((item) => {
-                const menu = (
-                  <AssetMenu
-                    slug={item.slug}
-                    onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-                    onShowHistory={() => setHistoryItem(item)}
-                    onAnimateCommand={handleAnimateCommand}
-                    MenuItem={ContextMenuItem}
-                  />
-                );
-                return (
-                  <div key={item.id} className="w-full">
-                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                  </div>
-                );
-              })}
-              <UploadSlot onClick={triggerUpload} />
-            </div>
-          </CollapsibleSidebar>
-        </div>
-
-        {/* Timeline */}
-        <div className="border-t border-border bg-card/30">
-          <div className="relative h-28 flex gap-0.5">
-            <TimelineSlot label="@s01" flex={3} />
-            <TimelineSlot label="@s02" flex={2} />
-            <TimelineSlot label="@s03" flex={3} />
-            <TimelineSlot label="@s04" flex={2} />
-            <TimelineSlot label="@s05" flex={2} />
+              expandedWidth="240px"
+              collapsedWidth="40px"
+              padding="px-2 pt-2 pb-2"
+              gap="gap-0"
+            >
+              <SidebarHeader
+                icon={<Grid3x3 className="w-3.5 h-3.5" />}
+                title="Clips"
+                collapsed={rightCollapsed}
+                onToggle={() => setRightCollapsed(c => !c)}
+                side="right"
+                sortOrder={sortOrder}
+                onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
+              />
+              <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
+                {clips.map((item) => {
+                  const menu = (
+                    <AssetMenu
+                      slug={item.slug}
+                      onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
+                      onShowHistory={() => setHistoryItem(item)}
+                      onAnimateCommand={handleAnimateCommand}
+                      MenuItem={ContextMenuItem}
+                    />
+                  );
+                  return (
+                    <div key={item.id} className="w-full">
+                      {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    </div>
+                  );
+                })}
+                <UploadSlot onClick={triggerUpload} />
+              </div>
+            </CollapsibleSidebar>
           </div>
-          <div className="relative h-12 border-t border-border/30 bg-card/20" />
+
+          {/* Timeline */}
+          <div className="border-t border-border bg-card/30">
+            <div className="relative h-28 flex gap-0.5">
+              <TimelineSlot label="@s01" flex={3} />
+              <TimelineSlot label="@s02" flex={2} />
+              <TimelineSlot label="@s03" flex={3} />
+              <TimelineSlot label="@s04" flex={2} />
+              <TimelineSlot label="@s05" flex={2} />
+            </div>
+            <div className="relative h-12 border-t border-border/30 bg-card/20" />
+          </div>
         </div>
       </div>
-    </div>
+    </CommandRegistryProvider>
   );
 }
