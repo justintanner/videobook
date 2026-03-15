@@ -1,7 +1,10 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
+import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -9,7 +12,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "transcribe";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "transcribe" | "isolate_vocals";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -39,6 +42,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeGptImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "transcribe") {
         await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
+      } else if (taskType === "isolate_vocals") {
+        await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
       }
 
       await deletePendingTask(fs, assetId, projectSlug);
@@ -240,4 +245,70 @@ async function completeTranscribe(
       osgPosition: "top-right",
     });
   }
+}
+
+async function completeIsolateVocals(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+): Promise<void> {
+  const vocalsUrl = resultUrls[0];
+  if (!vocalsUrl) throw new Error("No vocals URL in result");
+
+  const response = await fetch(vocalsUrl);
+  if (!response.ok) throw new Error(`Failed to download vocals: ${response.status} ${response.statusText}`);
+
+  let vocalsBuffer = Buffer.from(await response.arrayBuffer());
+
+  // Trim back to original duration if audio was padded before upload
+  const originalDuration = meta.originalDuration as number | undefined;
+  if (originalDuration !== undefined) {
+    const tmpIn = join(tmpdir(), `isolate-trim-in-${Date.now()}.mp3`);
+    const tmpOut = join(tmpdir(), `isolate-trim-out-${Date.now()}.mp3`);
+    try {
+      await writeFile(tmpIn, vocalsBuffer);
+      await runFfmpeg(["-y", "-i", tmpIn, "-t", String(originalDuration), tmpOut]);
+      vocalsBuffer = await readFsFile(tmpOut);
+    } finally {
+      await unlink(tmpIn).catch(() => {});
+      await unlink(tmpOut).catch(() => {});
+    }
+  }
+
+  const isAudioAsset = meta.isAudioAsset as boolean;
+
+  if (isAudioAsset) {
+    // Audio assets: write mix.mp3 and .mix.json
+    await fs.writeFile(assetId, "mix.mp3", vocalsBuffer, projectSlug);
+    const mixSettings = { volume: 100, fadeIn: 0, fadeOut: 0 };
+    await fs.writeFile(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2), projectSlug);
+  } else {
+    // Video assets: write audio_vocals.mp3
+    await fs.writeFile(assetId, "audio_vocals.mp3", vocalsBuffer, projectSlug);
+
+    // Optionally write background audio if a second URL exists
+    if (resultUrls[1]) {
+      const bgResponse = await fetch(resultUrls[1]);
+      if (bgResponse.ok) {
+        let bgBuffer = Buffer.from(await bgResponse.arrayBuffer());
+        if (originalDuration !== undefined) {
+          const tmpBgIn = join(tmpdir(), `isolate-bg-in-${Date.now()}.mp3`);
+          const tmpBgOut = join(tmpdir(), `isolate-bg-out-${Date.now()}.mp3`);
+          try {
+            await writeFile(tmpBgIn, bgBuffer);
+            await runFfmpeg(["-y", "-i", tmpBgIn, "-t", String(originalDuration), tmpBgOut]);
+            bgBuffer = await readFsFile(tmpBgOut);
+          } finally {
+            await unlink(tmpBgIn).catch(() => {});
+            await unlink(tmpBgOut).catch(() => {});
+          }
+        }
+        await fs.writeFile(assetId, "audio_background.mp3", bgBuffer, projectSlug);
+      }
+    }
+  }
+
+  await fs.commitOperation("isolate_vocals", assetId, { mode: "cloud" }, projectSlug);
 }

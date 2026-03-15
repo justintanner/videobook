@@ -17,6 +17,7 @@ import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
 import { registerProcessImageJob } from "./process-image.js";
+import { registerIsolateVocalsJob } from "./isolate-vocals.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -37,4 +38,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerAnalyzeVideoJob(fs);
   registerRenderTimelineJob(fs);
   registerProcessImageJob(fs);
+  registerIsolateVocalsJob(fs);
 }

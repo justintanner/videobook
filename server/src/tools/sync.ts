@@ -98,7 +98,11 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       if (isLockActive) {
         status = (lockData.state as string) ?? "loading";
       } else if (pendingTask) {
-        status = pendingTask.taskType === "transcribe" ? "transcribing" : "generating";
+        status = pendingTask.taskType === "transcribe"
+          ? "transcribing"
+          : pendingTask.taskType === "isolate_vocals"
+            ? "isolating"
+            : "generating";
       } else if (mediaFile) {
         if (!whitelisted) {
           status = "unreviewed";
