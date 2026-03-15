@@ -194,8 +194,17 @@ export function HomePage() {
   }, []);
 
   const mergedCommands = useMemo(() => {
-    if (activeSelection) return [...commands, ...VIEWER_COMMANDS];
-    return commands;
+    const selectedPrefix = activeSelection?.id?.split('-')[0];
+    const filtered = commands.filter((cmd) => {
+      if (!cmd.visibleWhen) return true;
+      if (cmd.visibleWhen.assetPrefix) {
+        if (!selectedPrefix) return false;
+        return cmd.visibleWhen.assetPrefix.includes(selectedPrefix);
+      }
+      return true;
+    });
+    if (activeSelection) return [...filtered, ...VIEWER_COMMANDS];
+    return filtered;
   }, [commands, activeSelection]);
 
   // Sync on mount + poll every 5s while page is active

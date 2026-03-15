@@ -13,6 +13,10 @@ interface McpToolBinding {
   autoInject?: string[];
 }
 
+interface VisibleWhen {
+  assetPrefix?: string[];
+}
+
 interface Command {
   command: string;
   description: string;
@@ -25,6 +29,7 @@ interface Command {
   params: CommandParam[];
   mcpTool?: McpToolBinding;
   uiAction?: string;
+  visibleWhen?: VisibleWhen;
 }
 
 const HARDCODED_COMMANDS: Command[] = [
@@ -54,6 +59,8 @@ const HARDCODED_COMMANDS: Command[] = [
     params: [
       { name: "prompt", type: "string", required: true, description: "The prompt to rewrite" },
     ],
+    mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
+    visibleWhen: { assetPrefix: ["vid", "img"] },
   },
   {
     command: "/trim",
@@ -97,17 +104,8 @@ const HARDCODED_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to isolate vocals from" },
     ],
-  },
-  {
-    command: "/apply",
-    description: "Apply current action",
-    example: "/apply",
-    category: "action",
-    icon: "Check",
-    size: "lg",
-    variant: "default",
-    chevron: "right",
-    params: [],
+    mcpTool: { tool: "isolate_vocals", autoInject: ["project_slug"] },
+    visibleWhen: { assetPrefix: ["vid", "aud"] },
   },
   {
     command: "/final",

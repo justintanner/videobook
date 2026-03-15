@@ -25,6 +25,9 @@ interface Command {
   params: CommandParam[];
   mcpTool?: McpToolBinding;
   uiAction?: string;
+  visibleWhen?: {
+    assetPrefix?: string[];
+  };
 }
 
 interface UseCommandsResult {
