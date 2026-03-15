@@ -219,14 +219,15 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
+  flipped: boolean;
+  onFlippedChange: (f: boolean) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
-  const [flipped, setFlipped] = useState(false);
   const [metadata, setMetadata] = useState<string | null>(null);
   const [metaLoading, setMetaLoading] = useState(false);
 
@@ -248,12 +249,12 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
   }, [projectSlug, item.id]);
 
   useEffect(() => {
-    setFlipped(false);
+    onFlippedChange(false);
     setMetadata(null);
-  }, [item.id]);
+  }, [item.id, onFlippedChange]);
 
   const handleFlipToBack = () => {
-    setFlipped(true);
+    onFlippedChange(true);
     if (metadata === null) fetchMetadata();
   };
 
@@ -290,6 +291,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
               {/* Info button */}
               <button
                 onClick={handleFlipToBack}
+                title="/info"
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
                 <Info className="w-4 h-4 stroke-[2.5]" />
@@ -328,7 +330,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
 
               {/* Flip back */}
               <button
-                onClick={() => setFlipped(false)}
+                onClick={() => onFlippedChange(false)}
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
                 <RotateCcw className="w-4 h-4 stroke-[2.5]" />

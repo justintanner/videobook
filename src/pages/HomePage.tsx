@@ -78,6 +78,17 @@ const VIEWER_COMMANDS: Command[] = [
     params: [],
     uiAction: 'set_viewer_portrait',
   },
+  {
+    command: '/info',
+    description: 'Show asset metadata',
+    category: 'action',
+    icon: 'info',
+    size: 'sm',
+    variant: 'default',
+    chevron: 'right',
+    params: [],
+    uiAction: 'toggle_info',
+  },
 ];
 
 export function HomePage() {
@@ -88,6 +99,7 @@ export function HomePage() {
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
+  const [viewerFlipped, setViewerFlipped] = useState(false);
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,9 +194,9 @@ export function HomePage() {
   }, []);
 
   const mergedCommands = useMemo(() => {
-    if (activeSelection?.type === 'image') return [...commands, ...VIEWER_COMMANDS];
+    if (activeSelection) return [...commands, ...VIEWER_COMMANDS];
     return commands;
-  }, [commands, activeSelection?.type]);
+  }, [commands, activeSelection]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -238,6 +250,7 @@ export function HomePage() {
     onOpenAsset: handleOpenAsset,
     onSwitchProject: handleProjectChange,
     onSetViewerSize: (s) => setViewerSize(s as ViewerSize),
+    onToggleInfo: () => setViewerFlipped(f => !f),
     callTool,
     projectSlug,
   });
@@ -341,7 +354,7 @@ export function HomePage() {
                   onClose={() => setHistoryItem(null)}
                 />
               ) : activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}
