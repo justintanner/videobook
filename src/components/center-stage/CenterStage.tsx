@@ -443,6 +443,12 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       e.preventDefault();
       const prev = (idx - 1 + manifest.length) % manifest.length;
       handleSelectFile(manifest[prev].name);
+    } else if (e.key === 'Tab') {
+      const input = document.querySelector<HTMLElement>('[data-testid="input-chat"]');
+      if (input) {
+        e.preventDefault();
+        input.focus();
+      }
     }
   }, [manifest, selectedFile, handleSelectFile]);
 
@@ -530,6 +536,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Two-pane body */}
             <div className="flex-1 flex min-h-0">
               <div
+                data-tabstop="files"
                 tabIndex={0}
                 onKeyDown={handleFileKeyDown}
                 className="w-48 shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"

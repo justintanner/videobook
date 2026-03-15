@@ -298,6 +298,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         e.preventDefault();
         selectSuggestion(autocompleteItems[selectedIndex]);
       }
+    } else if (e.key === 'Tab') {
+      const files = document.querySelector<HTMLElement>('[data-tabstop="files"]');
+      if (files) {
+        e.preventDefault();
+        files.focus();
+      }
     } else if (e.key === 'Enter') {
       handleSend();
     } else if (
