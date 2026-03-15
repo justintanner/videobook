@@ -219,6 +219,20 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "show_history",
   },
   {
+    command: "/open",
+    description: "Open asset in viewer",
+    example: "/open @hero-intro",
+    category: "context_menu",
+    icon: "Eye",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to open" },
+    ],
+    uiAction: "open_asset",
+  },
+  {
     command: "/delete",
     description: "Delete an asset",
     example: "/delete @outro-clip",

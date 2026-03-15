@@ -177,10 +177,16 @@ export function HomePage() {
     if (item) setHistoryItem(item);
   }, [mediaItems]);
 
+  const handleOpenAsset = useCallback((assetId: string) => {
+    const item = mediaItems.find(m => m.id === assetId);
+    if (item) setSelectedItem(item);
+  }, [mediaItems]);
+
   const { dispatch } = useChatDispatch(commands, {
     onOpenInbox: () => setInboxOpen(true),
     onUpload: triggerUpload,
     onShowHistory: handleShowHistory,
+    onOpenAsset: handleOpenAsset,
     onSwitchProject: handleProjectChange,
     callTool,
     projectSlug,
