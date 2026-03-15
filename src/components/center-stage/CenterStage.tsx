@@ -19,7 +19,7 @@ function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc
     <img
       src={src}
       alt={alt}
-      className="w-full h-full object-cover"
+      className="w-full h-full object-contain"
       draggable={false}
       onError={() => {
         if (!fell.current) {
