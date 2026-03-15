@@ -6,6 +6,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
@@ -169,11 +170,11 @@ function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect:
   );
 }
 
-const clipOrientationItems: Array<{ icon: typeof Monitor; label: string; value: Orientation }> = [
-  { icon: Monitor, label: '16:9', value: 'landscape' },
-  { icon: Smartphone, label: '9:16', value: 'portrait' },
-  { icon: Square, label: '1:1', value: 'square' },
-];
+const orientationLabels: Record<Orientation, string> = {
+  landscape: '/landscape 1920x1080',
+  portrait: '/portrait 1080x1920',
+  square: '/square 1080x1080',
+};
 
 function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrientation }: {
   active: ViewerSize;
@@ -182,38 +183,48 @@ function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrie
   onAddOrientation: (orient: Orientation) => void;
 }) {
   const rendered = new Set(renderOrientations);
+  const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
+  const existing = allOrientations.filter(o => rendered.has(o));
+  const addable = allOrientations.filter(o => !rendered.has(o));
+
+  const activeLabel = active === 'original'
+    ? '/original'
+    : orientationLabels[active as Orientation] ?? active;
+
   return (
-    <div className="inline-flex gap-0.5 rounded-sm bg-black/60 p-0.5">
-      {clipOrientationItems.map(({ icon: Icon, label, value }) => {
-        const exists = rendered.has(value);
-        return (
-          <button
-            key={value}
-            tabIndex={-1}
-            onClick={() => exists ? onSelect(value) : onAddOrientation(value)}
-            className={cn(
-              'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
-              exists
-                ? value === active
-                  ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-                : 'text-white/20 hover:text-white/40',
-            )}
-          >
-            <Icon className="w-3 h-3" />{label}
-            {!exists && <Plus className="w-2 h-2" />}
-          </button>
-        );
-      })}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
+          {activeLabel}
+          <ChevronDown className="w-3 h-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {existing.map((orient) => {
+          const Icon = ratioIcons[orient];
+          return (
+            <DropdownMenuItem key={orient} onClick={() => onSelect(orient)} className="py-2.5">
+              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{orientationLabels[orient]}</span>
+              <span className="ml-2 opacity-80 flex items-center"><Icon className="h-3 w-3" /></span>
+            </DropdownMenuItem>
+          );
+        })}
+        {addable.length > 0 && existing.length > 0 && <DropdownMenuSeparator />}
+        {addable.map((orient) => {
+          const Icon = ratioIcons[orient];
+          return (
+            <DropdownMenuItem key={orient} onClick={() => onAddOrientation(orient)} className="py-2.5">
+              <Plus className="w-3 h-3 text-primary/50" />
+              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1 text-muted-foreground/50">{orientationLabels[orient]}</span>
+              <span className="ml-2 opacity-40 flex items-center"><Icon className="h-3 w-3" /></span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
-
-const orientationLabels: Record<Orientation, string> = {
-  landscape: '/landscape 1920x1080',
-  portrait: '/portrait 1080x1920',
-  square: '/square 1080x1080',
-};
 
 function AddOrientationDialog({ open, orientation, assetCount, onConfirm, onCancel }: {
   open: boolean;
