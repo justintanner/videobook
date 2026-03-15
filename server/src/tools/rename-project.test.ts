@@ -42,7 +42,7 @@ describe("rename_project tool", () => {
     });
 
     // Old slug should fail
-    const oldResult = await client.callTool({
+    await client.callTool({
       name: "list_assets",
       arguments: { project_slug: "original" },
     });

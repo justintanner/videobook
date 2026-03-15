@@ -20,7 +20,7 @@ interface Command {
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[] };
   uiAction?: string;
-  visibleWhen?: { assetPrefix?: string[]; viewer?: boolean };
+  onMount?: string[];
 }
 
 const HARDCODED_COMMANDS: Command[] = [
@@ -232,7 +232,6 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "prompt", type: "string", required: true, description: "The prompt to rewrite" },
     ],
     mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
-    visibleWhen: { assetPrefix: ["vid", "img"] },
   },
   {
     command: "/isolate-vocals",
@@ -247,7 +246,6 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to isolate vocals from" },
     ],
     mcpTool: { tool: "isolate_vocals", autoInject: ["project_slug"] },
-    visibleWhen: { assetPrefix: ["vid", "aud"] },
   },
   {
     command: "/original",
@@ -259,7 +257,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_original",
-    visibleWhen: { viewer: true },
+    onMount: ["viewer"],
   },
   {
     command: "/landscape",
@@ -271,7 +269,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_landscape",
-    visibleWhen: { viewer: true },
+    onMount: ["viewer"],
   },
   {
     command: "/portrait",
@@ -283,7 +281,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_portrait",
-    visibleWhen: { viewer: true },
+    onMount: ["viewer"],
   },
   {
     command: "/info",
@@ -295,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_toggle_info",
-    visibleWhen: { viewer: true },
+    onMount: ["viewer"],
   },
   {
     command: "/files",
@@ -310,7 +308,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "position", type: "number", required: true, description: "1-based file position" },
     ],
     uiAction: "viewer_focus_file",
-    visibleWhen: { viewer: true },
+    onMount: ["viewer"],
   },
 ];
 

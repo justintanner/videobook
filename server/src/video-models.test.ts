@@ -10,7 +10,7 @@ import {
   IMAGE_SLOT_LIMITS,
   PARAM_SCHEMAS,
 } from "./video-models.js";
-import type { ActionLogEntry, ToolSchema } from "./video-models.js";
+import type { ActionLogEntry } from "./video-models.js";
 
 // ---------------------------------------------------------------------------
 // extractLastSettingsPerModel

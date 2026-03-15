@@ -17,25 +17,18 @@ export interface ServerCommand {
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[] };
   uiAction?: string;
-  visibleWhen?: { assetPrefix?: string[]; viewer?: boolean };
+  onMount?: string[];
 }
 
 export type CommandDescriptor = ServerCommand;
 
-export interface CommandScope {
-  selectedAssetPrefix: string | null;
-  viewerOpen: boolean;
-}
-
-export function filterCommandsByScope(commands: ServerCommand[], scope: CommandScope): ServerCommand[] {
+export function filterCommandsByMountKeys(
+  commands: ServerCommand[],
+  activeKeys: ReadonlySet<string>,
+): ServerCommand[] {
   return commands.filter((cmd) => {
-    if (!cmd.visibleWhen) return true;
-    if (cmd.visibleWhen.viewer && !scope.viewerOpen) return false;
-    if (cmd.visibleWhen.assetPrefix) {
-      if (!scope.selectedAssetPrefix) return false;
-      if (!cmd.visibleWhen.assetPrefix.includes(scope.selectedAssetPrefix)) return false;
-    }
-    return true;
+    if (!cmd.onMount || cmd.onMount.length === 0) return true;
+    return cmd.onMount.every((key) => activeKeys.has(key));
   });
 }
 

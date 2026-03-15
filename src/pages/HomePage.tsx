@@ -30,7 +30,7 @@ import { useListAssets } from '@/hooks/useListAssets';
 import { useTimeline } from '@/hooks/useTimeline';
 import type { Orientation } from '@/hooks/useTimeline';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
-import type { CommandScope } from '@/lib/command-registry';
+import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
@@ -169,8 +169,6 @@ export function HomePage() {
     sync(projectSlug);
   }, [projectSlug, addOrientation, mediaItems, callTool, sync]);
 
-  const selectedPrefix = activeSelection?.id?.split('-')[0] ?? null;
-
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
     if (!projectSlug) return;
@@ -225,11 +223,6 @@ export function HomePage() {
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
-  const scope: CommandScope = useMemo(() => ({
-    selectedAssetPrefix: selectedPrefix,
-    viewerOpen: activeSelection !== null,
-  }), [selectedPrefix, activeSelection]);
-
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
@@ -248,7 +241,8 @@ export function HomePage() {
   }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange]);
 
   return (
-    <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} scope={scope} uiActions={uiActions}>
+    <MountKeyProvider>
+    <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions}>
       <div className="w-screen h-screen bg-background overflow-hidden">
         <input
           ref={fileInputRef}
@@ -410,5 +404,6 @@ export function HomePage() {
         </div>
       </div>
     </CommandRegistryProvider>
+    </MountKeyProvider>
   );
 }

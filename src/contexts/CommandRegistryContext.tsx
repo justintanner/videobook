@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import type { ServerCommand, CommandScope } from '@/lib/command-registry';
-import { filterCommandsByScope, parseCommandArgs } from '@/lib/command-registry';
+import type { ServerCommand } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, parseCommandArgs } from '@/lib/command-registry';
+import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -17,17 +18,16 @@ export function CommandRegistryProvider({
   callTool,
   state,
   projectSlug,
-  scope,
   uiActions,
   children,
 }: {
   callTool: UseMcpResult['callTool'];
   state: string;
   projectSlug: string | undefined;
-  scope: CommandScope;
   uiActions: UiActionMap;
   children: React.ReactNode;
 }) {
+  const mountKeys = useMountKeys();
   const [allCommands, setAllCommands] = useState<ServerCommand[]>([]);
 
   useEffect(() => {
@@ -44,8 +44,8 @@ export function CommandRegistryProvider({
   }, [callTool, state, projectSlug]);
 
   const commands = useMemo(
-    () => filterCommandsByScope(allCommands, scope),
-    [allCommands, scope],
+    () => filterCommandsByMountKeys(allCommands, mountKeys),
+    [allCommands, mountKeys],
   );
 
   const dispatch = useCallback(async (input: string): Promise<boolean> => {

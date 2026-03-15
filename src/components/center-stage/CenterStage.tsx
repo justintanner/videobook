@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import { useMountKey } from '@/contexts/MountKeyContext';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
@@ -458,6 +459,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
 }) {
+  useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
   const [pendingAddOrientation, setPendingAddOrientation] = useState<Orientation | null>(null);
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
