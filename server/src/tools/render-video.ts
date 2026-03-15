@@ -13,14 +13,14 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_video",
     description:
-      "Render a vid- asset to landscape (1920x1080) and/or portrait (1080x1920) with blur-fill background and optional word-level subtitles. Produces 1920x1080_landscape.mp4 and/or 1080x1920_portrait.mp4.",
+      "Render a vid- asset to landscape (1920x1080), portrait (1080x1920), or square (1080x1080) with blur-fill background and optional word-level subtitles.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
       orientation: z
-        .enum(["landscape", "portrait", "square", "both"])
+        .enum(["landscape", "portrait", "square"])
         .optional()
-        .describe("Which versions to render (default: landscape)"),
+        .describe("Which orientation to render (default: landscape)"),
       subtitles_enabled: z
         .boolean()
         .optional()
@@ -85,7 +85,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
       } = args as {
         asset_id: string;
         project_slug: string;
-        orientation?: "landscape" | "portrait" | "both";
+        orientation?: "landscape" | "portrait" | "square";
         subtitles_enabled?: boolean;
         highlight_style?: "tikdance" | "highlight";
         position?: "top" | "middle" | "bottom";
@@ -150,10 +150,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
 
       const hasElevenlabs = manifest.files.some((f) => f.name === "elevenlabs.json");
 
-      const orientations: ("landscape" | "portrait")[] =
-        orientation === "both"
-          ? ["landscape", "portrait"]
-          : [orientation];
+      const orientations: ("landscape" | "portrait" | "square")[] = [orientation];
 
       for (const orient of orientations) {
         const subsEnabled =
