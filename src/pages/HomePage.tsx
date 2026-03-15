@@ -172,9 +172,15 @@ export function HomePage() {
     await listAssets(slug, sortOrder);
   }, [setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
 
+  const handleShowHistory = useCallback((assetId: string) => {
+    const item = mediaItems.find(m => m.id === assetId);
+    if (item) setHistoryItem(item);
+  }, [mediaItems]);
+
   const { dispatch } = useChatDispatch(commands, {
     onOpenInbox: () => setInboxOpen(true),
     onUpload: triggerUpload,
+    onShowHistory: handleShowHistory,
     onSwitchProject: handleProjectChange,
     callTool,
     projectSlug,

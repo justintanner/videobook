@@ -205,6 +205,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "duplicate_asset", autoInject: ["project_slug"] },
   },
   {
+    command: "/history",
+    description: "View asset version history",
+    example: "/history @hero-intro",
+    category: "context_menu",
+    icon: "History",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to view history for" },
+    ],
+    uiAction: "show_history",
+  },
+  {
     command: "/delete",
     description: "Delete an asset",
     example: "/delete @outro-clip",

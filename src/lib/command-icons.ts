@@ -9,6 +9,7 @@ import {
   Mailbox,
   ClipboardCopy,
   FolderOpen,
+  History,
 } from 'lucide-react';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -21,6 +22,7 @@ const iconMap: Record<string, LucideIcon> = {
   Mailbox,
   ClipboardCopy,
   FolderOpen,
+  History,
 };
 
 export function resolveIcon(name: string): LucideIcon | undefined {

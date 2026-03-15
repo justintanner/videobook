@@ -5,6 +5,7 @@ import type { Command, CommandParam } from './useCommands';
 interface ChatDispatchHandlers {
   onOpenInbox: () => void;
   onUpload: () => void;
+  onShowHistory: (assetId: string) => void;
   onSwitchProject: (slug: string) => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
@@ -47,7 +48,7 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
     const trimmed = input.trim();
     if (!trimmed) return false;
 
-    const { onOpenInbox, onUpload, onSwitchProject, callTool, projectSlug } = handlersRef.current;
+    const { onOpenInbox, onUpload, onShowHistory, onSwitchProject, callTool, projectSlug } = handlersRef.current;
 
     try {
       const firstSpace = trimmed.indexOf(' ');
@@ -66,6 +67,7 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
           const uiHandlers: Record<string, (r: string) => void> = {
             open_inbox: () => onOpenInbox(),
             open_upload: () => onUpload(),
+            show_history: (r: string) => { onShowHistory(r.startsWith('@') ? r.slice(1) : r); },
             copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
           };
           uiHandlers[matchedCommand.uiAction]?.(rest);
