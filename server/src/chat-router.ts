@@ -71,7 +71,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "render_video",
     actualTool: "render_video",
-    description: "Render a video to portrait (9:16) and/or landscape (16:9) with blur-fill background and optional subtitles",
+    description: "Render a video to landscape (16:9) and/or portrait (9:16) with blur-fill background and optional subtitles (default: landscape only)",
     params: ["asset_id", "orientation"],
     category: "action",
   },

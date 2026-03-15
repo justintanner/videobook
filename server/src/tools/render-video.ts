@@ -13,14 +13,14 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_video",
     description:
-      "Render a vid- asset to portrait (1080x1920) and/or landscape (1920x1080) with blur-fill background and optional word-level subtitles. Produces 1080x1920_portrait.mp4 and/or 1920x1080_landscape.mp4.",
+      "Render a vid- asset to landscape (1920x1080) and/or portrait (1080x1920) with blur-fill background and optional word-level subtitles. Produces 1920x1080_landscape.mp4 and/or 1080x1920_portrait.mp4.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
       orientation: z
-        .enum(["landscape", "portrait", "both"])
+        .enum(["landscape", "portrait", "square", "both"])
         .optional()
-        .describe("Which versions to render (default: both)"),
+        .describe("Which versions to render (default: landscape)"),
       subtitles_enabled: z
         .boolean()
         .optional()
@@ -70,7 +70,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
       const {
         asset_id,
         project_slug,
-        orientation = "both",
+        orientation = "landscape",
         subtitles_enabled,
         highlight_style = "tikdance",
         position = "bottom",

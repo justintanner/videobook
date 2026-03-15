@@ -4,17 +4,19 @@ export const LANDSCAPE_WIDTH = 1920;
 export const LANDSCAPE_HEIGHT = 1080;
 export const PORTRAIT_WIDTH = 1080;
 export const PORTRAIT_HEIGHT = 1920;
+export const SQUARE_WIDTH = 1080;
+export const SQUARE_HEIGHT = 1080;
 
 const TIKDANCE_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> = {
-  small:  { portrait: 56,  landscape: 44 },
-  medium: { portrait: 72,  landscape: 56 },
-  large:  { portrait: 88,  landscape: 72 },
+  small:  { portrait: 56,  landscape: 44, square: 44 },
+  medium: { portrait: 72,  landscape: 56, square: 56 },
+  large:  { portrait: 88,  landscape: 72, square: 72 },
 };
 
 const HIGHLIGHT_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> = {
-  small:  { portrait: 56,  landscape: 40 },
-  medium: { portrait: 72,  landscape: 52 },
-  large:  { portrait: 88,  landscape: 64 },
+  small:  { portrait: 56,  landscape: 40, square: 40 },
+  medium: { portrait: 72,  landscape: 52, square: 52 },
+  large:  { portrait: 88,  landscape: 64, square: 64 },
 };
 
 export function getTikDanceFontSize(preset: FontSizePreset, orientation: Orientation): number {
@@ -26,9 +28,9 @@ export function getHighlightFontSize(preset: FontSizePreset, orientation: Orient
 }
 
 const Y_POSITIONS: Record<SubtitlePosition, Record<Orientation, number>> = {
-  top:    { portrait: 0.15, landscape: 0.15 },
-  middle: { portrait: 0.45, landscape: 0.45 },
-  bottom: { portrait: 0.72, landscape: 0.80 },
+  top:    { portrait: 0.15, landscape: 0.15, square: 0.15 },
+  middle: { portrait: 0.45, landscape: 0.45, square: 0.45 },
+  bottom: { portrait: 0.72, landscape: 0.80, square: 0.80 },
 };
 
 export function getYPosition(position: SubtitlePosition, orientation: Orientation): number {

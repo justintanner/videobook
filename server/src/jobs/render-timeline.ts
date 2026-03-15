@@ -8,8 +8,10 @@ const LOCK_DURATION_MS = 900_000; // 15 min
 
 const LANDSCAPE_RENDER = "1920x1080_landscape.mp4";
 const PORTRAIT_RENDER = "1080x1920_portrait.mp4";
+const SQUARE_RENDER = "1080x1080_square.mp4";
 const LANDSCAPE_OUTPUT = "timeline_1920x1080.mp4";
 const PORTRAIT_OUTPUT = "timeline_1080x1920.mp4";
+const SQUARE_OUTPUT = "timeline_1080x1080.mp4";
 
 type ResolvedSlot = {
   slug: string;
@@ -22,7 +24,7 @@ type ResolvedSlot = {
 type RenderTimelinePayload = {
   type: "render_timeline";
   projectSlug: string;
-  orientation: "landscape" | "portrait";
+  orientation: "landscape" | "portrait" | "square";
   resolvedSlots: ResolvedSlot[];
 };
 
@@ -66,8 +68,8 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
     if (!lockResult.ok) throw new Error(`Final asset is locked: ${lockResult.error.message}`);
 
     try {
-      const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : LANDSCAPE_RENDER;
-      const outputFilename = orientation === "portrait" ? PORTRAIT_OUTPUT : LANDSCAPE_OUTPUT;
+      const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : orientation === "square" ? SQUARE_RENDER : LANDSCAPE_RENDER;
+      const outputFilename = orientation === "portrait" ? PORTRAIT_OUTPUT : orientation === "square" ? SQUARE_OUTPUT : LANDSCAPE_OUTPUT;
       const outputPath = join(finalDir, outputFilename);
 
       const inputPaths: string[] = [];

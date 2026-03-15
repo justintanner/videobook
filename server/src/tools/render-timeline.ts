@@ -12,6 +12,7 @@ type TimelineSlot = {
 
 const LANDSCAPE_RENDER = "1920x1080_landscape.mp4";
 const PORTRAIT_RENDER = "1080x1920_portrait.mp4";
+const SQUARE_RENDER = "1080x1080_square.mp4";
 
 export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -21,14 +22,14 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
     schema: {
       project_slug: z.string().describe("Project slug"),
       orientation: z
-        .enum(["landscape", "portrait"])
+        .enum(["landscape", "portrait", "square"])
         .optional()
         .describe("Which orientation to render (default: landscape)"),
     },
     handler: async (args) => {
       const { project_slug, orientation = "landscape" } = args as {
         project_slug: string;
-        orientation?: "landscape" | "portrait";
+        orientation?: "landscape" | "portrait" | "square";
       };
 
       const timelineResult = await fs.readProjectMeta<TimelineSlot[]>("timeline", project_slug);
@@ -53,7 +54,7 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : LANDSCAPE_RENDER;
+      const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : orientation === "square" ? SQUARE_RENDER : LANDSCAPE_RENDER;
 
       const resolvedSlots: Array<{
         slug: string;

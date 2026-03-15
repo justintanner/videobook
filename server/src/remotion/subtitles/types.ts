@@ -18,7 +18,7 @@ export interface Chunk {
   words: Word[];
 }
 
-export type Orientation = "landscape" | "portrait";
+export type Orientation = "landscape" | "portrait" | "square";
 export type SubtitleStyle = "tikdance" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";

@@ -21,6 +21,8 @@ import {
   LANDSCAPE_HEIGHT,
   PORTRAIT_WIDTH,
   PORTRAIT_HEIGHT,
+  SQUARE_WIDTH,
+  SQUARE_HEIGHT,
 } from "../remotion/constants.js";
 
 const LOCK_DURATION_MS = 900_000; // 15 min for renders
@@ -125,21 +127,24 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
 
       try {
         for (const orient of orientations) {
-          const isPortrait = orient === "portrait";
-          const targetWidth = isPortrait ? PORTRAIT_WIDTH : LANDSCAPE_WIDTH;
-          const targetHeight = isPortrait ? PORTRAIT_HEIGHT : LANDSCAPE_HEIGHT;
+          const targetWidth = orient === "portrait" ? PORTRAIT_WIDTH : orient === "square" ? SQUARE_WIDTH : LANDSCAPE_WIDTH;
+          const targetHeight = orient === "portrait" ? PORTRAIT_HEIGHT : orient === "square" ? SQUARE_HEIGHT : LANDSCAPE_HEIGHT;
 
           const subsEnabled =
             subtitlesEnabled !== undefined
               ? subtitlesEnabled
-              : isPortrait;
+              : orient === "portrait";
 
           let chunks: Chunk[] = [];
           if (subsEnabled && allSegments) {
             chunks = chunkSegments(allSegments, orient, highlightStyle);
           }
 
-          const outputFilename = isPortrait ? "1080x1920_portrait.mp4" : "1920x1080_landscape.mp4";
+          const outputFilename = orient === "portrait"
+            ? "1080x1920_portrait.mp4"
+            : orient === "square"
+              ? "1080x1080_square.mp4"
+              : "1920x1080_landscape.mp4";
           const outputPath = join(assetDir, outputFilename);
 
           const inputProps: RenderInputProps = {

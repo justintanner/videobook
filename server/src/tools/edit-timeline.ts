@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 
 type TimelineSlot = {
@@ -9,10 +10,15 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type TimelineConfig = {
+  slots: TimelineSlot[];
+  render: Orientation[];
+};
+
 export function editTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "edit_timeline",
-    description: "Set the timeline for a project (replaces all slots)",
+    description: "Set the timeline for a project (replaces all slots and render orientations)",
     schema: {
       project_slug: z.string().describe("Project slug"),
       slots: z.array(z.object({
@@ -21,14 +27,19 @@ export function editTimelineDef(fs: ClipfirstFs): ToolDef {
         audioFadeIn: z.number().optional(),
         audioFadeOut: z.number().optional(),
       })).describe("Timeline slots"),
+      render: z.array(z.enum(["landscape", "portrait", "square"]))
+        .optional()
+        .describe("Orientations to render (default: [\"landscape\"])"),
     },
     handler: async (args) => {
-      const { project_slug, slots } = args as {
+      const { project_slug, slots, render = ["landscape"] } = args as {
         project_slug: string;
         slots: TimelineSlot[];
+        render?: Orientation[];
       };
 
-      const result = await fs.writeProjectMeta("timeline", slots, project_slug);
+      const config: TimelineConfig = { slots, render };
+      const result = await fs.writeProjectMeta("timeline", config, project_slug);
       if (result.ok) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ path: result.value }) }],

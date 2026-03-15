@@ -20,7 +20,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
       start_time: z.string().optional().describe("Start time (e.g. '30', '1:30', '2m20s')"),
       end_time: z.string().optional().describe("End time (e.g. '60', '2:00', '3m')"),
       project_slug: z.string().describe("Project slug"),
-      export_videos: z.boolean().optional().default(true).describe("Auto-export 16:9 and 9:16 versions"),
+      export_videos: z.boolean().optional().default(false).describe("Auto-export 16:9 and 9:16 versions (default: off)"),
       full: z.boolean().optional().default(false).describe("Download entire video (no 3-min cap)"),
     },
     handler: async (args) => {
@@ -129,7 +129,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
           assetId,
           assetDir,
           projectSlug,
-          exportVideos: export_videos ?? true,
+          exportVideos: export_videos ?? false,
           full: full ?? false,
           title: entry.title,
           uploader: info.uploader ?? "",
