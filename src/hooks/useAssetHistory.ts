@@ -6,6 +6,7 @@ export interface GitCommit {
   message: string;
   date: string;
   author?: string;
+  files?: string[];
 }
 
 interface UseAssetHistoryResult {
