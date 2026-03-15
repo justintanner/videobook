@@ -264,7 +264,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
           'flip-card-perspective',
           size === 'original' ? 'w-full h-full'
             : size === 'landscape' ? 'aspect-video w-full h-full'
-            : 'aspect-[9/16] max-h-full max-w-full',
+            : 'w-full h-full',
         )}
       >
         <div className={cn(
@@ -297,10 +297,21 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
             </div>
 
             {/* Content */}
-            <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-              {isClip
-                ? <ClipViewer item={item} />
-                : <ImageViewer item={item} size={size} />}
+            <div className={cn(
+              'flex-1 bg-black flex items-center justify-center min-h-0',
+              size === 'portrait' && 'py-2',
+            )}>
+              {size === 'portrait' ? (
+                <div className="aspect-[9/16] h-full max-w-full">
+                  {isClip
+                    ? <ClipViewer item={item} />
+                    : <ImageViewer item={item} size={size} />}
+                </div>
+              ) : (
+                isClip
+                  ? <ClipViewer item={item} />
+                  : <ImageViewer item={item} size={size} />
+              )}
             </div>
           </div>
 

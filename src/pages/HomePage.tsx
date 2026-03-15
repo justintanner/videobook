@@ -178,7 +178,7 @@ export function HomePage() {
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSelectedItem(item);
-    setViewerSize('landscape');
+    setViewerSize('original');
   }, []);
 
   const mergedCommands = useMemo(() => {
