@@ -8,6 +8,7 @@ interface ChatDispatchHandlers {
   onShowHistory: (assetId: string) => void;
   onOpenAsset: (assetId: string) => void;
   onSwitchProject: (slug: string) => void;
+  onSetViewerSize: (size: string) => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
 }
@@ -49,7 +50,7 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
     const trimmed = input.trim();
     if (!trimmed) return false;
 
-    const { onOpenInbox, onUpload, onShowHistory, onOpenAsset, onSwitchProject, callTool, projectSlug } = handlersRef.current;
+    const { onOpenInbox, onUpload, onShowHistory, onOpenAsset, onSwitchProject, onSetViewerSize, callTool, projectSlug } = handlersRef.current;
 
     try {
       const firstSpace = trimmed.indexOf(' ');
@@ -71,6 +72,9 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
             show_history: (r: string) => { onShowHistory(r.startsWith('@') ? r.slice(1) : r); },
             open_asset: (r: string) => { onOpenAsset(r.startsWith('@') ? r.slice(1) : r); },
             copy_clipboard: (r: string) => { navigator.clipboard.writeText(r); },
+            set_viewer_original: () => onSetViewerSize('original'),
+            set_viewer_landscape: () => onSetViewerSize('landscape'),
+            set_viewer_portrait: () => onSetViewerSize('portrait'),
           };
           uiHandlers[matchedCommand.uiAction]?.(rest);
           return true;

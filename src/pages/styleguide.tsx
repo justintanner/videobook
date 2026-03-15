@@ -2068,14 +2068,14 @@ function Page14_AssetViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" />
+          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={() => {}} />
         </div>
       </div>
       {/* Right: Portrait viewer */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" />
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="portrait" onSizeChange={() => {}} />
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer } from '@/components/center-stage';
+import type { ViewerSize } from '@/components/center-stage';
 import { GitHistoryPanel } from '@/components/center-stage/GitHistoryPanel';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
@@ -28,6 +29,7 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useCommands } from '@/hooks/useCommands';
 import { useChatDispatch } from '@/hooks/useChatDispatch';
+import type { Command } from '@/hooks/useCommands';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
@@ -42,6 +44,42 @@ function humanizeId(id: string): string {
     .join(' ');
 }
 
+const VIEWER_COMMANDS: Command[] = [
+  {
+    command: '/original',
+    description: 'Show original uncropped image',
+    category: 'action',
+    icon: 'image',
+    size: 'sm',
+    variant: 'default',
+    chevron: 'right',
+    params: [],
+    uiAction: 'set_viewer_original',
+  },
+  {
+    command: '/landscape',
+    description: 'Show landscape crop (1920x1080)',
+    category: 'action',
+    icon: 'monitor',
+    size: 'sm',
+    variant: 'default',
+    chevron: 'right',
+    params: [],
+    uiAction: 'set_viewer_landscape',
+  },
+  {
+    command: '/portrait',
+    description: 'Show portrait crop (1080x1920)',
+    category: 'action',
+    icon: 'smartphone',
+    size: 'sm',
+    variant: 'default',
+    chevron: 'right',
+    params: [],
+    uiAction: 'set_viewer_portrait',
+  },
+];
+
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -49,6 +87,7 @@ export function HomePage() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
+  const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +176,16 @@ export function HomePage() {
     return mediaItems.find(m => m.id === selectedItem.id) ?? null;
   }, [mediaItems, selectedItem]);
 
+  const handleSelectItem = useCallback((item: MediaItem) => {
+    setSelectedItem(item);
+    setViewerSize('landscape');
+  }, []);
+
+  const mergedCommands = useMemo(() => {
+    if (activeSelection?.type === 'image') return [...commands, ...VIEWER_COMMANDS];
+    return commands;
+  }, [commands, activeSelection?.type]);
+
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
     if (!projectSlug) return;
@@ -179,15 +228,16 @@ export function HomePage() {
 
   const handleOpenAsset = useCallback((assetId: string) => {
     const item = mediaItems.find(m => m.id === assetId);
-    if (item) setSelectedItem(item);
-  }, [mediaItems]);
+    if (item) handleSelectItem(item);
+  }, [mediaItems, handleSelectItem]);
 
-  const { dispatch } = useChatDispatch(commands, {
+  const { dispatch } = useChatDispatch(mergedCommands, {
     onOpenInbox: () => setInboxOpen(true),
     onUpload: triggerUpload,
     onShowHistory: handleShowHistory,
     onOpenAsset: handleOpenAsset,
     onSwitchProject: handleProjectChange,
+    onSetViewerSize: (s) => setViewerSize(s as ViewerSize),
     callTool,
     projectSlug,
   });
@@ -269,10 +319,10 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                   </div>
                 );
               })}
@@ -291,7 +341,7 @@ export function HomePage() {
                   onClose={() => setHistoryItem(null)}
                 />
               ) : activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}
@@ -301,7 +351,7 @@ export function HomePage() {
                 ref={chatInputRef}
                 onSend={dispatch}
                 assetSlugs={assetSlugs}
-                commands={commands}
+                commands={mergedCommands}
                 callTool={callTool}
                 projectSlug={projectSlug}
               />
@@ -340,8 +390,8 @@ export function HomePage() {
                 );
                 return (
                   <div key={item.id} className="w-full">
-                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
-                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => setSelectedItem(item)} />}
+                    {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                    {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                   </div>
                 );
               })}

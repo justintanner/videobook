@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { MediaItem } from '@/components/sidebar/types';
 
-type ViewerSize = 'landscape' | 'portrait';
+export type ViewerSize = 'landscape' | 'portrait' | 'original';
 
 function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc: string; alt: string }) {
   const fell = useRef(false);
@@ -34,6 +34,16 @@ function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fallbackSrc
 function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   if (item.type === 'image') {
     if (!item.filePath) return null;
+    if (size === 'original') {
+      return (
+        <img
+          src={item.filePath}
+          alt={item.title}
+          className="w-full h-full object-contain"
+          draggable={false}
+        />
+      );
+    }
     const cropFile = size === 'landscape' ? 'image_1920x1080.jpg' : 'image_1080x1920.jpg';
     const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
     return (
@@ -79,18 +89,25 @@ function ClipViewer({ item }: { item: MediaItem }) {
   );
 }
 
+const ratioLabels: Record<ViewerSize, string> = {
+  original: '/original',
+  landscape: '/landscape',
+  portrait: '/portrait',
+};
+
 function RatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (s: ViewerSize) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
-          {active === 'landscape' ? 'Landscape (1920×1080)' : 'Portrait (1080×1920)'}
+          {ratioLabels[active]}
           <ChevronDown className="w-3 h-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onSelect('landscape')}>Landscape (1920×1080)</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSelect('portrait')}>Portrait (1080×1920)</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSelect('original')}>/original</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSelect('landscape')}>/landscape</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSelect('portrait')}>/portrait</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -202,12 +219,13 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   );
 }
 
-export function AssetViewer({ item, projectSlug }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange }: {
   item: MediaItem;
   projectSlug: string;
+  size: ViewerSize;
+  onSizeChange: (s: ViewerSize) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
-  const [size, setSize] = useState<ViewerSize>('landscape');
   const [flipped, setFlipped] = useState(false);
   const [metadata, setMetadata] = useState<string | null>(null);
   const [metaLoading, setMetaLoading] = useState(false);
@@ -244,7 +262,9 @@ export function AssetViewer({ item, projectSlug }: {
       <div
         className={cn(
           'flip-card-perspective',
-          size === 'landscape' ? 'aspect-video w-full h-full' : 'aspect-[9/16] max-h-full max-w-full',
+          size === 'original' ? 'w-full h-full'
+            : size === 'landscape' ? 'aspect-video w-full h-full'
+            : 'aspect-[9/16] max-h-full max-w-full',
         )}
       >
         <div className={cn(
@@ -259,8 +279,8 @@ export function AssetViewer({ item, projectSlug }: {
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
-                ? <ClipRatioToggle active={size} onSelect={setSize} />
-                : <RatioToggle active={size} onSelect={setSize} />}
+                ? <ClipRatioToggle active={size} onSelect={onSizeChange} />
+                : <RatioToggle active={size} onSelect={onSizeChange} />}
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
