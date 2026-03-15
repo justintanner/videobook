@@ -1,31 +1,110 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
-import { createCommandRegistry } from '@/lib/command-registry';
-import type { CommandRegistry, RegisteredCommand } from '@/lib/command-registry';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import type { ServerCommand, CommandScope } from '@/lib/command-registry';
+import { filterCommandsByScope, parseCommandArgs } from '@/lib/command-registry';
+import type { UiActionMap } from '@/lib/ui-actions';
+import { executeUiAction } from '@/lib/ui-actions';
+import type { UseMcpResult } from 'use-mcp/react';
 
 interface CommandRegistryContextValue {
-  registry: CommandRegistry;
-  commands: RegisteredCommand[];
+  commands: ServerCommand[];
+  allCommands: ServerCommand[];
+  dispatch: (input: string) => Promise<boolean>;
 }
 
 const CommandRegistryContext = createContext<CommandRegistryContextValue | null>(null);
 
-export function CommandRegistryProvider({ chatFallback, children }: {
-  chatFallback: (input: string) => Promise<boolean>;
+export function CommandRegistryProvider({
+  callTool,
+  state,
+  projectSlug,
+  scope,
+  uiActions,
+  children,
+}: {
+  callTool: UseMcpResult['callTool'];
+  state: string;
+  projectSlug: string | undefined;
+  scope: CommandScope;
+  uiActions: UiActionMap;
   children: React.ReactNode;
 }) {
-  const [registry] = useState(() => createCommandRegistry(chatFallback));
+  const [allCommands, setAllCommands] = useState<ServerCommand[]>([]);
 
   useEffect(() => {
-    registry.setFallback(chatFallback);
-  }, [registry, chatFallback]);
+    if (state !== 'ready') return;
+    let cancelled = false;
+    (async () => {
+      const result = await callTool('commands', {});
+      if (cancelled) return;
+      const content = result.content as Array<{ type: string; text: string }>;
+      const parsed: ServerCommand[] = JSON.parse(content[0].text);
+      setAllCommands(parsed);
+    })();
+    return () => { cancelled = true; };
+  }, [callTool, state, projectSlug]);
 
-  const commands = useSyncExternalStore(
-    registry.subscribe,
-    registry.commands,
+  const commands = useMemo(
+    () => filterCommandsByScope(allCommands, scope),
+    [allCommands, scope],
+  );
+
+  const dispatch = useCallback(async (input: string): Promise<boolean> => {
+    const trimmed = input.trim();
+    if (!trimmed) return false;
+
+    const firstSpace = trimmed.indexOf(' ');
+    const commandStr = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+    const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
+
+    if (commandStr.startsWith('/')) {
+      const cmd = allCommands.find((c) => c.command === commandStr);
+      if (cmd) {
+        const args = parseCommandArgs(rest, cmd.params);
+
+        // uiAction dispatch
+        if (cmd.uiAction) {
+          // For switch_project, pass the slug from the command name
+          if (cmd.uiAction === 'switch_project') {
+            const slug = commandStr.slice(1); // remove leading /
+            return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args });
+          }
+          return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args });
+        }
+
+        // mcpTool dispatch
+        if (cmd.mcpTool) {
+          const toolArgs: Record<string, string> = { ...args };
+          if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
+            toolArgs.project_slug = projectSlug;
+          }
+          const result = await callTool(cmd.mcpTool.tool, toolArgs);
+          return !result.isError;
+        }
+
+        // Chat fallback for commands with no mcpTool or uiAction
+        if (projectSlug) {
+          const result = await callTool('chat', { prompt: `${commandStr} ${rest}`.trim(), project_slug: projectSlug });
+          return !result.isError;
+        }
+        return false;
+      }
+    }
+
+    // General chat fallback
+    if (projectSlug) {
+      const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
+      return !result.isError;
+    }
+    return false;
+  }, [allCommands, callTool, projectSlug, uiActions]);
+
+  const value = useMemo(
+    () => ({ commands, allCommands, dispatch }),
+    [commands, allCommands, dispatch],
   );
 
   return (
-    <CommandRegistryContext.Provider value={{ registry, commands }}>
+    <CommandRegistryContext.Provider value={value}>
       {children}
     </CommandRegistryContext.Provider>
   );

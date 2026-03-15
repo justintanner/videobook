@@ -11,7 +11,7 @@ interface AutocompleteItem {
   label: string;
   description: string;
   example?: string;
-  category?: 'action' | 'project' | 'context_menu';
+  category?: 'action' | 'project' | 'context_menu' | 'viewer';
   icon?: string;
   colorScheme: ColorScheme;
 }

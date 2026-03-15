@@ -16,6 +16,7 @@ const COMMAND_COLORS: Record<string, ColorScheme> = {
   action: 'cyan',
   project: 'amber',
   context_menu: 'violet',
+  viewer: 'cyan',
 };
 
 interface ConfirmedToken {

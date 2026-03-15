@@ -45,6 +45,7 @@ import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
+import { commandsDef } from "./commands.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -101,5 +102,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     listChatHistoryDef(fs),
     rewritePromptDef(fs),
     isolateVocalsDef(fs),
+    commandsDef(fs),
   ];
 }

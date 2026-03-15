@@ -5,20 +5,38 @@ export interface CommandParam {
   description: string;
 }
 
-export interface CommandDescriptor {
+export interface ServerCommand {
   command: string;
   description: string;
   example?: string;
-  category: 'action' | 'project' | 'context_menu';
+  category: 'action' | 'project' | 'context_menu' | 'viewer';
   icon: string;
   size: 'sm' | 'default' | 'lg';
   variant: 'default' | 'violet';
   chevron: 'right' | 'down';
   params: CommandParam[];
+  mcpTool?: { tool: string; autoInject?: string[] };
+  uiAction?: string;
+  visibleWhen?: { assetPrefix?: string[]; viewer?: boolean };
 }
 
-export interface RegisteredCommand extends CommandDescriptor {
-  handler: (ctx: { raw: string; args: Record<string, string> }) => Promise<boolean> | boolean;
+export type CommandDescriptor = ServerCommand;
+
+export interface CommandScope {
+  selectedAssetPrefix: string | null;
+  viewerOpen: boolean;
+}
+
+export function filterCommandsByScope(commands: ServerCommand[], scope: CommandScope): ServerCommand[] {
+  return commands.filter((cmd) => {
+    if (!cmd.visibleWhen) return true;
+    if (cmd.visibleWhen.viewer && !scope.viewerOpen) return false;
+    if (cmd.visibleWhen.assetPrefix) {
+      if (!scope.selectedAssetPrefix) return false;
+      if (!cmd.visibleWhen.assetPrefix.includes(scope.selectedAssetPrefix)) return false;
+    }
+    return true;
+  });
 }
 
 export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, string> {
@@ -41,70 +59,4 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
   }
 
   return args;
-}
-
-export interface CommandRegistry {
-  commands: () => RegisteredCommand[];
-  register: (cmd: RegisteredCommand) => void;
-  unregister: (command: string) => void;
-  subscribe: (listener: () => void) => () => void;
-  dispatch: (input: string) => Promise<boolean>;
-  setFallback: (fn: (input: string) => Promise<boolean>) => void;
-}
-
-export function createCommandRegistry(initialFallback: (input: string) => Promise<boolean>): CommandRegistry {
-  const map = new Map<string, RegisteredCommand>();
-  const listeners = new Set<() => void>();
-  let chatFallback = initialFallback;
-  let cachedCommands: RegisteredCommand[] = [];
-
-  function notify(): void {
-    cachedCommands = Array.from(map.values());
-    for (const listener of listeners) listener();
-  }
-
-  return {
-    commands: () => cachedCommands,
-
-    register(cmd: RegisteredCommand) {
-      map.set(cmd.command, cmd);
-      notify();
-    },
-
-    unregister(command: string) {
-      if (map.delete(command)) notify();
-    },
-
-    subscribe(listener: () => void) {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-
-    setFallback(fn: (input: string) => Promise<boolean>) {
-      chatFallback = fn;
-    },
-
-    async dispatch(input: string): Promise<boolean> {
-      const trimmed = input.trim();
-      if (!trimmed) return false;
-
-      const firstSpace = trimmed.indexOf(' ');
-      const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
-      const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
-
-      if (command.startsWith('/')) {
-        const registered = map.get(command);
-        if (registered) {
-          const args = parseCommandArgs(rest, registered.params);
-          try {
-            return await registered.handler({ raw: rest, args });
-          } catch {
-            return false;
-          }
-        }
-      }
-
-      return chatFallback(trimmed);
-    },
-  };
 }
