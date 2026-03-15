@@ -83,6 +83,7 @@ function ClipViewer({ item }: { item: MediaItem }) {
       src={item.filePath}
       poster={thumbSrc}
       controls
+      tabIndex={-1}
       className="w-full h-full object-contain"
       draggable={false}
     />
@@ -111,7 +112,7 @@ function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect:
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
+        <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
           {ratioLabel(active, item)}
           <ChevronDown className="w-3 h-3" />
         </button>
@@ -143,6 +144,7 @@ function ClipRatioToggle({ active, onSelect }: { active: ViewerSize; onSelect: (
       {clipRatioItems.map(({ icon: Icon, label, value }) => (
         <button
           key={value}
+          tabIndex={-1}
           onClick={() => onSelect(value)}
           className={cn(
             'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
@@ -277,6 +279,7 @@ function FileListPane({ files, selectedFile, onSelectFile, loading }: {
       {files.map((f) => (
         <button
           key={f.name}
+          tabIndex={-1}
           onClick={() => onSelectFile(f.name)}
           className={cn(
             'w-full text-left px-3 py-1.5 text-xs font-mono flex items-center gap-2 transition-colors',
@@ -429,6 +432,20 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     fetchFileContent(fileName);
   };
 
+  const handleFileKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!manifest || manifest.length === 0) return;
+    const idx = manifest.findIndex(f => f.name === selectedFile);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = (idx + 1) % manifest.length;
+      handleSelectFile(manifest[next].name);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = (idx - 1 + manifest.length) % manifest.length;
+      handleSelectFile(manifest[prev].name);
+    }
+  }, [manifest, selectedFile, handleSelectFile]);
+
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
       <div
@@ -461,6 +478,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
               {/* Info button */}
               <button
+                tabIndex={-1}
                 onClick={handleFlipToBack}
                 title="/info"
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
@@ -501,6 +519,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
               {/* Flip back */}
               <button
+                tabIndex={-1}
                 onClick={() => onFlippedChange(false)}
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
@@ -510,7 +529,11 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
             {/* Two-pane body */}
             <div className="flex-1 flex min-h-0">
-              <div className="w-48 shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <div
+                tabIndex={0}
+                onKeyDown={handleFileKeyDown}
+                className="w-48 shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
+              >
                 <FileListPane
                   files={manifest ?? []}
                   selectedFile={selectedFile}

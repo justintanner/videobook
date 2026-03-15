@@ -123,6 +123,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
 
   const button = (
     <button
+      tabIndex={-1}
       disabled={isDisabled || isLoading || isSuccess || props.disabled}
       className={cn(
         'group flex items-center gap-0 rounded overflow-hidden relative',

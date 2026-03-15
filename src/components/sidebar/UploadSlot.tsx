@@ -11,6 +11,7 @@ export function UploadSlot({ onClick, loading }: UploadSlotProps) {
   return (
     <button
       type="button"
+      tabIndex={-1}
       onClick={onClick}
       disabled={loading}
       className={cn(

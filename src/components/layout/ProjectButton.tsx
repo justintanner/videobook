@@ -11,6 +11,7 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
     return (
       <button
         ref={ref}
+        tabIndex={-1}
         className={cn(
           'group flex items-center gap-0 rounded overflow-hidden relative',
           'h-8 border border-emerald-500/25 bg-emerald-500/10',

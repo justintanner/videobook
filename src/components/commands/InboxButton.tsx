@@ -94,6 +94,7 @@ export function InboxButton({
 
   return (
     <button
+      tabIndex={-1}
       onClick={onClick}
       className={cn(
         'group relative flex items-center gap-0 h-8 border rounded',

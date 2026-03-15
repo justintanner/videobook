@@ -449,6 +449,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
         {/* Send button */}
         <button
+          tabIndex={-1}
           data-testid="button-generate"
           aria-label={isLoading ? 'Generating' : 'Send message'}
           className={cn(

@@ -43,6 +43,7 @@ function SortButton({ sortOrder, onChange }: { sortOrder: SortOrder; onChange: (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          tabIndex={-1}
           onClick={onChange}
           className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
         >
@@ -71,6 +72,7 @@ export function SidebarHeader({ icon, title, collapsed, onToggle, side, sortOrde
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              tabIndex={-1}
               onClick={onToggle}
               className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             >

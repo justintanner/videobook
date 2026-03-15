@@ -45,7 +45,7 @@ export function TimelineSlot({
 
       {/* Context menu button */}
       <div className="absolute top-1.5 right-1.5 z-30">
-        <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+        <button tabIndex={-1} className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
       </div>

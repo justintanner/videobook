@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -26,20 +27,6 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
-async function uploadVideo(
-  client: Client,
-  projectSlug: string,
-  videoPath: string,
-): Promise<{ assetId: string; path: string }> {
-  const { readFile } = await import("node:fs/promises");
-  const data = (await readFile(videoPath)).toString("base64");
-  const result = await client.callTool({
-    name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
-  });
-  return JSON.parse((result.content as TextContent)[0].text);
-}
-
 describe("trim_video tool", () => {
   let client: Client;
   let tempDir: string;
@@ -58,10 +45,6 @@ describe("trim_video tool", () => {
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "trim-proj" },
-    });
   });
 
   afterEach(async () => {
@@ -69,32 +52,49 @@ describe("trim_video tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  async function createVideoAsset(projectSlug: string): Promise<string> {
+    const fs = createFsForTest(tempDir);
+    await fs.createProject(projectSlug);
+    const asset = await fs.createAsset("vid", "original", projectSlug);
+    if (!asset.ok) throw new Error(asset.error.message);
+    const data = await readFile(videoPath);
+    await fs.writeFile(asset.value.assetId, "original.mp4", data, projectSlug);
+    return asset.value.assetId;
+  }
+
   it("trims with trim_start only", async () => {
-    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+    const assetId = await createVideoAsset("trim-proj");
+
+    // Verify file exists before trim
+    const filePath = join(tempDir, "trim-proj", assetId, "original.mp4");
+    await access(filePath);
+    console.log("FILE EXISTS before trim_video call");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
         project_slug: "trim-proj",
         trim_start: 1,
       },
     });
 
+    console.log("trim_video result:", JSON.stringify(result));
+
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.asset_id).toBe(uploaded.assetId);
+    expect(parsed.asset_id).toBe(assetId);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id);
   });
 
   it("trims with trim_start and trim_end", async () => {
-    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+    const assetId = await createVideoAsset("trim-proj");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
         project_slug: "trim-proj",
         trim_start: 0.5,
         trim_end: 2.5,
@@ -108,12 +108,12 @@ describe("trim_video tool", () => {
   });
 
   it("cuts middle section", async () => {
-    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+    const assetId = await createVideoAsset("trim-proj");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
         project_slug: "trim-proj",
         cut_start: 1,
         cut_end: 2,
@@ -127,6 +127,8 @@ describe("trim_video tool", () => {
   });
 
   it("returns error for nonexistent asset", async () => {
+    await createVideoAsset("trim-proj");
+
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
@@ -140,17 +142,16 @@ describe("trim_video tool", () => {
   });
 
   it("returns error when no video file in asset", async () => {
-    const data = Buffer.from("fake-png-data").toString("base64");
-    const uploadResult = await client.callTool({
-      name: "upload_file",
-      arguments: { project_slug: "trim-proj", filename: "photo.png", data },
-    });
-    const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
+    const fs = createFsForTest(tempDir);
+    await fs.createProject("trim-proj");
+    const asset = await fs.createAsset("img", "photo", "trim-proj");
+    if (!asset.ok) throw new Error(asset.error.message);
+    await fs.writeFile(asset.value.assetId, "original.png", Buffer.from("fake-png-data"), "trim-proj");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: asset.value.assetId,
         project_slug: "trim-proj",
         trim_start: 1,
       },
@@ -162,12 +163,12 @@ describe("trim_video tool", () => {
   });
 
   it("returns error for conflicting params", async () => {
-    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+    const assetId = await createVideoAsset("trim-proj");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
         project_slug: "trim-proj",
         trim_start: 1,
         cut_start: 1,
@@ -181,12 +182,12 @@ describe("trim_video tool", () => {
   });
 
   it("returns error when cut_start >= cut_end", async () => {
-    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+    const assetId = await createVideoAsset("trim-proj");
 
     const result = await client.callTool({
       name: "trim_video",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
         project_slug: "trim-proj",
         cut_start: 2,
         cut_end: 1,
