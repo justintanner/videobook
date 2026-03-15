@@ -46,4 +46,16 @@ describe("asset_history tool", () => {
     expect(commits[0]).toHaveProperty("hash");
     expect(commits[0]).toHaveProperty("message");
   });
+
+  it("returns empty or throws for nonexistent asset", async () => {
+    const result = await client.callTool({
+      name: "asset_history",
+      arguments: { asset_id: "img-nonexistent-asset", project_slug: "test-proj" },
+    });
+    // asset_history calls fs.getAssetHistory which returns empty array for missing assets
+    const content = result.content as Array<{ type: string; text: string }>;
+    const commits = JSON.parse(content[0].text);
+    expect(Array.isArray(commits)).toBe(true);
+    expect(commits.length).toBe(0);
+  });
 });

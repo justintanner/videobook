@@ -66,4 +66,16 @@ describe("project_history tool", () => {
     );
     expect(commits.length).toBe(1);
   });
+
+  it("returns empty array for nonexistent project slug", async () => {
+    const result = await client.callTool({
+      name: "project_history",
+      arguments: { project_slug: "nonexistent-project" },
+    });
+    // project_history calls fs.getHistory which returns empty for missing projects
+    const content = result.content as Array<{ type: string; text: string }>;
+    const commits = JSON.parse(content[0].text);
+    expect(Array.isArray(commits)).toBe(true);
+    expect(commits.length).toBe(0);
+  });
 });

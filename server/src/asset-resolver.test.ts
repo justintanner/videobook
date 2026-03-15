@@ -1,0 +1,142 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
+import { parseAssetTags, stripAssetTags, resolveAllAssets } from "./asset-resolver.js";
+
+describe("parseAssetTags", () => {
+  it("parses a single @img- tag", () => {
+    expect(parseAssetTags("@img-sunset")).toEqual(["img-sunset"]);
+  });
+
+  it("parses a single @vid- tag", () => {
+    expect(parseAssetTags("@vid-foo")).toEqual(["vid-foo"]);
+  });
+
+  it("parses multiple tags", () => {
+    const result = parseAssetTags("@vid-foo @img-bar");
+    expect(result).toEqual(["vid-foo", "img-bar"]);
+  });
+
+  it("parses tags mixed with other text", () => {
+    const result = parseAssetTags("trim @vid-abc from 0:00 to 1:30");
+    expect(result).toEqual(["vid-abc"]);
+  });
+
+  it("returns empty array when no tags present", () => {
+    expect(parseAssetTags("no tags here")).toEqual([]);
+  });
+
+  it("returns empty array for empty string", () => {
+    expect(parseAssetTags("")).toEqual([]);
+  });
+
+  it("parses tags with hyphens and underscores in the name", () => {
+    const result = parseAssetTags("@img-my_photo-2");
+    expect(result).toEqual(["img-my_photo-2"]);
+  });
+
+  it("parses aud- and script- prefixed tags", () => {
+    const result = parseAssetTags("@aud-track1 @script-notes");
+    expect(result).toEqual(["aud-track1", "script-notes"]);
+  });
+});
+
+describe("stripAssetTags", () => {
+  it("strips a single tag and trims", () => {
+    expect(stripAssetTags("@img-sunset some text")).toBe("some text");
+  });
+
+  it("strips multiple tags", () => {
+    expect(stripAssetTags("@vid-foo @img-bar trim it")).toBe("trim it");
+  });
+
+  it("returns original text when no tags", () => {
+    expect(stripAssetTags("no tags")).toBe("no tags");
+  });
+
+  it("returns empty string when only a tag", () => {
+    expect(stripAssetTags("@vid-abc")).toBe("");
+  });
+
+  it("preserves text between tags", () => {
+    expect(stripAssetTags("@vid-a merge with @vid-b")).toBe("merge with");
+  });
+});
+
+describe("resolveAllAssets (real fs)", () => {
+  let tempDir: string;
+  let fs: ClipfirstFs;
+  const slug = "test-proj";
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-resolver-"));
+    fs = createFs({ projectsDir: tempDir });
+    await fs.createProject(slug);
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("returns empty arrays when no tags in text", async () => {
+    const result = await resolveAllAssets("no tags here", fs, slug);
+    expect(result.resolved).toEqual([]);
+    expect(result.unresolved).toEqual([]);
+  });
+
+  it("reports unresolved tags when asset does not exist", async () => {
+    const result = await resolveAllAssets("@vid-nonexistent", fs, slug);
+    expect(result.unresolved).toContain("vid-nonexistent");
+    expect(result.resolved).toEqual([]);
+  });
+
+  it("resolves existing image asset", async () => {
+    // Create an image asset
+    const createResult = await fs.createAsset("img", "sunset", slug);
+    expect(createResult.ok).toBe(true);
+    if (!createResult.ok) return;
+    const assetId = createResult.value.assetId;
+
+    // Write a file to the asset
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await fs.writeFile(assetId, "original.png", png, slug);
+
+    const result = await resolveAllAssets(`@${assetId} enhance it`, fs, slug);
+    expect(result.resolved.length).toBe(1);
+    expect(result.resolved[0].asset_id).toBe(assetId);
+    expect(result.resolved[0].tag).toBe(`@${assetId}`);
+    expect(result.resolved[0].asset_type).toBe("image");
+    expect(result.resolved[0].file_path).toContain("original.png");
+    expect(result.unresolved).toEqual([]);
+  });
+
+  it("resolves multiple assets", async () => {
+    const img = await fs.createAsset("img", "photo", slug);
+    const vid = await fs.createAsset("vid", "clip", slug);
+    expect(img.ok).toBe(true);
+    expect(vid.ok).toBe(true);
+    if (!img.ok || !vid.ok) return;
+
+    const text = `@${img.value.assetId} and @${vid.value.assetId}`;
+    const result = await resolveAllAssets(text, fs, slug);
+    expect(result.resolved.length).toBe(2);
+    expect(result.unresolved).toEqual([]);
+  });
+
+  it("handles a mix of resolved and unresolved tags", async () => {
+    const img = await fs.createAsset("img", "real", slug);
+    expect(img.ok).toBe(true);
+    if (!img.ok) return;
+
+    const text = `@${img.value.assetId} and @vid-nonexistent`;
+    const result = await resolveAllAssets(text, fs, slug);
+    expect(result.resolved.length).toBe(1);
+    expect(result.unresolved).toContain("vid-nonexistent");
+  });
+});

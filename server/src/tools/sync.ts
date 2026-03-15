@@ -265,7 +265,7 @@ async function findAutoRenderActions(
 ): Promise<RenderAction[]> {
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<RenderAction | null> => {
-      const manifestResult = await fs.getManifest(asset.id, projectSlug);
+      const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
       if (!manifestResult.ok) return null;
 
       const manifest = manifestResult.value;

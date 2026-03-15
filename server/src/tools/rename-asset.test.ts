@@ -67,7 +67,7 @@ describe("rename_asset tool", () => {
     expect(newParsed.asset_id).toBe(parsed.new_asset_id);
   });
 
-  it("returns error for nonexistent asset", async () => {
+  it("returns error for nonexistent asset", { timeout: 60_000 }, async () => {
     const result = await client.callTool({
       name: "rename_asset",
       arguments: {

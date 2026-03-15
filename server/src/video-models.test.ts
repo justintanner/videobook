@@ -3,8 +3,14 @@ import {
   extractLastSettingsPerModel,
   buildModelOption,
   VIDEO_MODELS,
+  getVideoToolSchema,
+  validateVideoParams,
+  applyVideoToolConstraints,
+  buildVideoRoutingPrompt,
+  IMAGE_SLOT_LIMITS,
+  PARAM_SCHEMAS,
 } from "./video-models.js";
-import type { ActionLogEntry } from "./video-models.js";
+import type { ActionLogEntry, ToolSchema } from "./video-models.js";
 
 // ---------------------------------------------------------------------------
 // extractLastSettingsPerModel
@@ -203,5 +209,416 @@ describe("buildModelOption history integration", () => {
     expect(option.prefilled_values.resolution).toBe("1080p");
     // sound is not in seedance's allowed params
     expect(option.prefilled_values).not.toHaveProperty("sound");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getVideoToolSchema
+// ---------------------------------------------------------------------------
+
+describe("getVideoToolSchema", () => {
+  it("returns null for unknown tool", () => {
+    expect(getVideoToolSchema("nonexistent_tool")).toBeNull();
+  });
+
+  it("kling30: prompt required, correct mode/duration/aspect_ratio enums", () => {
+    const schema = getVideoToolSchema("generate_kling30_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.properties.mode.enum).toEqual(["std", "pro"]);
+    expect(schema!.properties.duration.enum).toHaveLength(13); // "3" through "15"
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1"]);
+    expect(schema!.properties.sound).toBeDefined();
+  });
+
+  it("veo: prompt required, model enum, aspect_ratio enum", () => {
+    const schema = getVideoToolSchema("generate_veo_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.properties.model.enum).toEqual(["veo3_fast", "veo3"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "Auto"]);
+    expect(schema!.properties.generation_type.enum).toEqual([
+      "TEXT_2_VIDEO",
+      "FIRST_AND_LAST_FRAMES_2_VIDEO",
+      "REFERENCE_2_VIDEO",
+    ]);
+  });
+
+  it("extend_veo: video_slug required, prompt not required for grok_imagine", () => {
+    const schema = getVideoToolSchema("extend_veo_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("video_slug");
+    expect(schema!.properties.model.enum).toEqual(["fast", "quality"]);
+    expect(schema!.properties.model.default).toBe("fast");
+  });
+
+  it("seedance: aspect_ratio and duration required, correct enums", () => {
+    const schema = getVideoToolSchema("generate_seedance_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.required).toContain("aspect_ratio");
+    expect(schema!.required).toContain("duration");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
+    expect(schema!.properties.duration.enum).toEqual(["4", "8", "12"]);
+    expect(schema!.properties.prompt.minLength).toBe(3);
+    expect(schema!.properties.prompt.maxLength).toBe(2500);
+  });
+
+  it("grok_imagine: image_slugs required, prompt not required", () => {
+    const schema = getVideoToolSchema("generate_grok_imagine_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("image_slugs");
+    expect(schema!.required).not.toContain("prompt");
+    expect(schema!.properties.mode.enum).toEqual(["fun", "normal", "spicy"]);
+    expect(schema!.properties.duration.enum).toEqual(["6", "10"]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+  });
+
+  it("includes defaults from model definition", () => {
+    const schema = getVideoToolSchema("generate_kling30_video");
+    expect(schema!.defaults).toEqual(VIDEO_MODELS.kling30.defaults);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateVideoParams
+// ---------------------------------------------------------------------------
+
+describe("validateVideoParams", () => {
+  it("returns invalid for unknown tool", () => {
+    const result = validateVideoParams("nonexistent_tool", {});
+    expect(result.valid).toBe(false);
+    expect(result.warnings).toContain("Unknown tool");
+  });
+
+  it("valid kling30 params pass", () => {
+    const result = validateVideoParams("generate_kling30_video", {
+      prompt: "a sunset",
+      mode: "std",
+      duration: "8",
+      aspect_ratio: "16:9",
+    });
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("kling30: missing prompt is flagged", () => {
+    const result = validateVideoParams("generate_kling30_video", {
+      mode: "std",
+    });
+    expect(result.valid).toBe(false);
+    expect(result.missing_required).toContain("prompt");
+  });
+
+  it("kling30: warns on invalid enum value", () => {
+    const result = validateVideoParams("generate_kling30_video", {
+      prompt: "test",
+      mode: "ultra",
+    });
+    expect(result.warnings.some((w) => w.includes("mode") && w.includes("ultra"))).toBe(true);
+  });
+
+  it("kling30: warns when too many images", () => {
+    const result = validateVideoParams("generate_kling30_video", {
+      prompt: "test",
+      image_slugs: ["@img-a", "@img-b", "@img-c"],
+    });
+    expect(result.warnings.some((w) => w.includes("only supports 0-2 images"))).toBe(true);
+  });
+
+  it("kling30: warns when multi-shot with >1 image", () => {
+    const result = validateVideoParams("generate_kling30_video", {
+      prompt: "test",
+      image_slugs: ["@img-a", "@img-b"],
+      multi_prompt: [{ prompt: "s1", duration: 5 }],
+    });
+    expect(result.warnings.some((w) => w.includes("multi-shot mode allows max 1"))).toBe(true);
+  });
+
+  it("veo: REFERENCE_2_VIDEO warns about model restriction", () => {
+    const result = validateVideoParams("generate_veo_video", {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+      model: "veo3",
+    });
+    expect(result.warnings.some((w) => w.includes("REFERENCE_2_VIDEO") && w.includes("veo3_fast"))).toBe(true);
+  });
+
+  it("veo: REFERENCE_2_VIDEO warns about aspect_ratio restriction", () => {
+    const result = validateVideoParams("generate_veo_video", {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+      aspect_ratio: "Auto",
+    });
+    expect(result.warnings.some((w) => w.includes("16:9 or 9:16"))).toBe(true);
+  });
+
+  it("veo: auto-infers generation_type from image count", () => {
+    // 0 images => TEXT_2_VIDEO (no warnings about model)
+    const result = validateVideoParams("generate_veo_video", {
+      prompt: "test",
+      model: "veo3",
+    });
+    expect(result.warnings.some((w) => w.includes("REFERENCE_2_VIDEO"))).toBe(false);
+  });
+
+  it("grok_imagine: warns when no images", () => {
+    const result = validateVideoParams("generate_grok_imagine_video", {
+      image_slugs: [],
+    });
+    expect(result.warnings.some((w) => w.includes("requires at least one reference image"))).toBe(true);
+  });
+
+  it("grok_imagine: warns when >1 image", () => {
+    const result = validateVideoParams("generate_grok_imagine_video", {
+      image_slugs: ["@img-a", "@img-b"],
+    });
+    expect(result.warnings.some((w) => w.includes("only supports 1 reference image"))).toBe(true);
+  });
+
+  it("seedance: warns when >2 images", () => {
+    const result = validateVideoParams("generate_seedance_video", {
+      prompt: "test",
+      aspect_ratio: "16:9",
+      duration: "8",
+      image_slugs: ["@img-a", "@img-b", "@img-c"],
+    });
+    expect(result.warnings.some((w) => w.includes("only supports 0-2 images"))).toBe(true);
+  });
+
+  it("returns correct image_slots per tool", () => {
+    const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
+    expect(klingResult.image_slots).toEqual({ min: 0, max: 2 });
+
+    const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
+    expect(grokResult.image_slots).toEqual({ min: 1, max: 1 });
+  });
+
+  it("veo: image_slots depend on generation_type", () => {
+    const textResult = validateVideoParams("generate_veo_video", {
+      prompt: "test",
+      generation_type: "TEXT_2_VIDEO",
+    });
+    expect(textResult.image_slots).toEqual({ min: 0, max: 0 });
+
+    const refResult = validateVideoParams("generate_veo_video", {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+    });
+    expect(refResult.image_slots).toEqual({ min: 1, max: 3 });
+  });
+
+  it("multi_prompt_slots: 5 for kling30, null for others", () => {
+    const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
+    expect(klingResult.multi_prompt_slots).toBe(5);
+
+    const veoResult = validateVideoParams("generate_veo_video", { prompt: "test" });
+    expect(veoResult.multi_prompt_slots).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyVideoToolConstraints
+// ---------------------------------------------------------------------------
+
+describe("applyVideoToolConstraints", () => {
+  it("constrains veo REFERENCE_2_VIDEO model to veo3_fast", () => {
+    const schema = getVideoToolSchema("generate_veo_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+      model: "veo3",
+      aspect_ratio: "16:9",
+    };
+    applyVideoToolConstraints("generate_veo_video", schema, params);
+    expect(params.model).toBe("veo3_fast");
+    expect(schema.properties.model.enum).toEqual(["veo3_fast"]);
+  });
+
+  it("constrains veo REFERENCE_2_VIDEO aspect_ratio to 16:9 or 9:16", () => {
+    const schema = getVideoToolSchema("generate_veo_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+      model: "veo3",
+      aspect_ratio: "Auto",
+    };
+    applyVideoToolConstraints("generate_veo_video", schema, params);
+    expect(params.aspect_ratio).toBe("16:9");
+    expect(schema.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
+  });
+
+  it("preserves valid aspect_ratio for REFERENCE_2_VIDEO", () => {
+    const schema = getVideoToolSchema("generate_veo_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      generation_type: "REFERENCE_2_VIDEO",
+      model: "veo3",
+      aspect_ratio: "9:16",
+    };
+    applyVideoToolConstraints("generate_veo_video", schema, params);
+    expect(params.aspect_ratio).toBe("9:16");
+  });
+
+  it("auto-infers REFERENCE_2_VIDEO from 1 image", () => {
+    const schema = getVideoToolSchema("generate_veo_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      image_slugs: ["@img-a"],
+      model: "veo3",
+      aspect_ratio: "Auto",
+    };
+    applyVideoToolConstraints("generate_veo_video", schema, params);
+    // With 1 image, effective gen type is REFERENCE_2_VIDEO
+    expect(params.model).toBe("veo3_fast");
+    expect(params.aspect_ratio).toBe("16:9");
+  });
+
+  it("does nothing for TEXT_2_VIDEO", () => {
+    const schema = getVideoToolSchema("generate_veo_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      generation_type: "TEXT_2_VIDEO",
+      model: "veo3",
+      aspect_ratio: "Auto",
+    };
+    applyVideoToolConstraints("generate_veo_video", schema, params);
+    // No constraints applied
+    expect(params.model).toBe("veo3");
+    expect(params.aspect_ratio).toBe("Auto");
+  });
+
+  it("does nothing for non-veo tools", () => {
+    const schema = getVideoToolSchema("generate_kling30_video")!;
+    const params: Record<string, unknown> = {
+      prompt: "test",
+      mode: "std",
+    };
+    applyVideoToolConstraints("generate_kling30_video", schema, params);
+    expect(params.mode).toBe("std");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildVideoRoutingPrompt
+// ---------------------------------------------------------------------------
+
+describe("buildVideoRoutingPrompt", () => {
+  it("returns a non-empty string", () => {
+    const prompt = buildVideoRoutingPrompt();
+    expect(prompt.length).toBeGreaterThan(0);
+  });
+
+  it("mentions all video tool names", () => {
+    const prompt = buildVideoRoutingPrompt();
+    expect(prompt).toContain("generate_kling30_video");
+    expect(prompt).toContain("generate_veo_video");
+    expect(prompt).toContain("extend_veo_video");
+    expect(prompt).toContain("generate_seedance_video");
+    expect(prompt).toContain("generate_grok_imagine_video");
+  });
+
+  it("includes routing preferences", () => {
+    const prompt = buildVideoRoutingPrompt();
+    expect(prompt).toContain("ROUTING PREFERENCES");
+    expect(prompt).toContain("PREFER generate_kling30_video");
+  });
+
+  it("includes JSON response format instruction", () => {
+    const prompt = buildVideoRoutingPrompt();
+    expect(prompt).toContain("JSON only");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IMAGE_SLOT_LIMITS & PARAM_SCHEMAS exports
+// ---------------------------------------------------------------------------
+
+describe("IMAGE_SLOT_LIMITS", () => {
+  it("has entries for all 5 video tools", () => {
+    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_kling30_video");
+    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_veo_video");
+    expect(IMAGE_SLOT_LIMITS).toHaveProperty("extend_veo_video");
+    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_seedance_video");
+    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_grok_imagine_video");
+  });
+
+  it("extend_veo_video has 0/0 slots (no images)", () => {
+    expect(IMAGE_SLOT_LIMITS.extend_veo_video).toEqual({ min: 0, max: 0 });
+  });
+
+  it("grok_imagine requires exactly 1 image", () => {
+    expect(IMAGE_SLOT_LIMITS.generate_grok_imagine_video).toEqual({ min: 1, max: 1 });
+  });
+});
+
+describe("PARAM_SCHEMAS", () => {
+  it("prompt param has type string", () => {
+    expect(PARAM_SCHEMAS.prompt.type).toBe("string");
+  });
+
+  it("image_slugs param has type array", () => {
+    expect(PARAM_SCHEMAS.image_slugs.type).toBe("array");
+  });
+
+  it("seeds param has integer type with min/max", () => {
+    expect(PARAM_SCHEMAS.seeds.type).toBe("integer");
+    expect(PARAM_SCHEMAS.seeds.minimum).toBe(10000);
+    expect(PARAM_SCHEMAS.seeds.maximum).toBe(99999);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildModelOption — resolved assets & coercion
+// ---------------------------------------------------------------------------
+
+describe("buildModelOption resolved assets and coercion", () => {
+  it("fills image_slugs from resolved image assets", () => {
+    const resolvedAssets = [
+      { tag: "@img-sunset", asset_id: "img-sunset", asset_type: "image", file_path: "/some/path.png", asset_dir: "/some" },
+    ];
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
+    expect(option.prefilled_values.image_slugs).toEqual(["@img-sunset"]);
+  });
+
+  it("skips image assets without file_path", () => {
+    const resolvedAssets = [
+      { tag: "@img-sunset", asset_id: "img-sunset", asset_type: "image", file_path: null, asset_dir: "/some" },
+    ];
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
+    expect(option.prefilled_values.image_slugs).toEqual([]);
+  });
+
+  it("extend_veo prefills video_slug from video assets", () => {
+    const resolvedAssets = [
+      { tag: "@vid-clip", asset_id: "vid-clip", asset_type: "video", file_path: "/path/clip.mp4", asset_dir: "/path" },
+    ];
+    const option = buildModelOption("veo31_extend", VIDEO_MODELS.veo31_extend, {}, resolvedAssets);
+    expect(option.prefilled_values.video_slug).toBe("@vid-clip");
+  });
+
+  it("coerces numeric duration to string for kling30", () => {
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { duration: 8 }, []);
+    expect(option.prefilled_values.duration).toBe("8");
+  });
+
+  it("initializes kling30 element defaults", () => {
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
+    expect(option.prefilled_values.element1_slugs).toEqual([]);
+    expect(option.prefilled_values.element1_name).toBe("");
+    expect(option.prefilled_values.element1_desc).toBe("");
+    expect(option.prefilled_values.multi_prompt).toEqual([]);
+    expect(option.prefilled_values.multi_shots).toBe(false);
+  });
+
+  it("returns valid ModelOption structure", () => {
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { prompt: "test" }, []);
+    expect(option.key).toBe("kling30");
+    expect(option.label).toBe("Kling 3.0");
+    expect(option.tool_name).toBe("generate_kling30_video");
+    expect(option.schema).not.toBeNull();
+    expect(option.validation).toBeDefined();
+    expect(typeof option.validation.valid).toBe("boolean");
   });
 });

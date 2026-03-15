@@ -34,7 +34,7 @@ export function transcribeDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
       if (!manifestResult.ok) {
         return {
           isError: true as const,

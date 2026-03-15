@@ -48,4 +48,26 @@ describe("list_projects tool", () => {
     const slugs = data.map((p: { slug: string }) => p.slug).sort();
     expect(slugs).toEqual(["alpha", "beta"]);
   });
+
+  it("returns projects with sort parameter", async () => {
+    client = await createTestClient(tempDir);
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "alpha" },
+    });
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "beta" },
+    });
+    const result = await client.callTool({
+      name: "list_projects",
+      arguments: { sort: "newest" },
+    });
+    const content = result.content as Array<{ type: string; text: string }>;
+    const data = JSON.parse(content[0].text);
+    expect(data.length).toBe(2);
+    // Both projects returned regardless of sort order
+    const slugs = data.map((p: { slug: string }) => p.slug).sort();
+    expect(slugs).toEqual(["alpha", "beta"]);
+  });
 });
