@@ -56,6 +56,10 @@
     background-size: 40px 40px;
   }
 
+  *:focus {
+    outline: none;
+  }
+
   /* Cyberpunk Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
