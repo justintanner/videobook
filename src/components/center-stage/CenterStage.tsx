@@ -344,13 +344,14 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, focusFileIndex }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
+  focusFileIndex?: { index: number; seq: number };
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
@@ -411,12 +412,45 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     }
   }, [projectSlug, item.id]);
 
+  const pendingFocusRef = useRef<number | undefined>(undefined);
+
   useEffect(() => {
     onFlippedChange(false);
     setManifest(null);
     setSelectedFile('.original.json');
     setFileContent(null);
   }, [item.id, onFlippedChange]);
+
+  // Handle focusFileIndex: flip to back, load manifest if needed, select file by 1-based index
+  useEffect(() => {
+    if (!focusFileIndex) return;
+    pendingFocusRef.current = focusFileIndex.index;
+    onFlippedChange(true);
+    if (manifest === null) {
+      fetchManifest();
+    } else {
+      // Manifest already loaded — apply immediately
+      const idx = Math.max(0, Math.min(focusFileIndex.index - 1, manifest.length - 1));
+      const fileName = manifest[idx].name;
+      pendingFocusRef.current = undefined;
+      setSelectedFile(fileName);
+      setFileContent(null);
+      fetchFileContent(fileName);
+      document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
+    }
+  }, [focusFileIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply pending focus once manifest loads
+  useEffect(() => {
+    if (pendingFocusRef.current === undefined || !manifest || manifest.length === 0) return;
+    const idx = Math.max(0, Math.min(pendingFocusRef.current - 1, manifest.length - 1));
+    const fileName = manifest[idx].name;
+    pendingFocusRef.current = undefined;
+    setSelectedFile(fileName);
+    setFileContent(null);
+    fetchFileContent(fileName);
+    document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
+  }, [manifest, fetchFileContent]);
 
   const handleFlipToBack = () => {
     onFlippedChange(true);
@@ -539,7 +573,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 data-tabstop="files"
                 tabIndex={0}
                 onKeyDown={handleFileKeyDown}
-                className="w-48 shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
+                className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
               >
                 <FileListPane
                   files={manifest ?? []}

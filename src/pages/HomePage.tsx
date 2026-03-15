@@ -89,6 +89,18 @@ const VIEWER_COMMANDS: Command[] = [
     params: [],
     uiAction: 'toggle_info',
   },
+  {
+    command: '/files',
+    description: 'Focus file by position',
+    example: '/files 3',
+    category: 'action',
+    icon: 'file',
+    size: 'sm',
+    variant: 'default',
+    chevron: 'right',
+    params: [{ name: 'position', type: 'number', required: true, description: '1-based file position' }],
+    uiAction: 'focus_file',
+  },
 ];
 
 export function HomePage() {
@@ -100,6 +112,7 @@ export function HomePage() {
   const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
+  const [focusFileTarget, setFocusFileTarget] = useState<{ index: number; seq: number } | undefined>();
 
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -256,6 +269,12 @@ export function HomePage() {
     if (item) handleSelectItem(item);
   }, [mediaItems, handleSelectItem]);
 
+  const focusFileSeqRef = useRef(0);
+  const handleFocusFile = useCallback((position: number) => {
+    focusFileSeqRef.current += 1;
+    setFocusFileTarget({ index: position, seq: focusFileSeqRef.current });
+  }, []);
+
   const { dispatch } = useChatDispatch(mergedCommands, {
     onOpenInbox: () => setInboxOpen(true),
     onUpload: triggerUpload,
@@ -264,6 +283,7 @@ export function HomePage() {
     onSwitchProject: handleProjectChange,
     onSetViewerSize: (s) => setViewerSize(s as ViewerSize),
     onToggleInfo: () => setViewerFlipped(f => !f),
+    onFocusFile: handleFocusFile,
     callTool,
     projectSlug,
   });
@@ -367,7 +387,7 @@ export function HomePage() {
                   onClose={() => setHistoryItem(null)}
                 />
               ) : activeSelection ? (
-                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} />
+                <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} focusFileIndex={focusFileTarget} />
               ) : (
                 <IdleScreen label="WAITING FOR INPUT" fillParent />
               )}

@@ -10,6 +10,7 @@ interface ChatDispatchHandlers {
   onSwitchProject: (slug: string) => void;
   onSetViewerSize: (size: string) => void;
   onToggleInfo: () => void;
+  onFocusFile: (position: number) => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
 }
@@ -51,7 +52,7 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
     const trimmed = input.trim();
     if (!trimmed) return false;
 
-    const { onOpenInbox, onUpload, onShowHistory, onOpenAsset, onSwitchProject, onSetViewerSize, onToggleInfo, callTool, projectSlug } = handlersRef.current;
+    const { onOpenInbox, onUpload, onShowHistory, onOpenAsset, onSwitchProject, onSetViewerSize, onToggleInfo, onFocusFile, callTool, projectSlug } = handlersRef.current;
 
     try {
       const firstSpace = trimmed.indexOf(' ');
@@ -77,6 +78,7 @@ export function useChatDispatch(commands: Command[], handlers: ChatDispatchHandl
             set_viewer_landscape: () => onSetViewerSize('landscape'),
             set_viewer_portrait: () => onSetViewerSize('portrait'),
             toggle_info: () => onToggleInfo(),
+            focus_file: (r: string) => { onFocusFile(parseInt(r, 10) || 1); },
           };
           uiHandlers[matchedCommand.uiAction]?.(rest);
           return true;
