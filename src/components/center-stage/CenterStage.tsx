@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -238,6 +238,109 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   );
 }
 
+type ManifestFile = { name: string; size_bytes: number; extension: string | null };
+
+const BINARY_EXTENSIONS = new Set(['mp4', 'mp3', 'wav', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'webm', 'mov', 'flac', 'aac', 'ogg']);
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
+
+function isBinaryFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return BINARY_EXTENSIONS.has(ext);
+}
+
+function isImageFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileListPane({ files, selectedFile, onSelectFile, loading }: {
+  files: ManifestFile[];
+  selectedFile: string;
+  onSelectFile: (name: string) => void;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  return (
+    <div className="py-1">
+      {files.map((f) => (
+        <button
+          key={f.name}
+          onClick={() => onSelectFile(f.name)}
+          className={cn(
+            'w-full text-left px-3 py-1.5 text-xs font-mono flex items-center gap-2 transition-colors',
+            selectedFile === f.name
+              ? 'bg-primary/10 border-l-2 border-primary text-primary'
+              : 'border-l-2 border-transparent hover:bg-white/5',
+            f.name.startsWith('.') && selectedFile !== f.name && 'text-muted-foreground/40',
+          )}
+        >
+          <span className="truncate flex-1">{f.name}</span>
+          <span className="text-[10px] text-muted-foreground/30 shrink-0">{formatBytes(f.size_bytes)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FileContentPane({ content, loading, fileName, fileUrl }: {
+  content: string | null;
+  loading: boolean;
+  fileName: string;
+  fileUrl: string;
+}) {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-8">
+        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground/50 font-mono">Loading...</p>
+      </div>
+    );
+  }
+
+  if (isImageFile(fileName)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <img src={fileUrl} alt={fileName} className="max-w-full max-h-full object-contain" />
+      </div>
+    );
+  }
+
+  if (isBinaryFile(fileName)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground/50">
+        <p className="text-sm font-mono">Binary file</p>
+        <p className="text-xs font-mono">{fileName}</p>
+      </div>
+    );
+  }
+
+  // Text file — use JsonTerminal for .json, plain pre for everything else
+  const isJson = fileName.endsWith('.json');
+  if (isJson) {
+    return <JsonTerminal data={content} loading={false} />;
+  }
+
+  if (content === null) {
+    return <p className="text-sm text-muted-foreground/50 font-mono text-center py-8">No data found.</p>;
+  }
+
+  return (
+    <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed">{content}</pre>
+  );
+}
+
 export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange }: {
   item: MediaItem;
   projectSlug: string;
@@ -247,34 +350,83 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onFlippedChange: (f: boolean) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
-  const [metadata, setMetadata] = useState<string | null>(null);
-  const [metaLoading, setMetaLoading] = useState(false);
+  const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
+  const [manifestLoading, setManifestLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState('.original.json');
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
 
-  const fetchMetadata = useCallback(async () => {
-    setMetaLoading(true);
+  const fileUrl = useMemo(
+    () => `/files/${projectSlug}/${item.id}/${selectedFile}`,
+    [projectSlug, item.id, selectedFile],
+  );
+
+  const fetchFileContent = useCallback(async (fileName: string) => {
+    if (isBinaryFile(fileName)) {
+      setFileContent(null);
+      return;
+    }
+    setFileLoading(true);
     try {
-      const res = await fetch(`/files/${projectSlug}/${item.id}/.original.json`);
+      const res = await fetch(`/files/${projectSlug}/${item.id}/${fileName}`);
       if (res.ok) {
-        const json = await res.json();
-        setMetadata(JSON.stringify(json, null, 2));
+        const text = await res.text();
+        // Re-format JSON for pretty display
+        if (fileName.endsWith('.json')) {
+          try {
+            setFileContent(JSON.stringify(JSON.parse(text), null, 2));
+          } catch {
+            setFileContent(text);
+          }
+        } else {
+          setFileContent(text);
+        }
       } else {
-        setMetadata(`Error: ${res.status} ${res.statusText}`);
+        setFileContent(`Error: ${res.status} ${res.statusText}`);
       }
-    } catch (err) {
-      setMetadata(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } catch (e) {
+      setFileContent(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setMetaLoading(false);
+      setFileLoading(false);
+    }
+  }, [projectSlug, item.id]);
+
+  const fetchManifest = useCallback(async () => {
+    setManifestLoading(true);
+    try {
+      const res = await fetch(`/api/manifest/${projectSlug}/${item.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setManifest(data.files as ManifestFile[]);
+      } else {
+        setManifest([]);
+      }
+    } catch {
+      setManifest([]);
+    } finally {
+      setManifestLoading(false);
     }
   }, [projectSlug, item.id]);
 
   useEffect(() => {
     onFlippedChange(false);
-    setMetadata(null);
+    setManifest(null);
+    setSelectedFile('.original.json');
+    setFileContent(null);
   }, [item.id, onFlippedChange]);
 
   const handleFlipToBack = () => {
     onFlippedChange(true);
-    if (metadata === null) fetchMetadata();
+    if (manifest === null) {
+      fetchManifest();
+      fetchFileContent('.original.json');
+    }
+  };
+
+  const handleSelectFile = (fileName: string) => {
+    setSelectedFile(fileName);
+    setFileContent(null);
+    fetchFileContent(fileName);
   };
 
   return (
@@ -340,7 +492,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <span className="text-xs font-mono font-bold text-muted-foreground">Metadata</span>
+              <span className="text-xs font-mono font-bold text-muted-foreground">Files</span>
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -356,9 +508,24 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
               </button>
             </div>
 
-            {/* Body */}
-            <div className="flex-1 bg-black overflow-auto p-4">
-              <JsonTerminal data={metadata} loading={metaLoading} />
+            {/* Two-pane body */}
+            <div className="flex-1 flex min-h-0">
+              <div className="w-48 shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+                <FileListPane
+                  files={manifest ?? []}
+                  selectedFile={selectedFile}
+                  onSelectFile={handleSelectFile}
+                  loading={manifestLoading}
+                />
+              </div>
+              <div className="flex-1 overflow-auto p-4 bg-black">
+                <FileContentPane
+                  content={fileContent}
+                  loading={fileLoading}
+                  fileName={selectedFile}
+                  fileUrl={fileUrl}
+                />
+              </div>
             </div>
           </div>
         </div>

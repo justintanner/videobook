@@ -40,7 +40,7 @@ import { getTimelineDef } from "./get-timeline.js";
 import { editTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
 import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
-import { openFolderDef } from "./open-folder.js";
+import { showFolderDef } from "./show-folder.js";
 import { commandsDef } from "./commands.js";
 import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
@@ -96,7 +96,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     editTimelineDef(fs),
     renderTimelineDef(fs),
     redesignStyleguidePageDef(),
-    openFolderDef(fs),
+    showFolderDef(fs),
     commandsDef(fs),
     slugsDef(fs),
     pushChatHistoryDef(fs),

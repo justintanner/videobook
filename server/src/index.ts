@@ -15,6 +15,17 @@ app.use(cors());
 app.use("/files", express.static(resolve(PROJECTS_DIR), { dotfiles: "allow" }));
 app.use(express.json({ limit: "50mb" }));
 
+app.get("/api/manifest/:projectSlug/:assetId", async (req, res) => {
+  const { projectSlug, assetId } = req.params;
+  const result = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if (result.ok) {
+    res.json(result.value);
+  } else {
+    const status = result.error.code === "NOT_FOUND" ? 404 : 400;
+    res.status(status).json({ error: result.error.message });
+  }
+});
+
 app.post("/mcp", async (req, res) => {
   const server = createServer();
   const transport = new StreamableHTTPServerTransport({

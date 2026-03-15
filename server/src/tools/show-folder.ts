@@ -3,9 +3,9 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function openFolderDef(fs: ClipfirstFs): ToolDef {
+export function showFolderDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "open_folder",
+    name: "show_folder",
     description: "Reveal an asset's folder in Finder",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-cute-cat)"),

@@ -174,9 +174,9 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "copy_clipboard",
   },
   {
-    command: "/open-folder",
-    description: "Open asset folder",
-    example: "/open-folder @product-shot",
+    command: "/show-folder",
+    description: "Show asset folder",
+    example: "/show-folder @product-shot",
     category: "context_menu",
     icon: "FolderOpen",
     size: "default",
@@ -185,7 +185,7 @@ const HARDCODED_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to open folder for" },
     ],
-    mcpTool: { tool: "open_folder", autoInject: ["project_slug"] },
+    mcpTool: { tool: "show_folder", autoInject: ["project_slug"] },
   },
   {
     command: "/duplicate",

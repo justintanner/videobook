@@ -5,7 +5,7 @@ import { toast } from '@/hooks/useToast';
 
 interface AssetMenuProps {
   slug: string;
-  onOpenFolder: () => void;
+  onShowFolder: () => void;
   onShowHistory?: () => void;
   onAnimateCommand?: (text: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
@@ -27,7 +27,7 @@ function CommandMenuItem({ icon, command, onSelect, MenuItem, className }: {
   );
 }
 
-export function AssetMenu({ slug, onOpenFolder, onShowHistory, onAnimateCommand, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, onShowFolder, onShowHistory, onAnimateCommand, MenuItem }: AssetMenuProps) {
   return (
     <>
       <CommandMenuItem
@@ -41,8 +41,8 @@ export function AssetMenu({ slug, onOpenFolder, onShowHistory, onAnimateCommand,
       />
       <CommandMenuItem
         icon={<FolderOpen className="h-3 w-3" />}
-        command="/open-folder"
-        onSelect={onOpenFolder}
+        command="/show-folder"
+        onSelect={onShowFolder}
         MenuItem={MenuItem}
       />
       {onShowHistory && (

@@ -337,7 +337,7 @@ export function HomePage() {
                 const menu = (
                   <AssetMenu
                     slug={item.slug}
-                    onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                     onShowHistory={() => setHistoryItem(item)}
                     onAnimateCommand={handleAnimateCommand}
                     MenuItem={ContextMenuItem}
@@ -408,7 +408,7 @@ export function HomePage() {
                 const menu = (
                   <AssetMenu
                     slug={item.slug}
-                    onOpenFolder={() => callTool('open_folder', { asset_id: item.id, project_slug: projectSlug })}
+                    onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                     onShowHistory={() => setHistoryItem(item)}
                     onAnimateCommand={handleAnimateCommand}
                     MenuItem={ContextMenuItem}
