@@ -69,7 +69,7 @@ describe("render_timeline tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when no timeline exists", async () => {
+  it("returns error when timeline has no assets", async () => {
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
@@ -79,7 +79,7 @@ describe("render_timeline tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("No timeline found");
+    expect(content[0].text).toContain("no slots");
   });
 
   it("returns error when timeline has no slots with assets", async () => {

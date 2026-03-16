@@ -12,6 +12,7 @@ export function createProjectDef(fs: ClipfirstFs): ToolDef {
       const { project_slug } = args as { project_slug: string };
       const result = await fs.createProject(project_slug);
       if (result.ok) {
+        await fs.writeProjectMeta("timeline", { slots: [], render: "landscape" }, project_slug);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result.value) }],
         };
