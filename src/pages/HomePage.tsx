@@ -100,6 +100,7 @@ export function HomePage() {
       if (target.closest('[role="dialog"]')) return;
 
       e.preventDefault();
+      chatInputRef.current?.focus();
     };
 
     document.addEventListener('mousedown', handler);

@@ -154,6 +154,15 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     resultTimeoutRef.current = window.setTimeout(() => {
       setCommandResult(null);
       setResultText('');
+      // Refocus after input re-enables (wait for React DOM commit)
+      const focusWhenReady = () => {
+        if (inputRef.current && !inputRef.current.disabled) {
+          inputRef.current.focus();
+        } else {
+          requestAnimationFrame(focusWhenReady);
+        }
+      };
+      requestAnimationFrame(focusWhenReady);
     }, duration);
   }, [onSend]);
 
@@ -175,10 +184,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       startAnimation(text, () => {
         setChatInput(text);
         setConfirmedTokens(extractTokens(text, commands, assetSlugs));
-        setTimeout(() => {
-          inputRef.current?.focus();
-          inputRef.current?.setSelectionRange(text.length, text.length);
-        }, 50);
+        // Poll until React commits the DOM update (input is no longer disabled)
+        const focusWhenReady = () => {
+          if (inputRef.current && !inputRef.current.disabled) {
+            inputRef.current.focus();
+            inputRef.current.setSelectionRange(text.length, text.length);
+          } else {
+            requestAnimationFrame(focusWhenReady);
+          }
+        };
+        requestAnimationFrame(focusWhenReady);
       });
     },
     focus() {
