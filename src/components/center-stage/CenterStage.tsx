@@ -6,6 +6,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -210,8 +211,16 @@ const ratioIcons: Record<ViewerSize, typeof Monitor> = {
   square: Square,
 };
 
-function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect: (s: ViewerSize) => void; item: MediaItem }) {
-  const sizes: ViewerSize[] = ['original', 'landscape', 'portrait', 'square'];
+function RatioToggle({ active, onSelect, item, renders, status }: {
+  active: ViewerSize;
+  onSelect: (s: ViewerSize) => void;
+  item: MediaItem;
+  renders?: string[];
+  status?: ClipState;
+}) {
+  const orientations: Orientation[] = ['landscape', 'portrait', 'square'];
+  const clipMode = renders !== undefined;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -221,16 +230,57 @@ function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect:
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {sizes.map((size) => {
-          const Icon = ratioIcons[size];
-          return (
-            <DropdownMenuItem key={size} onClick={() => onSelect(size)} className="py-2.5">
-              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{ratioLabel(size, item)}</span>
-              <span className="ml-2 opacity-80 flex items-center"><Icon className="h-3 w-3" /></span>
+        {clipMode ? (
+          <>
+            <DropdownMenuItem onClick={() => onSelect('original')} className="py-2.5">
+              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
+                {active === 'original' ? <Check className="w-3 h-3 inline text-primary" /> : '\u203A'}
+              </span>
+              <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', active !== 'original' && 'text-muted-foreground/60')}>
+                {ratioLabel('original', item)}
+              </span>
+              <span className={cn('ml-2 flex items-center', active !== 'original' && 'opacity-40')}>
+                <Monitor className="h-3 w-3" />
+              </span>
             </DropdownMenuItem>
-          );
-        })}
+            <DropdownMenuSeparator />
+            {orientations.map((orient) => {
+              const Icon = ratioIcons[orient];
+              const isActive = active === orient;
+              const rendering = isOrientRendering(status, orient);
+              return (
+                <DropdownMenuItem
+                  key={orient}
+                  onClick={() => onSelect(orient)}
+                  disabled={rendering}
+                  className="py-2.5"
+                >
+                  <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
+                    {isActive ? <Check className="w-3 h-3 inline text-primary" /> : '\u203A'}
+                  </span>
+                  <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !isActive && 'text-muted-foreground/60')}>
+                    {ratioLabel(orient, item)}
+                  </span>
+                  <OrientIndicator orient={orient} renders={renders} status={status} />
+                  <span className={cn('ml-1 flex items-center', !isActive && 'opacity-40')}>
+                    <Icon className="h-3 w-3" />
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </>
+        ) : (
+          ['original' as ViewerSize, ...orientations].map((size) => {
+            const Icon = ratioIcons[size];
+            return (
+              <DropdownMenuItem key={size} onClick={() => onSelect(size)} className="py-2.5">
+                <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+                <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{ratioLabel(size, item)}</span>
+                <span className="ml-2 opacity-80 flex items-center"><Icon className="h-3 w-3" /></span>
+              </DropdownMenuItem>
+            );
+          })
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -302,7 +352,8 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }
   };
 
   return (
-    <div className="p-4 space-y-2">
+    <div className="p-3 space-y-1">
+      <p className="text-[10px] font-mono font-bold tracking-widest text-muted-foreground/40 uppercase px-3 pt-1 pb-1">Render orientations</p>
       {allOrientations.map((orient) => {
         const Icon = ratioIcons[orient];
         const isActive = orient === renderOrientation;
@@ -315,17 +366,17 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }
             onClick={() => handleClick(orient)}
             disabled={rendering}
             className={cn(
-              'w-full flex items-center gap-3 px-4 py-3 rounded border text-left font-mono text-xs transition-colors',
+              'w-full flex items-center gap-2 px-3 py-2 rounded text-left font-mono text-xs transition-colors',
               isActive
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-zinc-800/60 bg-black/40 text-muted-foreground hover:bg-white/5',
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-white/5',
               rendering && 'opacity-50 cursor-not-allowed',
             )}
           >
-            <Icon className="w-4 h-4 shrink-0" />
+            <Icon className="w-3.5 h-3.5 shrink-0" />
             <span className="font-bold tracking-wider flex-1">{orientationLabels[orient]}</span>
             <OrientIndicator orient={orient} renders={renders} status={status} />
-            {rendered && isActive && <Check className="w-3.5 h-3.5 text-primary" />}
+            {rendered && isActive && <Check className="w-3 h-3 text-primary" />}
             {rendering && <span className="text-[10px] font-bold tracking-widest text-primary animate-pulse">RENDERING</span>}
             {!rendered && !rendering && <span className="text-[10px] font-bold tracking-widest text-muted-foreground/40">RENDER</span>}
           </button>
@@ -705,7 +756,13 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           )}>
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <RatioToggle active={size} onSelect={onSizeChange} item={item} />
+              <RatioToggle
+                active={size}
+                onSelect={onSizeChange}
+                item={item}
+                renders={isClip ? (item.renders ?? []) : undefined}
+                status={isClip ? item.status : undefined}
+              />
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
