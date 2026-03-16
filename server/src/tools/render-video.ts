@@ -13,7 +13,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_video",
     description:
-      "Render a vid- asset to landscape (1920x1080), portrait (1080x1920), or square (1080x1080) with blur-fill background and optional word-level subtitles.",
+      "Render a vid- asset to landscape (1920x1080), portrait (1080x1920), or square (1080x1080) with configurable background (blur-fill or black letterbox) and optional word-level subtitles.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
@@ -65,6 +65,10 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
         .optional()
         .describe("OSG position (default: top-right)"),
+      background_mode: z
+        .enum(["blur", "black"])
+        .optional()
+        .describe("Background fill mode (default: blur)"),
     },
     handler: async (args) => {
       const {
@@ -82,6 +86,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         audio_volume = 100,
         osg_asset_id,
         osg_position = "top-right",
+        background_mode = "blur",
       } = args as {
         asset_id: string;
         project_slug: string;
@@ -97,6 +102,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         audio_volume?: number;
         osg_asset_id?: string;
         osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+        background_mode?: "blur" | "black";
       };
 
       if (!asset_id.startsWith("vid-")) {
@@ -221,6 +227,7 @@ export function renderVideoDef(fs: ClipfirstFs): ToolDef {
         hasElevenlabs,
         osgImagePath,
         osgPosition: osg_position,
+        backgroundMode: background_mode,
       });
 
       return {

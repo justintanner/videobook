@@ -8,6 +8,7 @@ interface BlurFillVideoProps {
   volume: number;
   audioFadeIn: number;
   audioFadeOut: number;
+  backgroundMode: "blur" | "black";
 }
 
 export const BlurFillVideo: React.FC<BlurFillVideoProps> = ({
@@ -17,6 +18,7 @@ export const BlurFillVideo: React.FC<BlurFillVideoProps> = ({
   volume,
   audioFadeIn,
   audioFadeOut,
+  backgroundMode,
 }) => {
   const { width, height, fps, durationInFrames } = useVideoConfig();
 
@@ -53,19 +55,21 @@ export const BlurFillVideo: React.FC<BlurFillVideoProps> = ({
 
   return (
     <div style={{ position: "relative", width, height, overflow: "hidden" }}>
-      {/* Background: scaled to cover, blurred */}
-      <OffthreadVideo
-        src={src}
-        style={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          filter: "blur(20px) brightness(0.6)",
-          transform: "scale(1.1)",
-        }}
-        volume={0}
-      />
+      {/* Background: scaled to cover, blurred (skip for black letterbox) */}
+      {backgroundMode === "blur" && (
+        <OffthreadVideo
+          src={src}
+          style={{
+            position: "absolute",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: "blur(20px) brightness(0.6)",
+            transform: "scale(1.1)",
+          }}
+          volume={0}
+        />
+      )}
       {/* Foreground: scaled to fit, centered */}
       <div
         style={{

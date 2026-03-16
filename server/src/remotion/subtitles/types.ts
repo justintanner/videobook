@@ -58,4 +58,5 @@ export interface RenderInputProps extends Record<string, unknown> {
   audioVolume: number;
   osgSrc: string | null;
   osgPosition: OsgPosition;
+  backgroundMode: BackgroundMode;
 }

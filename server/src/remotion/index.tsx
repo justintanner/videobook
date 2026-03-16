@@ -23,6 +23,7 @@ const defaultProps: RenderInputProps = {
   audioVolume: 100,
   osgSrc: null,
   osgPosition: "top-right",
+  backgroundMode: "blur",
 };
 
 // eslint-disable-next-line react-refresh/only-export-components

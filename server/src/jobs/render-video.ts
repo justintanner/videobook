@@ -13,6 +13,7 @@ import type {
   SubtitlePosition,
   FontSizePreset,
   OsgPosition,
+  BackgroundMode,
   Chunk,
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
@@ -68,6 +69,7 @@ type RenderVideoPayload = {
   hasElevenlabs: boolean;
   osgImagePath: string | null;
   osgPosition: OsgPosition;
+  backgroundMode: BackgroundMode;
 };
 
 export function registerRenderVideoJob(fs: ClipfirstFs): void {
@@ -90,6 +92,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
       hasElevenlabs,
       osgImagePath,
       osgPosition,
+      backgroundMode,
     } = payload as RenderVideoPayload;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "rendering" } });
@@ -167,6 +170,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
             audioVolume,
             osgSrc: osgCopyName,
             osgPosition: osgPosition ?? "top-right",
+            backgroundMode,
           };
 
           const composition = await selectComposition({
@@ -202,6 +206,7 @@ export function registerRenderVideoJob(fs: ClipfirstFs): void {
         audioFadeIn,
         audioFadeOut,
         audioVolume,
+        backgroundMode,
         renderedAt: new Date().toISOString(),
         outputs,
       };

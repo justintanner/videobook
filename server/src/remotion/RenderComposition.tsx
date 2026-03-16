@@ -21,6 +21,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   audioVolume,
   osgSrc,
   osgPosition,
+  backgroundMode,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
@@ -31,6 +32,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
         volume={audioVolume}
         audioFadeIn={audioFadeIn}
         audioFadeOut={audioFadeOut}
+        backgroundMode={backgroundMode}
       />
       {subtitlesEnabled && chunks.length > 0 && (
         <SubtitleOverlay
