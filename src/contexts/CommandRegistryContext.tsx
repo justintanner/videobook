@@ -34,11 +34,15 @@ export function CommandRegistryProvider({
     if (state !== 'ready') return;
     let cancelled = false;
     (async () => {
-      const result = await callTool('commands', {});
-      if (cancelled) return;
-      const content = result.content as Array<{ type: string; text: string }>;
-      const parsed: ServerCommand[] = JSON.parse(content[0].text);
-      setAllCommands(parsed);
+      try {
+        const result = await callTool('commands', {});
+        if (cancelled) return;
+        const content = result.content as Array<{ type: string; text: string }>;
+        const parsed: ServerCommand[] = JSON.parse(content[0].text);
+        setAllCommands(parsed);
+      } catch {
+        // callTool may throw during connection transitions; safe to ignore
+      }
     })();
     return () => { cancelled = true; };
   }, [callTool, state, projectSlug]);
@@ -56,56 +60,61 @@ export function CommandRegistryProvider({
     const commandStr = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
     const rest = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim();
 
-    if (commandStr.startsWith('/')) {
-      const cmd = allCommands.find((c) => c.command === commandStr);
-      if (cmd) {
-        const args = parseCommandArgs(rest, cmd.params);
+    try {
+      if (commandStr.startsWith('/')) {
+        const cmd = allCommands.find((c) => c.command === commandStr);
+        if (cmd) {
+          const args = parseCommandArgs(rest, cmd.params);
 
-        // uiAction dispatch
-        if (cmd.uiAction) {
-          // For switch_project, pass the slug from the command name
-          if (cmd.uiAction === 'switch_project') {
-            const slug = commandStr.slice(1); // remove leading /
-            return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args });
+          // uiAction dispatch
+          if (cmd.uiAction) {
+            // For switch_project, pass the slug from the command name
+            if (cmd.uiAction === 'switch_project') {
+              const slug = commandStr.slice(1); // remove leading /
+              return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args });
+            }
+            return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args });
           }
-          return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args });
-        }
 
-        // mcpTool dispatch
-        if (cmd.mcpTool) {
-          const toolArgs: Record<string, string> = { ...args };
-          if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
-            toolArgs.project_slug = projectSlug;
+          // mcpTool dispatch
+          if (cmd.mcpTool) {
+            const toolArgs: Record<string, string> = { ...args };
+            if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
+              toolArgs.project_slug = projectSlug;
+            }
+            const result = await callTool(cmd.mcpTool.tool, toolArgs);
+            return !result.isError;
           }
-          const result = await callTool(cmd.mcpTool.tool, toolArgs);
-          return !result.isError;
+
+          // Chat fallback for commands with no mcpTool or uiAction
+          if (projectSlug) {
+            const result = await callTool('chat', { prompt: `${commandStr} ${rest}`.trim(), project_slug: projectSlug });
+            return !result.isError;
+          }
+          return false;
         }
+      }
 
-        // Chat fallback for commands with no mcpTool or uiAction
-        if (projectSlug) {
-          const result = await callTool('chat', { prompt: `${commandStr} ${rest}`.trim(), project_slug: projectSlug });
-          return !result.isError;
+      // Bare command match — dispatch "download URL" the same as "/download URL"
+      const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
+      if (bareCmd) {
+        const args = parseCommandArgs(rest, bareCmd.params);
+        const toolArgs: Record<string, string> = { ...args };
+        if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
+          toolArgs.project_slug = projectSlug;
         }
-        return false;
+        const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
+        return !result.isError;
       }
-    }
 
-    // Bare command match — dispatch "download URL" the same as "/download URL"
-    const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
-    if (bareCmd) {
-      const args = parseCommandArgs(rest, bareCmd.params);
-      const toolArgs: Record<string, string> = { ...args };
-      if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
-        toolArgs.project_slug = projectSlug;
+      // General chat fallback
+      if (projectSlug) {
+        const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
+        return !result.isError;
       }
-      const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
-      return !result.isError;
-    }
-
-    // General chat fallback
-    if (projectSlug) {
-      const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
-      return !result.isError;
+    } catch {
+      // callTool may throw during MCP connection transitions; treat as failure
+      return false;
     }
     return false;
   }, [allCommands, callTool, projectSlug, uiActions]);
