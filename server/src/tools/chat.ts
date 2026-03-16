@@ -101,7 +101,7 @@ Determine which tool to use and what parameters to pass.`;
           response_format: { type: "json_object" },
           temperature: 0.1,
           max_completion_tokens: 512,
-        });
+        }, AbortSignal.timeout(15_000));
 
         decision = JSON.parse(result.content) as ChatDecision;
       } catch (e) {

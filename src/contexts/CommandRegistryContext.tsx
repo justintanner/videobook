@@ -90,6 +90,18 @@ export function CommandRegistryProvider({
       }
     }
 
+    // Bare command match — dispatch "download URL" the same as "/download URL"
+    const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
+    if (bareCmd) {
+      const args = parseCommandArgs(rest, bareCmd.params);
+      const toolArgs: Record<string, string> = { ...args };
+      if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
+        toolArgs.project_slug = projectSlug;
+      }
+      const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
+      return !result.isError;
+    }
+
     // General chat fallback
     if (projectSlug) {
       const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
