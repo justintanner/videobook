@@ -323,8 +323,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         e.preventDefault();
         setSelectedIndex((prev) => (prev - 1 + autocompleteItems.length) % autocompleteItems.length);
       } else if (e.key === 'Enter') {
-        e.preventDefault();
-        selectSuggestion(autocompleteItems[selectedIndex]);
+        const trimmed = chatInput.trim();
+        const isCompleteCommand = commands.some(c => trimmed === c.command);
+        if (isCompleteCommand) {
+          handleSend();
+        } else {
+          e.preventDefault();
+          selectSuggestion(autocompleteItems[selectedIndex]);
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         setDismissed(true);
