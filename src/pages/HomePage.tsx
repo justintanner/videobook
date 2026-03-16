@@ -77,6 +77,41 @@ export function HomePage() {
     prevInboxOpenRef.current = inboxOpen;
   }, [inboxOpen]);
 
+  // Global focus lock: refocus ChatInput unless a legitimate form element has focus
+  useEffect(() => {
+    if (inboxOpen) return;
+
+    const handler = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+      if (target.dataset.testid === 'input-chat') return;
+
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+          || tag === 'VIDEO' || tag === 'AUDIO') return;
+      if (target.isContentEditable) return;
+
+      // Skip Radix portaled content (dropdowns, popovers, context menus)
+      if (target.closest('[data-radix-popper-content-wrapper]')) return;
+      if (target.closest('[data-radix-menu-content]')) return;
+
+      requestAnimationFrame(() => chatInputRef.current?.focus());
+    };
+
+    document.addEventListener('focusin', handler);
+    return () => document.removeEventListener('focusin', handler);
+  }, [inboxOpen]);
+
+  // ESC key closes history panel
+  useEffect(() => {
+    if (!historyItem) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !inboxOpen) setHistoryItem(null);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [historyItem, inboxOpen]);
+
   // Refresh assets after each sync or sort change
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
@@ -144,6 +179,7 @@ export function HomePage() {
   }, [mediaItems, selectedItem]);
 
   const handleSelectItem = useCallback((item: MediaItem) => {
+    setHistoryItem(null);
     setSelectedItem(item);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
@@ -332,7 +368,6 @@ export function HomePage() {
                     item={historyItem}
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
-                    onClose={() => setHistoryItem(null)}
                   />
                 ) : activeSelection ? (
                   <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />

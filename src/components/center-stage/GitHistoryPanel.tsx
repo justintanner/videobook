@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { History, RotateCcw, X, Film, ImageIcon, Music, FileText, Loader2 } from 'lucide-react';
+import { History, RotateCcw, Film, ImageIcon, Music, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -135,10 +135,9 @@ interface GitHistoryPanelProps {
   item: MediaItem;
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
-  onClose: () => void;
 }
 
-export function GitHistoryPanel({ item, projectSlug, callTool, onClose }: GitHistoryPanelProps) {
+export function GitHistoryPanel({ item, projectSlug, callTool }: GitHistoryPanelProps) {
   const { commits, loading, fetchHistory, restoreVersion } = useAssetHistory(callTool);
 
   useEffect(() => {
@@ -214,13 +213,6 @@ export function GitHistoryPanel({ item, projectSlug, callTool, onClose }: GitHis
           <span className="text-[11px] font-mono text-muted-foreground/40">
             {loading ? '...' : `${commits.length} commits`}
           </span>
-
-          <button
-            onClick={onClose}
-            className="ml-auto text-muted-foreground/50 hover:text-cyan-400 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Timeline */}
