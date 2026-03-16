@@ -23,6 +23,7 @@ export type SubtitleStyle = "tikdance" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
 export type OsgPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type BackgroundMode = "blur" | "black";
 
 export interface RenderSettings {
   subtitlesEnabled: boolean;
@@ -34,6 +35,7 @@ export interface RenderSettings {
   audioFadeIn: number;
   audioFadeOut: number;
   audioVolume: number;
+  backgroundMode: BackgroundMode;
 }
 
 export interface RenderInputProps extends Record<string, unknown> {
