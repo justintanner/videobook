@@ -11,6 +11,7 @@ import {
 import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
+import { RenderSettingsPanel } from './RenderSettingsPanel';
 import { useMountKey } from '@/contexts/MountKeyContext';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
@@ -286,12 +287,6 @@ function RatioToggle({ active, onSelect, item, renders, status }: {
   );
 }
 
-const orientationLabels: Record<Orientation, string> = {
-  landscape: '/landscape 1920x1080',
-  portrait: '/portrait 1080x1920',
-  square: '/square 1080x1080',
-};
-
 const RENDERING_STATUSES = new Set<string>([
   'rendering', 'rendering-landscape', 'rendering-portrait', 'rendering-square',
   'render-queued', 'render-queued-landscape', 'render-queued-portrait', 'render-queued-square',
@@ -351,38 +346,28 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }
     }
   };
 
-  return (
-    <div className="p-3 space-y-1">
-      <p className="text-[10px] font-mono font-bold tracking-widest text-muted-foreground/40 uppercase px-3 pt-1 pb-1">Render orientations</p>
-      {allOrientations.map((orient) => {
-        const Icon = ratioIcons[orient];
-        const isActive = orient === renderOrientation;
-        const rendered = renders.includes(orient);
-        const rendering = isOrientRendering(status, orient);
+  const orientationEntries = allOrientations.map((orient) => ({
+    orient,
+    active: orient === renderOrientation,
+    rendered: renders.includes(orient),
+    rendering: isOrientRendering(status, orient),
+  }));
 
-        return (
-          <button
-            key={orient}
-            onClick={() => handleClick(orient)}
-            disabled={rendering}
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-2 rounded text-left font-mono text-xs transition-colors',
-              isActive
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-white/5',
-              rendering && 'opacity-50 cursor-not-allowed',
-            )}
-          >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
-            <span className="font-bold tracking-wider flex-1">{orientationLabels[orient]}</span>
-            <OrientIndicator orient={orient} renders={renders} status={status} />
-            {rendered && isActive && <Check className="w-3 h-3 text-primary" />}
-            {rendering && <span className="text-[10px] font-bold tracking-widest text-primary animate-pulse">RENDERING</span>}
-            {!rendered && !rendering && <span className="text-[10px] font-bold tracking-widest text-muted-foreground/40">RENDER</span>}
-          </button>
-        );
-      })}
-    </div>
+  return (
+    <RenderSettingsPanel
+      orientations={orientationEntries}
+      onOrientationClick={handleClick}
+      subtitlesEnabled={true}
+      subtitleStyle="tikdance"
+      subtitlePosition="bottom"
+      fontSize="medium"
+      audioVolume={100}
+      audioFadeIn={150}
+      audioFadeOut={100}
+      osgEnabled={true}
+      osgPosition="top-right"
+      backgroundMode="blur"
+    />
   );
 }
 

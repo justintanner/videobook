@@ -31,6 +31,7 @@ import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
+import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -1542,130 +1543,23 @@ function Page10_GenSystem() {
           {/* Scrollable body */}
           <div className="flex-1 overflow-auto bg-black p-4 space-y-3">
 
-            {/* Orientations */}
-            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Orientations</span>
-              </div>
-              {([
-                { label: '/landscape 1920x1080', icon: Monitor, active: true, rendered: true, rendering: false },
-                { label: '/portrait 1080x1920', icon: Smartphone, active: false, rendered: false, rendering: false },
-                { label: '/square 1080x1080', icon: Square, active: false, rendered: false, rendering: true },
-              ] as const).map((o) => (
-                <div
-                  key={o.label}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-4 py-3 rounded border text-left font-mono text-xs',
-                    o.active
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'border-zinc-800/60 bg-black/40 text-muted-foreground',
-                    o.rendering && 'opacity-50',
-                  )}
-                >
-                  <o.icon className="w-4 h-4 shrink-0" />
-                  <span className="font-bold tracking-wider flex-1">{o.label}</span>
-                  <span className={cn('w-1.5 h-1.5 rounded-full', o.rendering ? 'bg-primary animate-pulse' : o.rendered ? 'bg-primary' : 'bg-muted-foreground/20')} />
-                  {o.rendered && o.active && <Check className="w-3.5 h-3.5 text-primary" />}
-                  {o.rendering && <span className="text-[10px] font-bold tracking-widest text-primary animate-pulse">RENDERING</span>}
-                  {!o.rendered && !o.rendering && <span className="text-[10px] font-bold tracking-widest text-muted-foreground/40">RENDER</span>}
-                </div>
-              ))}
-            </div>
-
-            {/* Subtitles */}
-            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Subtitles</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Enabled</span>
-                <div className="flex gap-1">
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">ON</span>
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">OFF</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Style</span>
-                <div className="flex gap-1">
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">TikDance</span>
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">Highlight</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Position</span>
-                <div className="flex gap-1">
-                  {['Top', 'Mid', 'Bottom'].map((p) => (
-                    <span key={p} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold', p === 'Bottom' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{p}</span>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Font Size</span>
-                <div className="flex gap-1">
-                  {['Small', 'Medium', 'Large'].map((s) => (
-                    <span key={s} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold', s === 'Medium' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{s}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Audio */}
-            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Audio</span>
-              </div>
-              {([
-                { label: 'Volume', value: '80', unit: '' },
-                { label: 'Fade In', value: '200', unit: 'ms' },
-                { label: 'Fade Out', value: '500', unit: 'ms' },
-              ] as const).map((f) => (
-                <div key={f.label} className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-muted-foreground">{f.label}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-16 px-2 py-1 rounded border border-white/10 bg-black/40 text-[10px] font-mono font-bold text-foreground/80 text-right">{f.value}</span>
-                    {f.unit && <span className="text-[10px] font-mono text-muted-foreground/50">{f.unit}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* OSG (On-Screen Graphic) */}
-            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">OSG</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Enabled</span>
-                <div className="flex gap-1">
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">ON</span>
-                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">OFF</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-muted-foreground">Position</span>
-                <div className="grid grid-cols-2 gap-1">
-                  {(['TL', 'TR', 'BL', 'BR'] as const).map((pos) => (
-                    <span key={pos} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold text-center', pos === 'BR' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{pos}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Background */}
-            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
-                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Background</span>
-              </div>
-              <div className="flex gap-1">
-                <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">Blur</span>
-                <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">Black</span>
-              </div>
-            </div>
+            <RenderSettingsPanel
+              orientations={[
+                { orient: 'landscape', active: true, rendered: true, rendering: false },
+                { orient: 'portrait', active: false, rendered: false, rendering: false },
+                { orient: 'square', active: false, rendered: false, rendering: true },
+              ]}
+              subtitlesEnabled={true}
+              subtitleStyle="tikdance"
+              subtitlePosition="bottom"
+              fontSize="medium"
+              audioVolume={80}
+              audioFadeIn={200}
+              audioFadeOut={500}
+              osgEnabled={true}
+              osgPosition="bottom-right"
+              backgroundMode="blur"
+            />
 
           </div>
         </div>
