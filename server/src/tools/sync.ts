@@ -71,8 +71,8 @@ async function isWhitelisted(assetDir: string): Promise<boolean> {
 
 async function hasRenderMetadata(assetDir: string): Promise<boolean> {
   try {
-    await access(join(assetDir, ".render.json"));
-    return true;
+    const files = await readdir(assetDir);
+    return files.some((f) => /^\.(portrait|landscape|square)\.render\.json$/.test(f));
   } catch {
     return false;
   }
@@ -159,11 +159,17 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // Single listAssets call, shared by all consumers
   const assets = await fs.listAssets(project_slug);
 
+  // Read orientation from timeline config (needed by findAutoRenderActions)
+  const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", project_slug);
+  const orientation = timelineResult.ok
+    ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
+    : "landscape";
+
   // Run all three discovery steps in parallel
   const [uploads, tasks, renderActions] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
-    findAutoRenderActions(fs, project_slug, assets),
+    findAutoRenderActions(fs, project_slug, assets, orientation),
   ]);
 
   // Process external uploads
@@ -181,12 +187,6 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       await processSyncedTask(task, taskInfo, result);
     }));
   }
-
-  // Read orientation from timeline config
-  const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", project_slug);
-  const orientation = timelineResult.ok
-    ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
-    : "landscape";
 
   // Auto-pipeline: advance whitelisted videos through render
   for (const action of renderActions) {
@@ -286,6 +286,7 @@ async function findAutoRenderActions(
   fs: ClipfirstFs,
   projectSlug: string,
   assets: AssetEntry[],
+  orientation: string,
 ): Promise<RenderAction[]> {
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<RenderAction | null> => {
@@ -298,8 +299,8 @@ async function findAutoRenderActions(
 
       // Skip: not whitelisted
       if (!fileNames.has(".whitelisted_at")) return null;
-      // Skip: already rendered
-      if (fileNames.has(".render.json")) return null;
+      // Skip: already rendered for target orientation
+      if (fileNames.has(`.${orientation}.render.json`)) return null;
       // Skip: process_video incomplete
       if (!fileNames.has(".original.analysis.json")) return null;
 

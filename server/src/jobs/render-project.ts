@@ -217,7 +217,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename],
               };
-              await fs.writeMetadata(asset.assetId, "render", renderSettings, projectSlug);
+              await fs.writeMetadata(asset.assetId, `${orientation}.render`, renderSettings, projectSlug);
 
               await fs.commitOperation("render", asset.assetId, { orientation }, projectSlug);
 

@@ -263,7 +263,7 @@ describe("buildAssetList", () => {
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
-    await writeFile(join(assetDir, ".render.json"), JSON.stringify({ done: true }));
+    await writeFile(join(assetDir, ".landscape.render.json"), JSON.stringify({ done: true }));
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);

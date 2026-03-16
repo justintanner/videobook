@@ -128,7 +128,7 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
         output: outputFilename,
         renderedAt: new Date().toISOString(),
       };
-      await fs.writeMetadata("final", "render", renderMeta, projectSlug);
+      await fs.writeMetadata("final", `${orientation}.render`, renderMeta, projectSlug);
 
       await fs.commitOperation("render-timeline", "final", { orientation, slotCount: n }, projectSlug);
 
