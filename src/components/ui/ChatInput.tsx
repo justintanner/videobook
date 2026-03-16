@@ -85,6 +85,7 @@ function parseTokens(text: string, confirmedTokens: ConfirmedToken[], commands: 
 
 export interface ChatInputHandle {
   animateAndSend: (text: string) => void;
+  animateAndEdit: (text: string) => void;
   focus: () => void;
 }
 
@@ -156,7 +157,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     }, duration);
   }, [onSend]);
 
-  // Expose imperative handle for animate-and-send
+  // Expose imperative handle for animate-and-send / animate-and-edit
   useImperativeHandle(ref, () => ({
     animateAndSend(text: string) {
       history.push(text);
@@ -168,10 +169,22 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         runResultSequence(text);
       });
     },
+    animateAndEdit(text: string) {
+      setChatInput('');
+      setConfirmedTokens([]);
+      startAnimation(text, () => {
+        setChatInput(text);
+        setConfirmedTokens(extractTokens(text, commands, assetSlugs));
+        setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.setSelectionRange(text.length, text.length);
+        }, 0);
+      });
+    },
     focus() {
       inputRef.current?.focus();
     },
-  }), [runResultSequence, startAnimation, history]);
+  }), [runResultSequence, startAnimation, history, commands, assetSlugs]);
 
   // The displayed text is either animating text, result text, or user input
   const displayText = isAnimating ? animatingText : commandResult ? resultText : chatInput;

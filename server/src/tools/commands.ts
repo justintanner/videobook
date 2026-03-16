@@ -216,6 +216,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to rename" },
+      { name: "new_name", type: "string", required: true, description: "New slug name" },
     ],
     mcpTool: { tool: "rename_asset", autoInject: ["project_slug"] },
   },
