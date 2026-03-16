@@ -4,7 +4,7 @@ import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { registerJobHandler } from "../queue.js";
-import { probeVideo } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { chunkSegments } from "../remotion/subtitles/chunker.js";
 import type {
@@ -197,6 +197,15 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 crf: 18,
               });
 
+              // Extract first frame as {orientation}.jpg
+              const jpgFilename = outputFilename.replace(".mp4", ".jpg");
+              const jpgPath = join(asset.assetDir, jpgFilename);
+              try {
+                await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", jpgPath]);
+              } catch {
+                // non-fatal
+              }
+
               const renderSettings = {
                 orientation,
                 subtitlesEnabled: subsEnabled,
@@ -210,7 +219,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 audioVolume,
                 backgroundMode,
                 renderedAt: new Date().toISOString(),
-                outputs: [outputFilename],
+                outputs: [outputFilename, jpgFilename],
               };
               await fs.writeMetadata(asset.assetId, "render", renderSettings, projectSlug);
 

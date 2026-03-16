@@ -47,9 +47,9 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
         />
       );
     }
-    const cropFile = size === 'landscape' ? 'image_1920x1080.jpg'
-      : size === 'portrait' ? 'image_1080x1920.jpg'
-      : 'image_1080x1080.jpg';
+    const cropFile = size === 'landscape' ? 'landscape.jpg'
+      : size === 'portrait' ? 'portrait.jpg'
+      : 'square.jpg';
     const cropSrc = item.filePath.replace(/\/[^/]+$/, `/${cropFile}`);
     return (
       <CropImage key={cropSrc} cropSrc={cropSrc} fallbackSrc={item.filePath} alt={item.title} />
@@ -84,7 +84,7 @@ function ClipViewerInner({ item, orientedFile, derivedSrc }: {
 }) {
   const fell = useRef(false);
   const [src, setSrc] = useState(derivedSrc);
-  const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg');
+  const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
 
   return (
     <video

@@ -26,7 +26,7 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: 
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const showElfOverlay = isRenderingState(status);
-  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
+  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>

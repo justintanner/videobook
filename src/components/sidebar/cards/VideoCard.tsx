@@ -35,7 +35,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick }: Video
   const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   const duration = formatDuration(item.durationSeconds);
-  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
+  const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>

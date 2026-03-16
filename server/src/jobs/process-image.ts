@@ -27,14 +27,16 @@ export function registerProcessImageJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(assetId, "original", { ...provenance, width, height }, projectSlug);
 
     if (!SKIP_CROP_EXTENSIONS.has(extension)) {
-      const [landscape, portrait] = await Promise.all([
+      const [landscape, portrait, square] = await Promise.all([
         cropToFill(buffer, 1920, 1080),
         cropToFill(buffer, 1080, 1920),
+        cropToFill(buffer, 1080, 1080),
       ]);
 
       await Promise.all([
-        fs.writeFile(assetId, "image_1920x1080.jpg", landscape, projectSlug),
-        fs.writeFile(assetId, "image_1080x1920.jpg", portrait, projectSlug),
+        fs.writeFile(assetId, "landscape.jpg", landscape, projectSlug),
+        fs.writeFile(assetId, "portrait.jpg", portrait, projectSlug),
+        fs.writeFile(assetId, "square.jpg", square, projectSlug),
       ]);
     }
 

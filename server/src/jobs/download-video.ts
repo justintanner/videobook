@@ -77,7 +77,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
-      // (a) Download OG image as thumbnail.jpg
+      // (a) Download OG image as original.jpg
       try {
         const ogFileResult = await fs.readFile(assetId, ".opengraph.json", projectSlug ?? "");
         if (ogFileResult.ok) {
@@ -89,7 +89,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
               redirect: "follow",
             });
             const buffer = Buffer.from(await imgResponse.arrayBuffer());
-            await fs.writeFile(assetId, "thumbnail.jpg", buffer, projectSlug ?? "");
+            await fs.writeFile(assetId, "original.jpg", buffer, projectSlug ?? "");
           }
         }
       } catch {

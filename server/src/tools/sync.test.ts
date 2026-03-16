@@ -208,11 +208,11 @@ describe("buildAssetList", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, "thumbnail.jpg"), "fake-thumb");
+    await writeFile(join(assetDir, "original.jpg"), "fake-thumb");
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].thumbnail_url).toContain("thumbnail.jpg");
+    expect(assets[0].thumbnail_url).toContain("original.jpg");
   });
 
   it("returns null thumbnail for video without frame files", async () => {
