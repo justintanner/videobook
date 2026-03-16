@@ -95,6 +95,13 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
       <PopoverContent
         align="start"
         className="w-64 p-0 bg-card border-emerald-500/25"
+        onEscapeKeyDown={(e) => {
+          if (editingSlug || creatingNew) {
+            e.preventDefault()
+            if (editingSlug) cancelEdit()
+            if (creatingNew) cancelCreate()
+          }
+        }}
       >
         {/* Project list */}
         <div className="max-h-60 overflow-y-auto py-1">
@@ -111,7 +118,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                     onChange={(e) => setEditValue(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleRenameConfirm()
-                      if (e.key === 'Escape') cancelEdit()
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelEdit() }
                     }}
                     className="h-7 text-xs font-mono flex-1"
                   />
@@ -179,7 +186,7 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                 placeholder="project-slug"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreateConfirm()
-                  if (e.key === 'Escape') cancelCreate()
+                  if (e.key === 'Escape') { e.stopPropagation(); cancelCreate() }
                 }}
                 className="h-7 text-xs font-mono flex-1"
               />
