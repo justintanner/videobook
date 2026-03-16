@@ -31,6 +31,7 @@ import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
+import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
@@ -75,6 +76,7 @@ const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item
   { item: { id: 'o-error', type: 'video', slug: '@broken-clip', title: 'Error', filePath: '', status: 'error', durationSeconds: 30, origin: 'veo3', thumbnailSrc: null }, Component: VideoCard },
   { item: { id: 'o-elf', type: 'final', slug: '@final', title: 'Elf Building', filePath: '', status: 'rendering', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
   { item: { id: 'o-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }, Component: FinalVideoCard },
+  { item: { id: 'o-img-ready', type: 'image', slug: '@product-hero', title: 'Product Hero', filePath: '/styleguide-img-cyber-fresh.jpg', status: 'ready', width: 1920, height: 1080, origin: 'nano_banana', thumbnailSrc: '/styleguide-img-cyber-fresh.jpg' }, Component: ImageCard },
 ];
 
 const reviewQueueItems: MediaItem[] = [
@@ -88,11 +90,11 @@ const reviewQueueItems: MediaItem[] = [
   { id: 'rq-8', type: 'video', slug: '@outro-fade', title: 'Outro Fade', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 9, width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' },
 ];
 
-const pendingQueueItems = [
-  { id: 'pq-1', slug: '@intro-v2', tag: 'GEN' },
-  { id: 'pq-2', slug: '@b-roll-city', tag: 'DL' },
-  { id: 'pq-3', slug: '@cta-end', tag: 'GEN' },
-  { id: 'pq-4', slug: '@ambient-loop', tag: 'GEN' },
+const pendingQueueItems: MediaItem[] = [
+  { id: 'pq-1', type: 'video', slug: '@intro-v2', title: 'Intro V2', filePath: '', status: 'generating', width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-vid-purple-grind.jpg', prompt: 'cinematic intro with neon lights' },
+  { id: 'pq-2', type: 'video', slug: '@b-roll-city', title: 'B-Roll City', filePath: '', status: 'downloading', width: 1080, height: 1920, origin: 'kling3', thumbnailSrc: null, prompt: 'aerial city flyover at night' },
+  { id: 'pq-3', type: 'video', slug: '@cta-end', title: 'CTA End', filePath: '', status: 'generating', width: 1080, height: 1080, origin: 'wan21', thumbnailSrc: null, prompt: 'call to action end screen' },
+  { id: 'pq-4', type: 'video', slug: '@ambient-loop', title: 'Ambient Loop', filePath: '', status: 'generating', width: 1920, height: 1080, origin: 'veo3', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg', prompt: 'ambient background loop' },
 ];
 
 // ── Helper Components ──
@@ -1944,18 +1946,19 @@ function Page13_InboxReview() {
   const activeIndex = 2; // 3rd tile is active (0-based)
   return (
     <div className="w-full h-full flex flex-col bg-background">
-      {/* ReviewHeader */}
+      {/* InboxHeader */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
         <span className="text-xs font-mono font-bold tracking-widest text-primary/70 uppercase">REVIEW_QUEUE</span>
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-muted-foreground">{activeIndex + 1}/{reviewQueueItems.length}</span>
+          <span className="text-xs font-mono text-cyan-400/80">{activeIndex + 1}/{reviewQueueItems.length}</span>
+          <span className="text-xs font-mono text-amber-400/80">+{pendingQueueItems.length} pending</span>
           <button className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Unified grid — review cards + pending cards */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="flex flex-wrap gap-4">
           {reviewQueueItems.map((item, i) => {
@@ -2016,24 +2019,65 @@ function Page13_InboxReview() {
               </div>
             );
           })}
+
+          {/* Pending cards — full-sized in unified grid */}
+          {pendingQueueItems.map((item) => {
+            const w = item.width ?? 1920;
+            const h = item.height ?? 1080;
+            const isPortrait = h > w;
+            const isSquare = w === h;
+            const ratioLabel = isPortrait ? '9:16' : isSquare ? '1:1' : '16:9';
+            const cardWidth = isPortrait ? 'w-[160px]' : isSquare ? 'w-[220px]' : 'w-[300px]';
+            const statusTag = item.status === 'generating' ? 'GEN' : item.status === 'downloading' ? 'DL' : 'LOAD';
+            return (
+              <div
+                key={item.id}
+                className={cn(
+                  cardWidth,
+                  'rounded-lg overflow-hidden flex flex-col shrink-0',
+                  'border border-amber-500/30 bg-card/60 animate-pulse'
+                )}
+              >
+                <div className="bg-black relative" style={{ aspectRatio: `${w}/${h}` }}>
+                  {item.thumbnailSrc ? (
+                    <img src={item.thumbnailSrc} alt="" className="w-full h-full object-cover opacity-60" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs font-mono text-muted-foreground/30">{item.slug}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin text-amber-500/80" />
+                      <span className="text-[10px] font-mono font-bold bg-amber-500/15 text-amber-500/70 px-1.5 rounded">{statusTag}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono text-muted-foreground mt-auto">
+                  <span className="text-amber-400/70 truncate">{item.slug}</span>
+                  {item.prompt && (
+                    <>
+                      <span className="text-border">&middot;</span>
+                      <span className="truncate text-muted-foreground/60">{item.prompt}</span>
+                    </>
+                  )}
+                  <span className="text-border">&middot;</span>
+                  <span className={cn(
+                    'shrink-0 text-[10px] px-1 rounded',
+                    isPortrait ? 'bg-violet-500/15 text-violet-400/80'
+                      : isSquare ? 'bg-amber-500/15 text-amber-400/80'
+                      : 'bg-primary/10 text-primary/60'
+                  )}>{ratioLabel}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* PendingSection */}
-      <div className="border-t border-border/50 shrink-0">
-        <div className="flex items-center gap-2 px-6 py-2">
-          <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500/70 uppercase">INCOMING</span>
-          <span className="text-[10px] font-mono text-muted-foreground">{pendingQueueItems.length}</span>
-        </div>
-        <div className="max-h-32 overflow-y-auto px-6 pb-3 flex flex-wrap gap-x-4 gap-y-1.5">
-          {pendingQueueItems.map((item) => (
-            <div key={item.id} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-              <Loader2 className="w-3 h-3 animate-spin text-amber-500/60 shrink-0" />
-              <span className="truncate text-foreground/70">{item.slug}</span>
-              <span className="text-[10px] bg-amber-500/15 text-amber-500/70 px-1.5 rounded shrink-0">{item.tag}</span>
-            </div>
-          ))}
-        </div>
+      {/* ChatInput bar */}
+      <div className="shrink-0 border-t border-border/50 px-6 py-3">
+        <ChatInput placeholder="type /generate, /download..." />
       </div>
     </div>
   );
@@ -2062,6 +2106,7 @@ const assetViewerMockVideo: MediaItem = {
 
 function Page14_AssetViewer() {
   return (
+    <MountKeyProvider>
     <div className="w-full h-full grid grid-cols-2 gap-6">
       {/* Left: Landscape viewer */}
       <div className="flex flex-col gap-2 min-h-0">
@@ -2078,6 +2123,7 @@ function Page14_AssetViewer() {
         </div>
       </div>
     </div>
+    </MountKeyProvider>
   );
 }
 

@@ -316,6 +316,9 @@ export function HomePage() {
           pendingVideos={pendingClips}
           onApprove={handleApprove}
           onReject={handleReject}
+          assetSlugs={assetSlugs}
+          callTool={callTool}
+          projectSlug={projectSlug}
         />
         <div className="grid grid-rows-[48px_1fr_auto] h-full">
           <HomeHeaderBar
