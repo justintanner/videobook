@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
-import { openai } from "@nakedapi/openai";
+import { openai, withRetry, withFallback } from "@nakedapi/openai";
 import type { OpenAiContentPart } from "@nakedapi/openai";
+import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 
 type AnalyzeVideoPayload = {
@@ -14,6 +15,11 @@ type AnalyzeVideoPayload = {
 };
 
 const MAX_FRAMES = 15;
+
+const FALLBACK_ANALYSIS = {
+  summary: "", scenes: [], tags: [], mood: "",
+  subjects: [], actions: [], setting: "", textOnScreen: [],
+};
 
 const SYSTEM_PROMPT = `You are a video analysis expert. Analyze the provided video frames, metadata, and transcription (if available) to produce a comprehensive JSON analysis.
 
@@ -40,9 +46,6 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     const {
       assetId, assetDir, projectSlug, hasTranscription,
     } = payload as AnalyzeVideoPayload;
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
       assetId, "original", projectSlug
@@ -102,21 +105,45 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
       ...frameParts,
     ];
 
-    const provider = openai({ apiKey, timeout: 180_000 });
-    const result = await provider.v1.chat.completions({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_completion_tokens: 4096,
-    });
+    let analysis: Record<string, unknown> = FALLBACK_ANALYSIS;
 
-    const analysis = JSON.parse(result.content);
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const kieKey = process.env.KIE_API_KEY;
+
+    const providers: Array<(req: Record<string, unknown>, signal?: AbortSignal) => Promise<{ content: string }>> = [];
+    if (openaiKey) {
+      const p = openai({ apiKey: openaiKey, timeout: 180_000 });
+      providers.push(withRetry(p.v1.chat.completions, { retries: 2, baseMs: 500 }));
+    }
+    if (kieKey) {
+      const p = kie({ apiKey: kieKey, timeout: 180_000 });
+      providers.push(withRetry(p.chat.gpt52.v1.chat.completions, { retries: 2, baseMs: 500 }));
+    }
+
+    if (providers.length > 0) {
+      try {
+        const chat = providers.length > 1
+          ? withFallback(providers)
+          : providers[0];
+        const result = await chat({
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userContent },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          max_completion_tokens: 4096,
+          max_tokens: 4096,
+        });
+        analysis = JSON.parse(result.content);
+      } catch {
+        // all providers failed — use empty fallback
+      }
+    }
+
     const jsonString = JSON.stringify(analysis, null, 2);
     await fs.writeFile(assetId, ".original.analysis.json", jsonString, projectSlug);
 
-    return { success: true, analysis };
+    return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
   });
 }
