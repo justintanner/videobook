@@ -81,7 +81,7 @@ describe("download_video_file tool", () => {
     expect(content[0].text).toContain("must be less");
   });
 
-  it("returns error for invalid URL (yt-dlp fails)", async () => {
+  it("enqueues job for any URL (OG fetch failure is non-fatal)", async () => {
     const result = await client.callTool({
       name: "download_video_file",
       arguments: {
@@ -90,9 +90,12 @@ describe("download_video_file tool", () => {
       },
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("Failed to fetch video info");
+    const parsed = JSON.parse(content[0].text);
+    expect(parsed.assetId).toBeDefined();
+    expect(parsed.job_id).toBeDefined();
+    expect(parsed.status).toBe("enqueued");
   });
 
   it("returns error when start_time equals end_time", async () => {

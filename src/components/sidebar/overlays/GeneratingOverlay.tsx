@@ -133,7 +133,7 @@ export function GeneratingOverlay({ item }: OverlayProps) {
         className="absolute inset-0 pointer-events-none h-8"
         style={{
           background: `linear-gradient(to bottom, transparent, ${colorRgba(0.1)}, transparent)`,
-          animation: 'downloading-scanline 3s linear infinite',
+          animation: 'overlay-scanline-sweep 3s linear infinite',
         }}
       />
     </div>

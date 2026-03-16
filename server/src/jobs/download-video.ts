@@ -1,6 +1,8 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
+import type { IOGResult, IImageMetadata } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
@@ -26,23 +28,40 @@ async function blurFillExport(
   ]);
 }
 
+function extractOgImageUrl(ogImage: IOGResult["ogImage"]): string | null {
+  if (!ogImage) return null;
+  if (typeof ogImage === "string") return ogImage;
+  if (Array.isArray(ogImage)) {
+    const first = ogImage[0];
+    if (!first) return null;
+    if (typeof first === "string") return first;
+    return (first as IImageMetadata).url ?? null;
+  }
+  return (ogImage as IImageMetadata).url ?? null;
+}
+
 type DownloadVideoPayload = {
   type: "download_video";
   url: string;
   outputPath: string;
   downloadSections?: string;
-  playlistItem?: number;
   assetId: string;
   assetDir: string;
   projectSlug?: string;
   exportVideos: boolean;
   full: boolean;
-  title: string;
-  uploader: string;
-  description: string;
-  webpageUrl: string;
-  platform: string;
-  thumbnail: string;
+  ogData: IOGResult | null;
+};
+
+type InfoResult = {
+  _type?: string;
+  title?: string;
+  uploader?: string;
+  description?: string;
+  thumbnail?: string;
+  webpage_url?: string;
+  extractor?: string;
+  entries?: InfoResult[];
 };
 
 export function registerDownloadVideoJob(fs: ClipfirstFs): void {
@@ -50,15 +69,95 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
   registerJobHandler("download_video", async (payload) => {
     const {
-      url, outputPath, downloadSections, playlistItem,
+      url, outputPath, downloadSections,
       assetId, assetDir, projectSlug, exportVideos, full,
-      title, uploader, description, webpageUrl, platform, thumbnail,
+      ogData,
     } = payload as DownloadVideoPayload;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
+      // (a) Write .opengraph.json + download og.jpg
+      if (ogData) {
+        try {
+          await writeFile(join(assetDir, ".opengraph.json"), JSON.stringify(ogData, null, 2));
+        } catch {
+          // non-fatal
+        }
+        const imageUrl = extractOgImageUrl(ogData.ogImage);
+        if (imageUrl) {
+          try {
+            const imgResponse = await fetch(imageUrl, {
+              signal: AbortSignal.timeout(15_000),
+              redirect: "follow",
+            });
+            const buffer = Buffer.from(await imgResponse.arrayBuffer());
+            await writeFile(join(assetDir, "og.jpg"), buffer);
+          } catch {
+            // non-fatal
+          }
+        }
+      }
+
+      // (b) Fetch ytdlp metadata
+      let info: InfoResult;
+      try {
+        info = await ytdlp.getInfoAsync(url) as unknown as InfoResult;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to fetch video info: ${msg}`);
+      }
+
+      // (c) Handle playlists — if multiple entries, create additional assets + jobs for entries 2+
+      let playlistItem: number | undefined;
+      if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length > 1) {
+        // Current job handles entry 1
+        playlistItem = 1;
+
+        // Enqueue separate jobs for entries 2+
+        for (let i = 1; i < info.entries.length; i++) {
+          const entry = info.entries[i];
+          const entryTitle = entry.title ?? `video-${i + 1}`;
+          const sanitized = entryTitle
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-")
+            .toLowerCase()
+            .slice(0, 60) || "downloaded-video";
+
+          const assetResult = await fs.createAsset("vid", sanitized, projectSlug ?? "");
+          if (!assetResult.ok) continue;
+
+          const { assetId: newAssetId, path: newAssetDir } = assetResult.value;
+          const newFilename = full ? "original_full.mp4" : "original.mp4";
+          const newOutputPath = join(newAssetDir, newFilename);
+          const newJobId = `download-${newAssetId}-${Date.now()}`;
+
+          await queue.enqueue(newJobId, {
+            type: "download_video",
+            url,
+            outputPath: newOutputPath,
+            downloadSections,
+            assetId: newAssetId,
+            assetDir: newAssetDir,
+            projectSlug,
+            exportVideos,
+            full,
+            ogData: null,
+            _playlistItem: i + 1,
+          } as unknown as Record<string, unknown>);
+        }
+      } else if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length === 1) {
+        playlistItem = 1;
+      }
+
+      // Check for internal _playlistItem (set when this job was spawned for a playlist entry)
+      const internalPlaylistItem = (payload as Record<string, unknown>)._playlistItem as number | undefined;
+      if (internalPlaylistItem !== undefined) {
+        playlistItem = internalPlaylistItem;
+      }
+
+      // (d) Regular ytdlp download
       const builder = ytdlp
         .download(url)
         .setOutputTemplate(outputPath)
@@ -76,6 +175,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
       await builder.run();
 
+      // (e) Optional exports
       const exports: string[] = [];
       if (exportVideos) {
         try {
@@ -94,19 +194,21 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         }
       }
 
+      // (f) Build provenance from ytdlp metadata
       const provenance = {
         origin: "download",
         source_url: url,
-        title,
-        uploader,
-        description,
-        webpage_url: webpageUrl,
-        platform,
-        thumbnail,
+        title: info.title ?? "",
+        uploader: info.uploader ?? "",
+        description: info.description ?? "",
+        webpage_url: info.webpage_url ?? "",
+        platform: info.extractor ?? "",
+        thumbnail: info.thumbnail ?? "",
         full,
         downloaded_at: new Date().toISOString(),
       };
 
+      // (g) Enqueue process_video
       const processJobId = `process-video-${assetId}-${Date.now()}`;
       await queue.enqueue(processJobId, {
         type: "process_video",

@@ -2,7 +2,6 @@ export { UploadingOverlay } from './UploadingOverlay';
 export { GeneratingOverlay } from './GeneratingOverlay';
 export { RenderingOverlay } from './RenderingOverlay';
 export { ElfBuildingOverlay } from './ElfBuildingOverlay';
-export { DownloadingOverlay } from './DownloadingOverlay';
 export { UntranscribedOverlay } from './UntranscribedOverlay';
 export { TranscribingOverlay } from './TranscribingOverlay';
 export { CorruptOverlay } from './CorruptOverlay';

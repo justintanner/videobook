@@ -11,7 +11,6 @@ import {
   GeneratingOverlay,
   RenderingOverlay,
   ElfBuildingOverlay,
-  DownloadingOverlay,
   UntranscribedOverlay,
   TranscribingOverlay,
   CorruptOverlay,
@@ -46,7 +45,6 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'uploading' && type !== 'final') return <UploadingOverlay item={item} />;
   if (status === 'generating' && type !== 'final') return <GeneratingOverlay item={item} />;
   if (isRenderingState(status)) return type === 'final' ? <ElfBuildingOverlay item={item} /> : <RenderingOverlay item={item} />;
-  if (status === 'downloading' && type !== 'final') return <DownloadingOverlay item={item} />;
   if (status === 'transcribing' && (type === 'video' || type === 'audio')) return <TranscribingOverlay item={item} />;
   if (status === 'untranscribed' && (type === 'video' || type === 'audio')) return <UntranscribedOverlay item={item} />;
   if (status === 'corrupt' && type !== 'final') return <CorruptOverlay item={item} />;
@@ -67,7 +65,6 @@ const stateClassMap: Partial<Record<ClipState, string>> = {
   'render-queued-portrait': 'clip-state-rendering cursor-wait',
   'rendering-square': 'clip-state-rendering cursor-wait',
   'render-queued-square': 'clip-state-rendering cursor-wait',
-  downloading: 'clip-state-downloading cursor-wait',
   untranscribed: 'clip-state-untranscribed cursor-wait',
   transcribing: 'clip-state-transcribing cursor-pointer',
   corrupt: 'clip-state-corrupt cursor-pointer',
@@ -83,7 +80,6 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
     uploading: 'rgba(0, 255, 255, 0.7)',
     generating: 'rgba(34, 197, 94, 0.7)',
     rendering: 'rgba(0, 255, 255, 0.7)',
-    downloading: 'rgba(139, 92, 246, 0.7)',
     untranscribed: 'rgba(0, 255, 255, 0.4)',
     transcribing: 'rgba(0, 255, 255, 0.7)',
     corrupt: 'rgba(255, 0, 128, 0.7)',

@@ -2,16 +2,39 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
-import { YtDlp } from "ytdlp-nodejs";
+import { extractOpenGraph } from "@devmehq/open-graph-extractor";
+import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue } from "../queue.js";
 import { parseTime } from "../time-parse.js";
 import type { ToolDef } from "./tool-def.js";
 
 const DEFAULT_MAX_DURATION = 180;
 
-export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
-  const ytdlp = new YtDlp();
+function slugFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const last = parts.pop() ?? u.hostname;
+    return last
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .toLowerCase()
+      .slice(0, 60) || "downloaded-video";
+  } catch {
+    return "downloaded-video";
+  }
+}
 
+function slugFromTitle(title: string): string {
+  const sanitized = title
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .toLowerCase()
+    .slice(0, 60);
+  return sanitized || "downloaded-video";
+}
+
+export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "download_video_file",
     description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a clipfirst project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
@@ -61,89 +84,53 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
         downloadSections = `*${s}-${e}`;
       }
 
-      // Fetch metadata
-      type InfoResult = {
-        _type?: string;
-        title?: string;
-        uploader?: string;
-        description?: string;
-        thumbnail?: string;
-        webpage_url?: string;
-        extractor?: string;
-        entries?: InfoResult[];
-      };
+      // Fetch page HTML + extract OG for naming
+      let ogData: IOGResult | null = null;
+      let assetName = slugFromUrl(url);
 
-      let info: InfoResult;
       try {
-        info = await ytdlp.getInfoAsync(url) as unknown as InfoResult;
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return { isError: true as const, content: [{ type: "text" as const, text: `Failed to fetch video info: ${msg}` }] };
-      }
-
-      // Detect multi-video (Twitter quoted tweets)
-      type VideoEntry = { title: string; playlistItem?: number };
-      const entries: VideoEntry[] = [];
-
-      if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length > 0) {
-        for (let i = 0; i < info.entries.length; i++) {
-          entries.push({
-            title: info.entries[i].title ?? `video-${i + 1}`,
-            playlistItem: i + 1,
-          });
+        const response = await fetch(url, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
+          signal: AbortSignal.timeout(10_000),
+          redirect: "follow",
+        });
+        const html = await response.text();
+        ogData = extractOpenGraph(html);
+        if (ogData.ogTitle) {
+          assetName = slugFromTitle(ogData.ogTitle);
         }
-      } else {
-        entries.push({ title: info.title ?? "downloaded-video" });
+      } catch {
+        // OG fetch failure is non-fatal — fall back to URL-derived slug
       }
 
-      const results: string[] = [];
-
-      for (const entry of entries) {
-        const sanitized = entry.title
-          .replace(/[^\w\s-]/g, "")
-          .replace(/\s+/g, "-")
-          .toLowerCase()
-          .slice(0, 60);
-        const assetName = sanitized || "downloaded-video";
-
-        const projectSlug = project_slug;
-
-        const assetResult = await fs.createAsset("vid", assetName, projectSlug);
-        if (!assetResult.ok) {
-          results.push(`Error creating asset for "${entry.title}": ${assetResult.error.message}`);
-          continue;
-        }
-
-        const { assetId, path: assetDir } = assetResult.value;
-
-        const filename = full ? "original_full.mp4" : "original.mp4";
-        const outputPath = join(assetDir, filename);
-        const jobId = `download-${assetId}-${Date.now()}`;
-
-        await queue.enqueue(jobId, {
-          type: "download_video",
-          url,
-          outputPath,
-          downloadSections,
-          playlistItem: entry.playlistItem,
-          assetId,
-          assetDir,
-          projectSlug,
-          exportVideos: export_videos ?? false,
-          full: full ?? false,
-          title: entry.title,
-          uploader: info.uploader ?? "",
-          description: info.description ?? "",
-          webpageUrl: info.webpage_url ?? "",
-          platform: info.extractor ?? "",
-          thumbnail: info.thumbnail ?? "",
-        } as unknown as Record<string, unknown>);
-
-        results.push(JSON.stringify({ assetId, job_id: jobId, status: "enqueued" }));
+      const assetResult = await fs.createAsset("vid", assetName, project_slug);
+      if (!assetResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Error creating asset: ${assetResult.error.message}` }],
+        };
       }
+
+      const { assetId, path: assetDir } = assetResult.value;
+      const filename = full ? "original_full.mp4" : "original.mp4";
+      const outputPath = join(assetDir, filename);
+      const jobId = `download-${assetId}-${Date.now()}`;
+
+      await queue.enqueue(jobId, {
+        type: "download_video",
+        url,
+        outputPath,
+        downloadSections,
+        assetId,
+        assetDir,
+        projectSlug: project_slug,
+        exportVideos: export_videos ?? false,
+        full: full ?? false,
+        ogData,
+      } as unknown as Record<string, unknown>);
 
       return {
-        content: [{ type: "text" as const, text: results.join("\n") }],
+        content: [{ type: "text" as const, text: JSON.stringify({ assetId, job_id: jobId, status: "enqueued" }) }],
       };
     },
   };

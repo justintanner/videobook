@@ -23,18 +23,16 @@ interface VideoCardProps {
 
 export function VideoCard({ item, contextMenuContent, selected, onClick }: VideoCardProps) {
   const status = item.status ?? 'ready';
-  const isReady = status === 'ready' || status === 'approved';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const isUploading = status === 'uploading';
   const isGenerating = status === 'generating';
-  const isDownloading = status === 'downloading';
   const isLoading = status === 'loading';
   const isTranscribing = status === 'transcribing';
   const isUntranscribed = status === 'untranscribed';
   const isRendering = status.startsWith('render');
   const isProcessing = isTranscribing || isUntranscribed || isRendering;
-  const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
+  const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   const duration = formatDuration(item.durationSeconds);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/thumbnail.jpg') : null);
@@ -59,7 +57,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick }: Video
       {!hasOpaqueOverlay && !isError && duration && <DurationBadge duration={duration} isProcessing={isProcessing} />}
 
       {/* Slug badge */}
-      {(isReady || isError || isRendering || isTranscribing || isUntranscribed) && (
+      {!hasOpaqueOverlay && (
         <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} isProcessing={isProcessing} />
       )}
     </CardShell>

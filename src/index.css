@@ -141,12 +141,6 @@
     animation: clip-rendering-pulse 2s ease-in-out infinite;
   }
 
-  .clip-state-downloading {
-    border: 2px solid rgba(139, 92, 246, 0.4);
-    border-bottom-color: rgba(139, 92, 246, 0.7);
-    animation: clip-downloading-pulse 2s ease-in-out infinite;
-  }
-
   .clip-state-corrupt {
     animation: corrupt-border-pulse 2s ease-in-out infinite;
     border: 2px solid rgba(255, 0, 128, 0.5);
@@ -163,33 +157,6 @@
 
   .clip-state-final {
     animation: clip-final-glow 3s ease-in-out infinite;
-  }
-
-  /* ==================== DOWNLOADING STATE ==================== */
-
-  .downloading-marquee {
-    animation: downloading-marquee 8s linear infinite;
-  }
-
-  .downloading-cursor {
-    animation: downloading-cursor-blink 0.8s step-end infinite;
-  }
-
-  .downloading-pixel-grid {
-    background-image:
-      linear-gradient(rgba(139, 92, 246, 0.2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(139, 92, 246, 0.2) 1px, transparent 1px);
-    background-size: 4px 4px;
-  }
-
-  .downloading-scanlines {
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(139, 92, 246, 0.05) 2px,
-      rgba(139, 92, 246, 0.05) 4px
-    );
   }
 
   /* ==================== UPLOADING STATE ==================== */
@@ -500,72 +467,8 @@
   }
 }
 
-/* Downloading - Electric Purple/Violet Glow */
-@keyframes clip-downloading-pulse {
-  0%,
-  100% {
-    box-shadow:
-      inset 0 0 20px rgba(139, 92, 246, 0.15),
-      0 0 15px rgba(139, 92, 246, 0.25);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 35px rgba(139, 92, 246, 0.3),
-      0 0 30px rgba(139, 92, 246, 0.45);
-  }
-}
-
-/* Downloading: Matrix-style data fall */
-@keyframes downloading-data-fall {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-}
-
-/* Downloading: Progress bar fill */
-@keyframes downloading-progress {
-  0% {
-    width: 0%;
-  }
-  100% {
-    width: 100%;
-  }
-}
-
-/* Downloading: URL marquee scroll */
-@keyframes downloading-marquee {
-  0% {
-    transform: translateX(100%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
-/* Downloading: Cursor blink */
-@keyframes downloading-cursor-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-/* Downloading: Scanline sweep */
-@keyframes downloading-scanline {
+/* Shared overlay scanline sweep */
+@keyframes overlay-scanline-sweep {
   0% {
     transform: translateY(-100%);
   }

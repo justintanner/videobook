@@ -17,9 +17,8 @@ export function ImageCard({ item, contextMenuContent, selected, onClick }: Image
   const isCorrupt = status === 'corrupt';
   const isUploading = status === 'uploading';
   const isGenerating = status === 'generating';
-  const isDownloading = status === 'downloading';
   const isLoading = status === 'loading';
-  const hasOpaqueOverlay = isUploading || isGenerating || isDownloading || isLoading || isCorrupt;
+  const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
