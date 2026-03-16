@@ -537,6 +537,14 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setFileContent(null);
   }, [item.id, onFlippedChange]);
 
+  // Fetch manifest when flipped externally (e.g. /info command)
+  useEffect(() => {
+    if (flipped && manifest === null && !manifestLoading) {
+      fetchManifest();
+      fetchFileContent('.original.json');
+    }
+  }, [flipped]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Apply pending focus once manifest loads
   useEffect(() => {
     if (pendingFocusRef.current === undefined || !manifest || manifest.length === 0) return;

@@ -66,7 +66,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, addOrientation } = useTimeline(callTool);
+  const { timeline, fetchTimeline, addOrientation, setCurrentOrientation } = useTimeline(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -144,8 +144,14 @@ export function HomePage() {
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSelectedItem(item);
-    setViewerSize('original');
-  }, []);
+    const isClip = item.type === 'video' || item.type === 'final';
+    setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
+  }, [timeline]);
+
+  const handleViewerSizeChange = useCallback((size: ViewerSize) => {
+    setViewerSize(size);
+    if (projectSlug) setCurrentOrientation(projectSlug, size);
+  }, [projectSlug, setCurrentOrientation]);
 
   const renderOrientations = useMemo<Orientation[]>(
     () => timeline?.render ?? ['landscape'],
@@ -173,7 +179,9 @@ export function HomePage() {
   useEffect(() => {
     if (!projectSlug) return;
     sync(projectSlug);
-    fetchTimeline(projectSlug);
+    fetchTimeline(projectSlug).then(config => {
+      if (config?.currentOrientation) setViewerSize(config.currentOrientation);
+    });
     const id = setInterval(() => sync(projectSlug), 5_000);
     return () => clearInterval(id);
   }, [projectSlug, sync, fetchTimeline]);
@@ -230,15 +238,15 @@ export function HomePage() {
     show_history: handleShowHistory,
     open_asset: handleOpenAsset,
     switch_project: handleProjectChange,
-    viewer_set_original: () => setViewerSize('original'),
-    viewer_set_landscape: () => setViewerSize('landscape'),
-    viewer_set_portrait: () => setViewerSize('portrait'),
+    viewer_set_original: () => handleViewerSizeChange('original'),
+    viewer_set_landscape: () => handleViewerSizeChange('landscape'),
+    viewer_set_portrait: () => handleViewerSizeChange('portrait'),
     viewer_toggle_info: () => setViewerFlipped(f => !f),
     viewer_focus_file: (pos: number) => {
       setViewerFlipped(true);
       setPendingFilePosition(pos);
     },
-  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange]);
+  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange]);
 
   return (
     <MountKeyProvider>
@@ -333,7 +341,7 @@ export function HomePage() {
                     onClose={() => setHistoryItem(null)}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={setViewerSize} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}

@@ -2,16 +2,19 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export type Orientation = 'landscape' | 'portrait' | 'square';
+export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 export interface TimelineConfig {
   slots: Array<{ slug: string; volume?: number; audioFadeIn?: number; audioFadeOut?: number }>;
   render: Orientation[];
+  currentOrientation?: ViewerSize;
 }
 
 interface UseTimelineResult {
   timeline: TimelineConfig | undefined;
   fetchTimeline: (projectSlug: string) => Promise<TimelineConfig | null>;
   addOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
+  setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
 }
 
 export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResult {
@@ -60,5 +63,21 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, []);
 
-  return { timeline, fetchTimeline, addOrientation };
+  const setCurrentOrientation = useCallback((projectSlug: string, orient: ViewerSize) => {
+    callToolRef.current("get_timeline", { project_slug: projectSlug }).then(getResult => {
+      if (getResult.isError) return;
+      const content = getResult.content as Array<{ type: string; text: string }>;
+      const current: TimelineConfig = JSON.parse(content[0].text);
+      const updated = { ...current, currentOrientation: orient };
+      callToolRef.current("edit_timeline", {
+        project_slug: projectSlug,
+        slots: updated.slots,
+        render: updated.render,
+        currentOrientation: orient,
+      });
+      setTimeline(updated);
+    }).catch(() => {});
+  }, []);
+
+  return { timeline, fetchTimeline, addOrientation, setCurrentOrientation };
 }

@@ -10,9 +10,12 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
+
 type TimelineConfig = {
   slots: TimelineSlot[];
   render: Orientation[];
+  currentOrientation?: ViewerSize;
 };
 
 export function getTimelineDef(fs: ClipfirstFs): ToolDef {

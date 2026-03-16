@@ -10,9 +10,12 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
+
 type TimelineConfig = {
   slots: TimelineSlot[];
   render: Orientation[];
+  currentOrientation?: ViewerSize;
 };
 
 export function editTimelineDef(fs: ClipfirstFs): ToolDef {
@@ -30,15 +33,19 @@ export function editTimelineDef(fs: ClipfirstFs): ToolDef {
       render: z.array(z.enum(["landscape", "portrait", "square"]))
         .optional()
         .describe("Orientations to render (default: [\"landscape\"])"),
+      currentOrientation: z.enum(["landscape", "portrait", "square", "original"])
+        .optional()
+        .describe("Last-used viewer orientation for clips"),
     },
     handler: async (args) => {
-      const { project_slug, slots, render = ["landscape"] } = args as {
+      const { project_slug, slots, render = ["landscape"], currentOrientation } = args as {
         project_slug: string;
         slots: TimelineSlot[];
         render?: Orientation[];
+        currentOrientation?: ViewerSize;
       };
 
-      const config: TimelineConfig = { slots, render };
+      const config: TimelineConfig = { slots, render, ...(currentOrientation !== undefined && { currentOrientation }) };
       const result = await fs.writeProjectMeta("timeline", config, project_slug);
       if (result.ok) {
         return {
