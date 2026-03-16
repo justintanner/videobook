@@ -31,7 +31,7 @@ describe("get_timeline tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data).toEqual({ slots: [], render: ["landscape"] });
+    expect(data).toEqual({ slots: [], render: "landscape" });
   });
 
   it("returns matching data after edit_timeline", async () => {
@@ -41,7 +41,7 @@ describe("get_timeline tool", () => {
     ];
     await client.callTool({
       name: "edit_timeline",
-      arguments: { project_slug: "test-proj", slots, render: ["portrait"] },
+      arguments: { project_slug: "test-proj", slots, render: "portrait" },
     });
 
     const result = await client.callTool({
@@ -52,7 +52,7 @@ describe("get_timeline tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.slots).toEqual(slots);
-    expect(data.render).toEqual(["portrait"]);
+    expect(data.render).toBe("portrait");
   });
 
   it("wraps old array format with default render orientation", async () => {
@@ -71,15 +71,14 @@ describe("get_timeline tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.slots).toEqual(oldData);
-    expect(data.render).toEqual(["landscape"]);
+    expect(data.render).toBe("landscape");
   });
 
   it("round-trips: edit then get returns matching data", async () => {
     const slots = [{ slug: "vid-a" }, { slug: "vid-b", volume: 1.0, audioFadeIn: 200 }];
-    const render = ["landscape", "square"] as const;
     await client.callTool({
       name: "edit_timeline",
-      arguments: { project_slug: "test-proj", slots, render: [...render] },
+      arguments: { project_slug: "test-proj", slots, render: "square" },
     });
 
     const result = await client.callTool({
@@ -89,6 +88,6 @@ describe("get_timeline tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.slots).toEqual(slots);
-    expect(data.render).toEqual([...render]);
+    expect(data.render).toBe("square");
   });
 });

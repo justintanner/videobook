@@ -67,7 +67,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, addOrientation, setCurrentOrientation } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -154,27 +154,15 @@ export function HomePage() {
     if (projectSlug) setCurrentOrientation(projectSlug, size);
   }, [projectSlug, setCurrentOrientation]);
 
-  const renderOrientations = useMemo<Orientation[]>(
-    () => timeline?.render ?? ['landscape'],
+  const renderOrientation = useMemo<Orientation>(
+    () => timeline?.render ?? 'landscape',
     [timeline],
   );
 
-  const videoAssetCount = useMemo(
-    () => mediaItems.filter(m => m.type === 'video').length,
-    [mediaItems],
-  );
-
-  const handleAddOrientation = useCallback(async (orient: Orientation) => {
+  const handleChangeOrientation = useCallback(async (orient: Orientation) => {
     if (!projectSlug) return;
-    const ok = await addOrientation(projectSlug, orient);
-    if (!ok) return;
-    // Fire-and-forget render jobs for each video asset
-    const videos = mediaItems.filter(m => m.type === 'video');
-    for (const v of videos) {
-      callTool('render_video', { asset_id: v.id, project_slug: projectSlug, orientation: orient });
-    }
-    sync(projectSlug);
-  }, [projectSlug, addOrientation, mediaItems, callTool, sync]);
+    await setRenderOrientation(projectSlug, orient);
+  }, [projectSlug, setRenderOrientation]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -342,7 +330,7 @@ export function HomePage() {
                     onClose={() => setHistoryItem(null)}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientations={renderOrientations} videoAssetCount={videoAssetCount} onAddOrientation={handleAddOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}

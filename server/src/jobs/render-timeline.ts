@@ -6,12 +6,12 @@ import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 900_000; // 15 min
 
-const LANDSCAPE_RENDER = "1920x1080_landscape.mp4";
-const PORTRAIT_RENDER = "1080x1920_portrait.mp4";
-const SQUARE_RENDER = "1080x1080_square.mp4";
-const LANDSCAPE_OUTPUT = "timeline_1920x1080.mp4";
-const PORTRAIT_OUTPUT = "timeline_1080x1920.mp4";
-const SQUARE_OUTPUT = "timeline_1080x1080.mp4";
+const LANDSCAPE_RENDER = "landscape.mp4";
+const PORTRAIT_RENDER = "portrait.mp4";
+const SQUARE_RENDER = "square.mp4";
+const LANDSCAPE_OUTPUT = "timeline_landscape.mp4";
+const PORTRAIT_OUTPUT = "timeline_portrait.mp4";
+const SQUARE_OUTPUT = "timeline_square.mp4";
 
 type ResolvedSlot = {
   slug: string;

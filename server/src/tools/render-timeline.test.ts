@@ -141,7 +141,7 @@ describe("render_timeline tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("missing");
-    expect(content[0].text).toContain("1920x1080_landscape.mp4");
+    expect(content[0].text).toContain("landscape.mp4");
   });
 
   it("enqueues job when rendered files exist", async () => {
@@ -149,7 +149,7 @@ describe("render_timeline tool", () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
     // Copy the test video as the rendered landscape file in the asset dir
-    const renderedPath = join(uploaded.path, "1920x1080_landscape.mp4");
+    const renderedPath = join(uploaded.path, "landscape.mp4");
     await copyFile(videoPath, renderedPath);
 
     const fs = createFsForTest(tempDir);

@@ -656,13 +656,12 @@ describe("MCP tools e2e", () => {
 
   // ── Section 10: Render video (enqueue only) ────────────────────
 
-  it("enqueues render_video for landscape without subtitles", async () => {
+  it("enqueues render for landscape without subtitles", async () => {
     const result = await client.callTool({
-      name: "render_video",
+      name: "render",
       arguments: {
         asset_id: vidAssetId,
         project_slug: PROJECT,
-        orientation: "landscape",
         subtitles_enabled: false,
       },
     });
@@ -670,7 +669,7 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.asset_id).toBe(vidAssetId);
-    expect(parsed.orientations).toEqual(["landscape"]);
+    expect(parsed.orientation).toBe("landscape");
     // Don't waitForJob — Remotion rendering not available in test env
   });
 

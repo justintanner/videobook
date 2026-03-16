@@ -26,7 +26,6 @@ import { extractAudioDef } from "./extract-audio.js";
 import { transcribeDef } from "./transcribe.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
-import { renderVideoDef } from "./render-video.js";
 import { renderDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
@@ -83,7 +82,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     transcribeDef(fs),
     generateGrokImagineVideoDef(fs),
     generateNanoBananaImageDef(fs),
-    renderVideoDef(fs),
     renderDef(fs),
     syncDef(fs),
     listAssetsDef(fs),

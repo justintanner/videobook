@@ -223,14 +223,23 @@ async function completeTranscribe(
     const videoPath = join(assetDir, videoFile.name);
     const jobId = `auto-render-${assetId}-${Date.now()}`;
 
+    // Read orientation from timeline config
+    const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", projectSlug);
+    const orientation = timelineResult.ok
+      ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
+      : "landscape";
+
     await queue.enqueue(jobId, {
-      type: "render_video",
-      assetId,
-      assetDir,
-      videoPath,
-      videoFilename: videoFile.name,
+      type: "render_project",
       projectSlug,
-      orientations: ["landscape"],
+      orientation,
+      assets: [{
+        assetId,
+        assetDir,
+        videoPath,
+        videoFilename: videoFile.name,
+        hasElevenlabs: false,
+      }],
       subtitlesEnabled: false,
       highlightStyle: "tikdance",
       position: "bottom",
@@ -240,9 +249,9 @@ async function completeTranscribe(
       audioFadeIn: 150,
       audioFadeOut: 100,
       audioVolume: 100,
-      hasElevenlabs: false,
       osgImagePath: null,
       osgPosition: "top-right",
+      backgroundMode: "blur",
     });
   }
 }

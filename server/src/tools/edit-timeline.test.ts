@@ -38,13 +38,13 @@ describe("edit_timeline tool", () => {
     expect(data.path).toContain("test-proj");
   });
 
-  it("sets timeline with slots and render orientations", async () => {
+  it("sets timeline with slots and render orientation", async () => {
     const result = await client.callTool({
       name: "edit_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-hero" }],
-        render: ["landscape", "portrait"],
+        render: "portrait",
       },
     });
     expect(result.isError).toBeFalsy();

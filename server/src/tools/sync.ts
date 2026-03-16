@@ -167,17 +167,26 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     }));
   }
 
+  // Read orientation from timeline config
+  const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", project_slug);
+  const orientation = timelineResult.ok
+    ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
+    : "landscape";
+
   // Auto-pipeline: advance whitelisted videos through render
   for (const action of renderActions) {
     const jobId = `auto-render-${action.assetId}-${Date.now()}`;
     await queue.enqueue(jobId, {
-      type: "render_video",
-      assetId: action.assetId,
-      assetDir: action.assetDir,
-      videoPath: action.videoPath,
-      videoFilename: action.videoFilename,
+      type: "render_project",
       projectSlug: project_slug,
-      orientations: ["landscape"],
+      orientation,
+      assets: [{
+        assetId: action.assetId,
+        assetDir: action.assetDir,
+        videoPath: action.videoPath,
+        videoFilename: action.videoFilename,
+        hasElevenlabs: false,
+      }],
       subtitlesEnabled: false,
       highlightStyle: "tikdance",
       position: "bottom",
@@ -187,9 +196,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       audioFadeIn: 150,
       audioFadeOut: 100,
       audioVolume: 100,
-      hasElevenlabs: false,
       osgImagePath: null,
       osgPosition: "top-right",
+      backgroundMode: "blur",
     });
     result.auto_render.push({ assetId: action.assetId, jobId });
   }

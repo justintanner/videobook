@@ -69,13 +69,6 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
-    name: "render_video",
-    actualTool: "render_video",
-    description: "Render a video to landscape (16:9) and/or portrait (9:16) with blur-fill background and optional subtitles (default: landscape only)",
-    params: ["asset_id", "orientation"],
-    category: "action",
-  },
-  {
     name: "whitelist",
     actualTool: "whitelist",
     description: "Whitelist a video asset for transcription pipeline",

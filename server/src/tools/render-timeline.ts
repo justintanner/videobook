@@ -10,29 +10,24 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
-const LANDSCAPE_RENDER = "1920x1080_landscape.mp4";
-const PORTRAIT_RENDER = "1080x1920_portrait.mp4";
-const SQUARE_RENDER = "1080x1080_square.mp4";
+const LANDSCAPE_RENDER = "landscape.mp4";
+const PORTRAIT_RENDER = "portrait.mp4";
+const SQUARE_RENDER = "square.mp4";
 
 export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_timeline",
     description:
-      "Concatenate rendered video clips in timeline order into a single final output. Each slot must have a rendered video (1920x1080_landscape.mp4 or 1080x1920_portrait.mp4). Writes output to the 'final' singleton asset.",
+      "Concatenate rendered video clips in timeline order into a single final output. Each slot must have a rendered video (landscape.mp4, portrait.mp4, or square.mp4). Writes output to the 'final' singleton asset.",
     schema: {
       project_slug: z.string().describe("Project slug"),
-      orientation: z
-        .enum(["landscape", "portrait", "square"])
-        .optional()
-        .describe("Which orientation to render (default: landscape)"),
     },
     handler: async (args) => {
-      const { project_slug, orientation = "landscape" } = args as {
+      const { project_slug } = args as {
         project_slug: string;
-        orientation?: "landscape" | "portrait" | "square";
       };
 
-      const timelineResult = await fs.readProjectMeta<TimelineSlot[]>("timeline", project_slug);
+      const timelineResult = await fs.readProjectMeta<{ slots: TimelineSlot[]; render?: string } | TimelineSlot[]>("timeline", project_slug);
       if (!timelineResult.ok) {
         if (timelineResult.error.code === "NOT_FOUND") {
           return {
@@ -46,7 +41,9 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const slots = timelineResult.value.filter((s) => s.slug);
+      const raw = timelineResult.value;
+      const slots = (Array.isArray(raw) ? raw : raw.slots).filter((s) => s.slug);
+      const orientation = (Array.isArray(raw) ? "landscape" : (raw.render ?? "landscape")) as "landscape" | "portrait" | "square";
       if (slots.length === 0) {
         return {
           isError: true as const,
@@ -82,7 +79,7 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: `Asset ${slot.slug} is missing ${renderFilename}. Render it first with render_video.`,
+              text: `Asset ${slot.slug} is missing ${renderFilename}. Render it first with render.`,
             }],
           };
         }

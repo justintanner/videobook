@@ -14,14 +14,14 @@ type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 type TimelineConfig = {
   slots: TimelineSlot[];
-  render: Orientation[];
+  render: Orientation;
   currentOrientation?: ViewerSize;
 };
 
 export function editTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "edit_timeline",
-    description: "Set the timeline for a project (replaces all slots and render orientations)",
+    description: "Set the timeline for a project (replaces all slots and render orientation)",
     schema: {
       project_slug: z.string().describe("Project slug"),
       slots: z.array(z.object({
@@ -30,18 +30,18 @@ export function editTimelineDef(fs: ClipfirstFs): ToolDef {
         audioFadeIn: z.number().optional(),
         audioFadeOut: z.number().optional(),
       })).describe("Timeline slots"),
-      render: z.array(z.enum(["landscape", "portrait", "square"]))
+      render: z.enum(["landscape", "portrait", "square"])
         .optional()
-        .describe("Orientations to render (default: [\"landscape\"])"),
+        .describe("Orientation to render (default: \"landscape\")"),
       currentOrientation: z.enum(["landscape", "portrait", "square", "original"])
         .optional()
         .describe("Last-used viewer orientation for clips"),
     },
     handler: async (args) => {
-      const { project_slug, slots, render = ["landscape"], currentOrientation } = args as {
+      const { project_slug, slots, render = "landscape", currentOrientation } = args as {
         project_slug: string;
         slots: TimelineSlot[];
-        render?: Orientation[];
+        render?: Orientation;
         currentOrientation?: ViewerSize;
       };
 

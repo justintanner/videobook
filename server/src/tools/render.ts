@@ -4,22 +4,24 @@ import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { isValidHex } from "../remotion/util.js";
+import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
+
+type TimelineConfig = {
+  slots: unknown[];
+  render: Orientation;
+};
 
 export function renderDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render",
     description:
-      "Render a vid- asset. When orientation is omitted, enqueues jobs for all three orientations (landscape, portrait, square).",
+      "Render a vid- asset using the project's render orientation from timeline config. Output: landscape.mp4, portrait.mp4, or square.mp4.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
-      orientation: z
-        .enum(["landscape", "portrait", "square"])
-        .optional()
-        .describe("Which orientation to render (omit to render all three)"),
       subtitles_enabled: z
         .boolean()
         .optional()
@@ -73,7 +75,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       const {
         asset_id,
         project_slug,
-        orientation,
         subtitles_enabled,
         highlight_style = "tikdance",
         position = "bottom",
@@ -89,7 +90,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       } = args as {
         asset_id: string;
         project_slug: string;
-        orientation?: "landscape" | "portrait" | "square";
         subtitles_enabled?: boolean;
         highlight_style?: "tikdance" | "highlight";
         position?: "top" | "middle" | "bottom";
@@ -136,6 +136,17 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      // Read orientation from timeline config
+      const timelineResult = await fs.readProjectMeta<TimelineConfig>("timeline", project_slug);
+      let orientation: Orientation = "landscape";
+      if (timelineResult.ok) {
+        const raw = timelineResult.value;
+        if (raw && typeof raw === "object" && "render" in raw) {
+          const r = raw.render;
+          orientation = (Array.isArray(r) ? (r[0] ?? "landscape") : r) as Orientation;
+        }
+      }
+
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
@@ -155,27 +166,22 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
 
       const hasElevenlabs = manifest.files.some((f) => f.name === "elevenlabs.json");
 
-      const orientations: ("landscape" | "portrait" | "square")[] = orientation
-        ? [orientation]
-        : ["landscape", "portrait", "square"];
+      const subsEnabled =
+        subtitles_enabled !== undefined
+          ? subtitles_enabled
+          : orientation === "portrait";
 
-      for (const orient of orientations) {
-        const subsEnabled =
-          subtitles_enabled !== undefined
-            ? subtitles_enabled
-            : orient === "portrait";
-
-        if (subsEnabled && !hasElevenlabs) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `Subtitles enabled for ${orient} but elevenlabs.json not found in asset ${asset_id}. Transcribe the asset first or set subtitles_enabled=false.`,
-            }],
-          };
-        }
+      if (subsEnabled && !hasElevenlabs) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Subtitles enabled for ${orientation} but elevenlabs.json not found in asset ${asset_id}. Transcribe the asset first or set subtitles_enabled=false.`,
+          }],
+        };
       }
 
+      // Resolve OSG image
       let osgImagePath: string | null = null;
       if (osg_asset_id) {
         if (!osg_asset_id.startsWith("img-")) {
@@ -206,44 +212,40 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
 
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
-      const timestamp = Date.now();
-      const jobIds: string[] = [];
+      const jobId = `render-${asset_id}-${Date.now()}`;
 
-      for (const orient of orientations) {
-        const jobId = `render-${asset_id}-${orient}-${timestamp}`;
-        jobIds.push(jobId);
-
-        await queue.enqueue(jobId, {
-          type: "render_video",
+      await queue.enqueue(jobId, {
+        type: "render_project",
+        projectSlug: project_slug,
+        orientation,
+        assets: [{
           assetId: asset_id,
           assetDir,
           videoPath,
           videoFilename: videoFile.name,
-          projectSlug: project_slug,
-          orientations: [orient],
-          subtitlesEnabled: subtitles_enabled,
-          highlightStyle: highlight_style,
-          position,
-          fontSize: font_size,
-          textColor: text_color,
-          highlightColor: highlight_color,
-          audioFadeIn: audio_fade_in,
-          audioFadeOut: audio_fade_out,
-          audioVolume: audio_volume,
           hasElevenlabs,
-          osgImagePath,
-          osgPosition: osg_position,
-          backgroundMode: background_mode,
-        });
-      }
+        }],
+        subtitlesEnabled: subtitles_enabled,
+        highlightStyle: highlight_style,
+        position,
+        fontSize: font_size,
+        textColor: text_color,
+        highlightColor: highlight_color,
+        audioFadeIn: audio_fade_in,
+        audioFadeOut: audio_fade_out,
+        audioVolume: audio_volume,
+        osgImagePath,
+        osgPosition: osg_position,
+        backgroundMode: background_mode,
+      });
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
             asset_id,
-            job_ids: jobIds,
-            orientations,
+            job_id: jobId,
+            orientation,
             status: "enqueued",
           }),
         }],

@@ -235,7 +235,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/render",
-    description: "Render video in all orientations",
+    description: "Render video asset",
     example: "/render @hero-intro",
     category: "action",
     icon: "Film",
@@ -244,7 +244,6 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
-      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (omit for all)" },
     ],
     mcpTool: { tool: "render", autoInject: ["project_slug"] },
   },

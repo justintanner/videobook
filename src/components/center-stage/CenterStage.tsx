@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Plus } from 'lucide-react';
+import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -8,10 +8,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -111,9 +107,9 @@ function ClipViewerInner({ item, orientedFile, derivedSrc }: {
 function ClipViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   if (!item.filePath) return null;
 
-  const orientedFile = size === 'landscape' ? '1920x1080_landscape.mp4'
-    : size === 'portrait' ? '1080x1920_portrait.mp4'
-    : size === 'square' ? '1080x1080_square.mp4'
+  const orientedFile = size === 'landscape' ? 'landscape.mp4'
+    : size === 'portrait' ? 'portrait.mp4'
+    : size === 'square' ? 'square.mp4'
     : null;
 
   const derivedSrc = orientedFile
@@ -175,17 +171,14 @@ const orientationLabels: Record<Orientation, string> = {
   square: '/square 1080x1080',
 };
 
-function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrientation, item }: {
+function ClipOrientationToggle({ active, onSelect, renderOrientation, onChangeOrientation, item }: {
   active: ViewerSize;
   onSelect: (s: ViewerSize) => void;
-  renderOrientations: Orientation[];
-  onAddOrientation: (orient: Orientation) => void;
+  renderOrientation: Orientation;
+  onChangeOrientation: (orient: Orientation) => void;
   item: MediaItem;
 }) {
-  const rendered = new Set(renderOrientations);
   const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
-  const existing = allOrientations.filter(o => rendered.has(o));
-  const addable = allOrientations.filter(o => !rendered.has(o));
 
   const originalLabel = item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
   const activeLabel = active === 'original'
@@ -206,67 +199,22 @@ function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrie
           <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{originalLabel}</span>
           <span className="ml-2 opacity-80 flex items-center"><Monitor className="h-3 w-3" /></span>
         </DropdownMenuItem>
-        {existing.length > 0 && <DropdownMenuSeparator />}
-        {existing.map((orient) => {
+        <DropdownMenuSeparator />
+        {allOrientations.map((orient) => {
           const Icon = ratioIcons[orient];
+          const isActive = orient === renderOrientation;
           return (
-            <DropdownMenuItem key={orient} onClick={() => onSelect(orient)} className="py-2.5">
-              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{orientationLabels[orient]}</span>
-              <span className="ml-2 opacity-80 flex items-center"><Icon className="h-3 w-3" /></span>
-            </DropdownMenuItem>
-          );
-        })}
-        {addable.length > 0 && <DropdownMenuSeparator />}
-        {addable.map((orient) => {
-          const Icon = ratioIcons[orient];
-          return (
-            <DropdownMenuItem key={orient} onClick={() => onAddOrientation(orient)} className="py-2.5">
-              <Plus className="w-3 h-3 text-primary/50" />
-              <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1 text-muted-foreground/50">{orientationLabels[orient]}</span>
-              <span className="ml-2 opacity-40 flex items-center"><Icon className="h-3 w-3" /></span>
+            <DropdownMenuItem key={orient} onClick={() => { onChangeOrientation(orient); onSelect(orient); }} className="py-2.5">
+              {isActive
+                ? <Check className="w-3 h-3 text-primary" />
+                : <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>}
+              <span className={`font-mono font-bold text-xs tracking-wider leading-none flex-1 ${isActive ? '' : 'text-muted-foreground/50'}`}>{orientationLabels[orient]}</span>
+              <span className={`ml-2 flex items-center ${isActive ? 'opacity-80' : 'opacity-40'}`}><Icon className="h-3 w-3" /></span>
             </DropdownMenuItem>
           );
         })}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function AddOrientationDialog({ open, orientation, assetCount, onConfirm, onCancel }: {
-  open: boolean;
-  orientation: Orientation | null;
-  assetCount: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <DialogContent className="bg-zinc-950 border border-primary/30 rounded-lg ring-1 ring-primary/20 shadow-[0_0_30px_rgba(0,255,255,0.08)] p-0 gap-0 max-w-sm [&>button]:hidden">
-        <div className="p-6 space-y-3">
-          <h2 className="font-mono text-sm uppercase tracking-widest text-primary">
-            Add <span className="font-bold">{orientation ? orientationLabels[orientation] : ''}</span>
-          </h2>
-          <p className="font-mono text-xs text-zinc-400">
-            {assetCount} {assetCount === 1 ? 'asset' : 'assets'} will be re-rendered
-          </p>
-        </div>
-        <div className="flex border-t border-primary/20">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 text-zinc-500 hover:text-zinc-300 font-mono text-[10px] uppercase tracking-widest font-bold transition-colors border-r border-primary/20"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 text-primary font-mono text-[10px] uppercase tracking-widest font-bold transition-colors hover:shadow-[0_0_12px_rgba(0,255,255,0.15)]"
-          >
-            Confirm
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -454,22 +402,20 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientations, videoAssetCount, onAddOrientation, pendingFilePosition, onClearPendingFilePosition }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, pendingFilePosition, onClearPendingFilePosition }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
-  renderOrientations: Orientation[];
-  videoAssetCount: number;
-  onAddOrientation: (orient: Orientation) => void;
+  renderOrientation: Orientation;
+  onChangeOrientation: (orient: Orientation) => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
-  const [pendingAddOrientation, setPendingAddOrientation] = useState<Orientation | null>(null);
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState('.original.json');
@@ -633,7 +579,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
-                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientations={renderOrientations} onAddOrientation={(o) => setPendingAddOrientation(o)} item={item} />
+                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientation={renderOrientation} onChangeOrientation={onChangeOrientation} item={item} />
                 : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
 
               {/* Center slug */}
@@ -725,16 +671,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           </div>
         </div>
       </div>
-      <AddOrientationDialog
-        open={pendingAddOrientation !== null}
-        orientation={pendingAddOrientation}
-        assetCount={videoAssetCount}
-        onConfirm={() => {
-          if (pendingAddOrientation) onAddOrientation(pendingAddOrientation);
-          setPendingAddOrientation(null);
-        }}
-        onCancel={() => setPendingAddOrientation(null)}
-      />
     </div>
   );
 }

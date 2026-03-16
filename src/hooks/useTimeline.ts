@@ -6,14 +6,14 @@ export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 export interface TimelineConfig {
   slots: Array<{ slug: string; volume?: number; audioFadeIn?: number; audioFadeOut?: number }>;
-  render: Orientation[];
+  render: Orientation;
   currentOrientation?: ViewerSize;
 }
 
 interface UseTimelineResult {
   timeline: TimelineConfig | undefined;
   fetchTimeline: (projectSlug: string) => Promise<TimelineConfig | null>;
-  addOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
+  setRenderOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
   setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
 }
 
@@ -36,22 +36,19 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, []);
 
-  const addOrientation = useCallback(async (projectSlug: string, orient: Orientation): Promise<boolean> => {
+  const setRenderOrientation = useCallback(async (projectSlug: string, orient: Orientation): Promise<boolean> => {
     try {
-      // Read current config first
       const getResult = await callToolRef.current("get_timeline", { project_slug: projectSlug });
       if (getResult.isError) return false;
       const content = getResult.content as Array<{ type: string; text: string }>;
       const current: TimelineConfig = JSON.parse(content[0].text);
 
-      // Append new orientation
-      const updatedRender = [...current.render, orient];
-      const updatedConfig = { ...current, render: updatedRender };
+      const updatedConfig = { ...current, render: orient };
 
       const editResult = await callToolRef.current("edit_timeline", {
         project_slug: projectSlug,
         slots: updatedConfig.slots,
-        render: updatedConfig.render,
+        render: orient,
       });
       if (editResult.isError) return false;
 
@@ -79,5 +76,5 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }).catch(() => {});
   }, []);
 
-  return { timeline, fetchTimeline, addOrientation, setCurrentOrientation };
+  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation };
 }
