@@ -5,8 +5,28 @@ import { InboxAllClear } from './InboxAllClear';
 import { InboxReviewCard } from './InboxReviewCard';
 import { InboxPendingCard } from './InboxPendingCard';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { useCommandDispatch } from '@/hooks/useCommandDispatch';
+import type { CommandDescriptor } from '@/lib/command-registry';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
+
+const INBOX_COMMANDS: CommandDescriptor[] = [
+  {
+    command: '/accept', description: 'Approve card by number', example: '/accept 2',
+    category: 'action', icon: 'Check', size: 'sm', variant: 'default', chevron: 'right',
+    params: [{ name: 'number', type: 'number', required: false, description: 'Card number' }],
+  },
+  {
+    command: '/reject', description: 'Reject card by number', example: '/reject 3',
+    category: 'action', icon: 'X', size: 'sm', variant: 'default', chevron: 'right',
+    params: [{ name: 'number', type: 'number', required: false, description: 'Card number' }],
+  },
+  {
+    command: '/close', description: 'Close inbox', example: '/close',
+    category: 'action', icon: 'X', size: 'sm', variant: 'default', chevron: 'right',
+    params: [],
+  },
+];
 
 interface InboxDrawerProps {
   open: boolean;
@@ -76,13 +96,6 @@ export function InboxDrawer({
     }
   }, [open, liveVideos.length, pendingVideos.length]);
 
-  // Auto-close after all clear
-  useEffect(() => {
-    if (!allClear) return;
-    const timer = setTimeout(onClose, 1500);
-    return () => clearTimeout(timer);
-  }, [allClear, onClose]);
-
   // Escape key handler — respect ChatInput's preventDefault
   useEffect(() => {
     if (!open) return;
@@ -127,6 +140,45 @@ export function InboxDrawer({
   const handleApprove = (video: MediaItem) => handleMutate(video, onApprove);
   const handleReject = (video: MediaItem) => handleMutate(video, onReject);
 
+  const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch();
+  const mergedCommands = [...INBOX_COMMANDS, ...contextCommands];
+
+  const resolveTarget = (numStr: string | undefined): MediaItem | null => {
+    if (numStr) {
+      const n = parseInt(numStr, 10);
+      if (n >= 1 && n <= liveVideos.length) return liveVideos[n - 1];
+      return null;
+    }
+    if (activeVideoId) {
+      const v = liveVideos.find((v) => v.id === activeVideoId);
+      return v ?? null;
+    }
+    return null;
+  };
+
+  const handleInboxSend = async (message: string): Promise<boolean> => {
+    const trimmed = message.trim();
+    const acceptMatch = trimmed.match(/^\/accept(?:\s+(\d+))?$/);
+    if (acceptMatch) {
+      const target = resolveTarget(acceptMatch[1]);
+      if (!target) return false;
+      handleApprove(target);
+      return true;
+    }
+    const rejectMatch = trimmed.match(/^\/reject(?:\s+(\d+))?$/);
+    if (rejectMatch) {
+      const target = resolveTarget(rejectMatch[1]);
+      if (!target) return false;
+      handleReject(target);
+      return true;
+    }
+    if (trimmed === '/close') {
+      onClose();
+      return true;
+    }
+    return contextDispatch(message);
+  };
+
   const activeIndex = liveVideos.findIndex((v) => v.id === activeVideoId);
 
   if (!open) return null;
@@ -151,58 +203,60 @@ export function InboxDrawer({
           visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
         )}
       >
-        {allClear ? (
-          <div className="flex-1 flex items-center justify-center animate-in fade-in duration-300">
-            <InboxAllClear />
-          </div>
-        ) : (
-          <>
-            <InboxHeader
-              reviewCount={liveVideos.length}
-              pendingCount={pendingVideos.length}
-              activeIndex={activeIndex}
-              onClose={onClose}
-            />
+        <InboxHeader
+          reviewCount={liveVideos.length}
+          pendingCount={pendingVideos.length}
+          activeIndex={activeIndex}
+          onClose={onClose}
+        />
 
-            {/* Scrollable unified grid */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              {renderedVideos.length > 0 || pendingVideos.length > 0 ? (
-                <div className="flex flex-wrap gap-4">
-                  {renderedVideos.map((video) => (
-                    <InboxReviewCard
-                      key={video.id}
-                      video={video}
-                      isActive={video.id === activeVideoId}
-                      isExiting={exitingIds.has(video.id)}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onVideoEnded={handleVideoEnded}
-                      onActivate={setActiveVideoId}
-                      onExitComplete={handleExitComplete}
-                    />
-                  ))}
-                  {pendingVideos.map((video) => (
-                    <InboxPendingCard key={video.id} video={video} />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-sm font-mono">
-                  Waiting for generations to complete...
-                </div>
-              )}
+        {/* Scrollable unified grid */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {allClear ? (
+            <div className="flex-1 flex items-center justify-center animate-in fade-in duration-300">
+              <InboxAllClear />
             </div>
+          ) : renderedVideos.length > 0 || pendingVideos.length > 0 ? (
+            <div className="flex flex-wrap gap-4">
+              {renderedVideos.map((video) => {
+                const liveIdx = liveVideos.findIndex((v) => v.id === video.id);
+                return (
+                  <InboxReviewCard
+                    key={video.id}
+                    video={video}
+                    cardNumber={liveIdx >= 0 ? liveIdx + 1 : 0}
+                    isActive={video.id === activeVideoId}
+                    isExiting={exitingIds.has(video.id)}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onVideoEnded={handleVideoEnded}
+                    onActivate={setActiveVideoId}
+                    onExitComplete={handleExitComplete}
+                  />
+                );
+              })}
+              {pendingVideos.map((video) => (
+                <InboxPendingCard key={video.id} video={video} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm font-mono">
+              Waiting for generations to complete...
+            </div>
+          )}
+        </div>
 
-            {/* ChatInput bar */}
-            <div className="shrink-0 border-t border-border/50 px-6 py-3">
-              <ChatInput
-                assetSlugs={assetSlugs}
-                callTool={callTool}
-                projectSlug={projectSlug}
-                placeholder="type /generate, /download..."
-              />
-            </div>
-          </>
-        )}
+        {/* ChatInput bar */}
+        <div className="shrink-0 border-t border-border/50 px-6 py-3">
+          <ChatInput
+            assetSlugs={assetSlugs}
+            commands={mergedCommands}
+            onSend={handleInboxSend}
+            callTool={callTool}
+            projectSlug={projectSlug}
+            placeholder="type /accept, /reject, /close..."
+          />
+        </div>
       </div>
     </>
   );

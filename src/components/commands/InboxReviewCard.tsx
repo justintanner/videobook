@@ -6,6 +6,7 @@ import type { MediaItem } from '@/components/sidebar/types';
 
 interface InboxReviewCardProps {
   video: MediaItem;
+  cardNumber: number;
   isActive: boolean;
   isExiting: boolean;
   onApprove: (video: MediaItem) => void;
@@ -17,6 +18,7 @@ interface InboxReviewCardProps {
 
 export function InboxReviewCard({
   video,
+  cardNumber,
   isActive,
   isExiting,
   onApprove,
@@ -78,6 +80,10 @@ export function InboxReviewCard({
         style={{ aspectRatio: `${w}/${h}` }}
         onClick={isActive || isExiting ? undefined : () => onActivate(video.id)}
       >
+        {/* Number badge */}
+        <span className="absolute top-2 left-2 bg-black/70 text-primary text-xs font-mono font-bold px-1.5 py-0.5 rounded z-10">
+          {cardNumber}
+        </span>
         {video.filePath ? (
           <video
             ref={videoRef}
@@ -125,7 +131,7 @@ export function InboxReviewCard({
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-r border-border/50"
         >
           <X className="w-3.5 h-3.5" />
-          REJECT
+          /reject
         </button>
         <button
           onClick={() => onApprove(video)}
@@ -134,7 +140,7 @@ export function InboxReviewCard({
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Check className="w-3.5 h-3.5" />
-          APPROVE
+          /accept
         </button>
       </div>
     </div>
