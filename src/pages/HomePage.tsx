@@ -36,6 +36,7 @@ import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
+const SIDEBAR_HIDDEN_STATUSES = new Set<string>(['unreviewed', 'generating', 'downloading']);
 const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'transcribing']);
 
 function humanizeId(id: string): string {
@@ -116,7 +117,7 @@ export function HomePage() {
   [mediaItems]);
 
   const clips = useMemo(() =>
-    mediaItems.filter((m) => CLIP_TYPES.has(m.type) && m.status !== 'unreviewed'),
+    mediaItems.filter((m) => CLIP_TYPES.has(m.type) && !SIDEBAR_HIDDEN_STATUSES.has(m.status ?? '')),
   [mediaItems]);
 
   const allClipItems = useMemo(() =>
