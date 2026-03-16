@@ -311,6 +311,18 @@ const HARDCODED_COMMANDS: Command[] = [
     onMount: ["viewer"],
   },
   {
+    command: "/settings",
+    description: "Show render settings",
+    category: "viewer",
+    icon: "settings",
+    size: "sm",
+    variant: "default",
+    chevron: "right",
+    params: [],
+    uiAction: "viewer_show_settings",
+    onMount: ["viewer"],
+  },
+  {
     command: "/files",
     description: "Focus file by position",
     example: "/files 3",

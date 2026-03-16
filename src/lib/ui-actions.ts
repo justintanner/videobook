@@ -10,6 +10,7 @@ export interface UiActionCallbacks {
   viewer_set_portrait: () => void;
   viewer_toggle_info: () => void;
   viewer_focus_file: (position: number) => void;
+  viewer_show_settings: () => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;

@@ -6,15 +6,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
@@ -219,7 +211,7 @@ const ratioIcons: Record<ViewerSize, typeof Monitor> = {
 };
 
 function RatioToggle({ active, onSelect, item }: { active: ViewerSize; onSelect: (s: ViewerSize) => void; item: MediaItem }) {
-  const sizes: ViewerSize[] = ['original', 'landscape', 'portrait'];
+  const sizes: ViewerSize[] = ['original', 'landscape', 'portrait', 'square'];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -277,113 +269,69 @@ function OrientIndicator({ orient, renders, status }: {
   return <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />;
 }
 
-function ClipOrientationToggle({ active, onSelect, renderOrientation, onChangeOrientation, renders, status, onRender, item }: {
-  active: ViewerSize;
-  onSelect: (s: ViewerSize) => void;
+type BackTab = 'settings' | 'files';
+
+function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }: {
+  item: MediaItem;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
-  renders: string[];
-  status: ClipState | undefined;
   onRender?: () => void;
-  item: MediaItem;
 }) {
-  const [pendingOrient, setPendingOrient] = useState<Orientation | null>(null);
+  const isClip = item.type === 'video' || item.type === 'final';
+  if (!isClip) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-sm text-muted-foreground/50 font-mono">No render settings for this asset type</p>
+      </div>
+    );
+  }
+
+  const renders = item.renders ?? [];
+  const status = item.status;
   const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
 
-  const originalLabel = item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
-  const activeLabel = active === 'original'
-    ? originalLabel
-    : orientationLabels[active as Orientation] ?? active;
-
-  const handleOrientClick = (orient: Orientation) => {
-    const isRendered = renders.includes(orient);
+  const handleClick = (orient: Orientation) => {
     const rendering = isOrientRendering(status, orient);
-
-    if (rendering) return; // disabled while rendering
+    if (rendering) return;
 
     onChangeOrientation(orient);
 
-    if (isRendered) {
-      onSelect(orient);
-    } else {
-      setPendingOrient(orient);
-    }
-  };
-
-  const handleConfirmRender = () => {
-    if (pendingOrient) {
-      onSelect(pendingOrient);
+    if (!renders.includes(orient)) {
       onRender?.();
     }
-    setPendingOrient(null);
   };
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
-            {activeLabel}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={() => onSelect('original')} className="py-2.5">
-            <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-            <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{originalLabel}</span>
-            <span className="ml-2 opacity-80 flex items-center"><Monitor className="h-3 w-3" /></span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {allOrientations.map((orient) => {
-            const Icon = ratioIcons[orient];
-            const isActive = orient === renderOrientation;
-            const rendering = isOrientRendering(status, orient);
-            return (
-              <DropdownMenuItem
-                key={orient}
-                onClick={() => handleOrientClick(orient)}
-                disabled={rendering}
-                className="py-2.5"
-              >
-                {isActive
-                  ? <Check className="w-3 h-3 text-primary" />
-                  : <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>}
-                <span className={`font-mono font-bold text-xs tracking-wider leading-none flex-1 ${isActive ? '' : 'text-muted-foreground/50'}`}>{orientationLabels[orient]}</span>
-                <span className="ml-1.5 flex items-center">
-                  <OrientIndicator orient={orient} renders={renders} status={status} />
-                </span>
-                <span className={`ml-1.5 flex items-center ${isActive ? 'opacity-80' : 'opacity-40'}`}><Icon className="h-3 w-3" /></span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <div className="p-4 space-y-2">
+      {allOrientations.map((orient) => {
+        const Icon = ratioIcons[orient];
+        const isActive = orient === renderOrientation;
+        const rendered = renders.includes(orient);
+        const rendering = isOrientRendering(status, orient);
 
-      <Dialog open={pendingOrient !== null} onOpenChange={(open) => { if (!open) setPendingOrient(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-mono text-sm">Render {pendingOrient}?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            No {pendingOrient} render exists for this clip. Start rendering now?
-          </p>
-          <DialogFooter>
-            <button
-              onClick={() => setPendingOrient(null)}
-              className="px-3 py-1.5 text-xs font-mono rounded border border-border hover:bg-muted transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirmRender}
-              className="px-3 py-1.5 text-xs font-mono font-bold rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Render
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        return (
+          <button
+            key={orient}
+            onClick={() => handleClick(orient)}
+            disabled={rendering}
+            className={cn(
+              'w-full flex items-center gap-3 px-4 py-3 rounded border text-left font-mono text-xs transition-colors',
+              isActive
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-zinc-800/60 bg-black/40 text-muted-foreground hover:bg-white/5',
+              rendering && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            <span className="font-bold tracking-wider flex-1">{orientationLabels[orient]}</span>
+            <OrientIndicator orient={orient} renders={renders} status={status} />
+            {rendered && isActive && <Check className="w-3.5 h-3.5 text-primary" />}
+            {rendering && <span className="text-[10px] font-bold tracking-widest text-primary animate-pulse">RENDERING</span>}
+            {!rendered && !rendering && <span className="text-[10px] font-bold tracking-widest text-muted-foreground/40">RENDER</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -571,7 +519,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -583,9 +531,12 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onRender?: () => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
+  pendingBackTab?: BackTab | null;
+  onClearPendingBackTab?: () => void;
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
+  const [backTab, setBackTab] = useState<BackTab>('settings');
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState('.original.json');
@@ -648,18 +599,19 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
   useEffect(() => {
     onFlippedChange(false);
+    setBackTab('settings');
     setManifest(null);
     setSelectedFile('.original.json');
     setFileContent(null);
   }, [item.id, onFlippedChange]);
 
-  // Fetch manifest when flipped externally (e.g. /info command)
+  // Fetch manifest when files tab is active on the back face
   useEffect(() => {
-    if (flipped && manifest === null && !manifestLoading) {
+    if (flipped && backTab === 'files' && manifest === null && !manifestLoading) {
       fetchManifest();
       fetchFileContent('.original.json');
     }
-  }, [flipped]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply pending focus once manifest loads
   useEffect(() => {
@@ -674,17 +626,15 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   }, [manifest, fetchFileContent]);
 
   const handleFlipToBack = () => {
+    setBackTab('settings');
     onFlippedChange(true);
-    if (manifest === null) {
-      fetchManifest();
-      fetchFileContent('.original.json');
-    }
   };
 
   // Handle pending file position from uiAction dispatch
   useEffect(() => {
     if (pendingFilePosition == null) return;
     pendingFocusRef.current = pendingFilePosition;
+    setBackTab('files');
     onFlippedChange(true);
     if (manifest === null) {
       fetchManifest();
@@ -699,6 +649,13 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     }
     onClearPendingFilePosition?.();
   }, [pendingFilePosition]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle pending back tab from uiAction dispatch
+  useEffect(() => {
+    if (pendingBackTab == null) return;
+    setBackTab(pendingBackTab);
+    onClearPendingBackTab?.();
+  }, [pendingBackTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectFile = useCallback((fileName: string) => {
     setSelectedFile(fileName);
@@ -748,9 +705,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           )}>
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              {isClip
-                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientation={renderOrientation} onChangeOrientation={onChangeOrientation} renders={item.renders ?? []} status={item.status} onRender={onRender} item={item} />
-                : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
+              <RatioToggle active={size} onSelect={onSizeChange} item={item} />
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -797,7 +752,32 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <span className="text-xs font-mono font-bold text-muted-foreground">/files</span>
+              <div className="flex items-center gap-1">
+                <button
+                  tabIndex={-1}
+                  onClick={() => setBackTab('settings')}
+                  className={cn(
+                    'px-2 py-0.5 rounded text-xs font-mono font-bold transition-colors',
+                    backTab === 'settings'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-white/5',
+                  )}
+                >
+                  /settings
+                </button>
+                <button
+                  tabIndex={-1}
+                  onClick={() => setBackTab('files')}
+                  className={cn(
+                    'px-2 py-0.5 rounded text-xs font-mono font-bold transition-colors',
+                    backTab === 'files'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-white/5',
+                  )}
+                >
+                  /files
+                </button>
+              </div>
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -814,30 +794,41 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
               </button>
             </div>
 
-            {/* Two-pane body */}
-            <div className="flex-1 flex min-h-0">
-              <div
-                data-tabstop="files"
-                tabIndex={0}
-                onKeyDown={handleFileKeyDown}
-                className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
-              >
-                <FileListPane
-                  files={manifest ?? []}
-                  selectedFile={selectedFile}
-                  onSelectFile={handleSelectFile}
-                  loading={manifestLoading}
+            {/* Back face body */}
+            {backTab === 'settings' ? (
+              <div className="flex-1 overflow-auto bg-black">
+                <SettingsPane
+                  item={item}
+                  renderOrientation={renderOrientation}
+                  onChangeOrientation={onChangeOrientation}
+                  onRender={onRender}
                 />
               </div>
-              <div className="flex-1 overflow-auto p-4 bg-black">
-                <FileContentPane
-                  content={fileContent}
-                  loading={fileLoading}
-                  fileName={selectedFile}
-                  fileUrl={fileUrl}
-                />
+            ) : (
+              <div className="flex-1 flex min-h-0">
+                <div
+                  data-tabstop="files"
+                  tabIndex={0}
+                  onKeyDown={handleFileKeyDown}
+                  className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
+                >
+                  <FileListPane
+                    files={manifest ?? []}
+                    selectedFile={selectedFile}
+                    onSelectFile={handleSelectFile}
+                    loading={manifestLoading}
+                  />
+                </div>
+                <div className="flex-1 overflow-auto p-4 bg-black">
+                  <FileContentPane
+                    content={fileContent}
+                    loading={fileLoading}
+                    fileName={selectedFile}
+                    fileUrl={fileUrl}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

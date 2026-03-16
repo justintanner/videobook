@@ -58,6 +58,7 @@ export function HomePage() {
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
+  const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -281,11 +282,13 @@ export function HomePage() {
     viewer_set_original: () => handleViewerSizeChange('original'),
     viewer_set_landscape: () => handleViewerSizeChange('landscape'),
     viewer_set_portrait: () => handleViewerSizeChange('portrait'),
-    viewer_toggle_info: () => setViewerFlipped(f => !f),
+    viewer_toggle_info: () => { setPendingBackTab('settings'); setViewerFlipped(f => !f); },
     viewer_focus_file: (pos: number) => {
+      setPendingBackTab('files');
       setViewerFlipped(true);
       setPendingFilePosition(pos);
     },
+    viewer_show_settings: () => { setPendingBackTab('settings'); setViewerFlipped(true); },
   }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange]);
 
   return (
@@ -381,7 +384,7 @@ export function HomePage() {
                     callTool={callTool}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}
