@@ -52,7 +52,7 @@ async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
 
 async function findThumbnailFile(assetDir: string): Promise<boolean> {
   try {
-    await access(join(assetDir, "original_frames", "0.00.jpg"));
+    await access(join(assetDir, "thumbnail.jpg"));
     return true;
   } catch {
     return false;
@@ -95,7 +95,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         : null;
       const isImage = a.type === "image";
       const thumbnail_url = hasThumbnail
-        ? `/files/${project_slug}/${a.id}/original_frames/0.00.jpg`
+        ? `/files/${project_slug}/${a.id}/thumbnail.jpg`
         : isImage ? media_url : null;
 
       let status: string;

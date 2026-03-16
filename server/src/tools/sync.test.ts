@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -208,12 +208,11 @@ describe("buildAssetList", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await mkdir(join(assetDir, "original_frames"), { recursive: true });
-    await writeFile(join(assetDir, "original_frames", "0.00.jpg"), "fake-thumb");
+    await writeFile(join(assetDir, "thumbnail.jpg"), "fake-thumb");
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].thumbnail_url).toContain("original_frames/0.00.jpg");
+    expect(assets[0].thumbnail_url).toContain("thumbnail.jpg");
   });
 
   it("returns null thumbnail for video without frame files", async () => {

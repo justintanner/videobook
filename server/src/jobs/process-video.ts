@@ -63,6 +63,15 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       }
     }
 
+    // Create thumbnail.jpg from first frame if not already set (e.g., from OG image)
+    const thumbResult = await fs.readFile(assetId, "thumbnail.jpg", projectSlug ?? "");
+    if (!thumbResult.ok) {
+      const firstFrame = await fs.readFile(assetId, "original_frames/0.00.jpg", projectSlug ?? "");
+      if (firstFrame.ok) {
+        await fs.writeFile(assetId, "thumbnail.jpg", firstFrame.value, projectSlug ?? "");
+      }
+    }
+
     await fs.commitOperation("process_video", assetId, {
       width, height, duration, frame_count: frameCount,
     }, projectSlug);
