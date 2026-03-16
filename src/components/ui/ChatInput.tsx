@@ -143,8 +143,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     setCommandResult('transmitting');
 
     let success = false;
-    if (onSend) {
-      success = await onSend(text);
+    try {
+      if (onSend) {
+        success = await onSend(text);
+      }
+    } catch {
+      // dispatch may throw on connection errors; treat as rejected
+      success = false;
     }
 
     const phase: CommandResultPhase = success ? 'accepted' : 'rejected';
