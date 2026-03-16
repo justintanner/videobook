@@ -25,6 +25,13 @@ const SOURCE_PREFIX_MAP: Record<string, string> = {
   "dailymotion.com": "dm",
 };
 
+const OG_PLATFORM_SUFFIX = / on (?:X|Twitter|Instagram|Facebook|YouTube|TikTok|Vimeo|Reddit|Twitch|Dailymotion)$/i;
+const OG_HANDLE_PAREN = / \(@?\w+\)/g;
+
+function cleanOgTitle(raw: string): string {
+  return raw.replace(OG_PLATFORM_SUFFIX, "").replace(OG_HANDLE_PAREN, "").trim();
+}
+
 function sourcePrefix(url: string): string {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, "");
@@ -99,7 +106,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
           redirect: "follow",
         });
         ogData = extractOpenGraph(await response.text());
-        if (ogData.ogTitle) title = ogData.ogTitle;
+        if (ogData.ogTitle) title = cleanOgTitle(ogData.ogTitle);
       } catch {
         // OG fetch failure is non-fatal
       }
