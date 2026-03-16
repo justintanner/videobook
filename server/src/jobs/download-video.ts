@@ -1,8 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { writeFile } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
-import type { IOGResult, IImageMetadata } from "@devmehq/open-graph-extractor";
+import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
@@ -35,9 +34,9 @@ function extractOgImageUrl(ogImage: IOGResult["ogImage"]): string | null {
     const first = ogImage[0];
     if (!first) return null;
     if (typeof first === "string") return first;
-    return (first as IImageMetadata).url ?? null;
+    return typeof first === "object" && "url" in first ? (first.url as string) : null;
   }
-  return (ogImage as IImageMetadata).url ?? null;
+  return typeof ogImage === "object" && "url" in ogImage ? (ogImage.url as string) : null;
 }
 
 type DownloadVideoPayload = {
@@ -50,7 +49,7 @@ type DownloadVideoPayload = {
   projectSlug?: string;
   exportVideos: boolean;
   full: boolean;
-  ogData: IOGResult | null;
+  sourcePrefix: string;
 };
 
 type InfoResult = {
@@ -71,33 +70,30 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
     const {
       url, outputPath, downloadSections,
       assetId, assetDir, projectSlug, exportVideos, full,
-      ogData,
+      sourcePrefix,
     } = payload as DownloadVideoPayload;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
-      // (a) Write .opengraph.json + download og.jpg
-      if (ogData) {
-        try {
-          await writeFile(join(assetDir, ".opengraph.json"), JSON.stringify(ogData, null, 2));
-        } catch {
-          // non-fatal
-        }
-        const imageUrl = extractOgImageUrl(ogData.ogImage);
-        if (imageUrl) {
-          try {
+      // (a) Download og.jpg from persisted OG data
+      try {
+        const ogFileResult = await fs.readFile(assetId, ".opengraph.json", projectSlug ?? "");
+        if (ogFileResult.ok) {
+          const ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
+          const imageUrl = extractOgImageUrl(ogData.ogImage);
+          if (imageUrl) {
             const imgResponse = await fetch(imageUrl, {
               signal: AbortSignal.timeout(15_000),
               redirect: "follow",
             });
             const buffer = Buffer.from(await imgResponse.arrayBuffer());
-            await writeFile(join(assetDir, "og.jpg"), buffer);
-          } catch {
-            // non-fatal
+            await fs.writeFile(assetId, "og.jpg", buffer, projectSlug ?? "");
           }
         }
+      } catch {
+        // non-fatal
       }
 
       // (b) Fetch ytdlp metadata
@@ -118,14 +114,9 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         // Enqueue separate jobs for entries 2+
         for (let i = 1; i < info.entries.length; i++) {
           const entry = info.entries[i];
-          const entryTitle = entry.title ?? `video-${i + 1}`;
-          const sanitized = entryTitle
-            .replace(/[^\w\s-]/g, "")
-            .replace(/\s+/g, "-")
-            .toLowerCase()
-            .slice(0, 60) || "downloaded-video";
+          const entryName = `${sourcePrefix} ${entry.title ?? `video ${i + 1}`}`;
 
-          const assetResult = await fs.createAsset("vid", sanitized, projectSlug ?? "");
+          const assetResult = await fs.createAsset("vid", entryName, projectSlug ?? "");
           if (!assetResult.ok) continue;
 
           const { assetId: newAssetId, path: newAssetDir } = assetResult.value;
@@ -143,7 +134,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
             projectSlug,
             exportVideos,
             full,
-            ogData: null,
+            sourcePrefix,
             _playlistItem: i + 1,
           } as unknown as Record<string, unknown>);
         }

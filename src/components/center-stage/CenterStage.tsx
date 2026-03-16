@@ -584,11 +584,11 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     onClearPendingFilePosition?.();
   }, [pendingFilePosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSelectFile = (fileName: string) => {
+  const handleSelectFile = useCallback((fileName: string) => {
     setSelectedFile(fileName);
     setFileContent(null);
     fetchFileContent(fileName);
-  };
+  }, [fetchFileContent]);
 
   const handleFileKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!manifest || manifest.length === 0) return;

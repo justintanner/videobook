@@ -10,28 +10,30 @@ import type { ToolDef } from "./tool-def.js";
 
 const DEFAULT_MAX_DURATION = 180;
 
-function slugFromUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean);
-    const last = parts.pop() ?? u.hostname;
-    return last
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .toLowerCase()
-      .slice(0, 60) || "downloaded-video";
-  } catch {
-    return "downloaded-video";
-  }
-}
+const SOURCE_PREFIX_MAP: Record<string, string> = {
+  "youtube.com": "yt",
+  "youtu.be": "yt",
+  "twitter.com": "x",
+  "x.com": "x",
+  "instagram.com": "ig",
+  "tiktok.com": "tt",
+  "vimeo.com": "vm",
+  "reddit.com": "rd",
+  "facebook.com": "fb",
+  "fb.watch": "fb",
+  "twitch.tv": "tw",
+  "dailymotion.com": "dm",
+};
 
-function slugFromTitle(title: string): string {
-  const sanitized = title
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .toLowerCase()
-    .slice(0, 60);
-  return sanitized || "downloaded-video";
+function sourcePrefix(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    if (SOURCE_PREFIX_MAP[hostname]) return SOURCE_PREFIX_MAP[hostname];
+    const base = hostname.split(".").slice(-2, -1)[0];
+    return base ? base.slice(0, 3) : "dl";
+  } catch {
+    return "dl";
+  }
 }
 
 export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
@@ -84,25 +86,26 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
         downloadSections = `*${s}-${e}`;
       }
 
-      // Fetch page HTML + extract OG for naming
-      let ogData: IOGResult | null = null;
-      let assetName = slugFromUrl(url);
+      // 1. Source prefix from URL
+      const prefix = sourcePrefix(url);
 
+      // 2. OG extraction — one call
+      let ogData: IOGResult | null = null;
+      let title = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "video";
       try {
         const response = await fetch(url, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
           signal: AbortSignal.timeout(10_000),
           redirect: "follow",
         });
-        const html = await response.text();
-        ogData = extractOpenGraph(html);
-        if (ogData.ogTitle) {
-          assetName = slugFromTitle(ogData.ogTitle);
-        }
+        ogData = extractOpenGraph(await response.text());
+        if (ogData.ogTitle) title = ogData.ogTitle;
       } catch {
-        // OG fetch failure is non-fatal — fall back to URL-derived slug
+        // OG fetch failure is non-fatal
       }
 
+      // 3. Name decision (short, source-prefixed)
+      const assetName = `${prefix} ${title}`;
       const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -112,6 +115,13 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId, path: assetDir } = assetResult.value;
+
+      // 4. Immediately save OG data to hidden file
+      if (ogData) {
+        await fs.writeFile(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)), project_slug);
+      }
+
+      // 5. Launch job (no ogData in payload — it's on disk)
       const filename = full ? "original_full.mp4" : "original.mp4";
       const outputPath = join(assetDir, filename);
       const jobId = `download-${assetId}-${Date.now()}`;
@@ -126,7 +136,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
         projectSlug: project_slug,
         exportVideos: export_videos ?? false,
         full: full ?? false,
-        ogData,
+        sourcePrefix: prefix,
       } as unknown as Record<string, unknown>);
 
       return {
