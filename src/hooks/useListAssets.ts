@@ -13,6 +13,7 @@ export interface ListAsset {
   height: number | null;
   origin: string | null;
   prompt: string | null;
+  renders: string[];
 }
 
 interface UseListAssetsResult {

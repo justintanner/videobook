@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check } from 'lucide-react';
+import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -8,8 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import type { MediaItem } from '@/components/sidebar/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import { RenderingReadout } from './RenderingReadout';
 import { useMountKey } from '@/contexts/MountKeyContext';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
@@ -79,27 +87,19 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   return null;
 }
 
-function ClipViewerInner({ item, orientedFile, derivedSrc }: {
-  item: MediaItem; orientedFile: string | null; derivedSrc: string;
+function ClipViewerInner({ item, derivedSrc }: {
+  item: MediaItem; derivedSrc: string;
 }) {
-  const fell = useRef(false);
-  const [src, setSrc] = useState(derivedSrc);
   const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
 
   return (
     <video
-      src={src}
+      src={derivedSrc}
       poster={thumbSrc}
       controls
       tabIndex={-1}
       className="w-full h-full object-contain"
       draggable={false}
-      onError={() => {
-        if (!fell.current && orientedFile) {
-          fell.current = true;
-          setSrc(item.filePath);
-        }
-      }}
     />
   );
 }
@@ -116,7 +116,86 @@ function ClipViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
     ? item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`)
     : item.filePath;
 
-  return <ClipViewerInner key={`${item.id}-${size}`} item={item} orientedFile={orientedFile} derivedSrc={derivedSrc} />;
+  return <ClipViewerInner key={`${item.id}-${size}`} item={item} derivedSrc={derivedSrc} />;
+}
+
+function RenderPrompt({ item, orient, onRender }: {
+  item: MediaItem;
+  orient: Orientation;
+  onRender?: () => void;
+}) {
+  const primaryColor = item.type === 'final' ? '#fbbf24' : 'var(--color-primary)';
+
+  return (
+    <div
+      className={cn(
+        'w-full h-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden',
+        item.type === 'final' ? 'border border-amber-500/30' : 'border border-primary/30',
+      )}
+    >
+      {/* Grid overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-10"
+        style={{
+          backgroundImage: `
+            linear-gradient(${primaryColor}40 1px, transparent 1px),
+            linear-gradient(90deg, ${primaryColor}40 1px, transparent 1px)
+          `,
+          backgroundSize: '12px 12px',
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center gap-3">
+        <Film className="w-8 h-8 opacity-30" style={{ color: primaryColor }} />
+
+        <button
+          onClick={onRender}
+          className="px-4 py-2 rounded border text-xs font-bold tracking-wider transition-colors"
+          style={{
+            color: primaryColor,
+            borderColor: `${primaryColor}60`,
+            backgroundColor: `${primaryColor}10`,
+          }}
+        >
+          RENDER {orient.toUpperCase()}
+        </button>
+
+        <div className="text-xs opacity-40" style={{ color: primaryColor }}>
+          {item.slug}
+        </div>
+      </div>
+
+      {/* Corner decorations */}
+      <div className="absolute top-2 left-2 w-5 h-5 border-l-2 border-t-2 opacity-20" style={{ borderColor: primaryColor }} />
+      <div className="absolute top-2 right-2 w-5 h-5 border-r-2 border-t-2 opacity-20" style={{ borderColor: primaryColor }} />
+      <div className="absolute bottom-2 left-2 w-5 h-5 border-l-2 border-b-2 opacity-20" style={{ borderColor: primaryColor }} />
+      <div className="absolute bottom-2 right-2 w-5 h-5 border-r-2 border-b-2 opacity-20" style={{ borderColor: primaryColor }} />
+    </div>
+  );
+}
+
+function ClipContent({ item, size, onRender }: {
+  item: MediaItem;
+  size: ViewerSize;
+  onRender?: () => void;
+}) {
+  if (size === 'original') {
+    return <ClipViewer item={item} size={size} />;
+  }
+
+  const orient = size as Orientation;
+  const renders = item.renders ?? [];
+  const status = item.status;
+
+  if (renders.includes(orient)) {
+    return <ClipViewer item={item} size={size} />;
+  }
+
+  if (status && RENDERING_STATUSES.has(status)) {
+    return <RenderingReadout asset={item} />;
+  }
+
+  return <RenderPrompt item={item} orient={orient} onRender={onRender} />;
 }
 
 function ratioLabel(size: ViewerSize, item: MediaItem): string {
@@ -171,13 +250,44 @@ const orientationLabels: Record<Orientation, string> = {
   square: '/square 1080x1080',
 };
 
-function ClipOrientationToggle({ active, onSelect, renderOrientation, onChangeOrientation, item }: {
+const RENDERING_STATUSES = new Set<string>([
+  'rendering', 'rendering-landscape', 'rendering-portrait', 'rendering-square',
+  'render-queued', 'render-queued-landscape', 'render-queued-portrait', 'render-queued-square',
+]);
+
+function isOrientRendering(status: ClipState | undefined, orient: Orientation): boolean {
+  if (!status) return false;
+  return status === `rendering-${orient}` || status === `render-queued-${orient}`;
+}
+
+function OrientIndicator({ orient, renders, status }: {
+  orient: Orientation;
+  renders: string[];
+  status: ClipState | undefined;
+}) {
+  const isRendered = renders.includes(orient);
+  const rendering = isOrientRendering(status, orient);
+
+  if (rendering) {
+    return <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />;
+  }
+  if (isRendered) {
+    return <span className="w-1.5 h-1.5 rounded-full bg-primary" />;
+  }
+  return <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />;
+}
+
+function ClipOrientationToggle({ active, onSelect, renderOrientation, onChangeOrientation, renders, status, onRender, item }: {
   active: ViewerSize;
   onSelect: (s: ViewerSize) => void;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
+  renders: string[];
+  status: ClipState | undefined;
+  onRender?: () => void;
   item: MediaItem;
 }) {
+  const [pendingOrient, setPendingOrient] = useState<Orientation | null>(null);
   const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
 
   const originalLabel = item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
@@ -185,36 +295,95 @@ function ClipOrientationToggle({ active, onSelect, renderOrientation, onChangeOr
     ? originalLabel
     : orientationLabels[active as Orientation] ?? active;
 
+  const handleOrientClick = (orient: Orientation) => {
+    const isRendered = renders.includes(orient);
+    const rendering = isOrientRendering(status, orient);
+
+    if (rendering) return; // disabled while rendering
+
+    onChangeOrientation(orient);
+
+    if (isRendered) {
+      onSelect(orient);
+    } else {
+      setPendingOrient(orient);
+    }
+  };
+
+  const handleConfirmRender = () => {
+    if (pendingOrient) {
+      onSelect(pendingOrient);
+      onRender?.();
+    }
+    setPendingOrient(null);
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
-          {activeLabel}
-          <ChevronDown className="w-3 h-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onClick={() => onSelect('original')} className="py-2.5">
-          <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-          <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{originalLabel}</span>
-          <span className="ml-2 opacity-80 flex items-center"><Monitor className="h-3 w-3" /></span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {allOrientations.map((orient) => {
-          const Icon = ratioIcons[orient];
-          const isActive = orient === renderOrientation;
-          return (
-            <DropdownMenuItem key={orient} onClick={() => { onChangeOrientation(orient); onSelect(orient); }} className="py-2.5">
-              {isActive
-                ? <Check className="w-3 h-3 text-primary" />
-                : <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>}
-              <span className={`font-mono font-bold text-xs tracking-wider leading-none flex-1 ${isActive ? '' : 'text-muted-foreground/50'}`}>{orientationLabels[orient]}</span>
-              <span className={`ml-2 flex items-center ${isActive ? 'opacity-80' : 'opacity-40'}`}><Icon className="h-3 w-3" /></span>
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors">
+            {activeLabel}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => onSelect('original')} className="py-2.5">
+            <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+            <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{originalLabel}</span>
+            <span className="ml-2 opacity-80 flex items-center"><Monitor className="h-3 w-3" /></span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {allOrientations.map((orient) => {
+            const Icon = ratioIcons[orient];
+            const isActive = orient === renderOrientation;
+            const rendering = isOrientRendering(status, orient);
+            return (
+              <DropdownMenuItem
+                key={orient}
+                onClick={() => handleOrientClick(orient)}
+                disabled={rendering}
+                className="py-2.5"
+              >
+                {isActive
+                  ? <Check className="w-3 h-3 text-primary" />
+                  : <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>}
+                <span className={`font-mono font-bold text-xs tracking-wider leading-none flex-1 ${isActive ? '' : 'text-muted-foreground/50'}`}>{orientationLabels[orient]}</span>
+                <span className="ml-1.5 flex items-center">
+                  <OrientIndicator orient={orient} renders={renders} status={status} />
+                </span>
+                <span className={`ml-1.5 flex items-center ${isActive ? 'opacity-80' : 'opacity-40'}`}><Icon className="h-3 w-3" /></span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={pendingOrient !== null} onOpenChange={(open) => { if (!open) setPendingOrient(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">Render {pendingOrient}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            No {pendingOrient} render exists for this clip. Start rendering now?
+          </p>
+          <DialogFooter>
+            <button
+              onClick={() => setPendingOrient(null)}
+              className="px-3 py-1.5 text-xs font-mono rounded border border-border hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmRender}
+              className="px-3 py-1.5 text-xs font-mono font-bold rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Render
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -402,7 +571,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, pendingFilePosition, onClearPendingFilePosition }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -411,6 +580,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onFlippedChange: (f: boolean) => void;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
+  onRender?: () => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
 }) {
@@ -579,7 +749,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
-                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientation={renderOrientation} onChangeOrientation={onChangeOrientation} item={item} />
+                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientation={renderOrientation} onChangeOrientation={onChangeOrientation} renders={item.renders ?? []} status={item.status} onRender={onRender} item={item} />
                 : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
 
               {/* Center slug */}
@@ -606,18 +776,18 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
               {size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
                   {isClip
-                    ? <ClipViewer item={item} size={size} />
+                    ? <ClipContent item={item} size={size} onRender={onRender} />
                     : <ImageViewer item={item} size={size} />}
                 </div>
               ) : size === 'square' ? (
                 <div className="aspect-square h-full max-w-full">
                   {isClip
-                    ? <ClipViewer item={item} size={size} />
+                    ? <ClipContent item={item} size={size} onRender={onRender} />
                     : <ImageViewer item={item} size={size} />}
                 </div>
               ) : (
                 isClip
-                  ? <ClipViewer item={item} size={size} />
+                  ? <ClipContent item={item} size={size} onRender={onRender} />
                   : <ImageViewer item={item} size={size} />
               )}
             </div>

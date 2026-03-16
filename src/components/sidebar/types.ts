@@ -34,4 +34,5 @@ export interface MediaItem {
   origin?: string | null;
   thumbnailSrc?: string | null;
   prompt?: string | null;
+  renders?: string[];
 }

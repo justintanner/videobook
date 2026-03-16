@@ -121,7 +121,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
     try {
       for (const asset of assets) {
         try {
-          const lockResult = await fs.acquireLock(asset.assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "rendering" } });
+          const lockResult = await fs.acquireLock(asset.assetDir, { durationMs: LOCK_DURATION_MS, data: { state: `rendering-${orientation}` } });
           if (!lockResult.ok) {
             failed.push({ assetId: asset.assetId, error: `Asset is locked: ${lockResult.error.message}` });
             continue;

@@ -10,9 +10,11 @@ interface RenderingReadoutProps {
 function getBadgeText(status: string | undefined): string {
   if (status === 'rendering-landscape') return 'RENDERING LANDSCAPE';
   if (status === 'rendering-portrait') return 'RENDERING PORTRAIT';
+  if (status === 'rendering-square') return 'RENDERING SQUARE';
   if (status === 'render-queued') return 'QUEUED';
   if (status === 'render-queued-landscape') return 'QUEUED LANDSCAPE';
   if (status === 'render-queued-portrait') return 'QUEUED PORTRAIT';
+  if (status === 'render-queued-square') return 'QUEUED SQUARE';
   return 'RENDERING';
 }
 

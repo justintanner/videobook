@@ -42,8 +42,13 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
     if (i >= tokens.length) break;
 
     if (i === params.length - 1 && params[i].type === 'string') {
-      // Last string param gets all remaining tokens joined
-      const raw = tokens.slice(i).join(' ');
+      // Last string param gets all remaining tokens joined.
+      // Strip leading "to" connector (e.g. "/rename @slug to new-name")
+      let remaining = tokens.slice(i);
+      if (remaining.length > 1 && remaining[0].toLowerCase() === 'to') {
+        remaining = remaining.slice(1);
+      }
+      const raw = remaining.join(' ');
       args[params[i].name] = raw.startsWith('@') ? raw.slice(1) : raw;
     } else {
       const raw = tokens[i];

@@ -25,6 +25,7 @@ export type SyncAsset = {
   height: number | null;
   origin: string | null;
   prompt: string | null;
+  renders: string[];
 };
 
 export type SyncResult = {
@@ -77,11 +78,23 @@ async function hasRenderMetadata(assetDir: string): Promise<boolean> {
   }
 }
 
+const RENDER_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
+
+async function findRenderedOrientations(assetDir: string): Promise<string[]> {
+  try {
+    const files = await readdir(assetDir);
+    const fileSet = new Set(files);
+    return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
+  } catch {
+    return [];
+  }
+}
+
 export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
@@ -89,6 +102,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         isWhitelisted(a.path),
         hasRenderMetadata(a.path),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
+        findRenderedOrientations(a.path),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -130,6 +144,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         height: (meta?.height as number) ?? null,
         origin: (meta?.origin as string) ?? null,
         prompt: (meta?.prompt as string) ?? null,
+        renders,
       };
     }),
   );

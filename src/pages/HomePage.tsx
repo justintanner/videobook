@@ -28,6 +28,7 @@ import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useTimeline } from '@/hooks/useTimeline';
+import { useRenderAsset } from '@/hooks/useRenderAsset';
 import type { Orientation } from '@/hooks/useTimeline';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
@@ -68,6 +69,7 @@ export function HomePage() {
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
   const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
+  const { renderAsset } = useRenderAsset(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -77,29 +79,31 @@ export function HomePage() {
     prevInboxOpenRef.current = inboxOpen;
   }, [inboxOpen]);
 
-  // Global focus lock: refocus ChatInput unless a legitimate form element has focus
+  // Global focus lock: prevent focus from leaving ChatInput on non-form clicks.
+  // mousedown + preventDefault stops the browser from moving focus while still
+  // allowing click handlers to fire normally.
   useEffect(() => {
     if (inboxOpen) return;
 
-    const handler = (e: FocusEvent) => {
+    const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target) return;
-      if (target.dataset.testid === 'input-chat') return;
 
       const tag = target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
           || tag === 'VIDEO' || tag === 'AUDIO') return;
       if (target.isContentEditable) return;
 
-      // Skip Radix portaled content (dropdowns, popovers, context menus)
+      // Allow Radix portaled content (dropdowns, popovers, context menus, dialogs)
       if (target.closest('[data-radix-popper-content-wrapper]')) return;
       if (target.closest('[data-radix-menu-content]')) return;
+      if (target.closest('[role="dialog"]')) return;
 
-      requestAnimationFrame(() => chatInputRef.current?.focus());
+      e.preventDefault();
     };
 
-    document.addEventListener('focusin', handler);
-    return () => document.removeEventListener('focusin', handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [inboxOpen]);
 
   // ESC key closes history panel
@@ -143,6 +147,7 @@ export function HomePage() {
         height: asset.height,
         origin: asset.origin,
         prompt: asset.prompt,
+        renders: asset.renders ?? [],
       };
     });
   }, [assetList, result]);
@@ -199,6 +204,11 @@ export function HomePage() {
     if (!projectSlug) return;
     await setRenderOrientation(projectSlug, orient);
   }, [projectSlug, setRenderOrientation]);
+
+  const handleRender = useCallback(async () => {
+    if (!projectSlug || !activeSelection) return;
+    await renderAsset(activeSelection.id, projectSlug);
+  }, [projectSlug, activeSelection, renderAsset]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -370,7 +380,7 @@ export function HomePage() {
                     callTool={callTool}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}
