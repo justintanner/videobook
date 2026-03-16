@@ -175,19 +175,21 @@ const orientationLabels: Record<Orientation, string> = {
   square: '/square 1080x1080',
 };
 
-function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrientation }: {
+function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrientation, item }: {
   active: ViewerSize;
   onSelect: (s: ViewerSize) => void;
   renderOrientations: Orientation[];
   onAddOrientation: (orient: Orientation) => void;
+  item: MediaItem;
 }) {
   const rendered = new Set(renderOrientations);
   const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
   const existing = allOrientations.filter(o => rendered.has(o));
   const addable = allOrientations.filter(o => !rendered.has(o));
 
+  const originalLabel = item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
   const activeLabel = active === 'original'
-    ? '/original'
+    ? originalLabel
     : orientationLabels[active as Orientation] ?? active;
 
   return (
@@ -199,6 +201,12 @@ function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrie
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
+        <DropdownMenuItem onClick={() => onSelect('original')} className="py-2.5">
+          <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+          <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{originalLabel}</span>
+          <span className="ml-2 opacity-80 flex items-center"><Monitor className="h-3 w-3" /></span>
+        </DropdownMenuItem>
+        {existing.length > 0 && <DropdownMenuSeparator />}
         {existing.map((orient) => {
           const Icon = ratioIcons[orient];
           return (
@@ -209,7 +217,7 @@ function ClipOrientationToggle({ active, onSelect, renderOrientations, onAddOrie
             </DropdownMenuItem>
           );
         })}
-        {addable.length > 0 && existing.length > 0 && <DropdownMenuSeparator />}
+        {addable.length > 0 && <DropdownMenuSeparator />}
         {addable.map((orient) => {
           const Icon = ratioIcons[orient];
           return (
@@ -617,7 +625,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             {/* Top bar */}
             <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               {isClip
-                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientations={renderOrientations} onAddOrientation={(o) => setPendingAddOrientation(o)} />
+                ? <ClipOrientationToggle active={size} onSelect={onSizeChange} renderOrientations={renderOrientations} onAddOrientation={(o) => setPendingAddOrientation(o)} item={item} />
                 : <RatioToggle active={size} onSelect={onSizeChange} item={item} />}
 
               {/* Center slug */}
