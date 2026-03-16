@@ -37,7 +37,7 @@ import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
 const SIDEBAR_HIDDEN_STATUSES = new Set<string>(['unreviewed', 'generating', 'downloading']);
-const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'transcribing']);
+const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading']);
 
 function humanizeId(id: string): string {
   const rawName = id.replace(/^[a-z]+-/, '');
