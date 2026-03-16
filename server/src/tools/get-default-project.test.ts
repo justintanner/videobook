@@ -18,13 +18,17 @@ describe("get_default_project tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when no projects exist", async () => {
+  it("auto-creates a project when none exist", async () => {
     client = await createTestClient(tempDir);
     const result = await client.callTool({
       name: "get_default_project",
       arguments: {},
     });
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
+    const content = result.content as Array<{ type: string; text: string }>;
+    const data = JSON.parse(content[0].text);
+    expect(data.metadata.slug).toBeTruthy();
+    expect(data.path).toBeTruthy();
   });
 
   it("returns the default project after creation", async () => {
