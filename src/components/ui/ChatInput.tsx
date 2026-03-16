@@ -133,7 +133,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTriggerRef = useRef<string | null>(null);
   const resultTimeoutRef = useRef<number>(0);
-  const navigatingHistoryRef = useRef(false);
+  const [navigatingHistory, setNavigatingHistory] = useState(false);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
   const history = useChatHistory(callTool, projectSlug);
@@ -271,7 +271,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     if (selectedIndex !== 0) setSelectedIndex(0);
   }
 
-  const showSuggestions = triggerMatch !== null && autocompleteItems.length > 0 && !dismissed && !navigatingHistoryRef.current;
+  const showSuggestions = triggerMatch !== null && autocompleteItems.length > 0 && !dismissed && !navigatingHistory;
 
   const selectSuggestion = useCallback(
     (item: AutocompleteItem) => {
@@ -361,7 +361,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       const result = history.navigateBack(chatInput);
       if (result !== null) {
         e.preventDefault();
-        navigatingHistoryRef.current = true;
+        setNavigatingHistory(true);
         setChatInput(result);
         setConfirmedTokens(extractTokens(result, commands, assetSlugs));
         setHistorySlide('up');
@@ -373,7 +373,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       const result = history.navigateForward();
       if (result !== null) {
         e.preventDefault();
-        navigatingHistoryRef.current = true;
+        setNavigatingHistory(true);
         setChatInput(result);
         setConfirmedTokens(extractTokens(result, commands, assetSlugs));
         setHistorySlide('down');
@@ -384,7 +384,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setChatInput(newValue);
-    navigatingHistoryRef.current = false;
+    setNavigatingHistory(false);
     history.reset();
 
     // Remove confirmed tokens whose text no longer matches
