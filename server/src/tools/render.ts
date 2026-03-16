@@ -225,7 +225,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
           videoFilename: videoFile.name,
           hasElevenlabs,
         }],
-        subtitlesEnabled: subtitles_enabled,
+        subtitlesEnabled: subsEnabled,
         highlightStyle: highlight_style,
         position,
         fontSize: font_size,

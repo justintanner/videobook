@@ -23,7 +23,7 @@ export const Highlight: React.FC<HighlightProps> = ({
   const { fps, width, height } = useVideoConfig();
   const currentTime = frame / fps;
 
-  const orientation: Orientation = height > width ? "portrait" : "landscape";
+  const orientation: Orientation = height > width ? "portrait" : width === height ? "square" : "landscape";
   const fontPx = getHighlightFontSize(fontSize, orientation);
   const yFraction = getYPosition(position, orientation);
 

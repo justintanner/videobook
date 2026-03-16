@@ -62,7 +62,7 @@ type RenderProjectPayload = {
   projectSlug: string;
   orientation: Orientation;
   assets: AssetDescriptor[];
-  subtitlesEnabled?: boolean;
+  subtitlesEnabled: boolean;
   highlightStyle: SubtitleStyle;
   position: SubtitlePosition;
   fontSize: FontSizePreset;
@@ -141,13 +141,8 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
               }
             }
 
-            const subsEnabled =
-              subtitlesEnabled !== undefined
-                ? subtitlesEnabled
-                : orientation === "portrait";
-
             let chunks: Chunk[] = [];
-            if (subsEnabled && allSegments) {
+            if (subtitlesEnabled && allSegments) {
               chunks = chunkSegments(allSegments, orientation, highlightStyle);
             }
 
@@ -165,7 +160,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 sourceHeight: probe.height,
                 durationInFrames,
                 fps,
-                subtitlesEnabled: subsEnabled,
+                subtitlesEnabled,
                 chunks,
                 style: highlightStyle,
                 position,
@@ -208,7 +203,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
 
               const renderSettings = {
                 orientation,
-                subtitlesEnabled: subsEnabled,
+                subtitlesEnabled,
                 highlightStyle,
                 position,
                 fontSize,
@@ -218,10 +213,13 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 audioFadeOut,
                 audioVolume,
                 backgroundMode,
+                osgPosition: osgImagePath ? osgPosition : undefined,
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename],
               };
               await fs.writeMetadata(asset.assetId, "render", renderSettings, projectSlug);
+
+              await fs.commitOperation("render", asset.assetId, { orientation }, projectSlug);
 
               rendered.push(asset.assetId);
             } finally {

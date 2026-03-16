@@ -178,7 +178,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         setTimeout(() => {
           inputRef.current?.focus();
           inputRef.current?.setSelectionRange(text.length, text.length);
-        }, 0);
+        }, 50);
       });
     },
     focus() {

@@ -113,7 +113,6 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
         "-map", "[outv]",
         "-map", "[outa]",
         ...H264_MEDIUM,
-        "-level:v", "4.2",
         ...AUDIO_OPTS,
         "-movflags", "+faststart",
         "-y",

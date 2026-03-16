@@ -216,6 +216,10 @@ export function HomePage() {
     chatInputRef.current?.animateAndSend(text);
   }, []);
 
+  const handleAnimateEdit = useCallback((text: string) => {
+    chatInputRef.current?.animateAndEdit(text);
+  }, []);
+
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
@@ -303,6 +307,7 @@ export function HomePage() {
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                       onShowHistory={() => setHistoryItem(item)}
                       onAnimateCommand={handleAnimateCommand}
+                      onAnimateEdit={handleAnimateEdit}
                       MenuItem={ContextMenuItem}
                     />
                   );
@@ -372,6 +377,7 @@ export function HomePage() {
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                       onShowHistory={() => setHistoryItem(item)}
                       onAnimateCommand={handleAnimateCommand}
+                      onAnimateEdit={handleAnimateEdit}
                       MenuItem={ContextMenuItem}
                     />
                   );
