@@ -234,6 +234,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
   },
   {
+    command: "/render",
+    description: "Render video in all orientations",
+    example: "/render @hero-intro",
+    category: "action",
+    icon: "Film",
+    size: "lg",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
+      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (omit for all)" },
+    ],
+    mcpTool: { tool: "render", autoInject: ["project_slug"] },
+  },
+  {
     command: "/isolate-vocals",
     description: "Isolate vocals from audio",
     example: "/isolate-vocals @voiceover-main",
