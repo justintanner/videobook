@@ -1524,23 +1524,30 @@ function Page10_GenSystem() {
         </div>
       </div>
 
-      {/* Right: Flipside Back Face (Settings + Files tabs) */}
-      <div className="w-[700px] shrink-0 flex flex-col gap-4 min-h-0">
-        {/* Settings tab active */}
-        <div className="flex-1 flex flex-col gap-1 min-h-0">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /settings tab</p>
-          <div className="flex-1 flex flex-col border border-zinc-600/50 overflow-hidden">
-            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <div className="flex items-center gap-1">
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/settings</span>
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/files</span>
-              </div>
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
-              </span>
-              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+      {/* Right: Flipside Back Face — Full Render Settings */}
+      <div className="w-[700px] shrink-0 flex flex-col gap-1 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /settings tab (full render settings)</p>
+        <div className="flex-1 flex flex-col border border-zinc-600/50 overflow-hidden">
+          {/* Header: tab bar + slug + rotate */}
+          <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+            <div className="flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/settings</span>
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/files</span>
             </div>
-            <div className="flex-1 overflow-auto bg-black p-4 space-y-2">
+            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
+            </span>
+            <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+          </div>
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-auto bg-black p-4 space-y-3">
+
+            {/* Orientations */}
+            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Orientations</span>
+              </div>
               {([
                 { label: '/landscape 1920x1080', icon: Monitor, active: true, rendered: true, rendering: false },
                 { label: '/portrait 1080x1920', icon: Smartphone, active: false, rendered: false, rendering: false },
@@ -1565,32 +1572,101 @@ function Page10_GenSystem() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-        {/* Files tab active */}
-        <div className="flex-1 flex flex-col gap-1 min-h-0">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /files tab</p>
-          <div className="flex-1 flex flex-col border border-zinc-600/50 overflow-hidden">
-            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <div className="flex items-center gap-1">
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/settings</span>
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/files</span>
+
+            {/* Subtitles */}
+            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Subtitles</span>
               </div>
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
-              </span>
-              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Enabled</span>
+                <div className="flex gap-1">
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">ON</span>
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">OFF</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Style</span>
+                <div className="flex gap-1">
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">TikDance</span>
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">Highlight</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Position</span>
+                <div className="flex gap-1">
+                  {['Top', 'Mid', 'Bottom'].map((p) => (
+                    <span key={p} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold', p === 'Bottom' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{p}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Font Size</span>
+                <div className="flex gap-1">
+                  {['Small', 'Medium', 'Large'].map((s) => (
+                    <span key={s} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold', s === 'Medium' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{s}</span>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex-1 flex min-h-0">
-              <div className="w-[180px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 py-1">
-                {['.original.json', 'original.mp4', 'landscape.mp4', 'thumbnail.jpg'].map((f, i) => (
-                  <div key={f} className={cn('w-full text-left px-3 py-1.5 text-xs font-mono flex items-center', i === 0 ? 'bg-primary/10 border-l-2 border-primary text-primary' : 'border-l-2 border-transparent text-muted-foreground/60')}>{f}</div>
-                ))}
+
+            {/* Audio */}
+            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Audio</span>
               </div>
-              <div className="flex-1 overflow-auto p-4 bg-black">
-                <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap">{'{\n  "type": "video",\n  "slug": "vid-aurora-sky",\n  "origin": "veo3",\n  "width": 1920,\n  "height": 1080\n}'}</pre>
+              {([
+                { label: 'Volume', value: '80', unit: '' },
+                { label: 'Fade In', value: '200', unit: 'ms' },
+                { label: 'Fade Out', value: '500', unit: 'ms' },
+              ] as const).map((f) => (
+                <div key={f.label} className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-muted-foreground">{f.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-16 px-2 py-1 rounded border border-white/10 bg-black/40 text-[10px] font-mono font-bold text-foreground/80 text-right">{f.value}</span>
+                    {f.unit && <span className="text-[10px] font-mono text-muted-foreground/50">{f.unit}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* OSG (On-Screen Graphic) */}
+            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">OSG</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Enabled</span>
+                <div className="flex gap-1">
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">ON</span>
+                  <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">OFF</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-muted-foreground">Position</span>
+                <div className="grid grid-cols-2 gap-1">
+                  {(['TL', 'TR', 'BL', 'BR'] as const).map((pos) => (
+                    <span key={pos} className={cn('px-2.5 py-1 rounded border text-[10px] font-mono font-bold text-center', pos === 'BR' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-black/40 border-white/10 text-muted-foreground')}>{pos}</span>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {/* Background */}
+            <div className="border border-primary/20 bg-black/50 rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+                <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">Background</span>
+              </div>
+              <div className="flex gap-1">
+                <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-primary/20 border-primary/50 text-primary">Blur</span>
+                <span className="px-2.5 py-1 rounded border text-[10px] font-mono font-bold bg-black/40 border-white/10 text-muted-foreground">Black</span>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
