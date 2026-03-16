@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { InboxHeader } from './InboxHeader';
 import { InboxAllClear } from './InboxAllClear';
@@ -51,6 +51,7 @@ export function InboxDrawer({
   callTool,
   projectSlug,
 }: InboxDrawerProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [allClear, setAllClear] = useState(false);
@@ -105,6 +106,27 @@ export function InboxDrawer({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
+
+  // Focus lock: prevent clicks on non-interactive elements from stealing focus
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+          || tag === 'VIDEO' || tag === 'AUDIO' || tag === 'BUTTON') return;
+      if (target.isContentEditable) return;
+      if (target.closest('[data-radix-popper-content-wrapper]')) return;
+      const dialog = dialogRef.current;
+      if (!dialog || !dialog.contains(target)) return;
+      e.preventDefault();
+      const input = dialog.querySelector<HTMLInputElement>('[data-testid="input-chat"]');
+      input?.focus();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   const handleVideoEnded = (videoId: string) => {
     const idx = liveVideos.findIndex((v) => v.id === videoId);
@@ -196,6 +218,7 @@ export function InboxDrawer({
 
       {/* Full-screen container */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-label="Review pending generations"
         className={cn(
