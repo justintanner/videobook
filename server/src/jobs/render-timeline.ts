@@ -121,7 +121,6 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
       await runFfmpeg(ffmpegArgs);
 
       const renderMeta = {
-        orientation,
         slotCount: n,
         slots: resolvedSlots.map((s) => s.slug),
         output: outputFilename,

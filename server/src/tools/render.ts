@@ -25,7 +25,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       subtitles_enabled: z
         .boolean()
         .optional()
-        .describe("Enable subtitle overlay (default: portrait=true, landscape=false)"),
+        .describe("Enable subtitle overlay (default: true when elevenlabs.json exists)"),
       highlight_style: z
         .enum(["tikdance", "highlight"])
         .optional()
@@ -169,7 +169,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       const subsEnabled =
         subtitles_enabled !== undefined
           ? subtitles_enabled
-          : orientation === "portrait";
+          : hasElevenlabs;
 
       if (subsEnabled && !hasElevenlabs) {
         return {

@@ -202,7 +202,6 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
               }
 
               const renderSettings = {
-                orientation,
                 subtitlesEnabled,
                 highlightStyle,
                 position,
