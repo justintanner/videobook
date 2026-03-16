@@ -97,10 +97,9 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
         filterParts.push(buildAudioFilter(i, resolvedSlots[i], durations[i]));
       }
 
-      // Concat
-      const videoInputs = Array.from({ length: n }, (_, i) => `[v${i}]`).join("");
-      const audioInputs = Array.from({ length: n }, (_, i) => `[a${i}]`).join("");
-      filterParts.push(`${videoInputs}${audioInputs}concat=n=${n}:v=1:a=1[outv][outa]`);
+      // Concat — inputs must be interleaved per segment: [v0][a0][v1][a1]...
+      const concatInputs = Array.from({ length: n }, (_, i) => `[v${i}][a${i}]`).join("");
+      filterParts.push(`${concatInputs}concat=n=${n}:v=1:a=1[outv][outa]`);
 
       const filterComplex = filterParts.join(";");
 
