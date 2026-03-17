@@ -5,7 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { openai } from "@nakedapi/openai";
-import { resolveAllAssets } from "../asset-resolver.js";
+import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "../chat-log.js";
 import { parseTime } from "../time-parse.js";
@@ -31,14 +31,21 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
         project_slug: string;
       };
 
-      // 1. Resolve @asset tags
-      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(prompt, fs, slug);
+      // 1. Expand @s01 slot refs → actual asset slugs
+      let expandedPrompt = prompt;
+      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", slug);
+      if (timelineResult.ok && timelineResult.value.slots) {
+        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+      }
+
+      // 2. Resolve @asset tags
+      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
 
       if (unresolved.length > 0) {
         return error(`Asset not found: ${unresolved.map((t) => `@${t}`).join(", ")}`);
       }
 
-      // 2. Build asset context for the LLM
+      // 3. Build asset context for the LLM
       const assetContext = resolvedAssets.map((a) => ({
         tag: a.tag,
         type: a.asset_type,
@@ -65,11 +72,11 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
         }
       }
 
-      // 3. Read recent history for context
+      // 4. Read recent history for context
       const historyLines = await getRecentHistory(fs, slug);
       const historyContext = formatHistoryForPrompt(historyLines);
 
-      // 4. Call GPT 5.4 for routing
+      // 5. Call GPT 5.4 for routing
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return error("OPENAI_API_KEY environment variable is not set");
@@ -113,13 +120,13 @@ Determine which tool to use and what parameters to pass.`;
         return error("Could not determine which tool to use. Please rephrase.");
       }
 
-      // 5. Validate tool exists in routable registry
+      // 6. Validate tool exists in routable registry
       const routableTool = getRoutableTool(decision.tool);
       if (!routableTool) {
         return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
       }
 
-      // 6. Apply fixups
+      // 7. Apply fixups
       const params = decision.params ?? {};
 
       // Inject project_slug
@@ -145,7 +152,7 @@ Determine which tool to use and what parameters to pass.`;
         params.prompt = combinedScript;
       }
 
-      // 7. Look up handler from tool defs
+      // 8. Look up handler from tool defs
       // Lazy import to avoid circular dependency at module load time
       const { getAllToolDefs } = await import("./index.js");
       const allDefs = getAllToolDefs(fs);
@@ -155,14 +162,14 @@ Determine which tool to use and what parameters to pass.`;
         return error(`Tool handler not found: ${routableTool.actualTool}`);
       }
 
-      // 8. Execute
+      // 9. Execute
       const handlerResult = await targetDef.handler(params as Record<string, unknown>);
 
-      // 9. Log chat history (fire-and-forget)
+      // 10. Log chat history (fire-and-forget)
       logUserTurn(fs, slug, prompt);
       logAssistantTurn(fs, slug, decision.tool, decision.params, decision.message, Boolean(handlerResult.isError));
 
-      // 10. Return based on category
+      // 11. Return based on category
       if (routableTool.category === "generation") {
         // Return the preview JSON from the generation handler
         return handlerResult;

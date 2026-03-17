@@ -7,7 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { openai } from "@nakedapi/openai";
-import { resolveAllAssets } from "../asset-resolver.js";
+import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import {
   IMAGE_MODELS,
   buildImageRoutingPrompt,
@@ -38,10 +38,17 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
         project_slug: string;
       };
 
-      // 1. Resolve @asset tags
-      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(prompt, fs, slug);
+      // 1. Expand @s01 slot refs → actual asset slugs
+      let expandedPrompt = prompt;
+      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", slug);
+      if (timelineResult.ok && timelineResult.value.slots) {
+        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+      }
 
-      // 2. Route prompt via GPT-4o-mini
+      // 2. Resolve @asset tags
+      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
+
+      // 3. Route prompt via GPT-4o-mini
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return {
@@ -100,7 +107,7 @@ Determine which image generation tool to use and what parameters to pass.`;
         // LLM routing failure — fall through to nano_banana default
       }
 
-      // 3. Load prompt history from action log
+      // 4. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
         const log = await fs.getActionLog({ limit: 100 }, slug);
@@ -109,7 +116,7 @@ Determine which image generation tool to use and what parameters to pass.`;
         // action log unavailable
       }
 
-      // 4. Build model options for all 3 image models
+      // 5. Build model options for all 3 image models
       const modelOptions = Object.entries(IMAGE_MODELS).map(([key, info]) =>
         buildImageModelOption(
           key, info,
@@ -118,11 +125,11 @@ Determine which image generation tool to use and what parameters to pass.`;
         ),
       );
 
-      // 5. Determine selected model
+      // 6. Determine selected model
       const selectedModel = findSelectedModel(routedToolName) ?? "nano_banana";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
-      // 6. Build resolved_assets output
+      // 7. Build resolved_assets output
       const assetDicts = resolvedAssets.map((a) => ({
         tag: a.tag,
         asset_id: a.asset_id,

@@ -12,6 +12,11 @@ import type { UseMcpResult } from 'use-mcp/react';
 
 const stripSlugPrefix = (s: string) => s.replace(/^[a-z]_/, '');
 
+export interface SlotRef {
+  ref: string;       // "@s01"
+  assetSlug: string; // "vid-intro" or "" if empty
+}
+
 const COMMAND_COLORS: Record<string, ColorScheme> = {
   action: 'cyan',
   project: 'amber',
@@ -51,6 +56,12 @@ function extractTokens(text: string, commands: CommandDescriptor[], assetSlugs: 
     for (const m of text.matchAll(re)) {
       tokens.push({ type: 'slug', value: slug, start: m.index!, end: m.index! + slug.length });
     }
+  }
+
+  // Match @s01-style slot ref tokens
+  for (const m of text.matchAll(/(?<=^|\s)(@s\d{2})(?=\s|$)/g)) {
+    const value = m[1];
+    tokens.push({ type: 'slug', value, start: m.index!, end: m.index! + value.length });
   }
 
   return tokens;
@@ -99,6 +110,7 @@ interface ChatInputProps {
   isTransmitting?: boolean;
   disabled?: boolean;
   assetSlugs?: string[];
+  slotRefs?: SlotRef[];
   commands?: CommandDescriptor[];
   callTool?: UseMcpResult['callTool'];
   projectSlug?: string;
@@ -113,6 +125,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     isTransmitting = false,
     disabled = false,
     assetSlugs = [],
+    slotRefs = [],
     commands: commandsProp = [],
     callTool,
     projectSlug,
@@ -252,7 +265,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
     // slug type
     const filter = triggerMatch.filter.toLowerCase();
-    return assetSlugs
+    const slotItems: AutocompleteItem[] = slotRefs
+      .filter((s) => s.ref.toLowerCase().includes(`@${filter}`) || s.ref.slice(1).toLowerCase().includes(filter))
+      .map((s) => ({
+        type: 'slug' as const,
+        value: s.ref,
+        label: s.ref,
+        description: s.assetSlug ? `→ ${s.assetSlug}` : 'empty',
+        colorScheme: 'amber' as ColorScheme,
+      }));
+    const assetItems: AutocompleteItem[] = assetSlugs
       .filter((slug) => stripSlugPrefix(slug).toLowerCase().includes(filter))
       .map((slug) => ({
         type: 'slug' as const,
@@ -261,7 +283,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         description: '',
         colorScheme: 'cyan' as ColorScheme,
       }));
-  }, [triggerMatch, commands, assetSlugs]);
+    return [...slotItems, ...assetItems];
+  }, [triggerMatch, commands, assetSlugs, slotRefs]);
 
   // Reset dismissed/selectedIndex when trigger text changes
   const triggerKey = triggerMatch ? `${triggerMatch.type}:${triggerMatch.filter}` : null;

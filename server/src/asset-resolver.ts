@@ -70,5 +70,20 @@ async function resolveAllAssets(
   return { resolved, unresolved };
 }
 
-export { parseAssetTags, stripAssetTags, resolveAllAssets };
+const SLOT_PATTERN = /@s(\d{2})/g;
+
+function expandSlotRefs(
+  text: string,
+  slots: Array<{ slug: string }>,
+): string {
+  return text.replace(SLOT_PATTERN, (match, digits) => {
+    const index = parseInt(digits, 10) - 1;
+    if (index >= 0 && index < slots.length && slots[index].slug) {
+      return `@${slots[index].slug}`;
+    }
+    return match;
+  });
+}
+
+export { parseAssetTags, stripAssetTags, resolveAllAssets, expandSlotRefs };
 export type { ResolvedAsset };

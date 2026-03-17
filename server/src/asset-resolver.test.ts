@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFs } from "clipfirst-fs";
 import type { ClipfirstFs } from "clipfirst-fs";
-import { parseAssetTags, stripAssetTags, resolveAllAssets } from "./asset-resolver.js";
+import { parseAssetTags, stripAssetTags, resolveAllAssets, expandSlotRefs } from "./asset-resolver.js";
 
 describe("parseAssetTags", () => {
   it("parses a single @img- tag", () => {
@@ -63,6 +63,37 @@ describe("stripAssetTags", () => {
 
   it("preserves text between tags", () => {
     expect(stripAssetTags("@vid-a merge with @vid-b")).toBe("merge with");
+  });
+});
+
+describe("expandSlotRefs", () => {
+  it("expands @s01 with a valid slot", () => {
+    const slots = [{ slug: "vid-intro" }, { slug: "img-sunset" }];
+    expect(expandSlotRefs("use @s01 here", slots)).toBe("use @vid-intro here");
+  });
+
+  it("expands multiple slot refs in one string", () => {
+    const slots = [{ slug: "vid-intro" }, { slug: "img-sunset" }, { slug: "aud-bgm" }];
+    expect(expandSlotRefs("@s01 and @s03", slots)).toBe("@vid-intro and @aud-bgm");
+  });
+
+  it("leaves @s99 unchanged when out of range", () => {
+    const slots = [{ slug: "vid-intro" }];
+    expect(expandSlotRefs("ref @s99", slots)).toBe("ref @s99");
+  });
+
+  it("leaves slot ref unchanged when slug is empty", () => {
+    const slots = [{ slug: "" }, { slug: "img-sunset" }];
+    expect(expandSlotRefs("@s01 and @s02", slots)).toBe("@s01 and @img-sunset");
+  });
+
+  it("handles empty slots array", () => {
+    expect(expandSlotRefs("@s01", [])).toBe("@s01");
+  });
+
+  it("does not touch text without slot refs", () => {
+    const slots = [{ slug: "vid-intro" }];
+    expect(expandSlotRefs("no refs here", slots)).toBe("no refs here");
   });
 });
 

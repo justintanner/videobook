@@ -270,6 +270,15 @@ export function HomePage() {
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
+  const slotRefs = useMemo(() => {
+    const slots = timeline?.slots;
+    const count = slots && slots.length > 0 ? slots.length : 5;
+    return Array.from({ length: count }, (_, i) => ({
+      ref: `@s${String(i + 1).padStart(2, '0')}`,
+      assetSlug: slots?.[i]?.slug || '',
+    }));
+  }, [timeline]);
+
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
   const uiActions: UiActionMap = useMemo(() => ({
@@ -396,6 +405,7 @@ export function HomePage() {
                 <ChatInput
                   ref={chatInputRef}
                   assetSlugs={assetSlugs}
+                  slotRefs={slotRefs}
                   callTool={callTool}
                   projectSlug={projectSlug}
                 />

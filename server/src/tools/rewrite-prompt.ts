@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openai } from "@nakedapi/openai";
 import type { OpenAiContentPart } from "@nakedapi/openai";
-import { resolveAllAssets } from "../asset-resolver.js";
+import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import type { ToolDef } from "./tool-def.js";
 
 const REWRITE_MODEL = "gpt-5.2";
@@ -289,7 +289,14 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      return handleStandardRewrite(fs, apiKey, prompt, model, image_slugs, project_slug);
+      // Expand @s01 slot refs → actual asset slugs
+      let expandedPrompt = prompt;
+      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
+      if (timelineResult.ok && timelineResult.value.slots) {
+        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+      }
+
+      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, project_slug);
     },
   };
 }
