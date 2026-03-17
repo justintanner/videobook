@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Monitor, Smartphone, Square, Check, Zap } from 'lucide-react';
+import { Check, Zap } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -49,52 +49,30 @@ const orientationShortLabels: Record<Orientation, string> = {
   square: '1:1',
 };
 
-const ratioIcons: Record<Orientation, typeof Monitor> = {
-  landscape: Monitor,
-  portrait: Smartphone,
-  square: Square,
-};
-
 // ── Helper sub-components ──
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-primary/20 bg-black/50 rounded-lg p-2 space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <div className="w-0.5 h-2.5 bg-primary/50 rounded-full" />
-        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.15em]">{title}</span>
+    <div className="border border-primary/20 bg-black/50 rounded-lg p-2 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="w-0.5 h-3 bg-primary/50 rounded-full" />
+        <span className="text-xs font-mono font-bold uppercase tracking-[0.15em]">{title}</span>
       </div>
       {children}
     </div>
   );
 }
 
-function InlineSetting({ label, children }: { label: string; children: React.ReactNode }) {
+function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[9px] font-mono text-muted-foreground/60 shrink-0">{label}</span>
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] font-mono text-muted-foreground">{label}</span>
       {children}
     </div>
   );
 }
 
-function OnOffToggle({ enabled, onChange }: { enabled: boolean; onChange?: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange?.(!enabled)}
-      className={cn(
-        'px-3 py-1.5 rounded border text-[10px] font-mono font-bold tracking-wider',
-        enabled
-          ? 'bg-primary/20 border-primary/50 text-primary'
-          : 'bg-black/40 border-white/10 text-muted-foreground',
-      )}
-    >
-      {enabled ? 'ON' : 'OFF'}
-    </button>
-  );
-}
-
-function CompactSelect<T extends string>({
+function ToggleGroup<T extends string>({
   options,
   value,
   onChange,
@@ -104,17 +82,22 @@ function CompactSelect<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange?.(e.target.value as T)}
-      className="max-w-[140px] px-2 py-1.5 rounded border border-white/10 bg-black/40 text-[10px] font-mono font-bold text-foreground/80 cursor-pointer focus:border-primary/50 focus:outline-none"
-    >
+    <div className="flex gap-1">
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
+        <button
+          key={opt.value}
+          onClick={() => onChange?.(opt.value)}
+          className={cn(
+            'px-2.5 py-1 rounded border text-[10px] font-mono font-bold',
+            opt.value === value
+              ? 'bg-primary/20 border-primary/50 text-primary'
+              : 'bg-black/40 border-white/10 text-muted-foreground',
+          )}
+        >
           {opt.label}
-        </option>
+        </button>
       ))}
-    </select>
+    </div>
   );
 }
 
@@ -128,13 +111,13 @@ function ToggleGrid<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-0.5">
+    <div className="grid grid-cols-2 gap-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'px-2 py-1.5 rounded border text-[10px] font-mono font-bold text-center',
+            'px-2.5 py-1 rounded border text-[10px] font-mono font-bold text-center',
             opt.value === value
               ? 'bg-primary/20 border-primary/50 text-primary'
               : 'bg-black/40 border-white/10 text-muted-foreground',
@@ -149,9 +132,12 @@ function ToggleGrid<T extends string>({
 
 function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
   return (
-    <span className="px-2 py-1.5 rounded border border-white/10 bg-black/40 text-[10px] font-mono font-bold text-foreground/80">
-      {value}{unit ? ` ${unit}` : ''}
-    </span>
+    <div className="flex items-center gap-1.5">
+      <span className="w-16 px-2 py-1 rounded border border-white/10 bg-black/40 text-[10px] font-mono font-bold text-foreground/80 text-right">
+        {value}
+      </span>
+      {unit && <span className="text-[10px] font-mono text-muted-foreground/50">{unit}</span>}
+    </div>
   );
 }
 
@@ -162,7 +148,7 @@ function ColorSwatch({ value, onChange }: { value: string; onChange?: (v: string
         type="color"
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-6 h-6 rounded border border-white/10 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
+        className="w-4 h-4 rounded border border-white/10 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
       />
       <span className="text-[9px] font-mono text-foreground/50">{value}</span>
     </div>
@@ -193,111 +179,131 @@ export function RenderSettingsPanel({
   applyState,
 }: RenderSettingsPanelProps) {
   return (
-    <div className="p-2.5 flex flex-col gap-1.5 h-full">
-      {/* Orientations — full-width row */}
-      <SettingsSection title="Orientations">
-        <div className="flex gap-1">
-          {orientations.map((o) => {
-            const Icon = ratioIcons[o.orient];
-            return (
-              <button
-                key={o.orient}
-                onClick={() => onOrientationClick?.(o.orient)}
-                disabled={o.rendering}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border font-mono',
-                  o.active
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-zinc-800/60 bg-black/40 text-muted-foreground',
-                  o.rendering && 'opacity-50',
-                )}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span className="font-bold text-[11px]">{orientationShortLabels[o.orient]}</span>
-                {o.rendered && o.active && <Check className="w-3 h-3 text-primary" />}
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    o.rendering ? 'bg-primary animate-pulse' : o.rendered ? 'bg-primary' : 'bg-muted-foreground/20',
-                  )}
-                />
-              </button>
-            );
-          })}
-        </div>
-      </SettingsSection>
+    <div className="relative p-2 flex flex-col gap-1.5 h-full">
+      {/* Grid overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--color-primary) 1px, transparent 1px), linear-gradient(90deg, var(--color-primary) 1px, transparent 1px)',
+          backgroundSize: '12px 12px',
+        }}
+      />
+
+      {/* Corner brackets */}
+      <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/25" />
+      <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/25" />
+      <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/25" />
+      <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/25" />
+
+      {/* Orientations — segmented control */}
+      <div className="flex h-6 rounded border border-white/10 overflow-hidden">
+        {orientations.map((o, i) => (
+          <button
+            key={o.orient}
+            onClick={() => onOrientationClick?.(o.orient)}
+            disabled={o.rendering}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1 font-mono text-[10px] font-bold transition-colors',
+              i > 0 && 'border-l border-white/10',
+              o.active
+                ? 'bg-primary/15 text-primary shadow-[inset_0_0_12px_var(--color-primary)/10]'
+                : 'bg-transparent text-muted-foreground hover:bg-white/5',
+              o.rendering && 'opacity-50',
+            )}
+          >
+            <span>{orientationShortLabels[o.orient]}</span>
+            {o.rendered && o.active && <Check className="w-3 h-3 text-primary" />}
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full shrink-0',
+                o.rendering ? 'bg-primary animate-pulse' : o.rendered ? 'bg-primary' : 'bg-muted-foreground/20',
+              )}
+            />
+          </button>
+        ))}
+      </div>
 
       {/* Settings in 2 columns */}
       <div className="grid grid-cols-2 gap-1.5 items-start">
         {/* Left column: Subtitles */}
         <SettingsSection title="Subtitles">
-          <InlineSetting label="Enabled">
-            <OnOffToggle
-              enabled={subtitlesEnabled}
-              onChange={(v) => onSubtitleChange?.('enabled', v)}
-            />
-          </InlineSetting>
-          <InlineSetting label="Style">
-            <CompactSelect
+          <SettingRow label="Enabled">
+            <ToggleGroup
               options={[
-                { label: 'TikDance', value: 'tikdance' as const },
-                { label: 'Highlight', value: 'highlight' as const },
+                { label: 'ON', value: 'on' },
+                { label: 'OFF', value: 'off' },
+              ]}
+              value={subtitlesEnabled ? 'on' : 'off'}
+              onChange={(v) => onSubtitleChange?.('enabled', v === 'on')}
+            />
+          </SettingRow>
+          <SettingRow label="Style">
+            <ToggleGroup
+              options={[
+                { label: 'TikDance', value: 'tikdance' },
+                { label: 'Highlight', value: 'highlight' },
               ]}
               value={subtitleStyle}
               onChange={(v) => onSubtitleChange?.('style', v)}
             />
-          </InlineSetting>
-          <InlineSetting label="Position">
-            <CompactSelect
+          </SettingRow>
+          <SettingRow label="Position">
+            <ToggleGroup
               options={[
-                { label: 'Top', value: 'top' as const },
-                { label: 'Middle', value: 'middle' as const },
-                { label: 'Bottom', value: 'bottom' as const },
+                { label: 'Top', value: 'top' },
+                { label: 'Mid', value: 'middle' },
+                { label: 'Bottom', value: 'bottom' },
               ]}
               value={subtitlePosition}
               onChange={(v) => onSubtitleChange?.('position', v)}
             />
-          </InlineSetting>
-          <InlineSetting label="Font Size">
-            <CompactSelect
+          </SettingRow>
+          <SettingRow label="Font Size">
+            <ToggleGroup
               options={[
-                { label: 'Small', value: 'small' as const },
-                { label: 'Medium', value: 'medium' as const },
-                { label: 'Large', value: 'large' as const },
+                { label: 'S', value: 'small' },
+                { label: 'M', value: 'medium' },
+                { label: 'L', value: 'large' },
               ]}
               value={fontSize}
               onChange={(v) => onSubtitleChange?.('fontSize', v)}
             />
-          </InlineSetting>
-          <InlineSetting label="Text Color">
+          </SettingRow>
+          <SettingRow label="Text Color">
             <ColorSwatch value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
-          </InlineSetting>
-          <InlineSetting label="Highlight Color">
+          </SettingRow>
+          <SettingRow label="Highlight">
             <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
-          </InlineSetting>
+          </SettingRow>
         </SettingsSection>
 
         {/* Right column: Audio + OSG + Background */}
         <div className="space-y-1.5">
           <SettingsSection title="Audio">
-            <InlineSetting label="Volume">
+            <SettingRow label="Volume">
               <NumberDisplay value={audioVolume} />
-            </InlineSetting>
-            <InlineSetting label="Fade In">
+            </SettingRow>
+            <SettingRow label="Fade In">
               <NumberDisplay value={audioFadeIn} unit="ms" />
-            </InlineSetting>
-            <InlineSetting label="Fade Out">
+            </SettingRow>
+            <SettingRow label="Fade Out">
               <NumberDisplay value={audioFadeOut} unit="ms" />
-            </InlineSetting>
+            </SettingRow>
           </SettingsSection>
+
           <SettingsSection title="OSG">
-            <InlineSetting label="Enabled">
-              <OnOffToggle
-                enabled={osgEnabled}
-                onChange={(v) => onOsgChange?.('enabled', v)}
+            <SettingRow label="Enabled">
+              <ToggleGroup
+                options={[
+                  { label: 'ON', value: 'on' },
+                  { label: 'OFF', value: 'off' },
+                ]}
+                value={osgEnabled ? 'on' : 'off'}
+                onChange={(v) => onOsgChange?.('enabled', v === 'on')}
               />
-            </InlineSetting>
-            <InlineSetting label="Position">
+            </SettingRow>
+            <SettingRow label="Position">
               <ToggleGrid
                 options={[
                   { label: 'TL', value: 'top-left' },
@@ -308,19 +314,18 @@ export function RenderSettingsPanel({
                 value={osgPosition}
                 onChange={(v) => onOsgChange?.('position', v)}
               />
-            </InlineSetting>
+            </SettingRow>
           </SettingsSection>
+
           <SettingsSection title="Background">
-            <InlineSetting label="Mode">
-              <CompactSelect
-                options={[
-                  { label: 'Blur', value: 'blur' as const },
-                  { label: 'Black', value: 'black' as const },
-                ]}
-                value={backgroundMode}
-                onChange={onBackgroundChange}
-              />
-            </InlineSetting>
+            <ToggleGroup
+              options={[
+                { label: 'Blur', value: 'blur' },
+                { label: 'Black', value: 'black' },
+              ]}
+              value={backgroundMode}
+              onChange={onBackgroundChange}
+            />
           </SettingsSection>
         </div>
       </div>
