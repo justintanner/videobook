@@ -101,6 +101,36 @@ function ToggleGroup<T extends string>({
   );
 }
 
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T }[];
+  value: T;
+  onChange?: (value: T) => void;
+}) {
+  return (
+    <div className="flex h-6 rounded border border-white/10 overflow-hidden">
+      {options.map((opt, i) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange?.(opt.value)}
+          className={cn(
+            'flex-1 text-[10px] font-mono font-bold transition-colors',
+            i > 0 && 'border-l border-white/10',
+            opt.value === value
+              ? 'bg-primary/15 text-primary'
+              : 'bg-transparent text-muted-foreground hover:bg-white/5',
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ToggleGrid<T extends string>({
   options,
   value,
@@ -238,16 +268,14 @@ export function RenderSettingsPanel({
               onChange={(v) => onSubtitleChange?.('enabled', v === 'on')}
             />
           </SettingRow>
-          <SettingRow label="Style">
-            <ToggleGroup
-              options={[
-                { label: 'TikDance', value: 'tikdance' },
-                { label: 'Highlight', value: 'highlight' },
-              ]}
-              value={subtitleStyle}
-              onChange={(v) => onSubtitleChange?.('style', v)}
-            />
-          </SettingRow>
+          <SegmentedControl
+            options={[
+              { label: 'TikDance', value: 'tikdance' },
+              { label: 'Highlight', value: 'highlight' },
+            ]}
+            value={subtitleStyle}
+            onChange={(v) => onSubtitleChange?.('style', v)}
+          />
           <SettingRow label="Position">
             <ToggleGroup
               options={[
