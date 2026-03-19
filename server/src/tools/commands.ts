@@ -221,6 +221,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "rename_asset", autoInject: ["project_slug"] },
   },
   {
+    command: "/assign",
+    description: "Assign asset to timeline slot",
+    example: "/assign @vid-clip @s02",
+    category: "action",
+    icon: "LayoutGrid",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to assign" },
+      { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
+    ],
+    mcpTool: { tool: "assign_slot", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite-prompt",
     description: "Optimize a prompt",
     example: '/rewrite-prompt "make it more cinematic"',

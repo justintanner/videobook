@@ -18,12 +18,22 @@ import {
   LoadingOverlay,
 } from '../overlays';
 
+export interface DragData {
+  slug: string;
+  id: string;
+  filePath: string;
+  thumbnailSrc?: string;
+  type: string;
+}
+
 export interface CardShellProps {
   item: MediaItem;
   children: ReactNode;
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  draggable?: boolean;
+  dragData?: DragData;
 }
 
 function isRenderingState(status: string): boolean {
@@ -89,7 +99,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
   return (status && stateColors[status]) ?? 'var(--color-primary)';
 }
 
-export function CardShell({ item, children, contextMenuContent, selected, onClick }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData }: CardShellProps) {
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
@@ -120,8 +130,15 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
     !isGold && !isError && !selected && isReady && 'group-hover:opacity-100',
   );
 
+  const handleDragStart = draggable && dragData
+    ? (e: React.DragEvent) => {
+        e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+    : undefined;
+
   const card = (
-    <div className={classes} onClick={onClick}>
+    <div className={classes} onClick={onClick} draggable={draggable} onDragStart={handleDragStart}>
       {/* Bottom border accent */}
       <div className={accentClasses} />
 

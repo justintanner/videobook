@@ -1,5 +1,6 @@
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
+import type { DragData } from './CardShell';
 import { SlugBadge, ResolutionBadge } from './badges';
 
 import type { ReactNode } from 'react';
@@ -21,7 +22,7 @@ export function ImageCard({ item, contextMenuContent, selected, onClick }: Image
   const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Image */}
       {item.filePath && (
         <img

@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
+import type { DragData } from './CardShell';
 import { SlugBadge, DurationBadge } from './badges';
 
 function formatDuration(seconds: number | null | undefined): string | null {
@@ -38,7 +39,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick }: Video
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

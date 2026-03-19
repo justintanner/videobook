@@ -1,5 +1,6 @@
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
+import type { DragData } from './CardShell';
 import { SlugBadge } from './badges';
 
 function isRenderingState(status: string): boolean {
@@ -29,7 +30,7 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: 
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {thumbSrc && (
         <img

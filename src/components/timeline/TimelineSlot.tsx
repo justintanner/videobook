@@ -1,8 +1,10 @@
+import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { MoreHorizontal } from 'lucide-react';
 
 interface TimelineSlotProps {
   label: string;
+  slotIndex?: number;
   isActive?: boolean;
   isDragOver?: boolean;
   hasContent?: boolean;
@@ -10,18 +12,50 @@ interface TimelineSlotProps {
   assetId?: string;
   flex?: number;
   onClick?: () => void;
+  onAssetDrop?: (assetId: string, slotIndex: number) => void;
 }
 
 export function TimelineSlot({
   label,
+  slotIndex,
   isActive = false,
-  isDragOver = false,
+  isDragOver: isDragOverProp = false,
   hasContent = false,
   thumbnailSrc,
   assetId,
   flex = 1,
   onClick,
+  onAssetDrop,
 }: TimelineSlotProps) {
+  const [isDragOverLocal, setIsDragOverLocal] = useState(false);
+  const isDragOver = isDragOverProp || isDragOverLocal;
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (slotIndex == null || !onAssetDrop) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOverLocal(true);
+  }, [slotIndex, onAssetDrop]);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOverLocal(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverLocal(false);
+    if (slotIndex == null || !onAssetDrop) return;
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (data?.id) {
+        onAssetDrop(data.id, slotIndex);
+      }
+    } catch {
+      // ignore invalid drop data
+    }
+  }, [slotIndex, onAssetDrop]);
+
   return (
     <div
       className={cn(
@@ -35,6 +69,9 @@ export function TimelineSlot({
       )}
       style={{ flex: `${flex} 1 0`, minWidth: '60px' }}
       onClick={onClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Slot label badge */}
       <div className="absolute top-1.5 left-1.5 z-30">

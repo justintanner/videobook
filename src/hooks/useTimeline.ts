@@ -15,6 +15,7 @@ interface UseTimelineResult {
   fetchTimeline: (projectSlug: string) => Promise<TimelineConfig | null>;
   setRenderOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
   setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
+  assignSlot: (projectSlug: string, assetId: string, slotIndex: number) => Promise<boolean>;
 }
 
 export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResult {
@@ -76,5 +77,23 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }).catch(() => {});
   }, []);
 
-  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation };
+  const assignSlot = useCallback(async (projectSlug: string, assetId: string, slotIndex: number): Promise<boolean> => {
+    try {
+      const slot = `s${String(slotIndex + 1).padStart(2, '0')}`;
+      const result = await callToolRef.current("assign_slot", {
+        project_slug: projectSlug,
+        asset_id: assetId,
+        slot,
+      });
+      if (result.isError) return false;
+      // Re-fetch to sync local state
+      await fetchTimeline(projectSlug);
+      return true;
+    } catch (e: unknown) {
+      console.error("[assign_slot] exception:", e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [fetchTimeline]);
+
+  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot };
 }

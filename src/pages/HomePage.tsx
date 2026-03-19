@@ -69,7 +69,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
@@ -259,6 +259,11 @@ export function HomePage() {
     const item = mediaItems.find(m => m.id === assetId);
     if (item) handleSelectItem(item);
   }, [mediaItems, handleSelectItem]);
+
+  const handleAssignSlot = useCallback((assetId: string, slotIndex: number) => {
+    if (!projectSlug) return;
+    assignSlot(projectSlug, assetId, slotIndex);
+  }, [projectSlug, assignSlot]);
 
   const handleAnimateCommand = useCallback((text: string) => {
     chatInputRef.current?.animateAndSend(text);
@@ -458,11 +463,21 @@ export function HomePage() {
           {/* Timeline */}
           <div className="border-t border-border bg-card/30">
             <div className="relative h-28 flex gap-0.5">
-              <TimelineSlot label="@s01" flex={3} />
-              <TimelineSlot label="@s02" flex={2} />
-              <TimelineSlot label="@s03" flex={3} />
-              <TimelineSlot label="@s04" flex={2} />
-              <TimelineSlot label="@s05" flex={2} />
+              {slotRefs.map((slotRef, i) => {
+                const slotSlug = timeline?.slots?.[i]?.slug;
+                const slotAsset = slotSlug ? mediaItems.find(m => m.id === slotSlug) : null;
+                return (
+                  <TimelineSlot
+                    key={slotRef.ref}
+                    label={slotRef.ref}
+                    slotIndex={i}
+                    hasContent={!!slotSlug}
+                    thumbnailSrc={slotAsset?.thumbnailSrc ?? undefined}
+                    assetId={slotSlug ? `@${slotSlug}` : undefined}
+                    onAssetDrop={handleAssignSlot}
+                  />
+                );
+              })}
             </div>
             <div className="relative h-12 border-t border-border/30 bg-card/20" />
           </div>

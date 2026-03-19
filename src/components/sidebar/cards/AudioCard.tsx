@@ -1,6 +1,7 @@
 import { AudioLines } from 'lucide-react';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
+import type { DragData } from './CardShell';
 import { SlugBadge } from './badges';
 
 import type { ReactNode } from 'react';
@@ -18,7 +19,7 @@ export function AudioCard({ item, contextMenuContent, selected, onClick }: Audio
   const isCorrupt = status === 'corrupt';
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Audio icon */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}
