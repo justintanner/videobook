@@ -22,6 +22,16 @@ function toolError(msg: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text: msg }] };
 }
 
+function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
+  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
+  return {
+    ...raw,
+    render: Array.isArray(raw.render)
+      ? ((raw.render as unknown as string[])[0] ?? "landscape") as Orientation
+      : raw.render,
+  };
+}
+
 export function assignSlotDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "assign_slot",
@@ -57,20 +67,17 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
 
       // Read current timeline (default to empty)
       const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
-
-      if (!readResult.ok && readResult.error.code !== "NOT_FOUND") {
-        return toolError(readResult.error.message);
+      let config: TimelineConfig;
+      if (readResult.ok) {
+        config = normalizeConfig(readResult.value);
+      } else {
+        const err = (readResult as { ok: false; error: { code: string; message: string } }).error;
+        if (err.code === "NOT_FOUND") {
+          config = { slots: [], render: "landscape" };
+        } else {
+          return toolError(err.message);
+        }
       }
-      const config: TimelineConfig = !readResult.ok
-        ? { slots: [], render: "landscape" }
-        : Array.isArray(readResult.value)
-          ? { slots: readResult.value, render: "landscape" }
-          : {
-              ...readResult.value,
-              render: Array.isArray(readResult.value.render)
-                ? ((readResult.value.render as unknown as string[])[0] ?? "landscape") as Orientation
-                : readResult.value.render,
-            };
 
       // Pad slots array if needed
       while (config.slots.length <= index) {
@@ -82,13 +89,13 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
 
       // Write back
       const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
-      if (!writeResult.ok) {
-        return toolError(writeResult.error.message);
+      if (writeResult.ok) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(config) }],
+        };
       }
-
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(config) }],
-      };
+      const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
+      return toolError(writeErr.message);
     },
   };
 }
