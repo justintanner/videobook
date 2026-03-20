@@ -98,28 +98,9 @@ export function CommandRegistryProvider({
         }
       }
 
-      // Bare command match — dispatch "download URL" the same as "/download URL"
-      // Skip when the first arg looks like a plain English word (purely alphabetic,
-      // 2+ chars) — that signals natural language which the chat router handles
-      // better (e.g. "download the first 30s of URL").
-      const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
-      if (bareCmd) {
-        const firstArg = rest.split(/\s+/)[0] ?? '';
-        const looksLikeNaturalLanguage = /^[a-z]{2,}$/i.test(firstArg);
-
-        if (!looksLikeNaturalLanguage) {
-          const args = parseCommandArgs(rest, bareCmd.params);
-          const toolArgs: Record<string, string> = { ...args };
-          if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
-            toolArgs.project_slug = projectSlug;
-          }
-          const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
-          onAfterDispatch?.();
-          return !result.isError;
-        }
-      }
-
-      // General chat fallback
+      // General chat fallback — handles both natural language and bare commands
+      // like "download URL". The chat router (GPT) parses intent reliably;
+      // no need for a fragile positional-arg shortcut here.
       if (projectSlug) {
         const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
         return !result.isError;
