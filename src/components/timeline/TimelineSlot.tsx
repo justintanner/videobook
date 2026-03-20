@@ -16,7 +16,6 @@ import {
 
 interface TimelineSlotProps {
   label: string;
-  slotIndex?: number;
   isActive?: boolean;
   isDragOver?: boolean;
   hasContent?: boolean;
@@ -24,13 +23,11 @@ interface TimelineSlotProps {
   assetId?: string;
   flex?: number;
   onClick?: () => void;
-  onAssetDrop?: (assetId: string, slotIndex: number) => void;
   onAnimateCommand?: (text: string) => void;
 }
 
 export function TimelineSlot({
   label,
-  slotIndex,
   isActive = false,
   isDragOver: isDragOverProp = false,
   hasContent = false,
@@ -38,18 +35,17 @@ export function TimelineSlot({
   assetId,
   flex = 1,
   onClick,
-  onAssetDrop,
   onAnimateCommand,
 }: TimelineSlotProps) {
   const [isDragOverLocal, setIsDragOverLocal] = useState(false);
   const isDragOver = isDragOverProp || isDragOverLocal;
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (slotIndex == null || !onAssetDrop) return;
+    if (!onAnimateCommand) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setIsDragOverLocal(true);
-  }, [slotIndex, onAssetDrop]);
+  }, [onAnimateCommand]);
 
   const handleDragLeave = useCallback(() => {
     setIsDragOverLocal(false);
@@ -59,16 +55,16 @@ export function TimelineSlot({
     e.preventDefault();
     e.stopPropagation();
     setIsDragOverLocal(false);
-    if (slotIndex == null || !onAssetDrop) return;
+    if (!onAnimateCommand) return;
     try {
       const data = JSON.parse(e.dataTransfer.getData('application/json'));
       if (data?.id) {
-        onAssetDrop(data.id, slotIndex);
+        onAnimateCommand(`/assign @${data.id} ${label}`);
       }
     } catch {
       // ignore invalid drop data
     }
-  }, [slotIndex, onAssetDrop]);
+  }, [onAnimateCommand, label]);
 
   const showClearSlot = hasContent && onAnimateCommand;
 

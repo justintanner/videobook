@@ -69,7 +69,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
@@ -268,11 +268,6 @@ export function HomePage() {
     const item = mediaItems.find(m => m.id === assetId);
     if (item) handleSelectItem(item);
   }, [mediaItems, handleSelectItem]);
-
-  const handleAssignSlot = useCallback((assetId: string, slotIndex: number) => {
-    if (!projectSlug) return;
-    assignSlot(projectSlug, assetId, slotIndex);
-  }, [projectSlug, assignSlot]);
 
   const handleAnimateCommand = useCallback((text: string) => {
     chatInputRef.current?.animateAndSend(text);
@@ -484,11 +479,9 @@ export function HomePage() {
                   <TimelineSlot
                     key={slotRef.ref}
                     label={slotRef.ref}
-                    slotIndex={i}
                     hasContent={!!slotSlug}
                     thumbnailSrc={slotAsset?.thumbnailSrc ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
-                    onAssetDrop={handleAssignSlot}
                     onAnimateCommand={handleAnimateCommand}
                   />
                 );
