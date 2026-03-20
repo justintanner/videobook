@@ -52,27 +52,18 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
-async function pollManifestForFile(
-  client: Client,
-  projectSlug: string,
-  assetId: string,
+async function pollForFile(
+  dir: string,
   fileName: string,
   timeoutMs = 30_000,
-): Promise<ManifestFile> {
+): Promise<void> {
+  const filePath = join(dir, fileName);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const result = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: assetId, project_slug: projectSlug },
-    });
-    if (!result.isError) {
-      const data = parse(result);
-      const file = (data.files as ManifestFile[]).find((f) => f.name === fileName);
-      if (file) return file;
-    }
+    if (await fileExists(filePath)) return;
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`${fileName} not found in ${assetId} after ${timeoutMs}ms`);
+  throw new Error(`${fileName} not found in ${dir} after ${timeoutMs}ms`);
 }
 
 describe("MCP tools e2e", () => {
@@ -166,7 +157,7 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     scriptAssetId = parsed.assetId as string;
     expect(scriptAssetId).toMatch(/^script-/);
-    const mdContent = await readFile(join(tempDir, PROJECT, scriptAssetId, "episode-notes.md"), "utf-8");
+    const mdContent = await readFile(join(tempDir, PROJECT, scriptAssetId, "original.md"), "utf-8");
     expect(mdContent).toBe("# Episode Notes\n\nSome content here.");
   });
 
@@ -196,7 +187,7 @@ describe("MCP tools e2e", () => {
     const data = parse(result);
     const fileNames = (data.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.png");
-    expect(fileNames).toContain(".original.json");
+    // asset_manifest excludes dotfiles by default, so .original.json is not listed
   });
 
   it("reads script manifest", async () => {
@@ -207,7 +198,7 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const data = parse(result);
     const fileNames = (data.files as ManifestFile[]).map((f) => f.name);
-    expect(fileNames).toContain("episode-notes.md");
+    expect(fileNames).toContain("original.md");
   });
 
   // ── Section 4: Asset CRUD ──────────────────────────────────────
@@ -409,9 +400,9 @@ describe("MCP tools e2e", () => {
       arguments: { project_slug: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const slots = parse(result) as unknown as unknown[];
-    expect(slots).toEqual([]);
-    expect(await fileExists(join(tempDir, PROJECT, ".timeline.json"))).toBe(false);
+    const timeline = parse(result) as { slots: unknown[]; render: string };
+    expect(timeline.slots).toEqual([]);
+    expect(timeline.render).toBe("landscape");
   });
 
   it("sets timeline slots", async () => {
@@ -427,10 +418,10 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     expect(parsed.path).toBeTruthy();
     expect(await fileExists(join(tempDir, PROJECT, ".timeline.json"))).toBe(true);
-    const timeline = await readJson(join(tempDir, PROJECT, ".timeline.json")) as Array<Record<string, unknown>>;
-    expect(timeline).toHaveLength(2);
-    expect(timeline[0].slug).toBe("vid-intro");
-    expect(timeline[1].slug).toBe("vid-outro");
+    const timeline = await readJson(join(tempDir, PROJECT, ".timeline.json")) as { slots: Array<Record<string, unknown>>; render: string };
+    expect(timeline.slots).toHaveLength(2);
+    expect(timeline.slots[0].slug).toBe("vid-intro");
+    expect(timeline.slots[1].slug).toBe("vid-outro");
   });
 
   it("reads back timeline", async () => {
@@ -439,19 +430,19 @@ describe("MCP tools e2e", () => {
       arguments: { project_slug: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const slots = parse(result) as unknown as Array<{
+    const timeline = parse(result) as { slots: Array<{
       slug: string;
       volume?: number;
       audioFadeIn?: number;
       audioFadeOut?: number;
-    }>;
-    expect(slots).toHaveLength(2);
-    expect(slots[0].slug).toBe("vid-intro");
-    expect(slots[0].volume).toBe(80);
-    expect(slots[0].audioFadeIn).toBe(100);
-    expect(slots[1].slug).toBe("vid-outro");
-    expect(slots[1].volume).toBe(100);
-    expect(slots[1].audioFadeOut).toBe(200);
+    }>; render: string };
+    expect(timeline.slots).toHaveLength(2);
+    expect(timeline.slots[0].slug).toBe("vid-intro");
+    expect(timeline.slots[0].volume).toBe(80);
+    expect(timeline.slots[0].audioFadeIn).toBe(100);
+    expect(timeline.slots[1].slug).toBe("vid-outro");
+    expect(timeline.slots[1].volume).toBe(100);
+    expect(timeline.slots[1].audioFadeOut).toBe(200);
   });
 
   // ── Section 8: Sync ────────────────────────────────────────────
@@ -472,7 +463,7 @@ describe("MCP tools e2e", () => {
   // ── Section 9: Video processing (requires ffmpeg + queue) ─────
 
   it("waits for video processing", async () => {
-    await pollManifestForFile(client, PROJECT, vidAssetId, ".original.json");
+    await pollForFile(join(tempDir, PROJECT, vidAssetId), ".original.json");
     const meta = await readJson(join(tempDir, PROJECT, vidAssetId, ".original.json")) as Record<string, unknown>;
     expect(meta.width).toBeGreaterThan(0);
     expect(meta.height).toBeGreaterThan(0);

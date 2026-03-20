@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -12,6 +12,10 @@ type TextContent = Array<{ type: string; text: string }>;
 type ManifestFile = { name: string; size_bytes: number };
 
 const PROJECT_SLUG = "e2e-pipeline";
+
+async function fileExists(p: string): Promise<boolean> {
+  return stat(p).then(s => s.isFile(), () => false);
+}
 
 async function pollManifestForFile(
   client: Client,
@@ -31,6 +35,20 @@ async function pollManifestForFile(
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error(`${fileName} not found in ${assetId} after ${timeoutMs}ms`);
+}
+
+async function pollForFile(
+  dir: string,
+  fileName: string,
+  timeoutMs = 30_000,
+): Promise<void> {
+  const filePath = join(dir, fileName);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await fileExists(filePath)) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`${fileName} not found in ${dir} after ${timeoutMs}ms`);
 }
 
 describe("image → video e2e pipeline", () => {
@@ -145,7 +163,7 @@ describe("image → video e2e pipeline", () => {
     const mp4File = await pollManifestForFile(client, vidAssetId, "original.mp4");
     expect(mp4File.size_bytes).toBeGreaterThan(0);
 
-    await pollManifestForFile(client, vidAssetId, ".original.json");
+    await pollForFile(join(tempDir, PROJECT_SLUG, vidAssetId), ".original.json");
 
     const vidManifest = await client.callTool({
       name: "asset_manifest",
