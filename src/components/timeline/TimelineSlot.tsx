@@ -7,6 +7,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from '@/components/ui/context-menu';
 
 interface TimelineSlotProps {
   label: string;
@@ -19,7 +25,7 @@ interface TimelineSlotProps {
   flex?: number;
   onClick?: () => void;
   onAssetDrop?: (assetId: string, slotIndex: number) => void;
-  onClearSlot?: (slotIndex: number) => void;
+  onAnimateCommand?: (text: string) => void;
 }
 
 export function TimelineSlot({
@@ -33,7 +39,7 @@ export function TimelineSlot({
   flex = 1,
   onClick,
   onAssetDrop,
-  onClearSlot,
+  onAnimateCommand,
 }: TimelineSlotProps) {
   const [isDragOverLocal, setIsDragOverLocal] = useState(false);
   const isDragOver = isDragOverProp || isDragOverLocal;
@@ -64,7 +70,17 @@ export function TimelineSlot({
     }
   }, [slotIndex, onAssetDrop]);
 
-  return (
+  const showClearSlot = hasContent && onAnimateCommand;
+
+  const clearSlotMenuItem = (
+    <>
+      <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+      <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/clear-slot</span>
+      <span className="ml-2 opacity-80 flex items-center"><Eraser className="h-3 w-3" /></span>
+    </>
+  );
+
+  const slot = (
     <div
       className={cn(
         'relative h-full border bg-card/30 backdrop-blur-sm flex flex-col cursor-pointer transition-all duration-150 group overflow-hidden',
@@ -88,9 +104,9 @@ export function TimelineSlot({
         </span>
       </div>
 
-      {/* Context menu button */}
+      {/* Dropdown menu button */}
       <div className="absolute top-1.5 right-1.5 z-30">
-        {hasContent && onClearSlot && slotIndex != null ? (
+        {showClearSlot ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -104,11 +120,9 @@ export function TimelineSlot({
             <DropdownMenuContent align="end" side="top">
               <DropdownMenuItem
                 className="py-2.5"
-                onSelect={() => onClearSlot(slotIndex)}
+                onSelect={() => onAnimateCommand(`/clear-slot ${label}`)}
               >
-                <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-                <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/clear-slot</span>
-                <span className="ml-2 opacity-80 flex items-center"><Eraser className="h-3 w-3" /></span>
+                {clearSlotMenuItem}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -149,5 +163,18 @@ export function TimelineSlot({
         <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary shadow-[0_0_10px_var(--color-primary)]" />
       )}
     </div>
+  );
+
+  if (!showClearSlot) return slot;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{slot}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onAnimateCommand!(`/clear-slot ${label}`)}>
+          {clearSlotMenuItem}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
