@@ -99,16 +99,25 @@ export function CommandRegistryProvider({
       }
 
       // Bare command match — dispatch "download URL" the same as "/download URL"
+      // Skip when input has more tokens than params — that signals natural language
+      // which the chat router handles better (e.g. "download the first 30s of URL").
       const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
       if (bareCmd) {
-        const args = parseCommandArgs(rest, bareCmd.params);
-        const toolArgs: Record<string, string> = { ...args };
-        if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
-          toolArgs.project_slug = projectSlug;
+        const tokens = rest ? rest.split(/\s+/) : [];
+        const lastParam = bareCmd.params[bareCmd.params.length - 1];
+        const lastAbsorbs = lastParam?.type === 'string';
+        const isStructured = lastAbsorbs || tokens.length <= bareCmd.params.length;
+
+        if (isStructured) {
+          const args = parseCommandArgs(rest, bareCmd.params);
+          const toolArgs: Record<string, string> = { ...args };
+          if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
+            toolArgs.project_slug = projectSlug;
+          }
+          const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
+          onAfterDispatch?.();
+          return !result.isError;
         }
-        const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
-        onAfterDispatch?.();
-        return !result.isError;
       }
 
       // General chat fallback
