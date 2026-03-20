@@ -356,7 +356,7 @@ const HARDCODED_COMMANDS: Command[] = [
 
 export function commandsDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "commands",
+    name: "slash_commands",
     description: "List all available UI commands with scope metadata",
     schema: {},
     handler: async () => {

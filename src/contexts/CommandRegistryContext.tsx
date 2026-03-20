@@ -35,7 +35,7 @@ export function CommandRegistryProvider({
     let cancelled = false;
     (async () => {
       try {
-        const result = await callTool('commands', {});
+        const result = await callTool('slash_commands', {});
         if (cancelled) return;
         const content = result.content as Array<{ type: string; text: string }>;
         const parsed: ServerCommand[] = JSON.parse(content[0].text);
