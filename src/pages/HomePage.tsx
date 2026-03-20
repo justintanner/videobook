@@ -159,6 +159,9 @@ export function HomePage() {
         origin: asset.origin,
         prompt: asset.prompt,
         renders: asset.renders ?? [],
+        duration: asset.duration,
+        waveform: asset.waveform,
+        frameDirs: asset.frame_dirs,
       };
     });
   }, [assetList, result]);
@@ -470,17 +473,23 @@ export function HomePage() {
           </div>
 
           {/* Timeline */}
-          <div className="border-t border-border bg-card/30">
-            <div className="relative h-28 flex gap-0.5">
+          <div className="border-t border-border bg-card/30 overflow-visible">
+            <div className="relative h-28 flex gap-1 p-1 overflow-visible">
               {slotRefs.map((slotRef, i) => {
                 const slotSlug = timeline?.slots?.[i]?.slug;
                 const slotAsset = slotSlug ? mediaItems.find(m => m.id === slotSlug) : null;
+                const orientKey = `${renderOrientation}_frames`;
+                const frameUrls = slotAsset?.frameDirs?.[orientKey]
+                  ?? slotAsset?.frameDirs?.['original_frames']
+                  ?? undefined;
                 return (
                   <TimelineSlot
                     key={slotRef.ref}
                     label={slotRef.ref}
                     hasContent={!!slotSlug}
-                    thumbnailSrc={slotAsset?.thumbnailSrc ?? undefined}
+                    frameUrls={frameUrls}
+                    waveform={slotAsset?.waveform ?? undefined}
+                    duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
                     onAnimateCommand={handleAnimateCommand}
                   />

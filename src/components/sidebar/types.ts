@@ -35,4 +35,7 @@ export interface MediaItem {
   thumbnailSrc?: string | null;
   prompt?: string | null;
   renders?: string[];
+  duration?: number | null;
+  waveform?: number[] | null;
+  frameDirs?: Record<string, string[]>;
 }

@@ -14,6 +14,9 @@ export interface ListAsset {
   origin: string | null;
   prompt: string | null;
   renders: string[];
+  duration: number | null;
+  waveform: number[] | null;
+  frame_dirs: Record<string, string[]>;
 }
 
 interface UseListAssetsResult {

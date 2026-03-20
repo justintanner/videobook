@@ -1,19 +1,10 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { registerJobHandler } from "../queue.js";
 import { queue } from "../queue.js";
-import { probeVideo, runFfmpeg } from "../ffmpeg.js";
-
-function calculateFrameCount(duration: number): number {
-  const interval = duration <= 10 ? 2.0 : 5.0;
-  const count = Math.floor(duration / interval);
-  return Math.max(3, Math.min(30, count));
-}
-
-function formatTimestamp(t: number): string {
-  return t.toFixed(2);
-}
+import { probeVideo, runFfmpeg, extractWaveform } from "../ffmpeg.js";
+import { calculateFrameCount, formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
 type ProcessVideoPayload = {
   type: "process_video";
@@ -37,11 +28,8 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
-    const frameCount = calculateFrameCount(duration);
-    const endTime = Math.max(0, duration - 0.1);
-    const timestamps = frameCount === 1
-      ? [0.0]
-      : Array.from({ length: frameCount }, (_, i) => (endTime / (frameCount - 1)) * i);
+    const timestamps = generateTimestamps(duration);
+    const frameCount = timestamps.length;
 
     const framesDir = join(assetDir, "original_frames");
     await mkdir(framesDir, { recursive: true });
@@ -61,6 +49,12 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       } catch {
         // frame extraction failure is non-fatal
       }
+    }
+
+    // Extract waveform data
+    const waveform = await extractWaveform(videoPath);
+    if (waveform.length > 0) {
+      await writeFile(join(assetDir, "waveform.json"), JSON.stringify(waveform));
     }
 
     // Create original.jpg from first frame if not already set (e.g., from OG image)

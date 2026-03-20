@@ -1,10 +1,11 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { copyFile, unlink } from "node:fs/promises";
+import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { chunkSegments } from "../remotion/subtitles/chunker.js";
 import type {
@@ -201,6 +202,31 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 // non-fatal
               }
 
+              // Extract orientation frames at timestamps
+              const orientFramesDirName = `${orientation}_frames`;
+              const orientFramesDir = join(asset.assetDir, orientFramesDirName);
+              try {
+                await mkdir(orientFramesDir, { recursive: true });
+                const timestamps = generateTimestamps(durationInSeconds);
+                for (const ts of timestamps) {
+                  const framePath = join(orientFramesDir, `${formatTimestamp(ts)}.jpg`);
+                  try {
+                    await runFfmpeg([
+                      "-y", "-i", outputPath,
+                      "-ss", String(ts),
+                      "-frames:v", "1",
+                      "-q:v", "2",
+                      "-strict", "unofficial",
+                      framePath,
+                    ]);
+                  } catch {
+                    // frame extraction failure is non-fatal
+                  }
+                }
+              } catch {
+                // non-fatal
+              }
+
               const renderSettings = {
                 subtitlesEnabled,
                 highlightStyle,
@@ -214,7 +240,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 backgroundMode,
                 osgPosition: osgImagePath ? osgPosition : undefined,
                 renderedAt: new Date().toISOString(),
-                outputs: [outputFilename, jpgFilename],
+                outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };
               await fs.writeMetadata(asset.assetId, `${orientation}.render`, renderSettings, projectSlug);
 

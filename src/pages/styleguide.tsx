@@ -63,6 +63,13 @@ const colors = [
 ] as const;
 
 
+// Demo waveform — pseudo-random 100-bar sine envelope for styleguide slots
+const DEMO_WAVEFORM = Array.from({ length: 100 }, (_, i) => {
+  const env = 0.3 + 0.7 * Math.sin((i / 100) * Math.PI);
+  const noise = (Math.sin(i * 127.1 + 311.7) * 43758.5453) % 1;
+  return Math.abs(noise) * env * 0.9 + 0.1;
+});
+
 // ── Mock Data ──
 
 const cardOverlayMocks: { item: MediaItem; Component: React.ComponentType<{ item: MediaItem }> }[] = [
@@ -861,9 +868,9 @@ function Page1_FinalVideoPreview() {
         {/* Timeline */}
         <div className="border-t border-border bg-card/30">
           <div className="relative h-28 flex gap-0.5">
-            <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-            <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-            <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+            <TimelineSlot label="@s01" hasContent assetId="vid-purple-grind" waveform={DEMO_WAVEFORM} duration={12} flex={3} />
+            <TimelineSlot label="@s02" hasContent assetId="vid-neon-fox" isActive waveform={DEMO_WAVEFORM} duration={8} flex={2} />
+            <TimelineSlot label="@s03" hasContent assetId="vid-sky-ghost" waveform={DEMO_WAVEFORM} duration={5} flex={3} />
             <TimelineSlot label="@s04" flex={2} />
             <TimelineSlot label="@s05" flex={2} />
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
@@ -964,8 +971,8 @@ function Page2_VideoGeneration() {
 
         <div className="border-t border-border bg-card/30">
           <div className="relative h-28 flex gap-0.5">
-            <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-            <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
+            <TimelineSlot label="@s01" hasContent assetId="vid-purple-grind" waveform={DEMO_WAVEFORM} duration={12} flex={3} />
+            <TimelineSlot label="@s02" hasContent assetId="vid-neon-fox" isActive waveform={DEMO_WAVEFORM} duration={8} flex={2} />
             <TimelineSlot label="@s03" flex={2} />
             <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '35%' }} />
           </div>
@@ -1450,9 +1457,9 @@ function Page9_AudioSystem() {
       {/* TimelineScrubber */}
       <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10">
         <div className="relative h-24 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
-          <TimelineSlot label="@s01" hasContent thumbnailSrc="/styleguide-vid-purple-grind.jpg" assetId="vid-purple-grind" flex={3} />
-          <TimelineSlot label="@s02" hasContent thumbnailSrc="/styleguide-img-neon-fox.jpg" assetId="vid-neon-fox" isActive flex={2} />
-          <TimelineSlot label="@s03" hasContent thumbnailSrc="/styleguide-vid-sky-ghost.jpg" assetId="vid-sky-ghost" flex={3} />
+          <TimelineSlot label="@s01" hasContent assetId="vid-purple-grind" waveform={DEMO_WAVEFORM} duration={12} flex={3} />
+          <TimelineSlot label="@s02" hasContent assetId="vid-neon-fox" isActive waveform={DEMO_WAVEFORM} duration={8} flex={2} />
+          <TimelineSlot label="@s03" hasContent assetId="vid-sky-ghost" waveform={DEMO_WAVEFORM} duration={5} flex={3} />
           <TimelineSlot label="@s04" flex={2} />
           <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
         </div>

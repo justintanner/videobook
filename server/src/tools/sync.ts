@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
-import { readdir, access } from "node:fs/promises";
+import { readdir, readFile, access } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
@@ -11,6 +11,8 @@ import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
+import { extractWaveform } from "../ffmpeg.js";
+import { writeFile } from "node:fs/promises";
 import type { ToolDef } from "./tool-def.js";
 
 export type SyncAsset = {
@@ -26,6 +28,9 @@ export type SyncAsset = {
   origin: string | null;
   prompt: string | null;
   renders: string[];
+  duration: number | null;
+  waveform: number[] | null;
+  frame_dirs: Record<string, string[]>;
 };
 
 export type SyncResult = {
@@ -69,6 +74,46 @@ async function isWhitelisted(assetDir: string): Promise<boolean> {
   }
 }
 
+async function readOrExtractWaveform(assetDir: string): Promise<number[] | null> {
+  try {
+    const data = await readFile(join(assetDir, "waveform.json"), "utf-8");
+    return JSON.parse(data) as number[];
+  } catch {
+    // Backfill: extract waveform from original video if waveform.json doesn't exist
+    try {
+      const files = await readdir(assetDir);
+      const video = files.find((f) => /^original\.(mp4|mov)$/i.test(f));
+      if (!video) return null;
+      const waveform = await extractWaveform(join(assetDir, video));
+      if (waveform.length > 0) {
+        await writeFile(join(assetDir, "waveform.json"), JSON.stringify(waveform));
+        return waveform;
+      }
+    } catch { /* non-fatal */ }
+    return null;
+  }
+}
+
+async function findFrameDirectories(assetDir: string, projectSlug: string, assetId: string): Promise<Record<string, string[]>> {
+  const result: Record<string, string[]> = {};
+  try {
+    const entries = await readdir(assetDir);
+    const frameDirs = entries.filter((e) => e.endsWith("_frames"));
+    for (const dir of frameDirs) {
+      try {
+        const files = await readdir(join(assetDir, dir));
+        const jpgs = files.filter((f) => f.endsWith(".jpg")).sort();
+        result[dir] = jpgs.map((f) => `/files/${projectSlug}/${assetId}/${dir}/${f}`);
+      } catch {
+        // skip unreadable dirs
+      }
+    }
+  } catch {
+    // no frame dirs
+  }
+  return result;
+}
+
 async function hasRenderMetadata(assetDir: string): Promise<boolean> {
   try {
     const files = await readdir(assetDir);
@@ -94,7 +139,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
@@ -103,6 +148,8 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         hasRenderMetadata(a.path),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
         findRenderedOrientations(a.path),
+        readOrExtractWaveform(a.path),
+        findFrameDirectories(a.path, project_slug, a.id),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -145,6 +192,9 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         origin: (meta?.origin as string) ?? null,
         prompt: (meta?.prompt as string) ?? null,
         renders,
+        duration: (meta?.duration as number) ?? null,
+        waveform,
+        frame_dirs: frameDirs,
       };
     }),
   );

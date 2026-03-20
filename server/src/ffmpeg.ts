@@ -86,6 +86,33 @@ export interface FFmpeggyClass {
 
 let _FFmpeggy: FFmpeggyClass | null = null;
 
+export async function extractWaveform(videoPath: string, barCount = 100): Promise<number[]> {
+  try {
+    const { stdout } = await execFileAsync(FFMPEG, [
+      "-i", videoPath,
+      "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "pipe:1",
+    ], { encoding: "buffer", maxBuffer: 50 * 1024 * 1024 });
+    const buf = stdout as unknown as Buffer;
+    if (buf.length < 2) return [];
+    const samples = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
+    const samplesPerBin = Math.max(1, Math.floor(samples.length / barCount));
+    const peaks: number[] = [];
+    for (let b = 0; b < barCount; b++) {
+      const start = b * samplesPerBin;
+      const end = Math.min(start + samplesPerBin, samples.length);
+      let sum = 0;
+      for (let i = start; i < end; i++) {
+        sum += samples[i] * samples[i];
+      }
+      peaks.push(Math.sqrt(sum / (end - start)));
+    }
+    const max = Math.max(...peaks, 1);
+    return peaks.map((p) => p / max);
+  } catch {
+    return [];
+  }
+}
+
 export async function getFFmpeggy(): Promise<FFmpeggyClass> {
   if (!_FFmpeggy) {
     const mod = await import("ffmpeggy") as { FFmpeggy: FFmpeggyClass };
