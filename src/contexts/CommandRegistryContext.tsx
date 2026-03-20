@@ -99,16 +99,15 @@ export function CommandRegistryProvider({
       }
 
       // Bare command match — dispatch "download URL" the same as "/download URL"
-      // Skip when input has more tokens than params — that signals natural language
-      // which the chat router handles better (e.g. "download the first 30s of URL").
+      // Skip when the first arg looks like a plain English word (purely alphabetic,
+      // 2+ chars) — that signals natural language which the chat router handles
+      // better (e.g. "download the first 30s of URL").
       const bareCmd = allCommands.find((c) => c.command === `/${commandStr}` && c.mcpTool);
       if (bareCmd) {
-        const tokens = rest ? rest.split(/\s+/) : [];
-        const lastParam = bareCmd.params[bareCmd.params.length - 1];
-        const lastAbsorbs = lastParam?.type === 'string';
-        const isStructured = lastAbsorbs || tokens.length <= bareCmd.params.length;
+        const firstArg = rest.split(/\s+/)[0] ?? '';
+        const looksLikeNaturalLanguage = /^[a-z]{2,}$/i.test(firstArg);
 
-        if (isStructured) {
+        if (!looksLikeNaturalLanguage) {
           const args = parseCommandArgs(rest, bareCmd.params);
           const toolArgs: Record<string, string> = { ...args };
           if (bareCmd.mcpTool!.autoInject?.includes('project_slug') && projectSlug) {
