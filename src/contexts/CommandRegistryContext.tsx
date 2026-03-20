@@ -19,12 +19,14 @@ export function CommandRegistryProvider({
   state,
   projectSlug,
   uiActions,
+  onAfterDispatch,
   children,
 }: {
   callTool: UseMcpResult['callTool'];
   state: string;
   projectSlug: string | undefined;
   uiActions: UiActionMap;
+  onAfterDispatch?: () => void;
   children: React.ReactNode;
 }) {
   const mountKeys = useMountKeys();
@@ -83,6 +85,7 @@ export function CommandRegistryProvider({
               toolArgs.project_slug = projectSlug;
             }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);
+            onAfterDispatch?.();
             return !result.isError;
           }
 
@@ -104,6 +107,7 @@ export function CommandRegistryProvider({
           toolArgs.project_slug = projectSlug;
         }
         const result = await callTool(bareCmd.mcpTool!.tool, toolArgs);
+        onAfterDispatch?.();
         return !result.isError;
       }
 
@@ -117,7 +121,7 @@ export function CommandRegistryProvider({
       return false;
     }
     return false;
-  }, [allCommands, callTool, projectSlug, uiActions]);
+  }, [allCommands, callTool, projectSlug, uiActions, onAfterDispatch]);
 
   const value = useMemo(
     () => ({ commands, allCommands, dispatch }),

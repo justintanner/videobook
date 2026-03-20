@@ -1,6 +1,12 @@
 import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Eraser } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface TimelineSlotProps {
   label: string;
@@ -13,6 +19,7 @@ interface TimelineSlotProps {
   flex?: number;
   onClick?: () => void;
   onAssetDrop?: (assetId: string, slotIndex: number) => void;
+  onClearSlot?: (slotIndex: number) => void;
 }
 
 export function TimelineSlot({
@@ -26,6 +33,7 @@ export function TimelineSlot({
   flex = 1,
   onClick,
   onAssetDrop,
+  onClearSlot,
 }: TimelineSlotProps) {
   const [isDragOverLocal, setIsDragOverLocal] = useState(false);
   const isDragOver = isDragOverProp || isDragOverLocal;
@@ -82,9 +90,33 @@ export function TimelineSlot({
 
       {/* Context menu button */}
       <div className="absolute top-1.5 right-1.5 z-30">
-        <button tabIndex={-1} className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-          <MoreHorizontal className="w-3.5 h-3.5" />
-        </button>
+        {hasContent && onClearSlot && slotIndex != null ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                tabIndex={-1}
+                className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top">
+              <DropdownMenuItem
+                className="py-2.5"
+                onSelect={() => onClearSlot(slotIndex)}
+              >
+                <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
+                <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/clear-slot</span>
+                <span className="ml-2 opacity-80 flex items-center"><Eraser className="h-3 w-3" /></span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <button tabIndex={-1} className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Content */}

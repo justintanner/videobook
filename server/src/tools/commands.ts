@@ -236,6 +236,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "assign_slot", autoInject: ["project_slug"] },
   },
   {
+    command: "/clear-slot",
+    description: "Clear asset from timeline slot",
+    example: "/clear-slot @s02",
+    category: "action",
+    icon: "Eraser",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
+    ],
+    mcpTool: { tool: "clear_slot", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite-prompt",
     description: "Optimize a prompt",
     example: '/rewrite-prompt "make it more cinematic"',

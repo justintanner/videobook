@@ -46,6 +46,7 @@ import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
 import { assignSlotDef } from "./assign-slot.js";
+import { clearSlotDef } from "./clear-slot.js";
 import { commandsDef } from "./commands.js";
 import { withLogging } from "./log-wrapper.js";
 
@@ -104,6 +105,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     rewritePromptDef(fs),
     isolateVocalsDef(fs),
     assignSlotDef(fs),
+    clearSlotDef(fs),
     commandsDef(fs),
   ];
 }

@@ -16,6 +16,7 @@ interface UseTimelineResult {
   setRenderOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
   setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
   assignSlot: (projectSlug: string, assetId: string, slotIndex: number) => Promise<boolean>;
+  clearSlot: (projectSlug: string, slotIndex: number) => Promise<boolean>;
 }
 
 export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResult {
@@ -95,5 +96,21 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot };
+  const clearSlot = useCallback(async (projectSlug: string, slotIndex: number): Promise<boolean> => {
+    try {
+      const slot = `s${String(slotIndex + 1).padStart(2, '0')}`;
+      const result = await callToolRef.current("clear_slot", {
+        project_slug: projectSlug,
+        slot,
+      });
+      if (result.isError) return false;
+      await fetchTimeline(projectSlug);
+      return true;
+    } catch (e: unknown) {
+      console.error("[clear_slot] exception:", e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [fetchTimeline]);
+
+  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot, clearSlot };
 }

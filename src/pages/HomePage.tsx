@@ -69,7 +69,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot, clearSlot } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
@@ -126,6 +126,12 @@ export function HomePage() {
     if (!projectSlug || syncCount === 0) return;
     listAssets(projectSlug, sortOrder);
   }, [projectSlug, syncCount, sortOrder, listAssets]);
+
+  // Refresh timeline after each sync
+  useEffect(() => {
+    if (!projectSlug || syncCount === 0) return;
+    fetchTimeline(projectSlug);
+  }, [projectSlug, syncCount, fetchTimeline]);
 
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
@@ -268,6 +274,11 @@ export function HomePage() {
     assignSlot(projectSlug, assetId, slotIndex);
   }, [projectSlug, assignSlot]);
 
+  const handleClearSlot = useCallback((slotIndex: number) => {
+    if (!projectSlug) return;
+    clearSlot(projectSlug, slotIndex);
+  }, [projectSlug, clearSlot]);
+
   const handleAnimateCommand = useCallback((text: string) => {
     chatInputRef.current?.animateAndSend(text);
   }, []);
@@ -275,6 +286,11 @@ export function HomePage() {
   const handleAnimateEdit = useCallback((text: string) => {
     chatInputRef.current?.animateAndEdit(text);
   }, []);
+
+  const handleAfterDispatch = useCallback(() => {
+    if (!projectSlug) return;
+    fetchTimeline(projectSlug);
+  }, [projectSlug, fetchTimeline]);
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
@@ -310,7 +326,7 @@ export function HomePage() {
 
   return (
     <MountKeyProvider>
-    <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions}>
+    <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
       <div className="w-screen h-screen bg-background overflow-hidden">
         <input
           ref={fileInputRef}
@@ -478,6 +494,7 @@ export function HomePage() {
                     thumbnailSrc={slotAsset?.thumbnailSrc ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
                     onAssetDrop={handleAssignSlot}
+                    onClearSlot={handleClearSlot}
                   />
                 );
               })}
