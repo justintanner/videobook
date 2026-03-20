@@ -100,6 +100,9 @@ export function HomePage() {
       if (target.closest('[data-radix-menu-content]')) return;
       if (target.closest('[role="dialog"]')) return;
 
+      // Allow drag initiation on draggable elements
+      if (target.closest('[draggable="true"]')) return;
+
       e.preventDefault();
       chatInputRef.current?.focus();
     };

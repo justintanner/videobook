@@ -356,7 +356,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         const isCompleteCommand = commands.some(c => trimmed === c.command);
         const selectedItem = autocompleteItems[selectedIndex];
         const selectedMatchesInput = selectedItem?.value === trimmed;
+        // Send if the entire input is a bare command matching the suggestion
         if (isCompleteCommand && selectedMatchesInput) {
+          handleSend();
+        // Send if the typed text already fully matches the selected suggestion
+        // (user finished typing the value — no need to re-insert it)
+        } else if (triggerMatch && selectedItem && chatInput.slice(triggerMatch.startPos) === selectedItem.value) {
           handleSend();
         } else {
           e.preventDefault();
