@@ -93,14 +93,17 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
         downloadSections = `*${s}-${e}`;
       }
 
+      // Normalize URL: prepend https:// when no protocol is provided
+      const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+
       // 1. Source prefix from URL
-      const prefix = sourcePrefix(url);
+      const prefix = sourcePrefix(normalizedUrl);
 
       // 2. OG extraction — one call
       let ogData: IOGResult | null = null;
-      let title = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "video";
+      let title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
       try {
-        const response = await fetch(url, {
+        const response = await fetch(normalizedUrl, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
           signal: AbortSignal.timeout(10_000),
           redirect: "follow",
@@ -135,7 +138,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
 
       await queue.enqueue(jobId, {
         type: "download_video",
-        url,
+        url: normalizedUrl,
         outputPath,
         downloadSections,
         assetId,
