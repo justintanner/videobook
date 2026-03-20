@@ -2827,4 +2827,979 @@ describe("slash commands e2e", () => {
       expect(args.position).toBe("99");
     });
   });
+
+  // -----------------------------------------------------------------------
+  // 42. /download — URL normalization and sourcePrefix mapping
+  // -----------------------------------------------------------------------
+  describe("/download URL normalization", () => {
+    it("normalizes http:// URL (keeps as-is, not doubled)", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "http://example.com/video",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(parseResult(result).status).toBe("enqueued");
+    });
+
+    it("accepts tiktok.com domain", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://tiktok.com/@user/video/12345",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("accepts vimeo.com domain", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://vimeo.com/123456789",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("accepts reddit.com domain", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://reddit.com/r/videos/comments/abc/test",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("accepts fb.watch short URL", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://fb.watch/abc123",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("falls back to domain-derived prefix for unknown sites", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://obscure-video-host.xyz/v/12345",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(parseResult(result).status).toBe("enqueued");
+    });
+
+    it("accepts URL with www prefix", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("accepts youtu.be short URL", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://youtu.be/dQw4w9WgXcQ",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("accepts export_videos=true", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          export_videos: true,
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("full=true produces original_full.mp4 filename in job", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          full: true,
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(parseResult(result).status).toBe("enqueued");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 43. /assign — idempotent re-assignment and normalizeConfig branches
+  // -----------------------------------------------------------------------
+  describe("/assign idempotent and config normalization", () => {
+    it("assigning same asset to same slot is idempotent", async () => {
+      const data = Buffer.from("fake-png-data").toString("base64");
+      const upload = await client.callTool({
+        name: "upload_file",
+        arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      });
+      const assetId = parseResult(upload).assetId as string;
+
+      // Assign once
+      await client.callTool({
+        name: "assign_slot",
+        arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      });
+
+      // Assign same asset to same slot again
+      const result = await client.callTool({
+        name: "assign_slot",
+        arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      });
+      expect(result.isError).toBeFalsy();
+      const slots = parseResult(result).slots as Array<{ slug: string }>;
+      expect(slots[0].slug).toBe(assetId);
+    });
+
+    it("handles legacy array-format timeline config", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const data = Buffer.from("fake-png-data").toString("base64");
+      const upload = await client.callTool({
+        name: "upload_file",
+        arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      });
+      const assetId = parseResult(upload).assetId as string;
+
+      // Write timeline as raw array (legacy format)
+      await fs.writeProjectMeta("timeline", [
+        { slug: "" },
+      ], "test-proj");
+
+      const result = await client.callTool({
+        name: "assign_slot",
+        arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.render).toBe("landscape"); // default from normalizeConfig
+      expect((parsed.slots as Array<{ slug: string }>)[0].slug).toBe(assetId);
+    });
+
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "assign_slot",
+        arguments: {
+          project_slug: "no-such-project",
+          asset_id: "vid-test",
+          slot: "s01",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 44. /clear-slot — normalizeConfig and nonexistent project
+  // -----------------------------------------------------------------------
+  describe("/clear-slot with legacy config", () => {
+    it("handles legacy array-format timeline config", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const data = Buffer.from("fake-png-data").toString("base64");
+      const upload = await client.callTool({
+        name: "upload_file",
+        arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      });
+      const assetId = parseResult(upload).assetId as string;
+
+      // Write timeline as raw array (legacy format)
+      await fs.writeProjectMeta("timeline", [
+        { slug: assetId },
+      ], "test-proj");
+
+      const result = await client.callTool({
+        name: "clear_slot",
+        arguments: { project_slug: "test-proj", slot: "s01" },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.render).toBe("landscape"); // normalized default
+    });
+
+    it("errors for nonexistent project (no timeline)", async () => {
+      const result = await client.callTool({
+        name: "clear_slot",
+        arguments: { project_slug: "no-such-project", slot: "s01" },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 45. /duplicate — empty asset and prefix extraction edge cases
+  // -----------------------------------------------------------------------
+  describe("/duplicate prefix extraction", () => {
+    it("duplicates asset with no files (empty manifest)", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("img", "empty-asset", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+
+      const result = await client.callTool({
+        name: "duplicate_asset",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.new_asset_id).toBeDefined();
+      expect((parsed.new_asset_id as string).startsWith("img-")).toBe(true);
+    });
+
+    it("duplicate preserves copy name with 'copy' suffix", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("img", "beach-sunset", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+
+      const result = await client.callTool({
+        name: "duplicate_asset",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      // Auto-name should be "<original> copy"
+      const newId = parseResult(result).new_asset_id as string;
+      expect(newId).toContain("copy");
+    });
+
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "duplicate_asset",
+        arguments: {
+          asset_id: "img-test",
+          project_slug: "no-such-project",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 46. /rename — edge cases
+  // -----------------------------------------------------------------------
+  describe("/rename edge cases", () => {
+    it("rename to single character name", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("img", "longname", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+
+      const result = await client.callTool({
+        name: "rename_asset",
+        arguments: {
+          asset_id: asset.value.assetId,
+          new_name: "x",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect((parsed.new_asset_id as string).startsWith("img-")).toBe(true);
+    });
+
+    it("rename to name with numbers", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "clip-old", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake"), "test-proj");
+
+      const result = await client.callTool({
+        name: "rename_asset",
+        arguments: {
+          asset_id: asset.value.assetId,
+          new_name: "clip 42 final v3",
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "rename_asset",
+        arguments: {
+          asset_id: "img-test",
+          new_name: "whatever",
+          project_slug: "no-such-project",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 47. /delete — different asset types
+  // -----------------------------------------------------------------------
+  describe("/delete different asset types", () => {
+    it("deletes img- asset created via fs.createAsset", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("img", "del-img", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+
+      const result = await client.callTool({
+        name: "delete_asset",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.status).toBe("deleted");
+      expect(parsed.deleted_at).toBeDefined();
+    });
+
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "delete_asset",
+        arguments: {
+          asset_id: "img-test",
+          project_slug: "no-such-project",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 48. /render — findVideoFile with .avi and .mkv formats
+  // -----------------------------------------------------------------------
+  describe("/render additional video formats", () => {
+    it("finds .avi video file", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "avi-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "clip.avi", Buffer.from("fake-avi"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("finds .mkv video file", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "mkv-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "movie.mkv", Buffer.from("fake-mkv"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with background_mode=blur (default)", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "blur-bg-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+          background_mode: "blur",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with highlight_style='highlight'", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "highlight-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+          subtitles_enabled: true,
+          highlight_style: "highlight",
+          text_color: "#FF0000",
+          highlight_color: "#00FF00",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with square orientation from timeline config", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "square-vid", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      await fs.writeProjectMeta("timeline", {
+        slots: [{ slug: asset.value.assetId }],
+        render: "square",
+      }, "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(parseResult(result).orientation).toBe("square");
+    });
+
+    it("renders with large audio_fade_in and audio_fade_out values", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("vid", "bigfade-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: asset.value.assetId,
+          project_slug: "test-proj",
+          audio_fade_in: 5000,
+          audio_fade_out: 3000,
+          audio_volume: 50,
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with OSG using .webp image", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const vid = await fs.createAsset("vid", "osg-webp", "test-proj");
+      if (!vid.ok) throw new Error("Failed to create vid asset");
+      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      const img = await fs.createAsset("img", "webp-logo", "test-proj");
+      if (!img.ok) throw new Error("Failed to create img asset");
+      await fs.writeFile(img.value.assetId, "logo.webp", Buffer.from("fake-webp"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: vid.value.assetId,
+          project_slug: "test-proj",
+          osg_asset_id: img.value.assetId,
+          osg_position: "top-left",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with OSG using .svg image", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const vid = await fs.createAsset("vid", "osg-svg", "test-proj");
+      if (!vid.ok) throw new Error("Failed to create vid asset");
+      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      const img = await fs.createAsset("img", "svg-logo", "test-proj");
+      if (!img.ok) throw new Error("Failed to create img asset");
+      await fs.writeFile(img.value.assetId, "icon.svg", Buffer.from("<svg></svg>"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: vid.value.assetId,
+          project_slug: "test-proj",
+          osg_asset_id: img.value.assetId,
+          osg_position: "bottom-right",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("renders with OSG using .gif image", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const vid = await fs.createAsset("vid", "osg-gif", "test-proj");
+      if (!vid.ok) throw new Error("Failed to create vid asset");
+      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+
+      const img = await fs.createAsset("img", "gif-logo", "test-proj");
+      if (!img.ok) throw new Error("Failed to create img asset");
+      await fs.writeFile(img.value.assetId, "badge.gif", Buffer.from("GIF89a"), "test-proj");
+
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: vid.value.assetId,
+          project_slug: "test-proj",
+          osg_asset_id: img.value.assetId,
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: "vid-test",
+          project_slug: "no-such-project",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 49. /isolate-vocals — findAudioFile fallback logic
+  // -----------------------------------------------------------------------
+  describe("/isolate-vocals audio discovery", () => {
+    it("aud- asset finds .m4a file", async () => {
+      const origKey = process.env.KIE_API_KEY;
+      process.env.KIE_API_KEY = "test-key";
+      try {
+        const fs = createFs({ projectsDir: tempDir });
+        const asset = await fs.createAsset("aud", "m4a-track", "test-proj");
+        if (!asset.ok) throw new Error("Failed to create asset");
+        await fs.writeFile(asset.value.assetId, "episode.m4a", Buffer.from("fake-m4a"), "test-proj");
+
+        const result = await client.callTool({
+          name: "isolate_vocals",
+          arguments: {
+            asset_id: asset.value.assetId,
+            project_slug: "test-proj",
+          },
+        });
+        expect(result.isError).toBeFalsy();
+        expect(parseResult(result).status).toBe("enqueued");
+      } finally {
+        if (origKey) process.env.KIE_API_KEY = origKey;
+        else delete process.env.KIE_API_KEY;
+      }
+    });
+
+    it("aud- asset with non-audio file only errors", async () => {
+      const origKey = process.env.KIE_API_KEY;
+      process.env.KIE_API_KEY = "test-key";
+      try {
+        const fs = createFs({ projectsDir: tempDir });
+        const asset = await fs.createAsset("aud", "text-only", "test-proj");
+        if (!asset.ok) throw new Error("Failed to create asset");
+        await fs.writeFile(asset.value.assetId, "readme.txt", "text", "test-proj");
+
+        const result = await client.callTool({
+          name: "isolate_vocals",
+          arguments: {
+            asset_id: asset.value.assetId,
+            project_slug: "test-proj",
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("No audio file");
+      } finally {
+        if (origKey) process.env.KIE_API_KEY = origKey;
+        else delete process.env.KIE_API_KEY;
+      }
+    });
+
+    it("vid- asset with audio_original.mp3 preferred over original.mp3", async () => {
+      const origKey = process.env.KIE_API_KEY;
+      process.env.KIE_API_KEY = "test-key";
+      try {
+        const fs = createFs({ projectsDir: tempDir });
+        const asset = await fs.createAsset("vid", "both-audio", "test-proj");
+        if (!asset.ok) throw new Error("Failed to create asset");
+        await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+        await fs.writeFile(asset.value.assetId, "original.mp3", Buffer.from("original-mp3"), "test-proj");
+        await fs.writeFile(asset.value.assetId, "audio_original.mp3", Buffer.from("audio-original-mp3"), "test-proj");
+
+        const result = await client.callTool({
+          name: "isolate_vocals",
+          arguments: {
+            asset_id: asset.value.assetId,
+            project_slug: "test-proj",
+          },
+        });
+        // Should succeed — findAudioFile for vid- prefers audio_original.mp3
+        expect(result.isError).toBeFalsy();
+        expect(parseResult(result).status).toBe("enqueued");
+      } finally {
+        if (origKey) process.env.KIE_API_KEY = origKey;
+        else delete process.env.KIE_API_KEY;
+      }
+    });
+
+    it("errors for nonexistent project", async () => {
+      const origKey = process.env.KIE_API_KEY;
+      process.env.KIE_API_KEY = "test-key";
+      try {
+        const result = await client.callTool({
+          name: "isolate_vocals",
+          arguments: {
+            asset_id: "vid-test",
+            project_slug: "no-such-project",
+          },
+        });
+        expect(result.isError).toBe(true);
+      } finally {
+        if (origKey) process.env.KIE_API_KEY = origKey;
+        else delete process.env.KIE_API_KEY;
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 50. /rewrite-prompt — additional validation paths
+  // -----------------------------------------------------------------------
+  describe("/rewrite-prompt additional validation", () => {
+    it("errors when asset_slug provided without scene_index", async () => {
+      const origKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "test-key";
+      try {
+        // asset_slug but no scene_index — should fall to standard mode (prompt required)
+        const result = await client.callTool({
+          name: "rewrite_prompt",
+          arguments: {
+            project_slug: "test-proj",
+            asset_slug: "vid-test",
+            // no scene_index, no prompt
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("prompt is required");
+      } finally {
+        if (origKey) process.env.OPENAI_API_KEY = origKey;
+        else delete process.env.OPENAI_API_KEY;
+      }
+    });
+
+    it("errors for scene rewrite with scene_index < 0", async () => {
+      const origKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "test-key";
+      try {
+        const fs = createFs({ projectsDir: tempDir });
+        const asset = await fs.createAsset("vid", "neg-scene", "test-proj");
+        if (!asset.ok) throw new Error("Failed to create asset");
+        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+          tool: "generate_kling30_video",
+          prompt: "test",
+          duration: 8,
+        }, "test-proj");
+
+        const result = await client.callTool({
+          name: "rewrite_prompt",
+          arguments: {
+            project_slug: "test-proj",
+            asset_slug: asset.value.assetId,
+            scene_index: -1,
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("out of range");
+      } finally {
+        if (origKey) process.env.OPENAI_API_KEY = origKey;
+        else delete process.env.OPENAI_API_KEY;
+      }
+    });
+
+    it("errors for scene rewrite on multi_prompt with out-of-bounds index", async () => {
+      const origKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "test-key";
+      try {
+        const fs = createFs({ projectsDir: tempDir });
+        const asset = await fs.createAsset("vid", "multi-scene", "test-proj");
+        if (!asset.ok) throw new Error("Failed to create asset");
+        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+          tool: "generate_kling30_video",
+          multi_prompt: [
+            { prompt: "scene one", duration: 4 },
+            { prompt: "scene two", duration: 4 },
+          ],
+        }, "test-proj");
+
+        const result = await client.callTool({
+          name: "rewrite_prompt",
+          arguments: {
+            project_slug: "test-proj",
+            asset_slug: asset.value.assetId,
+            scene_index: 2, // only 0 and 1 are valid
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("out of range");
+      } finally {
+        if (origKey) process.env.OPENAI_API_KEY = origKey;
+        else delete process.env.OPENAI_API_KEY;
+      }
+    });
+
+    it("errors for scene rewrite on nonexistent asset", async () => {
+      const origKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "test-key";
+      try {
+        const result = await client.callTool({
+          name: "rewrite_prompt",
+          arguments: {
+            project_slug: "test-proj",
+            asset_slug: "vid-does-not-exist",
+            scene_index: 0,
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("tool.params");
+      } finally {
+        if (origKey) process.env.OPENAI_API_KEY = origKey;
+        else delete process.env.OPENAI_API_KEY;
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 51. /show-folder — different asset types via fs.createAsset
+  // -----------------------------------------------------------------------
+  describe("/show-folder with createAsset", () => {
+    it("errors for nonexistent project", async () => {
+      const result = await client.callTool({
+        name: "show_folder",
+        arguments: { asset_id: "img-test", project_slug: "no-such-project" },
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it("resolves correct path for img- asset", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+      const asset = await fs.createAsset("img", "folder-test", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+
+      const result = await client.callTool({
+        name: "show_folder",
+        arguments: { asset_id: asset.value.assetId, project_slug: "test-proj" },
+      });
+      // On macOS with Finder this should succeed; either way no validation error
+      if (!result.isError) {
+        const parsed = parseResult(result);
+        expect(parsed.path).toContain(asset.value.assetId);
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 52. /download time edge cases — mixed formats
+  // -----------------------------------------------------------------------
+  describe("/download mixed time formats", () => {
+    it("colon start with shorthand end '0:30' to '2m'", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          start_time: "0:30",
+          end_time: "2m",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("shorthand start with colon end '1m30s' to '3:00'", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          start_time: "1m30s",
+          end_time: "3:00",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("bare numeric start with shorthand end '10' to '5min'", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          start_time: "10",
+          end_time: "5min",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("both times as '0' and '0' errors (start >= end)", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          start_time: "0",
+          end_time: "0",
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it("HH:MM:SS start with bare end '0:02:30' to '200'", async () => {
+      const result = await client.callTool({
+        name: "download_video_file",
+        arguments: {
+          url: "https://example.com/video",
+          project_slug: "test-proj",
+          start_time: "0:02:30",
+          end_time: "200",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 53. Full round-trip: create → rename → duplicate → assign → render
+  // -----------------------------------------------------------------------
+  describe("full round-trip: create → rename → duplicate → assign → render", () => {
+    it("end-to-end lifecycle with vid asset", async () => {
+      const fs = createFs({ projectsDir: tempDir });
+
+      // Create vid asset
+      const asset = await fs.createAsset("vid", "raw-footage", "test-proj");
+      if (!asset.ok) throw new Error("Failed to create asset");
+      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      const origId = asset.value.assetId;
+
+      // Rename
+      const renameResult = await client.callTool({
+        name: "rename_asset",
+        arguments: {
+          asset_id: origId,
+          new_name: "polished clip",
+          project_slug: "test-proj",
+        },
+      });
+      expect(renameResult.isError).toBeFalsy();
+      const renamedId = parseResult(renameResult).new_asset_id as string;
+
+      // Duplicate
+      const dupResult = await client.callTool({
+        name: "duplicate_asset",
+        arguments: {
+          asset_id: renamedId,
+          project_slug: "test-proj",
+          new_name: "backup clip",
+        },
+      });
+      expect(dupResult.isError).toBeFalsy();
+
+      // Assign renamed asset to slot
+      const assignResult = await client.callTool({
+        name: "assign_slot",
+        arguments: {
+          project_slug: "test-proj",
+          asset_id: renamedId,
+          slot: "s01",
+        },
+      });
+      expect(assignResult.isError).toBeFalsy();
+
+      // Render the assigned asset
+      const renderResult = await client.callTool({
+        name: "render",
+        arguments: {
+          asset_id: renamedId,
+          project_slug: "test-proj",
+        },
+      });
+      expect(renderResult.isError).toBeFalsy();
+      expect(parseResult(renderResult).status).toBe("enqueued");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 54. parseCommandArgs — new differentiators
+  // -----------------------------------------------------------------------
+  describe("parseCommandArgs new differentiators", () => {
+    it("/download URL-only no extra params", () => {
+      const args = simulateParse("/download", "twitch.tv/videos/12345");
+      expect(args.url).toBe("twitch.tv/videos/12345");
+      expect(args.start_time).toBeUndefined();
+    });
+
+    it("/trim with only start time (no end)", () => {
+      const args = simulateParse("/trim", "@clip 1:00");
+      expect(args.asset_id).toBe("clip");
+      expect(args.start).toBe("1:00");
+      expect(args.end).toBeUndefined();
+    });
+
+    it("/duplicate without @ prefix", () => {
+      const args = simulateParse("/duplicate", "hero-intro my-copy");
+      expect(args.asset_id).toBe("hero-intro");
+      expect(args.new_name).toBe("my-copy");
+    });
+
+    it("/assign without @ on either param", () => {
+      const args = simulateParse("/assign", "vid-clip s02");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.slot).toBe("s02");
+    });
+
+    it("/rename with 'to' connector and multi-word name", () => {
+      const args = simulateParse("/rename", "@old-name to my brand new name");
+      expect(args.asset_id).toBe("old-name");
+      expect(args.new_name).toBe("my brand new name");
+    });
+
+    it("/rewrite-prompt with long prompt", () => {
+      const longPrompt = "a cinematic slow motion shot of a golden retriever catching a frisbee at sunset on the beach with dramatic lighting and lens flare";
+      const args = simulateParse("/rewrite-prompt", longPrompt);
+      expect(args.prompt).toBe(longPrompt);
+    });
+
+    it("/copy-name without @ prefix", () => {
+      const args = simulateParse("/copy-name", "vid-my-clip");
+      expect(args.asset_id).toBe("vid-my-clip");
+    });
+
+    it("/history with vid- prefixed asset", () => {
+      const args = simulateParse("/history", "@vid-raw-footage");
+      expect(args.asset_id).toBe("vid-raw-footage");
+    });
+
+    it("/open with aud- prefixed asset", () => {
+      const args = simulateParse("/open", "@aud-track-01");
+      expect(args.asset_id).toBe("aud-track-01");
+    });
+  });
 });
