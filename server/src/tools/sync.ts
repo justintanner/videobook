@@ -11,7 +11,7 @@ import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { extractWaveform } from "../ffmpeg.js";
+import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import { writeFile } from "node:fs/promises";
 import type { ToolDef } from "./tool-def.js";
 
@@ -182,6 +182,20 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       }
 
       const meta = metadata.ok ? metadata.value : null;
+
+      // Backfill duration if missing from metadata
+      let duration = (meta?.duration as number) ?? null;
+      if (duration === null && mediaFile && /\.(mp4|mov)$/i.test(mediaFile)) {
+        try {
+          const probe = await probeVideo(join(a.path, mediaFile));
+          duration = probe.duration;
+          // Persist so we don't re-probe next time
+          if (metadata.ok) {
+            await fs.writeMetadata(a.id, "original", { ...metadata.value, duration }, project_slug);
+          }
+        } catch { /* non-fatal */ }
+      }
+
       return {
         ...a,
         media_url,
@@ -192,7 +206,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         origin: (meta?.origin as string) ?? null,
         prompt: (meta?.prompt as string) ?? null,
         renders,
-        duration: (meta?.duration as number) ?? null,
+        duration,
         waveform,
         frame_dirs: frameDirs,
       };
