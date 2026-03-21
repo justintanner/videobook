@@ -293,11 +293,12 @@ function OrientIndicator({ orient, renders, status }: {
 
 type BackTab = 'settings' | 'files';
 
-function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }: {
+function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange }: {
   item: MediaItem;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
-  onRender?: () => void;
+  onFlip: (flipped: boolean) => void;
+  onSizeChange: (s: ViewerSize) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   if (!isClip) {
@@ -319,7 +320,8 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onRender }
     onChangeOrientation(orient);
 
     if (!renders.includes(orient)) {
-      onRender?.();
+      onSizeChange(orient);
+      onFlip(false);
     }
   };
 
@@ -813,7 +815,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   item={item}
                   renderOrientation={renderOrientation}
                   onChangeOrientation={onChangeOrientation}
-                  onRender={onRender}
+                  onFlip={onFlippedChange}
+                  onSizeChange={onSizeChange}
                 />
               </div>
             ) : (
