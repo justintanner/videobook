@@ -134,6 +134,79 @@ describe("parseCommandArgs", () => {
     ];
     expect(parseCommandArgs("3", params)).toEqual({ position: "3" });
   });
+
+  // -----------------------------------------------------------------------
+  // Freeform-style edge cases
+  // -----------------------------------------------------------------------
+
+  it("URL with query params stays intact as single token", () => {
+    const params: CommandParam[] = [
+      { name: "url", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("https://youtube.com/watch?v=abc&t=30", params)).toEqual({
+      url: "https://youtube.com/watch?v=abc&t=30",
+    });
+  });
+
+  it("URL without protocol prefix stays intact", () => {
+    const params: CommandParam[] = [
+      { name: "url", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("youtube.com/watch?v=abc", params)).toEqual({
+      url: "youtube.com/watch?v=abc",
+    });
+  });
+
+  it("slot ref @s01 strips @ prefix", () => {
+    const params: CommandParam[] = [
+      { name: "slot", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@s01", params)).toEqual({ slot: "s01" });
+  });
+
+  it("handles quoted string as single last param", () => {
+    const params: CommandParam[] = [
+      { name: "prompt", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs('"make it more cinematic"', params)).toEqual({
+      prompt: '"make it more cinematic"',
+    });
+  });
+
+  it("handles asset + multi-word prompt (two string params)", () => {
+    const params: CommandParam[] = [
+      { name: "asset_id", type: "string", required: true, description: "" },
+      { name: "prompt", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-intro a cinematic sunset over mountains", params)).toEqual({
+      asset_id: "vid-intro",
+      prompt: "a cinematic sunset over mountains",
+    });
+  });
+
+  it("handles URL + two timestamps + boolean (4 params)", () => {
+    const params: CommandParam[] = [
+      { name: "url", type: "string", required: true, description: "" },
+      { name: "start_time", type: "string", required: false, description: "" },
+      { name: "end_time", type: "string", required: false, description: "" },
+      { name: "full", type: "boolean", required: false, description: "" },
+    ];
+    expect(parseCommandArgs("https://example.com/vid 1:30 2:45", params)).toEqual({
+      url: "https://example.com/vid",
+      start_time: "1:30",
+      end_time: "2:45",
+    });
+  });
+
+  it("extra tokens beyond param count are ignored", () => {
+    const params: CommandParam[] = [
+      { name: "asset_id", type: "string", required: true, description: "" },
+    ];
+    // Only 1 param but 3 tokens — only first matters (not last-string-param)
+    expect(parseCommandArgs("@vid-foo extra stuff", params)).toEqual({
+      asset_id: "vid-foo extra stuff",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

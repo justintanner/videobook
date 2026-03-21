@@ -15,7 +15,7 @@ const TAG_PATTERN = /@([a-zA-Z0-9]+-[a-zA-Z0-9_-]+)/g;
 
 function parseAssetTags(text: string): string[] {
   const matches = text.matchAll(TAG_PATTERN);
-  return Array.from(matches, (m) => m[1]);
+  return [...new Set(Array.from(matches, (m) => m[1]))];
 }
 
 function stripAssetTags(text: string): string {

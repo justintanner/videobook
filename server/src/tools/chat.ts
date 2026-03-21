@@ -83,7 +83,7 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
       }
 
       const systemPrompt = buildChatRoutingPrompt(slug, historyContext || undefined);
-      const userMessage = `User query: ${prompt}
+      const userMessage = `User query: ${expandedPrompt}
 
 Referenced assets:
 ${JSON.stringify(assetContext, null, 2)}
@@ -126,8 +126,8 @@ Determine which tool to use and what parameters to pass.`;
         return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
       }
 
-      // 7. Apply fixups
-      const params = decision.params ?? {};
+      // 7. Apply fixups (spread to avoid mutating decision.params for logging)
+      const params: Record<string, unknown> = { ...(decision.params ?? {}) };
 
       // Inject project_slug
       params.project_slug = slug;
@@ -179,7 +179,7 @@ Determine which tool to use and what parameters to pass.`;
       if (handlerResult.isError) {
         return handlerResult;
       }
-      return { content: [{ type: "text" as const, text: decision.message }] };
+      return { content: [{ type: "text" as const, text: decision.message ?? "Done." }] };
     },
   };
 }

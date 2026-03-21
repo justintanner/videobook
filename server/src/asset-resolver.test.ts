@@ -42,6 +42,16 @@ describe("parseAssetTags", () => {
     const result = parseAssetTags("@aud-track1 @script-notes");
     expect(result).toEqual(["aud-track1", "script-notes"]);
   });
+
+  it("deduplicates repeated tags", () => {
+    const result = parseAssetTags("compare @img-sunset with @img-sunset");
+    expect(result).toEqual(["img-sunset"]);
+  });
+
+  it("deduplicates while preserving order of first occurrence", () => {
+    const result = parseAssetTags("@vid-a @img-b @vid-a @img-c @img-b");
+    expect(result).toEqual(["vid-a", "img-b", "img-c"]);
+  });
 });
 
 describe("stripAssetTags", () => {
