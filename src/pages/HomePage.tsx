@@ -289,7 +289,7 @@ export function HomePage() {
 
   const slotRefs = useMemo(() => {
     const slots = timeline?.slots;
-    const count = slots && slots.length > 0 ? slots.length : 5;
+    const count = Math.max(slots?.length ?? 0, 5);
     return Array.from({ length: count }, (_, i) => ({
       ref: `@s${String(i + 1).padStart(2, '0')}`,
       assetSlug: slots?.[i]?.slug || '',
