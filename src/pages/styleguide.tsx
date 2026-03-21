@@ -1380,115 +1380,155 @@ const mockManifestFiles = [
 
 function Page10_BackFacePanels() {
   return (
-    <div className="w-full h-full flex gap-8 items-start">
-      {/* Left: /settings tab active */}
-      <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /settings tab</p>
-        <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
-          <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <div className="flex items-center gap-1">
-              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]">/settings</span>
-              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold text-primary opacity-60">/files</span>
-            </div>
-            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
-            </span>
-            <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
-          </div>
-          <div className="flex-1 overflow-hidden bg-black">
-            <RenderSettingsPanel
-              orientations={[
-                { orient: 'landscape', active: true, rendered: true, rendering: false },
-                { orient: 'portrait', active: false, rendered: false, rendering: false },
-                { orient: 'square', active: false, rendered: false, rendering: true },
-              ]}
-              subtitlesEnabled={true}
-              subtitleStyle="tikdance"
-              subtitlePosition="bottom"
-              fontSize="medium"
-              audioVolume={80}
-              audioFadeIn={200}
-              audioFadeOut={500}
-              osgEnabled={true}
-              osgPosition="bottom-right"
-              backgroundMode="blur"
-            />
+    <div className="w-full h-full flex flex-col gap-2">
+      {/* Status strip — ambient telemetry (rec #9) */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-1.5 rounded-[10px]"
+        style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+        <div className="flex items-center gap-3">
+          <Settings className="w-3.5 h-3.5 text-cyan-400/60" />
+          <span className="font-mono text-[12px] uppercase tracking-[0.12em]" style={{ color: '#D8E7FF', opacity: 0.7 }}>@vid-aurora-sky</span>
+          <span className="text-zinc-700">|</span>
+          <span className="font-mono text-[11px]" style={{ color: '#3DFF91' }}>● Synced</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[11px] text-zinc-500">Last render: 2m 14s</span>
+          <div className="w-20 h-[3px] rounded-full bg-zinc-800 overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: '100%', background: 'linear-gradient(90deg, rgba(0,217,255,0.3), rgba(0,217,255,0.7))' }} />
           </div>
         </div>
       </div>
 
-      {/* Right: /files tab active */}
-      <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /files tab</p>
-        <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
-          <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-            <div className="flex items-center gap-1">
-              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold text-primary opacity-60">/settings</span>
-              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]">/files</span>
-            </div>
-            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
-            </span>
-            <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
-          </div>
-          <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
-              {mockManifestFiles.map((f) => {
-                const icon = f.name.endsWith('.json')
-                  ? <FileJson className="w-3.5 h-3.5 shrink-0" />
-                  : f.name.endsWith('.mp4')
-                    ? <Film className="w-3.5 h-3.5 shrink-0" />
-                    : f.name.endsWith('.jpg')
-                      ? <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                      : null;
-                return (
-                  <div
-                    key={f.name}
-                    className={cn(
-                      'h-9 px-3 text-xs font-mono cursor-pointer flex items-center gap-2',
-                      f.name === '.original.json'
-                        ? 'border-l-[3px] border-primary bg-primary/8 text-primary'
-                        : 'border-l-[3px] border-transparent text-muted-foreground hover:bg-white/5',
-                    )}
-                  >
-                    {icon}
-                    <span className="truncate flex-1">{f.name}</span>
-                    <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground/50 shrink-0">{f.size}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex-1 overflow-auto bg-black flex flex-col">
-              {/* Sticky header */}
-              <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-[#071017] border-b border-zinc-800/60">
-                <div className="flex items-center gap-3">
-                  <span className="text-[12px] font-mono font-semibold text-primary">.original.json</span>
-                  <span className="text-[10px] font-mono text-muted-foreground/50">1.2 KB</span>
-                  <span className="text-[10px] font-mono text-muted-foreground/50">Mar 18, 2026</span>
-                </div>
+      {/* Main panels */}
+      <div className="flex-1 flex gap-4 min-h-0">
+        {/* Left: /settings tab active */}
+        <div className="flex-1 flex flex-col gap-1 min-w-0">
+          <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /settings tab</p>
+          <div className="flex-1 flex flex-col rounded-[10px] overflow-hidden relative" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+            <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none z-10" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
+            <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none z-10" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
+
+            {/* Segmented control tab bar (rec #1) */}
+            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
+              <div className="inline-flex rounded-md overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
+                  style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/settings</span>
+                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/files</span>
               </div>
-              {/* Code with line numbers */}
-              <pre className="text-[13px] font-mono leading-relaxed p-4 pl-0">
-                {[
-                  <><span className="text-zinc-500">{'{'}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"upload"'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'12.4'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "resolution"'}</span><span className="text-zinc-500">{': {'}</span></>,
-                  <><span className="text-[#00E5FF]">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1920'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1080'}</span></>,
-                  <><span className="text-zinc-500">{'  },'}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"h264"'}</span><span className="text-zinc-500">{','}</span></>,
-                  <><span className="text-[#00E5FF]">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'30'}</span></>,
-                  <><span className="text-zinc-500">{'}'}</span></>,
-                ].map((line, i) => (
-                  <div key={i} className="flex">
-                    <span className="w-10 text-right pr-4 text-muted-foreground/30 select-none shrink-0 text-[11px]">{i + 1}</span>
-                    <span className="pl-5">{line}</span>
+              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>@vid-aurora-sky</span>
+              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <RenderSettingsPanel
+                orientations={[
+                  { orient: 'landscape', active: true, rendered: true, rendering: false },
+                  { orient: 'portrait', active: false, rendered: false, rendering: false },
+                  { orient: 'square', active: false, rendered: false, rendering: true },
+                ]}
+                subtitlesEnabled={true}
+                subtitleStyle="tikdance"
+                subtitlePosition="bottom"
+                fontSize="medium"
+                audioVolume={80}
+                audioFadeIn={200}
+                audioFadeOut={500}
+                osgEnabled={true}
+                osgPosition="bottom-right"
+                backgroundMode="blur"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right: /files tab active */}
+        <div className="flex-1 flex flex-col gap-1 min-w-0">
+          <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /files tab</p>
+          <div className="flex-1 flex flex-col rounded-[10px] overflow-hidden relative" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+            <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none z-10" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
+            <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none z-10" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
+
+            {/* Segmented control tab bar (rec #1) */}
+            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
+              <div className="inline-flex rounded-md overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/settings</span>
+                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
+                  style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/files</span>
+              </div>
+              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>@vid-aurora-sky</span>
+              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+            </div>
+
+            {/* File browser — dense asset cards (rec #8) */}
+            <div className="flex-1 flex min-h-0">
+              <div className="w-[212px] shrink-0 overflow-y-auto" style={{ borderRight: '1px solid #1F2A36', background: '#0D0F12' }}>
+                {mockManifestFiles.map((f) => {
+                  const ext = f.name.split('.').pop() ?? '';
+                  const icon = f.name.endsWith('.json')
+                    ? <FileJson className="w-3.5 h-3.5 shrink-0" />
+                    : f.name.endsWith('.mp4')
+                      ? <Film className="w-3.5 h-3.5 shrink-0" />
+                      : f.name.endsWith('.jpg')
+                        ? <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                        : null;
+                  const isSelected = f.name === '.original.json';
+                  const badgeColors: Record<string, { bg: string; color: string; border: string }> = {
+                    json: { bg: 'rgba(0,217,255,0.1)', color: '#00D9FF', border: 'rgba(0,217,255,0.25)' },
+                    mp4: { bg: 'rgba(168,85,247,0.1)', color: '#a855f7', border: 'rgba(168,85,247,0.25)' },
+                    jpg: { bg: 'rgba(251,146,60,0.1)', color: '#fb923c', border: 'rgba(251,146,60,0.25)' },
+                  };
+                  const badge = badgeColors[ext];
+                  return (
+                    <div
+                      key={f.name}
+                      className="h-9 px-3 font-mono cursor-pointer flex items-center gap-2 transition-colors"
+                      style={isSelected
+                        ? { borderLeft: '3px solid #00D9FF', background: '#071923', color: '#00D9FF' }
+                        : { borderLeft: '3px solid transparent', color: 'rgba(255,255,255,0.5)' }
+                      }
+                    >
+                      <div className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                        {icon}
+                      </div>
+                      <span className="truncate flex-1 text-[13px]" style={isSelected ? { color: '#D8E7FF' } : undefined}>{f.name}</span>
+                      {badge && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0"
+                          style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{ext.toUpperCase()}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex-1 overflow-auto flex flex-col" style={{ background: '#0D0F12' }}>
+                {/* Sticky header */}
+                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2" style={{ background: '#071923', borderBottom: '1px solid #1F2A36' }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-mono font-semibold" style={{ color: '#00D9FF' }}>.original.json</span>
+                    <span className="text-[11px] font-mono text-muted-foreground/50">1.2 KB</span>
+                    <span className="text-[11px] font-mono text-muted-foreground/50">Mar 18, 2026</span>
                   </div>
-                ))}
-              </pre>
+                </div>
+                {/* Code with line numbers */}
+                <pre className="text-[13px] font-mono leading-relaxed p-4 pl-0" style={{ color: '#D8E7FF' }}>
+                  {[
+                    <><span className="text-zinc-500">{'{'}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"upload"'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'12.4'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "resolution"'}</span><span className="text-zinc-500">{': {'}</span></>,
+                    <><span className="text-[#00E5FF]">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1920'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1080'}</span></>,
+                    <><span className="text-zinc-500">{'  },'}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"h264"'}</span><span className="text-zinc-500">{','}</span></>,
+                    <><span className="text-[#00E5FF]">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'30'}</span></>,
+                    <><span className="text-zinc-500">{'}'}</span></>,
+                  ].map((line, i) => (
+                    <div key={i} className="flex">
+                      <span className="w-10 text-right pr-4 text-muted-foreground/30 select-none shrink-0 text-[11px]">{i + 1}</span>
+                      <span className="pl-5">{line}</span>
+                    </div>
+                  ))}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

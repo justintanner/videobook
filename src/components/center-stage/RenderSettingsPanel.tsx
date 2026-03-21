@@ -59,10 +59,12 @@ const orientationIcons: Record<Orientation, React.ReactNode> = {
 
 function SettingsSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800/60 rounded p-3 space-y-2.5">
+    <div className="relative rounded-[10px] p-3 space-y-2.5" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+      <div className="absolute top-0 left-0 w-4 h-4 pointer-events-none" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
+      <div className="absolute bottom-0 right-0 w-4 h-4 pointer-events-none" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
       <div className="flex items-center gap-2">
         {icon && <span className="text-primary/60">{icon}</span>}
-        <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
+        <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</span>
       </div>
       {children}
     </div>
@@ -71,8 +73,8 @@ function SettingsSection({ title, icon, children }: { title: string; icon?: Reac
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-mono text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between gap-2">
+      <span className="w-[96px] shrink-0 text-[13px] leading-[18px] font-mono text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -94,11 +96,15 @@ function ToggleGroup<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'px-2.5 py-1 rounded border text-[11px] font-mono font-bold',
+            'h-8 min-w-[56px] px-3 rounded-md text-[11px] font-mono font-bold transition-all duration-[120ms]',
             opt.value === value
-              ? 'bg-primary/10 border-primary/50 text-primary'
-              : 'bg-black/40 border-zinc-800/60 text-muted-foreground hover:bg-white/5',
+              ? 'text-black'
+              : 'text-white/50 hover:text-white/70',
           )}
+          style={opt.value === value
+            ? { background: '#00D9FF', boxShadow: '0 0 12px rgba(0,217,255,.3)' }
+            : { background: '#1A1E26', border: '1px solid #2A3040' }
+          }
         >
           {opt.label}
         </button>
@@ -117,18 +123,22 @@ function SegmentedControl<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded border border-zinc-800/60 overflow-hidden">
+    <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid #1F2A36' }}>
       {options.map((opt, i) => (
         <button
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'flex-1 px-2.5 py-1 text-[11px] font-mono font-bold',
-            i > 0 && 'border-l border-zinc-800/60',
+            'flex-1 h-8 px-2.5 text-[11px] font-mono font-bold transition-all duration-[120ms]',
+            i > 0 && 'border-l',
             opt.value === value
-              ? 'bg-primary/10 text-primary'
-              : 'bg-black/40 text-muted-foreground hover:bg-white/5',
+              ? 'text-black'
+              : 'text-muted-foreground hover:text-white/70',
           )}
+          style={opt.value === value
+            ? { background: '#00D9FF', borderColor: '#00D9FF', boxShadow: '0 0 10px rgba(0,217,255,.25)' }
+            : { background: '#0D0F12', borderColor: '#1F2A36' }
+          }
         >
           {opt.label}
         </button>
@@ -153,11 +163,15 @@ function ToggleGrid<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'px-2.5 py-1 rounded border text-[11px] font-mono font-bold text-center',
+            'h-8 rounded-md text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
             opt.value === value
-              ? 'bg-primary/10 border-primary/50 text-primary'
-              : 'bg-black/40 border-zinc-800/60 text-muted-foreground hover:bg-white/5',
+              ? 'text-black'
+              : 'text-muted-foreground hover:text-white/70',
           )}
+          style={opt.value === value
+            ? { background: '#00D9FF', boxShadow: '0 0 10px rgba(0,217,255,.25)' }
+            : { background: '#0D0F12', border: '1px solid #1F2A36' }
+          }
         >
           {opt.label}
         </button>
@@ -168,8 +182,8 @@ function ToggleGrid<T extends string>({
 
 function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
   return (
-    <div className="w-[72px] px-2 py-1 rounded border border-zinc-800/60 bg-black/40 flex items-center justify-end gap-1">
-      <span className="text-xs font-mono font-bold text-foreground/80">{value}</span>
+    <div className="w-[72px] h-8 px-2 rounded-md flex items-center justify-end gap-1" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+      <span className="text-[14px] font-mono font-semibold" style={{ color: '#D8E7FF' }}>{value}</span>
       {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
     </div>
   );
@@ -177,14 +191,14 @@ function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
 
 function ColorSwatch({ value, onChange }: { value: string; onChange?: (v: string) => void }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <input
         type="color"
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-4 h-4 rounded border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
+        className="w-5 h-5 rounded border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
       />
-      <span className="text-[9px] font-mono text-muted-foreground/50">{value}</span>
+      <span className="text-[10px] font-mono" style={{ color: '#D8E7FF', opacity: 0.6 }}>{value}</span>
     </div>
   );
 }
@@ -213,43 +227,44 @@ export function RenderSettingsPanel({
   applyState,
 }: RenderSettingsPanelProps) {
   return (
-    <div className="p-4 flex flex-col gap-3 h-full">
+    <div className="p-4 flex flex-col gap-2 h-full" style={{ background: '#0D0F12' }}>
       {/* Scrollable content area */}
-      <div className="flex-1 overflow-auto space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {/* OUTPUT FORMAT label + Orientations */}
+      <div className="flex-1 overflow-auto space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* OUTPUT FORMAT — visual ratio cards (rec #6) */}
         <div className="space-y-1.5">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-muted-foreground">Output Format</span>
-          <div className="flex h-8 rounded border border-zinc-800/60 overflow-hidden">
-            {orientations.map((o, i) => (
-              <button
-                key={o.orient}
-                onClick={() => onOrientationClick?.(o.orient)}
-                disabled={o.rendering}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 font-mono text-[11px] font-bold',
-                  i > 0 && 'border-l border-zinc-800/60',
-                  o.active
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-black/40 text-muted-foreground hover:bg-white/5',
-                  o.rendering && 'opacity-50',
-                )}
-              >
-                {orientationIcons[o.orient]}
-                <span>{orientationShortLabels[o.orient]}</span>
-                {o.rendered && o.active && <Check className="w-3 h-3 text-primary" />}
-                <span
+          <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">Output Format</span>
+          <div className="flex gap-2">
+            {orientations.map((o) => {
+              const useCaseLabels: Record<Orientation, string> = { landscape: 'Landscape', portrait: 'Story', square: 'Square' };
+              return (
+                <button
+                  key={o.orient}
+                  onClick={() => onOrientationClick?.(o.orient)}
+                  disabled={o.rendering}
                   className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    o.rendered ? 'bg-primary' : 'bg-muted-foreground/20',
+                    'flex-1 h-14 rounded-[10px] flex flex-col items-center justify-center gap-0.5 font-mono transition-all duration-[160ms] relative overflow-hidden',
+                    o.rendering && 'opacity-50',
                   )}
-                />
-              </button>
-            ))}
+                  style={o.active
+                    ? { background: 'rgba(0,217,255,0.06)', border: '1px solid rgba(0,217,255,0.4)', boxShadow: '0 0 16px rgba(0,217,255,.2)' }
+                    : { background: '#0D0F12', border: '1px solid #1F2A36' }
+                  }
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={o.active ? 'text-cyan-400' : 'text-muted-foreground'}>{orientationIcons[o.orient]}</span>
+                    <span className={cn('text-[12px] font-bold', o.active ? 'text-cyan-400' : 'text-muted-foreground')}>{orientationShortLabels[o.orient]}</span>
+                    {o.rendered && <Check className="w-3 h-3 text-cyan-400" />}
+                  </div>
+                  <span className={cn('text-[9px] uppercase tracking-wider', o.active ? 'text-cyan-400/60' : 'text-muted-foreground/40')}>{useCaseLabels[o.orient]}</span>
+                  {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-cyan-400/60" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Settings in 2 columns */}
-        <div className="grid grid-cols-2 gap-3 items-start">
+        <div className="grid grid-cols-2 gap-2 items-start">
           {/* Left column: Subtitles */}
           <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
             <SettingRow label="Enabled">
@@ -299,7 +314,7 @@ export function RenderSettingsPanel({
               <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
             </SettingRow>
             {/* Mini subtitle preview */}
-            <div className="h-6 flex items-center justify-center rounded bg-black/60 border border-zinc-800/60">
+            <div className="h-7 flex items-center justify-center rounded-md" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
               <span
                 className="text-[11px] font-bold font-mono"
                 style={{
@@ -315,7 +330,7 @@ export function RenderSettingsPanel({
           </SettingsSection>
 
           {/* Right column: Audio + OSG + Background */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <SettingsSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
               <SettingRow label="Volume">
                 <NumberDisplay value={audioVolume} />
@@ -368,7 +383,7 @@ export function RenderSettingsPanel({
       </div>
 
       {/* Docked action bar */}
-      <div className="shrink-0 flex items-center justify-end pt-3 border-t border-zinc-800/60">
+      <div className="shrink-0 flex items-center justify-end pt-2 border-t" style={{ borderColor: '#1F2A36' }}>
         <CommandButton
           command="/render"
           icon={<Zap className="w-5 h-5" />}
