@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Info, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, Film } from 'lucide-react';
+import { Settings, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -731,14 +731,14 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{item.slug}</span>
               </span>
 
-              {/* Info button */}
+              {/* Settings button */}
               <button
                 tabIndex={-1}
                 onClick={handleFlipToBack}
-                title="/info"
+                title="/settings"
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
-                <Info className="w-4 h-4 stroke-[2.5]" />
+                <Settings className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
