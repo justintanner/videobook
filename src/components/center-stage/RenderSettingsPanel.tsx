@@ -66,7 +66,7 @@ function SettingsSection({ title, icon, children }: { title: string; icon?: Reac
     <div className="p-3 space-y-2.5" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
       <div className="flex items-center gap-2">
         {icon && <span className="text-primary/60">{icon}</span>}
-        <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</span>
+        <span className="text-[12px] font-mono font-bold tracking-[0.12em] text-muted-foreground">{title}</span>
       </div>
       {children}
     </div>
@@ -365,7 +365,7 @@ export function RenderSettingsPanel({
         <div className="grid grid-cols-2 gap-2 items-start">
           {/* Left column: Subtitles + Background */}
           <div className="space-y-2">
-            <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
+            <SettingsSection title="/subs" icon={<Type className="w-3.5 h-3.5" />}>
               <SettingRow label="Enabled">
                 <ToggleGroup
                   disabled={disabled}
@@ -418,7 +418,7 @@ export function RenderSettingsPanel({
               </SettingRow>
             </SettingsSection>
 
-            <SettingsSection title="Background" icon={<ImageIcon className="w-3.5 h-3.5" />}>
+            <SettingsSection title="/bg" icon={<ImageIcon className="w-3.5 h-3.5" />}>
               <ToggleGroup
                 disabled={disabled}
                 options={[
@@ -433,7 +433,7 @@ export function RenderSettingsPanel({
 
           {/* Right column: Audio + OSG */}
           <div className="space-y-2">
-            <SettingsSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
+            <SettingsSection title="/audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
               <SettingRow label="Volume">
                 <NumberInput disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
               </SettingRow>
@@ -445,7 +445,7 @@ export function RenderSettingsPanel({
               </SettingRow>
             </SettingsSection>
 
-            <SettingsSection title="OSG" icon={<Tv className="w-3.5 h-3.5" />}>
+            <SettingsSection title="/osg" icon={<Tv className="w-3.5 h-3.5" />}>
               <AssetDropSlot
                 value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
                 onChange={(asset) => {

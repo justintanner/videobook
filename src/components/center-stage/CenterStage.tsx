@@ -13,7 +13,6 @@ import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
 import type { ExecuteButtonState } from '@/components/commands/types';
-import { DEFAULT_RENDER_SETTINGS } from './render-settings-types';
 import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 
@@ -296,15 +295,16 @@ function OrientIndicator({ orient, renders, status }: {
 
 type BackTab = 'settings' | 'files';
 
-function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange, onRender }: {
+function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange, onRender, settings, onSettingsChange }: {
   item: MediaItem;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
   onFlip: (flipped: boolean) => void;
   onSizeChange: (s: ViewerSize) => void;
   onRender?: (settings: RenderSettings) => void;
+  settings: RenderSettings;
+  onSettingsChange: (s: RenderSettings) => void;
 }) {
-  const [settings, setSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [applyState, setApplyState] = useState<ExecuteButtonState | undefined>(undefined);
   const prevRenderingRef = useRef(false);
   const submittedOrientRef = useRef<Orientation | null>(null);
@@ -384,7 +384,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
 
   const handleSubtitleChange = (field: string, value: string | boolean) => {
     const key = subtitleFieldMap[field] ?? field;
-    setSettings(prev => ({ ...prev, [key]: value }));
+    onSettingsChange({ ...settings, [key]: value });
   };
 
   const handleOsgChange = (field: string, value: string | boolean | null) => {
@@ -394,15 +394,15 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       assetSrc: 'osgAssetSrc',
     };
     const key = keyMap[field] ?? field;
-    setSettings(prev => ({ ...prev, [key]: value }));
+    onSettingsChange({ ...settings, [key]: value });
   };
 
   const handleAudioChange = (field: string, value: number) => {
-    setSettings(prev => ({ ...prev, [field]: value }));
+    onSettingsChange({ ...settings, [field]: value });
   };
 
   const handleBackgroundChange = (mode: 'blur' | 'black') => {
-    setSettings(prev => ({ ...prev, backgroundMode: mode }));
+    onSettingsChange({ ...settings, backgroundMode: mode });
   };
 
   return (
@@ -617,7 +617,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -631,6 +631,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClearPendingFilePosition?: () => void;
   pendingBackTab?: BackTab | null;
   onClearPendingBackTab?: () => void;
+  settings: RenderSettings;
+  onSettingsChange: (s: RenderSettings) => void;
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
@@ -901,6 +903,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   onFlip={onFlippedChange}
                   onSizeChange={onSizeChange}
                   onRender={onRender}
+                  settings={settings}
+                  onSettingsChange={onSettingsChange}
                 />
               </div>
             ) : (

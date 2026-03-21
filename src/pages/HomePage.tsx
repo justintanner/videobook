@@ -34,6 +34,8 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
+import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settings-types';
+import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
@@ -59,6 +61,7 @@ export function HomePage() {
   const [viewerFlipped, setViewerFlipped] = useState(false);
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | null>(null);
+  const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -219,7 +222,7 @@ export function HomePage() {
     await setRenderOrientation(projectSlug, orient);
   }, [projectSlug, setRenderOrientation]);
 
-  const handleRender = useCallback(async (settings?: import('@/components/center-stage/render-settings-types').RenderSettings) => {
+  const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
     await renderAsset(activeSelection.id, projectSlug, settings);
   }, [projectSlug, activeSelection, renderAsset]);
@@ -298,6 +301,67 @@ export function HomePage() {
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
+  const applySubsSetting = useCallback((field: string, value: string) => {
+    setRenderSettings(prev => {
+      switch (field) {
+        case 'on': return { ...prev, subtitlesEnabled: true };
+        case 'off': return { ...prev, subtitlesEnabled: false };
+        case 'style': {
+          if (value === 'tikdance' || value === 'highlight') return { ...prev, subtitleStyle: value };
+          return prev;
+        }
+        case 'position': {
+          const posMap: Record<string, 'top' | 'middle' | 'bottom'> = { top: 'top', mid: 'middle', middle: 'middle', bottom: 'bottom' };
+          const pos = posMap[value];
+          return pos ? { ...prev, subtitlePosition: pos } : prev;
+        }
+        case 'size': {
+          const sizeMap: Record<string, 'small' | 'medium' | 'large'> = { s: 'small', m: 'medium', l: 'large', small: 'small', medium: 'medium', large: 'large' };
+          const sz = sizeMap[value];
+          return sz ? { ...prev, fontSize: sz } : prev;
+        }
+        case 'color': return { ...prev, textColor: value };
+        case 'highlight': return { ...prev, highlightColor: value };
+        default: return prev;
+      }
+    });
+  }, []);
+
+  const applyAudioSetting = useCallback((field: string, value: string) => {
+    const num = Math.max(0, parseInt(value, 10) || 0);
+    setRenderSettings(prev => {
+      switch (field) {
+        case 'volume': return { ...prev, audioVolume: Math.min(num, 100) };
+        case 'fade-in': return { ...prev, audioFadeIn: num };
+        case 'fade-out': return { ...prev, audioFadeOut: num };
+        default: return prev;
+      }
+    });
+  }, []);
+
+  const applyOsgSetting = useCallback((field: string, value: string) => {
+    setRenderSettings(prev => {
+      if (field === 'position') {
+        const posMap: Record<string, RenderSettings['osgPosition']> = {
+          tl: 'top-left', tr: 'top-right', bl: 'bottom-left', br: 'bottom-right',
+          'top-left': 'top-left', 'top-right': 'top-right', 'bottom-left': 'bottom-left', 'bottom-right': 'bottom-right',
+        };
+        const pos = posMap[value];
+        return pos ? { ...prev, osgPosition: pos } : prev;
+      }
+      if (field === 'clear') {
+        return { ...prev, osgAssetId: null, osgAssetSrc: null };
+      }
+      // field starts with @ — treat as asset id
+      if (field.startsWith('@')) {
+        const assetId = field.slice(1);
+        const item = mediaItems.find(m => m.id === assetId);
+        return { ...prev, osgAssetId: assetId, osgAssetSrc: item?.filePath ?? null };
+      }
+      return prev;
+    });
+  }, [mediaItems]);
+
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
@@ -315,7 +379,29 @@ export function HomePage() {
       setPendingFilePosition(pos);
     },
     viewer_show_settings: () => { setPendingBackTab('settings'); setViewerFlipped(true); },
-  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange]);
+    settings_subs: (field: string, value: string) => {
+      applySubsSetting(field, value);
+      setPendingBackTab('settings');
+      setViewerFlipped(true);
+    },
+    settings_audio: (field: string, value: string) => {
+      applyAudioSetting(field, value);
+      setPendingBackTab('settings');
+      setViewerFlipped(true);
+    },
+    settings_bg: (mode: string) => {
+      if (mode === 'blur' || mode === 'black') {
+        setRenderSettings(prev => ({ ...prev, backgroundMode: mode }));
+      }
+      setPendingBackTab('settings');
+      setViewerFlipped(true);
+    },
+    settings_osg: (field: string, value: string) => {
+      applyOsgSetting(field, value);
+      setPendingBackTab('settings');
+      setViewerFlipped(true);
+    },
+  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
     <MountKeyProvider>
@@ -413,7 +499,7 @@ export function HomePage() {
                     callTool={callTool}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}

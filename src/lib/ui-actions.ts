@@ -11,6 +11,10 @@ export interface UiActionCallbacks {
   viewer_toggle_info: () => void;
   viewer_focus_file: (position: number) => void;
   viewer_show_settings: () => void;
+  settings_subs: (field: string, value: string) => void;
+  settings_audio: (field: string, value: string) => void;
+  settings_bg: (mode: string) => void;
+  settings_osg: (field: string, value: string) => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;
@@ -39,6 +43,18 @@ export function executeUiAction(
       break;
     case 'viewer_focus_file':
       (fn as UiActionCallbacks['viewer_focus_file'])(parseInt(ctx.args.position, 10) || 1);
+      break;
+    case 'settings_subs':
+      (fn as UiActionCallbacks['settings_subs'])(ctx.args.field ?? '', ctx.args.value ?? '');
+      break;
+    case 'settings_audio':
+      (fn as UiActionCallbacks['settings_audio'])(ctx.args.field ?? '', ctx.args.value ?? '');
+      break;
+    case 'settings_bg':
+      (fn as UiActionCallbacks['settings_bg'])(ctx.args.mode ?? '');
+      break;
+    case 'settings_osg':
+      (fn as UiActionCallbacks['settings_osg'])(ctx.args.field ?? '', ctx.args.value ?? '');
       break;
     default:
       // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info
