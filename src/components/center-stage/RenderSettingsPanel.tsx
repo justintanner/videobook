@@ -59,9 +59,7 @@ const orientationIcons: Record<Orientation, React.ReactNode> = {
 
 function SettingsSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="relative rounded-[10px] p-3 space-y-2.5" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-      <div className="absolute top-0 left-0 w-4 h-4 pointer-events-none" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
-      <div className="absolute bottom-0 right-0 w-4 h-4 pointer-events-none" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
+    <div className="p-3 space-y-2.5" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
       <div className="flex items-center gap-2">
         {icon && <span className="text-primary/60">{icon}</span>}
         <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</span>
@@ -96,7 +94,7 @@ function ToggleGroup<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'h-8 min-w-[56px] px-3 rounded-md text-[11px] font-mono font-bold transition-all duration-[120ms]',
+            'h-8 min-w-[56px] px-3 text-[11px] font-mono font-bold transition-all duration-[120ms]',
             opt.value === value
               ? 'text-black'
               : 'text-white/50 hover:text-white/70',
@@ -123,7 +121,7 @@ function SegmentedControl<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid #1F2A36' }}>
+    <div className="flex overflow-hidden" style={{ border: '1px solid #1F2A36' }}>
       {options.map((opt, i) => (
         <button
           key={opt.value}
@@ -163,7 +161,7 @@ function ToggleGrid<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'h-8 rounded-md text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
+            'h-8 text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
             opt.value === value
               ? 'text-black'
               : 'text-muted-foreground hover:text-white/70',
@@ -182,7 +180,7 @@ function ToggleGrid<T extends string>({
 
 function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
   return (
-    <div className="w-[72px] h-8 px-2 rounded-md flex items-center justify-end gap-1" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+    <div className="w-[72px] h-8 px-2 flex items-center justify-end gap-1" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
       <span className="text-[14px] font-mono font-semibold" style={{ color: '#D8E7FF' }}>{value}</span>
       {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
     </div>
@@ -196,7 +194,7 @@ function ColorSwatch({ value, onChange }: { value: string; onChange?: (v: string
         type="color"
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-5 h-5 rounded border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
+        className="w-5 h-5 border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
       />
       <span className="text-[10px] font-mono" style={{ color: '#D8E7FF', opacity: 0.6 }}>{value}</span>
     </div>
@@ -242,7 +240,7 @@ export function RenderSettingsPanel({
                   onClick={() => onOrientationClick?.(o.orient)}
                   disabled={o.rendering}
                   className={cn(
-                    'flex-1 h-14 rounded-[10px] flex flex-col items-center justify-center gap-0.5 font-mono transition-all duration-[160ms] relative overflow-hidden',
+                    'flex-1 h-14 flex flex-col items-center justify-center gap-0.5 font-mono transition-all duration-[160ms] relative overflow-hidden',
                     o.rendering && 'opacity-50',
                   )}
                   style={o.active
@@ -256,7 +254,7 @@ export function RenderSettingsPanel({
                     {o.rendered && <Check className="w-3 h-3 text-cyan-400" />}
                   </div>
                   <span className={cn('text-[9px] uppercase tracking-wider', o.active ? 'text-cyan-400/60' : 'text-muted-foreground/40')}>{useCaseLabels[o.orient]}</span>
-                  {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-cyan-400/60" />}
+                  {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400/60" />}
                 </button>
               );
             })}
@@ -314,7 +312,7 @@ export function RenderSettingsPanel({
               <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
             </SettingRow>
             {/* Mini subtitle preview */}
-            <div className="h-7 flex items-center justify-center rounded-md" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+            <div className="h-7 flex items-center justify-center" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
               <span
                 className="text-[11px] font-bold font-mono"
                 style={{

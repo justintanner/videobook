@@ -1380,36 +1380,14 @@ const mockManifestFiles = [
 
 function Page10_BackFacePanels() {
   return (
-    <div className="w-full h-full flex flex-col gap-2">
-      {/* Status strip — ambient telemetry (rec #9) */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-1.5 rounded-[10px]"
-        style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-        <div className="flex items-center gap-3">
-          <Settings className="w-3.5 h-3.5 text-cyan-400/60" />
-          <span className="font-mono text-[12px] uppercase tracking-[0.12em]" style={{ color: '#D8E7FF', opacity: 0.7 }}>@vid-aurora-sky</span>
-          <span className="text-zinc-700">|</span>
-          <span className="font-mono text-[11px]" style={{ color: '#3DFF91' }}>● Synced</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-[11px] text-zinc-500">Last render: 2m 14s</span>
-          <div className="w-20 h-[3px] rounded-full bg-zinc-800 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: '100%', background: 'linear-gradient(90deg, rgba(0,217,255,0.3), rgba(0,217,255,0.7))' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Main panels */}
-      <div className="flex-1 flex gap-4 min-h-0">
+    <div className="w-full h-full flex gap-4">
         {/* Left: /settings tab active */}
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /settings tab</p>
-          <div className="flex-1 flex flex-col rounded-[10px] overflow-hidden relative" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-            <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none z-10" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
-            <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none z-10" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
-
-            {/* Segmented control tab bar (rec #1) */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+            {/* Segmented control tab bar */}
             <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
-              <div className="inline-flex rounded-md overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
                 <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
                   style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/settings</span>
                 <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/files</span>
@@ -1442,13 +1420,10 @@ function Page10_BackFacePanels() {
         {/* Right: /files tab active */}
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /files tab</p>
-          <div className="flex-1 flex flex-col rounded-[10px] overflow-hidden relative" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-            <div className="absolute top-0 left-0 w-5 h-5 pointer-events-none z-10" style={{ borderTop: '2px solid rgba(0,217,255,0.35)', borderLeft: '2px solid rgba(0,217,255,0.35)', borderRadius: '10px 0 0 0' }} />
-            <div className="absolute bottom-0 right-0 w-5 h-5 pointer-events-none z-10" style={{ borderBottom: '2px solid rgba(0,217,255,0.35)', borderRight: '2px solid rgba(0,217,255,0.35)', borderRadius: '0 0 10px 0' }} />
-
-            {/* Segmented control tab bar (rec #1) */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+            {/* Segmented control tab bar */}
             <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
-              <div className="inline-flex rounded-md overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
                 <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/settings</span>
                 <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
                   style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/files</span>
@@ -1485,12 +1460,12 @@ function Page10_BackFacePanels() {
                         : { borderLeft: '3px solid transparent', color: 'rgba(255,255,255,0.5)' }
                       }
                     >
-                      <div className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      <div className="w-5 h-5 flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.04)' }}>
                         {icon}
                       </div>
                       <span className="truncate flex-1 text-[13px]" style={isSelected ? { color: '#D8E7FF' } : undefined}>{f.name}</span>
                       {badge && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0"
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase shrink-0"
                           style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{ext.toUpperCase()}</span>
                       )}
                     </div>
@@ -1532,7 +1507,6 @@ function Page10_BackFacePanels() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
