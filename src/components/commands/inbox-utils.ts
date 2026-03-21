@@ -9,7 +9,7 @@ export function getCardOrientation(width: number | null | undefined, height: num
 }
 
 export function getCardWidthClass(orientation: Orientation): string {
-  if (orientation === 'portrait') return 'w-[160px]';
+  if (orientation === 'portrait') return 'min-w-[220px] w-[220px]';
   if (orientation === 'square') return 'w-[220px]';
   return 'w-[300px]';
 }

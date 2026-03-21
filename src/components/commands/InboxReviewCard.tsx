@@ -89,7 +89,6 @@ export function InboxReviewCard({
             ref={videoRef}
             src={video.filePath}
             loop={false}
-            muted
             playsInline
             onEnded={() => onVideoEnded(video.id)}
             className="w-full h-full object-cover"
@@ -128,19 +127,19 @@ export function InboxReviewCard({
           onClick={() => onReject(video)}
           disabled={isExiting}
           aria-label={`Reject ${video.slug}`}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-r border-border/50"
+          className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-mono font-bold tracking-wider text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-r border-border/50"
         >
-          <X className="w-3.5 h-3.5" />
           /reject
+          <X className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={() => onApprove(video)}
           disabled={isExiting}
           aria-label={`Approve ${video.slug}`}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-mono font-bold tracking-wider text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-mono font-bold tracking-wider text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Check className="w-3.5 h-3.5" />
           /accept
+          <Check className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
