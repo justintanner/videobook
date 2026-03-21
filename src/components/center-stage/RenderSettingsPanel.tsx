@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square, Plus, Loader2 } from 'lucide-react';
+import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square, Plus, Minus, Loader2 } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -178,11 +179,65 @@ function ToggleGrid<T extends string>({
   );
 }
 
-function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
+function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
+  value: number;
+  onChange?: (v: number) => void;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+
+  const commitDraft = () => {
+    const parsed = parseInt(draft, 10);
+    if (!isNaN(parsed)) onChange?.(clamp(parsed));
+    else setDraft(String(value));
+    setEditing(false);
+  };
+
   return (
-    <div className="w-[72px] h-8 px-2 flex items-center justify-end gap-1" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
-      <span className="text-[14px] font-mono font-semibold" style={{ color: '#D8E7FF' }}>{value}</span>
-      {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
+    <div className="flex items-center gap-0.5">
+      <button
+        onClick={() => onChange?.(clamp(value - step))}
+        className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
+        style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
+      >
+        <Minus className="w-3 h-3" />
+      </button>
+      <div
+        className="w-[56px] h-8 px-1.5 flex items-center justify-end gap-0.5 cursor-text"
+        style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}
+        onClick={() => { setDraft(String(value)); setEditing(true); }}
+      >
+        {editing ? (
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitDraft(); if (e.key === 'Escape') setEditing(false); }}
+            className="w-full h-full bg-transparent text-right text-[14px] font-mono font-semibold outline-none"
+            style={{ color: '#D8E7FF' }}
+          />
+        ) : (
+          <>
+            <span className="text-[14px] font-mono font-semibold" style={{ color: '#D8E7FF' }}>{value}</span>
+            {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
+          </>
+        )}
+      </div>
+      <button
+        onClick={() => onChange?.(clamp(value + step))}
+        className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
+        style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
+      >
+        <Plus className="w-3 h-3" />
+      </button>
     </div>
   );
 }
@@ -216,6 +271,7 @@ export function RenderSettingsPanel({
   audioVolume,
   audioFadeIn,
   audioFadeOut,
+  onAudioChange,
   osgEnabled,
   osgPosition,
   onOsgChange,
@@ -350,13 +406,13 @@ export function RenderSettingsPanel({
           <div className="space-y-2">
             <SettingsSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
               <SettingRow label="Volume">
-                <NumberDisplay value={audioVolume} />
+                <NumberInput value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
               </SettingRow>
               <SettingRow label="Fade In">
-                <NumberDisplay value={audioFadeIn} unit="ms" />
+                <NumberInput value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
               <SettingRow label="Fade Out">
-                <NumberDisplay value={audioFadeOut} unit="ms" />
+                <NumberInput value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
             </SettingsSection>
 

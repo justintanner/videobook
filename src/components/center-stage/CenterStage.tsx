@@ -356,6 +356,10 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleAudioChange = (field: string, value: number) => {
+    setSettings(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleBackgroundChange = (mode: 'blur' | 'black') => {
     setSettings(prev => ({ ...prev, backgroundMode: mode }));
   };
@@ -374,6 +378,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       audioVolume={settings.audioVolume}
       audioFadeIn={settings.audioFadeIn}
       audioFadeOut={settings.audioFadeOut}
+      onAudioChange={handleAudioChange}
       osgEnabled={settings.osgEnabled}
       osgPosition={settings.osgPosition}
       onOsgChange={handleOsgChange}
