@@ -45,8 +45,8 @@ import {
   FolderOpen, X, ChevronDown, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
-  AlertTriangle, AudioLines, Plus, Pencil,
-  Smartphone, Monitor, Square, Play, Loader2, Mic,
+  AudioLines, Plus, Pencil,
+  Play, Loader2, Mic,
   Check, History, RotateCcw,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
@@ -553,31 +553,6 @@ const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0p
 
 
 // ── Player Interface ──
-
-function RatioToggle({ active }: { active: '9:16' | '16:9' | '1:1' }) {
-  const items: Array<{ icon: typeof Monitor; label: string; value: string }> = [
-    { icon: Smartphone, label: '9:16', value: '9:16' },
-    { icon: Monitor, label: '16:9', value: '16:9' },
-    { icon: Square, label: '1:1', value: '1:1' },
-  ];
-  return (
-    <div className="inline-flex gap-0.5 rounded-sm bg-black/60 p-0.5">
-      {items.map(({ icon: Icon, label, value }) => (
-        <button
-          key={value}
-          className={cn(
-            'px-2 py-1 text-[10px] font-mono font-bold tracking-wider rounded-sm transition-all duration-150 flex items-center gap-1',
-            value === active
-              ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(0,255,255,0.25)]'
-              : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-          )}
-        >
-          <Icon className="w-3 h-3" />{label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 
 // ── Gen System ──
@@ -1315,60 +1290,6 @@ function Page7_Trimming() {
   );
 }
 
-// ── Slide 8: Video Editing ──
-
-function ClipViewer({ slug, activeRatio, children }: {
-  slug: string;
-  activeRatio: '9:16' | '16:9' | '1:1';
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col border border-zinc-600/50 rounded-xl overflow-hidden min-h-0">
-      <div className="shrink-0 px-3 py-1 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-        <RatioToggle active={activeRatio} />
-        <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-muted-foreground pointer-events-none">{slug}</span>
-        <button className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors duration-150 rounded hover:bg-black/40">
-          <Settings className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="flex-1 bg-black flex items-center justify-center min-h-0">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Page8_VideoEditing() {
-  return (
-    <div className="w-full h-full flex flex-col gap-2">
-      <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ClipViewer</p>
-      <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 min-h-0 overflow-hidden">
-        {/* Landscape — ready */}
-        <ClipViewer slug="@hero" activeRatio="16:9">
-          <video src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" controls loop muted playsInline />
-        </ClipViewer>
-        {/* Portrait — empty */}
-        <ClipViewer slug="@hero" activeRatio="9:16">
-          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Plus className="w-6 h-6" /><span className="text-xs">Create portrait render</span>
-          </div>
-        </ClipViewer>
-        {/* Square — rendering */}
-        <ClipViewer slug="@hero" activeRatio="1:1">
-          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Rendering square...</span>
-          </div>
-        </ClipViewer>
-        {/* Error */}
-        <ClipViewer slug="@broken" activeRatio="16:9">
-          <div className="flex flex-col items-center justify-center gap-1 text-destructive">
-            <AlertTriangle className="w-6 h-6" /><span className="text-xs font-medium">Playback error</span>
-          </div>
-        </ClipViewer>
-      </div>
-    </div>
-  );
-}
 
 // ── Slide 9: Audio System ──
 
@@ -2184,7 +2105,6 @@ const SLIDE_PAGES = [
   Page4_DesignSystem,
   Page5_FormsControls,
   Page6_CenterStage,
-  Page8_VideoEditing,
   Page9_AudioSystem,
   Page10_GenSystem,
   Page11_Workflow,

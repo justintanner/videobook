@@ -81,37 +81,6 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   return null;
 }
 
-function ClipViewerInner({ item, derivedSrc }: {
-  item: MediaItem; derivedSrc: string;
-}) {
-  const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
-
-  return (
-    <video
-      src={derivedSrc}
-      poster={thumbSrc}
-      controls
-      tabIndex={-1}
-      className="w-full h-full object-contain"
-      draggable={false}
-    />
-  );
-}
-
-function ClipViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
-  if (!item.filePath) return null;
-
-  const orientedFile = size === 'landscape' ? 'landscape.mp4'
-    : size === 'portrait' ? 'portrait.mp4'
-    : size === 'square' ? 'square.mp4'
-    : null;
-
-  const derivedSrc = orientedFile
-    ? item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`)
-    : item.filePath;
-
-  return <ClipViewerInner key={`${item.id}-${size}`} item={item} derivedSrc={derivedSrc} />;
-}
 
 function RenderPrompt({ item, orient, onRender }: {
   item: MediaItem;
@@ -173,8 +142,11 @@ function ClipContent({ item, size, onRender }: {
   size: ViewerSize;
   onRender?: () => void;
 }) {
+  if (!item.filePath) return null;
+
   if (size === 'original') {
-    return <ClipViewer item={item} size={size} />;
+    const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
+    return <video key={`${item.id}-${size}`} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
   }
 
   const orient = size as Orientation;
@@ -182,7 +154,12 @@ function ClipContent({ item, size, onRender }: {
   const status = item.status;
 
   if (renders.includes(orient)) {
-    return <ClipViewer item={item} size={size} />;
+    const orientedFile = size === 'landscape' ? 'landscape.mp4'
+      : size === 'portrait' ? 'portrait.mp4'
+      : 'square.mp4';
+    const derivedSrc = item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`);
+    const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
+    return <video key={`${item.id}-${size}`} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
   }
 
   if (status && RENDERING_STATUSES.has(status)) {
