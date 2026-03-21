@@ -770,47 +770,40 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           {/* BACK FACE */}
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
-            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <div className="flex items-center gap-1">
+            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
+              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
                 <button
                   tabIndex={-1}
                   onClick={() => setBackTab('settings')}
-                  className={cn(
-                    'h-9 px-3 rounded text-[13px] font-mono font-semibold transition-colors flex items-center',
-                    backTab === 'settings'
-                      ? 'bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]'
-                      : 'text-primary opacity-60 hover:shadow-[0_0_6px_rgba(0,217,255,0.3)]',
-                  )}
+                  className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
+                  style={backTab === 'settings'
+                    ? { background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }
+                    : { color: 'rgba(255,255,255,0.7)' }
+                  }
                 >
                   /settings
                 </button>
                 <button
                   tabIndex={-1}
                   onClick={() => setBackTab('files')}
-                  className={cn(
-                    'h-9 px-3 rounded text-[13px] font-mono font-semibold transition-colors flex items-center',
-                    backTab === 'files'
-                      ? 'bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]'
-                      : 'text-primary opacity-60 hover:shadow-[0_0_6px_rgba(0,217,255,0.3)]',
-                  )}
+                  className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
+                  style={backTab === 'files'
+                    ? { background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }
+                    : { color: 'rgba(255,255,255,0.7)' }
+                  }
                 >
                   /files
                 </button>
               </div>
 
-              {/* Center slug */}
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{item.slug}</span>
-              </span>
+              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>{item.slug}</span>
 
-              {/* Flip back */}
-              <button
-                tabIndex={-1}
+              <div
+                className="w-6 h-6 flex items-center justify-center text-muted-foreground cursor-pointer"
                 onClick={() => onFlippedChange(false)}
-                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
               >
                 <RotateCcw className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              </div>
             </div>
 
             {/* Back face body */}
