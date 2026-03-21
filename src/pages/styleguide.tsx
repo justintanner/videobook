@@ -1409,7 +1409,8 @@ function Page10_BackFacePanels() {
                 audioVolume={80}
                 audioFadeIn={200}
                 audioFadeOut={500}
-                osgEnabled={true}
+                osgAssetId={null}
+                osgAssetSrc={null}
                 osgPosition="bottom-right"
                 backgroundMode="blur"
               />

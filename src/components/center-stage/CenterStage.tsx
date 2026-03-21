@@ -387,8 +387,13 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleOsgChange = (field: string, value: string | boolean) => {
-    const key = field === 'enabled' ? 'osgEnabled' : field === 'position' ? 'osgPosition' : field;
+  const handleOsgChange = (field: string, value: string | boolean | null) => {
+    const keyMap: Record<string, keyof RenderSettings> = {
+      position: 'osgPosition',
+      assetId: 'osgAssetId',
+      assetSrc: 'osgAssetSrc',
+    };
+    const key = keyMap[field] ?? field;
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
@@ -415,7 +420,8 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       audioFadeIn={settings.audioFadeIn}
       audioFadeOut={settings.audioFadeOut}
       onAudioChange={handleAudioChange}
-      osgEnabled={settings.osgEnabled}
+      osgAssetId={settings.osgAssetId}
+      osgAssetSrc={settings.osgAssetSrc}
       osgPosition={settings.osgPosition}
       onOsgChange={handleOsgChange}
       backgroundMode={settings.backgroundMode}

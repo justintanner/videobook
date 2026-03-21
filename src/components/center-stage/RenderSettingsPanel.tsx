@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square, Plus, Minus, Loader2 } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
+import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
 
@@ -31,9 +32,10 @@ export interface RenderSettingsPanelProps {
   audioFadeOut: number;
   onAudioChange?: (field: string, value: number) => void;
 
-  osgEnabled: boolean;
+  osgAssetId: string | null;
+  osgAssetSrc: string | null;
   osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-  onOsgChange?: (field: string, value: string | boolean) => void;
+  onOsgChange?: (field: string, value: string | boolean | null) => void;
 
   backgroundMode: 'blur' | 'black';
   onBackgroundChange?: (mode: 'blur' | 'black') => void;
@@ -286,7 +288,8 @@ export function RenderSettingsPanel({
   audioFadeIn,
   audioFadeOut,
   onAudioChange,
-  osgEnabled,
+  osgAssetId,
+  osgAssetSrc,
   osgPosition,
   onOsgChange,
   backgroundMode,
@@ -443,17 +446,16 @@ export function RenderSettingsPanel({
             </SettingsSection>
 
             <SettingsSection title="OSG" icon={<Tv className="w-3.5 h-3.5" />}>
-              <SettingRow label="Enabled">
-                <ToggleGroup
-                  disabled={disabled}
-                  options={[
-                    { label: 'ON', value: 'on' },
-                    { label: 'OFF', value: 'off' },
-                  ]}
-                  value={osgEnabled ? 'on' : 'off'}
-                  onChange={(v) => onOsgChange?.('enabled', v === 'on')}
-                />
-              </SettingRow>
+              <AssetDropSlot
+                value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
+                onChange={(asset) => {
+                  onOsgChange?.('assetId', asset?.id ?? null);
+                  onOsgChange?.('assetSrc', asset?.src ?? null);
+                }}
+                acceptTypes={['image']}
+                disabled={disabled}
+                compact
+              />
               <SettingRow label="Position">
                 <ToggleGrid
                   disabled={disabled}

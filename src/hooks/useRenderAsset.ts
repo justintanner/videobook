@@ -27,7 +27,9 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
         args.audio_volume = settings.audioVolume;
         args.audio_fade_in = settings.audioFadeIn;
         args.audio_fade_out = settings.audioFadeOut;
-        args.osg_enabled = settings.osgEnabled;
+        if (settings.osgAssetId) {
+          args.osg_asset_id = settings.osgAssetId;
+        }
         args.osg_position = settings.osgPosition;
         args.background_mode = settings.backgroundMode;
       }

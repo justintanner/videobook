@@ -9,8 +9,8 @@ interface OsgOverlayProps {
 
 export const OsgOverlay: React.FC<OsgOverlayProps> = ({ src, position }) => {
   const { width } = useVideoConfig();
-  const maxSize = Math.round(width * 0.12);
-  const padding = Math.round(width * 0.03);
+  const maxSize = Math.round(width * 0.05);
+  const padding = Math.round(width * 0.02);
 
   const posStyle: React.CSSProperties = {
     position: "absolute",

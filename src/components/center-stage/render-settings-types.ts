@@ -8,7 +8,8 @@ export interface RenderSettings {
   audioVolume: number;
   audioFadeIn: number;
   audioFadeOut: number;
-  osgEnabled: boolean;
+  osgAssetId: string | null;
+  osgAssetSrc: string | null;
   osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   backgroundMode: 'blur' | 'black';
 }
@@ -23,7 +24,8 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   audioVolume: 100,
   audioFadeIn: 150,
   audioFadeOut: 100,
-  osgEnabled: true,
+  osgAssetId: null,
+  osgAssetSrc: null,
   osgPosition: 'top-right',
   backgroundMode: 'blur',
 };

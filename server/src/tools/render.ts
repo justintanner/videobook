@@ -58,10 +58,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         .number()
         .optional()
         .describe("Audio volume percent 0-100 (default: 100)"),
-      osg_enabled: z
-        .boolean()
-        .optional()
-        .describe("Enable on-screen graphic overlay (default: true)"),
       osg_asset_id: z
         .string()
         .optional()
@@ -88,7 +84,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         audio_fade_in = 150,
         audio_fade_out = 100,
         audio_volume = 100,
-        osg_enabled = true,
         osg_asset_id,
         osg_position = "top-right",
         background_mode = "blur",
@@ -104,7 +99,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         audio_fade_in?: number;
         audio_fade_out?: number;
         audio_volume?: number;
-        osg_enabled?: boolean;
         osg_asset_id?: string;
         osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
         background_mode?: "blur" | "black";
@@ -240,7 +234,6 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         audioFadeIn: audio_fade_in,
         audioFadeOut: audio_fade_out,
         audioVolume: audio_volume,
-        osgEnabled: osg_enabled,
         osgImagePath,
         osgPosition: osg_position,
         backgroundMode: background_mode,

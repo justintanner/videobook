@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { ImageIcon, Video, X, Plus } from 'lucide-react';
 
 interface ResolvedAsset {
+  id?: string;
   slug: string;
   src: string;
   thumbnailSrc?: string | null;
@@ -17,9 +18,10 @@ interface AssetDropSlotProps {
   disabled?: boolean;
   acceptTypes?: ('image' | 'video')[];
   emptyIcon?: React.ReactNode;
+  compact?: boolean;
 }
 
-export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon }: AssetDropSlotProps) {
+export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
 
@@ -45,6 +47,7 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
       const data = JSON.parse(e.dataTransfer.getData('application/json'));
       if (data && acceptTypes.includes(data.type)) {
         onChange({
+          id: data.id,
           slug: data.slug,
           src: data.filePath || data.src,
           thumbnailSrc: data.thumbnailSrc,
@@ -64,7 +67,8 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
   return (
     <div
       className={cn(
-        'relative aspect-video overflow-hidden',
+        'relative overflow-hidden',
+        compact ? 'h-10' : 'aspect-video',
         'border-2 transition-all duration-200',
         'bg-black/60',
         // States
@@ -84,8 +88,14 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
 
       {value ? (
         <>
-          {/* Image preview or fallback slug text */}
-          {value.thumbnailSrc || value.src ? (
+          {compact ? (
+            <div className="w-full h-full flex items-center gap-2 px-2 bg-black/80">
+              {(value.thumbnailSrc || value.src) && (
+                <img src={value.thumbnailSrc || value.src} alt={value.slug} draggable={false} className="h-6 w-6 object-contain shrink-0" />
+              )}
+              <span className="text-xs font-mono text-primary/60 truncate">{value.slug}</span>
+            </div>
+          ) : (value.thumbnailSrc || value.src) ? (
             <img
               src={value.thumbnailSrc || value.src}
               alt={value.slug}
