@@ -72,6 +72,7 @@ type RenderProjectPayload = {
   audioFadeIn: number;
   audioFadeOut: number;
   audioVolume: number;
+  osgEnabled: boolean;
   osgImagePath: string | null;
   osgPosition: OsgPosition;
   backgroundMode: BackgroundMode;
@@ -92,6 +93,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
       audioFadeIn,
       audioFadeOut,
       audioVolume,
+      osgEnabled,
       osgImagePath,
       osgPosition,
       backgroundMode,
@@ -238,7 +240,8 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 audioFadeOut,
                 audioVolume,
                 backgroundMode,
-                osgPosition: osgImagePath ? osgPosition : undefined,
+                osgEnabled,
+                osgPosition,
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };
