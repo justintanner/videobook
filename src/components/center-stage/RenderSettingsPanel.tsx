@@ -59,12 +59,10 @@ const orientationIcons: Record<Orientation, React.ReactNode> = {
 
 function SettingsSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="relative bg-[#071017] p-3 space-y-2.5">
-      {/* Radial glow behind title */}
-      <div className="absolute top-0 left-0 right-0 h-8 bg-[radial-gradient(ellipse_at_left,rgba(0,212,255,0.06)_0%,transparent_70%)] pointer-events-none" />
-      <div className="flex items-center gap-2 relative">
+    <div className="bg-zinc-900 border border-zinc-800/60 rounded p-3 space-y-2.5">
+      <div className="flex items-center gap-2">
         {icon && <span className="text-primary/60">{icon}</span>}
-        <span className="text-sm font-mono font-bold uppercase tracking-[0.15em] text-primary/80">{title}</span>
+        <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
       </div>
       {children}
     </div>
@@ -74,7 +72,7 @@ function SettingsSection({ title, icon, children }: { title: string; icon?: Reac
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-[12px] font-mono font-medium text-[#A9B7C6]">{label}</span>
+      <span className="text-xs font-mono text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -96,10 +94,10 @@ function ToggleGroup<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'px-3 py-1.5 rounded border font-mono',
+            'px-2.5 py-1 rounded border text-[11px] font-mono font-bold',
             opt.value === value
-              ? 'text-[13px] font-semibold bg-[#00CFFF]/20 border-[#00CFFF]/60 text-[#00CFFF] shadow-[inset_0_1px_4px_rgba(0,207,255,0.3),0_0_8px_rgba(0,207,255,0.15)]'
-              : 'text-[11px] font-bold bg-[#11161C] border-[#22303A] text-muted-foreground hover:border-primary/30',
+              ? 'bg-primary/10 border-primary/50 text-primary'
+              : 'bg-black/40 border-zinc-800/60 text-muted-foreground hover:bg-white/5',
           )}
         >
           {opt.label}
@@ -119,17 +117,17 @@ function SegmentedControl<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded border border-[#22303A] overflow-hidden">
+    <div className="flex rounded border border-zinc-800/60 overflow-hidden">
       {options.map((opt, i) => (
         <button
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'flex-1 px-3 py-1.5 font-mono transition-colors',
-            i > 0 && 'border-l border-[#22303A]',
+            'flex-1 px-2.5 py-1 text-[11px] font-mono font-bold',
+            i > 0 && 'border-l border-zinc-800/60',
             opt.value === value
-              ? 'text-[13px] font-semibold bg-[#00CFFF]/20 text-[#00CFFF] shadow-[inset_0_1px_4px_rgba(0,207,255,0.3),0_0_8px_rgba(0,207,255,0.15)]'
-              : 'text-[11px] font-bold bg-[#11161C] text-muted-foreground hover:border-primary/30',
+              ? 'bg-primary/10 text-primary'
+              : 'bg-black/40 text-muted-foreground hover:bg-white/5',
           )}
         >
           {opt.label}
@@ -155,10 +153,10 @@ function ToggleGrid<T extends string>({
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'px-3 py-1.5 rounded border font-mono text-center',
+            'px-2.5 py-1 rounded border text-[11px] font-mono font-bold text-center',
             opt.value === value
-              ? 'text-[13px] font-semibold bg-[#00CFFF]/20 border-[#00CFFF]/60 text-[#00CFFF] shadow-[inset_0_1px_4px_rgba(0,207,255,0.3),0_0_8px_rgba(0,207,255,0.15)]'
-              : 'text-[11px] font-bold bg-[#11161C] border-[#22303A] text-muted-foreground hover:border-primary/30',
+              ? 'bg-primary/10 border-primary/50 text-primary'
+              : 'bg-black/40 border-zinc-800/60 text-muted-foreground hover:bg-white/5',
           )}
         >
           {opt.label}
@@ -170,9 +168,9 @@ function ToggleGrid<T extends string>({
 
 function NumberDisplay({ value, unit }: { value: number; unit?: string }) {
   return (
-    <div className="w-[72px] px-2 py-1 rounded border border-white/10 bg-black/40 flex items-center justify-end gap-1">
-      <span className="text-[13px] font-mono font-semibold text-foreground/80">{value}</span>
-      {unit && <span className="text-[9px] font-mono text-muted-foreground/50 bg-white/5 px-1 py-0.5 rounded">{unit}</span>}
+    <div className="w-[72px] px-2 py-1 rounded border border-zinc-800/60 bg-black/40 flex items-center justify-end gap-1">
+      <span className="text-xs font-mono font-bold text-foreground/80">{value}</span>
+      {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
     </div>
   );
 }
@@ -184,9 +182,9 @@ function ColorSwatch({ value, onChange }: { value: string; onChange?: (v: string
         type="color"
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-4 h-4 rounded border border-white/10 bg-transparent cursor-pointer hover:ring-1 hover:ring-white [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
+        className="w-4 h-4 rounded border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0"
       />
-      <span className="text-[9px] font-mono text-foreground/50">{value}</span>
+      <span className="text-[9px] font-mono text-muted-foreground/50">{value}</span>
     </div>
   );
 }
@@ -215,54 +213,34 @@ export function RenderSettingsPanel({
   applyState,
 }: RenderSettingsPanelProps) {
   return (
-    <div className="relative p-4 flex flex-col gap-3 h-full">
-      {/* Grid overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            'linear-gradient(var(--color-primary) 1px, transparent 1px), linear-gradient(90deg, var(--color-primary) 1px, transparent 1px)',
-          backgroundSize: '12px 12px',
-        }}
-      />
-
-      {/* Corner brackets */}
-      <div className="absolute top-1 left-1 w-3 h-3 border-l border-t border-primary/25" />
-      <div className="absolute top-1 right-1 w-3 h-3 border-r border-t border-primary/25" />
-      <div className="absolute bottom-1 left-1 w-3 h-3 border-l border-b border-primary/25" />
-      <div className="absolute bottom-1 right-1 w-3 h-3 border-r border-b border-primary/25" />
-
+    <div className="p-4 flex flex-col gap-3 h-full">
       {/* Scrollable content area */}
       <div className="flex-1 overflow-auto space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* OUTPUT FORMAT label + Orientations */}
         <div className="space-y-1.5">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-[0.15em] text-primary/60">Output Format</span>
-          <div className="flex h-8 rounded border border-[#22303A] overflow-hidden">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-muted-foreground">Output Format</span>
+          <div className="flex h-8 rounded border border-zinc-800/60 overflow-hidden">
             {orientations.map((o, i) => (
               <button
                 key={o.orient}
                 onClick={() => onOrientationClick?.(o.orient)}
                 disabled={o.rendering}
                 className={cn(
-                  'relative flex-1 flex items-center justify-center gap-1.5 font-mono text-[11px] font-bold transition-colors overflow-hidden',
-                  i > 0 && 'border-l border-[#22303A]',
+                  'flex-1 flex items-center justify-center gap-1.5 font-mono text-[11px] font-bold',
+                  i > 0 && 'border-l border-zinc-800/60',
                   o.active
-                    ? 'bg-[#00CFFF]/20 text-[#00CFFF] shadow-[inset_0_1px_4px_rgba(0,207,255,0.3),0_0_8px_rgba(0,207,255,0.15)]'
-                    : 'bg-[#11161C] text-muted-foreground hover:border-primary/30',
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-black/40 text-muted-foreground hover:bg-white/5',
                   o.rendering && 'opacity-50',
                 )}
               >
-                {/* Scanline overlay for active segment */}
-                {o.active && (
-                  <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,255,0.05)_50%)] bg-[length:100%_4px] animate-cyber-scanline pointer-events-none" />
-                )}
-                <span className="relative">{orientationIcons[o.orient]}</span>
-                <span className="relative">{orientationShortLabels[o.orient]}</span>
-                {o.rendered && o.active && <Check className="w-3 h-3 text-[#00CFFF] relative" />}
+                {orientationIcons[o.orient]}
+                <span>{orientationShortLabels[o.orient]}</span>
+                {o.rendered && o.active && <Check className="w-3 h-3 text-primary" />}
                 <span
                   className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0 relative',
-                    o.rendering ? 'bg-primary animate-pulse' : o.rendered ? 'bg-primary' : 'bg-muted-foreground/20',
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    o.rendered ? 'bg-primary' : 'bg-muted-foreground/20',
                   )}
                 />
               </button>
@@ -271,7 +249,7 @@ export function RenderSettingsPanel({
         </div>
 
         {/* Settings in 2 columns */}
-        <div className="grid grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-2 gap-3 items-start">
           {/* Left column: Subtitles */}
           <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
             <SettingRow label="Enabled">
@@ -321,12 +299,11 @@ export function RenderSettingsPanel({
               <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
             </SettingRow>
             {/* Mini subtitle preview */}
-            <div className="h-6 flex items-center justify-center rounded bg-black/60 border border-white/5">
+            <div className="h-6 flex items-center justify-center rounded bg-black/60 border border-zinc-800/60">
               <span
                 className="text-[11px] font-bold font-mono"
                 style={{
                   color: textColor,
-                  textShadow: `0 0 8px ${highlightColor}`,
                   backgroundColor: subtitleStyle === 'highlight' ? highlightColor : 'transparent',
                   padding: subtitleStyle === 'highlight' ? '0 4px' : undefined,
                   borderRadius: subtitleStyle === 'highlight' ? '2px' : undefined,
@@ -391,8 +368,7 @@ export function RenderSettingsPanel({
       </div>
 
       {/* Docked action bar */}
-      <div className="h-[2px] bg-primary/20" />
-      <div className="h-16 shrink-0 flex items-center justify-end px-4 border-t border-primary/15 bg-[#071017]/80">
+      <div className="shrink-0 flex items-center justify-end pt-3 border-t border-zinc-800/60">
         <CommandButton
           command="/render"
           icon={<Zap className="w-5 h-5" />}
