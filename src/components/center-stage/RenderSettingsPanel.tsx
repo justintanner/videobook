@@ -155,13 +155,13 @@ function ToggleGrid<T extends string>({
   onChange?: (value: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1">
+    <div className="grid grid-cols-2 gap-1 w-full">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange?.(opt.value)}
           className={cn(
-            'h-8 text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
+            'h-8 min-w-[56px] text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
             opt.value === value
               ? 'text-black'
               : 'text-muted-foreground hover:text-white/70',
@@ -332,20 +332,6 @@ export function RenderSettingsPanel({
               <SettingRow label="Highlight">
                 <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
               </SettingRow>
-              {/* Mini subtitle preview */}
-              <div className="h-7 flex items-center justify-center" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
-                <span
-                  className="text-[11px] font-bold font-mono"
-                  style={{
-                    color: textColor,
-                    backgroundColor: subtitleStyle === 'highlight' ? highlightColor : 'transparent',
-                    padding: subtitleStyle === 'highlight' ? '0 4px' : undefined,
-                    borderRadius: subtitleStyle === 'highlight' ? '2px' : undefined,
-                  }}
-                >
-                  TikDance
-                </span>
-              </div>
             </SettingsSection>
 
             <SettingsSection title="Background" icon={<ImageIcon className="w-3.5 h-3.5" />}>

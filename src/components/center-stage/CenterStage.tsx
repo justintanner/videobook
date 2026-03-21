@@ -12,6 +12,8 @@ import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
+import { DEFAULT_RENDER_SETTINGS } from './render-settings-types';
+import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
@@ -293,13 +295,16 @@ function OrientIndicator({ orient, renders, status }: {
 
 type BackTab = 'settings' | 'files';
 
-function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange }: {
+function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange, onRender }: {
   item: MediaItem;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
   onFlip: (flipped: boolean) => void;
   onSizeChange: (s: ViewerSize) => void;
+  onRender?: (settings: RenderSettings) => void;
 }) {
+  const [settings, setSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+
   const isClip = item.type === 'video' || item.type === 'final';
   if (!isClip) {
     return (
@@ -332,20 +337,49 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
     rendering: isOrientRendering(status, orient),
   }));
 
+  const subtitleFieldMap: Record<string, keyof RenderSettings> = {
+    enabled: 'subtitlesEnabled',
+    style: 'subtitleStyle',
+    position: 'subtitlePosition',
+    fontSize: 'fontSize',
+    textColor: 'textColor',
+    highlightColor: 'highlightColor',
+  };
+
+  const handleSubtitleChange = (field: string, value: string | boolean) => {
+    const key = subtitleFieldMap[field] ?? field;
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleOsgChange = (field: string, value: string | boolean) => {
+    const key = field === 'enabled' ? 'osgEnabled' : field === 'position' ? 'osgPosition' : field;
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleBackgroundChange = (mode: 'blur' | 'black') => {
+    setSettings(prev => ({ ...prev, backgroundMode: mode }));
+  };
+
   return (
     <RenderSettingsPanel
       orientations={orientationEntries}
       onOrientationClick={handleClick}
-      subtitlesEnabled={true}
-      subtitleStyle="tikdance"
-      subtitlePosition="bottom"
-      fontSize="medium"
-      audioVolume={100}
-      audioFadeIn={150}
-      audioFadeOut={100}
-      osgEnabled={true}
-      osgPosition="top-right"
-      backgroundMode="blur"
+      subtitlesEnabled={settings.subtitlesEnabled}
+      subtitleStyle={settings.subtitleStyle}
+      subtitlePosition={settings.subtitlePosition}
+      fontSize={settings.fontSize}
+      textColor={settings.textColor}
+      highlightColor={settings.highlightColor}
+      onSubtitleChange={handleSubtitleChange}
+      audioVolume={settings.audioVolume}
+      audioFadeIn={settings.audioFadeIn}
+      audioFadeOut={settings.audioFadeOut}
+      osgEnabled={settings.osgEnabled}
+      osgPosition={settings.osgPosition}
+      onOsgChange={handleOsgChange}
+      backgroundMode={settings.backgroundMode}
+      onBackgroundChange={handleBackgroundChange}
+      onApply={() => onRender?.(settings)}
     />
   );
 }
@@ -543,7 +577,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onFlippedChange: (f: boolean) => void;
   renderOrientation: Orientation;
   onChangeOrientation: (orient: Orientation) => void;
-  onRender?: () => void;
+  onRender?: (settings?: RenderSettings) => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
   pendingBackTab?: BackTab | null;
@@ -817,6 +851,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   onChangeOrientation={onChangeOrientation}
                   onFlip={onFlippedChange}
                   onSizeChange={onSizeChange}
+                  onRender={onRender}
                 />
               </div>
             ) : (

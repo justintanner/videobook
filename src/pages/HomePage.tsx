@@ -219,9 +219,9 @@ export function HomePage() {
     await setRenderOrientation(projectSlug, orient);
   }, [projectSlug, setRenderOrientation]);
 
-  const handleRender = useCallback(async () => {
+  const handleRender = useCallback(async (settings?: import('@/components/center-stage/render-settings-types').RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
-    await renderAsset(activeSelection.id, projectSlug);
+    await renderAsset(activeSelection.id, projectSlug, settings);
   }, [projectSlug, activeSelection, renderAsset]);
 
   // Sync on mount + poll every 5s while page is active
