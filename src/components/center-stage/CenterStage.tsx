@@ -307,6 +307,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
   const [settings, setSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [applyState, setApplyState] = useState<ExecuteButtonState | undefined>(undefined);
   const prevRenderingRef = useRef(false);
+  const submittedOrientRef = useRef<Orientation | null>(null);
 
   const isClip = item.type === 'video' || item.type === 'final';
 
@@ -323,17 +324,22 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
 
   const isAnyRendering = orientationEntries.some(o => o.rendering);
 
-  // Track rendering→done transition to flash success
+  // When rendering finishes, flip card to the rendered orientation
   useEffect(() => {
     const wasRendering = prevRenderingRef.current;
     prevRenderingRef.current = isAnyRendering;
 
     if (wasRendering && !isAnyRendering && applyState === 'processing') {
-      const flashTimer = setTimeout(() => setApplyState('success'), 0);
-      const clearTimer = setTimeout(() => setApplyState(undefined), 1200);
-      return () => { clearTimeout(flashTimer); clearTimeout(clearTimer); };
+      const orient = submittedOrientRef.current ?? renderOrientation;
+      submittedOrientRef.current = null;
+      const timer = setTimeout(() => {
+        setApplyState(undefined);
+        onSizeChange(orient);
+        onFlip(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isAnyRendering, applyState]);
+  }, [isAnyRendering, applyState, renderOrientation, onSizeChange, onFlip]);
 
   // Derive processing state when rendering is detected without a local submit
   const effectiveApplyState = applyState ?? (isAnyRendering ? 'processing' : undefined);
@@ -341,6 +347,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
 
   const handleApply = async () => {
     if (!onRender) return;
+    submittedOrientRef.current = renderOrientation;
     setApplyState('submitting');
     await onRender(settings);
     setApplyState('processing');
