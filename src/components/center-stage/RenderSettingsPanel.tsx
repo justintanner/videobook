@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square } from 'lucide-react';
+import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square, Plus, Loader2 } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -228,106 +228,139 @@ export function RenderSettingsPanel({
     <div className="p-4 flex flex-col gap-2 h-full" style={{ background: '#0D0F12' }}>
       {/* Scrollable content area */}
       <div className="flex-1 overflow-auto space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {/* OUTPUT FORMAT — visual ratio cards (rec #6) */}
-        <div className="space-y-1.5">
-          <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">Output Format</span>
-          <div className="flex gap-2">
-            {orientations.map((o) => {
-              const useCaseLabels: Record<Orientation, string> = { landscape: 'Landscape', portrait: 'Story', square: 'Square' };
+        {/* OUTPUT FORMAT — tab bar */}
+        <div className="flex gap-1">
+          {orientations.map((o) => {
+            const addLabels: Record<Orientation, string> = { landscape: '+ LANDSCAPE', portrait: '+ PORTRAIT', square: '+ SQUARE' };
+            const isTab = o.rendered || o.active;
+
+            if (o.rendering) {
+              return (
+                <button
+                  key={o.orient}
+                  disabled
+                  className="h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold text-muted-foreground/40 opacity-50 relative"
+                  style={{ background: '#0D0F12' }}
+                >
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{orientationShortLabels[o.orient]}</span>
+                </button>
+              );
+            }
+
+            if (!isTab) {
               return (
                 <button
                   key={o.orient}
                   onClick={() => onOrientationClick?.(o.orient)}
-                  disabled={o.rendering}
-                  className={cn(
-                    'flex-1 h-14 flex flex-col items-center justify-center gap-0.5 font-mono transition-all duration-[160ms] relative overflow-hidden',
-                    o.rendering && 'opacity-50',
-                  )}
-                  style={o.active
-                    ? { background: 'rgba(0,217,255,0.06)', border: '1px solid rgba(0,217,255,0.4)', boxShadow: '0 0 16px rgba(0,217,255,.2)' }
-                    : { background: '#0D0F12', border: '1px solid #1F2A36' }
-                  }
+                  className="h-8 px-3 flex items-center gap-1 font-mono text-[11px] font-bold text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-[120ms]"
+                  style={{ background: 'transparent' }}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className={o.active ? 'text-cyan-400' : 'text-muted-foreground'}>{orientationIcons[o.orient]}</span>
-                    <span className={cn('text-[12px] font-bold', o.active ? 'text-cyan-400' : 'text-muted-foreground')}>{orientationShortLabels[o.orient]}</span>
-                    {o.rendered && <Check className="w-3 h-3 text-cyan-400" />}
-                  </div>
-                  <span className={cn('text-[9px] uppercase tracking-wider', o.active ? 'text-cyan-400/60' : 'text-muted-foreground/40')}>{useCaseLabels[o.orient]}</span>
-                  {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400/60" />}
+                  <Plus className="w-3 h-3" />
+                  <span>{addLabels[o.orient]}</span>
                 </button>
               );
-            })}
-          </div>
+            }
+
+            return (
+              <button
+                key={o.orient}
+                onClick={() => onOrientationClick?.(o.orient)}
+                className={cn(
+                  'h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
+                  o.active ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                )}
+                style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
+              >
+                {orientationIcons[o.orient]}
+                <span>{orientationShortLabels[o.orient]}</span>
+                {o.rendered && !o.active && <Check className="w-3 h-3 text-cyan-400/60" />}
+                {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Settings in 2 columns */}
+        {/* Settings in 2 columns: Subtitles+Background | Audio+OSG */}
         <div className="grid grid-cols-2 gap-2 items-start">
-          {/* Left column: Subtitles */}
-          <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
-            <SettingRow label="Enabled">
-              <ToggleGroup
+          {/* Left column: Subtitles + Background */}
+          <div className="space-y-2">
+            <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
+              <SettingRow label="Enabled">
+                <ToggleGroup
+                  options={[
+                    { label: 'ON', value: 'on' },
+                    { label: 'OFF', value: 'off' },
+                  ]}
+                  value={subtitlesEnabled ? 'on' : 'off'}
+                  onChange={(v) => onSubtitleChange?.('enabled', v === 'on')}
+                />
+              </SettingRow>
+              <SegmentedControl
                 options={[
-                  { label: 'ON', value: 'on' },
-                  { label: 'OFF', value: 'off' },
+                  { label: 'TikDance', value: 'tikdance' },
+                  { label: 'Highlight', value: 'highlight' },
                 ]}
-                value={subtitlesEnabled ? 'on' : 'off'}
-                onChange={(v) => onSubtitleChange?.('enabled', v === 'on')}
+                value={subtitleStyle}
+                onChange={(v) => onSubtitleChange?.('style', v)}
               />
-            </SettingRow>
-            <SegmentedControl
-              options={[
-                { label: 'TikDance', value: 'tikdance' },
-                { label: 'Highlight', value: 'highlight' },
-              ]}
-              value={subtitleStyle}
-              onChange={(v) => onSubtitleChange?.('style', v)}
-            />
-            <SettingRow label="Position">
-              <ToggleGroup
-                options={[
-                  { label: 'Top', value: 'top' },
-                  { label: 'Mid', value: 'middle' },
-                  { label: 'Bottom', value: 'bottom' },
-                ]}
-                value={subtitlePosition}
-                onChange={(v) => onSubtitleChange?.('position', v)}
-              />
-            </SettingRow>
-            <SettingRow label="Font Size">
-              <ToggleGroup
-                options={[
-                  { label: 'S', value: 'small' },
-                  { label: 'M', value: 'medium' },
-                  { label: 'L', value: 'large' },
-                ]}
-                value={fontSize}
-                onChange={(v) => onSubtitleChange?.('fontSize', v)}
-              />
-            </SettingRow>
-            <SettingRow label="Text Color">
-              <ColorSwatch value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
-            </SettingRow>
-            <SettingRow label="Highlight">
-              <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
-            </SettingRow>
-            {/* Mini subtitle preview */}
-            <div className="h-7 flex items-center justify-center" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
-              <span
-                className="text-[11px] font-bold font-mono"
-                style={{
-                  color: textColor,
-                  backgroundColor: subtitleStyle === 'highlight' ? highlightColor : 'transparent',
-                  padding: subtitleStyle === 'highlight' ? '0 4px' : undefined,
-                  borderRadius: subtitleStyle === 'highlight' ? '2px' : undefined,
-                }}
-              >
-                TikDance
-              </span>
-            </div>
-          </SettingsSection>
+              <SettingRow label="Position">
+                <ToggleGroup
+                  options={[
+                    { label: 'Top', value: 'top' },
+                    { label: 'Mid', value: 'middle' },
+                    { label: 'Bottom', value: 'bottom' },
+                  ]}
+                  value={subtitlePosition}
+                  onChange={(v) => onSubtitleChange?.('position', v)}
+                />
+              </SettingRow>
+              <SettingRow label="Font Size">
+                <ToggleGroup
+                  options={[
+                    { label: 'S', value: 'small' },
+                    { label: 'M', value: 'medium' },
+                    { label: 'L', value: 'large' },
+                  ]}
+                  value={fontSize}
+                  onChange={(v) => onSubtitleChange?.('fontSize', v)}
+                />
+              </SettingRow>
+              <SettingRow label="Text Color">
+                <ColorSwatch value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
+              </SettingRow>
+              <SettingRow label="Highlight">
+                <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
+              </SettingRow>
+              {/* Mini subtitle preview */}
+              <div className="h-7 flex items-center justify-center" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+                <span
+                  className="text-[11px] font-bold font-mono"
+                  style={{
+                    color: textColor,
+                    backgroundColor: subtitleStyle === 'highlight' ? highlightColor : 'transparent',
+                    padding: subtitleStyle === 'highlight' ? '0 4px' : undefined,
+                    borderRadius: subtitleStyle === 'highlight' ? '2px' : undefined,
+                  }}
+                >
+                  TikDance
+                </span>
+              </div>
+            </SettingsSection>
 
-          {/* Right column: Audio + OSG + Background */}
+            <SettingsSection title="Background" icon={<ImageIcon className="w-3.5 h-3.5" />}>
+              <ToggleGroup
+                options={[
+                  { label: 'Blur', value: 'blur' },
+                  { label: 'Black', value: 'black' },
+                ]}
+                value={backgroundMode}
+                onChange={onBackgroundChange}
+              />
+            </SettingsSection>
+          </div>
+
+          {/* Right column: Audio + OSG */}
           <div className="space-y-2">
             <SettingsSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
               <SettingRow label="Volume">
@@ -364,17 +397,6 @@ export function RenderSettingsPanel({
                   onChange={(v) => onOsgChange?.('position', v)}
                 />
               </SettingRow>
-            </SettingsSection>
-
-            <SettingsSection title="Background" icon={<ImageIcon className="w-3.5 h-3.5" />}>
-              <ToggleGroup
-                options={[
-                  { label: 'Blur', value: 'blur' },
-                  { label: 'Black', value: 'black' },
-                ]}
-                value={backgroundMode}
-                onChange={onBackgroundChange}
-              />
             </SettingsSection>
           </div>
         </div>
