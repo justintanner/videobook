@@ -46,7 +46,7 @@ import {
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AudioLines, Plus, Pencil,
   Play, Loader2, Mic,
-  Check, History, RotateCcw,
+  Check, History, RotateCcw, FileJson,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
 
@@ -1387,15 +1387,15 @@ function Page10_BackFacePanels() {
         <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
           <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/settings</span>
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/files</span>
+              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]">/settings</span>
+              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold text-primary opacity-60">/files</span>
             </div>
             <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
             </span>
             <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
           </div>
-          <div className="flex-1 overflow-auto bg-black p-4 space-y-3">
+          <div className="flex-1 overflow-hidden bg-black">
             <RenderSettingsPanel
               orientations={[
                 { orient: 'landscape', active: true, rendered: true, rendering: false },
@@ -1423,8 +1423,8 @@ function Page10_BackFacePanels() {
         <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
           <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/settings</span>
-              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/files</span>
+              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold text-primary opacity-60">/settings</span>
+              <span className="h-9 px-3 inline-flex items-center rounded text-[13px] font-mono font-semibold bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]">/files</span>
             </div>
             <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
@@ -1433,35 +1433,61 @@ function Page10_BackFacePanels() {
           </div>
           <div className="flex-1 flex min-h-0">
             <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
-              {mockManifestFiles.map((f) => (
-                <div
-                  key={f.name}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-mono cursor-pointer border-l-2 flex items-center justify-between',
-                    f.name === '.original.json'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-transparent text-muted-foreground hover:bg-white/5',
-                  )}
-                >
-                  <span className="truncate">{f.name}</span>
-                  <span className="text-[10px] text-muted-foreground/50 ml-2 shrink-0">{f.size}</span>
-                </div>
-              ))}
+              {mockManifestFiles.map((f) => {
+                const icon = f.name.endsWith('.json')
+                  ? <FileJson className="w-3.5 h-3.5 shrink-0" />
+                  : f.name.endsWith('.mp4')
+                    ? <Film className="w-3.5 h-3.5 shrink-0" />
+                    : f.name.endsWith('.jpg')
+                      ? <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                      : null;
+                return (
+                  <div
+                    key={f.name}
+                    className={cn(
+                      'h-9 px-3 text-xs font-mono cursor-pointer flex items-center gap-2',
+                      f.name === '.original.json'
+                        ? 'border-l-[3px] border-primary bg-primary/8 text-primary'
+                        : 'border-l-[3px] border-transparent text-muted-foreground hover:bg-white/5',
+                    )}
+                  >
+                    {icon}
+                    <span className="truncate flex-1">{f.name}</span>
+                    <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground/50 shrink-0">{f.size}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex-1 overflow-auto p-4 bg-black">
-              <pre className="text-xs font-mono leading-relaxed">
-                <span className="text-zinc-500">{'{\n'}</span>
-                <span className="text-cyan-400">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"upload"'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-magenta-400 text-fuchsia-400">{'12.4'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'  "resolution"'}</span><span className="text-zinc-500">{': {\n'}</span>
-                <span className="text-cyan-400">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'1920'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'1080'}</span><span className="text-zinc-500">{'\n'}</span>
-                <span className="text-zinc-500">{'  },\n'}</span>
-                <span className="text-cyan-400">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"h264"'}</span><span className="text-zinc-500">{',\n'}</span>
-                <span className="text-cyan-400">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'30'}</span><span className="text-zinc-500">{'\n'}</span>
-                <span className="text-zinc-500">{'}'}</span>
+            <div className="flex-1 overflow-auto bg-black flex flex-col">
+              {/* Sticky header */}
+              <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-[#071017] border-b border-zinc-800/60">
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-mono font-semibold text-primary">.original.json</span>
+                  <span className="text-[10px] font-mono text-muted-foreground/50">1.2 KB</span>
+                  <span className="text-[10px] font-mono text-muted-foreground/50">Mar 18, 2026</span>
+                </div>
+              </div>
+              {/* Code with line numbers */}
+              <pre className="text-[13px] font-mono leading-relaxed p-4 pl-0">
+                {[
+                  <><span className="text-zinc-500">{'{'}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"upload"'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'12.4'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "resolution"'}</span><span className="text-zinc-500">{': {'}</span></>,
+                  <><span className="text-[#00E5FF]">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1920'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1080'}</span></>,
+                  <><span className="text-zinc-500">{'  },'}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"h264"'}</span><span className="text-zinc-500">{','}</span></>,
+                  <><span className="text-[#00E5FF]">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'30'}</span></>,
+                  <><span className="text-zinc-500">{'}'}</span></>,
+                ].map((line, i) => (
+                  <div key={i} className="flex">
+                    <span className="w-10 text-right pr-4 text-muted-foreground/30 select-none shrink-0 text-[11px]">{i + 1}</span>
+                    <span className="pl-5">{line}</span>
+                  </div>
+                ))}
               </pre>
             </div>
           </div>

@@ -776,10 +776,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   tabIndex={-1}
                   onClick={() => setBackTab('settings')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-xs font-mono font-bold transition-colors',
+                    'h-9 px-3 rounded text-[13px] font-mono font-semibold transition-colors flex items-center',
                     backTab === 'settings'
-                      ? 'text-primary bg-primary/10'
-                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-white/5',
+                      ? 'bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]'
+                      : 'text-primary opacity-60 hover:shadow-[0_0_6px_rgba(0,217,255,0.3)]',
                   )}
                 >
                   /settings
@@ -788,10 +788,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   tabIndex={-1}
                   onClick={() => setBackTab('files')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-xs font-mono font-bold transition-colors',
+                    'h-9 px-3 rounded text-[13px] font-mono font-semibold transition-colors flex items-center',
                     backTab === 'files'
-                      ? 'text-primary bg-primary/10'
-                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-white/5',
+                      ? 'bg-[#00D9FF] text-black shadow-[0_0_8px_rgba(0,217,255,0.6)]'
+                      : 'text-primary opacity-60 hover:shadow-[0_0_6px_rgba(0,217,255,0.3)]',
                   )}
                 >
                   /files
