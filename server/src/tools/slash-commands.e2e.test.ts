@@ -3802,4 +3802,304 @@ describe("slash commands e2e", () => {
       expect(args.asset_id).toBe("aud-track-01");
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Render settings commands — command definitions
+  // -----------------------------------------------------------------------
+  describe("render settings commands", () => {
+    it("/subs has uiAction=settings_subs, onMount=['viewer'], field+value params", () => {
+      const cmd = findCommand("/subs");
+      expect(cmd.uiAction).toBe("settings_subs");
+      expect(cmd.onMount).toContain("viewer");
+      const names = cmd.params.map((p) => p.name);
+      expect(names).toContain("field");
+      expect(names).toContain("value");
+      expect(cmd.params.find((p) => p.name === "field")!.required).toBe(true);
+      expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
+    });
+
+    it("/audio has uiAction=settings_audio, onMount=['viewer'], field+value params", () => {
+      const cmd = findCommand("/audio");
+      expect(cmd.uiAction).toBe("settings_audio");
+      expect(cmd.onMount).toContain("viewer");
+      const names = cmd.params.map((p) => p.name);
+      expect(names).toContain("field");
+      expect(names).toContain("value");
+      expect(cmd.params.find((p) => p.name === "field")!.required).toBe(true);
+      expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
+    });
+
+    it("/bg has uiAction=settings_bg, onMount=['viewer'], mode param", () => {
+      const cmd = findCommand("/bg");
+      expect(cmd.uiAction).toBe("settings_bg");
+      expect(cmd.onMount).toContain("viewer");
+      const names = cmd.params.map((p) => p.name);
+      expect(names).toContain("mode");
+      expect(cmd.params.find((p) => p.name === "mode")!.required).toBe(true);
+    });
+
+    it("/osg has uiAction=settings_osg, onMount=['viewer'], field+value params", () => {
+      const cmd = findCommand("/osg");
+      expect(cmd.uiAction).toBe("settings_osg");
+      expect(cmd.onMount).toContain("viewer");
+      const names = cmd.params.map((p) => p.name);
+      expect(names).toContain("field");
+      expect(names).toContain("value");
+      expect(cmd.params.find((p) => p.name === "field")!.required).toBe(true);
+      expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // /subs different inputs — parse + dispatch
+  // -----------------------------------------------------------------------
+  describe("/subs different inputs", () => {
+    it("/subs on", () => {
+      const args = simulateParse("/subs", "on");
+      expect(args.field).toBe("on");
+      expect(args.value).toBeUndefined();
+    });
+
+    it("/subs off", () => {
+      const args = simulateParse("/subs", "off");
+      expect(args.field).toBe("off");
+      expect(args.value).toBeUndefined();
+    });
+
+    it("/subs style tikdance", () => {
+      const args = simulateParse("/subs", "style tikdance");
+      expect(args.field).toBe("style");
+      expect(args.value).toBe("tikdance");
+    });
+
+    it("/subs style highlight", () => {
+      const args = simulateParse("/subs", "style highlight");
+      expect(args.field).toBe("style");
+      expect(args.value).toBe("highlight");
+    });
+
+    it("/subs position top", () => {
+      const args = simulateParse("/subs", "position top");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("top");
+    });
+
+    it("/subs position mid", () => {
+      const args = simulateParse("/subs", "position mid");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("mid");
+    });
+
+    it("/subs position bottom", () => {
+      const args = simulateParse("/subs", "position bottom");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("bottom");
+    });
+
+    it("/subs size s", () => {
+      const args = simulateParse("/subs", "size s");
+      expect(args.field).toBe("size");
+      expect(args.value).toBe("s");
+    });
+
+    it("/subs size m", () => {
+      const args = simulateParse("/subs", "size m");
+      expect(args.field).toBe("size");
+      expect(args.value).toBe("m");
+    });
+
+    it("/subs size l", () => {
+      const args = simulateParse("/subs", "size l");
+      expect(args.field).toBe("size");
+      expect(args.value).toBe("l");
+    });
+
+    it("/subs color #FF0000", () => {
+      const args = simulateParse("/subs", "color #FF0000");
+      expect(args.field).toBe("color");
+      expect(args.value).toBe("#FF0000");
+    });
+
+    it("/subs highlight #00FF00", () => {
+      const args = simulateParse("/subs", "highlight #00FF00");
+      expect(args.field).toBe("highlight");
+      expect(args.value).toBe("#00FF00");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // /audio different inputs — parse + dispatch
+  // -----------------------------------------------------------------------
+  describe("/audio different inputs", () => {
+    it("/audio volume 80", () => {
+      const args = simulateParse("/audio", "volume 80");
+      expect(args.field).toBe("volume");
+      expect(args.value).toBe("80");
+    });
+
+    it("/audio volume 0", () => {
+      const args = simulateParse("/audio", "volume 0");
+      expect(args.field).toBe("volume");
+      expect(args.value).toBe("0");
+    });
+
+    it("/audio volume 100", () => {
+      const args = simulateParse("/audio", "volume 100");
+      expect(args.field).toBe("volume");
+      expect(args.value).toBe("100");
+    });
+
+    it("/audio fade-in 200", () => {
+      const args = simulateParse("/audio", "fade-in 200");
+      expect(args.field).toBe("fade-in");
+      expect(args.value).toBe("200");
+    });
+
+    it("/audio fade-out 500", () => {
+      const args = simulateParse("/audio", "fade-out 500");
+      expect(args.field).toBe("fade-out");
+      expect(args.value).toBe("500");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // /bg different inputs — parse + dispatch
+  // -----------------------------------------------------------------------
+  describe("/bg different inputs", () => {
+    it("/bg blur", () => {
+      const args = simulateParse("/bg", "blur");
+      expect(args.mode).toBe("blur");
+    });
+
+    it("/bg black", () => {
+      const args = simulateParse("/bg", "black");
+      expect(args.mode).toBe("black");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // /osg different inputs — parse + dispatch
+  // -----------------------------------------------------------------------
+  describe("/osg different inputs", () => {
+    it("/osg position tl", () => {
+      const args = simulateParse("/osg", "position tl");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("tl");
+    });
+
+    it("/osg position tr", () => {
+      const args = simulateParse("/osg", "position tr");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("tr");
+    });
+
+    it("/osg position bl", () => {
+      const args = simulateParse("/osg", "position bl");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("bl");
+    });
+
+    it("/osg position br", () => {
+      const args = simulateParse("/osg", "position br");
+      expect(args.field).toBe("position");
+      expect(args.value).toBe("br");
+    });
+
+    it("/osg clear", () => {
+      const args = simulateParse("/osg", "clear");
+      expect(args.field).toBe("clear");
+      expect(args.value).toBeUndefined();
+    });
+
+    it("/osg @img-logo strips @ prefix", () => {
+      const args = simulateParse("/osg", "@img-logo");
+      expect(args.field).toBe("img-logo");
+      expect(args.value).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Render settings executeUiAction dispatch
+  // -----------------------------------------------------------------------
+  describe("render settings executeUiAction dispatch", () => {
+    // Import inline to avoid adding to the top-level imports
+    let executeUiAction: typeof import("../../../src/lib/ui-actions.js").executeUiAction;
+
+    beforeEach(async () => {
+      const mod = await import("../../../src/lib/ui-actions.js");
+      executeUiAction = mod.executeUiAction;
+    });
+
+    it("settings_subs dispatches (field, value)", () => {
+      let captured: [string, string] | undefined;
+      const map = { settings_subs: (f: string, v: string) => { captured = [f, v]; } };
+      const result = executeUiAction("settings_subs", map, {
+        raw: "style tikdance",
+        args: { field: "style", value: "tikdance" },
+      });
+      expect(result).toBe(true);
+      expect(captured).toEqual(["style", "tikdance"]);
+    });
+
+    it("settings_subs dispatches on/off (value empty)", () => {
+      let captured: [string, string] | undefined;
+      const map = { settings_subs: (f: string, v: string) => { captured = [f, v]; } };
+      executeUiAction("settings_subs", map, {
+        raw: "on",
+        args: { field: "on" },
+      });
+      expect(captured).toEqual(["on", ""]);
+    });
+
+    it("settings_audio dispatches (field, value)", () => {
+      let captured: [string, string] | undefined;
+      const map = { settings_audio: (f: string, v: string) => { captured = [f, v]; } };
+      const result = executeUiAction("settings_audio", map, {
+        raw: "volume 80",
+        args: { field: "volume", value: "80" },
+      });
+      expect(result).toBe(true);
+      expect(captured).toEqual(["volume", "80"]);
+    });
+
+    it("settings_bg dispatches (mode)", () => {
+      let captured: string | undefined;
+      const map = { settings_bg: (m: string) => { captured = m; } };
+      const result = executeUiAction("settings_bg", map, {
+        raw: "blur",
+        args: { mode: "blur" },
+      });
+      expect(result).toBe(true);
+      expect(captured).toBe("blur");
+    });
+
+    it("settings_osg dispatches (field, value)", () => {
+      let captured: [string, string] | undefined;
+      const map = { settings_osg: (f: string, v: string) => { captured = [f, v]; } };
+      const result = executeUiAction("settings_osg", map, {
+        raw: "position tl",
+        args: { field: "position", value: "tl" },
+      });
+      expect(result).toBe(true);
+      expect(captured).toEqual(["position", "tl"]);
+    });
+
+    it("settings_osg dispatches clear (value empty)", () => {
+      let captured: [string, string] | undefined;
+      const map = { settings_osg: (f: string, v: string) => { captured = [f, v]; } };
+      executeUiAction("settings_osg", map, {
+        raw: "clear",
+        args: { field: "clear" },
+      });
+      expect(captured).toEqual(["clear", ""]);
+    });
+
+    it("returns false when action not in map", () => {
+      const result = executeUiAction("settings_subs", {}, {
+        raw: "on",
+        args: { field: "on" },
+      });
+      expect(result).toBe(false);
+    });
+  });
 });
