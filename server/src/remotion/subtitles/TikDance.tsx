@@ -9,6 +9,7 @@ interface TikDanceProps {
   position: SubtitlePosition;
   fontSize: FontSizePreset;
   textColor: string;
+  highlightColor: string;
 }
 
 export const TikDance: React.FC<TikDanceProps> = ({
@@ -16,6 +17,7 @@ export const TikDance: React.FC<TikDanceProps> = ({
   position,
   fontSize,
   textColor,
+  highlightColor,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -88,7 +90,7 @@ export const TikDance: React.FC<TikDanceProps> = ({
                 fontWeight: 900,
                 fontSize: fontPx,
                 lineHeight: 1.2,
-                color: isActive ? "#FACC15" : textColor,
+                color: isActive ? highlightColor : textColor,
                 WebkitTextStroke: "4px black",
                 paintOrder: "stroke fill",
                 textShadow: "2px 2px 4px rgba(0,0,0,0.5)",

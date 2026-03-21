@@ -38,6 +38,7 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
       position={position}
       fontSize={fontSize}
       textColor={textColor}
+      highlightColor={highlightColor}
     />
   );
 };

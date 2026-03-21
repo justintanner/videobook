@@ -265,9 +265,9 @@ function ColorSwatch({ value, onChange, disabled }: { value: string; onChange?: 
         value={value}
         disabled={disabled}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-5 h-5 border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
+        className="w-8 h-8 border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
       />
-      <span className="text-[10px] font-mono" style={{ color: '#D8E7FF', opacity: 0.6 }}>{value}</span>
+      <span className="text-xs font-mono" style={{ color: '#D8E7FF', opacity: 0.6 }}>{value}</span>
     </div>
   );
 }
