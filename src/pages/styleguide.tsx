@@ -36,8 +36,7 @@ import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
-import { CloseButton, GenPanel, ModelSelector } from '@/components/gen/ui';
-import type { ModelOption } from '@/components/gen/types';
+import { CloseButton } from '@/components/gen/ui';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
@@ -555,39 +554,6 @@ const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0p
 // ── Player Interface ──
 
 
-// ── Gen System ──
-
-const genNoop = () => {};
-
-const mockModelOptions: ModelOption[] = [
-  {
-    key: 'veo3_fast',
-    label: 'Veo 3 Fast',
-    tool_name: 'generate_veo_video',
-    description: 'Fast video generation',
-    schema: { type: 'object', properties: {}, required: [] },
-    prefilled_values: {},
-    validation: { valid: true, missing_required: [], warnings: [] },
-  },
-  {
-    key: 'veo3',
-    label: 'Veo 3',
-    tool_name: 'generate_veo_video',
-    description: 'High quality video generation',
-    schema: { type: 'object', properties: {}, required: [] },
-    prefilled_values: {},
-    validation: { valid: true, missing_required: [], warnings: [] },
-  },
-  {
-    key: 'nano_banana',
-    label: 'Nano Banana',
-    tool_name: 'generate_nano_banana_image',
-    description: 'Image generation',
-    schema: { type: 'object', properties: {}, required: [] },
-    prefilled_values: {},
-    validation: { valid: true, missing_required: [], warnings: [] },
-  },
-];
 
 // ── Pending Generations Section ──
 
@@ -1401,63 +1367,24 @@ function Page9_AudioSystem() {
   );
 }
 
-// ── Slide 10: Generation System ──
+// ── Slide 10: Back Face Panels ──
 
-function Page10_GenSystem() {
+const mockManifestFiles = [
+  { name: '.original.json', size: '1.2 KB' },
+  { name: '.render-settings.json', size: '0.8 KB' },
+  { name: 'original.mp4', size: '24.7 MB' },
+  { name: 'landscape.mp4', size: '18.3 MB' },
+  { name: 'portrait.mp4', size: '12.1 MB' },
+  { name: 'thumbnail.jpg', size: '48 KB' },
+];
+
+function Page10_BackFacePanels() {
   return (
-    <div className="w-full h-full flex gap-8">
-      {/* Left: Gen Panel variants */}
-      <div className="flex-1 flex flex-col gap-4 min-h-0">
-        <div className="flex gap-4 h-[220px] shrink-0">
-          <div className="flex-1 flex flex-col gap-1">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — video</p>
-            <div className="flex-1">
-              <GenPanel label="VIDEO_GENERATION" icon={<Film className="w-5 h-5" />} onClose={genNoop} footer={<span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>}>
-                <div className="flex-1 flex items-center justify-center"><span className="font-mono text-xs text-primary/30">FORM_FIELDS</span></div>
-              </GenPanel>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col gap-1">
-            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">GenPanel — image</p>
-            <div className="flex-1">
-              <GenPanel label="IMAGE_GENERATION" icon={<ImageIcon className="w-5 h-5" />} onClose={genNoop} closeDisabled footer={<span className="font-mono text-xs text-primary/40">FOOTER_SLOT</span>}>
-                <div className="flex-1 flex items-center justify-center"><span className="font-mono text-xs text-primary/30">FORM_FIELDS</span></div>
-              </GenPanel>
-            </div>
-          </div>
-        </div>
-        {/* Composed demo */}
-        <div className="flex-1 min-h-0">
-          <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Composed GenPanel</p>
-          <div className="h-[calc(100%-20px)]">
-            <GenPanel label="VIDEO_GENERATION" icon={<Film className="w-5 h-5" />} onClose={genNoop} footer={
-              <div className="flex items-center gap-4">
-                <ModelSelector selectedModelKey="veo3_fast" modelOptions={mockModelOptions} onChange={genNoop} />
-                <div className="flex-1" />
-                <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" state="ready" />
-              </div>
-            }>
-              <div className="flex-1 pl-4 pr-8 py-4 overflow-y-auto">
-                <div className="space-y-4">
-                  <GenField label="Prompt" required actions={<CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />}>
-                    <GenTextarea value="A cinematic drone shot sweeping over a coastal city at golden hour" onChange={genNoop} rows={3} />
-                  </GenField>
-                  <div className="flex flex-wrap gap-x-6 gap-y-3">
-                    <GenField label="Aspect Ratio"><GenToggle value="16:9" onChange={genNoop} options={['16:9', '9:16'] as const} /></GenField>
-                    <GenField label="Duration"><GenToggle value="8" onChange={genNoop} options={['5', '8', '10'] as const} /></GenField>
-                  </div>
-                </div>
-              </div>
-            </GenPanel>
-          </div>
-        </div>
-      </div>
-
-      {/* Right: Flipside Back Face — Full Render Settings */}
-      <div className="w-[700px] shrink-0 flex flex-col gap-1 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /settings tab (full render settings)</p>
-        <div className="flex-1 flex flex-col border border-zinc-600/50 overflow-hidden">
-          {/* Header: tab bar + slug + rotate */}
+    <div className="w-full h-full flex gap-8 items-start">
+      {/* Left: /settings tab active */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /settings tab</p>
+        <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
           <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
             <div className="flex items-center gap-1">
               <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/settings</span>
@@ -1468,9 +1395,7 @@ function Page10_GenSystem() {
             </span>
             <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
           </div>
-          {/* Scrollable body */}
           <div className="flex-1 overflow-auto bg-black p-4 space-y-3">
-
             <RenderSettingsPanel
               orientations={[
                 { orient: 'landscape', active: true, rendered: true, rendering: false },
@@ -1488,7 +1413,57 @@ function Page10_GenSystem() {
               osgPosition="bottom-right"
               backgroundMode="blur"
             />
+          </div>
+        </div>
+      </div>
 
+      {/* Right: /files tab active */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Back Face — /files tab</p>
+        <div className="h-[680px] flex flex-col border border-zinc-600/50 overflow-hidden">
+          <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+            <div className="flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-muted-foreground/50">/settings</span>
+              <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-primary bg-primary/10">/files</span>
+            </div>
+            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="font-mono text-xs font-bold text-muted-foreground">@vid-aurora-sky</span>
+            </span>
+            <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+          </div>
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              {mockManifestFiles.map((f) => (
+                <div
+                  key={f.name}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-mono cursor-pointer border-l-2 flex items-center justify-between',
+                    f.name === '.original.json'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-transparent text-muted-foreground hover:bg-white/5',
+                  )}
+                >
+                  <span className="truncate">{f.name}</span>
+                  <span className="text-[10px] text-muted-foreground/50 ml-2 shrink-0">{f.size}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <pre className="text-xs font-mono leading-relaxed">
+                <span className="text-zinc-500">{'{\n'}</span>
+                <span className="text-cyan-400">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"upload"'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-magenta-400 text-fuchsia-400">{'12.4'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'  "resolution"'}</span><span className="text-zinc-500">{': {\n'}</span>
+                <span className="text-cyan-400">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'1920'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'1080'}</span><span className="text-zinc-500">{'\n'}</span>
+                <span className="text-zinc-500">{'  },\n'}</span>
+                <span className="text-cyan-400">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-green-400">{'"h264"'}</span><span className="text-zinc-500">{',\n'}</span>
+                <span className="text-cyan-400">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-fuchsia-400">{'30'}</span><span className="text-zinc-500">{'\n'}</span>
+                <span className="text-zinc-500">{'}'}</span>
+              </pre>
+            </div>
           </div>
         </div>
       </div>
@@ -2106,7 +2081,7 @@ const SLIDE_PAGES = [
   Page5_FormsControls,
   Page6_CenterStage,
   Page9_AudioSystem,
-  Page10_GenSystem,
+  Page10_BackFacePanels,
   Page11_Workflow,
   Page12_CommandSystem,
   Page13_InboxReview,
