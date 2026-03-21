@@ -12,6 +12,7 @@ import type { MediaItem, ClipState } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
+import type { ExecuteButtonState } from '@/components/commands/types';
 import { DEFAULT_RENDER_SETTINGS } from './render-settings-types';
 import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -304,8 +305,47 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
   onRender?: (settings: RenderSettings) => void;
 }) {
   const [settings, setSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+  const [applyState, setApplyState] = useState<ExecuteButtonState | undefined>(undefined);
+  const prevRenderingRef = useRef(false);
 
   const isClip = item.type === 'video' || item.type === 'final';
+
+  const renders = isClip ? (item.renders ?? []) : [];
+  const status = isClip ? item.status : undefined;
+  const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
+
+  const orientationEntries = allOrientations.map((orient) => ({
+    orient,
+    active: orient === renderOrientation,
+    rendered: renders.includes(orient),
+    rendering: isOrientRendering(status, orient),
+  }));
+
+  const isAnyRendering = orientationEntries.some(o => o.rendering);
+
+  // Track rendering→done transition to flash success
+  useEffect(() => {
+    const wasRendering = prevRenderingRef.current;
+    prevRenderingRef.current = isAnyRendering;
+
+    if (wasRendering && !isAnyRendering && applyState === 'processing') {
+      const flashTimer = setTimeout(() => setApplyState('success'), 0);
+      const clearTimer = setTimeout(() => setApplyState(undefined), 1200);
+      return () => { clearTimeout(flashTimer); clearTimeout(clearTimer); };
+    }
+  }, [isAnyRendering, applyState]);
+
+  // Derive processing state when rendering is detected without a local submit
+  const effectiveApplyState = applyState ?? (isAnyRendering ? 'processing' : undefined);
+  const controlsDisabled = isAnyRendering || applyState === 'submitting';
+
+  const handleApply = async () => {
+    if (!onRender) return;
+    setApplyState('submitting');
+    await onRender(settings);
+    setApplyState('processing');
+  };
+
   if (!isClip) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -313,10 +353,6 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       </div>
     );
   }
-
-  const renders = item.renders ?? [];
-  const status = item.status;
-  const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
 
   const handleClick = (orient: Orientation) => {
     const rendering = isOrientRendering(status, orient);
@@ -329,13 +365,6 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       onFlip(false);
     }
   };
-
-  const orientationEntries = allOrientations.map((orient) => ({
-    orient,
-    active: orient === renderOrientation,
-    rendered: renders.includes(orient),
-    rendering: isOrientRendering(status, orient),
-  }));
 
   const subtitleFieldMap: Record<string, keyof RenderSettings> = {
     enabled: 'subtitlesEnabled',
@@ -384,7 +413,9 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       onOsgChange={handleOsgChange}
       backgroundMode={settings.backgroundMode}
       onBackgroundChange={handleBackgroundChange}
-      onApply={() => onRender?.(settings)}
+      onApply={handleApply}
+      applyState={effectiveApplyState}
+      disabled={controlsDisabled}
     />
   );
 }

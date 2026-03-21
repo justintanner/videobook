@@ -73,6 +73,13 @@ const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> =
   },
 };
 
+const commandStateOverrides: Record<string, Partial<Record<ExecuteButtonState, string>>> = {
+  '/render': {
+    processing: 'rendering',
+    submitting: '/submitting...',
+  },
+};
+
 const variants = {
   default: {
     bg: 'bg-cyan-500/10',
@@ -115,7 +122,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
   const isDisabled = state === 'disabled';
   const isLoading = state != null && ['charging', 'submitting', 'queued', 'processing'].includes(state);
   const isSuccess = state === 'success';
-  const displayCommand = state ? (stateCommands[size][state] ?? command) : command;
+  const displayCommand = state ? (commandStateOverrides[command]?.[state] ?? stateCommands[size][state] ?? command) : command;
 
   let displayIcon = icon;
   if (isLoading) displayIcon = <Loader2 className={cn(s.iconSize, 'animate-spin')} />;

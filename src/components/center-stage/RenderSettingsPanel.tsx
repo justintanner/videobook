@@ -40,6 +40,7 @@ export interface RenderSettingsPanelProps {
 
   onApply?: () => void;
   applyState?: ExecuteButtonState;
+  disabled?: boolean;
 }
 
 // ── Orientation constants ──
@@ -83,16 +84,19 @@ function ToggleGroup<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex gap-1">
+    <div className={cn('flex gap-1', disabled && 'opacity-40 pointer-events-none')}>
       {options.map((opt) => (
         <button
           key={opt.value}
+          disabled={disabled}
           onClick={() => onChange?.(opt.value)}
           className={cn(
             'h-8 min-w-[56px] px-3 text-[11px] font-mono font-bold transition-all duration-[120ms]',
@@ -116,16 +120,19 @@ function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex overflow-hidden" style={{ border: '1px solid #1F2A36' }}>
+    <div className={cn('flex overflow-hidden', disabled && 'opacity-40 pointer-events-none')} style={{ border: '1px solid #1F2A36' }}>
       {options.map((opt, i) => (
         <button
           key={opt.value}
+          disabled={disabled}
           onClick={() => onChange?.(opt.value)}
           className={cn(
             'flex-1 h-8 px-2.5 text-[11px] font-mono font-bold transition-all duration-[120ms]',
@@ -150,16 +157,19 @@ function ToggleGrid<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1 w-full">
+    <div className={cn('grid grid-cols-2 gap-1 w-full', disabled && 'opacity-40 pointer-events-none')}>
       {options.map((opt) => (
         <button
           key={opt.value}
+          disabled={disabled}
           onClick={() => onChange?.(opt.value)}
           className={cn(
             'h-8 min-w-[56px] text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
@@ -179,13 +189,14 @@ function ToggleGrid<T extends string>({
   );
 }
 
-function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
+function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disabled }: {
   value: number;
   onChange?: (v: number) => void;
   unit?: string;
   min?: number;
   max?: number;
   step?: number;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -200,8 +211,9 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
   };
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className={cn('flex items-center gap-0.5', disabled && 'opacity-40 pointer-events-none')}>
       <button
+        disabled={disabled}
         onClick={() => onChange?.(clamp(value - step))}
         className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
         style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
@@ -211,7 +223,7 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
       <div
         className="w-[56px] h-8 px-1.5 flex items-center justify-end gap-0.5 cursor-text"
         style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}
-        onClick={() => { setDraft(String(value)); setEditing(true); }}
+        onClick={() => { if (!disabled) { setDraft(String(value)); setEditing(true); } }}
       >
         {editing ? (
           <input
@@ -232,6 +244,7 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
         )}
       </div>
       <button
+        disabled={disabled}
         onClick={() => onChange?.(clamp(value + step))}
         className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
         style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
@@ -242,12 +255,13 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1 }: {
   );
 }
 
-function ColorSwatch({ value, onChange }: { value: string; onChange?: (v: string) => void }) {
+function ColorSwatch({ value, onChange, disabled }: { value: string; onChange?: (v: string) => void; disabled?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn('flex items-center gap-2', disabled && 'opacity-40 pointer-events-none')}>
       <input
         type="color"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange?.(e.target.value)}
         className="w-5 h-5 border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
       />
@@ -279,6 +293,7 @@ export function RenderSettingsPanel({
   onBackgroundChange,
   onApply,
   applyState,
+  disabled,
 }: RenderSettingsPanelProps) {
   return (
     <div className="p-4 flex flex-col gap-2 h-full" style={{ background: '#0D0F12' }}>
@@ -308,8 +323,12 @@ export function RenderSettingsPanel({
               return (
                 <button
                   key={o.orient}
+                  disabled={disabled}
                   onClick={() => onOrientationClick?.(o.orient)}
-                  className="h-8 px-3 flex items-center gap-1 font-mono text-[11px] font-bold text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-[120ms]"
+                  className={cn(
+                    'h-8 px-3 flex items-center gap-1 font-mono text-[11px] font-bold text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-[120ms]',
+                    disabled && 'opacity-40 pointer-events-none',
+                  )}
                   style={{ background: 'transparent' }}
                 >
                   <Plus className="w-3 h-3" />
@@ -321,10 +340,12 @@ export function RenderSettingsPanel({
             return (
               <button
                 key={o.orient}
+                disabled={disabled}
                 onClick={() => onOrientationClick?.(o.orient)}
                 className={cn(
                   'h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
                   o.active ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                  disabled && 'opacity-40 pointer-events-none',
                 )}
                 style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
               >
@@ -344,6 +365,7 @@ export function RenderSettingsPanel({
             <SettingsSection title="Subtitles" icon={<Type className="w-3.5 h-3.5" />}>
               <SettingRow label="Enabled">
                 <ToggleGroup
+                  disabled={disabled}
                   options={[
                     { label: 'ON', value: 'on' },
                     { label: 'OFF', value: 'off' },
@@ -353,6 +375,7 @@ export function RenderSettingsPanel({
                 />
               </SettingRow>
               <SegmentedControl
+                disabled={disabled}
                 options={[
                   { label: 'TikDance', value: 'tikdance' },
                   { label: 'Highlight', value: 'highlight' },
@@ -362,6 +385,7 @@ export function RenderSettingsPanel({
               />
               <SettingRow label="Position">
                 <ToggleGroup
+                  disabled={disabled}
                   options={[
                     { label: 'Top', value: 'top' },
                     { label: 'Mid', value: 'middle' },
@@ -373,6 +397,7 @@ export function RenderSettingsPanel({
               </SettingRow>
               <SettingRow label="Font Size">
                 <ToggleGroup
+                  disabled={disabled}
                   options={[
                     { label: 'S', value: 'small' },
                     { label: 'M', value: 'medium' },
@@ -383,15 +408,16 @@ export function RenderSettingsPanel({
                 />
               </SettingRow>
               <SettingRow label="Text Color">
-                <ColorSwatch value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
+                <ColorSwatch disabled={disabled} value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
               </SettingRow>
               <SettingRow label="Highlight">
-                <ColorSwatch value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
+                <ColorSwatch disabled={disabled} value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
               </SettingRow>
             </SettingsSection>
 
             <SettingsSection title="Background" icon={<ImageIcon className="w-3.5 h-3.5" />}>
               <ToggleGroup
+                disabled={disabled}
                 options={[
                   { label: 'Blur', value: 'blur' },
                   { label: 'Black', value: 'black' },
@@ -406,19 +432,20 @@ export function RenderSettingsPanel({
           <div className="space-y-2">
             <SettingsSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
               <SettingRow label="Volume">
-                <NumberInput value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
+                <NumberInput disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
               </SettingRow>
               <SettingRow label="Fade In">
-                <NumberInput value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
+                <NumberInput disabled={disabled} value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
               <SettingRow label="Fade Out">
-                <NumberInput value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
+                <NumberInput disabled={disabled} value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
             </SettingsSection>
 
             <SettingsSection title="OSG" icon={<Tv className="w-3.5 h-3.5" />}>
               <SettingRow label="Enabled">
                 <ToggleGroup
+                  disabled={disabled}
                   options={[
                     { label: 'ON', value: 'on' },
                     { label: 'OFF', value: 'off' },
@@ -429,6 +456,7 @@ export function RenderSettingsPanel({
               </SettingRow>
               <SettingRow label="Position">
                 <ToggleGrid
+                  disabled={disabled}
                   options={[
                     { label: 'TL', value: 'top-left' },
                     { label: 'TR', value: 'top-right' },
