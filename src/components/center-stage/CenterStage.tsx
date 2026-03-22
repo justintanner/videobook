@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Settings, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, VideoOff } from 'lucide-react';
+import { Settings, ChevronDown, RotateCcw, RefreshCw, AudioLines, FileText, Monitor, Smartphone, Square, Check, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -503,21 +503,24 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileListPane({ files, selectedFile, onSelectFile, loading }: {
+function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }: {
   files: ManifestFile[];
   selectedFile: string;
   onSelectFile: (name: string) => void;
+  onRefresh: () => void;
   loading: boolean;
 }) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
   return (
     <div className="py-1">
+      <div className="flex items-center justify-end px-3 py-1">
+        <button
+          tabIndex={-1}
+          onClick={onRefresh}
+          className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors"
+        >
+          <RefreshCw className={cn('w-3 h-3 stroke-[2.5]', loading && 'animate-spin')} />
+        </button>
+      </div>
       {files.map((f) => (
         <button
           key={f.name}
@@ -676,7 +679,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
   // Fetch manifest when files tab is active on the back face
   useEffect(() => {
-    if (flipped && backTab === 'files' && manifest === null && !manifestLoading) {
+    if (flipped && backTab === 'files' && !manifestLoading) {
       fetchManifest();
       fetchFileContent('.original.json');
     }
@@ -888,6 +891,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     files={manifest ?? []}
                     selectedFile={selectedFile}
                     onSelectFile={handleSelectFile}
+                    onRefresh={() => { fetchManifest(); fetchFileContent(selectedFile); }}
                     loading={manifestLoading}
                   />
                 </div>
