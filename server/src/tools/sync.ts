@@ -179,7 +179,44 @@ export async function readStoredRenderDefaults(
       return merged;
     }
   }
-  return HARDCODED_DEFAULTS;
+  const recs = await readAnalysisRecommendations(fs, assetId, projectSlug);
+  return { ...HARDCODED_DEFAULTS, ...recs };
+}
+
+const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
+const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
+
+async function readAnalysisRecommendations(
+  fs: ClipfirstFs, assetId: string, projectSlug: string,
+): Promise<Record<string, unknown>> {
+  const result = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
+  if (!result.ok) return {};
+  try {
+    const raw = typeof result.value === "string"
+      ? result.value
+      : new TextDecoder().decode(result.value);
+    const analysis = JSON.parse(raw) as Record<string, unknown>;
+    const recs: Record<string, unknown> = {};
+
+    const subPos = analysis.recommendedSubtitlePosition;
+    if (typeof subPos === "string" && VALID_SUB_POSITIONS.has(subPos)) {
+      recs.position = subPos;
+    }
+
+    const osgPos = analysis.recommendedOsgPosition;
+    if (typeof osgPos === "string" && VALID_OSG_POSITIONS.has(osgPos)) {
+      recs.osgPosition = osgPos;
+    }
+
+    const burned = analysis.burnedInSubtitles as { detected?: boolean } | null;
+    if (burned && burned.detected === true) {
+      recs.subtitlesEnabled = false;
+    }
+
+    return recs;
+  } catch {
+    return {};
+  }
 }
 
 async function findRenderedOrientations(assetDir: string): Promise<string[]> {

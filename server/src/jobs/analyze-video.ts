@@ -19,6 +19,10 @@ const MAX_FRAMES = 15;
 const FALLBACK_ANALYSIS = {
   summary: "", scenes: [], tags: [], mood: "",
   subjects: [], actions: [], setting: "", textOnScreen: [],
+  burnedInSubtitles: null,
+  onScreenGraphic: null,
+  recommendedSubtitlePosition: "bottom",
+  recommendedOsgPosition: "top-right",
 };
 
 const SYSTEM_PROMPT = `You are a video analysis expert. Analyze the provided video frames, metadata, and transcription (if available) to produce a comprehensive JSON analysis.
@@ -31,7 +35,11 @@ Return a JSON object with these fields:
 - "subjects": Array of main subjects/people/objects featured
 - "actions": Array of key actions or events that occur
 - "setting": Description of the environment/location
-- "textOnScreen": Array of any visible text in the frames`;
+- "textOnScreen": Array of any visible text in the frames
+- "burnedInSubtitles": Detect if subtitles or captions are already burned into the video frames. If detected, return an object with "detected": true, "position": one of "top", "middle", or "bottom" indicating where the text appears, and "confidence": "high", "medium", or "low". If no burned-in subtitles are found, return null. Look for persistent text overlays that appear across multiple frames in a consistent position — these are distinct from occasional on-screen titles or graphics.
+- "onScreenGraphic": Detect if there is a watermark, logo, or channel graphic burned into the video. If detected, return an object with "detected": true, "position": one of "top-left", "top-right", "bottom-left", or "bottom-right" indicating the corner where it appears, "description": a brief description of what it is (e.g. "TikTok logo", "channel watermark"), and "confidence": "high", "medium", or "low". If none found, return null.
+- "recommendedSubtitlePosition": Based on what is already on screen, recommend the best position ("top", "middle", or "bottom") for adding subtitle overlays that will not conflict with any detected burned-in subtitles or on-screen graphics. If burned-in subtitles are at the bottom, recommend "top". If nothing is detected, default to "bottom".
+- "recommendedOsgPosition": Based on what is already on screen, recommend the best corner ("top-left", "top-right", "bottom-left", or "bottom-right") for placing an overlay graphic that will not conflict with any detected on-screen graphics. If nothing is detected, default to "top-right".`;
 
 function sampleFrames(frames: string[]): string[] {
   if (frames.length <= MAX_FRAMES) return frames;
