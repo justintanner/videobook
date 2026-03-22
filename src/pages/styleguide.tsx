@@ -40,6 +40,8 @@ import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { CloseButton } from '@/components/gen/ui';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
+import { TimelinePlayer } from '@/components/center-stage/TimelinePlayer';
+import type { TimelinePreviewData } from '@/components/center-stage/TimelinePlayer';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, ChevronDown, Download, Sparkles,
@@ -2112,6 +2114,66 @@ function Page15_GitHistory() {
   );
 }
 
+// ── Slide 16: Timeline Player ──
+
+const timelineMockLandscape: TimelinePreviewData = {
+  compositionWidth: 1920,
+  compositionHeight: 1080,
+  fps: 30,
+  totalDurationInFrames: 750, // 25s
+  slots: Array.from({ length: 3 }, (_, i) => ({ id: `ls-${i}`, src: '', durationInFrames: 250, volume: 100, fadeIn: 0, fadeOut: 0 })),
+  slotOffsets: [0, 250, 500],
+  ready: false,
+};
+
+const timelineMockPortrait: TimelinePreviewData = {
+  compositionWidth: 1080,
+  compositionHeight: 1920,
+  fps: 30,
+  totalDurationInFrames: 480, // 16s
+  slots: Array.from({ length: 2 }, (_, i) => ({ id: `pt-${i}`, src: '', durationInFrames: 240, volume: 100, fadeIn: 0, fadeOut: 0 })),
+  slotOffsets: [0, 240],
+  ready: false,
+};
+
+const timelineMockSquare: TimelinePreviewData = {
+  compositionWidth: 1080,
+  compositionHeight: 1080,
+  fps: 30,
+  totalDurationInFrames: 1110, // 37s
+  slots: Array.from({ length: 4 }, (_, i) => ({ id: `sq-${i}`, src: '', durationInFrames: 277, volume: 100, fadeIn: 0, fadeOut: 0 })),
+  slotOffsets: [0, 277, 554, 831],
+  ready: false,
+};
+
+function Page16_TimelinePlayer() {
+  return (
+    <div className="w-full h-full flex gap-6">
+      {/* Landscape */}
+      <div className="flex-1 flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Landscape</p>
+        <div className="flex-1 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 min-h-0 flex flex-col">
+          <TimelinePlayer previewData={timelineMockLandscape} />
+        </div>
+      </div>
+      {/* Portrait */}
+      <div className="flex-1 flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Portrait</p>
+        <div className="flex-1 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 min-h-0 flex flex-col">
+          <TimelinePlayer previewData={timelineMockPortrait} />
+        </div>
+      </div>
+      {/* Square */}
+      <div className="flex-1 flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Square</p>
+        <div className="flex-1 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 min-h-0 flex flex-col">
+          <TimelinePlayer previewData={timelineMockSquare} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -2129,6 +2191,7 @@ const SLIDE_PAGES = [
   Page13_InboxReview,
   Page14_AssetViewer,
   Page15_GitHistory,
+  Page16_TimelinePlayer,
 ];
 
 // ── Main Styleguide ──
