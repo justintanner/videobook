@@ -1,8 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { registerJobHandler } from "../queue.js";
-import { queue } from "../queue.js";
+import { registerJobHandler, queue } from "../queue.js";
 import { probeVideo, runFfmpeg, extractWaveform } from "../ffmpeg.js";
 import { calculateFrameCount, formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
@@ -24,7 +23,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
 
-    await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration }, projectSlug);
+    await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
@@ -70,19 +69,21 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       width, height, duration, frame_count: frameCount,
     }, projectSlug);
 
+    // Enqueue transcription and analysis immediately
     if (probe.hasAudio) {
-      const jobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
-      await queue.enqueue(jobId, {
+      const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
+      await queue.enqueue(transcribeJobId, {
         type: "transcribe_video_audio",
         videoPath, assetId, assetDir, projectSlug,
       } as unknown as Record<string, unknown>);
-    } else {
-      const jobId = `analyze-video-${assetId}-${Date.now()}`;
-      await queue.enqueue(jobId, {
-        type: "analyze_video",
-        assetId, assetDir, projectSlug, hasTranscription: false,
-      } as unknown as Record<string, unknown>);
     }
+
+    const analyzeJobId = `analyze-video-${assetId}-${Date.now()}`;
+    await queue.enqueue(analyzeJobId, {
+      type: "analyze_video",
+      assetId, assetDir, projectSlug,
+      hasTranscription: false,
+    } as unknown as Record<string, unknown>);
 
     return { success: true, width, height, duration, frame_count: frameCount };
   });

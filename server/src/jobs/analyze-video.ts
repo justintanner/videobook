@@ -134,6 +134,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           ? withFallback(providers)
           : providers[0];
         const result = await chat({
+          model: "gpt-5.4",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userContent },

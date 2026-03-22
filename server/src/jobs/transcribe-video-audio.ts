@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { openai } from "@nakedapi/openai";
-import { registerJobHandler, queue } from "../queue.js";
+import { registerJobHandler } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
 
 type TranscribeVideoAudioPayload = {
@@ -36,12 +36,6 @@ export function registerTranscribeVideoAudioJob(fs: ClipfirstFs): void {
 
     const jsonString = JSON.stringify(result, null, 2);
     await fs.writeFile(assetId, ".analysis.gpt4otrans.json", jsonString, projectSlug);
-
-    const analyzeJobId = `analyze-video-${assetId}-${Date.now()}`;
-    await queue.enqueue(analyzeJobId, {
-      type: "analyze_video",
-      assetId, assetDir, projectSlug, hasTranscription: true,
-    } as unknown as Record<string, unknown>);
 
     return { success: true, text: result.text };
   });
