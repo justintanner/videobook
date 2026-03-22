@@ -292,6 +292,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "isolate_vocals", autoInject: ["project_slug"] },
   },
   {
+    command: "/transcribe",
+    description: "Transcribe audio using ElevenLabs",
+    example: "/transcribe @vid-yt-iran-war-future",
+    category: "action",
+    icon: "Mic",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video or audio asset to transcribe" },
+    ],
+    mcpTool: { tool: "transcribe", autoInject: ["project_slug"] },
+  },
+  {
     command: "/subs",
     description: "Subtitle settings",
     example: "/subs position top",

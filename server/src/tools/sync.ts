@@ -6,7 +6,8 @@ import { readdir, readFile, access } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile, findAudioFile } from "../media-files.js";
+import { readAndAssessDialog } from "../dialog-quality.js";
 import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
@@ -38,6 +39,7 @@ export type SyncResult = {
   failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
+  auto_transcribe: Array<{ assetId: string; jobId: string }>;
 };
 
 async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
@@ -232,7 +234,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [],
+    external_uploads: [], auto_render: [], auto_transcribe: [],
   };
 
   // Single listAssets call, shared by all consumers
@@ -244,11 +246,12 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
     : "landscape";
 
-  // Run all three discovery steps in parallel
-  const [uploads, tasks, renderActions] = await Promise.all([
+  // Run all discovery steps in parallel
+  const [uploads, tasks, renderActions, transcribeActions] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
     findAutoRenderActions(fs, project_slug, assets, orientation),
+    findAutoTranscribeActions(fs, project_slug, assets),
   ]);
 
   // Process external uploads
@@ -295,6 +298,23 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       backgroundMode: "blur",
     });
     result.auto_render.push({ assetId: action.assetId, jobId });
+  }
+
+  // Auto-pipeline: advance whitelisted+analyzed videos through transcription
+  for (const action of transcribeActions) {
+    const jobId = `auto-transcribe-${action.assetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "transcribe",
+      audioPath: action.audioPath,
+      audioFilename: action.audioFilename,
+      tagAudioEvents: true,
+      diarize: true,
+      assetId: action.assetId,
+      assetDir: action.assetDir,
+      projectSlug: project_slug,
+      autoRender: true,
+    } as unknown as Record<string, unknown>);
+    result.auto_transcribe.push({ assetId: action.assetId, jobId });
   }
 
   return result;
@@ -399,6 +419,59 @@ async function findAutoRenderActions(
     })
   );
   return candidates.filter((c): c is RenderAction => c !== null);
+}
+
+type TranscribeAction = {
+  assetId: string;
+  assetDir: string;
+  audioPath: string;
+  audioFilename: string;
+};
+
+async function findAutoTranscribeActions(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assets: AssetEntry[],
+): Promise<TranscribeAction[]> {
+  if (!process.env.KIE_API_KEY) return [];
+
+  const candidates = await Promise.all(
+    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<TranscribeAction | null> => {
+      const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      if (!manifestResult.ok) return null;
+
+      const manifest = manifestResult.value;
+      const files = manifest.files;
+      const fileNames = new Set(files.map((f) => f.name));
+
+      // Must be whitelisted
+      if (!fileNames.has(".whitelisted_at")) return null;
+      // Must have completed analysis
+      if (!fileNames.has(".original.analysis.json")) return null;
+      // Skip if already transcribed
+      if (fileNames.has("elevenlabs.json")) return null;
+      // Skip if transcription already in progress
+      if (fileNames.has(".kie-task.json")) return null;
+      // Skip if locked
+      if (await fs.isLocked(manifest.path)) return null;
+
+      // Must have real dialog
+      const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
+      if (!dialogQuality.hasDialog) return null;
+
+      // Must have an audio file
+      const audioFile = findAudioFile(files, asset.id);
+      if (!audioFile) return null;
+
+      return {
+        assetId: asset.id,
+        assetDir: manifest.path,
+        audioPath: join(manifest.path, audioFile.name),
+        audioFilename: audioFile.name,
+      };
+    })
+  );
+  return candidates.filter((c): c is TranscribeAction => c !== null);
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {

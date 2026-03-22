@@ -39,6 +39,7 @@ describe("sync tool", () => {
     expect(data.failed).toEqual([]);
     expect(data.external_uploads).toEqual([]);
     expect(data.auto_render).toEqual([]);
+    expect(data.auto_transcribe).toEqual([]);
   });
 
   it("sync after creating assets returns result with no errors", async () => {
@@ -294,6 +295,7 @@ describe("performSync", () => {
     expect(result.failed).toEqual([]);
     expect(result.external_uploads).toEqual([]);
     expect(result.auto_render).toEqual([]);
+    expect(result.auto_transcribe).toEqual([]);
   });
 
   it("performSync skips KIE task polling when KIE_API_KEY is not set", async () => {
@@ -422,5 +424,99 @@ describe("performSync — auto-render without transcription gate (RC2)", () => {
     // Should auto-render even without elevenlabs.json
     expect(result.auto_render.length).toBe(1);
     expect(result.auto_render[0].assetId).toBe(assetId);
+  });
+});
+
+describe("performSync — auto-transcribe", () => {
+  let fs: ClipfirstFs;
+  let tempDir: string;
+  let savedKey: string | undefined;
+
+  beforeAll(async () => {
+    await queue.start();
+  });
+
+  afterAll(async () => {
+    await queue.stop();
+  });
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-autotranscribe-test-"));
+    fs = createFsForTest(tempDir);
+    await fs.createProject("test-proj");
+    savedKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+  });
+
+  afterEach(async () => {
+    if (savedKey !== undefined) {
+      process.env.KIE_API_KEY = savedKey;
+    } else {
+      delete process.env.KIE_API_KEY;
+    }
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("auto-transcribes whitelisted+analyzed video with dialog and audio", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "transcribe-candidate", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking about economics",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
+    }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_transcribe.length).toBe(1);
+    expect(result.auto_transcribe[0].assetId).toBe(assetId);
+  });
+
+  it("skips auto-transcribe when elevenlabs.json already exists", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "already-transcribed", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "Hello world this is a test transcription with real dialog content",
+    }));
+    await writeFile(join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_transcribe.length).toBe(0);
+  });
+
+  it("skips auto-transcribe when no dialog detected", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "no-dialog", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "Scenic landscape footage",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "[music]",
+    }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_transcribe.length).toBe(0);
   });
 });
