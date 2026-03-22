@@ -156,6 +156,65 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         info = await ytdlp.getInfoAsync(url) as unknown as InfoResult;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
+
+        // (b2) yt-dlp found no video — fall back to OG image as an image asset
+        if (/no video/i.test(msg)) {
+          const ogImageResult = await fs.readFile(assetId, "original.jpg", projectSlug ?? "");
+          if (!ogImageResult.ok) throw new Error(`No video found and no OG image available: ${msg}`);
+
+          const slug = projectSlug ?? "";
+
+          // Read OG metadata for asset naming and provenance
+          let ogTitle = "image";
+          let ogData: IOGResult | null = null;
+          try {
+            const ogFileResult = await fs.readFile(assetId, ".opengraph.json", slug);
+            if (ogFileResult.ok) {
+              ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
+              if (ogData.ogTitle) ogTitle = ogData.ogTitle;
+            }
+          } catch { /* non-fatal */ }
+
+          const assetName = [sourcePrefix, ogTitle].join(" ");
+          const imgResult = await fs.createAsset("img", assetName, slug);
+          if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
+
+          const imgAssetId = imgResult.value.assetId;
+
+          // Copy OG image and metadata to new img- asset
+          await fs.writeFile(imgAssetId, "original.jpg", ogImageResult.value, slug);
+          try {
+            await fs.copyFile(assetId, ".opengraph.json", imgAssetId, ".opengraph.json", slug);
+          } catch { /* non-fatal */ }
+
+          // Release lock and delete the old vid- asset
+          await fs.releaseLock(assetDir);
+          await fs.deleteAsset(assetId, slug);
+
+          const provenance = {
+            origin: "download",
+            source_url: url,
+            title: ogData?.ogTitle ?? "",
+            uploader: "",
+            description: ogData?.ogDescription ?? "",
+            webpage_url: url,
+            platform: sourcePrefix,
+            thumbnail: "",
+            downloaded_at: new Date().toISOString(),
+          };
+
+          const processJobId = `process-image-${imgAssetId}-${Date.now()}`;
+          await queue.enqueue(processJobId, {
+            type: "process_image",
+            assetId: imgAssetId,
+            projectSlug: slug,
+            extension: ".jpg",
+            provenance,
+          } as unknown as Record<string, unknown>);
+
+          return { success: true, retyped: true, assetId: imgAssetId };
+        }
+
         throw new Error(`Failed to fetch video info: ${msg}`);
       }
 
