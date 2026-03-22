@@ -31,6 +31,7 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
+import { useRenderSettings } from '@/hooks/useRenderSettings';
 import type { Orientation } from '@/hooks/useTimeline';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
@@ -84,6 +85,7 @@ export function HomePage() {
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
   const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
+  const { fetchRenderSettings } = useRenderSettings(callTool);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -175,7 +177,6 @@ export function HomePage() {
         duration: asset.duration,
         waveform: asset.waveform,
         frameDirs: asset.frame_dirs,
-        renderSettings: asset.render_settings,
       };
     });
   }, [assetList, result]);
@@ -217,9 +218,6 @@ export function HomePage() {
     setTimelineSlotIndex(null);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
-    const orient = timeline?.render ?? 'landscape';
-    const stored = item.renderSettings?.[orient];
-    setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
   }, [timeline]);
 
   const handleViewerSizeChange = useCallback((size: ViewerSize) => {
@@ -231,6 +229,22 @@ export function HomePage() {
     () => timeline?.render ?? 'landscape',
     [timeline],
   );
+
+  // Sync render settings from dedicated endpoint when selection or orientation changes
+  const prevSettingsKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (!activeSelection?.id || !projectSlug) return;
+    const key = `${activeSelection.id}:${renderOrientation}`;
+    if (key === prevSettingsKeyRef.current) return;
+    prevSettingsKeyRef.current = key;
+    let cancelled = false;
+    fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
+      if (cancelled) return;
+      const stored = all?.[renderOrientation];
+      setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
+    });
+    return () => { cancelled = true; };
+  }, [activeSelection?.id, projectSlug, renderOrientation, fetchRenderSettings]);
 
   const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, renderOrientation);
 
@@ -255,9 +269,7 @@ export function HomePage() {
   const handleChangeOrientation = useCallback(async (orient: Orientation) => {
     if (!projectSlug) return;
     await setRenderOrientation(projectSlug, orient);
-    const stored = activeSelection?.renderSettings?.[orient];
-    setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
-  }, [projectSlug, setRenderOrientation, activeSelection]);
+  }, [projectSlug, setRenderOrientation]);
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;

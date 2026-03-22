@@ -38,5 +38,4 @@ export interface MediaItem {
   duration?: number | null;
   waveform?: number[] | null;
   frameDirs?: Record<string, string[]>;
-  renderSettings?: Record<string, Record<string, unknown>>;
 }

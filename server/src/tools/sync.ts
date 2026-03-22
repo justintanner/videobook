@@ -31,7 +31,6 @@ export type SyncAsset = {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
-  render_settings: Record<string, Record<string, unknown>>;
 };
 
 export type SyncResult = {
@@ -134,9 +133,9 @@ async function hasRenderMetadata(assetDir: string): Promise<boolean> {
   }
 }
 
-const RENDER_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
+export const RENDER_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 
-async function readRenderSettings(
+export async function readRenderSettings(
   fs: ClipfirstFs, assetId: string, projectSlug: string, orientations: string[],
 ): Promise<Record<string, Record<string, unknown>>> {
   const result: Record<string, Record<string, unknown>> = {};
@@ -188,7 +187,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile, renderSettingsMap] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
@@ -200,7 +199,6 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         readOrExtractWaveform(a.path),
         findFrameDirectories(a.path, project_slug, a.id),
         hasPartialDownload(a.path),
-        readRenderSettings(fs, a.id, project_slug, [...RENDER_ORIENTATIONS]),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -266,7 +264,6 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         duration,
         waveform,
         frame_dirs: frameDirs,
-        render_settings: renderSettingsMap,
       };
     }),
   );

@@ -48,6 +48,7 @@ import { isolateVocalsDef } from "./isolate-vocals.js";
 import { assignSlotDef } from "./assign-slot.js";
 import { clearSlotDef } from "./clear-slot.js";
 import { commandsDef } from "./commands.js";
+import { renderSettingsDef } from "./render-settings.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -107,5 +108,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     assignSlotDef(fs),
     clearSlotDef(fs),
     commandsDef(fs),
+    renderSettingsDef(fs),
   ];
 }

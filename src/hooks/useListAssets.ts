@@ -17,7 +17,6 @@ export interface ListAsset {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
-  render_settings: Record<string, Record<string, unknown>>;
 }
 
 interface UseListAssetsResult {
