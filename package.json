@@ -29,6 +29,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/cli": "^4.0.434",
+    "@remotion/player": "4.0.434",
     "@remotion/renderer": "^4.0.434",
     "@wavesurfer/react": "^1.0.12",
     "class-variance-authority": "^0.7.1",
@@ -49,7 +50,7 @@
   "overrides": {
     "hono": ">=4.12.7",
     "yauzl": ">=3.2.1",
-    "flatted": ">=3.4.0"
+    "flatted": ">=3.4.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
