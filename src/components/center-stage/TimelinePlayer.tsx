@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { TimelineComposition } from '@/remotion/TimelineComposition';
 import type { TimelineSlotData } from '@/remotion/TimelineComposition';
-import { Monitor, Smartphone, Square, Film } from 'lucide-react';
+import { Monitor, Smartphone, Square, Film, Check, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import type { Orientation } from '@/hooks/useTimeline';
 
 export interface TimelinePreviewData {
   slots: TimelineSlotData[];
@@ -18,6 +26,7 @@ interface TimelinePlayerProps {
   previewData: TimelinePreviewData;
   initialSlotIndex?: number;
   onFrameUpdate?: (frame: number) => void;
+  onOrientationChange?: (orient: Orientation) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -26,24 +35,69 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function OrientationIcon({ w, h }: { w: number; h: number }) {
-  const cls = "w-3 h-3 text-primary/60";
-  if (h > w) return <Smartphone className={cls} />;
-  if (w === h) return <Square className={cls} />;
-  return <Monitor className={cls} />;
+function OrientationIcon({ w, h, className: cls }: { w: number; h: number; className?: string }) {
+  const c = cls ?? "w-3 h-3 text-primary/60";
+  if (h > w) return <Smartphone className={c} />;
+  if (w === h) return <Square className={c} />;
+  return <Monitor className={c} />;
 }
 
-function TimelinePlayerHeader({ previewData }: { previewData: TimelinePreviewData }) {
+function orientFromDimensions(w: number, h: number): Orientation {
+  if (h > w) return 'portrait';
+  if (w === h) return 'square';
+  return 'landscape';
+}
+
+const orientationOptions: { orient: Orientation; label: string; dims: string; w: number; h: number }[] = [
+  { orient: 'landscape', label: '/landscape', dims: '1920×1080', w: 1920, h: 1080 },
+  { orient: 'portrait', label: '/portrait', dims: '1080×1920', w: 1080, h: 1920 },
+  { orient: 'square', label: '/square', dims: '1080×1080', w: 1080, h: 1080 },
+];
+
+function TimelinePlayerHeader({ previewData, onOrientationChange }: { previewData: TimelinePreviewData; onOrientationChange?: (orient: Orientation) => void }) {
   const { compositionWidth: w, compositionHeight: h, slots, totalDurationInFrames, fps } = previewData;
   const totalSeconds = fps > 0 ? totalDurationInFrames / fps : 0;
+  const activeOrient = orientFromDimensions(w, h);
+
+  const badge = (
+    <div className={cn(
+      'flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary/10 border border-primary/20',
+      onOrientationChange && 'cursor-pointer hover:bg-primary/20 transition-colors',
+    )}>
+      <OrientationIcon w={w} h={h} />
+      <span className="text-[11px] font-mono font-bold text-primary/70 tabular-nums">{w}&times;{h}</span>
+      {onOrientationChange && <ChevronDown className="w-3 h-3 text-primary/40" />}
+    </div>
+  );
 
   return (
     <div className="shrink-0 px-3 py-2 bg-black/80 backdrop-blur-sm border-b border-primary/20 flex items-center justify-between relative">
-      {/* Left: orientation badge chip */}
-      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
-        <OrientationIcon w={w} h={h} />
-        <span className="text-[11px] font-mono font-bold text-primary/70 tabular-nums">{w}&times;{h}</span>
-      </div>
+      {/* Left: orientation badge — dropdown when handler provided, static otherwise */}
+      {onOrientationChange ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button tabIndex={-1}>{badge}</button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {orientationOptions.map((opt) => {
+              const isActive = opt.orient === activeOrient;
+              return (
+                <DropdownMenuItem key={opt.orient} onClick={() => onOrientationChange(opt.orient)} className="py-2.5">
+                  <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
+                    {isActive ? <Check className="w-3 h-3 inline text-primary" /> : '\u203A'}
+                  </span>
+                  <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !isActive && 'text-muted-foreground/60')}>
+                    {opt.label} {opt.dims}
+                  </span>
+                  <span className={cn('ml-2 flex items-center', !isActive && 'opacity-40')}>
+                    <OrientationIcon w={opt.w} h={opt.h} className="h-3 w-3" />
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : badge}
 
       {/* Center label */}
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -61,7 +115,7 @@ function TimelinePlayerHeader({ previewData }: { previewData: TimelinePreviewDat
   );
 }
 
-export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }: TimelinePlayerProps) {
+export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate, onOrientationChange }: TimelinePlayerProps) {
   const playerRef = useRef<PlayerRef>(null);
 
   // Keep slotOffsets in a ref so the seek effect doesn't re-fire when
@@ -92,7 +146,7 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }:
   if (!previewData.ready) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TimelinePlayerHeader previewData={previewData} />
+        <TimelinePlayerHeader previewData={previewData} onOrientationChange={onOrientationChange} />
         <div className="flex-1 flex items-center justify-center">
           <span className="text-sm font-mono text-muted-foreground/50">
             No rendered clips for this orientation
@@ -104,7 +158,7 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }:
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <TimelinePlayerHeader previewData={previewData} />
+      <TimelinePlayerHeader previewData={previewData} onOrientationChange={onOrientationChange} />
       <div className="flex-1 flex items-center justify-center overflow-hidden">
         <Player
           ref={playerRef}

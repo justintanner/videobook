@@ -2151,46 +2151,19 @@ const timelineMockSquare: TimelinePreviewData = {
   ready: false,
 };
 
-const timelineTabLabels: Record<Orientation, string> = {
-  landscape: '/landscape',
-  portrait: '/portrait',
-  square: '/square',
-};
-
 const timelineMockData: Record<Orientation, TimelinePreviewData> = {
   landscape: timelineMockLandscape,
   portrait: timelineMockPortrait,
   square: timelineMockSquare,
 };
 
-const timelineOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
-
 function Page16_TimelinePlayer() {
   const [orientation, setOrientation] = useState<Orientation>('landscape');
 
   return (
-    <div className="w-full h-full flex flex-col gap-3">
-      {/* Slash-command tab bar */}
-      <div className="flex gap-1 shrink-0">
-        {timelineOrientations.map((o) => (
-          <button
-            key={o}
-            onClick={() => setOrientation(o)}
-            className={cn(
-              'h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
-              o === orientation ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
-            )}
-            style={{ background: o === orientation ? 'rgba(0,217,255,0.06)' : 'transparent' }}
-          >
-            <span>{timelineTabLabels[o]}</span>
-            {o === orientation && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
-          </button>
-        ))}
-      </div>
-
-      {/* Single TimelinePlayer for the active orientation */}
+    <div className="w-full h-full flex flex-col">
       <div className="flex-1 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 min-h-0 flex flex-col">
-        <TimelinePlayer previewData={timelineMockData[orientation]} />
+        <TimelinePlayer previewData={timelineMockData[orientation]} onOrientationChange={setOrientation} />
       </div>
     </div>
   );

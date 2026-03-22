@@ -591,6 +591,7 @@ export function HomePage() {
                     previewData={previewData}
                     initialSlotIndex={timelineSlotIndex}
                     onFrameUpdate={handleFrameUpdate}
+                    onOrientationChange={handleChangeOrientation}
                   />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
