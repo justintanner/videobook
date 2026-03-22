@@ -204,7 +204,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 codec: "h264",
                 outputLocation: outputPath,
                 inputProps: inputProps as unknown as Record<string, unknown>,
-                crf: 23,
+                videoBitrate: "8M",
                 concurrency: 4,
                 hardwareAcceleration: "if-possible",
               });
