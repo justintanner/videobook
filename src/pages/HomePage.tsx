@@ -435,6 +435,9 @@ export function HomePage() {
       setPendingFilePosition(pos);
     },
     viewer_show_settings: () => { setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_landscape: () => { handleChangeOrientation('landscape'); setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_portrait: () => { handleChangeOrientation('portrait'); setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_square: () => { handleChangeOrientation('square'); setPendingBackTab('settings'); setViewerFlipped(true); },
     settings_subs: (field: string, value: string) => {
       applySubsSetting(field, value);
       setPendingBackTab('settings');
@@ -457,7 +460,7 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
-  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
+  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, handleChangeOrientation, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
     <MountKeyProvider>

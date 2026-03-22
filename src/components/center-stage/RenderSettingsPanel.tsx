@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, Zap, Type, Volume2, Tv, ImageIcon, Monitor, Smartphone, Square, Plus, Minus, Loader2 } from 'lucide-react';
+import { Check, Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, Loader2 } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { ExecuteButtonState } from '@/components/commands/types';
@@ -47,16 +47,10 @@ export interface RenderSettingsPanelProps {
 
 // ── Orientation constants ──
 
-const orientationShortLabels: Record<Orientation, string> = {
-  landscape: '16:9',
-  portrait: '9:16',
-  square: '1:1',
-};
-
-const orientationIcons: Record<Orientation, React.ReactNode> = {
-  landscape: <Monitor className="w-3 h-3" />,
-  portrait: <Smartphone className="w-3 h-3" />,
-  square: <Square className="w-3 h-3" />,
+const orientationTabLabels: Record<Orientation, string> = {
+  landscape: '/settings-landscape',
+  portrait: '/settings-portrait',
+  square: '/settings-square',
 };
 
 // ── Helper sub-components ──
@@ -305,9 +299,6 @@ export function RenderSettingsPanel({
         {/* OUTPUT FORMAT — tab bar */}
         <div className="flex gap-1">
           {orientations.map((o) => {
-            const addLabels: Record<Orientation, string> = { landscape: '+ LANDSCAPE', portrait: '+ PORTRAIT', square: '+ SQUARE' };
-            const isTab = o.rendered || o.active;
-
             if (o.rendering) {
               return (
                 <button
@@ -317,25 +308,7 @@ export function RenderSettingsPanel({
                   style={{ background: '#0D0F12' }}
                 >
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>{orientationShortLabels[o.orient]}</span>
-                </button>
-              );
-            }
-
-            if (!isTab) {
-              return (
-                <button
-                  key={o.orient}
-                  disabled={disabled}
-                  onClick={() => onOrientationClick?.(o.orient)}
-                  className={cn(
-                    'h-8 px-3 flex items-center gap-1 font-mono text-[11px] font-bold text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors duration-[120ms]',
-                    disabled && 'opacity-40 pointer-events-none',
-                  )}
-                  style={{ background: 'transparent' }}
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>{addLabels[o.orient]}</span>
+                  <span>{orientationTabLabels[o.orient]}</span>
                 </button>
               );
             }
@@ -352,8 +325,7 @@ export function RenderSettingsPanel({
                 )}
                 style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
               >
-                {orientationIcons[o.orient]}
-                <span>{orientationShortLabels[o.orient]}</span>
+                <span>{orientationTabLabels[o.orient]}</span>
                 {o.rendered && !o.active && <Check className="w-3 h-3 text-cyan-400/60" />}
                 {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
               </button>

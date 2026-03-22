@@ -11,6 +11,9 @@ export interface UiActionCallbacks {
   viewer_toggle_info: () => void;
   viewer_focus_file: (position: number) => void;
   viewer_show_settings: () => void;
+  settings_landscape: () => void;
+  settings_portrait: () => void;
+  settings_square: () => void;
   settings_subs: (field: string, value: string) => void;
   settings_audio: (field: string, value: string) => void;
   settings_bg: (mode: string) => void;

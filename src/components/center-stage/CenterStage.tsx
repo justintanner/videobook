@@ -329,15 +329,9 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
   }
 
   const handleClick = (orient: Orientation) => {
-    const rendering = isOrientRendering(status, orient);
-    if (rendering) return;
-
+    if (isOrientRendering(status, orient)) return;
     onChangeOrientation(orient);
-
-    if (!renders.includes(orient)) {
-      onSizeChange(orient);
-      onFlip(false);
-    }
+    onSizeChange(orient);
   };
 
   const subtitleFieldMap: Record<string, keyof RenderSettings> = {
