@@ -273,8 +273,12 @@ export function HomePage() {
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
+    // Sync timeline render orientation to match viewer before rendering
+    if (viewerSize !== 'original' && viewerSize !== renderOrientation) {
+      await setRenderOrientation(projectSlug, viewerSize as Orientation);
+    }
     await renderAsset(activeSelection.id, projectSlug, settings);
-  }, [projectSlug, activeSelection, renderAsset]);
+  }, [projectSlug, activeSelection, renderAsset, viewerSize, renderOrientation, setRenderOrientation]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
