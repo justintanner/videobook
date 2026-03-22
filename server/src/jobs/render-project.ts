@@ -204,7 +204,9 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 codec: "h264",
                 outputLocation: outputPath,
                 inputProps: inputProps as unknown as Record<string, unknown>,
-                crf: 18,
+                crf: 23,
+                concurrency: 4,
+                hardwareAcceleration: "if-possible",
               });
 
               // Extract first frame as {orientation}.jpg

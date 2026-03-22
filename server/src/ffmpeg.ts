@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url);
 export const FFMPEG: string = require("ffmpeg-static");
 export const FFPROBE: string = require("ffprobe-static").path;
 
-export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level:v", "4.0"];
+export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-profile:v", "high", "-level:v", "4.0"];
 export const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k"];
 
 export interface ProbeResult {
