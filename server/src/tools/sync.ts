@@ -384,9 +384,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         assetDir: action.assetDir,
         videoPath: action.videoPath,
         videoFilename: action.videoFilename,
-        hasElevenlabs: false,
+        hasElevenlabs: action.hasElevenlabs,
       }],
-      subtitlesEnabled: stored.subtitlesEnabled as boolean,
+      subtitlesEnabled: action.hasElevenlabs ? (stored.subtitlesEnabled as boolean) : false,
       highlightStyle: stored.highlightStyle as string,
       position: stored.position as string,
       fontSize: stored.fontSize as string,
@@ -494,6 +494,7 @@ type RenderAction = {
   assetDir: string;
   videoPath: string;
   videoFilename: string;
+  hasElevenlabs: boolean;
 };
 
 async function findAutoRenderActions(
@@ -519,8 +520,7 @@ async function findAutoRenderActions(
       if (!fileNames.has(".original.analysis.json")) return null;
 
       // Render any whitelisted+analyzed video regardless of transcription status.
-      // Initial auto-render always uses subtitlesEnabled: false; the user can
-      // re-render with subtitles once transcription completes.
+      // If elevenlabs.json exists, subtitles will be burned in based on analysis defaults.
       const videoFile = findVideoFile(files);
       if (videoFile && !await fs.isLocked(manifest.path)) {
         return {
@@ -528,6 +528,7 @@ async function findAutoRenderActions(
           assetDir: manifest.path,
           videoPath: join(manifest.path, videoFile.name),
           videoFilename: videoFile.name,
+          hasElevenlabs: fileNames.has("elevenlabs.json"),
         };
       }
       return null;
