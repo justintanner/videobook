@@ -316,7 +316,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "default",
     chevron: "right",
     params: [
-      { name: "field", type: "string", required: true, description: "on|off|style|position|size|color|highlight" },
+      { name: "field", type: "string", required: true, description: "on|off|enabled|style|position|size|fontSize|color|textColor|highlight|highlightColor" },
       { name: "value", type: "string", required: false, description: "Value for the field" },
     ],
     uiAction: "settings_subs",
@@ -332,7 +332,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "default",
     chevron: "right",
     params: [
-      { name: "field", type: "string", required: true, description: "volume|fade-in|fade-out" },
+      { name: "field", type: "string", required: true, description: "volume|audioVolume|fade-in|fadeIn|audioFadeIn|fade-out|fadeOut|audioFadeOut" },
       { name: "value", type: "string", required: false, description: "Numeric value" },
     ],
     uiAction: "settings_audio",

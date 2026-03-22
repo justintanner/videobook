@@ -362,6 +362,10 @@ export function HomePage() {
       switch (field) {
         case 'on': return { ...prev, subtitlesEnabled: true };
         case 'off': return { ...prev, subtitlesEnabled: false };
+        case 'enabled': {
+          const on = value === 'on' || value === 'true';
+          return { ...prev, subtitlesEnabled: on };
+        }
         case 'style': {
           if (value === 'impact' || value === 'highlight') return { ...prev, subtitleStyle: value };
           return prev;
@@ -371,12 +375,15 @@ export function HomePage() {
           const pos = posMap[value];
           return pos ? { ...prev, subtitlePosition: pos } : prev;
         }
+        case 'fontSize':
         case 'size': {
           const sizeMap: Record<string, 'small' | 'medium' | 'large'> = { s: 'small', m: 'medium', l: 'large', small: 'small', medium: 'medium', large: 'large' };
           const sz = sizeMap[value];
           return sz ? { ...prev, fontSize: sz } : prev;
         }
+        case 'textColor':
         case 'color': return { ...prev, textColor: value };
+        case 'highlightColor':
         case 'highlight': return { ...prev, highlightColor: value };
         default: return prev;
       }
@@ -387,8 +394,13 @@ export function HomePage() {
     const num = Math.max(0, parseInt(value, 10) || 0);
     setRenderSettings(prev => {
       switch (field) {
+        case 'audioVolume':
         case 'volume': return { ...prev, audioVolume: Math.min(num, 100) };
+        case 'audioFadeIn':
+        case 'fadeIn':
         case 'fade-in': return { ...prev, audioFadeIn: num };
+        case 'audioFadeOut':
+        case 'fadeOut':
         case 'fade-out': return { ...prev, audioFadeOut: num };
         default: return prev;
       }
@@ -397,7 +409,7 @@ export function HomePage() {
 
   const applyOsgSetting = useCallback((field: string, value: string) => {
     setRenderSettings(prev => {
-      if (field === 'position') {
+      if (field === 'position' || field === 'osgPosition') {
         const posMap: Record<string, RenderSettings['osgPosition']> = {
           tl: 'top-left', tr: 'top-right', bl: 'bottom-left', br: 'bottom-right',
           'top-left': 'top-left', 'top-right': 'top-right', 'bottom-left': 'bottom-left', 'bottom-right': 'bottom-right',
