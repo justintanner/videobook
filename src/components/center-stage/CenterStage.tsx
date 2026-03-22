@@ -262,10 +262,9 @@ function OrientIndicator({ orient, renders, status }: {
 
 type BackTab = 'settings' | 'files';
 
-function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, onSizeChange, onRender, settings, onSettingsChange }: {
+function SettingsPane({ item, renderOrientation, onFlip, onSizeChange, onRender, settings, onSettingsChange }: {
   item: MediaItem;
   renderOrientation: Orientation;
-  onChangeOrientation: (orient: Orientation) => void;
   onFlip: (flipped: boolean) => void;
   onSizeChange: (s: ViewerSize) => void;
   onRender?: (settings: RenderSettings) => void;
@@ -330,7 +329,6 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
 
   const handleClick = (orient: Orientation) => {
     if (isOrientRendering(status, orient)) return;
-    onChangeOrientation(orient);
     onSizeChange(orient);
   };
 
@@ -589,7 +587,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onChangeOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -597,7 +595,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
   renderOrientation: Orientation;
-  onChangeOrientation: (orient: Orientation) => void;
   onRender?: (settings?: RenderSettings) => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
@@ -871,7 +868,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 <SettingsPane
                   item={item}
                   renderOrientation={renderOrientation}
-                  onChangeOrientation={onChangeOrientation}
                   onFlip={onFlippedChange}
                   onSizeChange={onSizeChange}
                   onRender={onRender}

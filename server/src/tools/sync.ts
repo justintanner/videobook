@@ -171,6 +171,7 @@ const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
     highlightColor: "#FFFF00",
   },
   landscape: {
+    subtitlesEnabled: true,
     highlightStyle: "highlight",
     textColor: "#FFFFFF",
     highlightColor: "#991B1B",

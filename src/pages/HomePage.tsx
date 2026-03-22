@@ -83,7 +83,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
 
@@ -225,28 +225,28 @@ export function HomePage() {
     if (projectSlug) setCurrentOrientation(projectSlug, size);
   }, [projectSlug, setCurrentOrientation]);
 
-  const renderOrientation = useMemo<Orientation>(
-    () => timeline?.render ?? 'landscape',
-    [timeline],
+  const settingsOrientation = useMemo<Orientation>(
+    () => viewerSize !== 'original' ? viewerSize as Orientation : 'landscape',
+    [viewerSize],
   );
 
   // Sync render settings from dedicated endpoint when selection or orientation changes
   const prevSettingsKeyRef = useRef<string>('');
   useEffect(() => {
     if (!activeSelection?.id || !projectSlug) return;
-    const key = `${activeSelection.id}:${renderOrientation}`;
+    const key = `${activeSelection.id}:${settingsOrientation}`;
     if (key === prevSettingsKeyRef.current) return;
     prevSettingsKeyRef.current = key;
     let cancelled = false;
     fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
       if (cancelled) return;
-      const stored = all?.[renderOrientation];
-      setRenderSettings(stored ? storedToRenderSettings(stored) : getDefaultRenderSettings(renderOrientation));
+      const stored = all?.[settingsOrientation];
+      setRenderSettings(stored ? storedToRenderSettings(stored) : getDefaultRenderSettings(settingsOrientation));
     });
     return () => { cancelled = true; };
-  }, [activeSelection?.id, projectSlug, renderOrientation, fetchRenderSettings]);
+  }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings]);
 
-  const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, renderOrientation);
+  const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, settingsOrientation);
 
   const frameRef = useRef(0);
   const rafRef = useRef(0);
@@ -265,11 +265,6 @@ export function HomePage() {
   useEffect(() => {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
-
-  const handleChangeOrientation = useCallback(async (orient: Orientation) => {
-    if (!projectSlug) return;
-    await setRenderOrientation(projectSlug, orient);
-  }, [projectSlug, setRenderOrientation]);
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
@@ -462,9 +457,9 @@ export function HomePage() {
       setPendingFilePosition(pos);
     },
     viewer_show_settings: () => { setPendingBackTab('settings'); setViewerFlipped(true); },
-    settings_landscape: () => { handleChangeOrientation('landscape'); setPendingBackTab('settings'); setViewerFlipped(true); },
-    settings_portrait: () => { handleChangeOrientation('portrait'); setPendingBackTab('settings'); setViewerFlipped(true); },
-    settings_square: () => { handleChangeOrientation('square'); setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_landscape: () => { handleViewerSizeChange('landscape'); setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_portrait: () => { handleViewerSizeChange('portrait'); setPendingBackTab('settings'); setViewerFlipped(true); },
+    settings_square: () => { handleViewerSizeChange('square'); setPendingBackTab('settings'); setViewerFlipped(true); },
     settings_subs: (field: string, value: string) => {
       applySubsSetting(field, value);
       setPendingBackTab('settings');
@@ -487,7 +482,7 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
-  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, handleChangeOrientation, applySubsSetting, applyAudioSetting, applyOsgSetting]);
+  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
     <MountKeyProvider>
@@ -585,13 +580,13 @@ export function HomePage() {
                     callTool={callTool}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} />
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={settingsOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer
                     previewData={previewData}
                     initialSlotIndex={timelineSlotIndex}
                     onFrameUpdate={handleFrameUpdate}
-                    onOrientationChange={handleChangeOrientation}
+                    onOrientationChange={handleViewerSizeChange}
                   />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
@@ -657,7 +652,7 @@ export function HomePage() {
               {slotRefs.map((slotRef, i) => {
                 const slotSlug = timeline?.slots?.[i]?.slug;
                 const slotAsset = slotSlug ? mediaItems.find(m => m.id === slotSlug) : null;
-                const orientKey = `${renderOrientation}_frames`;
+                const orientKey = `${settingsOrientation}_frames`;
                 const frameUrls = slotAsset?.frameDirs?.[orientKey]
                   ?? slotAsset?.frameDirs?.['original_frames']
                   ?? undefined;
