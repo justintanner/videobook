@@ -380,9 +380,10 @@ describe("buildAssetList — failed download detection (RC3)", () => {
   });
 });
 
-describe("performSync — auto-render without transcription gate (RC2)", () => {
+describe("performSync — auto-render with transcription gate", () => {
   let fs: ClipfirstFs;
   let tempDir: string;
+  let savedKieKey: string | undefined;
 
   beforeAll(async () => {
     await queue.start();
@@ -396,20 +397,25 @@ describe("performSync — auto-render without transcription gate (RC2)", () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc2-test-"));
     fs = createFsForTest(tempDir);
     await fs.createProject("test-proj");
+    savedKieKey = process.env.KIE_API_KEY;
+    delete process.env.KIE_API_KEY;
   });
 
   afterEach(async () => {
+    if (savedKieKey !== undefined) {
+      process.env.KIE_API_KEY = savedKieKey;
+    } else {
+      delete process.env.KIE_API_KEY;
+    }
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("auto-renders whitelisted video with dialog even without elevenlabs.json", async () => {
+  it("skips auto-render for dialog video without elevenlabs.json", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "dialog-no-elevenlabs", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.assetId;
     const assetDir = createResult.value.path;
 
-    // Set up: whitelisted + analyzed + has dialog in transcription but no elevenlabs.json
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
@@ -418,10 +424,108 @@ describe("performSync — auto-render without transcription gate (RC2)", () => {
     await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
       text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
     }));
-    // NOTE: no elevenlabs.json — this is the crux of the bug
 
     const result = await performSync(fs, "test-proj");
-    // Should auto-render even without elevenlabs.json
+    expect(result.auto_render.length).toBe(0);
+  });
+
+  it("auto-renders dialog video when elevenlabs.json exists", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "dialog-with-elevenlabs", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking about economics",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
+    }));
+    await writeFile(join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_render.length).toBe(1);
+    expect(result.auto_render[0].assetId).toBe(assetId);
+  });
+
+  it("skips auto-render when gpt4otrans is missing for audio video", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "no-stt", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "Video with audio",
+    }));
+    await fs.writeMetadata(createResult.value.assetId, "original", { hasAudio: true }, "test-proj");
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_render.length).toBe(0);
+  });
+
+  it("auto-renders no-audio video without gpt4otrans", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "silent-clip", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "Silent AI-generated clip",
+    }));
+    await fs.writeMetadata(assetId, "original", { hasAudio: false }, "test-proj");
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_render.length).toBe(1);
+    expect(result.auto_render[0].assetId).toBe(assetId);
+  });
+
+  it("skips auto-render when kie-task.json exists", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "transcribing-video", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "Hello world this is a real transcription with enough words to count as dialog",
+    }));
+    await writeFile(join(assetDir, ".kie-task.json"), JSON.stringify({
+      taskId: "task-123", taskType: "transcribe",
+    }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_render.length).toBe(0);
+  });
+
+  it("auto-renders non-dialog video without elevenlabs.json", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "music-video", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "Scenic landscape with background music",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "[music]",
+    }));
+
+    const result = await performSync(fs, "test-proj");
     expect(result.auto_render.length).toBe(1);
     expect(result.auto_render[0].assetId).toBe(assetId);
   });

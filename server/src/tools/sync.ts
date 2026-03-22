@@ -519,8 +519,19 @@ async function findAutoRenderActions(
       // Skip: process_video incomplete
       if (!fileNames.has(".original.analysis.json")) return null;
 
-      // Render any whitelisted+analyzed video regardless of transcription status.
-      // If elevenlabs.json exists, subtitles will be burned in based on analysis defaults.
+      // Skip if speech-to-text analysis not yet complete (unless video has no audio)
+      if (!fileNames.has(".analysis.gpt4otrans.json")) {
+        const meta = await fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug);
+        if (meta.ok && meta.value.hasAudio) return null;
+      }
+
+      // Skip if transcription is in progress (completeTranscribe will auto-render)
+      if (fileNames.has(".kie-task.json")) return null;
+
+      // For videos with dialog, wait for ElevenLabs transcription
+      const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
+      if (dialogQuality.hasDialog && !fileNames.has("elevenlabs.json")) return null;
+
       const videoFile = findVideoFile(files);
       if (videoFile && !await fs.isLocked(manifest.path)) {
         return {
