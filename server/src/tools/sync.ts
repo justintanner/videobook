@@ -171,7 +171,6 @@ const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
     highlightColor: "#FFFF00",
   },
   landscape: {
-    subtitlesEnabled: true,
     highlightStyle: "highlight",
     textColor: "#FFFFFF",
     highlightColor: "#991B1B",
@@ -228,9 +227,7 @@ export async function readAnalysisRecommendations(
     }
 
     const burned = analysis.burnedInSubtitles as { detected?: boolean } | null;
-    if (burned && burned.detected === true) {
-      recs.subtitlesEnabled = false;
-    }
+    recs.subtitlesEnabled = !(burned && burned.detected === true);
 
     return recs;
   } catch {
