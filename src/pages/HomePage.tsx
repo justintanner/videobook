@@ -230,8 +230,22 @@ export function HomePage() {
 
   const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, renderOrientation);
 
+  const frameRef = useRef(0);
+  const rafRef = useRef(0);
+
   const handleFrameUpdate = useCallback((frame: number) => {
-    setCurrentFrame(frame);
+    frameRef.current = frame;
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        setCurrentFrame(frameRef.current);
+        rafRef.current = 0;
+      });
+    }
+  }, []);
+
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
 
   const handleChangeOrientation = useCallback(async (orient: Orientation) => {

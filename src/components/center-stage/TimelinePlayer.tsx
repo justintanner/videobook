@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { TimelineComposition } from '@/remotion/TimelineComposition';
 import type { TimelineSlotData } from '@/remotion/TimelineComposition';
@@ -64,12 +64,17 @@ function TimelinePlayerHeader({ previewData }: { previewData: TimelinePreviewDat
 export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }: TimelinePlayerProps) {
   const playerRef = useRef<PlayerRef>(null);
 
+  // Keep slotOffsets in a ref so the seek effect doesn't re-fire when
+  // the array reference changes (happens every sync cycle).
+  const slotOffsetsRef = useRef(previewData.slotOffsets);
+  slotOffsetsRef.current = previewData.slotOffsets;
+
   // Seek to the requested slot on mount or when initialSlotIndex changes
   useEffect(() => {
     if (!playerRef.current || !previewData.ready) return;
-    const offset = initialSlotIndex != null ? previewData.slotOffsets[initialSlotIndex] ?? 0 : 0;
+    const offset = initialSlotIndex != null ? slotOffsetsRef.current[initialSlotIndex] ?? 0 : 0;
     playerRef.current.seekTo(offset);
-  }, [initialSlotIndex, previewData.ready, previewData.slotOffsets]);
+  }, [initialSlotIndex, previewData.ready]);
 
   // Subscribe to frame updates
   useEffect(() => {
@@ -81,6 +86,8 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }:
     player.addEventListener('frameupdate', handler);
     return () => player.removeEventListener('frameupdate', handler);
   }, [onFrameUpdate]);
+
+  const inputProps = useMemo(() => ({ slots: previewData.slots }), [previewData.slots]);
 
   if (!previewData.ready) {
     return (
@@ -102,7 +109,7 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate }:
         <Player
           ref={playerRef}
           component={TimelineComposition}
-          inputProps={{ slots: previewData.slots }}
+          inputProps={inputProps}
           durationInFrames={previewData.totalDurationInFrames}
           fps={previewData.fps}
           compositionWidth={previewData.compositionWidth}
