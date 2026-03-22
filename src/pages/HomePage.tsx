@@ -14,6 +14,8 @@ import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer } from '@/components/center-stage';
 import type { ViewerSize } from '@/components/center-stage';
 import { GitHistoryPanel } from '@/components/center-stage/GitHistoryPanel';
+import { TimelinePlayer } from '@/components/center-stage/TimelinePlayer';
+import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -50,6 +52,12 @@ function humanizeId(id: string): string {
     .join(' ');
 }
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -62,6 +70,8 @@ export function HomePage() {
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+  const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -203,6 +213,7 @@ export function HomePage() {
   const handleSelectItem = useCallback((item: MediaItem) => {
     setHistoryItem(null);
     setSelectedItem(item);
+    setTimelineSlotIndex(null);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
@@ -216,6 +227,12 @@ export function HomePage() {
     () => timeline?.render ?? 'landscape',
     [timeline],
   );
+
+  const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, renderOrientation);
+
+  const handleFrameUpdate = useCallback((frame: number) => {
+    setCurrentFrame(frame);
+  }, []);
 
   const handleChangeOrientation = useCallback(async (orient: Orientation) => {
     if (!projectSlug) return;
@@ -281,6 +298,12 @@ export function HomePage() {
 
   const handleAnimateEdit = useCallback((text: string) => {
     chatInputRef.current?.animateAndEdit(text);
+  }, []);
+
+  const handleSlotClick = useCallback((slotIndex: number) => {
+    setSelectedItem(null);
+    setHistoryItem(null);
+    setTimelineSlotIndex(slotIndex);
   }, []);
 
   const handleAfterDispatch = useCallback(() => {
@@ -500,6 +523,12 @@ export function HomePage() {
                   />
                 ) : activeSelection ? (
                   <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={renderOrientation} onChangeOrientation={handleChangeOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} />
+                ) : timelineSlotIndex != null ? (
+                  <TimelinePlayer
+                    previewData={previewData}
+                    initialSlotIndex={timelineSlotIndex}
+                    onFrameUpdate={handleFrameUpdate}
+                  />
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}
@@ -572,17 +601,44 @@ export function HomePage() {
                   <TimelineSlot
                     key={slotRef.ref}
                     label={slotRef.ref}
+                    isActive={timelineSlotIndex === i}
                     hasContent={!!slotSlug}
                     frameUrls={frameUrls}
                     waveform={slotAsset?.waveform ?? undefined}
                     duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
+                    onClick={() => slotSlug && handleSlotClick(i)}
                     onAnimateCommand={handleAnimateCommand}
                   />
                 );
               })}
             </div>
-            <div className="relative h-12 border-t border-border/30 bg-card/20" />
+            <div className="relative h-12 border-t border-border/30 bg-card/20 flex items-center px-3 gap-3">
+              {timelineSlotIndex != null && previewData.ready && (
+                <>
+                  {/* Progress bar with slot boundaries */}
+                  <div className="flex-1 relative h-2 bg-white/5 rounded-full overflow-hidden">
+                    {/* Slot boundary markers */}
+                    {previewData.slotOffsets.slice(1).map((offset, i) => (
+                      <div
+                        key={i}
+                        className="absolute top-0 bottom-0 w-px bg-white/20"
+                        style={{ left: `${(offset / previewData.totalDurationInFrames) * 100}%` }}
+                      />
+                    ))}
+                    {/* Progress fill */}
+                    <div
+                      className="absolute top-0 left-0 bottom-0 bg-primary/60 rounded-full transition-[width] duration-75"
+                      style={{ width: `${(currentFrame / previewData.totalDurationInFrames) * 100}%` }}
+                    />
+                  </div>
+                  {/* Time readout */}
+                  <span className="text-[10px] font-mono text-muted-foreground/50 tabular-nums whitespace-nowrap">
+                    {formatTime(currentFrame / previewData.fps)} / {formatTime(previewData.totalDurationInFrames / previewData.fps)}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
