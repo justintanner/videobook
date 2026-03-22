@@ -420,11 +420,11 @@ export function HomePage() {
       if (field === 'clear') {
         return { ...prev, osgAssetId: null, osgAssetSrc: null };
       }
-      // field starts with @ — treat as asset id
-      if (field.startsWith('@')) {
-        const assetId = field.slice(1);
-        const item = mediaItems.find(m => m.id === assetId);
-        return { ...prev, osgAssetId: assetId, osgAssetSrc: item?.filePath ?? null };
+      // Treat as asset id (@ prefix already stripped by command parser)
+      const assetId = field.startsWith('@') ? field.slice(1) : field;
+      const item = mediaItems.find(m => m.id === assetId);
+      if (item) {
+        return { ...prev, osgAssetId: assetId, osgAssetSrc: item.filePath ?? null };
       }
       return prev;
     });

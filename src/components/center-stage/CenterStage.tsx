@@ -270,7 +270,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
   onSizeChange: (s: ViewerSize) => void;
   onRender?: (settings: RenderSettings) => void;
   settings: RenderSettings;
-  onSettingsChange: (s: RenderSettings) => void;
+  onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
 }) {
   const [applyState, setApplyState] = useState<ExecuteButtonState | undefined>(undefined);
   const prevRenderingRef = useRef(false);
@@ -355,7 +355,7 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       assetSrc: 'osgAssetSrc',
     };
     const key = keyMap[field] ?? field;
-    onSettingsChange({ ...settings, [key]: value });
+    onSettingsChange(prev => ({ ...prev, [key]: value }));
   };
 
   const handleAudioChange = (field: string, value: number) => {
@@ -593,7 +593,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   pendingBackTab?: BackTab | null;
   onClearPendingBackTab?: () => void;
   settings: RenderSettings;
-  onSettingsChange: (s: RenderSettings) => void;
+  onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
