@@ -27,7 +27,7 @@ import {
   SQUARE_HEIGHT,
 } from "../remotion/constants.js";
 
-const LOCK_DURATION_MS = 900_000; // 15 min for renders
+const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
 const REMOTION_ENTRY = new URL("../remotion/index.tsx", import.meta.url).pathname;
 
 let bundleLocation: string | null = null;
