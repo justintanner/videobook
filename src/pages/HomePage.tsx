@@ -385,6 +385,21 @@ export function HomePage() {
         case 'color': return { ...prev, textColor: value };
         case 'highlightColor':
         case 'highlight': return { ...prev, highlightColor: value };
+        case 'stroke':
+        case 'strokeWidth': {
+          const n = Math.max(0, Math.min(20, parseInt(value, 10) || 0));
+          return { ...prev, strokeWidth: n };
+        }
+        case 'strokeColor': return { ...prev, strokeColor: value };
+        case 'shadow':
+        case 'shadowBlur': {
+          const n = Math.max(0, Math.min(30, parseInt(value, 10) || 0));
+          return { ...prev, shadowBlur: n };
+        }
+        case 'shadowOpacity': {
+          const n = Math.max(0, Math.min(100, parseInt(value, 10) || 0));
+          return { ...prev, shadowOpacity: n };
+        }
         default: return prev;
       }
     });

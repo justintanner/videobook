@@ -59,4 +59,8 @@ export interface RenderInputProps extends Record<string, unknown> {
   osgSrc: string | null;
   osgPosition: OsgPosition;
   backgroundMode: BackgroundMode;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 }

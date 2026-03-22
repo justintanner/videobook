@@ -37,6 +37,10 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
         }
         args.osg_position = settings.osgPosition;
         args.background_mode = settings.backgroundMode;
+        args.stroke_width = settings.strokeWidth;
+        args.stroke_color = settings.strokeColor;
+        args.shadow_blur = settings.shadowBlur;
+        args.shadow_opacity = settings.shadowOpacity;
       }
 
       const result = await callToolRef.current("render", args);

@@ -10,6 +10,10 @@ interface SubtitleOverlayProps {
   fontSize: FontSizePreset;
   textColor: string;
   highlightColor: string;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 }
 
 export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
@@ -19,6 +23,10 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
   fontSize,
   textColor,
   highlightColor,
+  strokeWidth,
+  strokeColor,
+  shadowBlur,
+  shadowOpacity,
 }) => {
   if (style === "highlight") {
     return (
@@ -28,6 +36,10 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
         fontSize={fontSize}
         textColor={textColor}
         highlightColor={highlightColor}
+        strokeWidth={strokeWidth}
+        strokeColor={strokeColor}
+        shadowBlur={shadowBlur}
+        shadowOpacity={shadowOpacity}
       />
     );
   }
@@ -39,6 +51,10 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
       fontSize={fontSize}
       textColor={textColor}
       highlightColor={highlightColor}
+      strokeWidth={strokeWidth}
+      strokeColor={strokeColor}
+      shadowBlur={shadowBlur}
+      shadowOpacity={shadowOpacity}
     />
   );
 };

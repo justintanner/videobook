@@ -10,6 +10,10 @@ interface HighlightProps {
   fontSize: FontSizePreset;
   textColor: string;
   highlightColor: string;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 }
 
 export const Highlight: React.FC<HighlightProps> = ({
@@ -18,6 +22,10 @@ export const Highlight: React.FC<HighlightProps> = ({
   fontSize,
   textColor,
   highlightColor,
+  strokeWidth,
+  strokeColor,
+  shadowBlur,
+  shadowOpacity,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -77,7 +85,9 @@ export const Highlight: React.FC<HighlightProps> = ({
                 fontSize: fontPx,
                 lineHeight: 1.2,
                 color: textColor,
-                textShadow: "2px 2px 4px rgba(0,0,0,0.4)",
+                WebkitTextStroke: strokeWidth > 0 ? `${strokeWidth}px ${strokeColor}` : undefined,
+                paintOrder: strokeWidth > 0 ? "stroke fill" : undefined,
+                textShadow: shadowBlur > 0 ? `${Math.round(shadowBlur / 2)}px ${Math.round(shadowBlur / 2)}px ${shadowBlur}px rgba(0,0,0,${shadowOpacity / 100})` : undefined,
                 whiteSpace: "nowrap",
                 padding: `${boxPadding}px`,
                 borderRadius: isActive ? boxRadius : 0,

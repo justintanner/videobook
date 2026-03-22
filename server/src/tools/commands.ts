@@ -316,7 +316,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "default",
     chevron: "right",
     params: [
-      { name: "field", type: "string", required: true, description: "on|off|enabled|style|position|size|fontSize|color|textColor|highlight|highlightColor" },
+      { name: "field", type: "string", required: true, description: "on|off|enabled|style|position|size|fontSize|color|textColor|highlight|highlightColor|stroke|strokeWidth|strokeColor|shadow|shadowBlur|shadowOpacity" },
       { name: "value", type: "string", required: false, description: "Value for the field" },
     ],
     uiAction: "settings_subs",

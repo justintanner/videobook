@@ -1416,6 +1416,10 @@ function Page10_BackFacePanels() {
                 osgAssetSrc={null}
                 osgPosition="bottom-right"
                 backgroundMode="blur"
+                strokeWidth={6}
+                strokeColor="#000000"
+                shadowBlur={6}
+                shadowOpacity={60}
               />
             </div>
           </div>

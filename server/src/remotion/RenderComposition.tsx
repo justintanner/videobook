@@ -22,6 +22,10 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   osgSrc,
   osgPosition,
   backgroundMode,
+  strokeWidth,
+  strokeColor,
+  shadowBlur,
+  shadowOpacity,
 }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
@@ -42,6 +46,10 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
           fontSize={fontSize}
           textColor={textColor}
           highlightColor={highlightColor}
+          strokeWidth={strokeWidth}
+          strokeColor={strokeColor}
+          shadowBlur={shadowBlur}
+          shadowOpacity={shadowOpacity}
         />
       )}
       {osgSrc && (

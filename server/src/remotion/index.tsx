@@ -24,6 +24,10 @@ const defaultProps: RenderInputProps = {
   osgSrc: null,
   osgPosition: "top-right",
   backgroundMode: "blur",
+  strokeWidth: 6,
+  strokeColor: "#000000",
+  shadowBlur: 6,
+  shadowOpacity: 60,
 };
 
 // eslint-disable-next-line react-refresh/only-export-components

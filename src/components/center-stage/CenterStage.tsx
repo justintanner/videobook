@@ -341,9 +341,13 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
     fontSize: 'fontSize',
     textColor: 'textColor',
     highlightColor: 'highlightColor',
+    strokeWidth: 'strokeWidth',
+    strokeColor: 'strokeColor',
+    shadowBlur: 'shadowBlur',
+    shadowOpacity: 'shadowOpacity',
   };
 
-  const handleSubtitleChange = (field: string, value: string | boolean) => {
+  const handleSubtitleChange = (field: string, value: string | boolean | number) => {
     const key = subtitleFieldMap[field] ?? field;
     onSettingsChange({ ...settings, [key]: value });
   };
@@ -376,6 +380,10 @@ function SettingsPane({ item, renderOrientation, onChangeOrientation, onFlip, on
       fontSize={settings.fontSize}
       textColor={settings.textColor}
       highlightColor={settings.highlightColor}
+      strokeWidth={settings.strokeWidth}
+      strokeColor={settings.strokeColor}
+      shadowBlur={settings.shadowBlur}
+      shadowOpacity={settings.shadowOpacity}
       onSubtitleChange={handleSubtitleChange}
       audioVolume={settings.audioVolume}
       audioFadeIn={settings.audioFadeIn}

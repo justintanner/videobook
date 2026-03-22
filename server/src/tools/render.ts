@@ -69,6 +69,22 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         .enum(["blur", "black"])
         .optional()
         .describe("Background fill mode (default: blur)"),
+      stroke_width: z
+        .number()
+        .optional()
+        .describe("Subtitle stroke width in px, 0-20 (default: 6)"),
+      stroke_color: z
+        .string()
+        .optional()
+        .describe("Subtitle stroke color hex (default: #000000)"),
+      shadow_blur: z
+        .number()
+        .optional()
+        .describe("Subtitle shadow blur in px, 0-30 (default: 6)"),
+      shadow_opacity: z
+        .number()
+        .optional()
+        .describe("Subtitle shadow opacity 0-100 (default: 60)"),
     },
     handler: async (args) => {
       const {
@@ -87,6 +103,10 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         osg_asset_id,
         osg_position = "top-right",
         background_mode = "blur",
+        stroke_width = 6,
+        stroke_color = "#000000",
+        shadow_blur = 6,
+        shadow_opacity = 60,
       } = args as {
         asset_id: string;
         project_slug: string;
@@ -103,6 +123,10 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         osg_asset_id?: string;
         osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
         background_mode?: "blur" | "black";
+        stroke_width?: number;
+        stroke_color?: string;
+        shadow_blur?: number;
+        shadow_opacity?: number;
       };
 
       if (!asset_id.startsWith("vid-")) {
@@ -134,6 +158,30 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "audio fade values must be >= 0" }],
+        };
+      }
+      if (stroke_width < 0 || stroke_width > 20) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "stroke_width must be 0-20" }],
+        };
+      }
+      if (stroke_color && !isValidHex(stroke_color)) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Invalid stroke_color hex: ${stroke_color}` }],
+        };
+      }
+      if (shadow_blur < 0 || shadow_blur > 30) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "shadow_blur must be 0-30" }],
+        };
+      }
+      if (shadow_opacity < 0 || shadow_opacity > 100) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "shadow_opacity must be 0-100" }],
         };
       }
 
@@ -236,6 +284,10 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
           osgAssetId: osg_asset_id ?? null,
           osgPosition: osg_position,
           backgroundMode: background_mode,
+          strokeWidth: stroke_width,
+          strokeColor: stroke_color,
+          shadowBlur: shadow_blur,
+          shadowOpacity: shadow_opacity,
         });
         jobs.push({ job_id: jobId, orientation });
       }

@@ -163,6 +163,10 @@ export async function readStoredRenderDefaults(
     osgAssetId: null,
     osgPosition: "top-right",
     backgroundMode: "blur",
+    strokeWidth: 6,
+    strokeColor: "#000000",
+    shadowBlur: 6,
+    shadowOpacity: 60,
   };
   // Try target orientation first, then fall back to any other orientation
   const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];

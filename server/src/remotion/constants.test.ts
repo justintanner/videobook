@@ -14,7 +14,6 @@ import {
   POP_DURATION_FRAMES,
   POP_SCALE_START,
   POP_SCALE_END,
-  IMPACT_STROKE_WIDTH,
 } from "./constants.js";
 import type { FontSizePreset, Orientation, SubtitlePosition } from "./subtitles/types.js";
 
@@ -103,12 +102,6 @@ describe("getHighlightFontSize", () => {
       });
     }
   }
-});
-
-describe("IMPACT_STROKE_WIDTH", () => {
-  it("has correct stroke width", () => {
-    expect(IMPACT_STROKE_WIDTH).toBe(6);
-  });
 });
 
 describe("getYPosition", () => {

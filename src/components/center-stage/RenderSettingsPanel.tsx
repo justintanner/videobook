@@ -25,7 +25,11 @@ export interface RenderSettingsPanelProps {
   fontSize: 'small' | 'medium' | 'large';
   textColor?: string;
   highlightColor?: string;
-  onSubtitleChange?: (field: string, value: string | boolean) => void;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
+  onSubtitleChange?: (field: string, value: string | boolean | number) => void;
 
   audioVolume: number;
   audioFadeIn: number;
@@ -277,6 +281,10 @@ export function RenderSettingsPanel({
   fontSize,
   textColor = '#F8FAFC',
   highlightColor = '#991B1B',
+  strokeWidth,
+  strokeColor,
+  shadowBlur,
+  shadowOpacity,
   onSubtitleChange,
   audioVolume,
   audioFadeIn,
@@ -387,6 +395,18 @@ export function RenderSettingsPanel({
               </SettingRow>
               <SettingRow label="Highlight">
                 <ColorSwatch disabled={disabled} value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
+              </SettingRow>
+              <SettingRow label="Stroke">
+                <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
+              </SettingRow>
+              <SettingRow label="Stroke Color">
+                <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
+              </SettingRow>
+              <SettingRow label="Shadow">
+                <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
+              </SettingRow>
+              <SettingRow label="Shadow Opacity">
+                <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
               </SettingRow>
             </SettingsSection>
 

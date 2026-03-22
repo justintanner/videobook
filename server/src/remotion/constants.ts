@@ -23,8 +23,6 @@ export function getImpactFontSize(preset: FontSizePreset, orientation: Orientati
   return IMPACT_FONT_SIZES[preset][orientation];
 }
 
-export const IMPACT_STROKE_WIDTH = 6;
-
 export function getHighlightFontSize(preset: FontSizePreset, orientation: Orientation): number {
   return HIGHLIGHT_FONT_SIZES[preset][orientation];
 }

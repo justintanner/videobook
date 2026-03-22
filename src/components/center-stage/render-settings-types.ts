@@ -12,6 +12,10 @@ export interface RenderSettings {
   osgAssetSrc: string | null;
   osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   backgroundMode: 'blur' | 'black';
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 }
 
 export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
@@ -28,6 +32,10 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   osgAssetSrc: null,
   osgPosition: 'top-right',
   backgroundMode: 'blur',
+  strokeWidth: 6,
+  strokeColor: '#000000',
+  shadowBlur: 6,
+  shadowOpacity: 60,
 };
 
 function extractAssetId(osgImagePath: string | undefined | null): string | null {
@@ -60,5 +68,9 @@ export function storedToRenderSettings(stored: Record<string, unknown>): RenderS
     osgAssetSrc: null, // frontend resolves src from asset list
     osgPosition: (stored.osgPosition as RenderSettings['osgPosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgPosition,
     backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,
+    strokeWidth: (stored.strokeWidth as number | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeWidth,
+    strokeColor: (stored.strokeColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeColor,
+    shadowBlur: (stored.shadowBlur as number | undefined) ?? DEFAULT_RENDER_SETTINGS.shadowBlur,
+    shadowOpacity: (stored.shadowOpacity as number | undefined) ?? DEFAULT_RENDER_SETTINGS.shadowOpacity,
   };
 }

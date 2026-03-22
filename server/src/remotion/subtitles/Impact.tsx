@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Anton";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
 import { getCurrentWordIndex } from "../util.js";
-import { getImpactFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END, IMPACT_STROKE_WIDTH } from "../constants.js";
+import { getImpactFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END } from "../constants.js";
 
 const { fontFamily } = loadFont();
 
@@ -13,6 +13,10 @@ interface ImpactProps {
   fontSize: FontSizePreset;
   textColor: string;
   highlightColor: string;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 }
 
 export const Impact: React.FC<ImpactProps> = ({
@@ -21,6 +25,10 @@ export const Impact: React.FC<ImpactProps> = ({
   fontSize,
   textColor,
   highlightColor,
+  strokeWidth,
+  strokeColor,
+  shadowBlur,
+  shadowOpacity,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -93,9 +101,9 @@ export const Impact: React.FC<ImpactProps> = ({
                 fontSize: fontPx,
                 lineHeight: 1.1,
                 color: isActive ? highlightColor : textColor,
-                WebkitTextStroke: `${IMPACT_STROKE_WIDTH}px black`,
-                paintOrder: "stroke fill",
-                textShadow: "3px 3px 6px rgba(0,0,0,0.6)",
+                WebkitTextStroke: strokeWidth > 0 ? `${strokeWidth}px ${strokeColor}` : undefined,
+                paintOrder: strokeWidth > 0 ? "stroke fill" : undefined,
+                textShadow: shadowBlur > 0 ? `${Math.round(shadowBlur / 2)}px ${Math.round(shadowBlur / 2)}px ${shadowBlur}px rgba(0,0,0,${shadowOpacity / 100})` : undefined,
                 whiteSpace: "nowrap",
                 transform: `scale(${scale})`,
                 display: "inline-block",

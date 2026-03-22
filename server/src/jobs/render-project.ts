@@ -76,6 +76,10 @@ type RenderProjectPayload = {
   osgAssetId?: string | null;
   osgPosition: OsgPosition;
   backgroundMode: BackgroundMode;
+  strokeWidth: number;
+  strokeColor: string;
+  shadowBlur: number;
+  shadowOpacity: number;
 };
 
 export function registerRenderProjectJob(fs: ClipfirstFs): void {
@@ -97,6 +101,10 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
       osgAssetId,
       osgPosition,
       backgroundMode,
+      strokeWidth,
+      strokeColor,
+      shadowBlur,
+      shadowOpacity,
     } = payload as RenderProjectPayload;
 
     const bundleDir = await getBundleLocation();
@@ -176,6 +184,10 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 osgSrc: osgCopyName,
                 osgPosition: osgPosition ?? "top-right",
                 backgroundMode,
+                strokeWidth,
+                strokeColor,
+                shadowBlur,
+                shadowOpacity,
               };
 
               const outputPath = join(asset.assetDir, outputFilename);
@@ -240,6 +252,10 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 audioFadeOut,
                 audioVolume,
                 backgroundMode,
+                strokeWidth,
+                strokeColor,
+                shadowBlur,
+                shadowOpacity,
                 osgImagePath: osgImagePath ?? undefined,
                 osgAssetId: osgAssetId ?? undefined,
                 osgPosition,
