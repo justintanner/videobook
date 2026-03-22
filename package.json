@@ -29,6 +29,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/cli": "^4.0.434",
+    "@remotion/google-fonts": "^4.0.434",
     "@remotion/player": "4.0.434",
     "@remotion/renderer": "^4.0.434",
     "@wavesurfer/react": "^1.0.12",

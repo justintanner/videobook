@@ -6,7 +6,7 @@ import {
   PORTRAIT_HEIGHT,
   SQUARE_WIDTH,
   SQUARE_HEIGHT,
-  getTikDanceFontSize,
+  getImpactFontSize,
   getHighlightFontSize,
   getYPosition,
   DEFAULT_TEXT_COLOR,
@@ -14,6 +14,7 @@ import {
   POP_DURATION_FRAMES,
   POP_SCALE_START,
   POP_SCALE_END,
+  IMPACT_STROKE_WIDTH,
 } from "./constants.js";
 import type { FontSizePreset, Orientation, SubtitlePosition } from "./subtitles/types.js";
 
@@ -45,22 +46,22 @@ describe("default style constants", () => {
 
   it("has correct pop animation constants", () => {
     expect(POP_DURATION_FRAMES).toBe(4);
-    expect(POP_SCALE_START).toBe(1.05);
+    expect(POP_SCALE_START).toBe(1.15);
     expect(POP_SCALE_END).toBe(1.0);
   });
 });
 
-describe("getTikDanceFontSize", () => {
+describe("getImpactFontSize", () => {
   const expected: Record<string, number> = {
-    "small:portrait": 56,
-    "small:landscape": 44,
-    "small:square": 44,
-    "medium:portrait": 72,
-    "medium:landscape": 56,
-    "medium:square": 56,
-    "large:portrait": 88,
-    "large:landscape": 72,
-    "large:square": 72,
+    "small:portrait": 96,
+    "small:landscape": 56,
+    "small:square": 56,
+    "medium:portrait": 120,
+    "medium:landscape": 72,
+    "medium:square": 72,
+    "large:portrait": 144,
+    "large:landscape": 88,
+    "large:square": 88,
   };
 
   const presets: FontSizePreset[] = ["small", "medium", "large"];
@@ -69,7 +70,7 @@ describe("getTikDanceFontSize", () => {
   for (const preset of presets) {
     for (const orientation of orientations) {
       it(`returns ${expected[`${preset}:${orientation}`]} for ${preset}:${orientation}`, () => {
-        expect(getTikDanceFontSize(preset, orientation)).toBe(
+        expect(getImpactFontSize(preset, orientation)).toBe(
           expected[`${preset}:${orientation}`],
         );
       });
@@ -102,6 +103,12 @@ describe("getHighlightFontSize", () => {
       });
     }
   }
+});
+
+describe("IMPACT_STROKE_WIDTH", () => {
+  it("has correct stroke width", () => {
+    expect(IMPACT_STROKE_WIDTH).toBe(6);
+  });
 });
 
 describe("getYPosition", () => {

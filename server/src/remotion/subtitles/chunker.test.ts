@@ -44,34 +44,33 @@ describe("chunkSegments", () => {
     expect(result[0].end).toBe(0.5);
   });
 
-  describe("tikdance:portrait limits (maxWords=3, maxChars=16)", () => {
+  describe("impact:portrait limits (maxWords=2, maxChars=12)", () => {
     it("splits by maxWords when exceeded", () => {
       const words = [
         makeWord("one", 0.0, 0.2),
         makeWord("two", 0.3, 0.5),
         makeWord("three", 0.6, 0.8),
-        makeWord("four", 0.9, 1.1),
       ];
-      const segments = [makeSegment("one two three four", 0, 1.1, words)];
-      const result = chunkSegments(segments, "portrait", "tikdance");
+      const segments = [makeSegment("one two three", 0, 0.8, words)];
+      const result = chunkSegments(segments, "portrait", "impact");
 
-      // maxWords=3 so 4th word triggers split after 3 words
+      // maxWords=2 so 3rd word triggers split after 2 words
       expect(result.length).toBeGreaterThanOrEqual(2);
-      // First chunk should have at most 3 words
-      expect(result[0].words.length).toBeLessThanOrEqual(3);
+      // First chunk should have at most 2 words
+      expect(result[0].words.length).toBeLessThanOrEqual(2);
     });
 
-    it("splits by maxChars when text exceeds 16 chars", () => {
+    it("splits by maxChars when text exceeds 12 chars", () => {
       const words = [
-        makeWord("longword1234", 0.0, 0.5),
+        makeWord("longword", 0.0, 0.5),
         makeWord("extra", 0.6, 1.0),
       ];
-      const segments = [makeSegment("longword1234 extra", 0, 1.0, words)];
-      const result = chunkSegments(segments, "portrait", "tikdance");
+      const segments = [makeSegment("longword extra", 0, 1.0, words)];
+      const result = chunkSegments(segments, "portrait", "impact");
 
-      // "longword1234 extra" is 18 chars > 16, so second word triggers split
+      // "longword extra" is 14 chars > 12, so second word triggers split
       expect(result.length).toBe(2);
-      expect(result[0].text).toBe("longword1234");
+      expect(result[0].text).toBe("longword");
       expect(result[1].text).toBe("extra");
     });
   });
@@ -116,50 +115,41 @@ describe("chunkSegments", () => {
   });
 
   describe("different orientations", () => {
-    it("landscape tikdance allows more words (maxWords=5)", () => {
+    it("landscape impact allows 2 words (maxWords=2)", () => {
       const words = [
         makeWord("a", 0.0, 0.1),
         makeWord("b", 0.2, 0.3),
-        makeWord("c", 0.4, 0.5),
-        makeWord("d", 0.6, 0.7),
-        makeWord("e", 0.8, 0.9),
       ];
-      const segments = [makeSegment("a b c d e", 0, 0.9, words)];
-      const result = chunkSegments(segments, "landscape", "tikdance");
+      const segments = [makeSegment("a b", 0, 0.3, words)];
+      const result = chunkSegments(segments, "landscape", "impact");
 
-      // 5 words fits within landscape maxWords=5
       expect(result).toHaveLength(1);
-      expect(result[0].words).toHaveLength(5);
+      expect(result[0].words).toHaveLength(2);
     });
 
-    it("portrait tikdance splits 5 words into multiple chunks (maxWords=3)", () => {
+    it("portrait impact splits 3 words into multiple chunks (maxWords=2)", () => {
       const words = [
         makeWord("a", 0.0, 0.1),
         makeWord("b", 0.2, 0.3),
         makeWord("c", 0.4, 0.5),
-        makeWord("d", 0.6, 0.7),
-        makeWord("e", 0.8, 0.9),
       ];
-      const segments = [makeSegment("a b c d e", 0, 0.9, words)];
-      const result = chunkSegments(segments, "portrait", "tikdance");
+      const segments = [makeSegment("a b c", 0, 0.5, words)];
+      const result = chunkSegments(segments, "portrait", "impact");
 
       expect(result.length).toBeGreaterThan(1);
     });
 
-    it("square orientation uses landscape values (maxWords=5 for tikdance)", () => {
+    it("square orientation uses same limits as landscape (maxWords=2 for impact)", () => {
       const words = [
         makeWord("a", 0.0, 0.1),
         makeWord("b", 0.2, 0.3),
-        makeWord("c", 0.4, 0.5),
-        makeWord("d", 0.6, 0.7),
-        makeWord("e", 0.8, 0.9),
       ];
-      const segments = [makeSegment("a b c d e", 0, 0.9, words)];
-      const result = chunkSegments(segments, "square", "tikdance");
+      const segments = [makeSegment("a b", 0, 0.3, words)];
+      const result = chunkSegments(segments, "square", "impact");
 
-      // square tikdance = [30, 5], so 5 words fits
+      // square impact = [16, 2], so 2 words fits
       expect(result).toHaveLength(1);
-      expect(result[0].words).toHaveLength(5);
+      expect(result[0].words).toHaveLength(2);
     });
   });
 
@@ -237,7 +227,7 @@ describe("chunkSegments", () => {
     expect(result[1].text).toBe("Bye.");
   });
 
-  it("defaults orientation to portrait and style to tikdance", () => {
+  it("defaults orientation to portrait and style to impact", () => {
     const words = [
       makeWord("a", 0.0, 0.1),
       makeWord("b", 0.2, 0.3),
@@ -246,7 +236,7 @@ describe("chunkSegments", () => {
     ];
     const segments = [makeSegment("a b c d", 0, 0.7, words)];
 
-    // Default = tikdance:portrait = maxWords 3
+    // Default = impact:portrait = maxWords 2
     const result = chunkSegments(segments);
     expect(result.length).toBeGreaterThan(1);
   });

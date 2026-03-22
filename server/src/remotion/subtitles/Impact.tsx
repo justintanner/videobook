@@ -1,10 +1,13 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion";
+import { loadFont } from "@remotion/google-fonts/Bangers";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
 import { getCurrentWordIndex } from "../util.js";
-import { getTikDanceFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END } from "../constants.js";
+import { getImpactFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END, IMPACT_STROKE_WIDTH } from "../constants.js";
 
-interface TikDanceProps {
+const { fontFamily } = loadFont();
+
+interface ImpactProps {
   chunks: Chunk[];
   position: SubtitlePosition;
   fontSize: FontSizePreset;
@@ -12,7 +15,7 @@ interface TikDanceProps {
   highlightColor: string;
 }
 
-export const TikDance: React.FC<TikDanceProps> = ({
+export const Impact: React.FC<ImpactProps> = ({
   chunks,
   position,
   fontSize,
@@ -24,7 +27,7 @@ export const TikDance: React.FC<TikDanceProps> = ({
   const currentTime = frame / fps;
 
   const orientation: Orientation = height > width ? "portrait" : width === height ? "square" : "landscape";
-  const fontPx = getTikDanceFontSize(fontSize, orientation);
+  const fontPx = getImpactFontSize(fontSize, orientation);
   const yFraction = getYPosition(position, orientation);
 
   const activeChunk = chunks.find(
@@ -53,12 +56,11 @@ export const TikDance: React.FC<TikDanceProps> = ({
       <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
           gap: `${Math.round(fontPx * 0.25)}px`,
-          maxWidth: `${width - 120}px`,
-          padding: "0 60px",
+          maxWidth: `${width - 80}px`,
+          padding: "0 40px",
         }}
       >
         {activeChunk.words.map((word, i) => {
@@ -86,21 +88,21 @@ export const TikDance: React.FC<TikDanceProps> = ({
             <span
               key={i}
               style={{
-                fontFamily: "Arial Black, Arial, Helvetica, sans-serif",
-                fontWeight: 900,
+                fontFamily,
+                fontWeight: 400,
                 fontSize: fontPx,
-                lineHeight: 1.2,
+                lineHeight: 1.1,
                 color: isActive ? highlightColor : textColor,
-                WebkitTextStroke: "4px black",
+                WebkitTextStroke: `${IMPACT_STROKE_WIDTH}px black`,
                 paintOrder: "stroke fill",
-                textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+                textShadow: "3px 3px 6px rgba(0,0,0,0.6)",
                 whiteSpace: "nowrap",
                 transform: `scale(${scale})`,
                 display: "inline-block",
                 userSelect: "none",
               }}
             >
-              {text}
+              {text.toUpperCase()}
             </span>
           );
         })}

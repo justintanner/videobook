@@ -1,6 +1,6 @@
 import React from "react";
 import type { Chunk, SubtitleStyle, SubtitlePosition, FontSizePreset } from "./types.js";
-import { TikDance } from "./TikDance.js";
+import { Impact } from "./Impact.js";
 import { Highlight } from "./Highlight.js";
 
 interface SubtitleOverlayProps {
@@ -33,7 +33,7 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({
   }
 
   return (
-    <TikDance
+    <Impact
       chunks={chunks}
       position={position}
       fontSize={fontSize}

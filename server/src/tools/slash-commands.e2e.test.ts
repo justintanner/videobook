@@ -2131,9 +2131,9 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it("renders with highlight_style='tikdance' (default)", async () => {
+    it("renders with highlight_style='impact' (default)", async () => {
       const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "tikdance-test", "test-proj");
+      const asset = await fs.createAsset("vid", "impact-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
@@ -2144,7 +2144,7 @@ describe("slash commands e2e", () => {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
           subtitles_enabled: true,
-          highlight_style: "tikdance",
+          highlight_style: "impact",
         },
       });
       expect(result.isError).toBeFalsy();
@@ -3866,10 +3866,10 @@ describe("slash commands e2e", () => {
       expect(args.value).toBeUndefined();
     });
 
-    it("/subs style tikdance", () => {
-      const args = simulateParse("/subs", "style tikdance");
+    it("/subs style impact", () => {
+      const args = simulateParse("/subs", "style impact");
       expect(args.field).toBe("style");
-      expect(args.value).toBe("tikdance");
+      expect(args.value).toBe("impact");
     });
 
     it("/subs style highlight", () => {
@@ -4034,11 +4034,11 @@ describe("slash commands e2e", () => {
       let captured: [string, string] | undefined;
       const map = { settings_subs: (f: string, v: string) => { captured = [f, v]; } };
       const result = executeUiAction("settings_subs", map, {
-        raw: "style tikdance",
-        args: { field: "style", value: "tikdance" },
+        raw: "style impact",
+        args: { field: "style", value: "impact" },
       });
       expect(result).toBe(true);
-      expect(captured).toEqual(["style", "tikdance"]);
+      expect(captured).toEqual(["style", "impact"]);
     });
 
     it("settings_subs dispatches on/off (value empty)", () => {

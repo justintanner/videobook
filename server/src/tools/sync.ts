@@ -151,7 +151,7 @@ export async function readStoredRenderDefaults(
 ): Promise<Record<string, unknown>> {
   const HARDCODED_DEFAULTS: Record<string, unknown> = {
     subtitlesEnabled: false,
-    highlightStyle: "tikdance",
+    highlightStyle: "impact",
     position: "bottom",
     fontSize: "medium",
     textColor: "#F8FAFC",
@@ -168,7 +168,12 @@ export async function readStoredRenderDefaults(
   const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];
   for (const orient of tryOrder) {
     const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
-    if (meta.ok) return { ...HARDCODED_DEFAULTS, ...meta.value };
+    if (meta.ok) {
+      const merged = { ...HARDCODED_DEFAULTS, ...meta.value };
+      // Migrate old "tikdance" → "impact"
+      if (merged.highlightStyle === "tikdance") merged.highlightStyle = "impact";
+      return merged;
+    }
   }
   return HARDCODED_DEFAULTS;
 }

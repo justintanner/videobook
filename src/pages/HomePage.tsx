@@ -362,7 +362,7 @@ export function HomePage() {
         case 'on': return { ...prev, subtitlesEnabled: true };
         case 'off': return { ...prev, subtitlesEnabled: false };
         case 'style': {
-          if (value === 'tikdance' || value === 'highlight') return { ...prev, subtitleStyle: value };
+          if (value === 'impact' || value === 'highlight') return { ...prev, subtitleStyle: value };
           return prev;
         }
         case 'position': {

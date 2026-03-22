@@ -24,7 +24,7 @@ function parseResult(result: { content: unknown }): Record<string, unknown> {
 }
 
 const ORIENTATIONS = ["landscape", "portrait", "square"] as const;
-const HIGHLIGHT_STYLES = ["tikdance", "highlight"] as const;
+const HIGHLIGHT_STYLES = ["impact", "highlight"] as const;
 const POSITIONS = ["top", "middle", "bottom"] as const;
 const FONT_SIZES = ["small", "medium", "large"] as const;
 const BACKGROUND_MODES = ["blur", "black"] as const;
@@ -425,7 +425,7 @@ describe("render orientation: full settings matrix", () => {
           asset_id: asset.value.assetId,
           project_slug: "jazzy-salmon-95",
           subtitles_enabled: true,
-          highlight_style: "tikdance",
+          highlight_style: "impact",
           position: "bottom",
           font_size: "medium",
           text_color: "#F8FAFC",
@@ -501,9 +501,9 @@ describe("render orientation: full settings matrix", () => {
       expect(parseResult(result).orientation).toBe(orientation);
     });
 
-    it(`${orientation}: tikdance style with mid position + small font + black bg`, async () => {
+    it(`${orientation}: impact style with mid position + small font + black bg`, async () => {
       const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", `full-tikdance-mid-${orientation}`, "jazzy-salmon-95");
+      const asset = await fs.createAsset("vid", `full-impact-mid-${orientation}`, "jazzy-salmon-95");
       if (!asset.ok) throw new Error("Failed to create asset");
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "jazzy-salmon-95");
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "jazzy-salmon-95");
@@ -519,7 +519,7 @@ describe("render orientation: full settings matrix", () => {
           asset_id: asset.value.assetId,
           project_slug: "jazzy-salmon-95",
           subtitles_enabled: true,
-          highlight_style: "tikdance",
+          highlight_style: "impact",
           position: "middle",
           font_size: "small",
           text_color: "#F0F0F0",
@@ -610,7 +610,7 @@ describe("render orientation: timeline switching between orientations", () => {
           asset_id: asset.value.assetId,
           project_slug: "jazzy-salmon-95",
           subtitles_enabled: true,
-          highlight_style: "tikdance",
+          highlight_style: "impact",
           position: "bottom",
           font_size: "medium",
         },
@@ -896,10 +896,10 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(parsed.orientation).toBe("landscape");
   });
 
-  // --- highlight_style: tikdance ---
-  it("highlight_style=tikdance succeeds with subtitles enabled", async () => {
+  // --- highlight_style: impact ---
+  it("highlight_style=impact succeeds with subtitles enabled", async () => {
     const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "style-tikdance-test", "jazzy-salmon-95");
+    const asset = await fs.createAsset("vid", "style-impact-test", "jazzy-salmon-95");
     if (!asset.ok) throw new Error("Failed to create asset");
     await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "jazzy-salmon-95");
     await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "jazzy-salmon-95");
@@ -915,7 +915,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
         asset_id: asset.value.assetId,
         project_slug: "jazzy-salmon-95",
         subtitles_enabled: true,
-        highlight_style: "tikdance",
+        highlight_style: "impact",
       },
     });
     expect(result.isError).toBeFalsy();
@@ -953,9 +953,9 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
   });
 
   // --- highlight_style with additional subtitle settings ---
-  it("tikdance style with position and font_size settings", async () => {
+  it("impact style with position and font_size settings", async () => {
     const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "tikdance-full-opts", "jazzy-salmon-95");
+    const asset = await fs.createAsset("vid", "impact-full-opts", "jazzy-salmon-95");
     if (!asset.ok) throw new Error("Failed to create asset");
     await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "jazzy-salmon-95");
     await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "jazzy-salmon-95");
@@ -971,7 +971,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
         asset_id: asset.value.assetId,
         project_slug: "jazzy-salmon-95",
         subtitles_enabled: true,
-        highlight_style: "tikdance",
+        highlight_style: "impact",
         position: "middle",
         font_size: "large",
         text_color: "#FFFFFF",
@@ -1033,7 +1033,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
         asset_id: asset.value.assetId,
         project_slug: "jazzy-salmon-95",
         subtitles_enabled: false,
-        highlight_style: "tikdance",
+        highlight_style: "impact",
       },
     });
     expect(result.isError).toBeFalsy();
@@ -1657,15 +1657,15 @@ describe("render color settings: text_color and highlight_color", () => {
     expect(parsed.status).toBe("enqueued");
   });
 
-  it("highlight_color=#00FF00 applies with highlight_style=tikdance", async () => {
-    const assetId = await createSubtitledVidAsset("color-style-tikdance");
+  it("highlight_color=#00FF00 applies with highlight_style=impact", async () => {
+    const assetId = await createSubtitledVidAsset("color-style-impact");
     const result = await client.callTool({
       name: "render",
       arguments: {
         asset_id: assetId,
         project_slug: "jazzy-salmon-95",
         subtitles_enabled: true,
-        highlight_style: "tikdance",
+        highlight_style: "impact",
         highlight_color: "#00FF00",
         text_color: "#FF0000",
       },
@@ -2260,7 +2260,7 @@ describe("render: background_mode focused", () => {
         project_slug: "jazzy-salmon-95",
         subtitles_enabled: true,
         background_mode: "blur",
-        highlight_style: "tikdance",
+        highlight_style: "impact",
         position: "bottom",
         font_size: "medium",
       },

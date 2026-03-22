@@ -13,7 +13,7 @@ const defaultProps: RenderInputProps = {
   fps: 30,
   subtitlesEnabled: false,
   chunks: [],
-  style: "tikdance",
+  style: "impact",
   position: "bottom",
   fontSize: "medium",
   textColor: "#F8FAFC",

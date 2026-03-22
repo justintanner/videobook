@@ -20,7 +20,7 @@ export interface RenderSettingsPanelProps {
   onOrientationClick?: (orient: Orientation) => void;
 
   subtitlesEnabled: boolean;
-  subtitleStyle: 'tikdance' | 'highlight';
+  subtitleStyle: 'impact' | 'highlight';
   subtitlePosition: 'top' | 'middle' | 'bottom';
   fontSize: 'small' | 'medium' | 'large';
   textColor?: string;
@@ -380,7 +380,7 @@ export function RenderSettingsPanel({
               <SegmentedControl
                 disabled={disabled}
                 options={[
-                  { label: 'TikDance', value: 'tikdance' },
+                  { label: 'Impact', value: 'impact' },
                   { label: 'Highlight', value: 'highlight' },
                 ]}
                 value={subtitleStyle}

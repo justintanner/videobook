@@ -7,10 +7,10 @@ export const PORTRAIT_HEIGHT = 1920;
 export const SQUARE_WIDTH = 1080;
 export const SQUARE_HEIGHT = 1080;
 
-const TIKDANCE_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> = {
-  small:  { portrait: 56,  landscape: 44, square: 44 },
-  medium: { portrait: 72,  landscape: 56, square: 56 },
-  large:  { portrait: 88,  landscape: 72, square: 72 },
+const IMPACT_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> = {
+  small:  { portrait: 96,  landscape: 56, square: 56 },
+  medium: { portrait: 120, landscape: 72, square: 72 },
+  large:  { portrait: 144, landscape: 88, square: 88 },
 };
 
 const HIGHLIGHT_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> = {
@@ -19,9 +19,11 @@ const HIGHLIGHT_FONT_SIZES: Record<FontSizePreset, Record<Orientation, number>> 
   large:  { portrait: 88,  landscape: 64, square: 64 },
 };
 
-export function getTikDanceFontSize(preset: FontSizePreset, orientation: Orientation): number {
-  return TIKDANCE_FONT_SIZES[preset][orientation];
+export function getImpactFontSize(preset: FontSizePreset, orientation: Orientation): number {
+  return IMPACT_FONT_SIZES[preset][orientation];
 }
+
+export const IMPACT_STROKE_WIDTH = 6;
 
 export function getHighlightFontSize(preset: FontSizePreset, orientation: Orientation): number {
   return HIGHLIGHT_FONT_SIZES[preset][orientation];
@@ -40,5 +42,5 @@ export function getYPosition(position: SubtitlePosition, orientation: Orientatio
 export const DEFAULT_TEXT_COLOR = "#F8FAFC";
 export const DEFAULT_HIGHLIGHT_COLOR = "#991B1B";
 export const POP_DURATION_FRAMES = 4; // ~120ms at 30fps
-export const POP_SCALE_START = 1.05;
+export const POP_SCALE_START = 1.15;
 export const POP_SCALE_END = 1.0;

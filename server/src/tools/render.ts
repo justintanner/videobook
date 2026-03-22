@@ -27,9 +27,9 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         .optional()
         .describe("Enable subtitle overlay (default: true when elevenlabs.json exists)"),
       highlight_style: z
-        .enum(["tikdance", "highlight"])
+        .enum(["impact", "highlight"])
         .optional()
-        .describe("Subtitle animation style (default: tikdance)"),
+        .describe("Subtitle animation style (default: impact)"),
       position: z
         .enum(["top", "middle", "bottom"])
         .optional()
@@ -76,7 +76,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         asset_id,
         project_slug,
         subtitles_enabled,
-        highlight_style = "tikdance",
+        highlight_style = "impact",
         position = "bottom",
         font_size = "medium",
         text_color = "#F8FAFC",
@@ -91,7 +91,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         asset_id: string;
         project_slug: string;
         subtitles_enabled?: boolean;
-        highlight_style?: "tikdance" | "highlight";
+        highlight_style?: "impact" | "highlight";
         position?: "top" | "middle" | "bottom";
         font_size?: "small" | "medium" | "large";
         text_color?: string;

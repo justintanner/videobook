@@ -19,7 +19,7 @@ export interface Chunk {
 }
 
 export type Orientation = "landscape" | "portrait" | "square";
-export type SubtitleStyle = "tikdance" | "highlight";
+export type SubtitleStyle = "impact" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
 export type OsgPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";

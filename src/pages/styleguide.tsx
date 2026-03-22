@@ -1406,7 +1406,7 @@ function Page10_BackFacePanels() {
                   { orient: 'square', active: false, rendered: false, rendering: true },
                 ]}
                 subtitlesEnabled={true}
-                subtitleStyle="tikdance"
+                subtitleStyle="impact"
                 subtitlePosition="bottom"
                 fontSize="medium"
                 audioVolume={80}
