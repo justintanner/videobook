@@ -489,7 +489,7 @@ async function processSyncedTask(
   }
 }
 
-type RenderAction = {
+export type RenderAction = {
   assetId: string;
   assetDir: string;
   videoPath: string;
@@ -497,7 +497,7 @@ type RenderAction = {
   hasElevenlabs: boolean;
 };
 
-async function findAutoRenderActions(
+export async function findAutoRenderActions(
   fs: ClipfirstFs,
   projectSlug: string,
   assets: AssetEntry[],

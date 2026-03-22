@@ -6,8 +6,34 @@ import { findVideoFile } from "../media-files.js";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
+import { findAutoRenderActions, readStoredRenderDefaults } from "./sync.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
+
+type TimelineSlot = {
+  slug: string;
+  volume?: number;
+  audioFadeIn?: number;
+  audioFadeOut?: number;
+};
+
+type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
+
+type TimelineConfig = {
+  slots: TimelineSlot[];
+  render: Orientation;
+  currentOrientation?: ViewerSize;
+};
+
+function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
+  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
+  return {
+    ...raw,
+    render: Array.isArray(raw.render)
+      ? ((raw.render as unknown as string[])[0] ?? "landscape") as Orientation
+      : raw.render,
+  };
+}
 
 export function renderDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -292,6 +318,69 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         jobs.push({ job_id: jobId, orientation });
       }
 
+      // --- Cascade rendering: update project orientation and render other clips ---
+      const cascadeJobs: Array<{ asset_id: string; job_id: string; orientation: Orientation }> = [];
+      let savedOrientation: Orientation | undefined;
+
+      if (explicitOrientation) {
+        try {
+          // Update timeline.render to the explicit orientation
+          const timelineResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+          let config: TimelineConfig;
+          if (timelineResult.ok) {
+            config = normalizeConfig(timelineResult.value);
+          } else {
+            const err = (timelineResult as { ok: false; error: { code: string; message: string } }).error;
+            if (err.code === "NOT_FOUND") {
+              config = { slots: [], render: "landscape" };
+            } else {
+              throw new Error(err.message);
+            }
+          }
+          config.render = explicitOrientation;
+          await fs.writeProjectMeta("timeline", config, project_slug);
+          savedOrientation = explicitOrientation;
+
+          // Find other eligible clips and enqueue renders
+          const assets = await fs.listAssets(project_slug);
+          const actions = await findAutoRenderActions(fs, project_slug, assets, explicitOrientation);
+          const cascadeActions = actions.filter((a) => a.assetId !== asset_id);
+
+          for (const action of cascadeActions) {
+            const stored = await readStoredRenderDefaults(fs, action.assetId, project_slug, explicitOrientation);
+            const jobId = `cascade-render-${action.assetId}-${explicitOrientation}-${Date.now()}`;
+            await queue.enqueue(jobId, {
+              type: "render_project",
+              projectSlug: project_slug,
+              orientation: explicitOrientation,
+              assets: [{
+                assetId: action.assetId,
+                assetDir: action.assetDir,
+                videoPath: action.videoPath,
+                videoFilename: action.videoFilename,
+                hasElevenlabs: action.hasElevenlabs,
+              }],
+              subtitlesEnabled: action.hasElevenlabs ? (stored.subtitlesEnabled as boolean) : false,
+              highlightStyle: stored.highlightStyle as string,
+              position: stored.position as string,
+              fontSize: stored.fontSize as string,
+              textColor: stored.textColor as string,
+              highlightColor: stored.highlightColor as string,
+              audioFadeIn: stored.audioFadeIn as number,
+              audioFadeOut: stored.audioFadeOut as number,
+              audioVolume: stored.audioVolume as number,
+              osgImagePath: (stored.osgImagePath as string | null) ?? null,
+              osgAssetId: (stored.osgAssetId as string | null) ?? null,
+              osgPosition: stored.osgPosition as string,
+              backgroundMode: stored.backgroundMode as string,
+            });
+            cascadeJobs.push({ asset_id: action.assetId, job_id: jobId, orientation: explicitOrientation });
+          }
+        } catch (err) {
+          console.warn("Cascade rendering failed (non-fatal):", err);
+        }
+      }
+
       return {
         content: [{
           type: "text" as const,
@@ -299,6 +388,8 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
             asset_id,
             orientations: orientations,
             jobs,
+            cascade_jobs: cascadeJobs,
+            ...(savedOrientation !== undefined && { timeline_render: savedOrientation }),
             status: "enqueued",
           }),
         }],
