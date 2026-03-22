@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Settings, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, Film } from 'lucide-react';
+import { Settings, ChevronDown, RotateCcw, AudioLines, FileText, Monitor, Smartphone, Square, Check, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -84,57 +84,24 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
 }
 
 
-function RenderPrompt({ item, orient, onRender }: {
+function RenderPrompt({ item, onRender }: {
   item: MediaItem;
-  orient: Orientation;
   onRender?: () => void;
 }) {
-  const primaryColor = item.type === 'final' ? '#fbbf24' : 'var(--color-primary)';
-
   return (
-    <div
-      className={cn(
-        'w-full h-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden',
-        item.type === 'final' ? 'border border-amber-500/30' : 'border border-primary/30',
-      )}
-    >
-      {/* Grid overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-10"
-        style={{
-          backgroundImage: `
-            linear-gradient(${primaryColor}40 1px, transparent 1px),
-            linear-gradient(90deg, ${primaryColor}40 1px, transparent 1px)
-          `,
-          backgroundSize: '12px 12px',
-        }}
-      />
-
-      <div className="relative z-10 flex flex-col items-center gap-3">
-        <Film className="w-8 h-8 opacity-30" style={{ color: primaryColor }} />
-
-        <button
-          onClick={onRender}
-          className="px-4 py-2 rounded border text-xs font-bold tracking-wider transition-colors"
-          style={{
-            color: primaryColor,
-            borderColor: `${primaryColor}60`,
-            backgroundColor: `${primaryColor}10`,
-          }}
-        >
-          RENDER {orient.toUpperCase()}
-        </button>
-
-        <div className="text-xs opacity-40" style={{ color: primaryColor }}>
-          {item.slug}
-        </div>
-      </div>
-
-      {/* Corner decorations */}
-      <div className="absolute top-2 left-2 w-5 h-5 border-l-2 border-t-2 opacity-20" style={{ borderColor: primaryColor }} />
-      <div className="absolute top-2 right-2 w-5 h-5 border-r-2 border-t-2 opacity-20" style={{ borderColor: primaryColor }} />
-      <div className="absolute bottom-2 left-2 w-5 h-5 border-l-2 border-b-2 opacity-20" style={{ borderColor: primaryColor }} />
-      <div className="absolute bottom-2 right-2 w-5 h-5 border-r-2 border-b-2 opacity-20" style={{ borderColor: primaryColor }} />
+    <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-3">
+      <VideoOff className="w-10 h-10 text-muted-foreground/20" />
+      <button
+        onClick={() => onRender?.()}
+        className={cn(
+          'px-4 py-2 rounded border font-mono text-xs font-bold tracking-wider transition-colors',
+          item.type === 'final'
+            ? 'text-amber-400 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20'
+            : 'text-primary border-primary/40 bg-primary/10 hover:bg-primary/20',
+        )}
+      >
+        /render
+      </button>
     </div>
   );
 }
@@ -168,7 +135,7 @@ function ClipContent({ item, size, onRender }: {
     return <RenderingReadout asset={item} />;
   }
 
-  return <RenderPrompt item={item} orient={orient} onRender={onRender} />;
+  return <RenderPrompt item={item} onRender={onRender} />;
 }
 
 function ratioLabel(size: ViewerSize, item: MediaItem): string {

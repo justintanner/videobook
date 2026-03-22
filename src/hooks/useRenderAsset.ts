@@ -1,21 +1,26 @@
 import { useCallback, useRef, useEffect } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import type { RenderSettings } from "@/components/center-stage/render-settings-types";
+import type { Orientation } from "@/hooks/useTimeline";
 
 interface UseRenderAssetResult {
-  renderAsset: (assetId: string, projectSlug: string, settings?: RenderSettings) => Promise<boolean>;
+  renderAsset: (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings) => Promise<boolean>;
 }
 
 export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAssetResult {
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const renderAsset = useCallback(async (assetId: string, projectSlug: string, settings?: RenderSettings): Promise<boolean> => {
+  const renderAsset = useCallback(async (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings): Promise<boolean> => {
     try {
       const args: Record<string, string | number | boolean> = {
         asset_id: assetId,
         project_slug: projectSlug,
       };
+
+      if (orientation) {
+        args.orientation = orientation;
+      }
 
       if (settings) {
         args.subtitles_enabled = settings.subtitlesEnabled;

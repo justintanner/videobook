@@ -9,19 +9,18 @@ import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
 
-type TimelineConfig = {
-  slots: unknown[];
-  render: Orientation;
-};
-
 export function renderDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render",
     description:
-      "Render a vid- asset using the project's render orientation from timeline config. Output: landscape.mp4, portrait.mp4, or square.mp4.",
+      "Render a vid- asset. Output: landscape.mp4, portrait.mp4, or square.mp4.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
+      orientation: z
+        .enum(["landscape", "portrait", "square"])
+        .optional()
+        .describe("Render orientation (default: from timeline config, or landscape)"),
       subtitles_enabled: z
         .boolean()
         .optional()
@@ -75,6 +74,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       const {
         asset_id,
         project_slug,
+        orientation: explicitOrientation,
         subtitles_enabled,
         highlight_style = "impact",
         position = "bottom",
@@ -90,6 +90,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
       } = args as {
         asset_id: string;
         project_slug: string;
+        orientation?: Orientation;
         subtitles_enabled?: boolean;
         highlight_style?: "impact" | "highlight";
         position?: "top" | "middle" | "bottom";
@@ -136,16 +137,11 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Read orientation from timeline config
-      const timelineResult = await fs.readProjectMeta<TimelineConfig>("timeline", project_slug);
-      let orientation: Orientation = "landscape";
-      if (timelineResult.ok) {
-        const raw = timelineResult.value;
-        if (raw && typeof raw === "object" && "render" in raw) {
-          const r = raw.render;
-          orientation = (Array.isArray(r) ? (r[0] ?? "landscape") : r) as Orientation;
-        }
-      }
+      // Determine orientations to render
+      const ALL_ORIENTATIONS: Orientation[] = ["landscape", "portrait", "square"];
+      const orientations: Orientation[] = explicitOrientation
+        ? [explicitOrientation]
+        : ALL_ORIENTATIONS;
 
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
@@ -176,7 +172,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: `Subtitles enabled for ${orientation} but elevenlabs.json not found in asset ${asset_id}. Transcribe the asset first or set subtitles_enabled=false.`,
+            text: `Subtitles enabled but elevenlabs.json not found in asset ${asset_id}. Transcribe the asset first or set subtitles_enabled=false.`,
           }],
         };
       }
@@ -212,41 +208,45 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
 
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
-      const jobId = `render-${asset_id}-${Date.now()}`;
+      const jobs: Array<{ job_id: string; orientation: Orientation }> = [];
 
-      await queue.enqueue(jobId, {
-        type: "render_project",
-        projectSlug: project_slug,
-        orientation,
-        assets: [{
-          assetId: asset_id,
-          assetDir,
-          videoPath,
-          videoFilename: videoFile.name,
-          hasElevenlabs,
-        }],
-        subtitlesEnabled: subsEnabled,
-        highlightStyle: highlight_style,
-        position,
-        fontSize: font_size,
-        textColor: text_color,
-        highlightColor: highlight_color,
-        audioFadeIn: audio_fade_in,
-        audioFadeOut: audio_fade_out,
-        audioVolume: audio_volume,
-        osgImagePath,
-        osgAssetId: osg_asset_id ?? null,
-        osgPosition: osg_position,
-        backgroundMode: background_mode,
-      });
+      for (const orientation of orientations) {
+        const jobId = `render-${asset_id}-${orientation}-${Date.now()}`;
+        await queue.enqueue(jobId, {
+          type: "render_project",
+          projectSlug: project_slug,
+          orientation,
+          assets: [{
+            assetId: asset_id,
+            assetDir,
+            videoPath,
+            videoFilename: videoFile.name,
+            hasElevenlabs,
+          }],
+          subtitlesEnabled: subsEnabled,
+          highlightStyle: highlight_style,
+          position,
+          fontSize: font_size,
+          textColor: text_color,
+          highlightColor: highlight_color,
+          audioFadeIn: audio_fade_in,
+          audioFadeOut: audio_fade_out,
+          audioVolume: audio_volume,
+          osgImagePath,
+          osgAssetId: osg_asset_id ?? null,
+          osgPosition: osg_position,
+          backgroundMode: background_mode,
+        });
+        jobs.push({ job_id: jobId, orientation });
+      }
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
             asset_id,
-            job_id: jobId,
-            orientation,
+            orientations: orientations,
+            jobs,
             status: "enqueued",
           }),
         }],
