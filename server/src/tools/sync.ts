@@ -40,6 +40,7 @@ export type SyncResult = {
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
+  auto_speech_to_text: Array<{ assetId: string; jobId: string }>;
 };
 
 async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
@@ -335,7 +336,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], auto_transcribe: [],
+    external_uploads: [], auto_render: [], auto_transcribe: [], auto_speech_to_text: [],
   };
 
   // Single listAssets call, shared by all consumers
@@ -348,11 +349,12 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     : "landscape";
 
   // Run all discovery steps in parallel
-  const [uploads, tasks, renderActions, transcribeActions] = await Promise.all([
+  const [uploads, tasks, renderActions, transcribeActions, sttActions] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
     findAutoRenderActions(fs, project_slug, assets, orientation),
     findAutoTranscribeActions(fs, project_slug, assets),
+    findAutoSpeechToTextActions(fs, project_slug, assets),
   ]);
 
   // Process external uploads
@@ -400,6 +402,19 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       backgroundMode: stored.backgroundMode as string,
     });
     result.auto_render.push({ assetId: action.assetId, jobId });
+  }
+
+  // Auto-pipeline: retry missing speech-to-text (gpt4otrans) for whitelisted videos with audio
+  for (const action of sttActions) {
+    const jobId = `auto-stt-${action.assetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "transcribe_video_audio",
+      videoPath: action.videoPath,
+      assetId: action.assetId,
+      assetDir: action.assetDir,
+      projectSlug: project_slug,
+    } as unknown as Record<string, unknown>);
+    result.auto_speech_to_text.push({ assetId: action.assetId, jobId });
   }
 
   // Auto-pipeline: advance whitelisted+analyzed videos through transcription
@@ -574,6 +589,55 @@ async function findAutoTranscribeActions(
     })
   );
   return candidates.filter((c): c is TranscribeAction => c !== null);
+}
+
+type SpeechToTextAction = {
+  assetId: string;
+  assetDir: string;
+  videoPath: string;
+};
+
+async function findAutoSpeechToTextActions(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assets: AssetEntry[],
+): Promise<SpeechToTextAction[]> {
+  if (!process.env.OPENAI_API_KEY) return [];
+
+  const candidates = await Promise.all(
+    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<SpeechToTextAction | null> => {
+      const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      if (!manifestResult.ok) return null;
+
+      const manifest = manifestResult.value;
+      const files = manifest.files;
+      const fileNames = new Set(files.map((f) => f.name));
+
+      // Must be whitelisted
+      if (!fileNames.has(".whitelisted_at")) return null;
+      // Must have completed analysis
+      if (!fileNames.has(".original.analysis.json")) return null;
+      // Skip if already has speech-to-text
+      if (fileNames.has(".analysis.gpt4otrans.json")) return null;
+      // Skip if locked
+      if (await fs.isLocked(manifest.path)) return null;
+
+      // Must have audio (check metadata)
+      const meta = await fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug);
+      if (!meta.ok || !meta.value.hasAudio) return null;
+
+      // Must have a video file (needed to extract audio)
+      const videoFile = findVideoFile(files);
+      if (!videoFile) return null;
+
+      return {
+        assetId: asset.id,
+        assetDir: manifest.path,
+        videoPath: join(manifest.path, videoFile.name),
+      };
+    })
+  );
+  return candidates.filter((c): c is SpeechToTextAction => c !== null);
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {
