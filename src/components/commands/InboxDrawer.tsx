@@ -240,7 +240,7 @@ export function InboxDrawer({
               <InboxAllClear />
             </div>
           ) : renderedVideos.length > 0 || pendingVideos.length > 0 ? (
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 items-start">
               {renderedVideos.map((video) => {
                 const liveIdx = liveVideos.findIndex((v) => v.id === video.id);
                 return (
