@@ -6,7 +6,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
-import { readStoredRenderDefaults } from "../tools/sync.js";
+import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -231,6 +231,9 @@ async function completeTranscribe(
       : "landscape";
 
     const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
+    const analysisRecs = await readAnalysisRecommendations(fs, assetId, projectSlug);
+    // Enable subs after transcription unless burned-in subs were detected
+    const subtitlesEnabled = analysisRecs.subtitlesEnabled !== false;
     await queue.enqueue(jobId, {
       type: "render_project",
       projectSlug,
@@ -242,7 +245,7 @@ async function completeTranscribe(
         videoFilename: videoFile.name,
         hasElevenlabs: true,
       }],
-      subtitlesEnabled: true,
+      subtitlesEnabled,
       highlightStyle: stored.highlightStyle as string,
       position: stored.position as string,
       fontSize: stored.fontSize as string,

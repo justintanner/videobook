@@ -37,7 +37,7 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
-import { DEFAULT_RENDER_SETTINGS, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
+import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
@@ -241,7 +241,7 @@ export function HomePage() {
     fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
       if (cancelled) return;
       const stored = all?.[renderOrientation];
-      setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
+      setRenderSettings(stored ? storedToRenderSettings(stored) : getDefaultRenderSettings(renderOrientation));
     });
     return () => { cancelled = true; };
   }, [activeSelection?.id, projectSlug, renderOrientation, fetchRenderSettings]);

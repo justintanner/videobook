@@ -53,6 +53,13 @@ function migrateStyle(raw: string | undefined): RenderSettings['subtitleStyle'] 
   return undefined;
 }
 
+export function getDefaultRenderSettings(orientation: string): RenderSettings {
+  if (orientation === 'portrait') {
+    return { ...DEFAULT_RENDER_SETTINGS, subtitleStyle: 'impact', textColor: '#FFFFFF', highlightColor: '#FFFF00' };
+  }
+  return { ...DEFAULT_RENDER_SETTINGS, subtitleStyle: 'highlight', textColor: '#FFFFFF', highlightColor: '#991B1B' };
+}
+
 export function storedToRenderSettings(stored: Record<string, unknown>): RenderSettings {
   return {
     subtitlesEnabled: (stored.subtitlesEnabled as boolean | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlesEnabled,

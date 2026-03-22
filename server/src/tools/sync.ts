@@ -146,47 +146,64 @@ export async function readRenderSettings(
   return result;
 }
 
+const BASE_DEFAULTS: Record<string, unknown> = {
+  subtitlesEnabled: false,
+  position: "bottom",
+  fontSize: "medium",
+  audioFadeIn: 150,
+  audioFadeOut: 100,
+  audioVolume: 100,
+  osgImagePath: null,
+  osgAssetId: null,
+  osgPosition: "top-right",
+  backgroundMode: "blur",
+  strokeWidth: 6,
+  strokeColor: "#000000",
+  shadowBlur: 6,
+  shadowOpacity: 60,
+};
+
+const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
+  portrait: {
+    highlightStyle: "impact",
+    textColor: "#FFFFFF",
+    highlightColor: "#FFFF00",
+  },
+  landscape: {
+    highlightStyle: "highlight",
+    textColor: "#FFFFFF",
+    highlightColor: "#991B1B",
+  },
+  square: {
+    highlightStyle: "highlight",
+    textColor: "#FFFFFF",
+    highlightColor: "#991B1B",
+  },
+};
+
 export async function readStoredRenderDefaults(
   fs: ClipfirstFs, assetId: string, projectSlug: string, targetOrientation: string,
 ): Promise<Record<string, unknown>> {
-  const HARDCODED_DEFAULTS: Record<string, unknown> = {
-    subtitlesEnabled: false,
-    highlightStyle: "impact",
-    position: "bottom",
-    fontSize: "medium",
-    textColor: "#F8FAFC",
-    highlightColor: "#991B1B",
-    audioFadeIn: 150,
-    audioFadeOut: 100,
-    audioVolume: 100,
-    osgImagePath: null,
-    osgAssetId: null,
-    osgPosition: "top-right",
-    backgroundMode: "blur",
-    strokeWidth: 6,
-    strokeColor: "#000000",
-    shadowBlur: 6,
-    shadowOpacity: 60,
-  };
+  const defaults = { ...BASE_DEFAULTS, ...(ORIENTATION_OVERRIDES[targetOrientation] ?? ORIENTATION_OVERRIDES.landscape) };
   // Try target orientation first, then fall back to any other orientation
   const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];
   for (const orient of tryOrder) {
     const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
     if (meta.ok) {
-      const merged = { ...HARDCODED_DEFAULTS, ...meta.value };
+      const merged = { ...defaults, ...meta.value };
       // Migrate old "tikdance" → "impact"
       if (merged.highlightStyle === "tikdance") merged.highlightStyle = "impact";
       return merged;
     }
   }
   const recs = await readAnalysisRecommendations(fs, assetId, projectSlug);
-  return { ...HARDCODED_DEFAULTS, ...recs };
+  return { ...defaults, ...recs };
 }
 
 const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
 const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 
-async function readAnalysisRecommendations(
+export async function readAnalysisRecommendations(
   fs: ClipfirstFs, assetId: string, projectSlug: string,
 ): Promise<Record<string, unknown>> {
   const result = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
