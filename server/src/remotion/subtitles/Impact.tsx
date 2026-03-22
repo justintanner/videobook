@@ -1,6 +1,6 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion";
-import { loadFont } from "@remotion/google-fonts/Bangers";
+import { loadFont } from "@remotion/google-fonts/Anton";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
 import { getCurrentWordIndex } from "../util.js";
 import { getImpactFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END, IMPACT_STROKE_WIDTH } from "../constants.js";
