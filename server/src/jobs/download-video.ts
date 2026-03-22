@@ -97,7 +97,25 @@ type InfoResult = {
   webpage_url?: string;
   extractor?: string;
   entries?: InfoResult[];
+  duration?: number;
+  vcodec?: string;
+  ext?: string;
+  url?: string;
 };
+
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
+export function isImageContent(info: InfoResult): boolean {
+  if (!info.ext) return false;
+  if (!IMAGE_EXTENSIONS.has(info.ext.toLowerCase())) return false;
+  if (info.vcodec && info.vcodec !== "none") return false;
+  return true;
+}
+
+export function imageExtension(info: InfoResult): string {
+  const ext = info.ext?.toLowerCase() ?? "jpg";
+  return IMAGE_EXTENSIONS.has(ext) ? `.${ext}` : ".jpg";
+}
 
 export function registerDownloadVideoJob(fs: ClipfirstFs): void {
   const ytdlp = new YtDlp();
@@ -150,9 +168,10 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         // Enqueue separate jobs for entries 2+
         for (let i = 1; i < info.entries.length; i++) {
           const entry = info.entries[i];
-          const entryName = `${sourcePrefix} ${entry.title ?? `video ${i + 1}`}`;
+          const entryPrefix = isImageContent(entry) ? "img" : "vid";
+          const entryName = `${sourcePrefix} ${entry.title ?? `${entryPrefix === "img" ? "image" : "video"} ${i + 1}`}`;
 
-          const assetResult = await fs.createAsset("vid", entryName, projectSlug ?? "");
+          const assetResult = await fs.createAsset(entryPrefix, entryName, projectSlug ?? "");
           if (!assetResult.ok) continue;
 
           const { assetId: newAssetId, path: newAssetDir } = assetResult.value;
@@ -182,6 +201,77 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
       const internalPlaylistItem = (payload as Record<string, unknown>)._playlistItem as number | undefined;
       if (internalPlaylistItem !== undefined) {
         playlistItem = internalPlaylistItem;
+      }
+
+      // (d0) Detect image-only content — retype asset and route to process_image
+      const itemInfo = (playlistItem !== undefined && info._type === "playlist" && info.entries?.length)
+        ? (info.entries[playlistItem - 1] ?? info)
+        : info;
+
+      if (isImageContent(itemInfo)) {
+        let effectiveAssetId = assetId;
+        const slug = projectSlug ?? "";
+
+        // Retype vid- asset to img- if needed
+        if (assetId.startsWith("vid-")) {
+          const assetName = [sourcePrefix, itemInfo.title ?? "image"].join(" ");
+          const imgResult = await fs.createAsset("img", assetName, slug);
+          if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
+
+          effectiveAssetId = imgResult.value.assetId;
+
+          // Copy .opengraph.json to new asset
+          try {
+            await fs.copyFile(assetId, ".opengraph.json", effectiveAssetId, ".opengraph.json", slug);
+          } catch {
+            // non-fatal — OG data may not exist
+          }
+
+          // Release lock and delete the old vid- asset
+          await fs.releaseLock(assetDir);
+          const delResult = await fs.deleteAsset(assetId, slug);
+          if (!delResult.ok) {
+            // non-fatal — orphan vid- asset is acceptable
+          }
+        }
+
+        // Download image directly from yt-dlp's resolved URL
+        const imageUrl = itemInfo.url ?? itemInfo.thumbnail ?? "";
+        if (!imageUrl) throw new Error("No image URL found in content info");
+
+        const ext = imageExtension(itemInfo);
+        const imgResponse = await fetch(imageUrl, {
+          signal: AbortSignal.timeout(30_000),
+          redirect: "follow",
+        });
+        if (!imgResponse.ok) throw new Error(`Image download failed: ${imgResponse.status}`);
+        const buffer = Buffer.from(await imgResponse.arrayBuffer());
+        await fs.writeFile(effectiveAssetId, `original${ext}`, buffer, slug);
+
+        // Build provenance
+        const provenance = {
+          origin: "download",
+          source_url: url,
+          title: itemInfo.title ?? info.title ?? "",
+          uploader: itemInfo.uploader ?? info.uploader ?? "",
+          description: itemInfo.description ?? info.description ?? "",
+          webpage_url: itemInfo.webpage_url ?? info.webpage_url ?? "",
+          platform: itemInfo.extractor ?? info.extractor ?? "",
+          thumbnail: itemInfo.thumbnail ?? info.thumbnail ?? "",
+          downloaded_at: new Date().toISOString(),
+        };
+
+        // Enqueue process_image instead of process_video
+        const processJobId = `process-image-${effectiveAssetId}-${Date.now()}`;
+        await queue.enqueue(processJobId, {
+          type: "process_image",
+          assetId: effectiveAssetId,
+          projectSlug: slug,
+          extension: ext,
+          provenance,
+        } as unknown as Record<string, unknown>);
+
+        return { success: true, retyped: assetId !== effectiveAssetId, assetId: effectiveAssetId };
       }
 
       // (d) Regular ytdlp download
@@ -251,7 +341,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
       return { success: true, exports };
     } finally {
-      await fs.releaseLock(assetDir);
+      try { await fs.releaseLock(assetDir); } catch { /* asset may have been retyped/deleted */ }
     }
   });
 }

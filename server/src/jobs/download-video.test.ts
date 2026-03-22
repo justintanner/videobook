@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { isImageContent, imageExtension } from "./download-video.js";
 
 describe("download-video job handler", () => {
   it("exports registerDownloadVideoJob function", async () => {
@@ -70,5 +71,62 @@ describe("validateDownloadOutput (RC1)", () => {
     await writeFile(outputPath, ""); // 0 bytes
 
     await expect(validateDownloadOutput(outputPath)).rejects.toThrow(/empty/i);
+  });
+});
+
+describe("isImageContent", () => {
+  it("returns true for jpg with no video codec", () => {
+    expect(isImageContent({ ext: "jpg", vcodec: "none" })).toBe(true);
+  });
+
+  it("returns true for png with no vcodec field", () => {
+    expect(isImageContent({ ext: "png" })).toBe(true);
+  });
+
+  it("returns true for webp with vcodec none", () => {
+    expect(isImageContent({ ext: "webp", vcodec: "none" })).toBe(true);
+  });
+
+  it("returns false for mp4 with h264 codec", () => {
+    expect(isImageContent({ ext: "mp4", vcodec: "h264" })).toBe(false);
+  });
+
+  it("returns false when ext is mp4 even without vcodec", () => {
+    expect(isImageContent({ ext: "mp4" })).toBe(false);
+  });
+
+  it("returns false when no ext is set", () => {
+    expect(isImageContent({})).toBe(false);
+  });
+
+  it("returns false for image ext with a real video codec", () => {
+    expect(isImageContent({ ext: "jpg", vcodec: "h264" })).toBe(false);
+  });
+
+  it("handles case-insensitive extensions", () => {
+    expect(isImageContent({ ext: "JPG", vcodec: "none" })).toBe(true);
+    expect(isImageContent({ ext: "PNG" })).toBe(true);
+  });
+});
+
+describe("imageExtension", () => {
+  it("returns .jpg for jpg ext", () => {
+    expect(imageExtension({ ext: "jpg" })).toBe(".jpg");
+  });
+
+  it("returns .png for png ext", () => {
+    expect(imageExtension({ ext: "png" })).toBe(".png");
+  });
+
+  it("returns .webp for webp ext", () => {
+    expect(imageExtension({ ext: "webp" })).toBe(".webp");
+  });
+
+  it("defaults to .jpg when ext is missing", () => {
+    expect(imageExtension({})).toBe(".jpg");
+  });
+
+  it("defaults to .jpg for non-image ext", () => {
+    expect(imageExtension({ ext: "mp4" })).toBe(".jpg");
   });
 });
