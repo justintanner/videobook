@@ -10,7 +10,6 @@ import { findVideoFile } from "../media-files.js";
 import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
-import { readAndAssessDialog } from "../dialog-quality.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import { writeFile } from "node:fs/promises";
 import type { ToolDef } from "./tool-def.js";
@@ -53,6 +52,15 @@ async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
     return files.find((f) => /^original\.md$/i.test(f)) ?? null;
   } catch {
     return null;
+  }
+}
+
+async function hasPartialDownload(assetDir: string): Promise<boolean> {
+  try {
+    const files = await readdir(assetDir);
+    return files.some((f) => /\.(mp4|mov)\.part$/i.test(f));
+  } catch {
+    return false;
   }
 }
 
@@ -139,7 +147,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
@@ -150,6 +158,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         findRenderedOrientations(a.path),
         readOrExtractWaveform(a.path),
         findFrameDirectories(a.path, project_slug, a.id),
+        hasPartialDownload(a.path),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -169,6 +178,10 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
           : pendingTask.taskType === "isolate_vocals"
             ? "isolating"
             : "generating";
+      } else if (hasPartFile && a.id.startsWith("vid-") && (!mediaFile || /\.(jpe?g|png|webp)$/i.test(mediaFile))) {
+        // Video asset with a .part file but no actual video = failed download
+        // (original.jpg thumbnail may exist from OG image, but that's not a real media file for a video)
+        status = "error";
       } else if (mediaFile) {
         if (!whitelisted) {
           status = "unreviewed";
@@ -177,6 +190,8 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         } else {
           status = "approved";
         }
+      } else if (hasPartFile) {
+        status = "error";
       } else {
         status = "loading";
       }
@@ -368,36 +383,19 @@ async function findAutoRenderActions(
       // Skip: process_video incomplete
       if (!fileNames.has(".original.analysis.json")) return null;
 
-      const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
-
-      if (dialogQuality.hasDialog) {
-        // Has dialog — only render after transcription is done
-        const hasElevenlabs = fileNames.has("elevenlabs.json");
-        if (hasElevenlabs) {
-          const videoFile = findVideoFile(files);
-          if (videoFile && !await fs.isLocked(manifest.path)) {
-            return {
-              assetId: asset.id,
-              assetDir: manifest.path,
-              videoPath: join(manifest.path, videoFile.name),
-              videoFilename: videoFile.name,
-            };
-          }
-        }
-        return null;
-      } else {
-        // No dialog — render directly (no subtitles)
-        const videoFile = findVideoFile(files);
-        if (videoFile && !await fs.isLocked(manifest.path)) {
-          return {
-            assetId: asset.id,
-            assetDir: manifest.path,
-            videoPath: join(manifest.path, videoFile.name),
-            videoFilename: videoFile.name,
-          };
-        }
-        return null;
+      // Render any whitelisted+analyzed video regardless of transcription status.
+      // Initial auto-render always uses subtitlesEnabled: false; the user can
+      // re-render with subtitles once transcription completes.
+      const videoFile = findVideoFile(files);
+      if (videoFile && !await fs.isLocked(manifest.path)) {
+        return {
+          assetId: asset.id,
+          assetDir: manifest.path,
+          videoPath: join(manifest.path, videoFile.name),
+          videoFilename: videoFile.name,
+        };
       }
+      return null;
     })
   );
   return candidates.filter((c): c is RenderAction => c !== null);

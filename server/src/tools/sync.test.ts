@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
+import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 
@@ -314,5 +315,112 @@ describe("performSync", () => {
         process.env.KIE_API_KEY = savedKey;
       }
     }
+  });
+});
+
+describe("buildAssetList — failed download detection (RC3)", () => {
+  let fs: ClipfirstFs;
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc3-test-"));
+    fs = createFsForTest(tempDir);
+    await fs.createProject("test-proj");
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("shows status 'error' when only a .part file exists (no original.mp4)", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "broken-download", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    // Simulate failed download: 0-byte .part file, no original.mp4
+    await writeFile(join(assetDir, "original.mp4.part"), "");
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
+    expect(assets[0].status).toBe("error");
+  });
+
+  it("shows status 'error' when vid- asset has .part file + thumbnail but no video", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "broken-with-thumb", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    // Simulate: OG image downloaded as original.jpg, but video download failed
+    await writeFile(join(assetDir, "original.jpg"), "fake-thumbnail");
+    await writeFile(join(assetDir, "original.mp4.part"), "");
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
+    // Should be "error" — the thumbnail doesn't mean the video is OK
+    expect(assets[0].status).toBe("error");
+  });
+
+  it("does not show status 'error' when original.mp4 exists alongside .part file", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "good-download", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    // Both .part and completed file exist (shouldn't happen, but be safe)
+    await writeFile(join(assetDir, "original.mp4"), "fake-video");
+    await writeFile(join(assetDir, "original.mp4.part"), "");
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
+    expect(assets[0].status).not.toBe("error");
+  });
+});
+
+describe("performSync — auto-render without transcription gate (RC2)", () => {
+  let fs: ClipfirstFs;
+  let tempDir: string;
+
+  beforeAll(async () => {
+    await queue.start();
+  });
+
+  afterAll(async () => {
+    await queue.stop();
+  });
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc2-test-"));
+    fs = createFsForTest(tempDir);
+    await fs.createProject("test-proj");
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("auto-renders whitelisted video with dialog even without elevenlabs.json", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "dialog-no-elevenlabs", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
+    const assetDir = createResult.value.path;
+
+    // Set up: whitelisted + analyzed + has dialog in transcription but no elevenlabs.json
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking about economics",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
+    }));
+    // NOTE: no elevenlabs.json — this is the crux of the bug
+
+    const result = await performSync(fs, "test-proj");
+    // Should auto-render even without elevenlabs.json
+    expect(result.auto_render.length).toBe(1);
+    expect(result.auto_render[0].assetId).toBe(assetId);
   });
 });

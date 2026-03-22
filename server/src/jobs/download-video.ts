@@ -1,11 +1,47 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
+import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 600_000;
+
+export async function validateDownloadOutput(outputPath: string): Promise<void> {
+  const partPath = outputPath + ".part";
+
+  let fileStat: { size: number } | null = null;
+  try {
+    fileStat = await stat(outputPath);
+  } catch {
+    // output file doesn't exist — check for leftover .part
+  }
+
+  if (fileStat) {
+    if (fileStat.size === 0) {
+      try { await unlink(outputPath); } catch { /* best-effort cleanup */ }
+      throw new Error("Download produced an empty file");
+    }
+    return; // file exists with content — success
+  }
+
+  // Output file missing — check for .part file
+  let hasPartFile = false;
+  try {
+    await stat(partPath);
+    hasPartFile = true;
+  } catch {
+    // no .part file either
+  }
+
+  if (hasPartFile) {
+    try { await unlink(partPath); } catch { /* best-effort cleanup */ }
+    throw new Error("Download incomplete: only a partial .part file was found");
+  }
+
+  throw new Error("Download failed: output file was not created");
+}
 
 async function blurFillExport(
   inputPath: string,
@@ -165,6 +201,9 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
       }
 
       await builder.run();
+
+      // (d2) Validate download output
+      await validateDownloadOutput(outputPath);
 
       // (e) Optional exports
       const exports: string[] = [];
