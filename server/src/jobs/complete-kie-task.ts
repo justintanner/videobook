@@ -6,6 +6,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
+import { readStoredRenderDefaults } from "../tools/sync.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -229,6 +230,7 @@ async function completeTranscribe(
       ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
       : "landscape";
 
+    const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
     await queue.enqueue(jobId, {
       type: "render_project",
       projectSlug,
@@ -241,17 +243,17 @@ async function completeTranscribe(
         hasElevenlabs: true,
       }],
       subtitlesEnabled: true,
-      highlightStyle: "tikdance",
-      position: "bottom",
-      fontSize: "medium",
-      textColor: "#F8FAFC",
-      highlightColor: "#991B1B",
-      audioFadeIn: 150,
-      audioFadeOut: 100,
-      audioVolume: 100,
-      osgImagePath: null,
-      osgPosition: "top-right",
-      backgroundMode: "blur",
+      highlightStyle: stored.highlightStyle as string,
+      position: stored.position as string,
+      fontSize: stored.fontSize as string,
+      textColor: stored.textColor as string,
+      highlightColor: stored.highlightColor as string,
+      audioFadeIn: stored.audioFadeIn as number,
+      audioFadeOut: stored.audioFadeOut as number,
+      audioVolume: stored.audioVolume as number,
+      osgImagePath: (stored.osgImagePath as string | null) ?? null,
+      osgPosition: stored.osgPosition as string,
+      backgroundMode: stored.backgroundMode as string,
     });
   }
 }

@@ -36,7 +36,7 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
-import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settings-types';
+import { DEFAULT_RENDER_SETTINGS, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
@@ -175,6 +175,7 @@ export function HomePage() {
         duration: asset.duration,
         waveform: asset.waveform,
         frameDirs: asset.frame_dirs,
+        renderSettings: asset.render_settings,
       };
     });
   }, [assetList, result]);
@@ -216,6 +217,9 @@ export function HomePage() {
     setTimelineSlotIndex(null);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
+    const orient = timeline?.render ?? 'landscape';
+    const stored = item.renderSettings?.[orient];
+    setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
   }, [timeline]);
 
   const handleViewerSizeChange = useCallback((size: ViewerSize) => {
@@ -251,7 +255,9 @@ export function HomePage() {
   const handleChangeOrientation = useCallback(async (orient: Orientation) => {
     if (!projectSlug) return;
     await setRenderOrientation(projectSlug, orient);
-  }, [projectSlug, setRenderOrientation]);
+    const stored = activeSelection?.renderSettings?.[orient];
+    setRenderSettings(stored ? storedToRenderSettings(stored) : DEFAULT_RENDER_SETTINGS);
+  }, [projectSlug, setRenderOrientation, activeSelection]);
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;

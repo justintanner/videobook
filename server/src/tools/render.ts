@@ -235,6 +235,7 @@ export function renderDef(fs: ClipfirstFs): ToolDef {
         audioFadeOut: audio_fade_out,
         audioVolume: audio_volume,
         osgImagePath,
+        osgAssetId: osg_asset_id ?? null,
         osgPosition: osg_position,
         backgroundMode: background_mode,
       });

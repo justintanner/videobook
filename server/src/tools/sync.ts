@@ -31,6 +31,7 @@ export type SyncAsset = {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
+  render_settings: Record<string, Record<string, unknown>>;
 };
 
 export type SyncResult = {
@@ -135,6 +136,44 @@ async function hasRenderMetadata(assetDir: string): Promise<boolean> {
 
 const RENDER_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 
+async function readRenderSettings(
+  fs: ClipfirstFs, assetId: string, projectSlug: string, orientations: string[],
+): Promise<Record<string, Record<string, unknown>>> {
+  const result: Record<string, Record<string, unknown>> = {};
+  await Promise.all(orientations.map(async (orient) => {
+    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+    if (meta.ok) result[orient] = meta.value;
+  }));
+  return result;
+}
+
+export async function readStoredRenderDefaults(
+  fs: ClipfirstFs, assetId: string, projectSlug: string, targetOrientation: string,
+): Promise<Record<string, unknown>> {
+  const HARDCODED_DEFAULTS: Record<string, unknown> = {
+    subtitlesEnabled: false,
+    highlightStyle: "tikdance",
+    position: "bottom",
+    fontSize: "medium",
+    textColor: "#F8FAFC",
+    highlightColor: "#991B1B",
+    audioFadeIn: 150,
+    audioFadeOut: 100,
+    audioVolume: 100,
+    osgImagePath: null,
+    osgAssetId: null,
+    osgPosition: "top-right",
+    backgroundMode: "blur",
+  };
+  // Try target orientation first, then fall back to any other orientation
+  const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];
+  for (const orient of tryOrder) {
+    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+    if (meta.ok) return { ...HARDCODED_DEFAULTS, ...meta.value };
+  }
+  return HARDCODED_DEFAULTS;
+}
+
 async function findRenderedOrientations(assetDir: string): Promise<string[]> {
   try {
     const files = await readdir(assetDir);
@@ -149,7 +188,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile] = await Promise.all([
+      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile, renderSettingsMap] = await Promise.all([
         findPrimaryMediaFile(a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
@@ -161,6 +200,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         readOrExtractWaveform(a.path),
         findFrameDirectories(a.path, project_slug, a.id),
         hasPartialDownload(a.path),
+        readRenderSettings(fs, a.id, project_slug, [...RENDER_ORIENTATIONS]),
       ]);
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile}`
@@ -226,6 +266,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         duration,
         waveform,
         frame_dirs: frameDirs,
+        render_settings: renderSettingsMap,
       };
     }),
   );
@@ -272,6 +313,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
   // Auto-pipeline: advance whitelisted videos through render
   for (const action of renderActions) {
+    const stored = await readStoredRenderDefaults(fs, action.assetId, project_slug, orientation);
     const jobId = `auto-render-${action.assetId}-${Date.now()}`;
     await queue.enqueue(jobId, {
       type: "render_project",
@@ -284,18 +326,18 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         videoFilename: action.videoFilename,
         hasElevenlabs: false,
       }],
-      subtitlesEnabled: false,
-      highlightStyle: "tikdance",
-      position: "bottom",
-      fontSize: "medium",
-      textColor: "#F8FAFC",
-      highlightColor: "#991B1B",
-      audioFadeIn: 150,
-      audioFadeOut: 100,
-      audioVolume: 100,
-      osgImagePath: null,
-      osgPosition: "top-right",
-      backgroundMode: "blur",
+      subtitlesEnabled: stored.subtitlesEnabled as boolean,
+      highlightStyle: stored.highlightStyle as string,
+      position: stored.position as string,
+      fontSize: stored.fontSize as string,
+      textColor: stored.textColor as string,
+      highlightColor: stored.highlightColor as string,
+      audioFadeIn: stored.audioFadeIn as number,
+      audioFadeOut: stored.audioFadeOut as number,
+      audioVolume: stored.audioVolume as number,
+      osgImagePath: (stored.osgImagePath as string | null) ?? null,
+      osgPosition: stored.osgPosition as string,
+      backgroundMode: stored.backgroundMode as string,
     });
     result.auto_render.push({ assetId: action.assetId, jobId });
   }

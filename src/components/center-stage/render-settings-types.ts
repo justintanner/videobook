@@ -29,3 +29,29 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   osgPosition: 'top-right',
   backgroundMode: 'blur',
 };
+
+function extractAssetId(osgImagePath: string | undefined | null): string | null {
+  if (!osgImagePath) return null;
+  // Path format: .../img-something/original.png — extract the asset ID directory name
+  const parts = osgImagePath.split('/');
+  const imgPart = parts.find((p) => p.startsWith('img-'));
+  return imgPart ?? null;
+}
+
+export function storedToRenderSettings(stored: Record<string, unknown>): RenderSettings {
+  return {
+    subtitlesEnabled: (stored.subtitlesEnabled as boolean | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlesEnabled,
+    subtitleStyle: (stored.highlightStyle as RenderSettings['subtitleStyle'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitleStyle,
+    subtitlePosition: (stored.position as RenderSettings['subtitlePosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlePosition,
+    fontSize: (stored.fontSize as RenderSettings['fontSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.fontSize,
+    textColor: (stored.textColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.textColor,
+    highlightColor: (stored.highlightColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.highlightColor,
+    audioVolume: (stored.audioVolume as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioVolume,
+    audioFadeIn: (stored.audioFadeIn as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioFadeIn,
+    audioFadeOut: (stored.audioFadeOut as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioFadeOut,
+    osgAssetId: (stored.osgAssetId as string | undefined) ?? extractAssetId(stored.osgImagePath as string | undefined),
+    osgAssetSrc: null, // frontend resolves src from asset list
+    osgPosition: (stored.osgPosition as RenderSettings['osgPosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgPosition,
+    backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,
+  };
+}
