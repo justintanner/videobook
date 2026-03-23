@@ -366,7 +366,7 @@ export function TrimEditor({
       >
         {/* Header */}
         <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 relative">
-          <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Editing</span>
+          <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Trimming</span>
           <div className="absolute inset-x-0 flex justify-center pointer-events-none">
             <span className="font-mono text-xs tracking-widest text-zinc-400">{assetId ? `@${assetId}` : ''}</span>
           </div>
@@ -563,23 +563,17 @@ export function TrimEditor({
 // ── Waveform bars ──
 
 function WaveformBars({ data }: { data: number[] }) {
-  const barCount = Math.min(data.length, 200);
-  const step = data.length / barCount;
   const maxVal = Math.max(...data, 1);
 
   return (
-    <div className="flex items-end w-full h-full gap-px px-px">
-      {Array.from({ length: barCount }, (_, i) => {
-        const idx = Math.floor(i * step);
-        const val = data[idx] / maxVal;
-        return (
-          <div
-            key={i}
-            className="flex-1 min-w-0 bg-cyan-500/40 rounded-t-sm"
-            style={{ height: `${Math.max(val * 100, 2)}%` }}
-          />
-        );
-      })}
+    <div className="flex items-end w-full h-full px-px">
+      {data.map((val, i) => (
+        <div
+          key={i}
+          className="flex-1 min-w-0 bg-cyan-500/40"
+          style={{ height: `${Math.max((val / maxVal) * 100, 2)}%` }}
+        />
+      ))}
     </div>
   );
 }

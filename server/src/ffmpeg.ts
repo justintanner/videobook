@@ -86,7 +86,7 @@ export interface FFmpeggyClass {
 
 let _FFmpeggy: FFmpeggyClass | null = null;
 
-export async function extractWaveform(videoPath: string, barCount = 100): Promise<number[]> {
+export async function extractWaveform(videoPath: string, barCount = 500): Promise<number[]> {
   try {
     const { stdout } = await execFileAsync(FFMPEG, [
       "-i", videoPath,
