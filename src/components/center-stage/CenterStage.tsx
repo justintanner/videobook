@@ -14,6 +14,9 @@ import { RenderingReadout } from './RenderingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
 import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
+import type { UseMcpResult } from 'use-mcp/react';
+import { useAssetHistory } from '@/hooks/useAssetHistory';
+import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './GitHistoryPanel';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
@@ -244,7 +247,7 @@ const RENDERING_STATUSES = new Set<string>([
   'render-queued', 'render-queued-landscape', 'render-queued-portrait', 'render-queued-square',
 ]);
 
-type BackTab = 'settings' | 'files';
+type BackTab = 'settings' | 'files' | 'history';
 
 function SettingsPane({ item, renderOrientation, onSizeChange, onRender, settings, onSettingsChange }: {
   item: MediaItem;
@@ -531,7 +534,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   );
 }
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -546,6 +549,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClearPendingBackTab?: () => void;
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+  callTool: UseMcpResult['callTool'];
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
@@ -555,6 +559,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   const [selectedFile, setSelectedFile] = useState('.original.json');
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
+
+  // History tab state
+  const { commits, loading: historyLoading, fetchHistory, restoreVersion } = useAssetHistory(callTool);
+  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null);
 
   const fileUrl = useMemo(
     () => `/files/${projectSlug}/${item.id}/${selectedFile}`,
@@ -616,6 +624,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setManifest(null);
     setSelectedFile('.original.json');
     setFileContent(null);
+    setSelectedCommitHash(null);
   }, [item.id, onFlippedChange]);
 
   // Fetch manifest when files tab is active on the back face
@@ -625,6 +634,25 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       fetchFileContent('.original.json');
     }
   }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch history when history tab is active on the back face
+  useEffect(() => {
+    if (flipped && backTab === 'history') {
+      fetchHistory(item.id, projectSlug);
+    }
+  }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select the latest commit when history loads
+  useEffect(() => {
+    if (commits.length > 0 && selectedCommitHash === null) {
+      setSelectedCommitHash(commits[0].hash);
+    }
+  }, [commits, selectedCommitHash]);
+
+  const handleRestore = async (hash: string) => {
+    const ok = await restoreVersion(item.id, hash, projectSlug);
+    if (ok) fetchHistory(item.id, projectSlug);
+  };
 
   // Apply pending focus once manifest loads
   useEffect(() => {
@@ -794,6 +822,18 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   <span>/files</span>
                   {backTab === 'files' && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
                 </button>
+                <button
+                  tabIndex={-1}
+                  onClick={() => setBackTab('history')}
+                  className={cn(
+                    'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative',
+                    backTab === 'history' ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                  )}
+                  style={{ background: backTab === 'history' ? 'rgba(0,217,255,0.06)' : 'transparent' }}
+                >
+                  <span>/history</span>
+                  {backTab === 'history' && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
+                </button>
               </div>
 
               {/* Center slug */}
@@ -821,7 +861,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   onSettingsChange={onSettingsChange}
                 />
               </div>
-            ) : (
+            ) : backTab === 'files' ? (
               <div className="flex-1 flex min-h-0">
                 <div
                   data-tabstop="files"
@@ -843,6 +883,29 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     loading={fileLoading}
                     fileName={selectedFile}
                     fileUrl={fileUrl}
+                  />
+                </div>
+              </div>
+            ) : commits.length === 0 ? (
+              <div className="flex-1 bg-black">
+                <HistoryEmptyState loading={historyLoading} />
+              </div>
+            ) : (
+              <div className="flex-1 flex min-h-0">
+                <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+                  <HistoryListPane
+                    commits={commits}
+                    selectedHash={selectedCommitHash}
+                    onSelectCommit={setSelectedCommitHash}
+                    onRefresh={() => fetchHistory(item.id, projectSlug)}
+                    loading={historyLoading}
+                  />
+                </div>
+                <div className="flex-1 overflow-auto bg-black">
+                  <HistoryDetailPane
+                    commit={commits.find(c => c.hash === selectedCommitHash) ?? null}
+                    isHead={selectedCommitHash === commits[0]?.hash}
+                    onRestore={handleRestore}
                   />
                 </div>
               </div>

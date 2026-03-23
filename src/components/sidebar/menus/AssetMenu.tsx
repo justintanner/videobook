@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import { ClipboardCopy, FolderOpen, History, Pencil, Scissors, Trash2 } from 'lucide-react';
+import { ClipboardCopy, FolderOpen, Pencil, Scissors, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 
@@ -7,7 +7,6 @@ interface AssetMenuProps {
   slug: string;
   itemType?: string;
   onShowFolder: () => void;
-  onShowHistory?: () => void;
   onAnimateCommand?: (text: string) => void;
   onAnimateEdit?: (text: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
@@ -29,7 +28,7 @@ function CommandMenuItem({ icon, command, onSelect, MenuItem, className }: {
   );
 }
 
-export function AssetMenu({ slug, itemType, onShowFolder, onShowHistory, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
   return (
     <>
       <CommandMenuItem
@@ -47,15 +46,7 @@ export function AssetMenu({ slug, itemType, onShowFolder, onShowHistory, onAnima
         onSelect={onShowFolder}
         MenuItem={MenuItem}
       />
-      {onShowHistory && (
-        <CommandMenuItem
-          icon={<History className="h-3 w-3" />}
-          command="/history"
-          onSelect={onShowHistory}
-          MenuItem={MenuItem}
-        />
-      )}
-      {itemType === 'video' && (
+{itemType === 'video' && (
         <CommandMenuItem
           icon={<Scissors className="h-3 w-3" />}
           command="/trim"

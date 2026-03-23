@@ -13,7 +13,6 @@ import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer } from '@/components/center-stage';
 import type { ViewerSize } from '@/components/center-stage';
-import { GitHistoryPanel } from '@/components/center-stage/GitHistoryPanel';
 import { TimelinePlayer } from '@/components/center-stage/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
@@ -67,11 +66,10 @@ export function HomePage() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
-  const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
-  const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | null>(null);
+  const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | 'history' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -127,16 +125,6 @@ export function HomePage() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [inboxOpen]);
-
-  // ESC key closes history panel
-  useEffect(() => {
-    if (!historyItem) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !inboxOpen) setHistoryItem(null);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [historyItem, inboxOpen]);
 
   // Refresh assets after each sync or sort change
   useEffect(() => {
@@ -219,7 +207,6 @@ export function HomePage() {
   }, [mediaItems, selectedItem]);
 
   const handleSelectItem = useCallback((item: MediaItem) => {
-    setHistoryItem(null);
     setSelectedItem(item);
     setTimelineSlotIndex(null);
     const isClip = item.type === 'video' || item.type === 'final';
@@ -316,11 +303,6 @@ export function HomePage() {
     await listAssets(slug, sortOrder);
   }, [setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
 
-  const handleShowHistory = useCallback((assetId: string) => {
-    const item = mediaItems.find(m => m.id === assetId);
-    if (item) setHistoryItem(item);
-  }, [mediaItems]);
-
   const handleOpenAsset = useCallback((assetId: string) => {
     const item = mediaItems.find(m => m.id === assetId);
     if (item) handleSelectItem(item);
@@ -336,7 +318,6 @@ export function HomePage() {
 
   const handleSlotClick = useCallback((slotIndex: number) => {
     setSelectedItem(null);
-    setHistoryItem(null);
     setTimelineSlotIndex(slotIndex);
   }, []);
 
@@ -451,7 +432,12 @@ export function HomePage() {
     open_inbox: () => setInboxOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
-    show_history: handleShowHistory,
+    show_history: (assetId: string) => {
+      const item = mediaItems.find(m => m.id === assetId);
+      if (item) handleSelectItem(item);
+      setPendingBackTab('history');
+      setViewerFlipped(true);
+    },
     open_asset: handleOpenAsset,
     switch_project: handleProjectChange,
     viewer_set_original: () => handleViewerSizeChange('original'),
@@ -489,7 +475,7 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
-  }), [triggerUpload, handleShowHistory, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
     <MountKeyProvider>
@@ -568,7 +554,7 @@ export function HomePage() {
                       slug={item.slug}
                       itemType={item.type}
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-                      onShowHistory={() => setHistoryItem(item)}
+
                       onAnimateCommand={handleAnimateCommand}
                       onAnimateEdit={handleAnimateEdit}
                       MenuItem={ContextMenuItem}
@@ -590,14 +576,8 @@ export function HomePage() {
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 p-4 overflow-hidden flex flex-col">
-                {historyItem ? (
-                  <GitHistoryPanel
-                    item={historyItem}
-                    projectSlug={projectSlug ?? ''}
-                    callTool={callTool}
-                  />
-                ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={settingsOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} />
+                {activeSelection ? (
+                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={settingsOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} callTool={callTool} />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer
                     previewData={previewData}
@@ -646,7 +626,7 @@ export function HomePage() {
                       slug={item.slug}
                       itemType={item.type}
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-                      onShowHistory={() => setHistoryItem(item)}
+
                       onAnimateCommand={handleAnimateCommand}
                       onAnimateEdit={handleAnimateEdit}
                       MenuItem={ContextMenuItem}
