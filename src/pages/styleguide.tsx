@@ -928,7 +928,7 @@ function Page3_MediaCatalog() {
   return (
     <div className="w-full h-full flex flex-col gap-6">
       <p className="text-xs font-mono text-zinc-400 leading-relaxed max-w-3xl">All 14 card states: receiving, plan, video, image, and final — every lifecycle phase at a glance.</p>
-      <div className="flex-1 flex flex-col justify-center">
+      <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-7 gap-4">
           {/* Row 1 */}
           <div><ReceivingGhostCard filename="hero-intro-final.mp4" /></div>
@@ -954,6 +954,11 @@ function Page3_MediaCatalog() {
           <div className="w-[240px]"><FinalVideoCard item={cardOverlayMocks[10].item} /></div>
           <div className="w-[240px]"><FinalVideoCard item={cardOverlayMocks[11].item} /></div>
         </div>
+      </div>
+
+      {/* ChatInput bar */}
+      <div className="shrink-0 border-t border-border/50 px-6 py-3">
+        <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
       </div>
     </div>
   );
@@ -1140,99 +1145,88 @@ function Page6_CenterStage() {
 
 function Page7_Trimming() {
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="h-full bg-zinc-950 border border-zinc-600/50 rounded-xl overflow-hidden ring-1 ring-cyan-500/10 flex flex-col">
-        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 relative">
-          <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Editing</span>
-          <div className="absolute inset-x-0 flex justify-center pointer-events-none">
-            <span className="font-mono text-xs tracking-widest text-zinc-400">@hero-intro</span>
-          </div>
-          <CloseButton onClick={() => {}} />
+    <div className="w-full h-full flex flex-col bg-zinc-950">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-w-0 flex items-center justify-center bg-black">
+          <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
         </div>
-        <div className="flex flex-1 overflow-hidden min-h-0">
-          <div className="flex-1 flex flex-col px-4 py-3 overflow-hidden min-w-0">
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <div className="relative w-full h-full bg-black rounded-md overflow-hidden">
-                <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
-              </div>
+        <div className="w-[280px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+          <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
+            <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
+            <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 leading-relaxed scrollbar-hide">
+            <div className="leading-loose">
+              {trimDemoWords.map((word, i) => {
+                const isSelected = trimSelectedWordIndices.has(i);
+                const isActive = i === trimActiveWordIndex;
+                return (
+                  <span key={i}>
+                    <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
+                    {word.text.endsWith('.') && <br />}
+                  </span>
+                );
+              })}
             </div>
-            <div className="shrink-0 mt-3 px-4 py-3 bg-zinc-900/60 rounded-lg border border-zinc-800/40">
-              <div className="relative overflow-visible" style={{ height: 80 }}>
-                <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 80 }}>
-                  <div className="absolute inset-0 rounded-md overflow-hidden">
-                    <StyleguideWaveform url="/fixtures/video-frost.mp4" height={80} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
-                  </div>
-                  {trimDemoCutRegions.map((region, i) => (
-                    <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
-                  ))}
+          </div>
+        </div>
+      </div>
+      <div className="shrink-0 px-6 py-3">
+        <div className="relative overflow-visible" style={{ height: 80 }}>
+          <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 80 }}>
+            <div className="absolute inset-0 rounded-md overflow-hidden">
+              <StyleguideWaveform url="/fixtures/video-frost.mp4" height={80} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
+            </div>
+            {trimDemoCutRegions.map((region, i) => (
+              <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
+            ))}
+          </div>
+
+          {/* Thumbnail badges — mini thumbnails that expand on hover */}
+          {trimTimelineBadges.map((badge, i) => {
+            const inCut = trimDemoCutRegions.some(
+              (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
+            );
+            const isStuckHover = i === 2;
+            return (
+              <div
+                key={i}
+                className={cn('absolute z-20', !isStuckHover && 'group')}
+                style={{
+                  left: `${badge.percent}%`,
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                {/* Timestamp label — visible on hover */}
+                <div className={cn(
+                  'absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 transition-opacity',
+                  isStuckHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                )}>
+                  <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
                 </div>
-
-                {/* Thumbnail badges — mini thumbnails that expand on hover */}
-                {trimTimelineBadges.map((badge, i) => {
-                  const inCut = trimDemoCutRegions.some(
-                    (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
-                  );
-                  const isStuckHover = i === 2;
-                  return (
-                    <div
-                      key={i}
-                      className={cn('absolute z-20', !isStuckHover && 'group')}
-                      style={{
-                        left: `${badge.percent}%`,
-                        top: '50%',
-                        transform: 'translate(-50%, -50%)',
-                      }}
-                    >
-                      {/* Timestamp label — visible on hover */}
-                      <div className={cn(
-                        'absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 transition-opacity',
-                        isStuckHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-                      )}>
-                        <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
-                      </div>
-                      {/* Badge */}
-                      <div
-                        className={cn(
-                          'border border-cyan-500/30 bg-cover bg-center',
-                          isStuckHover
-                            ? 'w-24 h-[72px] -translate-y-[calc(100%+4px)] shadow-[0_0_12px_rgba(34,211,238,0.4)] border-cyan-400/60 z-40 rounded-md'
-                            : 'w-6 h-6 rounded-sm transition-all duration-200 ease-out group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)] group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40 group-hover:rounded-md',
-                          inCut && 'opacity-50',
-                        )}
-                        style={{ backgroundImage: `url(${badge.src})` }}
-                      />
-                    </div>
-                  );
-                })}
-
-                <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 80, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
+                {/* Badge */}
+                <div
+                  className={cn(
+                    'border border-cyan-500/30 bg-cover bg-center',
+                    isStuckHover
+                      ? 'w-24 h-[72px] -translate-y-[calc(100%+4px)] shadow-[0_0_12px_rgba(34,211,238,0.4)] border-cyan-400/60 z-40 rounded-md'
+                      : 'w-6 h-6 rounded-sm transition-all duration-200 ease-out group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)] group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40 group-hover:rounded-md',
+                    inCut && 'opacity-50',
+                  )}
+                  style={{ backgroundImage: `url(${badge.src})` }}
+                />
               </div>
-            </div>
-          </div>
-          <div className="relative w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
-            <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
-              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
-              <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3 leading-relaxed scrollbar-hide">
-              <div className="leading-loose">
-                {trimDemoWords.map((word, i) => {
-                  const isSelected = trimSelectedWordIndices.has(i);
-                  const isActive = i === trimActiveWordIndex;
-                  return (
-                    <span key={i}>
-                      <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
-                      {word.text.endsWith('.') && <br />}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="absolute bottom-3 right-3 z-10">
-              <CommandButton command="/trim" icon={<Scissors className="w-5 h-5" />} size="lg" />
-            </div>
-          </div>
+            );
+          })}
+
+          <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 80, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
         </div>
+      </div>
+
+      {/* ChatInput bar */}
+      <div className="shrink-0 border-t border-border/50 px-6 py-3">
+        <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon', '@outro-final', '@clip-dance']} />
       </div>
     </div>
   );
