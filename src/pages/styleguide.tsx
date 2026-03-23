@@ -45,7 +45,7 @@ import type { TimelinePreviewData } from '@/components/center-stage/TimelinePlay
 import type { Orientation } from '@/hooks/useTimeline';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
-  FolderOpen, X, ChevronDown, Download, Sparkles,
+  FolderOpen, X, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AudioLines, Plus, Pencil,
@@ -55,6 +55,10 @@ import {
 import { ProjectButton } from '@/components/layout/ProjectButton';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
+import { GenPanel } from '@/components/gen/ui/GenPanel';
+import { ModelSelector } from '@/components/gen/ui/ModelSelector';
+import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
+import type { ModelOption, ResolvedAsset } from '@/components/gen/types';
 import type { UseMcpResult } from 'use-mcp/react';
 
 const colors = [
@@ -150,48 +154,6 @@ function StyleguideWaveform({
   return <div ref={containerRef} className="w-full" />;
 }
 
-// ── App Layout Demo Helpers ──
-
-function BracketLabel({ label, required }: { label: string; required?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-bold tracking-[0.15em] text-primary/70 uppercase">[{label}]</span>
-      {required && <span className="text-[8px] font-bold text-red-400/80 tracking-wider">*REQ</span>}
-    </div>
-  );
-}
-
-function ToggleGroup({ options, activeIndex }: { options: string[]; activeIndex: number }) {
-  return (
-    <div className="inline-flex border border-primary/30 rounded overflow-hidden bg-black/40">
-      {options.map((opt, i) => (
-        <button
-          key={opt}
-          type="button"
-          className={[
-            'font-mono font-bold tracking-wider px-4 h-9 text-xs',
-            i > 0 ? 'border-l border-primary/30' : '',
-            i === activeIndex
-              ? 'bg-primary/20 text-primary shadow-[inset_0_0_12px_rgba(0,255,255,0.3)]'
-              : 'text-primary/50',
-          ].join(' ')}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FakeDropdown({ text }: { text: string }) {
-  return (
-    <div className="bg-black/60 border border-primary/30 rounded px-3 py-2.5 text-xs font-mono font-bold tracking-wide text-primary/90 flex items-center gap-2">
-      {text}
-      <ChevronDown className="w-3 h-3 text-primary/50" />
-    </div>
-  );
-}
-
 const styleguideMockCallTool: UseMcpResult['callTool'] = async (name: string) => {
   if (name === 'list_projects') {
     return {
@@ -221,31 +183,15 @@ const demoVideoMock: MediaItem = {
   status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg',
 };
 
-function HeaderBar() {
-  return (
-    <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
-      <div className="flex items-center gap-1">
-        {/* Logo */}
-        <div className="flex items-center gap-2 px-3 h-full">
-          <div className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 logo-dot-pulse" />
-          <span className="font-mono font-bold text-sm uppercase tracking-wider"><span className="text-foreground">CLIP</span><span className="text-primary">FIRST</span></span>
-        </div>
+const page2ModelOptions: ModelOption[] = [
+  { key: 'kling3', label: 'Kling 3.0', tool_name: 'generate_kling30_video', description: 'Kling 3.0 video generation', schema: { type: 'object', properties: {}, required: [] }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+  { key: 'veo3', label: 'Veo 3', tool_name: 'generate_veo3_video', description: 'Veo 3 video generation', schema: { type: 'object', properties: {}, required: [] }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+  { key: 'wan21', label: 'Wan 2.1', tool_name: 'generate_wan21_video', description: 'Wan 2.1 video generation', schema: { type: 'object', properties: {}, required: [] }, prefilled_values: {}, validation: { valid: true, missing_required: [], warnings: [] } },
+];
 
-        {/* Project selector */}
-        <CommandButton command="/vax" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
-
-        {/* Generations */}
-        <InboxButton state="ready" generatingCount={0} readyCount={4} flashKey={0} onClick={() => {}} />
-      </div>
-
-      {/* Right side */}
-      <div className="flex items-center gap-1">
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
-      </div>
-    </div>
-  );
-}
-
+const page2ResolvedAssets: ResolvedAsset[] = [
+  { slug: '@img-neon-fox', src: '/styleguide-img-neon-fox.jpg', thumbnailSrc: '/styleguide-img-neon-fox.jpg', type: 'image' },
+];
 
 function SelectWithChevronDemo() {
   const [value, setValue] = useState('veo3');
@@ -832,70 +778,93 @@ function Page1_FinalVideoPreview() {
 // ── Slide 2: Video Generation (reuses AppLayoutDemo internals) ──
 
 function Page2_VideoGeneration() {
+  const [prompt, setPrompt] = useState('Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion.');
+  const [aspect, setAspect] = useState<string>('16:9');
+  const [duration, setDuration] = useState<string>('8');
+  const [mode, setMode] = useState<string>('std');
+  const [sound, setSound] = useState<string>('Yes');
+  const [selectedModel, setSelectedModel] = useState('kling3');
+  const [imageSlugs, setImageSlugs] = useState<string[]>(['@img-neon-fox']);
+
   return (
     <div className="w-full h-full overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HeaderBar />
+        <HomeHeaderBar
+          pulseKey={0}
+          projectSlug="vax"
+          callTool={styleguideMockCallTool}
+          onProjectChange={() => {}}
+          inboxState="ready"
+          generatingCount={0}
+          readyCount={4}
+          onInboxClick={() => {}}
+        />
         <div className="flex flex-row overflow-hidden">
           <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              <div className="w-full"><ImageCard item={demoImageMock} /></div>
+              <div className="w-full"><ImageCard item={demoImageMock} contextMenuContent={clipMenu('@img-neon-fox', 'image')} /></div>
               <UploadSlot />
             </div>
           </CollapsibleSidebar>
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-y-auto flex flex-col">
-              {/* VIDEO_GENERATION Panel */}
-              <div className="relative w-full flex-1 overflow-hidden bg-gradient-to-b from-cyan-950/30 via-black to-black rounded flex flex-col">
-                <div className="absolute inset-0 pointer-events-none scanlines opacity-20 z-10" />
-                <div className="absolute inset-0 pointer-events-none opacity-5" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '4px 4px' }} />
-                <div className="relative z-20 flex-1 flex flex-col border-2 border-cyan-400/50 shadow-[0_0_30px_-10px_rgba(0,255,255,0.3)]">
-                  <div className="flex items-center justify-between pl-2.5 pr-2.5 py-1.5 shrink-0 border-b-2 border-inherit bg-black/50 backdrop-blur-sm">
-                    <div className="flex items-center gap-2">
-                      <Film className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#22d3ee]" />
-                      <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">VIDEO_GENERATION</span>
-                    </div>
-                    <button className="w-7 h-7 flex items-center justify-center text-primary/60 transition-all hover:bg-red-500/10 hover:text-red-400">
-                      <X className="w-5 h-5 stroke-[2.5]" />
-                    </button>
+              <GenPanel
+                label="VIDEO GEN"
+                icon={<Zap className="w-4 h-4" />}
+                onClose={() => {}}
+                headerExtra={<CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />}
+                footer={
+                  <div className="flex items-center justify-between">
+                    <ModelSelector
+                      selectedModelKey={selectedModel}
+                      modelOptions={page2ModelOptions}
+                      onChange={setSelectedModel}
+                    />
+                    <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
                   </div>
-                  <div className="flex flex-row flex-1">
-                    <div className="flex-1 pl-4 pr-8 py-4 mr-2">
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <BracketLabel label="PROMPT" required />
-                          <CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />
-                        </div>
-                        <textarea className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28" defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion." readOnly />
+                }
+              >
+                <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <div className="mb-3">
+                        <GenField label="PROMPT" required>
+                          <GenTextarea value={prompt} onChange={setPrompt} rows={5} />
+                        </GenField>
                       </div>
-                      <div className="flex flex-wrap gap-x-6 gap-y-4 my-3">
-                        <div><BracketLabel label="ASPECT RATIO" /><div className="mt-1.5"><ToggleGroup options={['16:9', '9:16', '1:1']} activeIndex={0} /></div></div>
-                        <div><BracketLabel label="DURATION" /><div className="mt-1.5"><FakeDropdown text="8" /></div></div>
-                        <div><BracketLabel label="MODE" /><div className="mt-1.5"><ToggleGroup options={['std', 'pro']} activeIndex={0} /></div></div>
-                        <div><BracketLabel label="SOUND" /><div className="mt-1.5"><ToggleGroup options={['No', 'Yes']} activeIndex={1} /></div></div>
-                      </div>
-                    </div>
-                    <div className="w-44 border-l border-primary/20 bg-black/20 p-3 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <BracketLabel label="IMAGES" />
-                        <span className="text-[10px] font-mono text-primary/50">1/2</span>
-                      </div>
-                      <div className="relative aspect-video border-2 border-primary/50 bg-black/60 overflow-hidden">
-                        <img src="/styleguide-img-cover.jpg" alt="" className="w-full h-full object-cover" />
-                      </div>
-                      <div className="relative aspect-video border-2 border-primary/30 border-dashed bg-black/60 overflow-hidden flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-primary/25 relative z-10" />
+                      <div className="flex flex-wrap gap-x-6 gap-y-4">
+                        <GenField label="Aspect Ratio">
+                          <GenToggle value={aspect} onChange={setAspect} options={['16:9', '9:16', '1:1']} />
+                        </GenField>
+                        <GenField label="Duration">
+                          <GenToggle value={duration} onChange={setDuration} options={['5', '8', '10']} compact />
+                        </GenField>
+                        <GenField label="Mode">
+                          <GenToggle value={mode} onChange={setMode} options={['std', 'pro']} />
+                        </GenField>
+                        <GenField label="Sound">
+                          <GenToggle value={sound} onChange={setSound} options={['No', 'Yes']} />
+                        </GenField>
                       </div>
                     </div>
-                  </div>
-                  <div className="shrink-0 p-2.5 border-t-2 border-inherit bg-black/30 flex items-center justify-between">
-                    <FakeDropdown text="Kling 3.0" />
-                    <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" />
+                    <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3">
+                      <ImageParamSlots
+                        assetFields={[{
+                          name: 'image_slugs',
+                          schema: { type: 'array', items: { type: 'string' } },
+                          value: imageSlugs,
+                          required: false,
+                        }]}
+                        resolvedAssets={page2ResolvedAssets}
+                        imageSlots={{ min: 0, max: 2 }}
+                        onChange={(_fieldName, value) => setImageSlugs(value as string[])}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </GenPanel>
             </div>
             <div className="shrink-0 px-4 pb-3 pt-2">
               <ChatInput assetSlugs={['@hero-intro', '@product-shot', '@bg-neon']} />
@@ -905,7 +874,7 @@ function Page2_VideoGeneration() {
           <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
-              <div className="w-full"><VideoCard item={demoVideoMock} /></div>
+              <div className="w-full"><VideoCard item={demoVideoMock} contextMenuContent={clipMenu('@vid-purple-grind', 'video')} /></div>
             </div>
           </CollapsibleSidebar>
         </div>

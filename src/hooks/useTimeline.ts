@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export type Orientation = 'landscape' | 'portrait' | 'square';
-export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
+type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 export interface TimelineConfig {
   slots: Array<{ slug: string; volume?: number; audioFadeIn?: number; audioFadeOut?: number }>;

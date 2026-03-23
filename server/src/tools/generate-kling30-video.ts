@@ -6,7 +6,6 @@ import { findVideoFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {

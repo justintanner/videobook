@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { mkdir, writeFile, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
-import { calculateFrameCount, formatTimestamp, generateTimestamps } from "../frame-utils.js";
+import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
 type ProcessVideoPayload = {
   type: "process_video";

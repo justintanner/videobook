@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import type { ToolDef } from "./tool-def.js";
 
@@ -34,9 +33,4 @@ export function getDefaultProjectDef(fs: ClipfirstFs): ToolDef {
       };
     },
   };
-}
-
-export function registerGetDefaultProjectTool(server: McpServer, fs: ClipfirstFs): void {
-  const def = getDefaultProjectDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
 }
