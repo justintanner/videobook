@@ -114,46 +114,9 @@ function RenderPrompt({ item, onRender }: {
         }}
       />
 
-      {/* HUD corner brackets */}
-      <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2" style={{ borderColor: `${primaryColor}99` }} />
-      <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2" style={{ borderColor: `${primaryColor}99` }} />
-      <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2" style={{ borderColor: `${primaryColor}99` }} />
-      <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2" style={{ borderColor: `${primaryColor}99` }} />
-
-      {/* Slow scan line */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute left-0 right-0 h-px opacity-30"
-          style={{
-            backgroundColor: primaryColor,
-            boxShadow: `0 0 8px 1px ${primaryColor}`,
-            animation: 'readout-scan 4s ease-in-out infinite',
-          }}
-        />
-      </div>
-
       {/* Center content */}
       <div className="relative z-10 flex flex-col items-center gap-5">
-        {/* Targeting reticle with VideoOff */}
-        <div className="relative flex items-center justify-center">
-          <div
-            className="w-20 h-20 rounded-full border flex items-center justify-center transition-all duration-500"
-            style={{
-              borderColor: `${primaryColor}40`,
-              boxShadow: armed
-                ? `0 0 20px ${primaryColor}30, inset 0 0 15px ${primaryColor}15`
-                : `inset 0 0 10px ${primaryColor}10`,
-              animation: armed ? 'showcase-slot-pulse 2s ease-in-out infinite' : undefined,
-            }}
-          >
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: `${primaryColor}08` }}
-            >
-              <VideoOff className="w-8 h-8" style={{ color: `${primaryColor}50` }} />
-            </div>
-          </div>
-        </div>
+        <VideoOff className="w-10 h-10" style={{ color: `${primaryColor}30` }} />
 
         {/* CommandButton */}
         <CommandButton
