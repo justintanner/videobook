@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Scissors, Eraser } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Scissors, Eraser, Magnet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { CommandButton } from './CommandButton';
@@ -82,6 +82,31 @@ function clampPct(v: number): number {
   return Math.max(0, Math.min(100, v));
 }
 
+function snapToNearest(timeSec: number, points: number[]): number {
+  if (points.length === 0) return timeSec;
+  let best = timeSec;
+  let bestDist = Infinity;
+  for (const p of points) {
+    const d = Math.abs(timeSec - p);
+    if (d < bestDist) { bestDist = d; best = p; }
+  }
+  return best;
+}
+
+function snapRangePct(range: TrimRange, duration: number, points: number[]): TrimRange {
+  if (points.length === 0 || duration <= 0) return range;
+  const s = snapToNearest((range.startPct / 100) * duration, points);
+  const e = snapToNearest((range.endPct / 100) * duration, points);
+  const sp = clampPct((s / duration) * 100);
+  const ep = clampPct((e / duration) * 100);
+  return { startPct: Math.min(sp, ep), endPct: Math.max(sp, ep) };
+}
+
+interface SnapMarker { timeSec: number; label: string; }
+
+interface AnalysisScene { timestamp?: number; description?: string; }
+interface AnalysisJson { scenes?: AnalysisScene[]; }
+
 function parseTimestamp(s: string): number | undefined {
   const trimmed = s.trim();
   if (!trimmed) return undefined;
@@ -140,10 +165,15 @@ export function TrimEditor({
   const [playheadPercent, setPlayheadPercent] = useState(0);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
 
+  // Derived values needed by callbacks
+  const duration = item?.duration ?? 0;
+
   // Selection state
   const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
   const [trimState, setTrimState] = useState<ExecuteButtonState | undefined>(undefined);
-  const draggingRef = useRef(false);
+  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [markers, setMarkers] = useState<SnapMarker[]>([]);
+  const draggingRef = useRef<false | 'create' | 'start' | 'end'>(false);
   const dragStartPctRef = useRef(0);
 
   // Two-phase open: mount then animate in
@@ -183,6 +213,38 @@ export function TrimEditor({
     return () => { cancelled = true; };
   }, [open, assetId, projectSlug]);
 
+  // Fetch analysis markers when asset changes
+  useEffect(() => {
+    if (!open || !assetId || !projectSlug) {
+      setMarkers([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/files/${projectSlug}/${assetId}/.original.analysis.json`)
+      .then((res) => {
+        if (!res.ok) throw new Error('no analysis');
+        return res.json() as Promise<AnalysisJson>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const scenes = (data?.scenes ?? []).filter(
+          (s): s is AnalysisScene & { timestamp: number } => typeof s.timestamp === 'number',
+        );
+        setMarkers(scenes.map((s) => ({ timeSec: s.timestamp, label: s.description ?? '' })));
+      })
+      .catch(() => { if (!cancelled) setMarkers([]); });
+    return () => { cancelled = true; };
+  }, [open, assetId, projectSlug]);
+
+  // Snap points: analysis markers, or 250ms grid fallback
+  const snapPoints = useMemo(() => {
+    if (markers.length > 0) return markers.map((m) => m.timeSec);
+    if (duration <= 0) return [];
+    const points: number[] = [];
+    for (let t = 0; t <= duration; t += 0.25) points.push(t);
+    return points;
+  }, [markers, duration]);
+
   // Video timeupdate → playhead + active word
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
@@ -195,53 +257,67 @@ export function TrimEditor({
     setActiveWordIndex(idx);
   }, [words]);
 
-  // Waveform mouse handlers — always select mode
+  // Waveform mouse handlers — create new selection or drag existing handles
   const handleWaveformMouseDown = useCallback((e: React.MouseEvent) => {
     const rect = waveformRef.current?.getBoundingClientRect();
     if (!rect) return;
     const pct = pctFromMouse(e, rect);
-    draggingRef.current = true;
+    // If an existing range, check if click is near a handle (within 2% of width)
+    if (trimRange) {
+      const hitZone = 2;
+      if (Math.abs(pct - trimRange.startPct) <= hitZone) {
+        draggingRef.current = 'start';
+        return;
+      }
+      if (Math.abs(pct - trimRange.endPct) <= hitZone) {
+        draggingRef.current = 'end';
+        return;
+      }
+    }
+    // Otherwise create a new selection
+    draggingRef.current = 'create';
     dragStartPctRef.current = pct;
     setTrimRange({ startPct: pct, endPct: pct });
-  }, []);
+  }, [trimRange]);
 
-  const handleWaveformMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingRef.current) return;
-    const rect = waveformRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const pct = pctFromMouse(e, rect);
-    const startPct = dragStartPctRef.current;
-    setTrimRange({
-      startPct: Math.min(startPct, pct),
-      endPct: Math.max(startPct, pct),
-    });
-  }, []);
-
-  const handleWaveformMouseUp = useCallback(() => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    // Discard clicks with no drag distance
-    setTrimRange((prev) => {
-      if (prev && Math.abs(prev.endPct - prev.startPct) < 0.5) return null;
-      return prev;
-    });
-  }, []);
-
-  // Global mouseup to catch releases outside waveform
+  // Global mousemove + mouseup for waveform dragging (works outside the waveform)
   useEffect(() => {
     if (!open) return;
-    const handler = () => {
-      if (draggingRef.current) {
-        draggingRef.current = false;
-        setTrimRange((prev) => {
-          if (prev && Math.abs(prev.endPct - prev.startPct) < 0.5) return null;
-          return prev;
-        });
+    const handleMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const rect = waveformRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const mode = draggingRef.current;
+      if (mode === 'create') {
+        const anchor = dragStartPctRef.current;
+        setTrimRange({ startPct: Math.min(anchor, pct), endPct: Math.max(anchor, pct) });
+      } else if (mode === 'start') {
+        setTrimRange((prev) => prev ? { startPct: Math.min(pct, prev.endPct), endPct: Math.max(pct, prev.endPct) } : prev);
+      } else if (mode === 'end') {
+        setTrimRange((prev) => prev ? { startPct: Math.min(prev.startPct, pct), endPct: Math.max(prev.startPct, pct) } : prev);
       }
     };
-    window.addEventListener('mouseup', handler);
-    return () => window.removeEventListener('mouseup', handler);
-  }, [open]);
+    const handleUp = () => {
+      const mode = draggingRef.current;
+      if (!mode) return;
+      draggingRef.current = false;
+      setTrimRange((prev) => {
+        if (!prev) return null;
+        if (mode === 'create' && Math.abs(prev.endPct - prev.startPct) < 0.5) return null;
+        if (snapEnabled && snapPoints.length > 0 && duration > 0) {
+          return snapRangePct(prev, duration, snapPoints);
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [open, snapEnabled, snapPoints, duration]);
 
   // Escape key handler
   useEffect(() => {
@@ -312,6 +388,12 @@ export function TrimEditor({
     const cmd = message.trim().toLowerCase();
     if (cmd === '/close') { onClose(); return true; }
     if (cmd === '/clear') { handleClear(); return true; }
+    if (cmd === '/snap' || cmd === '/snap on' || cmd === '/snap off') {
+      if (cmd === '/snap on') setSnapEnabled(true);
+      else if (cmd === '/snap off') setSnapEnabled(false);
+      else setSnapEnabled((prev) => !prev);
+      return true;
+    }
     if (cmd.startsWith('/select')) {
       const args = cmd.slice(7).trim();
       if (args && duration > 0) {
@@ -321,7 +403,11 @@ export function TrimEditor({
         if (startSec !== undefined) {
           const startPct = clampPct((startSec / duration) * 100);
           const endPct = endSec !== undefined ? clampPct((endSec / duration) * 100) : startPct;
-          setTrimRange({ startPct: Math.min(startPct, endPct), endPct: Math.max(startPct, endPct) });
+          let range: TrimRange = { startPct: Math.min(startPct, endPct), endPct: Math.max(startPct, endPct) };
+          if (snapEnabled && snapPoints.length > 0) {
+            range = snapRangePct(range, duration, snapPoints);
+          }
+          setTrimRange(range);
         }
       }
       return true;
@@ -337,7 +423,6 @@ export function TrimEditor({
 
   if (!open) return null;
 
-  const duration = item?.duration ?? 0;
   const waveform = item?.waveform ?? [];
   const videoSrc = item?.filePath ?? '';
   const posterSrc = item?.thumbnailSrc ?? '';
@@ -435,6 +520,15 @@ export function TrimEditor({
           <div className="flex items-center gap-2">
             <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="violet" />
             <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" onClick={handleClear} />
+            <CommandButton
+              command={snapEnabled ? '/snap off' : '/snap on'}
+              icon={<Magnet className="w-4 h-4" />}
+              size="default"
+              variant={snapEnabled ? 'violet' : 'default'}
+              onClick={() => setSnapEnabled((prev) => !prev)}
+              state={duration <= 0 ? 'disabled' : undefined}
+              disabledReason="No video loaded"
+            />
             <div className="flex-1" />
             <CommandButton
               command="/trim"
@@ -452,15 +546,13 @@ export function TrimEditor({
             />
           </div>
 
-          <div className="relative overflow-visible" style={{ height: 80 }}>
+          <div className="relative overflow-visible" style={{ height: 120 }}>
             <div
               ref={waveformRef}
               data-waveform
               className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden flex items-end select-none cursor-col-resize"
-              style={{ height: 80 }}
+              style={{ height: 96 }}
               onMouseDown={handleWaveformMouseDown}
-              onMouseMove={handleWaveformMouseMove}
-              onMouseUp={handleWaveformMouseUp}
             >
               {waveform.length > 0 && <WaveformBars data={waveform} />}
 
@@ -471,14 +563,22 @@ export function TrimEditor({
                     className="absolute top-0 bottom-0 bg-violet-500/20 pointer-events-none z-10"
                     style={{ left: `${trimRange.startPct}%`, width: `${trimRange.endPct - trimRange.startPct}%` }}
                   />
+                  {/* Start handle — visible line + wide grab zone */}
                   <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none z-20"
-                    style={{ left: `${trimRange.startPct}%` }}
-                  />
+                    className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
+                    style={{ left: `${trimRange.startPct}%`, transform: 'translateX(-50%)', width: 12 }}
+                    onMouseDown={(e) => { e.stopPropagation(); draggingRef.current = 'start'; }}
+                  >
+                    <div className="w-0.5 bg-violet-400 mx-auto" />
+                  </div>
+                  {/* End handle — visible line + wide grab zone */}
                   <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none z-20"
-                    style={{ left: `${trimRange.endPct}%` }}
-                  />
+                    className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
+                    style={{ left: `${trimRange.endPct}%`, transform: 'translateX(-50%)', width: 12 }}
+                    onMouseDown={(e) => { e.stopPropagation(); draggingRef.current = 'end'; }}
+                  >
+                    <div className="w-0.5 bg-violet-400 mx-auto" />
+                  </div>
                   {duration > 0 && (
                     <>
                       <span
@@ -497,26 +597,64 @@ export function TrimEditor({
                   )}
                 </>
               )}
+
+              {/* 250ms grid ticks (fallback when no analysis markers) */}
+              {snapEnabled && duration > 0 && markers.length === 0 && snapPoints.map((t, i) => (
+                <div
+                  key={i}
+                  className="absolute bottom-0 w-px h-2 bg-zinc-500/50 pointer-events-none z-10"
+                  style={{ left: `${(t / duration) * 100}%` }}
+                />
+              ))}
             </div>
 
-            {/* Thumbnail badges */}
+            {/* Analysis scene triangle markers */}
+            {snapEnabled && duration > 0 && markers.length > 0 && markers.map((m, i) => (
+              <div
+                key={`scene-${i}`}
+                className="absolute z-15 group"
+                style={{ left: `${(m.timeSec / duration) * 100}%`, top: 0, transform: 'translateX(-50%)' }}
+              >
+                {/* Full-height stem through waveform */}
+                <div className="absolute left-1/2 w-px -translate-x-1/2 bg-amber-400/25" style={{ top: 0, height: 96 }} />
+                {/* Triangle ▼ below waveform */}
+                <div
+                  className="absolute w-0 h-0 left-1/2 -translate-x-1/2 cursor-pointer"
+                  style={{ top: 96, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid rgb(245 158 11 / 0.8)' }}
+                />
+                {/* Hover tooltip above waveform */}
+                <div
+                  className="absolute pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 left-1/2 -translate-x-1/2 w-48 p-2 rounded bg-zinc-900/95 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                  style={{ bottom: 'calc(100% + 4px)' }}
+                >
+                  <span className="text-[9px] font-mono text-amber-300 block mb-0.5">{formatDuration(m.timeSec)}</span>
+                  <span className="text-[10px] text-zinc-300 leading-tight line-clamp-3">{m.label}</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Thumbnail triangle markers */}
             {frameBadges.map((badge, i) => (
               <div
-                key={i}
+                key={`frame-${i}`}
                 className="absolute z-20 group"
-                style={{
-                  left: `${badge.percent}%`,
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
+                style={{ left: `${badge.percent}%`, top: 96, transform: 'translateX(-50%)' }}
               >
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 transition-opacity opacity-0 group-hover:opacity-100">
-                  <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
-                </div>
+                {/* Stem into waveform */}
+                <div className="absolute bottom-full left-1/2 w-px h-3 -translate-x-1/2 bg-cyan-500/40" />
+                {/* Triangle ▼ */}
                 <div
-                  className="border border-cyan-500/30 bg-cover bg-center w-6 h-6 rounded-sm transition-all duration-200 ease-out group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)] group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40 group-hover:rounded-md"
-                  style={{ backgroundImage: `url(${badge.src})` }}
+                  className="w-0 h-0 cursor-pointer"
+                  style={{ borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid rgb(34 211 238 / 0.7)' }}
                 />
+                {/* Hover preview — image + time */}
+                <div className="absolute bottom-[calc(100%+16px)] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 flex flex-col items-center gap-1">
+                  <div
+                    className="w-[120px] h-20 rounded border border-cyan-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(34,211,238,0.5)]"
+                    style={{ backgroundImage: `url(${badge.src})` }}
+                  />
+                  <span className="text-[9px] font-mono text-cyan-400/80 whitespace-nowrap">{badge.time}</span>
+                </div>
               </div>
             ))}
 
@@ -526,7 +664,7 @@ export function TrimEditor({
               style={{
                 left: `${playheadPercent}%`,
                 width: 3,
-                height: 80,
+                height: 96,
                 marginLeft: -1,
                 backgroundColor: 'rgb(34, 211, 238)',
                 filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))',
