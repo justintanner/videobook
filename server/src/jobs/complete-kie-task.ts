@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "transcribe" | "isolate_vocals";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -35,6 +35,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     try {
       if (taskType === "nano_banana_image") {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType === "kling30_video") {
+        await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_image") {
@@ -88,6 +90,47 @@ async function completeNanoBananaImage(
     projectSlug,
     extension: `.${ext}`,
     provenance: origin,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeKling30Video(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in result");
+
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+
+  const provenance = {
+    source_assets: meta.sourceImageIds,
+    model: "kling-3.0/video",
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
+    ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
+    ...(meta.sound !== undefined ? { sound: meta.sound } : {}),
+    ...(meta.aspect_ratio !== undefined ? { aspect_ratio: meta.aspect_ratio } : {}),
+    ...(meta.multi_shots !== undefined ? { multi_shots: meta.multi_shots } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  const videoPath = join(assetDir, "original.mp4");
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+    provenance,
   } as unknown as Record<string, unknown>);
 }
 
