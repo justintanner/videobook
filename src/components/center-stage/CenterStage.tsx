@@ -163,7 +163,10 @@ function ClipContent({ item, size, onRender }: {
       : size === 'portrait' ? 'portrait.mp4'
       : 'square.mp4';
     const derivedSrc = item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`);
-    const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
+    const thumbFile = size === 'landscape' ? 'landscape.jpg'
+      : size === 'portrait' ? 'portrait.jpg'
+      : 'square.jpg';
+    const thumbSrc = item.filePath.replace(/\/[^/]+$/, `/${thumbFile}`);
     return <video key={`${item.id}-${size}`} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
   }
 
