@@ -134,7 +134,7 @@ export function ImageParamSlots({
         : `${filledCount}/${maxSlots}`;
 
   return (
-    <div className={inline ? 'flex flex-wrap items-start gap-3' : 'flex flex-col gap-3 p-2.5'}>
+    <div className={inline ? 'flex flex-wrap items-start gap-3' : 'flex flex-col gap-3'}>
       <div className="flex items-center justify-between w-full">
         <span className="text-xs font-bold tracking-[0.15em] text-primary/70 uppercase">{sectionLabel}</span>
         <span className={cn('text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-primary/50')}>

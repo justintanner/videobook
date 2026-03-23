@@ -351,7 +351,7 @@ export function GenPreviewPanel({
 
           {/* Right column: asset slots + element groups */}
           {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
-            <div className="w-48 shrink-0 space-y-4">
+            <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
               {assetFieldInfos.length > 0 && (
                 <ImageParamSlots
                   assetFields={assetFieldInfos}

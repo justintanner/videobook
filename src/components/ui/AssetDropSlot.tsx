@@ -19,9 +19,10 @@ interface AssetDropSlotProps {
   acceptTypes?: ('image' | 'video')[];
   emptyIcon?: React.ReactNode;
   compact?: boolean;
+  variant?: 'default' | 'violet';
 }
 
-export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact }: AssetDropSlotProps) {
+export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'default' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
 
@@ -73,10 +74,12 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
         'bg-black/60',
         // States
         isDragOver && !disabled
-          ? 'border-primary border-solid shadow-[0_0_20px_rgba(0,255,255,0.5)] scale-[1.02]'
+          ? variant === 'violet'
+            ? 'border-violet-400 border-solid shadow-[0_0_20px_rgba(139,92,246,0.5)] scale-[1.02]'
+            : 'border-primary border-solid shadow-[0_0_20px_rgba(0,255,255,0.5)] scale-[1.02]'
           : value
-            ? 'border-primary/50 border-solid'
-            : 'border-primary/30 border-dashed hover:border-primary/50',
+            ? variant === 'violet' ? 'border-violet-400/50 border-solid' : 'border-primary/50 border-solid'
+            : variant === 'violet' ? 'border-violet-400/30 border-dashed hover:border-violet-400/50' : 'border-primary/30 border-dashed hover:border-primary/50',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
       onDragOver={handleDragOver}
@@ -126,7 +129,7 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           {/* Minimal drop icon */}
-          <div className={cn('transition-all duration-200', isDragOver ? 'text-primary scale-110' : 'text-primary/25')}>
+          <div className={cn('transition-all duration-200', isDragOver ? (variant === 'violet' ? 'text-violet-400 scale-110' : 'text-primary scale-110') : (variant === 'violet' ? 'text-violet-400/25' : 'text-primary/25'))}>
             {isDragOver ? (
               <Plus className="w-6 h-6" />
             ) : emptyIcon ? (

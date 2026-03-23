@@ -154,6 +154,14 @@ export function ElementGroupEditor({
 
   return (
     <div className="space-y-3">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold tracking-[0.15em] text-violet-400/70 uppercase">[ELEMENTS]</span>
+        <span className="text-[10px] font-mono text-violet-400/50">
+          {effectiveVisible}/{maxGroups}
+        </span>
+      </div>
+
       {activeIndices.map((groupIdx) => {
         const slugsSchema = elementSchemas.get(`element${groupIdx}_slugs`);
         const maxItems = slugsSchema?.maxItems ?? 4;
@@ -171,11 +179,11 @@ export function ElementGroupEditor({
         if (canAddMore) slots.push({ slug: null, index: filledCount });
 
         return (
-          <div key={groupIdx} className={cn('border rounded p-3 space-y-2.5', 'border-violet-400/30 bg-violet-400/5')}>
+          <div key={groupIdx} className={cn('border rounded p-2.5 space-y-2.5', 'border-violet-400/30 bg-violet-400/5')}>
             {/* Header */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold tracking-[0.15em] text-violet-400/70 uppercase">
-                [Element {groupIdx}]
+              <span className="text-[10px] font-bold tracking-[0.15em] text-violet-400/50 uppercase">
+                Element {groupIdx}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-violet-400/50">
@@ -200,11 +208,11 @@ export function ElementGroupEditor({
             </div>
 
             {/* Asset drop slots */}
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               {slots.map(({ slug, index }) => {
                 const thumbnailSrc = slug ? findThumbnail(slug, droppedAssets, resolvedAssets, assets) : '';
                 return (
-                  <div key={`el${groupIdx}-${index}`} className="w-20 shrink-0">
+                  <div key={`el${groupIdx}-${index}`}>
                     <AssetDropSlot
                       value={slug ? { slug, src: thumbnailSrc, type: 'image' as const } : null}
                       onChange={(asset) => {
@@ -222,6 +230,7 @@ export function ElementGroupEditor({
                       disabled={disabled}
                       acceptTypes={['image', 'video']}
                       emptyIcon={<Puzzle className="w-5 h-5" />}
+                      variant="violet"
                     />
                   </div>
                 );
