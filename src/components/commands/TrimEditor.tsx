@@ -130,15 +130,21 @@ function parseTimestamp(s: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function buildTimeMarks(duration: number): string[] {
+interface TimeMark { timeSec: number; label: string; }
+
+function buildTimeMarks(duration: number): TimeMark[] {
   const intervals = [5, 10, 15, 20, 30, 60, 120, 300];
   let interval = intervals.find((i) => duration / i <= 7) ?? Math.ceil(duration / 6);
   if (interval < 1) interval = 1;
-  const marks: string[] = [];
-  for (let t = 0; t < duration; t += interval) {
-    marks.push(formatDuration(t));
+  const marks: TimeMark[] = [];
+  for (let t = 0; t <= duration; t += interval) {
+    marks.push({ timeSec: t, label: formatDuration(t) });
   }
-  marks.push(formatDuration(duration));
+  // Add final duration mark only if not already covered
+  const last = marks[marks.length - 1];
+  if (!last || Math.abs(last.timeSec - duration) > 0.5) {
+    marks.push({ timeSec: duration, label: formatDuration(duration) });
+  }
   return marks;
 }
 
@@ -256,10 +262,8 @@ export function TrimEditor({
         points.add(((i + 0.5) / count) * duration);
       }
     }
-    // If we only have start/end (no real markers), use 250ms grid
-    if (points.size <= 2) {
-      for (let t = 0; t <= duration; t += 0.25) points.add(t);
-    }
+    // Always include 250ms grid
+    for (let t = 0; t <= duration; t += 0.25) points.add(t);
     return Array.from(points).sort((a, b) => a - b);
   }, [markers, duration, item?.frameDirs?.original_frames]);
 
@@ -616,14 +620,27 @@ export function TrimEditor({
                 </>
               )}
 
-              {/* 250ms grid ticks (fallback when no analysis markers) */}
-              {snapEnabled && duration > 0 && markers.length === 0 && snapPoints.map((t, i) => (
-                <div
-                  key={i}
-                  className="absolute bottom-0 w-px h-2 bg-zinc-500/50 pointer-events-none z-10"
-                  style={{ left: `${(t / duration) * 100}%` }}
-                />
-              ))}
+              {/* 250ms grid notches — rendered from top down so bars don't cover them */}
+              {duration > 0 && (() => {
+                const ticks: React.ReactNode[] = [];
+                for (let t = 0.25; t < duration; t += 0.25) {
+                  const isSec = Math.abs(t - Math.round(t)) < 0.01;
+                  ticks.push(
+                    <div
+                      key={t}
+                      className="absolute pointer-events-none z-[15]"
+                      style={{
+                        left: `${(t / duration) * 100}%`,
+                        top: 0,
+                        width: 1,
+                        height: isSec ? 12 : 6,
+                        backgroundColor: isSec ? 'rgba(161,161,170,0.6)' : 'rgba(161,161,170,0.3)',
+                      }}
+                    />
+                  );
+                }
+                return ticks;
+              })()}
             </div>
 
             {/* Analysis scene markers — vertically centered on waveform */}
@@ -692,12 +709,21 @@ export function TrimEditor({
             />
           </div>
 
-          {/* Time marks */}
+          {/* Time marks — positioned by actual time */}
           {duration > 0 && (
-            <div className="flex justify-between px-0.5 mt-1">
-              {buildTimeMarks(duration).map((label, i) => (
-                <span key={i} className="text-[10px] font-mono text-zinc-500">{label}</span>
-              ))}
+            <div className="relative mt-1" style={{ height: 16 }}>
+              {buildTimeMarks(duration).map((mark, i) => {
+                const pct = (mark.timeSec / duration) * 100;
+                return (
+                  <span
+                    key={i}
+                    className="absolute text-[10px] font-mono text-zinc-500 -translate-x-1/2"
+                    style={{ left: `${pct}%` }}
+                  >
+                    {mark.label}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
