@@ -150,10 +150,10 @@ function ClipContent({ item, size, onRender }: {
   return <RenderPrompt item={item} onRender={onRender} />;
 }
 
-function ratioLabel(size: ViewerSize, item: MediaItem): string {
+function ratioLabel(size: ViewerSize, item?: MediaItem): string {
   switch (size) {
     case 'original':
-      return item.width && item.height ? `/original ${item.width}x${item.height}` : '/original';
+      return item?.width && item?.height ? `/original ${item.width}x${item.height}` : '/original';
     case 'landscape':
       return '/landscape 1920x1080';
     case 'portrait':
@@ -170,12 +170,13 @@ const ratioIcons: Record<ViewerSize, typeof Monitor> = {
   square: Square,
 };
 
-function RatioToggle({ active, onSelect, item }: {
+export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
   active: ViewerSize;
   onSelect: (s: ViewerSize) => void;
-  item: MediaItem;
+  item?: MediaItem;
+  sizes?: ViewerSize[];
 }) {
-  const sizes: ViewerSize[] = ['original', 'landscape', 'portrait', 'square'];
+  const sizes = sizesProp ?? ['original', 'landscape', 'portrait', 'square'];
 
   return (
     <DropdownMenu>
