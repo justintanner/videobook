@@ -86,15 +86,21 @@ export interface FFmpeggyClass {
 
 let _FFmpeggy: FFmpeggyClass | null = null;
 
-export async function extractWaveform(videoPath: string, barCount = 500): Promise<number[]> {
+export async function extractWaveform(videoPath: string, barCount?: number): Promise<number[]> {
   try {
+    const SAMPLE_RATE = 8000;
     const { stdout } = await execFileAsync(FFMPEG, [
       "-i", videoPath,
-      "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "pipe:1",
+      "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1",
     ], { encoding: "buffer", maxBuffer: 50 * 1024 * 1024 });
     const buf = stdout as unknown as Buffer;
     if (buf.length < 2) return [];
     const samples = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
+    // Default: 100 bars per second of audio (0.01s resolution)
+    if (barCount === undefined) {
+      const durationSec = samples.length / SAMPLE_RATE;
+      barCount = Math.max(20, Math.min(1000, Math.round(durationSec * 100)));
+    }
     const samplesPerBin = Math.max(1, Math.floor(samples.length / barCount));
     const peaks: number[] = [];
     for (let b = 0; b < barCount; b++) {

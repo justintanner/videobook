@@ -566,11 +566,11 @@ function WaveformBars({ data }: { data: number[] }) {
   const maxVal = Math.max(...data, 1);
 
   return (
-    <div className="flex items-end w-full h-full px-px">
+    <div className="flex items-end w-full h-full gap-[0.5px] px-px">
       {data.map((val, i) => (
         <div
           key={i}
-          className="flex-1 min-w-0 bg-cyan-500/40"
+          className="flex-1 min-w-0 bg-cyan-500/50 rounded-t-[0.5px]"
           style={{ height: `${Math.max((val / maxVal) * 100, 2)}%` }}
         />
       ))}
