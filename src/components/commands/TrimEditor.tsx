@@ -546,7 +546,7 @@ export function TrimEditor({
             />
           </div>
 
-          <div className="relative overflow-visible" style={{ height: 120 }}>
+          <div className="relative overflow-visible" style={{ height: 96 }}>
             <div
               ref={waveformRef}
               data-waveform
@@ -608,24 +608,24 @@ export function TrimEditor({
               ))}
             </div>
 
-            {/* Analysis scene triangle markers */}
-            {snapEnabled && duration > 0 && markers.length > 0 && markers.map((m, i) => (
+            {/* Analysis scene markers — vertically centered on waveform */}
+            {duration > 0 && markers.length > 0 && markers.map((m, i) => (
               <div
                 key={`scene-${i}`}
-                className="absolute z-15 group"
-                style={{ left: `${(m.timeSec / duration) * 100}%`, top: 0, transform: 'translateX(-50%)' }}
+                className="absolute z-20 group"
+                style={{ left: `${(m.timeSec / duration) * 100}%`, top: 0, bottom: 0 }}
               >
-                {/* Full-height stem through waveform */}
-                <div className="absolute left-1/2 w-px -translate-x-1/2 bg-amber-400/25" style={{ top: 0, height: 96 }} />
-                {/* Triangle ▼ below waveform */}
+                {/* Full-height line */}
+                <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-amber-400/40" />
+                {/* Exclamation circle — centered */}
                 <div
-                  className="absolute w-0 h-0 left-1/2 -translate-x-1/2 cursor-pointer"
-                  style={{ top: 96, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid rgb(245 158 11 / 0.8)' }}
-                />
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                >
+                  <span className="text-[11px] font-black text-zinc-900 leading-none">!</span>
+                </div>
                 {/* Hover tooltip above waveform */}
-                <div
-                  className="absolute pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 left-1/2 -translate-x-1/2 w-48 p-2 rounded bg-zinc-900/95 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-                  style={{ bottom: 'calc(100% + 4px)' }}
+                <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 w-48 p-2 rounded bg-zinc-900/95 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                  style={{ bottom: 'calc(100% + 8px)' }}
                 >
                   <span className="text-[9px] font-mono text-amber-300 block mb-0.5">{formatDuration(m.timeSec)}</span>
                   <span className="text-[10px] text-zinc-300 leading-tight line-clamp-3">{m.label}</span>
@@ -633,24 +633,26 @@ export function TrimEditor({
               </div>
             ))}
 
-            {/* Thumbnail triangle markers */}
+            {/* Thumbnail markers — vertically centered on waveform */}
             {frameBadges.map((badge, i) => (
               <div
                 key={`frame-${i}`}
                 className="absolute z-20 group"
-                style={{ left: `${badge.percent}%`, top: 96, transform: 'translateX(-50%)' }}
+                style={{ left: `${badge.percent}%`, top: 0, bottom: 0 }}
               >
-                {/* Stem into waveform */}
-                <div className="absolute bottom-full left-1/2 w-px h-3 -translate-x-1/2 bg-cyan-500/40" />
-                {/* Triangle ▼ */}
+                {/* Full-height line */}
+                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-cyan-500/30" />
+                {/* Micro thumbnail — centered */}
                 <div
-                  className="w-0 h-0 cursor-pointer"
-                  style={{ borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid rgb(34 211 238 / 0.7)' }}
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-6 rounded-sm border border-cyan-400/60 bg-cover bg-center cursor-pointer shadow-[0_0_6px_rgba(34,211,238,0.3)]"
+                  style={{ backgroundImage: `url(${badge.src})` }}
                 />
-                {/* Hover preview — image + time */}
-                <div className="absolute bottom-[calc(100%+16px)] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 flex flex-col items-center gap-1">
+                {/* Hover preview above waveform */}
+                <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 flex flex-col items-center gap-1"
+                  style={{ bottom: 'calc(100% + 8px)' }}
+                >
                   <div
-                    className="w-[120px] h-20 rounded border border-cyan-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(34,211,238,0.5)]"
+                    className="w-[140px] h-[94px] rounded border border-cyan-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(34,211,238,0.5)]"
                     style={{ backgroundImage: `url(${badge.src})` }}
                   />
                   <span className="text-[9px] font-mono text-cyan-400/80 whitespace-nowrap">{badge.time}</span>
