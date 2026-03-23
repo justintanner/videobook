@@ -151,7 +151,7 @@ function ClipContent({ item, size, onRender }: {
 
   if (size === 'original') {
     const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
-    return <video key={`${item.id}-${size}`} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+    return <video key={item.filePath} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
   }
 
   const orient = size as Orientation;
@@ -162,12 +162,15 @@ function ClipContent({ item, size, onRender }: {
     const orientedFile = size === 'landscape' ? 'landscape.mp4'
       : size === 'portrait' ? 'portrait.mp4'
       : 'square.mp4';
-    const derivedSrc = item.filePath.replace(/\/[^/]+$/, `/${orientedFile}`);
+    const qIdx = item.filePath.indexOf('?');
+    const qs = qIdx >= 0 ? item.filePath.slice(qIdx) : '';
+    const basePath = qIdx >= 0 ? item.filePath.slice(0, qIdx) : item.filePath;
+    const derivedSrc = basePath.replace(/\/[^/]+$/, `/${orientedFile}`) + qs;
     const thumbFile = size === 'landscape' ? 'landscape.jpg'
       : size === 'portrait' ? 'portrait.jpg'
       : 'square.jpg';
-    const thumbSrc = item.filePath.replace(/\/[^/]+$/, `/${thumbFile}`);
-    return <video key={`${item.id}-${size}`} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+    const thumbSrc = basePath.replace(/\/[^/]+$/, `/${thumbFile}`) + qs;
+    return <video key={derivedSrc} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
   }
 
   if (status && RENDERING_STATUSES.has(status)) {

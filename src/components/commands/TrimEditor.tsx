@@ -379,8 +379,11 @@ export function TrimEditor({
     setTrimRange(null);
   }, []);
 
+  const [trimError, setTrimError] = useState<string | null>(null);
+
   const handleTrim = useCallback(async (startSec: number, endSec: number) => {
     if (!assetId || !projectSlug) return;
+    setTrimError(null);
     setTrimState('charging');
     await new Promise((r) => setTimeout(r, 400));
     setTrimState('processing');
@@ -392,6 +395,10 @@ export function TrimEditor({
         trim_end: endSec,
       });
       if (result && 'isError' in result && result.isError) {
+        const msg = Array.isArray(result.content) && result.content[0]?.text
+          ? String(result.content[0].text)
+          : 'Trim failed';
+        setTrimError(msg);
         setTrimState(undefined);
         return;
       }
@@ -401,7 +408,8 @@ export function TrimEditor({
         setTrimRange(null);
         onClose();
       }, 1200);
-    } catch {
+    } catch (err) {
+      setTrimError(err instanceof Error ? err.message : 'Trim failed');
       setTrimState(undefined);
     }
   }, [assetId, projectSlug, callTool, onClose]);
@@ -552,6 +560,9 @@ export function TrimEditor({
               disabledReason="No video loaded"
             />
             <div className="flex-1" />
+            {trimError && (
+              <span className="text-[11px] font-mono text-red-400 truncate max-w-[300px]">{trimError}</span>
+            )}
             <CommandButton
               command="/trim"
               icon={<Scissors className="w-4 h-4" />}
@@ -560,6 +571,7 @@ export function TrimEditor({
               disabledReason="Drag on the waveform to select a trim range"
               onClick={() => {
                 if (trimRange && duration > 0 && !trimState) {
+                  setTrimError(null);
                   const startSec = (trimRange.startPct / 100) * duration;
                   const endSec = (trimRange.endPct / 100) * duration;
                   handleTrim(startSec, endSec);

@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
-import { readdir, readFile, access } from "node:fs/promises";
+import { readdir, readFile, access, stat } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
 import { queue } from "../queue.js";
@@ -262,12 +262,18 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         findFrameDirectories(a.path, project_slug, a.id),
         hasPartialDownload(a.path),
       ]);
+      // Cache-bust media URLs with file mtime so browsers refetch after trim/re-encode
+      let mediaMtime = 0;
+      if (mediaFile) {
+        try { mediaMtime = (await stat(join(a.path, mediaFile))).mtimeMs; } catch { /* non-fatal */ }
+      }
+      const cacheBust = mediaMtime ? `?v=${Math.floor(mediaMtime)}` : '';
       const media_url = mediaFile
-        ? `/files/${project_slug}/${a.id}/${mediaFile}`
+        ? `/files/${project_slug}/${a.id}/${mediaFile}${cacheBust}`
         : null;
       const isImage = a.type === "image";
       const thumbnail_url = hasThumbnail
-        ? `/files/${project_slug}/${a.id}/original.jpg`
+        ? `/files/${project_slug}/${a.id}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
       let status: string;

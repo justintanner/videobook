@@ -126,12 +126,19 @@ export function trimVideoDef(fs: ClipfirstFs): ToolDef {
         jobPayload.cutEnd = validated.cutEnd;
       }
 
-      await queue.enqueue(jobId, jobPayload);
+      try {
+        await queue.enqueueAndWait(jobId, jobPayload);
+      } catch (err) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Trim failed: ${err instanceof Error ? err.message : String(err)}` }],
+        };
+      }
 
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ asset_id, job_id: jobId, status: "enqueued" }),
+          text: JSON.stringify({ asset_id, job_id: jobId, status: "completed" }),
         }],
       };
     },

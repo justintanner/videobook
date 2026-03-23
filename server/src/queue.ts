@@ -18,7 +18,12 @@ queue.execute(async (job: Job<JobPayload>) => {
   const payload = job.payload as { type: string };
   const handler = handlers.get(payload.type);
   if (!handler) throw new Error(`No handler for job type: ${payload.type}`);
-  return handler(job.payload as Record<string, unknown>);
+  try {
+    return await handler(job.payload as Record<string, unknown>);
+  } catch (err) {
+    console.error(`[queue] job ${payload.type} failed:`, err instanceof Error ? err.message : err);
+    throw err;
+  }
 });
 
 export async function waitForJob(jobId: string, timeoutMs = 300_000): Promise<void> {
