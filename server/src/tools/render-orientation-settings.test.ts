@@ -76,7 +76,7 @@ describe("render orientation: video without subtitles", () => {
           });
           expect(result.isError).toBeFalsy();
           const parsed = parseResult(result);
-          expect(parsed.orientation).toBe(orientation);
+          expect(parsed.orientations).toContain(orientation);
           expect(parsed.status).toBe("enqueued");
         });
       }
@@ -102,7 +102,7 @@ describe("render orientation: video without subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
 
       it("audio: volume=50, fade_in=300, fade_out=200", async () => {
@@ -128,7 +128,7 @@ describe("render orientation: video without subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
 
       it("audio: volume=100, no fades", async () => {
@@ -154,7 +154,7 @@ describe("render orientation: video without subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
 
       it("combined: black background + muted audio", async () => {
@@ -181,7 +181,7 @@ describe("render orientation: video without subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
     });
   }
@@ -239,7 +239,7 @@ describe("render orientation: video with subtitles", () => {
               });
               expect(result.isError).toBeFalsy();
               const parsed = parseResult(result);
-              expect(parsed.orientation).toBe(orientation);
+              expect(parsed.orientations).toContain(orientation);
               expect(parsed.status).toBe("enqueued");
             });
           }
@@ -269,7 +269,7 @@ describe("render orientation: video with subtitles", () => {
             },
           });
           expect(result.isError).toBeFalsy();
-          expect(parseResult(result).orientation).toBe(orientation);
+          expect(parseResult(result).orientations).toContain(orientation);
         });
       }
 
@@ -296,7 +296,7 @@ describe("render orientation: video with subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
 
       it("default colors: textColor=#F8FAFC highlightColor=#991B1B", async () => {
@@ -322,7 +322,7 @@ describe("render orientation: video with subtitles", () => {
           },
         });
         expect(result.isError).toBeFalsy();
-        expect(parseResult(result).orientation).toBe(orientation);
+        expect(parseResult(result).orientations).toContain(orientation);
       });
     });
   }
@@ -378,7 +378,7 @@ describe("render orientation: OSG overlay positions", () => {
         });
         expect(result.isError).toBeFalsy();
         const parsed = parseResult(result);
-        expect(parsed.orientation).toBe(orientation);
+        expect(parsed.orientations).toContain(orientation);
         expect(parsed.status).toBe("enqueued");
       });
     }
@@ -438,7 +438,7 @@ describe("render orientation: full settings matrix", () => {
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.orientation).toBe(orientation);
+      expect(parsed.orientations).toContain(orientation);
       expect(parsed.status).toBe("enqueued");
     });
 
@@ -467,7 +467,7 @@ describe("render orientation: full settings matrix", () => {
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.orientation).toBe(orientation);
+      expect(parsed.orientations).toContain(orientation);
       expect(parsed.status).toBe("enqueued");
     });
 
@@ -498,7 +498,7 @@ describe("render orientation: full settings matrix", () => {
         },
       });
       expect(result.isError).toBeFalsy();
-      expect(parseResult(result).orientation).toBe(orientation);
+      expect(parseResult(result).orientations).toContain(orientation);
     });
 
     it(`${orientation}: impact style with mid position + small font + black bg`, async () => {
@@ -528,7 +528,7 @@ describe("render orientation: full settings matrix", () => {
         },
       });
       expect(result.isError).toBeFalsy();
-      expect(parseResult(result).orientation).toBe(orientation);
+      expect(parseResult(result).orientations).toContain(orientation);
     });
   }
 });
@@ -582,7 +582,7 @@ describe("render orientation: timeline switching between orientations", () => {
         },
       });
       expect(renderResult.isError).toBeFalsy();
-      expect(parseResult(renderResult).orientation).toBe(orientation);
+      expect(parseResult(renderResult).orientations).toContain(orientation);
     }
   });
 
@@ -616,7 +616,7 @@ describe("render orientation: timeline switching between orientations", () => {
         },
       });
       expect(renderResult.isError).toBeFalsy();
-      expect(parseResult(renderResult).orientation).toBe(orientation);
+      expect(parseResult(renderResult).orientations).toContain(orientation);
     }
   });
 
@@ -655,7 +655,7 @@ describe("render orientation: timeline switching between orientations", () => {
         },
       });
       expect(r1.isError).toBeFalsy();
-      expect(parseResult(r1).orientation).toBe(orientation);
+      expect(parseResult(r1).orientations).toContain(orientation);
 
       // Render video 2 (with subs)
       const r2 = await client.callTool({
@@ -671,7 +671,7 @@ describe("render orientation: timeline switching between orientations", () => {
         },
       });
       expect(r2.isError).toBeFalsy();
-      expect(parseResult(r2).orientation).toBe(orientation);
+      expect(parseResult(r2).orientations).toContain(orientation);
     }
   });
 });
@@ -742,7 +742,7 @@ describe("render orientation: subtitle edge cases", () => {
         },
       });
       expect(result.isError).toBeFalsy();
-      expect(parseResult(result).orientation).toBe(orientation);
+      expect(parseResult(result).orientations).toContain(orientation);
     });
 
     it(`${orientation}: subtitles_enabled=false overrides auto-detection`, async () => {
@@ -766,7 +766,7 @@ describe("render orientation: subtitle edge cases", () => {
         },
       });
       expect(result.isError).toBeFalsy();
-      expect(parseResult(result).orientation).toBe(orientation);
+      expect(parseResult(result).orientations).toContain(orientation);
     });
   }
 });
@@ -816,7 +816,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // --- subtitles_enabled: true without elevenlabs.json => error ---
@@ -866,7 +866,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // --- subtitles_enabled: false overrides auto-detect when elevenlabs.json exists ---
@@ -893,7 +893,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // --- highlight_style: impact ---
@@ -921,7 +921,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // --- highlight_style: highlight ---
@@ -949,7 +949,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // --- highlight_style with additional subtitle settings ---
@@ -981,7 +981,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.orientations).toContain("portrait");
   });
 
   it("highlight style with position and font_size settings", async () => {
@@ -1012,7 +1012,7 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("square");
+    expect(parsed.orientations).toContain("square");
   });
 
   // --- highlight_style ignored when subtitles disabled ---
@@ -1091,7 +1091,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1109,7 +1109,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1127,7 +1127,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1147,7 +1147,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1165,7 +1165,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1185,7 +1185,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1203,7 +1203,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1260,7 +1260,7 @@ describe("render audio settings", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
     expect(parsed.asset_id).toBe(assetId);
   });
 
@@ -1377,7 +1377,7 @@ describe("render color settings: text_color and highlight_color", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("text_color=#FF0000 (red, non-default) succeeds", async () => {
@@ -1394,7 +1394,7 @@ describe("render color settings: text_color and highlight_color", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // ---- highlight_color valid values ----
@@ -1413,7 +1413,7 @@ describe("render color settings: text_color and highlight_color", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("highlight_color=#00FF00 (green, non-default) succeeds", async () => {
@@ -1430,7 +1430,7 @@ describe("render color settings: text_color and highlight_color", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   // ---- both colors together ----
@@ -1721,7 +1721,7 @@ describe("render settings: subtitle position", () => {
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.orientation).toBe("landscape");
+      expect(parsed.orientations).toContain("landscape");
       expect(parsed.status).toBe("enqueued");
     });
 
@@ -1750,7 +1750,7 @@ describe("render settings: subtitle position", () => {
         });
         expect(result.isError).toBeFalsy();
         const parsed = parseResult(result);
-        expect(parsed.orientation).toBe(orientation);
+        expect(parsed.orientations).toContain(orientation);
         expect(parsed.status).toBe("enqueued");
       }
     });
@@ -1828,7 +1828,7 @@ describe("render settings: font size", () => {
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.orientation).toBe("landscape");
+      expect(parsed.orientations).toContain("landscape");
       expect(parsed.status).toBe("enqueued");
     });
 
@@ -1857,7 +1857,7 @@ describe("render settings: font size", () => {
         });
         expect(result.isError).toBeFalsy();
         const parsed = parseResult(result);
-        expect(parsed.orientation).toBe(orientation);
+        expect(parsed.orientations).toContain(orientation);
         expect(parsed.status).toBe("enqueued");
       }
     });
@@ -1937,7 +1937,7 @@ describe("render settings: position x font_size combinations", () => {
         });
         expect(result.isError).toBeFalsy();
         const parsed = parseResult(result);
-        expect(parsed.orientation).toBe("portrait");
+        expect(parsed.orientations).toContain("portrait");
         expect(parsed.status).toBe("enqueued");
       });
     }
@@ -1993,7 +1993,7 @@ describe("render: osg_position focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("osg_position=top-right enqueues successfully", async () => {
@@ -2024,7 +2024,7 @@ describe("render: osg_position focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.orientations).toContain("portrait");
   });
 
   it("osg_position=bottom-left enqueues successfully", async () => {
@@ -2055,7 +2055,7 @@ describe("render: osg_position focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("square");
+    expect(parsed.orientations).toContain("square");
   });
 
   it("osg_position=bottom-right enqueues successfully", async () => {
@@ -2086,7 +2086,7 @@ describe("render: osg_position focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("osg_position defaults to top-right when omitted", async () => {
@@ -2188,7 +2188,7 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.orientations).toContain("portrait");
   });
 
   it("background_mode=black enqueues successfully", async () => {
@@ -2214,7 +2214,7 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("background_mode defaults to blur when omitted", async () => {
@@ -2268,7 +2268,7 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.orientations).toContain("portrait");
   });
 
   it("background_mode=black works with subtitles enabled", async () => {
@@ -2298,7 +2298,7 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("square");
+    expect(parsed.orientations).toContain("square");
   });
 
   it("background_mode=blur combined with OSG overlay", async () => {
@@ -2330,7 +2330,7 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toContain("landscape");
   });
 
   it("background_mode=black combined with OSG overlay", async () => {
@@ -2362,6 +2362,6 @@ describe("render: background_mode focused", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parseResult(result);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.orientation).toBe("portrait");
+    expect(parsed.orientations).toContain("portrait");
   });
 });

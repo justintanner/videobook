@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { basename } from "node:path";
-import { registerJobHandler } from "../queue.js";
+import { basename, join } from "node:path";
+import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
@@ -57,6 +57,15 @@ export function registerReverseVideoJob(fs: ClipfirstFs): void {
 
       // Re-arm whitelist so transcription pipeline picks up the changed video
       await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
+
+      const videoPath = join(assetDir, inputFilename);
+      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+        type: "process_video",
+        videoPath, assetId, assetDir, projectSlug,
+        provenance: { origin: "reverse", reversed_at: new Date().toISOString() },
+        force: true,
+        skipDownstreamJobs: true,
+      } as unknown as Record<string, unknown>);
 
       return { success: true };
     } finally {

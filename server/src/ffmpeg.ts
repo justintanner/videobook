@@ -119,6 +119,36 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
   }
 }
 
+export async function isThumbnailBlank(imagePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(FFMPEG, [
+      "-i", imagePath,
+      "-vf", "format=gray",
+      "-f", "rawvideo",
+      "-pix_fmt", "gray",
+      "pipe:1",
+    ], { encoding: "buffer", maxBuffer: 10 * 1024 * 1024 });
+    const buf = stdout as unknown as Buffer;
+    if (buf.length === 0) return true;
+
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i];
+    const mean = sum / buf.length;
+
+    let variance = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const diff = buf[i] - mean;
+      variance += diff * diff;
+    }
+    const stddev = Math.sqrt(variance / buf.length);
+
+    // Near-black or uniform solid color
+    return mean < 10 || stddev < 5;
+  } catch {
+    return false;
+  }
+}
+
 export async function getFFmpeggy(): Promise<FFmpeggyClass> {
   if (!_FFmpeggy) {
     const mod = await import("ffmpeggy") as { FFmpeggy: FFmpeggyClass };
