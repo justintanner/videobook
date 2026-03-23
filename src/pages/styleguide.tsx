@@ -1323,15 +1323,18 @@ function Page10_BackFacePanels() {
         {/* Left: /settings tab active */}
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /settings tab</p>
-          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-            {/* Segmented control tab bar */}
-            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
-              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
-                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
-                  style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/settings</span>
-                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/files</span>
+          <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+            <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
+              <div className="flex gap-1">
+                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-cyan-400" style={{ background: 'rgba(0,217,255,0.06)' }}>
+                  <span>/settings</span>
+                  <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
+                </span>
+                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-muted-foreground">/files</span>
               </div>
-              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>@vid-aurora-sky</span>
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
+              </span>
               <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
             </div>
             <div className="flex-1 overflow-hidden">
@@ -1364,15 +1367,18 @@ function Page10_BackFacePanels() {
         {/* Right: /files tab active */}
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /files tab</p>
-          <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-            {/* Segmented control tab bar */}
-            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
-              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
-                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold text-white/70 transition-all duration-[160ms]">/settings</span>
-                <span className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
-                  style={{ background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }}>/files</span>
+          <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+            <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
+              <div className="flex gap-1">
+                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-muted-foreground">/settings</span>
+                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-cyan-400" style={{ background: 'rgba(0,217,255,0.06)' }}>
+                  <span>/files</span>
+                  <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
+                </span>
               </div>
-              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>@vid-aurora-sky</span>
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
+              </span>
               <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
             </div>
 
