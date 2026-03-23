@@ -49,10 +49,13 @@ import {
   Film, Grid3x3, Scissors, Music, Clapperboard,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AudioLines, Plus, Pencil,
-  Play, Loader2, Mic,
+  Loader2, Mic,
   Check, History, RotateCcw, FileJson,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
+import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
+import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
+import type { UseMcpResult } from 'use-mcp/react';
 
 const colors = [
   { name: 'Primary', bg: 'bg-primary', hex: '#00D4FF' },
@@ -186,6 +189,25 @@ function FakeDropdown({ text }: { text: string }) {
       {text}
       <ChevronDown className="w-3 h-3 text-primary/50" />
     </div>
+  );
+}
+
+const styleguideMockCallTool: UseMcpResult['callTool'] = async (name: string) => {
+  if (name === 'list_projects') {
+    return {
+      content: [{ type: 'text', text: JSON.stringify([
+        { slug: 'vax', path: '/projects/vax' },
+        { slug: 'neon-reel', path: '/projects/neon-reel' },
+        { slug: 'demo-2025', path: '/projects/demo-2025' },
+      ]) }],
+    };
+  }
+  return { content: [{ type: 'text', text: '{}' }] };
+};
+
+function clipMenu(slug: string, itemType: string) {
+  return (
+    <AssetMenu slug={slug} itemType={itemType} onShowFolder={() => {}} MenuItem={ContextMenuItem} />
   );
 }
 
@@ -367,25 +389,6 @@ function ContextMenuDemo() {
   );
 }
 
-function ClipContextMenu({ children }: { children: React.ReactNode }) {
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuLabel className="text-[10px] font-mono text-muted-foreground/60">clip</ContextMenuLabel>
-        <ContextMenuItem className="text-xs font-mono gap-2"><Play className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>preview</span></ContextMenuItem>
-        <ContextMenuItem className="text-xs font-mono gap-2"><Scissors className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>trim</span></ContextMenuItem>
-        <ContextMenuItem className="text-xs font-mono gap-2"><Download className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>download</span></ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-xs font-mono gap-2"><Copy className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>duplicate</span></ContextMenuItem>
-        <ContextMenuItem className="text-xs font-mono gap-2"><Mic className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>transcribe</span></ContextMenuItem>
-        <ContextMenuItem className="text-xs font-mono gap-2"><Film className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>render</span></ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-xs font-mono gap-2 text-destructive"><Trash2 className="w-3.5 h-3.5" /> <span><span className="text-primary/25 text-[0.65em]">/</span>delete</span></ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
 
 const allExecuteStates: ExecuteButtonState[] = ['disabled', 'ready', 'processing', 'success'];
 
@@ -747,7 +750,16 @@ function Page1_FinalVideoPreview() {
   return (
     <div className="w-full h-full overflow-hidden rounded-lg border border-border/60 bg-background shadow-[0_0_40px_-12px_rgba(0,212,255,0.08)]">
       <div className="grid grid-rows-[48px_1fr_auto] h-full">
-        <HeaderBar />
+        <HomeHeaderBar
+          pulseKey={0}
+          projectSlug="vax"
+          callTool={styleguideMockCallTool}
+          onProjectChange={() => {}}
+          inboxState="ready"
+          generatingCount={0}
+          readyCount={4}
+          onInboxClick={() => {}}
+        />
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets */}
           <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
@@ -785,18 +797,10 @@ function Page1_FinalVideoPreview() {
           <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
             <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Clips" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
             <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
-              <ClipContextMenu>
-                <div className="w-full"><VideoCard item={{ id: 'clip-s01', type: 'video', slug: '@s01', title: 'Purple Grind', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }} /></div>
-              </ClipContextMenu>
-              <ClipContextMenu>
-                <div className="w-full"><VideoCard item={{ id: 'clip-s02', type: 'video', slug: '@s02', title: 'Neon Fox', filePath: '/styleguide-img-neon-fox.jpg', status: 'ready', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/styleguide-img-neon-fox.jpg' }} /></div>
-              </ClipContextMenu>
-              <ClipContextMenu>
-                <div className="w-full"><VideoCard item={{ id: 'clip-s03', type: 'video', slug: '@s03', title: 'Sky Ghost', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 75, origin: 'veo3', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' }} /></div>
-              </ClipContextMenu>
-              <ClipContextMenu>
-                <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} /></div>
-              </ClipContextMenu>
+              <div className="w-full"><VideoCard item={{ id: 'clip-s01', type: 'video', slug: '@s01', title: 'Purple Grind', filePath: '/styleguide-vid-purple-grind.jpg', status: 'ready', durationSeconds: 90, origin: 'wan21', thumbnailSrc: '/styleguide-vid-purple-grind.jpg' }} contextMenuContent={clipMenu('@s01', 'video')} /></div>
+              <div className="w-full"><VideoCard item={{ id: 'clip-s02', type: 'video', slug: '@s02', title: 'Neon Fox', filePath: '/styleguide-img-neon-fox.jpg', status: 'ready', durationSeconds: 60, origin: 'veo3', thumbnailSrc: '/styleguide-img-neon-fox.jpg' }} contextMenuContent={clipMenu('@s02', 'video')} /></div>
+              <div className="w-full"><VideoCard item={{ id: 'clip-s03', type: 'video', slug: '@s03', title: 'Sky Ghost', filePath: '/styleguide-vid-sky-ghost.jpg', status: 'ready', durationSeconds: 75, origin: 'veo3', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg' }} contextMenuContent={clipMenu('@s03', 'video')} /></div>
+              <div className="w-full"><FinalVideoCard item={{ id: 'demo-final-ready', type: 'final', slug: '@final-export-v2', title: 'Final Ready', filePath: '/final.mp4', status: 'ready', durationSeconds: 180, thumbnailSrc: '/styleguide-final-thumb.jpg' }} contextMenuContent={clipMenu('@final-export-v2', 'final')} /></div>
               <UploadSlot />
             </div>
           </CollapsibleSidebar>
