@@ -48,6 +48,8 @@ export function GenPreviewPanel({
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
   const [flipped, setFlipped] = useState(false);
+  const [translatedPayload, setTranslatedPayload] = useState<Record<string, unknown> | null>(null);
+  const [translateLoading, setTranslateLoading] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
 
@@ -127,6 +129,27 @@ export function GenPreviewPanel({
       args: { ...formValues, project_slug: projectSlug },
     };
   }, [selectedOption, formValues, projectSlug]);
+
+  const fetchTranslatedPayload = useCallback(async () => {
+    if (!jsonPayload) return;
+    setTranslateLoading(true);
+    try {
+      const result = await callToolRef.current('translate_payload', {
+        tool_name: jsonPayload.tool_name,
+        args_json: JSON.stringify(jsonPayload.args),
+      });
+      if (!result.isError) {
+        const content = result.content as Array<{ type: string; text: string }>;
+        setTranslatedPayload(JSON.parse(content[0].text) as Record<string, unknown>);
+      } else {
+        setTranslatedPayload(null);
+      }
+    } catch {
+      setTranslatedPayload(null);
+    } finally {
+      setTranslateLoading(false);
+    }
+  }, [jsonPayload]);
 
   const handleGenerate = useCallback(async () => {
     if (!selectedOption || !projectSlug) return;
@@ -291,7 +314,11 @@ export function GenPreviewPanel({
       headerExtra={
         <button
           tabIndex={-1}
-          onClick={() => setFlipped((f) => !f)}
+          onClick={() => {
+            const willFlip = !flipped;
+            setFlipped(willFlip);
+            if (willFlip) fetchTranslatedPayload();
+          }}
           title={flipped ? 'Back to form' : 'View JSON payload'}
           className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
         >
@@ -406,11 +433,38 @@ export function GenPreviewPanel({
             </div>
           </div>
 
-          {/* BACK FACE — JSON payload */}
-          <div className="flip-card-back absolute inset-0 overflow-auto p-4">
-            <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
-              <JsonNode data={jsonPayload ?? {}} />
-            </pre>
+          {/* BACK FACE — JSON payloads side by side */}
+          <div className="flip-card-back absolute inset-0 flex">
+            {/* Left pane: Raw MCP tool call */}
+            <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
+              <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">
+                Tool Call
+              </div>
+              <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                <JsonNode data={jsonPayload ?? {}} />
+              </pre>
+            </div>
+
+            {/* Right pane: Translated provider payload */}
+            <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
+              <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">
+                Provider Payload
+              </div>
+              {translateLoading ? (
+                <div className="flex items-center gap-2 text-primary/40">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span className="text-[10px] font-mono">Translating...</span>
+                </div>
+              ) : translatedPayload ? (
+                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                  <JsonNode data={translatedPayload} />
+                </pre>
+              ) : (
+                <span className="text-[10px] text-primary/20 font-mono italic">
+                  Flip to refresh
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

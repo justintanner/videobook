@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { buildGptImagePayload } from "../payload-builders.js";
 
 type GenerateGptImagePayload = {
   type: "generate_gpt_image";
@@ -36,15 +37,11 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       uploadedUrls.push(downloadUrl);
     }
 
-    const { taskId } = await provider.api.v1.jobs.createTask({
-      model: "gpt-image/1.5-image-to-image",
-      input: {
-        prompt,
-        input_urls: uploadedUrls,
-        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
-        ...(quality !== undefined ? { quality } : {}),
-      },
-    });
+    const request = buildGptImagePayload(
+      { prompt, aspect_ratio: aspectRatio, quality },
+      uploadedUrls,
+    );
+    const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,

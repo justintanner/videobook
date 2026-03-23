@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { buildGrokImagineImagePayload } from "../payload-builders.js";
 
 type GenerateGrokImagineImagePayload = {
   type: "generate_grok_imagine_image";
@@ -35,13 +36,8 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       filename: imageFilename,
     });
 
-    const { taskId } = await provider.api.v1.jobs.createTask({
-      model: "grok-imagine/image-to-image",
-      input: {
-        image_urls: [downloadUrl],
-        ...(prompt !== undefined ? { prompt } : {}),
-      },
-    });
+    const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
+    const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,

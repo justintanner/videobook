@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { buildNanoBananaImagePayload } from "../payload-builders.js";
 
 type GenerateNanoBananaImagePayload = {
   type: "generate_nano_banana_image";
@@ -37,16 +38,11 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
       uploadedUrls.push(downloadUrl);
     }
 
-    const { taskId } = await provider.api.v1.jobs.createTask({
-      model: "nano-banana-pro",
-      input: {
-        prompt,
-        ...(uploadedUrls.length > 0 ? { image_input: uploadedUrls } : {}),
-        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-        ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
-      },
-    });
+    const request = buildNanoBananaImagePayload(
+      { prompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
+      uploadedUrls,
+    );
+    const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,

@@ -118,11 +118,11 @@ describe("chat log round-trip (real fs)", () => {
 
   it("round-trips multiple turns and respects limit", async () => {
     logUserTurn(fs, slug, "first");
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 500));
     logAssistantTurn(fs, slug, "list_assets", {}, "Listing.", false);
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 500));
     logUserTurn(fs, slug, "second");
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 500));
 
     const all = await getRecentHistory(fs, slug, 10);
     expect(all.length).toBe(3);

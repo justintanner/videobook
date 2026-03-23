@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { buildGrokImagineVideoPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
@@ -38,16 +39,11 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       filename: imageFilename,
     });
 
-    const { taskId } = await provider.api.v1.jobs.createTask({
-      model: "grok-imagine/image-to-video",
-      input: {
-        image_urls: [downloadUrl],
-        ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
-        ...(duration !== undefined ? { duration } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-      },
-    });
+    const request = buildGrokImagineVideoPayload(
+      { prompt, mode, duration, resolution },
+      [downloadUrl],
+    );
+    const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
