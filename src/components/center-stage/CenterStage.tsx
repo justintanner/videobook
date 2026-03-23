@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Settings, ChevronDown, RotateCcw, RefreshCw, AudioLines, FileText, Monitor, Smartphone, Square, Check, VideoOff } from 'lucide-react';
+import { Settings, ChevronDown, RotateCcw, RefreshCw, AudioLines, FileText, Monitor, Smartphone, Square, Check, VideoOff, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import { CommandButton } from '@/components/commands';
 import { RenderingReadout } from './RenderingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
 import type { RenderSettings } from './render-settings-types';
@@ -88,32 +89,92 @@ function RenderPrompt({ item, onRender }: {
 }) {
   const [armed, setArmed] = useState(false);
   const isFinal = item.type === 'final';
+  const primaryColor = isFinal ? '#fbbf24' : 'var(--color-primary)';
+
+  const handleClick = () => {
+    if (armed) {
+      onRender?.();
+      setArmed(false);
+    } else {
+      setArmed(true);
+    }
+  };
 
   return (
-    <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-3">
-      <VideoOff className="w-10 h-10 text-muted-foreground/20" />
-      <button
-        onClick={() => {
-          if (armed) {
-            onRender?.();
-            setArmed(false);
-          } else {
-            setArmed(true);
-          }
+    <div className="w-full h-full bg-black flex flex-col items-center justify-center relative overflow-hidden select-none">
+      {/* CRT scanlines */}
+      <div className="absolute inset-0 scanlines pointer-events-none opacity-50" />
+
+      {/* Pixel grid */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-15"
+        style={{
+          backgroundImage: `linear-gradient(${primaryColor}33 1px, transparent 1px), linear-gradient(90deg, ${primaryColor}33 1px, transparent 1px)`,
+          backgroundSize: '8px 8px',
         }}
-        className={cn(
-          'px-4 py-2 rounded border font-mono text-xs font-bold tracking-wider transition-colors',
-          armed
-            ? isFinal
-              ? 'text-amber-400 border-amber-400 bg-amber-500/20 hover:bg-amber-500/30'
-              : 'text-primary border-primary bg-primary/20 hover:bg-primary/30'
-            : isFinal
-              ? 'text-amber-400 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20'
-              : 'text-primary border-primary/40 bg-primary/10 hover:bg-primary/20',
-        )}
-      >
-        {armed ? 'confirm /render' : '/render'}
-      </button>
+      />
+
+      {/* HUD corner brackets */}
+      <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2" style={{ borderColor: `${primaryColor}99` }} />
+      <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2" style={{ borderColor: `${primaryColor}99` }} />
+      <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2" style={{ borderColor: `${primaryColor}99` }} />
+      <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2" style={{ borderColor: `${primaryColor}99` }} />
+
+      {/* Slow scan line */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute left-0 right-0 h-px opacity-30"
+          style={{
+            backgroundColor: primaryColor,
+            boxShadow: `0 0 8px 1px ${primaryColor}`,
+            animation: 'readout-scan 4s ease-in-out infinite',
+          }}
+        />
+      </div>
+
+      {/* Center content */}
+      <div className="relative z-10 flex flex-col items-center gap-5">
+        {/* Targeting reticle with VideoOff */}
+        <div className="relative flex items-center justify-center">
+          <div
+            className="w-20 h-20 rounded-full border flex items-center justify-center transition-all duration-500"
+            style={{
+              borderColor: `${primaryColor}40`,
+              boxShadow: armed
+                ? `0 0 20px ${primaryColor}30, inset 0 0 15px ${primaryColor}15`
+                : `inset 0 0 10px ${primaryColor}10`,
+              animation: armed ? 'showcase-slot-pulse 2s ease-in-out infinite' : undefined,
+            }}
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: `${primaryColor}08` }}
+            >
+              <VideoOff className="w-8 h-8" style={{ color: `${primaryColor}50` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* CommandButton */}
+        <CommandButton
+          command={armed ? 'confirm /render' : '/render'}
+          icon={<Zap className="w-5 h-5" />}
+          size="lg"
+          state={armed ? 'ready' : undefined}
+          className={isFinal
+            ? 'border-amber-400 bg-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
+            : undefined}
+          onClick={handleClick}
+        />
+
+        {/* Status hint */}
+        <span
+          className="text-[10px] font-mono font-bold tracking-[0.15em] uppercase transition-opacity duration-300"
+          style={{ color: primaryColor, opacity: armed ? 0.6 : 0.3 }}
+        >
+          {armed ? 'press again to confirm' : 'no render available'}
+        </span>
+      </div>
     </div>
   );
 }

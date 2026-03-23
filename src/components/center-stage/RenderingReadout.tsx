@@ -93,16 +93,6 @@ export function RenderingReadout({ asset, className }: RenderingReadoutProps) {
         </span>
       </div>
 
-      <style>{`
-        @keyframes readout-scan {
-          0%, 100% { top: 15%; }
-          50% { top: 85%; }
-        }
-        @keyframes readout-breathe {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
     </div>
   );
 }
