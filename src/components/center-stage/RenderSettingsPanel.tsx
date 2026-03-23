@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, Loader2 } from 'lucide-react';
+import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { ExecuteButtonState } from '@/components/commands/types';
@@ -11,8 +11,6 @@ import type { Orientation } from '@/hooks/useTimeline';
 export interface OrientationEntry {
   orient: Orientation;
   active: boolean;
-  rendered: boolean;
-  rendering: boolean;
 }
 
 export interface RenderSettingsPanelProps {
@@ -300,45 +298,27 @@ export function RenderSettingsPanel({
   applyState,
   disabled,
 }: RenderSettingsPanelProps) {
+  const [armed, setArmed] = useState(false);
   return (
     <div className="p-4 flex flex-col gap-2 h-full" style={{ background: '#0D0F12' }}>
       {/* Scrollable content area */}
       <div className="flex-1 overflow-auto space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* OUTPUT FORMAT — tab bar */}
         <div className="flex gap-1">
-          {orientations.map((o) => {
-            if (o.rendering) {
-              return (
-                <button
-                  key={o.orient}
-                  disabled
-                  className="h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold text-muted-foreground/40 opacity-50 relative"
-                  style={{ background: '#0D0F12' }}
-                >
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>{orientationTabLabels[o.orient]}</span>
-                </button>
-              );
-            }
-
-            return (
-              <button
-                key={o.orient}
-                disabled={disabled}
-                onClick={() => onOrientationClick?.(o.orient)}
-                className={cn(
-                  'h-8 px-3 flex items-center gap-1.5 font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
-                  o.active ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
-                  disabled && 'opacity-40 pointer-events-none',
-                )}
-                style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
-              >
-                <span>{orientationTabLabels[o.orient]}</span>
-                {o.rendered && !o.active && <Check className="w-3 h-3 text-cyan-400/60" />}
-                {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
-              </button>
-            );
-          })}
+          {orientations.map((o) => (
+            <button
+              key={o.orient}
+              onClick={() => onOrientationClick?.(o.orient)}
+              className={cn(
+                'h-8 px-3 flex items-center font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
+                o.active ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+              )}
+              style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
+            >
+              <span>{orientationTabLabels[o.orient]}</span>
+              {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
+            </button>
+          ))}
         </div>
 
         {/* Settings in 2 columns: Subtitles+Background | Audio+OSG */}
@@ -469,11 +449,18 @@ export function RenderSettingsPanel({
       {/* Docked action bar */}
       <div className="shrink-0 flex items-center justify-end pt-2 border-t" style={{ borderColor: '#1F2A36' }}>
         <CommandButton
-          command="/render"
+          command={armed ? 'confirm /render' : '/render'}
           icon={<Zap className="w-5 h-5" />}
           size="lg"
           state={applyState}
-          onClick={onApply}
+          onClick={() => {
+            if (armed) {
+              setArmed(false);
+              onApply?.();
+            } else {
+              setArmed(true);
+            }
+          }}
         />
       </div>
     </div>

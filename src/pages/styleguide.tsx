@@ -1402,9 +1402,9 @@ function Page10_BackFacePanels() {
             <div className="flex-1 overflow-hidden">
               <RenderSettingsPanel
                 orientations={[
-                  { orient: 'landscape', active: true, rendered: true, rendering: false },
-                  { orient: 'portrait', active: false, rendered: false, rendering: false },
-                  { orient: 'square', active: false, rendered: false, rendering: true },
+                  { orient: 'landscape', active: true },
+                  { orient: 'portrait', active: false },
+                  { orient: 'square', active: false },
                 ]}
                 subtitlesEnabled={true}
                 subtitleStyle="impact"
