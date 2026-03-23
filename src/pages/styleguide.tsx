@@ -1241,108 +1241,65 @@ function Page7_Trimming() {
 
 // ── Slide 9: Audio System ──
 
+const audioCardMocks: MediaItem[] = [
+  { id: 'a-ready', type: 'audio', slug: '@bg-music', title: 'BG Music', filePath: '/audio.mp3', status: 'ready' },
+  { id: 'a-gen', type: 'audio', slug: '@sfx-hit', title: 'SFX Hit', filePath: '', status: 'generating' },
+  { id: 'a-upload', type: 'audio', slug: '@vocal-track', title: 'Vocal Track', filePath: '', status: 'uploading' },
+  { id: 'a-transcribing', type: 'audio', slug: '@interview-vo', title: 'Interview VO', filePath: '/interview.mp3', status: 'transcribing' },
+  { id: 'a-err', type: 'audio', slug: '@broken-track', title: 'Broken', filePath: '', status: 'error' },
+  { id: 'a-corrupt', type: 'audio', slug: '@glitched', title: 'Corrupt', filePath: '', status: 'corrupt' },
+];
+
 function Page9_AudioSystem() {
   return (
     <div className="w-full h-full flex flex-col gap-5">
-      {/* AudioPlayer */}
-      <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-violet-500/10">
-        <div className="shrink-0 px-5 py-2 border-b border-zinc-700/50 flex items-center justify-between bg-gradient-to-r from-zinc-900 to-zinc-950">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-foreground">@BACKGROUND-MUSIC</span>
-            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-400 border border-violet-500/30">VOCALS</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
-            <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
-          </div>
-        </div>
-        <div className="relative px-5 py-3" style={{ minHeight: 100 }}>
-          <div className="relative w-full" style={{ height: 60 }}>
-            <StyleguideWaveform url="/fixtures/audio-storm.mp3" height={60} progress={0.4} />
-            <div className="absolute top-0 bottom-0 left-0 bg-black/50 pointer-events-none" style={{ width: '15%' }} />
-            <div className="absolute top-0 bottom-0 right-0 bg-black/50 pointer-events-none" style={{ width: '25%' }} />
-            <div className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_6px_rgba(34,211,238,0.7)]" style={{ left: '40%' }} />
-          </div>
-        </div>
-        <div className="px-5 py-2 border-t border-zinc-700/50 flex items-center gap-4 bg-zinc-900/60">
-          <button className="w-8 h-8 rounded-full border border-primary/50 bg-primary/15 flex items-center justify-center text-primary"><Play className="w-3.5 h-3.5 ml-0.5" /></button>
-          <div className="font-mono text-sm tabular-nums"><span className="text-cyan-400">01:23</span><span className="text-zinc-600 mx-1">/</span><span className="text-zinc-500">03:45</span></div>
+      {/* AudioCard — sidebar states */}
+      <div className="shrink-0">
+        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">AudioCard</p>
+        <div className="grid grid-cols-6 gap-4">
+          {audioCardMocks.map((item) => (
+            <AudioCard key={item.id} item={item} />
+          ))}
         </div>
       </div>
 
-      {/* AudioTrack states */}
-      <div className="flex-1 min-h-0 p-5 rounded-xl bg-gradient-to-b from-zinc-950 to-zinc-900/60 border border-zinc-600/40 ring-1 ring-fuchsia-500/10 grid grid-cols-3 gap-4 content-start">
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Empty (default)</p>
-          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-14 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3.5 h-3.5" /><span className="font-mono text-xs">/add_audio</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Collapsed</p>
-          <div className="border border-dashed rounded-md flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40">
-            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">/add_audio</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Assigning</p>
-          <div className="h-14 border border-zinc-700/40 bg-primary/5 rounded-md flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /><span className="font-mono text-xs tracking-wider">ASSIGNING...</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Active (cyan)</p>
-          <div className="relative h-14 border border-cyan-400/30 bg-cyan-950/10 rounded-md overflow-hidden">
-            <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '10%', width: '60%' }}>
-              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" progressColor="rgba(0, 255, 255, 0.6)" /></div>
-              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Active (magenta)</p>
-          <div className="relative h-14 border border-fuchsia-400/30 bg-fuchsia-950/10 rounded-md overflow-hidden">
-            <div className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden" style={{ left: '20%', width: '50%' }}>
-              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/sfx-hit.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" progressColor="rgba(217, 70, 239, 0.6)" /></div>
-              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@sfx-hit</span></div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">Multi-track</p>
-          <div className="relative h-14 border border-zinc-700/30 bg-zinc-950/40 rounded-md overflow-hidden">
-            <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '5%', width: '45%' }}>
-              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={36} waveColor="rgba(0, 255, 255, 0.3)" /></div>
-              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@music</span></div>
-            </div>
-            <div className="absolute top-0 bottom-0 rounded border border-fuchsia-400/40 bg-fuchsia-950/30 overflow-hidden" style={{ left: '55%', width: '35%' }}>
-              <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/sfx-click.mp3" height={36} waveColor="rgba(217, 70, 239, 0.3)" /></div>
-              <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-fuchsia-400/80 px-1 py-0.5 rounded bg-black/70">@vo</span></div>
-            </div>
-          </div>
+      {/* TimelineSlot — slot states */}
+      <div className="shrink-0">
+        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">TimelineSlot</p>
+        <div className="h-20 flex gap-0.5 rounded-lg overflow-hidden bg-gradient-to-b from-zinc-900/40 to-zinc-950">
+          <TimelineSlot label="@s01" flex={2} />
+          <TimelineSlot label="@s02" hasContent waveform={DEMO_WAVEFORM} duration={12} assetId="bg-music" flex={3} />
+          <TimelineSlot label="@s03" hasContent isActive waveform={DEMO_WAVEFORM} duration={8} assetId="sfx-hit" flex={2} />
+          <TimelineSlot label="@s04" isDragOver flex={2} />
         </div>
       </div>
 
-      {/* TimelineScrubber */}
-      <div className="shrink-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10">
-        <div className="relative h-24 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
+      {/* CommandButton — audio actions */}
+      <div className="shrink-0">
+        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">CommandButton — audio actions</p>
+        <div className="flex items-center gap-3">
+          <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
+          <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+          <CommandButton command="/add-audio" icon={<Music className="w-3.5 h-3.5" />} />
+        </div>
+      </div>
+
+      {/* Timeline scrubber with audio overlay */}
+      <div className="flex-1 min-h-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10 flex flex-col">
+        <p className="text-[11px] font-mono text-zinc-500 px-3 pt-2 uppercase tracking-widest shrink-0">Timeline + audio track</p>
+        <div className="relative flex-1 min-h-0 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
           <TimelineSlot label="@s01" hasContent assetId="vid-purple-grind" waveform={DEMO_WAVEFORM} duration={12} flex={3} />
           <TimelineSlot label="@s02" hasContent assetId="vid-neon-fox" isActive waveform={DEMO_WAVEFORM} duration={8} flex={2} />
           <TimelineSlot label="@s03" hasContent assetId="vid-sky-ghost" waveform={DEMO_WAVEFORM} duration={5} flex={3} />
           <TimelineSlot label="@s04" flex={2} />
           <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
         </div>
-        <div className="relative h-12 border-t border-zinc-700/50 bg-zinc-900/30">
+        <div className="relative h-12 border-t border-zinc-700/50 bg-zinc-900/30 shrink-0">
           <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '8%', width: '55%' }}>
             <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={30} progress={0.42} /></div>
             <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
           </div>
           <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
-        </div>
-        <div className="border-t border-zinc-800/60">
-          <div className="border border-dashed flex items-center justify-center gap-2 h-8 border-zinc-600/40 text-muted-foreground/40 m-0.5 rounded-md">
-            <Music className="w-3 h-3" /><span className="font-mono text-[10px]">/add_audio</span>
-          </div>
         </div>
       </div>
     </div>
