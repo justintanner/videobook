@@ -95,8 +95,14 @@ function snapToNearest(timeSec: number, points: number[]): number {
 
 function snapRangePct(range: TrimRange, duration: number, points: number[]): TrimRange {
   if (points.length === 0 || duration <= 0) return range;
-  const s = snapToNearest((range.startPct / 100) * duration, points);
-  const e = snapToNearest((range.endPct / 100) * duration, points);
+  let s = snapToNearest((range.startPct / 100) * duration, points);
+  let e = snapToNearest((range.endPct / 100) * duration, points);
+  // If both snap to the same point, push end to the next snap point
+  if (s === e && points.length > 1) {
+    const idx = points.indexOf(e);
+    if (idx < points.length - 1) e = points[idx + 1];
+    else if (idx > 0) s = points[idx - 1];
+  }
   const sp = clampPct((s / duration) * 100);
   const ep = clampPct((e / duration) * 100);
   return { startPct: Math.min(sp, ep), endPct: Math.max(sp, ep) };
@@ -171,7 +177,7 @@ export function TrimEditor({
   // Selection state
   const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
   const [trimState, setTrimState] = useState<ExecuteButtonState | undefined>(undefined);
-  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(true);
   const [markers, setMarkers] = useState<SnapMarker[]>([]);
   const draggingRef = useRef<false | 'create' | 'start' | 'end'>(false);
   const dragStartPctRef = useRef(0);
@@ -236,14 +242,26 @@ export function TrimEditor({
     return () => { cancelled = true; };
   }, [open, assetId, projectSlug]);
 
-  // Snap points: analysis markers, or 250ms grid fallback
+  // Snap points: all marker positions combined, or 250ms grid fallback
   const snapPoints = useMemo(() => {
-    if (markers.length > 0) return markers.map((m) => m.timeSec);
     if (duration <= 0) return [];
-    const points: number[] = [];
-    for (let t = 0; t <= duration; t += 0.25) points.push(t);
-    return points;
-  }, [markers, duration]);
+    const points = new Set<number>([0, duration]);
+    // Analysis scene markers
+    for (const m of markers) points.add(m.timeSec);
+    // Frame badge positions
+    const frameUrls = item?.frameDirs?.original_frames;
+    if (frameUrls && frameUrls.length > 0) {
+      const count = Math.min(frameUrls.length, 8);
+      for (let i = 0; i < count; i++) {
+        points.add(((i + 0.5) / count) * duration);
+      }
+    }
+    // If we only have start/end (no real markers), use 250ms grid
+    if (points.size <= 2) {
+      for (let t = 0; t <= duration; t += 0.25) points.add(t);
+    }
+    return Array.from(points).sort((a, b) => a - b);
+  }, [markers, duration, item?.frameDirs?.original_frames]);
 
   // Video timeupdate → playhead + active word
   const handleTimeUpdate = useCallback(() => {
@@ -609,7 +627,7 @@ export function TrimEditor({
             </div>
 
             {/* Analysis scene markers — vertically centered on waveform */}
-            {duration > 0 && markers.length > 0 && markers.map((m, i) => (
+            {duration > 0 && markers.length > 0 && markers.filter((m) => m.timeSec > 0 && m.timeSec < duration).map((m, i) => (
               <div
                 key={`scene-${i}`}
                 className="absolute z-20 group"
@@ -619,9 +637,9 @@ export function TrimEditor({
                 <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-amber-400/40" />
                 {/* Exclamation circle — centered */}
                 <div
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 border border-amber-300 cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.5)]"
                 >
-                  <span className="text-[11px] font-black text-zinc-900 leading-none">!</span>
+                  <span className="text-[13px] font-black text-zinc-900 leading-none">!</span>
                 </div>
                 {/* Hover tooltip above waveform */}
                 <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 w-48 p-2 rounded bg-zinc-900/95 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
@@ -634,7 +652,7 @@ export function TrimEditor({
             ))}
 
             {/* Thumbnail markers — vertically centered on waveform */}
-            {frameBadges.map((badge, i) => (
+            {frameBadges.filter((b) => b.percent > 1 && b.percent < 99).map((badge, i) => (
               <div
                 key={`frame-${i}`}
                 className="absolute z-20 group"
