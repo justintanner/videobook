@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { CommandButton } from './CommandButton';
+import { CloseButton } from '@/components/gen/ui/CloseButton';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { UseMcpResult } from 'use-mcp/react';
 
@@ -65,6 +68,7 @@ interface TrimEditorProps {
 
 export function TrimEditor({
   open,
+  assetId,
   onClose,
   assetSlugs,
   callTool,
@@ -148,12 +152,21 @@ export function TrimEditor({
           visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
         )}
       >
+        {/* Header */}
+        <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 relative">
+          <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Editing</span>
+          <div className="absolute inset-x-0 flex justify-center pointer-events-none">
+            <span className="font-mono text-xs tracking-widest text-zinc-400">{assetId ? `@${assetId}` : ''}</span>
+          </div>
+          <CloseButton onClick={onClose} />
+        </div>
+
         {/* Video + Transcript */}
-        <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-h-0 flex overflow-hidden relative">
           <div className="flex-1 min-w-0 flex items-center justify-center bg-black">
             <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
           </div>
-          <div className="w-[280px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+          <div className="relative w-[280px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
             <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
               <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
               <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
@@ -171,6 +184,9 @@ export function TrimEditor({
                   );
                 })}
               </div>
+            </div>
+            <div className="shrink-0 px-3 py-3 flex justify-end">
+              <CommandButton command="/trim" icon={<Scissors className="w-5 h-5" />} size="lg" />
             </div>
           </div>
         </div>
