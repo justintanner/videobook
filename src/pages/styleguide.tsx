@@ -30,7 +30,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, TransmissionView, RenderingReadout, AssetViewer } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settings-types';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
@@ -403,14 +403,6 @@ function ExecuteButtonStatesDemo() {
     </div>
   );
 }
-
-// ── CenterStage: TransmissionView ──
-
-const centerStageMocks = [
-  { id: 'cs-transmission', label: 'transmission', message: 'Generate a 30s product demo with upbeat music' },
-  { id: 'cs-transmission-short', label: 'transmission (short)', message: 'Retry render' },
-];
-
 
 // ── CenterStage: AssetViewShell ──
 
@@ -1105,33 +1097,19 @@ function Page5_FormsControls() {
 // ── Slide 6: Center Stage ──
 
 function Page6_CenterStage() {
-  const [replayCount, setReplayCount] = useState(0);
-  const handleComplete = useCallback(() => setReplayCount((n) => n + 1), []);
-
   return (
-    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-6">
-      {/* Top-left: IdleScreen */}
+    <div className="w-full h-full grid grid-cols-3 gap-6">
+      {/* IdleScreen */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">IdleScreen</p>
         <div className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 shadow-[0_0_40px_-10px_rgba(0,212,255,0.15)] ring-1 ring-cyan-500/20 min-h-0">
           <IdleScreen label="WAITING_FOR_INPUT..." badge="SRC: NULL" />
         </div>
       </div>
-      {/* Top-right: TransmissionView */}
-      <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">TransmissionView</p>
-        <div className="flex-1 flex flex-col gap-3 min-h-0">
-          {centerStageMocks.map((mock) => (
-            <div key={`${mock.id}-${replayCount}`} className="flex-1 bg-black/60 rounded-xl overflow-hidden flex flex-col border border-cyan-500/20 ring-1 ring-cyan-500/20 min-h-0">
-              <TransmissionView message={mock.message} onComplete={handleComplete} />
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Bottom-left: AssetViewShell */}
+      {/* AssetViewShell */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AssetViewShell</p>
-        <div className="flex-1 flex gap-4 min-h-0">
+        <div className="flex-1 flex flex-col gap-4 min-h-0">
           {assetViewShellMocks.map((mock) => (
             <div key={mock.id} className="flex-1 bg-black/60 rounded-xl overflow-hidden flex border border-cyan-500/20 ring-1 ring-cyan-500/20 min-h-0">
               <AssetViewShell fillParent={mock.fillParent}>
@@ -1143,7 +1121,7 @@ function Page6_CenterStage() {
           ))}
         </div>
       </div>
-      {/* Bottom-right: RenderingReadout */}
+      {/* RenderingReadout */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">RenderingReadout</p>
         <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
