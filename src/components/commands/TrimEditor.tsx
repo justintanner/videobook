@@ -7,6 +7,7 @@ import { CloseButton } from '@/components/gen/ui/CloseButton';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
+import type { ExecuteButtonState } from './types';
 
 // ── Types ──
 
@@ -77,6 +78,39 @@ function pctFromMouse(e: React.MouseEvent, rect: DOMRect): number {
   return Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
 }
 
+function clampPct(v: number): number {
+  return Math.max(0, Math.min(100, v));
+}
+
+function parseTimestamp(s: string): number | undefined {
+  const trimmed = s.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.includes(':')) {
+    const parts = trimmed.split(':');
+    if (parts.length === 2 && parts.every((p) => /^\d+(\.\d+)?$/.test(p))) {
+      return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+    }
+    if (parts.length === 3 && parts.every((p) => /^\d+(\.\d+)?$/.test(p))) {
+      return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+    }
+    return undefined;
+  }
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function buildTimeMarks(duration: number): string[] {
+  const intervals = [5, 10, 15, 20, 30, 60, 120, 300];
+  let interval = intervals.find((i) => duration / i <= 7) ?? Math.ceil(duration / 6);
+  if (interval < 1) interval = 1;
+  const marks: string[] = [];
+  for (let t = 0; t < duration; t += interval) {
+    marks.push(formatDuration(t));
+  }
+  marks.push(formatDuration(duration));
+  return marks;
+}
+
 // ── Component ──
 
 interface TrimEditorProps {
@@ -108,6 +142,7 @@ export function TrimEditor({
 
   // Selection state
   const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
+  const [trimState, setTrimState] = useState<ExecuteButtonState | undefined>(undefined);
   const draggingRef = useRef(false);
   const dragStartPctRef = useRef(0);
 
@@ -246,11 +281,57 @@ export function TrimEditor({
     setTrimRange(null);
   }, []);
 
+  const handleTrim = useCallback(async (startSec: number, endSec: number) => {
+    if (!assetId || !projectSlug) return;
+    setTrimState('charging');
+    await new Promise((r) => setTimeout(r, 400));
+    setTrimState('processing');
+    try {
+      const result = await callTool('trim_video', {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        trim_start: startSec,
+        trim_end: endSec,
+      });
+      if (result && 'isError' in result && result.isError) {
+        setTrimState(undefined);
+        return;
+      }
+      setTrimState('success');
+      setTimeout(() => {
+        setTrimState(undefined);
+        setTrimRange(null);
+        onClose();
+      }, 1200);
+    } catch {
+      setTrimState(undefined);
+    }
+  }, [assetId, projectSlug, callTool, onClose]);
+
   const handleSend = async (message: string) => {
     const cmd = message.trim().toLowerCase();
     if (cmd === '/close') { onClose(); return true; }
     if (cmd === '/clear') { handleClear(); return true; }
-    if (cmd === '/select') { /* already in select mode — no-op */ return true; }
+    if (cmd.startsWith('/select')) {
+      const args = cmd.slice(7).trim();
+      if (args && duration > 0) {
+        const parts = args.split(/\s+/);
+        const startSec = parseTimestamp(parts[0]);
+        const endSec = parts[1] ? parseTimestamp(parts[1]) : undefined;
+        if (startSec !== undefined) {
+          const startPct = clampPct((startSec / duration) * 100);
+          const endPct = endSec !== undefined ? clampPct((endSec / duration) * 100) : startPct;
+          setTrimRange({ startPct: Math.min(startPct, endPct), endPct: Math.max(startPct, endPct) });
+        }
+      }
+      return true;
+    }
+    if (cmd.startsWith('/trim') && trimRange && duration > 0) {
+      const startSec = (trimRange.startPct / 100) * duration;
+      const endSec = (trimRange.endPct / 100) * duration;
+      handleTrim(startSec, endSec);
+      return true;
+    }
     return contextDispatch(message);
   };
 
@@ -307,7 +388,7 @@ export function TrimEditor({
               onTimeUpdate={handleTimeUpdate}
             />
           </div>
-          <div className="relative w-[280px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+          <div className="relative w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
             <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
               <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
               <span className="text-[10px] font-mono text-zinc-500">
@@ -325,7 +406,7 @@ export function TrimEditor({
                       <span key={i}>
                         <span
                           className={cn(
-                            'inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm',
+                            'inline-block text-base font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm',
                             isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300',
                           )}
                           onClick={() => {
@@ -359,8 +440,15 @@ export function TrimEditor({
               command="/trim"
               icon={<Scissors className="w-4 h-4" />}
               size="default"
-              state={trimRange ? undefined : 'disabled'}
+              state={trimState ?? (trimRange ? undefined : 'disabled')}
               disabledReason="Drag on the waveform to select a trim range"
+              onClick={() => {
+                if (trimRange && duration > 0 && !trimState) {
+                  const startSec = (trimRange.startPct / 100) * duration;
+                  const endSec = (trimRange.endPct / 100) * duration;
+                  handleTrim(startSec, endSec);
+                }
+              }}
             />
           </div>
 
@@ -391,6 +479,22 @@ export function TrimEditor({
                     className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none z-20"
                     style={{ left: `${trimRange.endPct}%` }}
                   />
+                  {duration > 0 && (
+                    <>
+                      <span
+                        className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+                        style={{ left: `${trimRange.startPct}%` }}
+                      >
+                        {formatDuration((trimRange.startPct / 100) * duration)}
+                      </span>
+                      <span
+                        className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+                        style={{ left: `${trimRange.endPct}%` }}
+                      >
+                        {formatDuration((trimRange.endPct / 100) * duration)}
+                      </span>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -429,6 +533,15 @@ export function TrimEditor({
               }}
             />
           </div>
+
+          {/* Time marks */}
+          {duration > 0 && (
+            <div className="flex justify-between px-0.5 mt-1">
+              {buildTimeMarks(duration).map((label, i) => (
+                <span key={i} className="text-[10px] font-mono text-zinc-500">{label}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ChatInput bar */}
