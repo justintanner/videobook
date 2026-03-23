@@ -7,7 +7,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-describe("preview_image_gen tool", () => {
+describe("preview_image tool", () => {
   let client: Client;
   let tempDir: string;
   const origKey = process.env.OPENAI_API_KEY;
@@ -31,7 +31,7 @@ describe("preview_image_gen tool", () => {
   it("returns error when OPENAI_API_KEY is not set", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "a sunset", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -42,7 +42,7 @@ describe("preview_image_gen tool", () => {
   it("resolves @tags before checking API key — prompt with no @tags returns API key error", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "generate a photo of a mountain", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -53,7 +53,7 @@ describe("preview_image_gen tool", () => {
   it("resolves @tags before checking API key — prompt with unresolved @tags still returns API key error", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "edit @img-sunset to add clouds", project_slug: "test-proj" },
     });
     // Asset resolution runs first but the tool does NOT error on unresolved tags here;
@@ -74,7 +74,7 @@ describe("preview_image_gen tool", () => {
     // Set a dummy API key — asset resolution runs, then OpenAI call fails
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "edit @img-sunset to be colorful", project_slug: "test-proj" },
     });
 
@@ -99,7 +99,7 @@ describe("preview_image_gen tool", () => {
   it("returns preview with empty resolved_assets when prompt has no @tags and dummy API key", async () => {
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "a sunset landscape", project_slug: "test-proj" },
     });
 
@@ -116,7 +116,7 @@ describe("preview_image_gen tool", () => {
   it("includes unresolved @tag warnings in the preview", async () => {
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: { prompt: "transform @img-nonexistent", project_slug: "test-proj" },
     });
 

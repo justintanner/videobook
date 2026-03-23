@@ -8,7 +8,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-describe("download_video_file tool", () => {
+describe("download_video tool", () => {
   let client: Client;
   let tempDir: string;
 
@@ -36,7 +36,7 @@ describe("download_video_file tool", () => {
 
   it("returns error for invalid timestamp", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video",
         project_slug: "test-proj",
@@ -51,7 +51,7 @@ describe("download_video_file tool", () => {
 
   it("returns error when full=true with start_time", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video",
         project_slug: "test-proj",
@@ -67,7 +67,7 @@ describe("download_video_file tool", () => {
 
   it("returns error when start_time >= end_time", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video",
         project_slug: "test-proj",
@@ -83,7 +83,7 @@ describe("download_video_file tool", () => {
 
   it("enqueues job for any URL (OG fetch failure is non-fatal)", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/not-a-real-video-url-12345",
         project_slug: "test-proj",
@@ -100,7 +100,7 @@ describe("download_video_file tool", () => {
 
   it("returns error when start_time equals end_time", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video",
         project_slug: "test-proj",
@@ -116,7 +116,7 @@ describe("download_video_file tool", () => {
 
   it("returns error when full=true with end_time", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video",
         project_slug: "test-proj",

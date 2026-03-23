@@ -678,9 +678,9 @@ describe("MCP tools e2e", () => {
 
   // ── Section 12: Download video (validation) ────────────────────
 
-  it("download_video_file rejects start >= end", async () => {
+  it("download_video rejects start >= end", async () => {
     const result = await client.callTool({
-      name: "download_video_file",
+      name: "download_video",
       arguments: {
         url: "https://example.com/video.mp4",
         start_time: "60",
@@ -785,10 +785,10 @@ describe("MCP tools e2e", () => {
 
   // ── Section 16: Preview tools (require OPENAI_API_KEY) ─────────
 
-  it("preview_video_gen returns error without OPENAI_API_KEY", async () => {
+  it("preview_video returns error without OPENAI_API_KEY", async () => {
     if (hasOpenAiKey) return;
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: {
         prompt: "generate a sunset video",
         project_slug: PROJECT,
@@ -798,10 +798,10 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("OPENAI_API_KEY");
   });
 
-  it("preview_image_gen returns error without OPENAI_API_KEY", async () => {
+  it("preview_image returns error without OPENAI_API_KEY", async () => {
     if (hasOpenAiKey) return;
     const result = await client.callTool({
-      name: "preview_image_gen",
+      name: "preview_image",
       arguments: {
         prompt: "generate a sunset image",
         project_slug: PROJECT,

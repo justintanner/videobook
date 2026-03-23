@@ -20,8 +20,8 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
-    name: "download_video_file",
-    actualTool: "download_video_file",
+    name: "download_video",
+    actualTool: "download_video",
     description: "Download a video from a URL (YouTube, Twitter/X, Instagram, TikTok, etc.)",
     params: ["url", "start_time", "end_time"],
     category: "action",
@@ -99,7 +99,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   // --- Generation tools ---
   {
     name: "generate_video",
-    actualTool: "preview_video_gen",
+    actualTool: "preview_video",
     description: "Generate a video from a text prompt or image references",
     params: ["prompt"],
     category: "generation",
@@ -115,7 +115,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
 
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
-  download_video_file: ["start_time", "end_time"],
+  download_video: ["start_time", "end_time"],
 };
 
 function buildChatRoutingPrompt(slug: string, historyContext?: string): string {

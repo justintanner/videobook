@@ -7,7 +7,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-describe("preview_video_gen tool", () => {
+describe("preview_video tool", () => {
   let client: Client;
   let tempDir: string;
   const origKey = process.env.OPENAI_API_KEY;
@@ -31,7 +31,7 @@ describe("preview_video_gen tool", () => {
   it("returns error when OPENAI_API_KEY is not set", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: { prompt: "a sunset video", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -42,7 +42,7 @@ describe("preview_video_gen tool", () => {
   it("resolves @tags before checking API key — prompt with no @tags returns API key error", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: { prompt: "generate a sunset video", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -60,7 +60,7 @@ describe("preview_video_gen tool", () => {
 
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: { prompt: "animate @img-sunset into a video", project_slug: "test-proj" },
     });
 
@@ -80,7 +80,7 @@ describe("preview_video_gen tool", () => {
   it("returns preview with empty resolved_assets when prompt has no @tags and dummy API key", async () => {
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: { prompt: "create an epic sunrise video", project_slug: "test-proj" },
     });
 
@@ -97,7 +97,7 @@ describe("preview_video_gen tool", () => {
   it("includes unresolved @tag warnings in the preview", async () => {
     process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
-      name: "preview_video_gen",
+      name: "preview_video",
       arguments: { prompt: "animate @img-nonexistent", project_slug: "test-proj" },
     });
 

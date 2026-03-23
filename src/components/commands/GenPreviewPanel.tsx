@@ -26,7 +26,7 @@ interface GenPreviewPanelProps {
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
-  return cat === 'video' ? 'preview_video_gen' : 'preview_image_gen';
+  return cat === 'video' ? 'preview_video' : 'preview_image';
 }
 
 export function GenPreviewPanel({

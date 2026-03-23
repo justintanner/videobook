@@ -1,5 +1,5 @@
 /**
- * preview_image_gen MCP tool — routes a natural language prompt to the best
+ * preview_image MCP tool — routes a natural language prompt to the best
  * image generation tool and returns a rich preview JSON for the frontend to
  * render a dynamic parameter form.
  */
@@ -25,7 +25,7 @@ function findSelectedModel(toolName: string): string | null {
 
 export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "preview_image_gen",
+    name: "preview_image",
     description:
       "Route a natural language prompt to the best image generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available image models.",
     schema: {

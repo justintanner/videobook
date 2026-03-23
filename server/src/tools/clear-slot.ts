@@ -34,7 +34,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
 
 export function clearSlotDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "clear_slot",
+    name: "unassign_slot",
     description: "Clear an asset from a timeline slot (e.g. slot 's02' = index 1)",
     schema: {
       project_slug: z.string().describe("Project slug"),

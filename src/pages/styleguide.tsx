@@ -866,7 +866,7 @@ function Page2_VideoGeneration() {
                       <div className="space-y-2 mb-3">
                         <div className="flex items-center justify-between">
                           <BracketLabel label="PROMPT" required />
-                          <CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />
+                          <CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />
                         </div>
                         <textarea className="w-full px-3 py-2 resize-none bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary/60 shadow-[inset_0_0_15px_rgba(0,255,255,0.1)] h-28" defaultValue="Create a dynamic and engaging video showcasing a variety of scenes and scenarios, highlighting vibrant visuals and motion." readOnly />
                       </div>
@@ -1277,7 +1277,7 @@ function Page9_AudioSystem() {
         <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">CommandButton — audio actions</p>
         <div className="flex items-center gap-3">
           <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
-          <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+          <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
           <CommandButton command="/add-audio" icon={<Music className="w-3.5 h-3.5" />} />
         </div>
       </div>
@@ -1544,9 +1544,9 @@ const mockProjects = [
 
 const mockCommands: CommandDescriptor[] = [
   { command: '/generate', description: 'Generate content from prompt', example: '/generate video of a dog on a skateboard @bg-neon', category: 'action', icon: 'Zap', size: 'lg', variant: 'default', chevron: 'right', params: [] },
-  { command: '/rewrite-prompt', description: 'Optimize a prompt', example: '/rewrite-prompt "make it more cinematic"', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
+  { command: '/rewrite', description: 'Optimize a prompt', example: '/rewrite "make it more cinematic"', category: 'action', icon: 'Sparkles', size: 'sm', variant: 'default', chevron: 'right', params: [] },
   { command: '/trim', description: 'Trim video clip', example: '/trim @hero-intro 0:05 0:12', category: 'action', icon: 'Scissors', size: 'lg', variant: 'default', chevron: 'right', params: [] },
-  { command: '/isolate-vocals', description: 'Isolate vocals from audio', example: '/isolate-vocals @voiceover-main', category: 'action', icon: 'Mic', size: 'default', variant: 'violet', chevron: 'right', params: [] },
+  { command: '/vocals', description: 'Isolate vocals from audio', example: '/vocals @voiceover-main', category: 'action', icon: 'Mic', size: 'default', variant: 'violet', chevron: 'right', params: [] },
   { command: '/inbox', description: 'View generations inbox', example: '/inbox', category: 'action', icon: 'Mailbox', size: 'default', variant: 'default', chevron: 'down', params: [] },
 ];
 const mockAssetSlugs = ['@hero-intro', '@product-shot', '@bg-neon', '@outro-clip', '@voiceover-main'];
@@ -1694,7 +1694,7 @@ function Page12_CommandSystem() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">sm</span>
-                <CommandButton size="sm" command="/rewrite-prompt" icon={<Sparkles className="w-3 h-3" />} />
+                <CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
@@ -1717,7 +1717,7 @@ function Page12_CommandSystem() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
-                <CommandButton command="/isolate-vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+                <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
               </div>
             </div>
           </div>

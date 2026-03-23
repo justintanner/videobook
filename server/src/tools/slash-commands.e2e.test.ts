@@ -63,7 +63,7 @@ describe("slash commands e2e", () => {
   }
 
   // -----------------------------------------------------------------------
-  // 1. /download — download_video_file
+  // 1. /download — download_video
   // -----------------------------------------------------------------------
   describe("/download", () => {
     it("parses '/download https://youtube.com/watch?v=abc'", () => {
@@ -73,7 +73,7 @@ describe("slash commands e2e", () => {
 
     it("enqueues a download job for a valid URL", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/some-video",
           project_slug: "test-proj",
@@ -88,7 +88,7 @@ describe("slash commands e2e", () => {
 
     it("enqueues a download with start_time and end_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -102,7 +102,7 @@ describe("slash commands e2e", () => {
 
     it("errors when start_time > end_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -115,7 +115,7 @@ describe("slash commands e2e", () => {
 
     it("errors when full=true with start_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -128,7 +128,7 @@ describe("slash commands e2e", () => {
 
     it("errors for invalid timestamp format", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -140,11 +140,11 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. /show-folder — show_folder
+  // 2. /folder — show_folder
   // -----------------------------------------------------------------------
-  describe("/show-folder", () => {
-    it("parses '/show-folder @product-shot'", () => {
-      const args = simulateParse("/show-folder", "@product-shot");
+  describe("/folder", () => {
+    it("parses '/folder @product-shot'", () => {
+      const args = simulateParse("/folder", "@product-shot");
       expect(args.asset_id).toBe("product-shot");
     });
 
@@ -423,11 +423,11 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. /clear-slot — clear_slot
+  // 7. /unassign — unassign_slot
   // -----------------------------------------------------------------------
-  describe("/clear-slot", () => {
-    it("parses '/clear-slot @s02'", () => {
-      const args = simulateParse("/clear-slot", "@s02");
+  describe("/unassign", () => {
+    it("parses '/unassign @s02'", () => {
+      const args = simulateParse("/unassign", "@s02");
       expect(args.slot).toBe("s02");
     });
 
@@ -451,7 +451,7 @@ describe("slash commands e2e", () => {
 
       // Clear
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -461,7 +461,7 @@ describe("slash commands e2e", () => {
 
     it("errors for invalid slot format", async () => {
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "xyz" },
       });
       expect(result.isError).toBe(true);
@@ -469,7 +469,7 @@ describe("slash commands e2e", () => {
 
     it("errors for slot s00", async () => {
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s00" },
       });
       expect(result.isError).toBe(true);
@@ -477,7 +477,7 @@ describe("slash commands e2e", () => {
 
     it("errors for no timeline", async () => {
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBe(true);
@@ -485,11 +485,11 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. /rewrite-prompt — rewrite_prompt (validation only, no API key)
+  // 8. /rewrite — rewrite_prompt (validation only, no API key)
   // -----------------------------------------------------------------------
-  describe("/rewrite-prompt", () => {
-    it("parses '/rewrite-prompt make it more cinematic'", () => {
-      const args = simulateParse("/rewrite-prompt", "make it more cinematic");
+  describe("/rewrite", () => {
+    it("parses '/rewrite make it more cinematic'", () => {
+      const args = simulateParse("/rewrite", "make it more cinematic");
       expect(args.prompt).toBe("make it more cinematic");
     });
 
@@ -634,11 +634,11 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 10. /isolate-vocals — isolate_vocals
+  // 10. /vocals — isolate_vocals
   // -----------------------------------------------------------------------
-  describe("/isolate-vocals", () => {
-    it("parses '/isolate-vocals @voiceover-main'", () => {
-      const args = simulateParse("/isolate-vocals", "@voiceover-main");
+  describe("/vocals", () => {
+    it("parses '/vocals @voiceover-main'", () => {
+      const args = simulateParse("/vocals", "@voiceover-main");
       expect(args.asset_id).toBe("voiceover-main");
     });
 
@@ -796,10 +796,10 @@ describe("slash commands e2e", () => {
       expect(cmd.uiAction).toBe("open_inbox");
     });
 
-    it("/copy-name has uiAction=copy_clipboard and parses @asset_id", () => {
-      const cmd = findCommand("/copy-name");
+    it("/copy has uiAction=copy_clipboard and parses @asset_id", () => {
+      const cmd = findCommand("/copy");
       expect(cmd.uiAction).toBe("copy_clipboard");
-      const args = simulateParse("/copy-name", "@hero-intro");
+      const args = simulateParse("/copy", "@hero-intro");
       expect(args.asset_id).toBe("hero-intro");
     });
 
@@ -925,8 +925,8 @@ describe("slash commands e2e", () => {
       expect(args.new_name).toBe("my cool copy");
     });
 
-    it("/clear-slot without @ prefix", () => {
-      const args = simulateParse("/clear-slot", "s03");
+    it("/unassign without @ prefix", () => {
+      const args = simulateParse("/unassign", "s03");
       expect(args.slot).toBe("s03");
     });
 
@@ -956,7 +956,7 @@ describe("slash commands e2e", () => {
   describe("/download different inputs", () => {
     it("normalizes URL without protocol prefix", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "youtube.com/watch?v=abc123",
           project_slug: "test-proj",
@@ -969,7 +969,7 @@ describe("slash commands e2e", () => {
 
     it("accepts colon time format '1:30'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -982,7 +982,7 @@ describe("slash commands e2e", () => {
 
     it("accepts shorthand time '2m20s'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -995,7 +995,7 @@ describe("slash commands e2e", () => {
 
     it("accepts bare numeric seconds '90'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1007,7 +1007,7 @@ describe("slash commands e2e", () => {
 
     it("accepts full=true alone (no time range)", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1019,7 +1019,7 @@ describe("slash commands e2e", () => {
 
     it("errors when full=true with end_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1032,7 +1032,7 @@ describe("slash commands e2e", () => {
 
     it("errors when start_time equals end_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1045,7 +1045,7 @@ describe("slash commands e2e", () => {
 
     it("accepts HH:MM:SS format '1:02:30'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1058,7 +1058,7 @@ describe("slash commands e2e", () => {
 
     it("errors for nonexistent project", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "no-such-project",
@@ -1149,9 +1149,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 18. /clear-slot with different scenarios
+  // 18. /unassign with different scenarios
   // -----------------------------------------------------------------------
-  describe("/clear-slot different inputs", () => {
+  describe("/unassign different inputs", () => {
     it("clearing already-empty slot succeeds", async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
@@ -1168,7 +1168,7 @@ describe("slash commands e2e", () => {
 
       // Clear empty s01 — should succeed, slot is already empty
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -1192,7 +1192,7 @@ describe("slash commands e2e", () => {
 
       // Clear s05 which doesn't exist
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s05" },
       });
       expect(result.isError).toBe(true);
@@ -1591,11 +1591,11 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 23. /show-folder with different inputs
+  // 23. /folder with different inputs
   // -----------------------------------------------------------------------
-  describe("/show-folder different inputs", () => {
-    it("parses '/show-folder @vid-my-clip'", () => {
-      const args = simulateParse("/show-folder", "@vid-my-clip");
+  describe("/folder different inputs", () => {
+    it("parses '/folder @vid-my-clip'", () => {
+      const args = simulateParse("/folder", "@vid-my-clip");
       expect(args.asset_id).toBe("vid-my-clip");
     });
 
@@ -1623,9 +1623,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 24. /isolate-vocals with aud- prefix asset
+  // 24. /vocals with aud- prefix asset
   // -----------------------------------------------------------------------
-  describe("/isolate-vocals different inputs", () => {
+  describe("/vocals different inputs", () => {
     it("enqueues job for aud- asset with mp3 file", async () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
@@ -1799,7 +1799,7 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 27. Full round-trip: /assign then /clear-slot
+  // 27. Full round-trip: /assign then /unassign
   // -----------------------------------------------------------------------
   describe("full round-trip: assign then clear", () => {
     it("assign → verify → clear → verify", async () => {
@@ -1826,7 +1826,7 @@ describe("slash commands e2e", () => {
 
       // Clear s01
       const clearResult = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(clearResult.isError).toBeFalsy();
@@ -1894,7 +1894,7 @@ describe("slash commands e2e", () => {
   describe("/download time parsing edge cases", () => {
     it("accepts decimal seconds '30.5'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1907,7 +1907,7 @@ describe("slash commands e2e", () => {
 
     it("accepts shorthand '1h2m3s'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1920,7 +1920,7 @@ describe("slash commands e2e", () => {
 
     it("accepts '5min' shorthand", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1932,7 +1932,7 @@ describe("slash commands e2e", () => {
 
     it("accepts '0' as start_time", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1945,7 +1945,7 @@ describe("slash commands e2e", () => {
 
     it("errors for negative time value (not parseable)", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1960,7 +1960,7 @@ describe("slash commands e2e", () => {
 
     it("errors for gibberish time value", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1972,7 +1972,7 @@ describe("slash commands e2e", () => {
 
     it("accepts colon format with trailing 's' suffix '1:30s'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1985,7 +1985,7 @@ describe("slash commands e2e", () => {
 
     it("accepts only end_time (no start_time)", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -1999,7 +1999,7 @@ describe("slash commands e2e", () => {
       // Test with different known domains
       for (const domain of ["youtube.com/watch?v=x", "x.com/status/123", "instagram.com/reel/x"]) {
         const result = await client.callTool({
-          name: "download_video_file",
+          name: "download_video",
           arguments: {
             url: `https://${domain}`,
             project_slug: "test-proj",
@@ -2192,9 +2192,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 32. /isolate-vocals — different audio formats for aud- assets
+  // 32. /vocals — different audio formats for aud- assets
   // -----------------------------------------------------------------------
-  describe("/isolate-vocals audio format variants", () => {
+  describe("/vocals audio format variants", () => {
     const audioFormats = [
       { ext: "wav", name: "recording.wav" },
       { ext: "ogg", name: "voiceover.ogg" },
@@ -2381,9 +2381,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 35. /clear-slot — edge cases with timeline state
+  // 35. /unassign — edge cases with timeline state
   // -----------------------------------------------------------------------
-  describe("/clear-slot timeline state edge cases", () => {
+  describe("/unassign timeline state edge cases", () => {
     it("clears last remaining slot, timeline still exists", async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
@@ -2398,7 +2398,7 @@ describe("slash commands e2e", () => {
       });
 
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -2408,7 +2408,7 @@ describe("slash commands e2e", () => {
       expect(slots[0].slug).toBe("");
     });
 
-    it("clear_slot resets volume/fade settings", async () => {
+    it("unassign_slot resets volume/fade settings", async () => {
       const fs = createFs({ projectsDir: tempDir });
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
@@ -2424,7 +2424,7 @@ describe("slash commands e2e", () => {
       }, "test-proj");
 
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -2433,7 +2433,7 @@ describe("slash commands e2e", () => {
         volume?: number;
         audioFadeIn?: number;
       }>;
-      // clear_slot does a full reset: { slug: "" } — no volume/fade
+      // unassign_slot does a full reset: { slug: "" } — no volume/fade
       expect(slots[0].slug).toBe("");
       expect(slots[0].volume).toBeUndefined();
       expect(slots[0].audioFadeIn).toBeUndefined();
@@ -2441,9 +2441,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 36. /rewrite-prompt — scene mode validation
+  // 36. /rewrite — scene mode validation
   // -----------------------------------------------------------------------
-  describe("/rewrite-prompt scene mode", () => {
+  describe("/rewrite scene mode", () => {
     it("errors when asset_slug provided but no tool.params.json", async () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
@@ -2669,9 +2669,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 38. /show-folder with different asset types
+  // 38. /folder with different asset types
   // -----------------------------------------------------------------------
-  describe("/show-folder different asset types", () => {
+  describe("/folder different asset types", () => {
     it("opens folder for aud- asset", async () => {
       const fs = createFs({ projectsDir: tempDir });
       const asset = await fs.createAsset("aud", "my-audio", "test-proj");
@@ -2732,7 +2732,7 @@ describe("slash commands e2e", () => {
 
       // Clear middle slot
       const clearResult = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s02" },
       });
       expect(clearResult.isError).toBeFalsy();
@@ -2801,13 +2801,13 @@ describe("slash commands e2e", () => {
       expect(args.asset_id).toBe("vid-my-clip");
     });
 
-    it("/isolate-vocals parses asset_id", () => {
-      const args = simulateParse("/isolate-vocals", "@aud-my-track");
+    it("/vocals parses asset_id", () => {
+      const args = simulateParse("/vocals", "@aud-my-track");
       expect(args.asset_id).toBe("aud-my-track");
     });
 
-    it("/rewrite-prompt parses prompt text", () => {
-      const args = simulateParse("/rewrite-prompt", "a beautiful sunset over mountains");
+    it("/rewrite parses prompt text", () => {
+      const args = simulateParse("/rewrite", "a beautiful sunset over mountains");
       expect(args.prompt).toBe("a beautiful sunset over mountains");
     });
 
@@ -2834,7 +2834,7 @@ describe("slash commands e2e", () => {
   describe("/download URL normalization", () => {
     it("normalizes http:// URL (keeps as-is, not doubled)", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "http://example.com/video",
           project_slug: "test-proj",
@@ -2846,7 +2846,7 @@ describe("slash commands e2e", () => {
 
     it("accepts tiktok.com domain", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://tiktok.com/@user/video/12345",
           project_slug: "test-proj",
@@ -2857,7 +2857,7 @@ describe("slash commands e2e", () => {
 
     it("accepts vimeo.com domain", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://vimeo.com/123456789",
           project_slug: "test-proj",
@@ -2868,7 +2868,7 @@ describe("slash commands e2e", () => {
 
     it("accepts reddit.com domain", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://reddit.com/r/videos/comments/abc/test",
           project_slug: "test-proj",
@@ -2879,7 +2879,7 @@ describe("slash commands e2e", () => {
 
     it("accepts fb.watch short URL", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://fb.watch/abc123",
           project_slug: "test-proj",
@@ -2890,7 +2890,7 @@ describe("slash commands e2e", () => {
 
     it("falls back to domain-derived prefix for unknown sites", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://obscure-video-host.xyz/v/12345",
           project_slug: "test-proj",
@@ -2902,7 +2902,7 @@ describe("slash commands e2e", () => {
 
     it("accepts URL with www prefix", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
           project_slug: "test-proj",
@@ -2913,7 +2913,7 @@ describe("slash commands e2e", () => {
 
     it("accepts youtu.be short URL", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://youtu.be/dQw4w9WgXcQ",
           project_slug: "test-proj",
@@ -2924,7 +2924,7 @@ describe("slash commands e2e", () => {
 
     it("accepts export_videos=true", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -2936,7 +2936,7 @@ describe("slash commands e2e", () => {
 
     it("full=true produces original_full.mp4 filename in job", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3014,9 +3014,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 44. /clear-slot — normalizeConfig and nonexistent project
+  // 44. /unassign — normalizeConfig and nonexistent project
   // -----------------------------------------------------------------------
-  describe("/clear-slot with legacy config", () => {
+  describe("/unassign with legacy config", () => {
     it("handles legacy array-format timeline config", async () => {
       const fs = createFs({ projectsDir: tempDir });
       const data = Buffer.from("fake-png-data").toString("base64");
@@ -3032,7 +3032,7 @@ describe("slash commands e2e", () => {
       ], "test-proj");
 
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -3042,7 +3042,7 @@ describe("slash commands e2e", () => {
 
     it("errors for nonexistent project (no timeline)", async () => {
       const result = await client.callTool({
-        name: "clear_slot",
+        name: "unassign_slot",
         arguments: { project_slug: "no-such-project", slot: "s01" },
       });
       expect(result.isError).toBe(true);
@@ -3383,9 +3383,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 49. /isolate-vocals — findAudioFile fallback logic
+  // 49. /vocals — findAudioFile fallback logic
   // -----------------------------------------------------------------------
-  describe("/isolate-vocals audio discovery", () => {
+  describe("/vocals audio discovery", () => {
     it("aud- asset finds .m4a file", async () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
@@ -3481,9 +3481,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 50. /rewrite-prompt — additional validation paths
+  // 50. /rewrite — additional validation paths
   // -----------------------------------------------------------------------
-  describe("/rewrite-prompt additional validation", () => {
+  describe("/rewrite additional validation", () => {
     it("errors when asset_slug provided without scene_index", async () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
@@ -3587,9 +3587,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 51. /show-folder — different asset types via fs.createAsset
+  // 51. /folder — different asset types via fs.createAsset
   // -----------------------------------------------------------------------
-  describe("/show-folder with createAsset", () => {
+  describe("/folder with createAsset", () => {
     it("errors for nonexistent project", async () => {
       const result = await client.callTool({
         name: "show_folder",
@@ -3622,7 +3622,7 @@ describe("slash commands e2e", () => {
   describe("/download mixed time formats", () => {
     it("colon start with shorthand end '0:30' to '2m'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3635,7 +3635,7 @@ describe("slash commands e2e", () => {
 
     it("shorthand start with colon end '1m30s' to '3:00'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3648,7 +3648,7 @@ describe("slash commands e2e", () => {
 
     it("bare numeric start with shorthand end '10' to '5min'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3661,7 +3661,7 @@ describe("slash commands e2e", () => {
 
     it("both times as '0' and '0' errors (start >= end)", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3674,7 +3674,7 @@ describe("slash commands e2e", () => {
 
     it("HH:MM:SS start with bare end '0:02:30' to '200'", async () => {
       const result = await client.callTool({
-        name: "download_video_file",
+        name: "download_video",
         arguments: {
           url: "https://example.com/video",
           project_slug: "test-proj",
@@ -3781,14 +3781,14 @@ describe("slash commands e2e", () => {
       expect(args.new_name).toBe("my brand new name");
     });
 
-    it("/rewrite-prompt with long prompt", () => {
+    it("/rewrite with long prompt", () => {
       const longPrompt = "a cinematic slow motion shot of a golden retriever catching a frisbee at sunset on the beach with dramatic lighting and lens flare";
-      const args = simulateParse("/rewrite-prompt", longPrompt);
+      const args = simulateParse("/rewrite", longPrompt);
       expect(args.prompt).toBe(longPrompt);
     });
 
-    it("/copy-name without @ prefix", () => {
-      const args = simulateParse("/copy-name", "vid-my-clip");
+    it("/copy without @ prefix", () => {
+      const args = simulateParse("/copy", "vid-my-clip");
       expect(args.asset_id).toBe("vid-my-clip");
     });
 

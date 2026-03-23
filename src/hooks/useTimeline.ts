@@ -99,7 +99,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
   const clearSlot = useCallback(async (projectSlug: string, slotIndex: number): Promise<boolean> => {
     try {
       const slot = `s${String(slotIndex + 1).padStart(2, '0')}`;
-      const result = await callToolRef.current("clear_slot", {
+      const result = await callToolRef.current("unassign_slot", {
         project_slug: projectSlug,
         slot,
       });
@@ -107,7 +107,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
       await fetchTimeline(projectSlug);
       return true;
     } catch (e: unknown) {
-      console.error("[clear_slot] exception:", e instanceof Error ? e.message : String(e));
+      console.error("[unassign_slot] exception:", e instanceof Error ? e.message : String(e));
       return false;
     }
   }, [fetchTimeline]);

@@ -33,7 +33,7 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
     <>
       <CommandMenuItem
         icon={<ClipboardCopy className="h-3 w-3" />}
-        command="/copy-name"
+        command="/copy"
         onSelect={() => {
           navigator.clipboard.writeText(slug);
           toast({ title: 'Copied', description: slug, duration: 2000 });
@@ -42,7 +42,7 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
       />
       <CommandMenuItem
         icon={<FolderOpen className="h-3 w-3" />}
-        command="/show-folder"
+        command="/folder"
         onSelect={onShowFolder}
         MenuItem={MenuItem}
       />

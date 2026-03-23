@@ -321,9 +321,9 @@ export function TimelineSlot({
       <ContextMenuTrigger asChild>{slot}</ContextMenuTrigger>
       {canClear && (
         <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onAnimateCommand!(`/clear-slot ${label}`)}>
+          <ContextMenuItem onSelect={() => onAnimateCommand!(`/unassign ${label}`)}>
             <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-            <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/clear-slot</span>
+            <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/unassign</span>
             <span className="ml-2 opacity-80 flex items-center"><Eraser className="h-3 w-3" /></span>
           </ContextMenuItem>
         </ContextMenuContent>

@@ -21,7 +21,7 @@ describe("getRoutableTool", () => {
   it("returns correct tool info for generate_video", () => {
     const tool = getRoutableTool("generate_video");
     expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("preview_video_gen");
+    expect(tool!.actualTool).toBe("preview_video");
     expect(tool!.category).toBe("generation");
   });
 
@@ -52,7 +52,7 @@ describe("buildChatRoutingPrompt", () => {
   it("includes the tool list", () => {
     const prompt = buildChatRoutingPrompt("test");
     expect(prompt).toContain("trim_video");
-    expect(prompt).toContain("download_video_file");
+    expect(prompt).toContain("download_video");
     expect(prompt).toContain("generate_video");
     expect(prompt).toContain("generate_image");
     expect(prompt).toContain("Available tools:");
@@ -86,10 +86,10 @@ describe("TIMESTAMP_PARAMS", () => {
     expect(TIMESTAMP_PARAMS.trim_video).toContain("cut_end");
   });
 
-  it("has entries for download_video_file", () => {
-    expect(TIMESTAMP_PARAMS.download_video_file).toBeDefined();
-    expect(TIMESTAMP_PARAMS.download_video_file).toContain("start_time");
-    expect(TIMESTAMP_PARAMS.download_video_file).toContain("end_time");
+  it("has entries for download_video", () => {
+    expect(TIMESTAMP_PARAMS.download_video).toBeDefined();
+    expect(TIMESTAMP_PARAMS.download_video).toContain("start_time");
+    expect(TIMESTAMP_PARAMS.download_video).toContain("end_time");
   });
 
   it("does not have entries for tools without timestamps", () => {

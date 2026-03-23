@@ -46,7 +46,7 @@ describe("clear_slot tool", () => {
 
   it("clears an assigned slot", async () => {
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "test-proj",
         slot: "s01",
@@ -77,7 +77,7 @@ describe("clear_slot tool", () => {
 
     // Clear slot 1
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "test-proj",
         slot: "s01",
@@ -92,7 +92,7 @@ describe("clear_slot tool", () => {
 
   it("returns error for invalid slot format", async () => {
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "test-proj",
         slot: "invalid",
@@ -112,7 +112,7 @@ describe("clear_slot tool", () => {
     });
 
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "empty-proj",
         slot: "s01",
@@ -128,7 +128,7 @@ describe("clear_slot tool", () => {
   it("returns error for out-of-range slot index", async () => {
     // Timeline only has 1 slot (s01)
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "test-proj",
         slot: "s05",
@@ -142,7 +142,7 @@ describe("clear_slot tool", () => {
 
   it("returns error for slot s00", async () => {
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: {
         project_slug: "test-proj",
         slot: "s00",
@@ -155,13 +155,13 @@ describe("clear_slot tool", () => {
   it("clearing already-empty slot resets volume/fade", async () => {
     // Clear slot 1 first
     await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: { project_slug: "test-proj", slot: "s01" },
     });
 
     // Clear it again (already empty)
     const result = await client.callTool({
-      name: "clear_slot",
+      name: "unassign_slot",
       arguments: { project_slug: "test-proj", slot: "s01" },
     });
 

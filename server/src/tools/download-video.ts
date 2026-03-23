@@ -45,7 +45,7 @@ function sourcePrefix(url: string): string {
 
 export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "download_video_file",
+    name: "download_video",
     description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a clipfirst project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
     schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
