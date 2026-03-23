@@ -195,6 +195,10 @@ export function HomePage() {
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
 
+  const trimItem = useMemo(() =>
+    trimAssetId ? mediaItems.find(m => m.id === trimAssetId) ?? null : null,
+  [mediaItems, trimAssetId]);
+
   const unreviewedClips = useMemo(() =>
     allClipItems.filter(c => c.status === 'unreviewed'),
   [allClipItems]);
@@ -519,6 +523,7 @@ export function HomePage() {
         <TrimEditor
           open={trimAssetId != null}
           assetId={trimAssetId}
+          item={trimItem}
           onClose={() => setTrimAssetId(null)}
           assetSlugs={assetSlugs}
           callTool={callTool}
