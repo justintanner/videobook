@@ -4,6 +4,7 @@ export interface UiActionCallbacks {
   copy_clipboard: (raw: string) => void;
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
+  open_trim: (assetId: string) => void;
   switch_project: (slug: string) => void;
   viewer_set_original: () => void;
   viewer_set_landscape: () => void;
@@ -39,6 +40,9 @@ export function executeUiAction(
       break;
     case 'open_asset':
       (fn as UiActionCallbacks['open_asset'])(ctx.args.asset_id ?? ctx.raw);
+      break;
+    case 'open_trim':
+      (fn as UiActionCallbacks['open_trim'])(ctx.args.asset_id ?? ctx.raw);
       break;
     case 'switch_project':
       // The command is /{slug}, so extract slug from the command itself

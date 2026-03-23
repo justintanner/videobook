@@ -52,6 +52,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "start", type: "string", required: false, description: "Start timestamp" },
       { name: "end", type: "string", required: false, description: "End timestamp" },
     ],
+    uiAction: "open_trim",
   },
   {
     command: "/trim-audio",

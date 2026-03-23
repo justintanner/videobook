@@ -20,6 +20,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { InboxDrawer } from '@/components/commands';
+import { TrimEditor } from '@/components/commands/TrimEditor';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -64,6 +65,7 @@ export function HomePage() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
@@ -443,6 +445,7 @@ export function HomePage() {
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
+    open_trim: (assetId: string) => setTrimAssetId(assetId),
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: handleShowHistory,
     open_asset: handleOpenAsset,
@@ -513,6 +516,14 @@ export function HomePage() {
           callTool={callTool}
           projectSlug={projectSlug}
         />
+        <TrimEditor
+          open={trimAssetId != null}
+          assetId={trimAssetId}
+          onClose={() => setTrimAssetId(null)}
+          assetSlugs={assetSlugs}
+          callTool={callTool}
+          projectSlug={projectSlug}
+        />
         <div className="grid grid-rows-[48px_1fr_auto] h-full">
           <HomeHeaderBar
             pulseKey={syncCount}
@@ -550,6 +561,7 @@ export function HomePage() {
                   const menu = (
                     <AssetMenu
                       slug={item.slug}
+                      itemType={item.type}
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                       onShowHistory={() => setHistoryItem(item)}
                       onAnimateCommand={handleAnimateCommand}
@@ -627,6 +639,7 @@ export function HomePage() {
                   const menu = (
                     <AssetMenu
                       slug={item.slug}
+                      itemType={item.type}
                       onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
                       onShowHistory={() => setHistoryItem(item)}
                       onAnimateCommand={handleAnimateCommand}
