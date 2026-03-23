@@ -210,6 +210,7 @@ export function HomePage() {
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSelectedItem(item);
+    setGenPanel(null);
     setTimelineSlotIndex(null);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
@@ -320,6 +321,7 @@ export function HomePage() {
 
   const handleSlotClick = useCallback((slotIndex: number) => {
     setSelectedItem(null);
+    setGenPanel(null);
     setTimelineSlotIndex(slotIndex);
   }, []);
 
@@ -433,9 +435,9 @@ export function HomePage() {
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
-    open_gen_preview: (prompt: string) => setGenPanel({ category: 'auto', prompt: prompt || '' }),
-    open_video_preview: (prompt: string) => setGenPanel({ category: 'video', prompt: prompt || '' }),
-    open_image_preview: (prompt: string) => setGenPanel({ category: 'image', prompt: prompt || '' }),
+    open_gen_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'auto', prompt: prompt || '' }); },
+    open_video_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'video', prompt: prompt || '' }); },
+    open_image_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'image', prompt: prompt || '' }); },
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: (assetId: string) => {
       const item = mediaItems.find(m => m.id === assetId);

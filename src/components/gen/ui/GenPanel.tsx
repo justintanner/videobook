@@ -9,7 +9,9 @@ interface GenPanelProps {
   icon: ReactNode;
   onClose: () => void;
   closeDisabled?: boolean;
+  closeHidden?: boolean;
   headerExtra?: ReactNode;
+  headerRight?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -20,7 +22,9 @@ export function GenPanel({
   icon,
   onClose,
   closeDisabled,
+  closeHidden,
   headerExtra,
+  headerRight,
   footer,
   children,
   className,
@@ -48,9 +52,11 @@ export function GenPanel({
       <div className="flex items-center gap-2">
         <span className="text-cyan-400 drop-shadow-[0_0_6px_#22d3ee] [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
         <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">{label}</span>
-        {headerExtra}
       </div>
-      <CloseButton onClick={onClose} disabled={closeDisabled} />
+      <div className="flex items-center gap-1">
+        {headerExtra}
+        {closeHidden ? headerRight : <CloseButton onClick={onClose} disabled={closeDisabled} />}
+      </div>
     </div>
   );
 

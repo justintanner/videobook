@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { Zap, Loader2, Film, ImageIcon } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Zap, Loader2, Film, ImageIcon, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
 import { ModelSelector } from '@/components/gen/ui/ModelSelector';
@@ -8,6 +8,7 @@ import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
+import { JsonNode } from '@/components/ui/JsonNode';
 import { CommandButton } from './CommandButton';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
@@ -46,6 +47,7 @@ export function GenPreviewPanel({
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
+  const [flipped, setFlipped] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
 
@@ -117,6 +119,14 @@ export function GenPreviewPanel({
   const selectedOption: ModelOption | undefined = preview?.model_options.find(
     (o) => o.key === selectedModelKey,
   );
+
+  const jsonPayload = useMemo(() => {
+    if (!selectedOption) return null;
+    return {
+      tool_name: selectedOption.tool_name,
+      args: { ...formValues, project_slug: projectSlug },
+    };
+  }, [selectedOption, formValues, projectSlug]);
 
   const handleGenerate = useCallback(async () => {
     if (!selectedOption || !projectSlug) return;
@@ -269,19 +279,33 @@ export function GenPreviewPanel({
 
   const imageSlots = selectedOption?.validation.image_slots ?? null;
 
+  const isDisabled = genState === 'submitting' || genState === 'processing';
+
   return (
     <GenPanel
       label={activeCategory === 'video' ? 'VIDEO GEN' : 'IMAGE GEN'}
       icon={<Zap className="w-4 h-4" />}
       onClose={onClose}
-      closeDisabled={genState === 'submitting' || genState === 'processing'}
+      closeDisabled={isDisabled}
+      closeHidden
+      headerExtra={
+        <button
+          tabIndex={-1}
+          onClick={() => setFlipped((f) => !f)}
+          title={flipped ? 'Back to form' : 'View JSON payload'}
+          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+        >
+          <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+        </button>
+      }
+      headerRight={null}
       footer={
         <div className="flex items-center justify-between">
           <ModelSelector
             selectedModelKey={selectedModelKey}
             modelOptions={preview.model_options}
             onChange={handleModelChange}
-            disabled={genState === 'submitting' || genState === 'processing'}
+            disabled={isDisabled}
           />
           <CommandButton
             command="/generate"
@@ -294,88 +318,100 @@ export function GenPreviewPanel({
         </div>
       }
     >
-      <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-        {error && (
-          <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
-            {error}
-          </div>
-        )}
-
-        {/* Warnings */}
-        {selectedOption?.validation.warnings && selectedOption.validation.warnings.length > 0 && (
-          <div className="mb-3 space-y-1">
-            {selectedOption.validation.warnings.map((w, i) => (
-              <div key={i} className="px-3 py-1.5 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-mono">
-                {w}
+      <div className="flex-1 overflow-hidden flip-card-perspective">
+        <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
+          {/* FRONT FACE — form */}
+          <div className="flip-card-face absolute inset-0 overflow-y-auto pl-4 pr-6 py-4">
+            {error && (
+              <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
+                {error}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        <div className="flex gap-4">
-          {/* Left column: prompt + inline params */}
-          <div className="flex-1">
-            {/* Prompt field (full width) */}
-            {regularFields
-              .filter(([name]) => name === 'prompt')
-              .map(([name, s]) => (
-                <div key={name} className="mb-3">
-                  <DynamicField
-                    name={name}
-                    schema={s}
-                    value={formValues[name]}
-                    onChange={(v) => handleFieldChange(name, v)}
-                    required={schema?.required?.includes(name)}
-                    disabled={genState === 'submitting' || genState === 'processing'}
-                    autoFocus
-                  />
-                </div>
-              ))}
-            {/* Other fields (horizontal wrap) */}
-            <div className="flex flex-wrap gap-x-6 gap-y-4">
-              {regularFields
-                .filter(([name]) => name !== 'prompt')
-                .map(([name, s]) => (
-                  <DynamicField
-                    key={name}
-                    name={name}
-                    schema={s}
-                    value={formValues[name]}
-                    onChange={(v) => handleFieldChange(name, v)}
-                    required={schema?.required?.includes(name)}
-                    disabled={genState === 'submitting' || genState === 'processing'}
-                  />
+            {/* Warnings */}
+            {selectedOption?.validation.warnings && selectedOption.validation.warnings.length > 0 && (
+              <div className="mb-3 space-y-1">
+                {selectedOption.validation.warnings.map((w, i) => (
+                  <div key={i} className="px-3 py-1.5 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-mono">
+                    {w}
+                  </div>
                 ))}
+              </div>
+            )}
+
+            <div className="flex gap-4">
+              {/* Left column: prompt + inline params */}
+              <div className="flex-1">
+                {/* Prompt field (full width) */}
+                {regularFields
+                  .filter(([name]) => name === 'prompt')
+                  .map(([name, s]) => (
+                    <div key={name} className="mb-3">
+                      <DynamicField
+                        name={name}
+                        schema={s}
+                        value={formValues[name]}
+                        onChange={(v) => handleFieldChange(name, v)}
+                        required={schema?.required?.includes(name)}
+                        disabled={isDisabled}
+                        autoFocus
+                      />
+                    </div>
+                  ))}
+                {/* Other fields (horizontal wrap) */}
+                <div className="flex flex-wrap gap-x-6 gap-y-4">
+                  {regularFields
+                    .filter(([name]) => name !== 'prompt')
+                    .map(([name, s]) => (
+                      <DynamicField
+                        key={name}
+                        name={name}
+                        schema={s}
+                        value={formValues[name]}
+                        onChange={(v) => handleFieldChange(name, v)}
+                        required={schema?.required?.includes(name)}
+                        disabled={isDisabled}
+                      />
+                    ))}
+                </div>
+              </div>
+
+              {/* Right column: asset slots + element groups */}
+              {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
+                <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
+                  {assetFieldInfos.length > 0 && (
+                    <ImageParamSlots
+                      assetFields={assetFieldInfos}
+                      resolvedAssets={preview.resolved_assets}
+                      droppedAssets={droppedAssets}
+                      imageSlots={imageSlots}
+                      onChange={handleFieldChange}
+                      disabled={isDisabled}
+                    />
+                  )}
+                  {sortedElementIndices.length > 0 && (
+                    <ElementGroupEditor
+                      elementGroupIndices={sortedElementIndices}
+                      elementSchemas={elementSchemas}
+                      formValues={formValues}
+                      resolvedAssets={preview.resolved_assets}
+                      droppedAssets={droppedAssets}
+                      assets={[]}
+                      onChange={handleFieldChange}
+                      disabled={isDisabled}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Right column: asset slots + element groups */}
-          {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
-            <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
-              {assetFieldInfos.length > 0 && (
-                <ImageParamSlots
-                  assetFields={assetFieldInfos}
-                  resolvedAssets={preview.resolved_assets}
-                  droppedAssets={droppedAssets}
-                  imageSlots={imageSlots}
-                  onChange={handleFieldChange}
-                  disabled={genState === 'submitting' || genState === 'processing'}
-                />
-              )}
-              {sortedElementIndices.length > 0 && (
-                <ElementGroupEditor
-                  elementGroupIndices={sortedElementIndices}
-                  elementSchemas={elementSchemas}
-                  formValues={formValues}
-                  resolvedAssets={preview.resolved_assets}
-                  droppedAssets={droppedAssets}
-                  assets={[]}
-                  onChange={handleFieldChange}
-                  disabled={genState === 'submitting' || genState === 'processing'}
-                />
-              )}
-            </div>
-          )}
+          {/* BACK FACE — JSON payload */}
+          <div className="flip-card-back absolute inset-0 overflow-auto p-4">
+            <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+              <JsonNode data={jsonPayload ?? {}} />
+            </pre>
+          </div>
         </div>
       </div>
     </GenPanel>
