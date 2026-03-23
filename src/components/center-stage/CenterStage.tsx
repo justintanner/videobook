@@ -687,7 +687,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
             'border border-zinc-600/50',
           )}>
             {/* Top bar */}
-            <div className="shrink-0 px-3 py-2.5 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
+            <div className="shrink-0 px-3 py-3 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
               <RatioToggle
                 active={size}
                 onSelect={onSizeChange}
@@ -738,7 +738,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           {/* BACK FACE */}
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
-            <div className="shrink-0 px-3 py-2.5 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
+            <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
               <div className="flex gap-1">
                 <button
                   tabIndex={-1}
@@ -766,7 +766,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 </button>
               </div>
 
-              <span className="font-mono text-[13px] font-semibold" style={{ color: '#D8E7FF', opacity: 0.6 }}>{item.slug}</span>
+              {/* Center slug */}
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{item.slug}</span>
+              </span>
 
               <div
                 className="w-6 h-6 flex items-center justify-center text-muted-foreground cursor-pointer"
