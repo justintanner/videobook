@@ -25,7 +25,8 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
     name: "generate_grok_imagine_video",
     description: "Generate a video from an image asset using Grok Imagine image-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: {
-      asset_id: z.string().describe("Image asset ID (must be img-*)"),
+      asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
+      image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide video generation"),
       mode: z.enum(["fun", "normal", "spicy"]).optional().describe("Generation mode"),
@@ -33,8 +34,9 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, prompt, mode, duration, resolution } = args as {
-        asset_id: string;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution } = args as {
+        asset_id?: string;
+        image_slugs?: string[];
         project_slug: string;
         prompt?: string;
         mode?: "fun" | "normal" | "spicy";
@@ -42,10 +44,20 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         resolution?: "480p" | "720p";
       };
 
+      // Derive asset_id from image_slugs if not provided directly
+      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
+
       if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+        };
+      }
+
+      if (!asset_id) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "asset_id or image_slugs with at least one entry is required" }],
         };
       }
 

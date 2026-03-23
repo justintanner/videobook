@@ -25,21 +25,33 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
     name: "generate_grok_imagine_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job.",
     schema: {
-      asset_id: z.string().describe("Image asset ID (must be img-*)"),
+      asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
+      image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, prompt } = args as {
-        asset_id: string;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt } = args as {
+        asset_id?: string;
+        image_slugs?: string[];
         project_slug: string;
         prompt?: string;
       };
+
+      // Derive asset_id from image_slugs if not provided directly
+      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
 
       if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+        };
+      }
+
+      if (!asset_id) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "asset_id or image_slugs with at least one entry is required" }],
         };
       }
 
