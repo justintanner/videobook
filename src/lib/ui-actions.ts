@@ -1,6 +1,9 @@
 export interface UiActionCallbacks {
   open_upload: () => void;
   open_inbox: () => void;
+  open_gen_preview: (prompt: string) => void;
+  open_video_preview: (prompt: string) => void;
+  open_image_preview: (prompt: string) => void;
   copy_clipboard: (raw: string) => void;
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
@@ -43,6 +46,11 @@ export function executeUiAction(
       break;
     case 'open_trim':
       (fn as UiActionCallbacks['open_trim'])(ctx.args.asset_id ?? ctx.raw);
+      break;
+    case 'open_gen_preview':
+    case 'open_video_preview':
+    case 'open_image_preview':
+      (fn as (prompt: string) => void)(ctx.raw);
       break;
     case 'switch_project':
       // The command is /{slug}, so extract slug from the command itself

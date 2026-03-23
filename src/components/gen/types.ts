@@ -38,6 +38,19 @@ export interface DynamicGenerationPreview {
   resolved_assets?: ResolvedAsset[];
 }
 
+export interface FullPreviewResponse extends DynamicGenerationPreview {
+  tool_name: string;
+  tool_description: string;
+  schema: JSONSchema;
+  prefilled_values: Record<string, unknown>;
+  validation: {
+    valid: boolean;
+    missing_required: string[];
+    warnings: string[];
+    image_slots?: { min: number; max: number } | null;
+  };
+}
+
 export interface ResolvedAsset {
   slug: string;
   src: string;

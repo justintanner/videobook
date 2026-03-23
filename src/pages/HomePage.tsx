@@ -20,6 +20,7 @@ import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { InboxDrawer } from '@/components/commands';
 import { TrimEditor } from '@/components/commands/TrimEditor';
+import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -73,6 +74,7 @@ export function HomePage() {
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image' | 'auto'; prompt: string } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -99,7 +101,7 @@ export function HomePage() {
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (inboxOpen) return;
+    if (inboxOpen || genPanel != null) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -124,7 +126,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [inboxOpen]);
+  }, [inboxOpen, genPanel]);
 
   // Refresh assets after each sync or sort change
   useEffect(() => {
@@ -431,6 +433,9 @@ export function HomePage() {
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
+    open_gen_preview: (prompt: string) => setGenPanel({ category: 'auto', prompt: prompt || '' }),
+    open_video_preview: (prompt: string) => setGenPanel({ category: 'video', prompt: prompt || '' }),
+    open_image_preview: (prompt: string) => setGenPanel({ category: 'image', prompt: prompt || '' }),
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: (assetId: string) => {
       const item = mediaItems.find(m => m.id === assetId);
@@ -576,7 +581,15 @@ export function HomePage() {
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 p-4 overflow-hidden flex flex-col">
-                {activeSelection ? (
+                {genPanel != null ? (
+                  <GenPreviewPanel
+                    category={genPanel.category}
+                    prompt={genPanel.prompt}
+                    onClose={() => setGenPanel(null)}
+                    callTool={callTool}
+                    projectSlug={projectSlug}
+                  />
+                ) : activeSelection ? (
                   <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={settingsOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} callTool={callTool} />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer
