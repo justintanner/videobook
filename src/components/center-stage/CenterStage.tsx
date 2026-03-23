@@ -738,29 +738,31 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           {/* BACK FACE */}
           <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             {/* Top bar — matches front */}
-            <div className="shrink-0 px-3 py-2 flex items-center justify-between relative" style={{ borderBottom: '1px solid #1F2A36', background: 'rgba(13,15,18,0.8)' }}>
-              <div className="inline-flex overflow-hidden" style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}>
+            <div className="shrink-0 px-3 py-2.5 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
+              <div className="flex gap-1">
                 <button
                   tabIndex={-1}
                   onClick={() => setBackTab('settings')}
-                  className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
-                  style={backTab === 'settings'
-                    ? { background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }
-                    : { color: 'rgba(255,255,255,0.7)' }
-                  }
+                  className={cn(
+                    'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative',
+                    backTab === 'settings' ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                  )}
+                  style={{ background: backTab === 'settings' ? 'rgba(0,217,255,0.06)' : 'transparent' }}
                 >
-                  /settings
+                  <span>/settings</span>
+                  {backTab === 'settings' && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
                 </button>
                 <button
                   tabIndex={-1}
                   onClick={() => setBackTab('files')}
-                  className="h-10 px-3 inline-flex items-center text-[13px] font-mono font-semibold transition-all duration-[160ms]"
-                  style={backTab === 'files'
-                    ? { background: 'rgba(0,217,255,0.12)', color: '#00D9FF', boxShadow: '0 0 16px rgba(0,217,255,.35)' }
-                    : { color: 'rgba(255,255,255,0.7)' }
-                  }
+                  className={cn(
+                    'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative',
+                    backTab === 'files' ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                  )}
+                  style={{ background: backTab === 'files' ? 'rgba(0,217,255,0.06)' : 'transparent' }}
                 >
-                  /files
+                  <span>/files</span>
+                  {backTab === 'files' && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
                 </button>
               </div>
 
