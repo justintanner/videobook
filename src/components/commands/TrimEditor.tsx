@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Scissors } from 'lucide-react';
+import { Scissors, Eraser } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { CommandButton } from './CommandButton';
@@ -14,6 +14,11 @@ interface TranscriptWord {
   text: string;
   start: number;
   end: number;
+}
+
+interface TrimRange {
+  startPct: number;
+  endPct: number;
 }
 
 // ── Helpers ──
@@ -68,6 +73,10 @@ function parseTranscriptWords(data: ElevenLabsJson): TranscriptWord[] {
     .filter((w): w is TranscriptWord => w !== null);
 }
 
+function pctFromMouse(e: React.MouseEvent, rect: DOMRect): number {
+  return Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+}
+
 // ── Component ──
 
 interface TrimEditorProps {
@@ -91,10 +100,16 @@ export function TrimEditor({
 }: TrimEditorProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const waveformRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [words, setWords] = useState<TranscriptWord[]>([]);
   const [playheadPercent, setPlayheadPercent] = useState(0);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
+
+  // Selection state
+  const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
+  const draggingRef = useRef(false);
+  const dragStartPctRef = useRef(0);
 
   // Two-phase open: mount then animate in
   useEffect(() => {
@@ -106,6 +121,11 @@ export function TrimEditor({
       return () => clearTimeout(t);
     }
   }, [open]);
+
+  // Reset selection when asset changes
+  useEffect(() => {
+    setTrimRange(null);
+  }, [assetId]);
 
   // Fetch transcript when asset changes
   useEffect(() => {
@@ -135,11 +155,58 @@ export function TrimEditor({
     const pct = (video.currentTime / video.duration) * 100;
     setPlayheadPercent(pct);
 
-    // Find active word
     const t = video.currentTime;
     const idx = words.findIndex((w) => t >= w.start && t <= w.end);
     setActiveWordIndex(idx);
   }, [words]);
+
+  // Waveform mouse handlers — always select mode
+  const handleWaveformMouseDown = useCallback((e: React.MouseEvent) => {
+    const rect = waveformRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pct = pctFromMouse(e, rect);
+    draggingRef.current = true;
+    dragStartPctRef.current = pct;
+    setTrimRange({ startPct: pct, endPct: pct });
+  }, []);
+
+  const handleWaveformMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggingRef.current) return;
+    const rect = waveformRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pct = pctFromMouse(e, rect);
+    const startPct = dragStartPctRef.current;
+    setTrimRange({
+      startPct: Math.min(startPct, pct),
+      endPct: Math.max(startPct, pct),
+    });
+  }, []);
+
+  const handleWaveformMouseUp = useCallback(() => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    // Discard clicks with no drag distance
+    setTrimRange((prev) => {
+      if (prev && Math.abs(prev.endPct - prev.startPct) < 0.5) return null;
+      return prev;
+    });
+  }, []);
+
+  // Global mouseup to catch releases outside waveform
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => {
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        setTrimRange((prev) => {
+          if (prev && Math.abs(prev.endPct - prev.startPct) < 0.5) return null;
+          return prev;
+        });
+      }
+    };
+    window.addEventListener('mouseup', handler);
+    return () => window.removeEventListener('mouseup', handler);
+  }, [open]);
 
   // Escape key handler
   useEffect(() => {
@@ -162,6 +229,7 @@ export function TrimEditor({
           || tag === 'VIDEO' || tag === 'AUDIO' || tag === 'BUTTON') return;
       if (target.isContentEditable) return;
       if (target.closest('[data-radix-popper-content-wrapper]')) return;
+      if (target.closest('[data-waveform]')) return;
       const dialog = dialogRef.current;
       if (!dialog || !dialog.contains(target)) return;
       e.preventDefault();
@@ -174,11 +242,15 @@ export function TrimEditor({
 
   const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch();
 
+  const handleClear = useCallback(() => {
+    setTrimRange(null);
+  }, []);
+
   const handleSend = async (message: string) => {
-    if (message.trim() === '/close') {
-      onClose();
-      return true;
-    }
+    const cmd = message.trim().toLowerCase();
+    if (cmd === '/close') { onClose(); return true; }
+    if (cmd === '/clear') { handleClear(); return true; }
+    if (cmd === '/select') { /* already in select mode — no-op */ return true; }
     return contextDispatch(message);
   };
 
@@ -188,8 +260,6 @@ export function TrimEditor({
   const waveform = item?.waveform ?? [];
   const videoSrc = item?.filePath ?? '';
   const posterSrc = item?.thumbnailSrc ?? '';
-
-  // Build frame badges from frameDirs or fallback to evenly-spaced thumbnails
   const frameBadges = buildFrameBadges(item, projectSlug);
 
   return (
@@ -276,17 +346,53 @@ export function TrimEditor({
                 </div>
               )}
             </div>
-            <div className="shrink-0 px-3 py-3 flex justify-end">
-              <CommandButton command="/trim" icon={<Scissors className="w-5 h-5" />} size="lg" />
-            </div>
           </div>
         </div>
 
-        {/* Waveform */}
-        <div className="shrink-0 px-6 py-3">
+        {/* Tool bar + Waveform */}
+        <div className="shrink-0 px-6 py-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="violet" />
+            <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" onClick={handleClear} />
+            <div className="flex-1" />
+            <CommandButton
+              command="/trim"
+              icon={<Scissors className="w-4 h-4" />}
+              size="default"
+              state={trimRange ? undefined : 'disabled'}
+              disabledReason="Drag on the waveform to select a trim range"
+            />
+          </div>
+
           <div className="relative overflow-visible" style={{ height: 80 }}>
-            <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden flex items-end" style={{ height: 80 }}>
+            <div
+              ref={waveformRef}
+              data-waveform
+              className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden flex items-end select-none cursor-col-resize"
+              style={{ height: 80 }}
+              onMouseDown={handleWaveformMouseDown}
+              onMouseMove={handleWaveformMouseMove}
+              onMouseUp={handleWaveformMouseUp}
+            >
               {waveform.length > 0 && <WaveformBars data={waveform} />}
+
+              {/* Trim selection overlay */}
+              {trimRange && (
+                <>
+                  <div
+                    className="absolute top-0 bottom-0 bg-violet-500/20 pointer-events-none z-10"
+                    style={{ left: `${trimRange.startPct}%`, width: `${trimRange.endPct - trimRange.startPct}%` }}
+                  />
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none z-20"
+                    style={{ left: `${trimRange.startPct}%` }}
+                  />
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none z-20"
+                    style={{ left: `${trimRange.endPct}%` }}
+                  />
+                </>
+              )}
             </div>
 
             {/* Thumbnail badges */}
@@ -344,7 +450,6 @@ export function TrimEditor({
 // ── Waveform bars ──
 
 function WaveformBars({ data }: { data: number[] }) {
-  // Downsample to ~200 bars max
   const barCount = Math.min(data.length, 200);
   const step = data.length / barCount;
   const maxVal = Math.max(...data, 1);
@@ -379,7 +484,6 @@ function buildFrameBadges(item: MediaItem | null, _projectSlug: string | undefin
 
   const frameUrls = item.frameDirs?.original_frames;
   if (frameUrls && frameUrls.length > 0) {
-    // Use real frames — URLs are already absolute paths from the server
     const count = Math.min(frameUrls.length, 8);
     const step = Math.max(1, Math.floor(frameUrls.length / count));
     return Array.from({ length: count }, (_, i) => {
@@ -394,7 +498,6 @@ function buildFrameBadges(item: MediaItem | null, _projectSlug: string | undefin
     });
   }
 
-  // Fallback: evenly-spaced badges using thumbnail
   const count = 6;
   const thumb = item.thumbnailSrc ?? '';
   if (!thumb) return [];
