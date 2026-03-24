@@ -378,7 +378,7 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   );
 }
 
-type ManifestFile = { name: string; size_bytes: number; extension: string | null };
+export type ManifestFile = { name: string; size_bytes: number; extension: string | null };
 
 const BINARY_EXTENSIONS = new Set(['mp4', 'mp3', 'wav', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'webm', 'mov', 'flac', 'aac', 'ogg']);
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
@@ -399,7 +399,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }: {
+export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }: {
   files: ManifestFile[];
   selectedFile: string;
   onSelectFile: (name: string) => void;
@@ -438,7 +438,7 @@ function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }:
   );
 }
 
-function FileContentPane({ content, loading, fileName, fileUrl }: {
+export function FileContentPane({ content, loading, fileName, fileUrl }: {
   content: string | null;
   loading: boolean;
   fileName: string;

@@ -30,8 +30,11 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane } from '@/components/center-stage';
+import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
+import { HistoryListPane, HistoryDetailPane } from '@/components/center-stage/GitHistoryPanel';
+import type { GitCommit } from '@/hooks/useAssetHistory';
 import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settings-types';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import { ScriptReadout } from '@/components/chat/ScriptReadout';
@@ -47,10 +50,10 @@ import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
-  Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
+  Zap, Info, Settings, User, Copy, Trash2,
   AudioLines, Plus, Pencil,
   Loader2, Mic,
-  Check, History, RotateCcw, FileJson,
+  Check, RotateCcw,
 } from 'lucide-react';
 import { ProjectButton } from '@/components/layout/ProjectButton';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
@@ -526,90 +529,6 @@ The figure stops, looking up at a massive screen displaying a countdown timer.
 NARRATOR (V.O.)
 But some things never change. The need to create. To tell stories. To be heard.`;
 
-
-// ── Git History Mock Data ──
-
-type CommitOperation = 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename';
-
-interface MockCommit {
-  hash: string;
-  message: string;
-  timestamp: string;
-}
-
-const OPERATION_STYLES: Record<CommitOperation, { dot: string; label: string }> = {
-  create:   { dot: 'bg-emerald-500', label: 'text-emerald-400' },
-  generate: { dot: 'bg-primary',     label: 'text-primary' },
-  upload:   { dot: 'bg-blue-500',    label: 'text-blue-400' },
-  render:   { dot: 'bg-amber-500',   label: 'text-amber-400' },
-  restore:  { dot: 'bg-violet-500',  label: 'text-violet-400' },
-  delete:   { dot: 'bg-red-500',     label: 'text-red-400' },
-  rename:   { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
-};
-
-function extractOperation(message: string): CommitOperation {
-  const first = message.split(/[\s:(]/)[0].toLowerCase();
-  if (first in OPERATION_STYLES) return first as CommitOperation;
-  return 'create';
-}
-
-const mockCommits: MockCommit[] = [
-  { hash: 'a3f8c1d', message: 'generate: re-generate hero intro with updated prompt',       timestamp: '18 min ago' },
-  { hash: 'b1e2d3c', message: 'restore: reverted to version c2d3e4f',                       timestamp: 'yesterday' },
-  { hash: 'c2d3e4f', message: 'render: composite with background music track',               timestamp: 'yesterday' },
-  { hash: 'd3e4f5a', message: 'generate: initial hero intro generation',                     timestamp: '2 days ago' },
-  { hash: 'e4f5a6b', message: 'generate: test generation with alternate prompt',             timestamp: '2 days ago' },
-  { hash: 'f5a6b7c', message: 'upload: uploaded raw footage from camera',                    timestamp: '3 days ago' },
-  { hash: 'a6b7c8d', message: 'rename: renamed from untitled-clip-003',                      timestamp: '4 days ago' },
-  { hash: 'b7c8d9e', message: 'create: asset created',                                       timestamp: '4 days ago' },
-];
-
-function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-mono font-bold tracking-widest text-muted-foreground/50 uppercase">{label}</span>
-      <span className="text-sm font-mono text-foreground/80">{children}</span>
-    </div>
-  );
-}
-
-function TimelineNode({ commit, isHead }: { commit: MockCommit; isHead: boolean }) {
-  const op = extractOperation(commit.message);
-  const style = OPERATION_STYLES[op];
-  return (
-    <div className="relative flex items-start gap-4 pl-[15px] py-2 group">
-      {/* Vertical line */}
-      <div className="absolute left-[15px] top-0 bottom-0 w-px bg-border/40" />
-      {/* Dot */}
-      <div className="relative z-10 shrink-0 flex items-center justify-center" style={{ width: 12, height: 24 }}>
-        {isHead ? (
-          <div className="relative">
-            <div className={cn('w-3 h-3 rounded-full', style.dot)} />
-            <div className={cn('absolute inset-0 w-3 h-3 rounded-full animate-ping opacity-40', style.dot)} />
-          </div>
-        ) : (
-          <div className={cn('w-2 h-2 rounded-full', style.dot)} />
-        )}
-      </div>
-      {/* Content */}
-      <div className="flex-1 flex items-baseline justify-between gap-3 min-w-0">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className={cn('text-xs font-mono font-bold', style.label)}>{op}</span>
-          <span className="text-[11px] font-mono text-muted-foreground/60">{commit.hash}</span>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-[11px] font-mono text-muted-foreground/50">{commit.timestamp}</span>
-          {!isHead && (
-            <button className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-colors uppercase">
-              <RotateCcw className="w-3 h-3" />
-              Restore
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Slide Deck Infrastructure ──
 
@@ -1336,155 +1255,150 @@ function Page9_AudioSystem() {
 
 // ── Slide 10: Back Face Panels ──
 
-const mockManifestFiles = [
-  { name: '.original.json', size: '1.2 KB' },
-  { name: '.render-settings.json', size: '0.8 KB' },
-  { name: 'original.mp4', size: '24.7 MB' },
-  { name: 'landscape.mp4', size: '18.3 MB' },
-  { name: 'portrait.mp4', size: '12.1 MB' },
-  { name: 'thumbnail.jpg', size: '48 KB' },
+const mockManifestFiles: ManifestFile[] = [
+  { name: '.original.json', size_bytes: 1228, extension: 'json' },
+  { name: '.render-settings.json', size_bytes: 819, extension: 'json' },
+  { name: 'original.mp4', size_bytes: 25_901_670, extension: 'mp4' },
+  { name: 'landscape.mp4', size_bytes: 19_188_736, extension: 'mp4' },
+  { name: 'portrait.mp4', size_bytes: 12_688_384, extension: 'mp4' },
+  { name: 'thumbnail.jpg', size_bytes: 49_152, extension: 'jpg' },
 ];
+
+const mockGitCommits: GitCommit[] = [
+  { hash: 'a3f8c1d29e74b', message: 'generate: re-generate hero intro with updated prompt', date: '2026-03-23T09:42:00Z', files: ['original.mp4', '.original.json'] },
+  { hash: 'b1e2d3c48f65a', message: 'restore: reverted to version c2d3e4f', date: '2026-03-22T15:30:00Z' },
+  { hash: 'c2d3e4f57a86b', message: 'render: composite with background music track', date: '2026-03-22T11:00:00Z', files: ['landscape.mp4', 'portrait.mp4'] },
+  { hash: 'd3e4f5a66b97c', message: 'generate: initial hero intro generation', date: '2026-03-21T14:20:00Z', files: ['original.mp4', '.original.json'] },
+  { hash: 'e4f5a6b75c08d', message: 'upload: uploaded raw footage from camera', date: '2026-03-20T09:15:00Z', files: ['original.mp4'] },
+  { hash: 'f5a6b7c84d19e', message: 'create: asset created', date: '2026-03-19T16:00:00Z', files: ['.original.json'] },
+];
+
+const mockFileContentJson = JSON.stringify({
+  slug: 'vid-aurora-sky',
+  created: '2026-03-18T14:32:00Z',
+  source: 'upload',
+  duration: 12.4,
+  resolution: { width: 1920, height: 1080 },
+  codec: 'h264',
+  fps: 30,
+}, null, 2);
+
+const noop = () => {};
+
+function BackFaceTabBar({ active }: { active: 'settings' | 'files' | 'history' }) {
+  const tabs = ['settings', 'files', 'history'] as const;
+  return (
+    <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
+      <div className="flex gap-1">
+        {tabs.map((tab) => (
+          <span
+            key={tab}
+            className={cn(
+              'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative',
+              tab === active ? 'text-cyan-400' : 'text-muted-foreground',
+            )}
+            style={{ background: tab === active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
+          >
+            <span>/{tab}</span>
+            {tab === active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
+          </span>
+        ))}
+      </div>
+      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
+      </span>
+      <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+    </div>
+  );
+}
 
 function Page10_BackFacePanels() {
   return (
     <div className="w-full h-full flex gap-4">
-        {/* Left: /settings tab active */}
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
-          <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /settings tab</p>
-          <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
-            <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
-              <div className="flex gap-1">
-                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-cyan-400" style={{ background: 'rgba(0,217,255,0.06)' }}>
-                  <span>/settings</span>
-                  <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
-                </span>
-                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-muted-foreground">/files</span>
-              </div>
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
-              </span>
-              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+      {/* /settings tab */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /settings tab</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+          <BackFaceTabBar active="settings" />
+          <div className="flex-1 overflow-hidden">
+            <RenderSettingsPanel
+              orientations={[
+                { orient: 'landscape', active: true },
+                { orient: 'portrait', active: false },
+                { orient: 'square', active: false },
+              ]}
+              subtitlesEnabled={true}
+              subtitleStyle="impact"
+              subtitlePosition="bottom"
+              fontSize="medium"
+              audioVolume={80}
+              audioFadeIn={200}
+              audioFadeOut={500}
+              osgAssetId={null}
+              osgAssetSrc={null}
+              osgPosition="bottom-right"
+              backgroundMode="blur"
+              strokeWidth={6}
+              strokeColor="#000000"
+              shadowBlur={6}
+              shadowOpacity={60}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* /files tab */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /files tab</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+          <BackFaceTabBar active="files" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <FileListPane
+                files={mockManifestFiles}
+                selectedFile=".original.json"
+                onSelectFile={noop}
+                onRefresh={noop}
+                loading={false}
+              />
             </div>
-            <div className="flex-1 overflow-hidden">
-              <RenderSettingsPanel
-                orientations={[
-                  { orient: 'landscape', active: true },
-                  { orient: 'portrait', active: false },
-                  { orient: 'square', active: false },
-                ]}
-                subtitlesEnabled={true}
-                subtitleStyle="impact"
-                subtitlePosition="bottom"
-                fontSize="medium"
-                audioVolume={80}
-                audioFadeIn={200}
-                audioFadeOut={500}
-                osgAssetId={null}
-                osgAssetSrc={null}
-                osgPosition="bottom-right"
-                backgroundMode="blur"
-                strokeWidth={6}
-                strokeColor="#000000"
-                shadowBlur={6}
-                shadowOpacity={60}
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <FileContentPane
+                content={mockFileContentJson}
+                loading={false}
+                fileName=".original.json"
+                fileUrl=""
               />
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Right: /files tab active */}
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
-          <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /files tab</p>
-          <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
-            <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
-              <div className="flex gap-1">
-                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-muted-foreground">/settings</span>
-                <span className="h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative text-cyan-400" style={{ background: 'rgba(0,217,255,0.06)' }}>
-                  <span>/files</span>
-                  <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
-                </span>
-              </div>
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
-              </span>
-              <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
+      {/* /history tab */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /history tab</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+          <BackFaceTabBar active="history" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[220px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+              <HistoryListPane
+                commits={mockGitCommits}
+                selectedHash={mockGitCommits[0].hash}
+                onSelectCommit={noop}
+                onRefresh={noop}
+                loading={false}
+              />
             </div>
-
-            {/* File browser — dense asset cards (rec #8) */}
-            <div className="flex-1 flex min-h-0">
-              <div className="w-[212px] shrink-0 overflow-y-auto" style={{ borderRight: '1px solid #1F2A36', background: '#0D0F12' }}>
-                {mockManifestFiles.map((f) => {
-                  const ext = f.name.split('.').pop() ?? '';
-                  const icon = f.name.endsWith('.json')
-                    ? <FileJson className="w-3.5 h-3.5 shrink-0" />
-                    : f.name.endsWith('.mp4')
-                      ? <Film className="w-3.5 h-3.5 shrink-0" />
-                      : f.name.endsWith('.jpg')
-                        ? <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                        : null;
-                  const isSelected = f.name === '.original.json';
-                  const badgeColors: Record<string, { bg: string; color: string; border: string }> = {
-                    json: { bg: 'rgba(0,217,255,0.1)', color: '#00D9FF', border: 'rgba(0,217,255,0.25)' },
-                    mp4: { bg: 'rgba(168,85,247,0.1)', color: '#a855f7', border: 'rgba(168,85,247,0.25)' },
-                    jpg: { bg: 'rgba(251,146,60,0.1)', color: '#fb923c', border: 'rgba(251,146,60,0.25)' },
-                  };
-                  const badge = badgeColors[ext];
-                  return (
-                    <div
-                      key={f.name}
-                      className="h-9 px-3 font-mono cursor-pointer flex items-center gap-2 transition-colors"
-                      style={isSelected
-                        ? { borderLeft: '3px solid #00D9FF', background: '#071923', color: '#00D9FF' }
-                        : { borderLeft: '3px solid transparent', color: 'rgba(255,255,255,0.5)' }
-                      }
-                    >
-                      <div className="w-5 h-5 flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        {icon}
-                      </div>
-                      <span className="truncate flex-1 text-[13px]" style={isSelected ? { color: '#D8E7FF' } : undefined}>{f.name}</span>
-                      {badge && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase shrink-0"
-                          style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{ext.toUpperCase()}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex-1 overflow-auto flex flex-col" style={{ background: '#0D0F12' }}>
-                {/* Sticky header */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2" style={{ background: '#071923', borderBottom: '1px solid #1F2A36' }}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[13px] font-mono font-semibold" style={{ color: '#00D9FF' }}>.original.json</span>
-                    <span className="text-[11px] font-mono text-muted-foreground/50">1.2 KB</span>
-                    <span className="text-[11px] font-mono text-muted-foreground/50">Mar 18, 2026</span>
-                  </div>
-                </div>
-                {/* Code with line numbers */}
-                <pre className="text-[13px] font-mono leading-relaxed p-4 pl-0" style={{ color: '#D8E7FF' }}>
-                  {[
-                    <><span className="text-zinc-500">{'{'}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "slug"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"vid-aurora-sky"'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "created"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"2026-03-18T14:32:00Z"'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "source"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"upload"'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "duration"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'12.4'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "resolution"'}</span><span className="text-zinc-500">{': {'}</span></>,
-                    <><span className="text-[#00E5FF]">{'    "width"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1920'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'    "height"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'1080'}</span></>,
-                    <><span className="text-zinc-500">{'  },'}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "codec"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#C792EA]">{'"h264"'}</span><span className="text-zinc-500">{','}</span></>,
-                    <><span className="text-[#00E5FF]">{'  "fps"'}</span><span className="text-zinc-500">{': '}</span><span className="text-[#82E67A]">{'30'}</span></>,
-                    <><span className="text-zinc-500">{'}'}</span></>,
-                  ].map((line, i) => (
-                    <div key={i} className="flex">
-                      <span className="w-10 text-right pr-4 text-muted-foreground/30 select-none shrink-0 text-[11px]">{i + 1}</span>
-                      <span className="pl-5">{line}</span>
-                    </div>
-                  ))}
-                </pre>
-              </div>
+            <div className="flex-1 overflow-auto bg-black">
+              <HistoryDetailPane
+                commit={mockGitCommits[0]}
+                isHead={true}
+                onRestore={noop}
+              />
             </div>
           </div>
         </div>
+      </div>
     </div>
   );
 }
@@ -2020,74 +1934,6 @@ function Page14_AssetViewer() {
   );
 }
 
-// ── Slide 15: Git History ──
-
-function Page15_GitHistory() {
-  const headCommit = mockCommits[0];
-  const headOp = extractOperation(headCommit.message);
-  return (
-    <div className="w-full h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
-        <div className="flex items-center gap-3">
-          <History className="w-4 h-4 text-primary/70" />
-          <span className="text-xs font-mono font-bold tracking-widest text-primary/70 uppercase">ASSET_HISTORY</span>
-          <span className="text-xs font-mono text-muted-foreground/60">vid-hero-intro</span>
-        </div>
-        <button className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Two-panel body */}
-      <div className="flex-1 flex min-h-0">
-        {/* Left panel — asset info */}
-        <div className="w-[280px] shrink-0 border-r border-border/50 flex flex-col gap-6 px-6 py-6">
-          {/* Thumbnail */}
-          <div className="w-full aspect-video rounded-lg overflow-hidden bg-card border border-border/30">
-            <img src="/styleguide-vid-purple-grind.jpg" alt="" className="w-full h-full object-cover" />
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <MetaRow label="ASSET_ID">vid-hero-intro</MetaRow>
-            <MetaRow label="TYPE">
-              <span className="flex items-center gap-1.5">
-                <Film className="w-3.5 h-3.5 text-primary/60" />
-                VIDEO
-              </span>
-            </MetaRow>
-            <MetaRow label="COMMITS">{mockCommits.length}</MetaRow>
-            <MetaRow label="CREATED">3/10</MetaRow>
-            <MetaRow label="MODIFIED">18m ago</MetaRow>
-          </div>
-
-          {/* Active version card */}
-          <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 shadow-[0_0_12px_rgba(0,212,255,0.08)]">
-            <span className="text-[10px] font-mono font-bold tracking-widest text-primary/50 uppercase">ACTIVE_VER</span>
-            <div className="mt-1.5 flex items-baseline gap-2">
-              <span className="text-sm font-mono text-primary/90 font-bold">{headCommit.hash}</span>
-              <span className={cn('text-xs font-mono', OPERATION_STYLES[headOp].label)}>{headOp}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right panel — commit log */}
-        <div className="flex-1 flex flex-col min-h-0 px-6 py-6">
-          <div className="flex items-baseline gap-3 mb-4 shrink-0">
-            <span className="text-xs font-mono font-bold tracking-widest text-muted-foreground/70 uppercase">COMMIT_LOG</span>
-            <span className="text-[11px] font-mono text-muted-foreground/40">&middot; {mockCommits.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {mockCommits.map((commit, i) => (
-              <TimelineNode key={commit.hash} commit={commit} isHead={i === 0} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Slide 16: Timeline Player ──
 
 const timelineMockLandscape: TimelinePreviewData = {
@@ -2154,7 +2000,6 @@ const SLIDE_PAGES = [
   Page12_CommandSystem,
   Page13_InboxReview,
   Page14_AssetViewer,
-  Page15_GitHistory,
   Page16_TimelinePlayer,
 ];
 
