@@ -37,5 +37,13 @@ projects/
 # TypeScript build info
 *.tsbuildinfo
 
+# Compiled JS/DTS in src
+src/lib/*.js
+src/lib/*.d.ts
+
+# Test artifacts
+test-results/
+tests/screenshots/
+
 # Claude Code
 .claude/worktrees/
