@@ -817,9 +817,9 @@ function Page2_VideoGeneration() {
   );
 }
 
-// ── Slide 3: Media Catalog ──
+// ── Slide 4: Media Catalog ──
 
-function Page3_MediaCatalog() {
+function Page4_MediaCatalog() {
   return (
     <div className="w-full h-full flex flex-col gap-6">
       <p className="text-xs font-mono text-zinc-400 leading-relaxed max-w-3xl">All 14 card states: receiving, plan, video, image, and final — every lifecycle phase at a glance.</p>
@@ -859,9 +859,9 @@ function Page3_MediaCatalog() {
   );
 }
 
-// ── Slide 4: Design System ──
+// ── Slide 5: Design System ──
 
-function Page4_DesignSystem() {
+function Page5_DesignSystem() {
   return (
     <div className="w-full h-full flex gap-12">
       {/* Left third: Colors */}
@@ -926,9 +926,9 @@ function Page4_DesignSystem() {
   );
 }
 
-// ── Slide 5: Forms & Controls ──
+// ── Slide 6: Forms & Controls ──
 
-function Page5_FormsControls() {
+function Page6_FormsControls() {
   return (
     <div className="w-full h-full flex gap-10">
       {/* Left column: Overlays */}
@@ -994,9 +994,9 @@ function Page5_FormsControls() {
   );
 }
 
-// ── Slide 6: Center Stage ──
+// ── Slide 7: Center Stage ──
 
-function Page6_CenterStage() {
+function Page7_CenterStage() {
   return (
     <div className="w-full h-full grid grid-cols-3 gap-6">
       {/* IdleScreen */}
@@ -1036,9 +1036,9 @@ function Page6_CenterStage() {
   );
 }
 
-// ── Slide 7: Video Editing ──
+// ── Slide 3: Trimming ──
 
-function Page7_Trimming() {
+function Page3_Trimming() {
   return (
     <div className="w-full h-full flex flex-col bg-zinc-950">
       {/* Header */}
@@ -1185,75 +1185,7 @@ function Page7_Trimming() {
   );
 }
 
-
-// ── Slide 9: Audio System ──
-
-const audioCardMocks: MediaItem[] = [
-  { id: 'a-ready', type: 'audio', slug: '@bg-music', title: 'BG Music', filePath: '/audio.mp3', status: 'ready' },
-  { id: 'a-gen', type: 'audio', slug: '@sfx-hit', title: 'SFX Hit', filePath: '', status: 'generating' },
-  { id: 'a-upload', type: 'audio', slug: '@vocal-track', title: 'Vocal Track', filePath: '', status: 'uploading' },
-  { id: 'a-transcribing', type: 'audio', slug: '@interview-vo', title: 'Interview VO', filePath: '/interview.mp3', status: 'transcribing' },
-  { id: 'a-err', type: 'audio', slug: '@broken-track', title: 'Broken', filePath: '', status: 'error' },
-  { id: 'a-corrupt', type: 'audio', slug: '@glitched', title: 'Corrupt', filePath: '', status: 'corrupt' },
-];
-
-function Page9_AudioSystem() {
-  return (
-    <div className="w-full h-full flex flex-col gap-5">
-      {/* AudioCard — sidebar states */}
-      <div className="shrink-0">
-        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">AudioCard</p>
-        <div className="grid grid-cols-6 gap-4">
-          {audioCardMocks.map((item) => (
-            <AudioCard key={item.id} item={item} />
-          ))}
-        </div>
-      </div>
-
-      {/* TimelineSlot — slot states */}
-      <div className="shrink-0">
-        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">TimelineSlot</p>
-        <div className="h-20 flex gap-0.5 rounded-lg overflow-hidden bg-gradient-to-b from-zinc-900/40 to-zinc-950">
-          <TimelineSlot label="@s01" flex={2} />
-          <TimelineSlot label="@s02" hasContent waveform={DEMO_WAVEFORM} duration={12} assetId="bg-music" flex={3} />
-          <TimelineSlot label="@s03" hasContent isActive waveform={DEMO_WAVEFORM} duration={8} assetId="sfx-hit" flex={2} />
-          <TimelineSlot label="@s04" isDragOver flex={2} />
-        </div>
-      </div>
-
-      {/* CommandButton — audio actions */}
-      <div className="shrink-0">
-        <p className="text-[11px] font-mono text-zinc-500 mb-2 uppercase tracking-widest">CommandButton — audio actions</p>
-        <div className="flex items-center gap-3">
-          <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
-          <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
-          <CommandButton command="/add-audio" icon={<Music className="w-3.5 h-3.5" />} />
-        </div>
-      </div>
-
-      {/* Timeline scrubber with audio overlay */}
-      <div className="flex-1 min-h-0 border border-zinc-600/50 rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-amber-500/10 flex flex-col">
-        <p className="text-[11px] font-mono text-zinc-500 px-3 pt-2 uppercase tracking-widest shrink-0">Timeline + audio track</p>
-        <div className="relative flex-1 min-h-0 flex gap-0.5 bg-gradient-to-b from-zinc-900/40 to-zinc-950">
-          <TimelineSlot label="@s01" hasContent assetId="vid-purple-grind" waveform={DEMO_WAVEFORM} duration={12} flex={3} />
-          <TimelineSlot label="@s02" hasContent assetId="vid-neon-fox" isActive waveform={DEMO_WAVEFORM} duration={8} flex={2} />
-          <TimelineSlot label="@s03" hasContent assetId="vid-sky-ghost" waveform={DEMO_WAVEFORM} duration={5} flex={3} />
-          <TimelineSlot label="@s04" flex={2} />
-          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
-        </div>
-        <div className="relative h-12 border-t border-zinc-700/50 bg-zinc-900/30 shrink-0">
-          <div className="absolute top-0 bottom-0 rounded border border-cyan-400/40 bg-cyan-950/30 overflow-hidden" style={{ left: '8%', width: '55%' }}>
-            <div className="absolute inset-0 px-1 flex items-center"><StyleguideWaveform url="/fixtures/audio-red.mp3" height={30} progress={0.42} /></div>
-            <div className="absolute bottom-0.5 left-1 z-20"><span className="text-[10px] font-mono text-cyan-400/80 px-1 py-0.5 rounded bg-black/70">@bg-music</span></div>
-          </div>
-          <div className="absolute top-0 bottom-0 w-0.5 bg-primary z-[100] pointer-events-none shadow-[0_0_8px_var(--color-primary)]" style={{ left: '42%' }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Slide 10: Back Face Panels ──
+// ── Slide 8: Back Face Panels ──
 
 const mockManifestFiles: ManifestFile[] = [
   { name: '.original.json', size_bytes: 1228, extension: 'json' },
@@ -1310,7 +1242,7 @@ function BackFaceTabBar({ active }: { active: 'settings' | 'files' | 'history' }
   );
 }
 
-function Page10_BackFacePanels() {
+function Page8_BackFacePanels() {
   return (
     <div className="w-full h-full flex gap-4">
       {/* /settings tab */}
@@ -1401,9 +1333,9 @@ function Page10_BackFacePanels() {
   );
 }
 
-// ── Slide 11: Workflow ──
+// ── Slide 9: Workflow ──
 
-function Page11_Workflow() {
+function Page9_Workflow() {
   return (
     <div className="w-full h-full flex flex-col gap-6">
       {/* Top row: Sidebars + Inbox */}
@@ -1475,7 +1407,7 @@ function Page11_Workflow() {
   );
 }
 
-// ── Slide 12: Command System ──
+// ── Slide 10: Command System ──
 
 const mockProjects = [
   { slug: 'summer-campaign', active: false },
@@ -1493,7 +1425,7 @@ const mockCommands: CommandDescriptor[] = [
 ];
 const mockAssetSlugs = ['@hero-intro', '@product-shot', '@bg-neon', '@outro-clip', '@voiceover-main'];
 
-function Page12_CommandSystem() {
+function Page10_CommandSystem() {
   return (
     <div className="w-full h-full flex flex-col gap-5">
       {/* Row 1: ProjectButton + ProjectDropdown + InboxButton */}
@@ -1744,7 +1676,7 @@ function Page12_CommandSystem() {
   );
 }
 
-function Page13_InboxReview() {
+function Page11_InboxReview() {
   const activeIndex = 2; // 3rd tile is active (0-based)
   return (
     <div className="w-full h-full flex flex-col bg-background">
@@ -1888,7 +1820,7 @@ function Page13_InboxReview() {
   );
 }
 
-// ── Slide 14: Asset Viewer ──
+// ── Slide 12: Asset Viewer ──
 
 const assetViewerMockImage: MediaItem = {
   id: 'img-neon-fox',
@@ -1909,7 +1841,7 @@ const assetViewerMockVideo: MediaItem = {
   thumbnailSrc: '/styleguide-img-cover.jpg',
 };
 
-function Page14_AssetViewer() {
+function Page12_AssetViewer() {
   return (
     <MountKeyProvider>
     <div className="w-full h-full grid grid-cols-2 gap-6">
@@ -1932,7 +1864,7 @@ function Page14_AssetViewer() {
   );
 }
 
-// ── Slide 16: Timeline Player ──
+// ── Slide 13: Timeline Player ──
 
 const timelinePreviewByOrientation: Record<Orientation, TimelinePreviewData> = {
   landscape: {
@@ -1977,7 +1909,7 @@ function TimelinePanel({ initialOrientation }: { initialOrientation: Orientation
   );
 }
 
-function Page16_TimelinePlayer() {
+function Page13_TimelinePlayer() {
   return (
     <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
       <TimelinePanel initialOrientation="landscape" />
@@ -1993,18 +1925,17 @@ function Page16_TimelinePlayer() {
 const SLIDE_PAGES = [
   Page1_FinalVideoPreview,
   Page2_VideoGeneration,
-  Page7_Trimming,
-  Page3_MediaCatalog,
-  Page4_DesignSystem,
-  Page5_FormsControls,
-  Page6_CenterStage,
-  Page9_AudioSystem,
-  Page10_BackFacePanels,
-  Page11_Workflow,
-  Page12_CommandSystem,
-  Page13_InboxReview,
-  Page14_AssetViewer,
-  Page16_TimelinePlayer,
+  Page3_Trimming,
+  Page4_MediaCatalog,
+  Page5_DesignSystem,
+  Page6_FormsControls,
+  Page7_CenterStage,
+  Page8_BackFacePanels,
+  Page9_Workflow,
+  Page10_CommandSystem,
+  Page11_InboxReview,
+  Page12_AssetViewer,
+  Page13_TimelinePlayer,
 ];
 
 // ── Main Styleguide ──
