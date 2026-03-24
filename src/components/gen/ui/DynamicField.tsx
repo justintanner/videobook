@@ -88,7 +88,7 @@ export function DynamicField({
 
     return (
       <div className="space-y-2">
-        <label className="text-xs font-bold tracking-[0.15em] text-primary/70 uppercase">[Generation Mode]</label>
+        <label className="text-xs font-bold tracking-[0.15em] text-primary/70">Generation Mode</label>
         <div className="flex gap-2">
           {options.map((mode) => {
             const isSelected = currentValue === mode;

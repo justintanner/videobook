@@ -56,7 +56,7 @@ import { ProjectButton } from '@/components/layout/ProjectButton';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
-import { ModelSelector } from '@/components/gen/ui/ModelSelector';
+import { ModelSelector, ProviderSelector } from '@/components/gen/ui/ModelSelector';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
@@ -2329,7 +2329,7 @@ function Page16_ImageGen() {
 
   return (
     <div className="w-full h-full flex flex-col gap-4">
-      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 pl-1">IMAGE GENERATION</h1>
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 px-3 py-3">IMAGE GENERATION</h1>
       <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4">
       {/* Top-left: Image Gen Form (Flux Pro) */}
       <div className="flex flex-col gap-2 min-h-0">
@@ -2342,7 +2342,10 @@ function Page16_ImageGen() {
             closeHidden
             footer={
               <div className="flex items-center justify-between">
-                <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
+                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
+                </div>
                 <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
               </div>
             }
@@ -2374,7 +2377,10 @@ function Page16_ImageGen() {
             closeHidden
             footer={
               <div className="flex items-center justify-between">
-                <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
+                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
+                </div>
                 <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
               </div>
             }
@@ -2451,7 +2457,7 @@ function Page17_VideoGen() {
 
   return (
     <div className="w-full h-full flex flex-col gap-4">
-      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 pl-1">VIDEO GENERATION</h1>
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 px-3 py-3">VIDEO GENERATION</h1>
       <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4">
       {/* Top-left: Video Gen (text-to-video) */}
       <div className="flex flex-col gap-2 min-h-0">
@@ -2464,7 +2470,10 @@ function Page17_VideoGen() {
             closeHidden
             footer={
               <div className="flex items-center justify-between">
-                <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
+                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
+                </div>
                 <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
               </div>
             }
@@ -2502,7 +2511,10 @@ function Page17_VideoGen() {
             closeHidden
             footer={
               <div className="flex items-center justify-between">
-                <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
+                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
+                </div>
                 <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
               </div>
             }
@@ -2566,7 +2578,10 @@ function Page17_VideoGen() {
             closeHidden
             footer={
               <div className="flex items-center justify-between">
-                <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
+                <div className="flex items-center gap-4">
+                  <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
+                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} disabled />
+                </div>
                 <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" state="submitting" />
               </div>
             }

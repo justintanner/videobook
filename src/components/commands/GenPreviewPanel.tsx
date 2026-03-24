@@ -3,7 +3,7 @@ import { Zap, Loader2, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
-import { ModelSelector } from '@/components/gen/ui/ModelSelector';
+import { ModelSelector, ProviderSelector } from '@/components/gen/ui/ModelSelector';
 import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
@@ -282,12 +282,20 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       headerRight={null}
       footer={
         <div className="flex items-center justify-between">
-          <ModelSelector
-            selectedModelKey={selectedModelKey}
-            modelOptions={preview.model_options}
-            onChange={handleModelChange}
-            disabled={isDisabled}
-          />
+          <div className="flex items-center gap-4">
+            <ModelSelector
+              selectedModelKey={selectedModelKey}
+              modelOptions={preview.model_options}
+              onChange={handleModelChange}
+              disabled={isDisabled}
+            />
+            <ProviderSelector
+              selectedProvider="Kie"
+              providers={['Kie']}
+              onChange={() => {}}
+              disabled={isDisabled}
+            />
+          </div>
           <CommandButton
             command="/generate"
             icon={<Zap className="w-4 h-4" />}
