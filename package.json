@@ -20,6 +20,7 @@
     "@nakedapi/kie": "file:../nakedapi/packages/provider/kie",
     "@nakedapi/kimicoding": "file:../nakedapi/packages/provider/kimicoding",
     "@nakedapi/openai": "file:../nakedapi/packages/provider/openai",
+    "@nakedapi/xai": "file:../nakedapi/packages/provider/xai",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

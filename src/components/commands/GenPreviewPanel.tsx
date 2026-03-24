@@ -48,6 +48,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedModelKey, setSelectedModelKey] = useState('');
+  const [selectedProviderKey, setSelectedProviderKey] = useState('');
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
@@ -77,6 +78,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setPreview(data);
       setSelectedModelKey(data.selected_model);
       const option = data.model_options.find((o) => o.key === data.selected_model);
+      setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
       setFormValues(option?.prefilled_values ?? {});
       setDroppedAssets(new Map());
     } catch (e) {
@@ -101,6 +103,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const currentPrompt = formValues.prompt;
       setFormValues({ ...option.prefilled_values, prompt: currentPrompt });
       setDroppedAssets(new Map());
+      setSelectedProviderKey(option.selected_provider ?? option.providers?.[0]?.key ?? '');
     }
   }, [preview, formValues.prompt]);
 
@@ -145,9 +148,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (!selectedOption) return null;
     return {
       tool_name: selectedOption.tool_name,
-      args: { ...formValues, project_slug: projectSlug },
+      args: { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey },
     };
-  }, [selectedOption, formValues, projectSlug]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey]);
 
   const fetchTranslatedPayload = useCallback(async () => {
     if (!jsonPayload) return;
@@ -174,7 +177,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (!selectedOption || !projectSlug) return;
     setGenState('submitting');
     try {
-      const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug };
+      const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(selectedOption.tool_name, args);
       if (result.isError) {
         setGenState(undefined);
@@ -190,7 +193,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, onClose]);
+  }, [selectedOption, formValues, projectSlug, onClose, selectedProviderKey]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
@@ -307,9 +310,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               disabled={isDisabled}
             />
             <ProviderSelector
-              selectedProvider="Kie"
-              providers={['Kie']}
-              onChange={() => {}}
+              selectedProvider={selectedOption?.providers?.find((p) => p.key === selectedProviderKey)?.label ?? 'Kie'}
+              providers={selectedOption?.providers?.map((p) => p.label) ?? ['Kie']}
+              onChange={(label) => {
+                const match = selectedOption?.providers?.find((p) => p.label === label);
+                if (match) setSelectedProviderKey(match.key);
+              }}
               disabled={isDisabled}
             />
           </div>

@@ -210,6 +210,8 @@ const page16ImageModelOptions: ModelOption[] = [
     }, required: ['prompt'] },
     prefilled_values: { prompt: 'A luminous fox made of neon particles drifting through a cyberpunk alley at midnight', aspect_ratio: '1:1', style: 'digital_art' },
     validation: { valid: true, missing_required: [], warnings: [] },
+    providers: [{ key: 'kie', label: 'Kie' }],
+    selected_provider: 'kie',
   },
   {
     key: 'flux_pro', label: 'Flux Pro', tool_name: 'generate_flux_pro_image', description: 'Black Forest Labs Flux Pro',
@@ -219,6 +221,8 @@ const page16ImageModelOptions: ModelOption[] = [
     }, required: ['prompt'] },
     prefilled_values: { prompt: 'A luminous fox made of neon particles' },
     validation: { valid: true, missing_required: [], warnings: [] },
+    providers: [{ key: 'kie', label: 'Kie' }, { key: 'xai', label: 'xAI' }],
+    selected_provider: 'kie',
   },
   {
     key: 'dall_e_4', label: 'DALL-E 4', tool_name: 'generate_dall_e_4_image', description: 'OpenAI DALL-E 4 image generation',
@@ -229,6 +233,8 @@ const page16ImageModelOptions: ModelOption[] = [
     }, required: ['prompt'] },
     prefilled_values: { prompt: 'A luminous fox made of neon particles', style: 'vivid' },
     validation: { valid: true, missing_required: [], warnings: [] },
+    providers: [{ key: 'kie', label: 'Kie' }],
+    selected_provider: 'kie',
   },
 ];
 
@@ -243,6 +249,8 @@ const page17VideoModelOptions: ModelOption[] = [
     }, required: ['prompt'] },
     prefilled_values: { prompt: 'Aerial drone shot sweeping over a bioluminescent forest at twilight, camera slowly descending through the canopy', aspect_ratio: '16:9', duration: 8, model: 'veo3' },
     validation: { valid: true, missing_required: [], warnings: [] },
+    providers: [{ key: 'kie', label: 'Kie' }],
+    selected_provider: 'kie',
   },
   {
     key: 'kling3', label: 'Kling 3.0', tool_name: 'generate_kling30_video', description: 'Kling 3.0 video generation',
@@ -266,6 +274,8 @@ const page17VideoModelOptions: ModelOption[] = [
       element1_slugs: ['@img-neon-fox'], element1_name: 'fox_mascot', element1_desc: 'The neon fox character from the brand identity',
     },
     validation: { valid: true, missing_required: [], warnings: [], image_slots: { min: 0, max: 2 } },
+    providers: [{ key: 'kie', label: 'Kie' }, { key: 'xai', label: 'xAI' }],
+    selected_provider: 'kie',
   },
 ];
 
@@ -2190,6 +2200,7 @@ function Page16_ImageGen() {
   const [imgStyle, setImgStyle] = useState<string>('digital_art');
   const [imgNeg, setImgNeg] = useState('');
   const [imgModel, setImgModel] = useState('imagen4');
+  const [imgProvider, setImgProvider] = useState('Kie');
 
   return (
     <div className="w-full h-full flex flex-col gap-4">
@@ -2263,8 +2274,8 @@ function Page16_ImageGen() {
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
-                  <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
+                  <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={(k) => { setImgModel(k); const opt = page16ImageModelOptions.find((o) => o.key === k); setImgProvider(opt?.providers?.[0]?.label ?? 'Kie'); }} />
+                  <ProviderSelector selectedProvider={imgProvider} providers={page16ImageModelOptions.find((o) => o.key === imgModel)?.providers?.map((p) => p.label) ?? ['Kie']} onChange={setImgProvider} />
                 </div>
                 <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="blue" />
               </div>

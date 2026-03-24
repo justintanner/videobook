@@ -29,11 +29,14 @@ export interface ModelOption {
     warnings: string[];
     image_slots?: { min: number; max: number } | null;
   };
+  providers?: Array<{ key: string; label: string }>;
+  selected_provider?: string;
 }
 
 export interface DynamicGenerationPreview {
   category: 'image' | 'video' | 'audio';
   selected_model: string;
+  selected_provider?: string;
   model_options: ModelOption[];
   resolved_assets?: ResolvedAsset[];
 }

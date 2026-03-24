@@ -4,6 +4,17 @@
 import type { ResolvedAsset } from "./asset-resolver.js";
 
 // ---------------------------------------------------------------------------
+// Provider routes
+// ---------------------------------------------------------------------------
+
+type ProviderRoute = {
+  key: string;
+  label: string;
+  provider_path: string;
+  envKey: string;
+};
+
+// ---------------------------------------------------------------------------
 // Model registry
 // ---------------------------------------------------------------------------
 
@@ -13,6 +24,7 @@ type ImageModelInfo = {
   description: string;
   params: string[];
   defaults: Record<string, unknown>;
+  providers: ProviderRoute[];
 };
 
 const IMAGE_MODELS: Record<string, ImageModelInfo> = {
@@ -22,6 +34,9 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
     description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
     params: ["prompt", "image_slugs", "aspect_ratio", "resolution", "output_format"],
     defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
   },
   grok_imagine_image: {
     label: "Grok Imagine",
@@ -29,6 +44,10 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
     description: "Image-to-image transformation (requires exactly 1 reference image)",
     params: ["prompt", "image_slugs"],
     defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.v1.images.edits()", envKey: "XAI_API_KEY" },
+    ],
   },
   gpt_image: {
     label: "GPT Image",
@@ -36,6 +55,9 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
     description: "Image editing with reference images, aspect ratio and quality control",
     params: ["prompt", "image_slugs", "aspect_ratio", "quality"],
     defaults: { aspect_ratio: "1:1", quality: "high" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
   },
 };
 
@@ -278,6 +300,8 @@ type ModelOption = {
   prefilled_values: Record<string, unknown>;
   validation: ValidationResult;
   image_slots: { min: number; max: number } | null;
+  providers: Array<{ key: string; label: string }>;
+  selected_provider: string;
 };
 
 function buildImageModelOption(
@@ -295,10 +319,12 @@ function buildImageModelOption(
   }
 
   // Prefill from most recent historical usage of this tool
+  let historicalProvider: string | undefined;
   if (historyEntries) {
     const settingsMap = extractLastImageSettingsPerModel(historyEntries);
     const historical = settingsMap.get(toolName);
     if (historical) {
+      historicalProvider = historical._provider as string | undefined;
       for (const [k, v] of Object.entries(historical)) {
         if (allowedParams.has(k) && !(k in params)) {
           params[k] = v;
@@ -331,6 +357,13 @@ function buildImageModelOption(
 
   const validation = validateImageParams(toolName, params);
 
+  // Filter providers to those with available API keys
+  const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
+  const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
+  const selectedProvider = (historicalProvider && providerList.some((p) => p.key === historicalProvider))
+    ? historicalProvider
+    : providerList[0].key;
+
   return {
     key: modelKey,
     label: modelInfo.label,
@@ -340,6 +373,8 @@ function buildImageModelOption(
     prefilled_values: params,
     validation,
     image_slots: validation.image_slots,
+    providers: providerList.map((p) => ({ key: p.key, label: p.label })),
+    selected_provider: selectedProvider,
   };
 }
 
@@ -353,4 +388,4 @@ export {
   buildImageModelOption,
   extractLastImageSettingsPerModel,
 };
-export type { ImageModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry };
+export type { ImageModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };

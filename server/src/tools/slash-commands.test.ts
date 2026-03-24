@@ -203,10 +203,11 @@ describe("slash_commands tool", () => {
 
     const viewerCommands = commands.filter((c) => c.category === "viewer");
     for (const cmd of viewerCommands) {
+      const hasViewerOrGen = cmd.onMount?.includes("viewer") || cmd.onMount?.includes("gen");
       expect(
-        cmd.onMount,
-        `Viewer command ${cmd.command} should have onMount`,
-      ).toContain("viewer");
+        hasViewerOrGen,
+        `Viewer command ${cmd.command} should have onMount containing 'viewer' or 'gen'`,
+      ).toBe(true);
     }
   });
 

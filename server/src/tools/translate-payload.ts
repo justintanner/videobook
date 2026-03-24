@@ -26,7 +26,7 @@ export function translatePayloadDef(): ToolDef {
         };
       }
 
-      const result = translateToolPayload(tool_name, args);
+      const result = translateToolPayload(tool_name, args, args._provider as string | undefined);
       if (!result) {
         return {
           isError: true as const,

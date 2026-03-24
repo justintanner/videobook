@@ -155,6 +155,7 @@ Determine which image generation tool to use and what parameters to pass.`;
         resolved_assets: assetDicts,
         category: "image",
         selected_model: selectedModel,
+        selected_provider: selectedOption.selected_provider,
         model_options: modelOptions,
       };
 

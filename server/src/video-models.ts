@@ -4,6 +4,17 @@
 import type { ResolvedAsset } from "./asset-resolver.js";
 
 // ---------------------------------------------------------------------------
+// Provider routes
+// ---------------------------------------------------------------------------
+
+type ProviderRoute = {
+  key: string;
+  label: string;
+  provider_path: string;
+  envKey: string;
+};
+
+// ---------------------------------------------------------------------------
 // Model registry
 // ---------------------------------------------------------------------------
 
@@ -13,6 +24,7 @@ type VideoModelInfo = {
   description: string;
   params: string[];
   defaults: Record<string, unknown>;
+  providers: ProviderRoute[];
 };
 
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
@@ -29,6 +41,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "duration", "sound", "aspect_ratio", "image_orientation",
     ],
     defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9", image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
   },
   veo31: {
     label: "Veo 3.1",
@@ -39,6 +54,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "aspect_ratio", "model", "seeds", "watermark", "enable_translation", "image_orientation",
     ],
     defaults: { aspect_ratio: "16:9", model: "veo3_fast", enable_translation: true, image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.veo.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
+    ],
   },
   veo31_extend: {
     label: "Veo 3.1 Extend",
@@ -46,6 +64,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "Extend an existing Veo video with additional content",
     params: ["video_slug", "prompt", "model", "seeds", "watermark"],
     defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.veo.api.v1.veo.extend()", envKey: "KIE_API_KEY" },
+    ],
   },
   seedance: {
     label: "Seedance 1.5 Pro",
@@ -56,6 +77,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "duration", "fixed_lens", "generate_audio", "image_orientation",
     ],
     defaults: { aspect_ratio: "16:9", resolution: "1080p", duration: "8", generate_audio: true, image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
   },
   grok_imagine: {
     label: "Grok Imagine",
@@ -63,6 +87,10 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "Grok image-to-video with fun/normal/spicy modes",
     params: ["prompt", "image_slugs", "mode", "duration", "resolution", "image_orientation"],
     defaults: { mode: "normal", duration: "6", resolution: "720p", image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
+    ],
   },
 };
 
@@ -457,6 +485,8 @@ type ModelOption = {
   validation: ValidationResult;
   image_slots: { min: number; max: number } | null;
   multi_prompt_slots: number | null;
+  providers: Array<{ key: string; label: string }>;
+  selected_provider: string;
 };
 
 function buildModelOption(
@@ -475,10 +505,12 @@ function buildModelOption(
   }
 
   // Prefill from most recent historical usage of this tool
+  let historicalProvider: string | undefined;
   if (historyEntries) {
     const settingsMap = extractLastSettingsPerModel(historyEntries);
     const historical = settingsMap.get(toolName);
     if (historical) {
+      historicalProvider = historical._provider as string | undefined;
       for (const [k, v] of Object.entries(historical)) {
         if (allowedParams.has(k) && !(k in params)) {
           params[k] = v;
@@ -531,6 +563,13 @@ function buildModelOption(
 
   const validation = validateVideoParams(toolName, params);
 
+  // Filter providers to those with available API keys
+  const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
+  const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
+  const selectedProvider = (historicalProvider && providerList.some((p) => p.key === historicalProvider))
+    ? historicalProvider
+    : providerList[0].key;
+
   return {
     key: modelKey,
     label: modelInfo.label,
@@ -541,6 +580,8 @@ function buildModelOption(
     validation,
     image_slots: validation.image_slots,
     multi_prompt_slots: validation.multi_prompt_slots,
+    providers: providerList.map((p) => ({ key: p.key, label: p.label })),
+    selected_provider: selectedProvider,
   };
 }
 
@@ -555,4 +596,4 @@ export {
   buildModelOption,
   extractLastSettingsPerModel,
 };
-export type { VideoModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry };
+export type { VideoModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };

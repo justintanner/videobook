@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readdir, readFile, access, stat } from "node:fs/promises";
 import { kie } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
+import { xai } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -374,12 +375,50 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   }
 
   // Poll KIE tasks (only if API key is set)
-  if (process.env.KIE_API_KEY && tasks.length > 0) {
+  const kieTasks = tasks.filter((t) => !t.taskType.startsWith("xai_"));
+  if (process.env.KIE_API_KEY && kieTasks.length > 0) {
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
-    await Promise.all(tasks.map(async (task) => {
+    await Promise.all(kieTasks.map(async (task) => {
       const taskInfo = await provider.api.v1.jobs.recordInfo(task.taskId);
       await processSyncedTask(task, taskInfo, result);
+    }));
+  }
+
+  // Poll xAI tasks (only if API key is set)
+  const xaiTasks = tasks.filter((t) => t.taskType.startsWith("xai_"));
+  if (process.env.XAI_API_KEY && xaiTasks.length > 0) {
+    const provider = xai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
+
+    await Promise.all(xaiTasks.map(async (task) => {
+      try {
+        const videoResult = await provider.v1.videos(task.taskId);
+        if (videoResult.status === "done" && videoResult.video?.url) {
+          const jobId = `complete-xai-${task.assetId}-${Date.now()}`;
+          await queue.enqueue(jobId, {
+            type: "complete_kie_task",
+            taskId: task.taskId,
+            taskType: task.taskType,
+            assetId: task.assetId,
+            assetDir: task.assetDir,
+            projectSlug: task.projectSlug,
+            meta: task.meta,
+            resultUrls: [videoResult.video.url],
+          } as unknown as Record<string, unknown>);
+          result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
+        } else if (videoResult.status === "failed" || videoResult.status === "expired") {
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: `xAI task ${videoResult.status}` });
+        } else {
+          result.pending.push({
+            assetId: task.assetId,
+            taskType: task.taskType,
+            progress: videoResult.progress ?? 0,
+            state: videoResult.status,
+          });
+        }
+      } catch (e) {
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
+      }
     }));
   }
 

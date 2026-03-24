@@ -15,6 +15,7 @@ import type {
   GptImageToImageRequest,
 } from "@nakedapi/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@nakedapi/kie";
+import type { XaiImageEditRequest, XaiVideoGenerateRequest } from "@nakedapi/xai";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -194,6 +195,36 @@ function buildVeoExtendPayload(
 }
 
 // ---------------------------------------------------------------------------
+// xAI payload builders
+// ---------------------------------------------------------------------------
+
+function buildXaiGrokImagineImagePayload(
+  args: GrokImagineImageArgs,
+  imageUrls: string[],
+): XaiImageEditRequest {
+  return {
+    prompt: args.prompt ?? "",
+    ...(imageUrls.length === 1
+      ? { image: { url: imageUrls[0], type: "image_url" as const } }
+      : imageUrls.length > 1
+        ? { images: imageUrls.map((url) => ({ url, type: "image_url" as const })) }
+        : {}),
+  };
+}
+
+function buildXaiGrokImagineVideoPayload(
+  args: GrokImagineVideoArgs,
+  imageUrls: string[],
+): XaiVideoGenerateRequest {
+  return {
+    prompt: args.prompt ?? "",
+    ...(imageUrls.length > 0 ? { image_url: imageUrls[0] } : {}),
+    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Kling element extraction helper
 // ---------------------------------------------------------------------------
 
@@ -238,9 +269,14 @@ type TranslateResult = {
   payload: Record<string, unknown>;
 };
 
+function isXaiProvider(provider?: string): boolean {
+  return provider !== undefined && provider.startsWith("xai");
+}
+
 function translateToolPayload(
   toolName: string,
   args: Record<string, unknown>,
+  provider?: string,
 ): TranslateResult | null {
   const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
 
@@ -248,36 +284,44 @@ function translateToolPayload(
     case "generate_kling30_video": {
       const elements = extractKlingElements(args);
       const payload = buildKling30VideoPayload(args as Kling30Args, imageSlugs, elements);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_video": {
+      if (isXaiProvider(provider)) {
+        const payload = buildXaiGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
+        return { provider_path: "xai.v1.videos.generations()", payload: payload as unknown as Record<string, unknown> };
+      }
       const payload = buildGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_image": {
+      if (isXaiProvider(provider)) {
+        const payload = buildXaiGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
+        return { provider_path: "xai.v1.images.edits()", payload: payload as unknown as Record<string, unknown> };
+      }
       const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_seedance_video": {
       const payload = buildSeedanceVideoPayload(args as SeedanceVideoArgs, imageSlugs);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_gpt_image": {
       const payload = buildGptImagePayload(args as GptImageArgs, imageSlugs);
-      return { provider_path: "provider.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_veo_video": {
       const payload = buildVeoVideoPayload(args, imageSlugs);
-      return { provider_path: "provider.veo.api.v1.veo.generate()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.veo.api.v1.veo.generate()", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_veo_video": {
       const videoSlug = (args.video_slug as string) ?? "";
       const payload = buildVeoExtendPayload(args, videoSlug);
-      return { provider_path: "provider.veo.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.veo.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
     }
     default:
       return null;
@@ -315,6 +359,8 @@ export {
   buildKling30VideoPayload,
   buildGrokImagineVideoPayload,
   buildGrokImagineImagePayload,
+  buildXaiGrokImagineImagePayload,
+  buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
   buildGptImagePayload,
   extractKlingElements,

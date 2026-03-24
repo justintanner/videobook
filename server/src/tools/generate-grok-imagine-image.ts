@@ -29,22 +29,26 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
       image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt } = args as {
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, _provider } = args as {
         asset_id?: string;
         image_slugs?: string[];
         project_slug: string;
         prompt?: string;
+        _provider?: string;
       };
 
       // Derive asset_id from image_slugs if not provided directly
       const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
 
-      if (!process.env.KIE_API_KEY) {
+      const isXai = _provider !== undefined && _provider.startsWith("xai");
+      const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
+      if (!process.env[requiredKey]) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: `${requiredKey} environment variable is not set` }],
         };
       }
 
@@ -102,6 +106,7 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
         sourceImageId: asset_id,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

@@ -32,9 +32,10 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       mode: z.enum(["fun", "normal", "spicy"]).optional().describe("Generation mode"),
       duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
       resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution } = args as {
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, _provider } = args as {
         asset_id?: string;
         image_slugs?: string[];
         project_slug: string;
@@ -42,15 +43,18 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         mode?: "fun" | "normal" | "spicy";
         duration?: "6" | "10" | "15";
         resolution?: "480p" | "720p";
+        _provider?: string;
       };
 
       // Derive asset_id from image_slugs if not provided directly
       const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
 
-      if (!process.env.KIE_API_KEY) {
+      const isXai = _provider !== undefined && _provider.startsWith("xai");
+      const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
+      if (!process.env[requiredKey]) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: `${requiredKey} environment variable is not set` }],
         };
       }
 
@@ -111,6 +115,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
+        ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
       return {
