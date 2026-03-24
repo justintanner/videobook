@@ -1,4 +1,4 @@
-import { RefreshCw, History, ClipboardCopy, Loader2 } from 'lucide-react';
+import { RefreshCw, History, Copy, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { CommandButton } from '@/components/commands';
@@ -87,7 +87,7 @@ export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefre
             <span className={cn('font-bold shrink-0', style.label)}>{op}</span>
             <span className="text-muted-foreground/30 shrink-0">{commit.hash.slice(0, 7)}</span>
             <span className="flex-1" />
-            <span className="text-xs text-muted-foreground/30 shrink-0">{formatDate(commit.date)}</span>
+            <span className="text-muted-foreground/30 shrink-0">{formatDate(commit.date)}</span>
           </button>
         );
       })}
@@ -132,7 +132,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
           }}
           className="w-7 h-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
         >
-          <ClipboardCopy className="w-5 h-5 stroke-[2]" />
+          <Copy className="w-5 h-5 stroke-[2]" />
         </button>
       </div>
 

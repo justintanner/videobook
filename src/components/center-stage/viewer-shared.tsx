@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ChevronDown, RotateCcw, RefreshCw, FileText, Check, VideoOff, Zap } from 'lucide-react';
+import { ChevronDown, RotateCcw, RefreshCw, FileText, Check, VideoOff, Zap, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/useToast';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -288,7 +289,23 @@ export function FileContentPane({ content, loading, fileName, fileUrl }: {
 
   const isJson = fileName.endsWith('.json');
   if (isJson) {
-    return <JsonTerminal data={content} loading={false} />;
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            if (content) {
+              navigator.clipboard.writeText(content);
+              toast({ title: 'Copied', description: fileName, duration: 2000 });
+            }
+          }}
+          className="absolute top-0 right-0 w-7 h-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
+        >
+          <Copy className="w-5 h-5 stroke-[2]" />
+        </button>
+        <JsonTerminal data={content} loading={false} />
+      </div>
+    );
   }
 
   if (content === null) {
