@@ -327,7 +327,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       <div className="flex-1 overflow-hidden flip-card-perspective">
         <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
           {/* FRONT FACE — form */}
-          <div className="flip-card-face absolute inset-0 overflow-y-auto pl-4 pr-6 py-4">
+          <div className="flip-card-face absolute inset-0 overflow-y-auto px-3 py-4">
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}
@@ -345,9 +345,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
             )}
 
-            <div className="flex gap-4">
+            <div className="flex gap-2">
               {/* Left column: prompt + inline params */}
-              <div className="flex-1 space-y-3">
+              <div className="flex-1 space-y-2">
                 {/* Prompt field in /prompt section */}
                 {regularFields
                   .filter(([name]) => name === 'prompt')
@@ -400,7 +400,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
               {/* Right column: asset slots + element groups */}
               {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
-                <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
+                <div className="w-56 shrink-0 space-y-2">
                   {assetFieldInfos.length > 0 && (
                     <ImageParamSlots
                       assetFields={assetFieldInfos}
@@ -432,26 +432,26 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <div className="flip-card-back absolute inset-0 flex">
             {/* Left pane: Raw MCP tool call */}
             <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
-              <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">
-                Tool Call
+              <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                /tool-call
               </div>
-              <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+              <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
                 <JsonNode data={jsonPayload ?? {}} />
               </pre>
             </div>
 
             {/* Right pane: Translated provider payload */}
             <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
-              <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">
-                Provider Payload
+              <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                /provider-payload
               </div>
               {translateLoading ? (
-                <div className="flex items-center gap-2 text-primary/40">
+                <div className="flex items-center gap-2 text-emerald-400/40">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span className="text-[10px] font-mono">Translating...</span>
                 </div>
               ) : translatedPayload ? (
-                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
                   <JsonNode data={translatedPayload} />
                 </pre>
               ) : (

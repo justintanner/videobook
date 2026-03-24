@@ -876,7 +876,7 @@ function Page2_VideoGeneration() {
                         </GenField>
                       </div>
                     </div>
-                    <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
+                    <div className="w-56 shrink-0 space-y-2">
                       <ImageParamSlots
                         assetFields={[{
                           name: 'image_slugs',
@@ -2219,7 +2219,7 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2270,7 +2270,7 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2399,7 +2399,7 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2456,9 +2456,9 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-              <div className="flex gap-4">
-                <div className="flex-1 space-y-3">
+            <div className="flex-1 overflow-y-auto px-3 py-3">
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-2">
                   <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                       <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2487,7 +2487,7 @@ function Page17_VideoGen() {
                     </div>
                   </div>
                 </div>
-                <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
+                <div className="w-56 shrink-0 space-y-2">
                   <ImageParamSlots
                     assetFields={[{
                       name: 'image_slugs',
@@ -2539,7 +2539,7 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2586,14 +2586,14 @@ function Page17_VideoGen() {
           >
             <div className="flex-1 flex overflow-hidden">
               <div className="flex-1 overflow-auto pl-4 pr-2 py-4">
-                <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">Tool Call</div>
-                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">/tool-call</div>
+                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
                   <JsonNode data={page17MockToolCallPayload} />
                 </pre>
               </div>
               <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20">
-                <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">Provider Payload</div>
-                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">/provider-payload</div>
+                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
                   <JsonNode data={page17MockProviderPayload} />
                 </pre>
               </div>
