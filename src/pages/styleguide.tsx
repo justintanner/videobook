@@ -30,14 +30,13 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane, RenderPrompt } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane } from '@/components/center-stage';
 import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { HistoryListPane, HistoryDetailPane } from '@/components/center-stage/GitHistoryPanel';
 import type { GitCommit } from '@/hooks/useAssetHistory';
 import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settings-types';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
-import { ScriptReadout } from '@/components/chat/ScriptReadout';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { CloseButton } from '@/components/gen/ui';
@@ -51,7 +50,7 @@ import {
   FolderOpen, X, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
   Zap, Info, Settings, User, Copy, Trash2,
-  AudioLines, Plus, Pencil,
+  Plus, Pencil,
   Loader2, Mic,
   Check, RotateCcw,
 } from 'lucide-react';
@@ -1337,69 +1336,60 @@ function Page8_BackFacePanels() {
 
 function Page9_Workflow() {
   return (
-    <div className="w-full h-full flex flex-col gap-6">
-      {/* Top row: Sidebars + Inbox */}
-      <div className="flex gap-6 h-[440px] shrink-0">
-        {/* CollapsibleSidebar states */}
-        <div className="flex-1 flex flex-col gap-2">
-          <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CollapsibleSidebar</h3>
-          <div className="flex-1 grid grid-cols-4 gap-4 min-h-0">
-            <div className="flex flex-col gap-1 min-h-0">
-              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">left expanded</p>
-              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
-                <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-                  <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-                  <div className="flex-1 flex items-center justify-center"><span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span></div>
-                </CollapsibleSidebar>
+    <div className="w-full h-full flex flex-col gap-4">
+      <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">CollapsibleSidebar</h3>
+      <div className="flex-1 grid grid-cols-4 gap-4 min-h-0">
+        {/* Left expanded */}
+        <div className="flex flex-col gap-1 min-h-0">
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider shrink-0">left expanded</p>
+          <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
+            <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                <div className="w-full"><VideoCard item={cardOverlayMocks[0].item} /></div>
+                <div className="w-full"><VideoCard item={{ ...cardOverlayMocks[0].item, id: 'sb-v2', slug: '@sky-ghost', title: 'Sky Ghost', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg', filePath: '/styleguide-vid-sky-ghost.jpg', durationSeconds: 45 }} /></div>
+                <div className="w-full"><VideoCard item={{ ...cardOverlayMocks[0].item, id: 'sb-v3', slug: '@turret-cyber', title: 'Turret Cyber', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg', filePath: '/styleguide-vid-turret-cyber.jpg', durationSeconds: 60 }} /></div>
+                <div className="w-full"><VideoCard item={cardOverlayMocks[2].item} /></div>
+                <div className="w-full"><FinalVideoCard item={cardOverlayMocks[10].item} /></div>
               </div>
-            </div>
-            <div className="flex flex-col gap-1 min-h-0">
-              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">left collapsed</p>
-              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
-                <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
-                  <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
-                </CollapsibleSidebar>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1 min-h-0">
-              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">right expanded</p>
-              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
-                <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
-                  <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={false} onToggle={() => {}} side="right" />
-                  <div className="flex-1 flex items-center justify-center"><span className="font-mono text-[10px] text-muted-foreground/40">CARD_LIST</span></div>
-                </CollapsibleSidebar>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1 min-h-0">
-              <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">right collapsed</p>
-              <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
-                <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
-                  <SidebarHeader icon={<AudioLines className="w-4 h-4" />} title="AUDIO" collapsed={true} onToggle={() => {}} side="right" />
-                </CollapsibleSidebar>
-              </div>
-            </div>
+            </CollapsibleSidebar>
           </div>
         </div>
-      </div>
 
-      {/* Bottom: Chat & Messaging */}
-      <div className="flex-1 min-h-0 flex flex-col gap-4">
-        <h3 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">Chat & Messaging</h3>
-        <div className="flex-1 flex gap-6 min-h-0">
-          {/* ScriptReadout */}
-          <div className="flex-1 flex gap-4 min-h-0">
-            <div className="flex-1 flex flex-col gap-1 min-h-0">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider shrink-0">with content</span>
-              <div className="flex-1 min-h-0">
-                <ScriptReadout content={sampleScript} slug="@hero-script" onSave={() => {}} onGenerateVideo={() => {}} />
+        {/* Left collapsed */}
+        <div className="flex flex-col gap-1 min-h-0">
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider shrink-0">left collapsed</p>
+          <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
+            <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
+              <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
+            </CollapsibleSidebar>
+          </div>
+        </div>
+
+        {/* Right expanded */}
+        <div className="flex flex-col gap-1 min-h-0">
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider shrink-0">right expanded</p>
+          <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
+            <CollapsibleSidebar side="right" collapsed={false} onToggle={() => {}} expandedWidth="100%">
+              <SidebarHeader icon={<Grid3x3 className="w-4 h-4" />} title="ASSETS" collapsed={false} onToggle={() => {}} side="right" sortOrder="newest" onSortChange={() => {}} />
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                <div className="w-full"><ImageCard item={demoImageMock} /></div>
+                <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'sb-img2', slug: '@img-cyber-fresh', title: 'Cyber Fresh', thumbnailSrc: '/styleguide-img-cyber-fresh.jpg', filePath: '/styleguide-img-cyber-fresh.jpg' }} /></div>
+                <div className="w-full"><AudioCard item={{ id: 'sb-aud1', type: 'audio', slug: '@voiceover', title: 'Voiceover', filePath: '/audio.wav', status: 'ready' }} /></div>
+                <div className="w-full"><ScriptCard item={{ id: 'sb-script1', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} /></div>
+                <div className="w-full"><PlanCard item={{ id: 'sb-plan1', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour.\n\nScene 2: Close-up of hands typing.' }} /></div>
               </div>
-            </div>
-            <div className="flex-1 flex flex-col gap-1 min-h-0">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider shrink-0">generating video</span>
-              <div className="flex-1 min-h-0">
-                <ScriptReadout content={sampleScript} slug="@render-script" isGenerating onSave={() => {}} onGenerateVideo={() => {}} />
-              </div>
-            </div>
+            </CollapsibleSidebar>
+          </div>
+        </div>
+
+        {/* Right collapsed */}
+        <div className="flex flex-col gap-1 min-h-0">
+          <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider shrink-0">right collapsed</p>
+          <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
+            <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
+              <SidebarHeader icon={<Grid3x3 className="w-4 h-4" />} title="ASSETS" collapsed={true} onToggle={() => {}} side="right" />
+            </CollapsibleSidebar>
           </div>
         </div>
       </div>
@@ -1831,6 +1821,15 @@ const assetViewerMockImage: MediaItem = {
   filePath: '/styleguide-img-neon-fox.jpg',
 };
 
+const assetViewerMockImage2: MediaItem = {
+  id: 'img-cyber-fresh',
+  type: 'image',
+  slug: '@img-cyber-fresh',
+  title: 'Cyber Fresh',
+  status: 'ready',
+  filePath: '/styleguide-img-cyber-fresh.jpg',
+};
+
 const assetViewerMockVideo: MediaItem = {
   id: 'vid-aurora-sky',
   type: 'video',
@@ -1841,6 +1840,8 @@ const assetViewerMockVideo: MediaItem = {
   thumbnailSrc: '/styleguide-img-cover.jpg',
 };
 
+const mockCallTool = (() => Promise.resolve({ content: [], isError: false })) as never;
+
 function Page12_AssetViewer() {
   return (
     <MountKeyProvider>
@@ -1849,30 +1850,28 @@ function Page12_AssetViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
-      {/* Top-right: Portrait */}
+      {/* Top-right: Portrait (different image) */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="portrait" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+          <AssetViewer item={assetViewerMockImage2} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
-      {/* Bottom-left: Square */}
+      {/* Bottom-left: /files tab */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Square</p>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — /files</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="square" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="square" onSizeChange={noop} flipped={true} onFlippedChange={noop} pendingBackTab="files" onClearPendingBackTab={noop} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
-      {/* Bottom-right: /render prompt */}
+      {/* Bottom-right: /history tab */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">RenderPrompt — /render</p>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — /history</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <div className="flex-1">
-            <RenderPrompt item={assetViewerMockVideo} />
-          </div>
+          <AssetViewer item={assetViewerMockImage2} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={true} onFlippedChange={noop} pendingBackTab="history" onClearPendingBackTab={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
     </div>
@@ -1935,6 +1934,45 @@ function Page13_TimelinePlayer() {
   );
 }
 
+// ── Slide 14: Video Viewer ──
+
+function Page14_VideoViewer() {
+  return (
+    <MountKeyProvider>
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Landscape */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Landscape</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Top-right: Portrait */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Portrait</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Bottom-left: Square */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Square</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="square" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Bottom-right: Original */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Original</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+    </div>
+    </MountKeyProvider>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -1951,6 +1989,7 @@ const SLIDE_PAGES = [
   Page11_InboxReview,
   Page12_AssetViewer,
   Page13_TimelinePlayer,
+  Page14_VideoViewer,
 ];
 
 // ── Main Styleguide ──
