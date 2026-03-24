@@ -3,6 +3,7 @@ import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
+import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -192,6 +193,17 @@ export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+
+      await writePendingTask(fs, vidAssetId, project_slug, {
+        taskId: QUEUED_TASK_ID,
+        taskType: "kling30_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        projectSlug: project_slug,
+        createdAt: new Date().toISOString(),
+        meta: { sourceImageIds, ...(prompt !== undefined ? { prompt } : {}) },
+      });
+
       const jobId = `kling30-video-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {

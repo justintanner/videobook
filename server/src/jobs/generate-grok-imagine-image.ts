@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
+import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { buildGrokImagineImagePayload } from "../payload-builders.js";
 
 type GenerateGrokImagineImagePayload = {
@@ -58,6 +58,9 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
       // Write to asset
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
+
+      // Clear queued pending task written by tool handler
+      await deletePendingTask(fs, imgAssetId, projectSlug);
 
       return { success: true, provider: "xai" };
     }

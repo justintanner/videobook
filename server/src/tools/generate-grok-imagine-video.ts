@@ -3,6 +3,7 @@ import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
+import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -100,6 +101,16 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+
+      await writePendingTask(fs, vidAssetId, project_slug, {
+        taskId: QUEUED_TASK_ID,
+        taskType: "grok_imagine_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        projectSlug: project_slug,
+        createdAt: new Date().toISOString(),
+        meta: { sourceImageId: asset_id, ...(prompt !== undefined ? { prompt } : {}) },
+      });
 
       const jobId = `grok-imagine-video-${vidAssetId}-${Date.now()}`;
 

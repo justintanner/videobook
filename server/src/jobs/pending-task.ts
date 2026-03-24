@@ -1,5 +1,8 @@
 import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 
+/** Sentinel taskId written by tool handlers before the real task is created. */
+export const QUEUED_TASK_ID = "queued";
+
 export type PendingKieTask = {
   taskId: string;
   taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video";

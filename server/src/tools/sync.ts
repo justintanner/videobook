@@ -9,7 +9,7 @@ import { xai } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, readPendingTask } from "../jobs/pending-task.js";
+import { findPendingTasks, readPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -374,8 +374,15 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
   }
 
+  // Queued tasks (not yet submitted to provider) — report as pending, skip polling
+  const queuedTasks = tasks.filter((t) => t.taskId === QUEUED_TASK_ID);
+  for (const t of queuedTasks) {
+    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 0, state: "queued" });
+  }
+  const pollableTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID);
+
   // Poll KIE tasks (only if API key is set)
-  const kieTasks = tasks.filter((t) => !t.taskType.startsWith("xai_"));
+  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_"));
   if (process.env.KIE_API_KEY && kieTasks.length > 0) {
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
@@ -386,7 +393,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   }
 
   // Poll xAI tasks (only if API key is set)
-  const xaiTasks = tasks.filter((t) => t.taskType.startsWith("xai_"));
+  const xaiTasks = pollableTasks.filter((t) => t.taskType.startsWith("xai_"));
   if (process.env.XAI_API_KEY && xaiTasks.length > 0) {
     const provider = xai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
 

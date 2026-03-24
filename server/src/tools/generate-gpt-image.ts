@@ -3,6 +3,7 @@ import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
+import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -107,6 +108,16 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+
+      await writePendingTask(fs, imgAssetId, project_slug, {
+        taskId: QUEUED_TASK_ID,
+        taskType: "gpt_image",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        projectSlug: project_slug,
+        createdAt: new Date().toISOString(),
+        meta: { sourceImageIds, prompt },
+      });
 
       const jobId = `gpt-image-${imgAssetId}-${Date.now()}`;
 
