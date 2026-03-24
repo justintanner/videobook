@@ -156,7 +156,7 @@ export function ElementGroupEditor({
     <div className="space-y-3">
       {/* Section header */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold tracking-[0.15em] text-violet-400/70 uppercase">[ELEMENTS]</span>
+        <span className="text-sm font-bold tracking-[0.15em] text-violet-400/70">/elements</span>
         <span className="text-[10px] font-mono text-violet-400/50">
           {effectiveVisible}/{maxGroups}
         </span>

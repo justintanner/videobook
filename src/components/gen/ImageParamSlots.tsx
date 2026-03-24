@@ -56,7 +56,7 @@ export function ImageParamSlots({
 
   const isVideoField = assetFields.some((f) => f.name === 'video_slug');
   const assetType: 'image' | 'video' = isVideoField ? 'video' : 'image';
-  const sectionLabel = isVideoField ? '[VIDEO]' : '[IMAGES]';
+  const sectionLabel = isVideoField ? '/video' : '/images';
 
   const arrayField = assetFields.find((f) => f.schema.type === 'array');
   const stringField = assetFields.find((f) => f.schema.type === 'string');
@@ -136,7 +136,7 @@ export function ImageParamSlots({
   return (
     <div className={inline ? 'flex flex-wrap items-start gap-3' : 'flex flex-col gap-3'}>
       <div className="flex items-center justify-between w-full">
-        <span className="text-xs font-bold tracking-[0.15em] text-primary/70 uppercase">{sectionLabel}</span>
+        <span className="text-sm font-bold tracking-[0.15em] text-primary/70">{sectionLabel}</span>
         <span className={cn('text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-primary/50')}>
           {slotCountLabel}
         </span>
