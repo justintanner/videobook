@@ -27,6 +27,8 @@ export interface UiActionCallbacks {
   gen_mode: (value: string) => void;
   gen_style: (value: string) => void;
   gen_neg: (text: string) => void;
+  gen_images: (slugs: string) => void;
+  gen_elements: (index: string, field: string, value: string) => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;
@@ -94,6 +96,12 @@ export function executeUiAction(
       break;
     case 'gen_neg':
       (fn as UiActionCallbacks['gen_neg'])(ctx.args.text ?? ctx.raw);
+      break;
+    case 'gen_images':
+      (fn as UiActionCallbacks['gen_images'])(ctx.args.slugs ?? ctx.raw);
+      break;
+    case 'gen_elements':
+      (fn as UiActionCallbacks['gen_elements'])(ctx.args.index ?? '', ctx.args.field ?? '', ctx.args.value ?? ctx.raw);
       break;
     default:
       // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info

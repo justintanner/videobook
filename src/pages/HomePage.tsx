@@ -502,6 +502,8 @@ export function HomePage() {
     gen_mode: (value: string) => genPanelRef.current?.setField('mode', value),
     gen_style: (value: string) => genPanelRef.current?.setField('style', value),
     gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
+    gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
+    gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (

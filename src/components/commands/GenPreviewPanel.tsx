@@ -19,6 +19,8 @@ import type { UseMcpResult } from 'use-mcp/react';
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
   setModel: (key: string) => void;
+  setImages: (slugs: string) => void;
+  setElement: (index: string, field: string, value: string) => void;
 }
 
 interface GenPreviewPanelProps {
@@ -108,6 +110,19 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     },
     setModel: (key: string) => {
       handleModelChange(key);
+    },
+    setImages: (slugs: string) => {
+      const slugList = slugs.split(/\s+/).map((s) => s.startsWith('@') ? s : `@${s}`).filter(Boolean);
+      setFormValues((prev) => ({ ...prev, image_slugs: slugList }));
+    },
+    setElement: (index: string, field: string, value: string) => {
+      const key = `element${index}_${field === 'slugs' ? 'slugs' : field === 'name' ? 'name' : 'desc'}`;
+      if (field === 'slugs') {
+        const slugList = value.split(/\s+/).map((s) => s.startsWith('@') ? s : `@${s}`).filter(Boolean);
+        setFormValues((prev) => ({ ...prev, [key]: slugList }));
+      } else {
+        setFormValues((prev) => ({ ...prev, [key]: value }));
+      }
     },
   }), [handleModelChange]);
 
