@@ -222,7 +222,7 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
   return (
     <div className="py-1">
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-[10px] font-mono text-muted-foreground/30 uppercase tracking-wider">
+        <span className="text-xs font-mono text-muted-foreground/50 uppercase tracking-wider">
           {loading ? '...' : `${files.length} files`}
         </span>
         <button
@@ -377,7 +377,7 @@ export function FilesBackPane({ manifest, manifestLoading, selectedFile, fileCon
         data-tabstop="files"
         tabIndex={0}
         onKeyDown={handleFileKeyDown}
-        className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
+        className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 outline-none focus:ring-1 focus:ring-primary/40"
       >
         <FileListPane
           files={manifest ?? []}

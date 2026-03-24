@@ -1387,7 +1387,7 @@ function Page8_BackFacePanels() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
           <BackFaceTabBar active="files" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <FileListPane
                 files={mockManifestFiles}
                 selectedFile=".original.json"
@@ -1897,7 +1897,7 @@ function Page12_ImageViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="files" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <FileListPane
                 files={mockManifestFiles}
                 selectedFile=".original.json"
@@ -2004,7 +2004,7 @@ function Page13_VideoViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="files" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <FileListPane
                 files={mockManifestFiles}
                 selectedFile="original.mp4"
@@ -2055,7 +2055,7 @@ function Page14_ScriptViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="files" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <FileListPane
                 files={mockManifestFiles}
                 selectedFile=".original.json"
@@ -2131,7 +2131,7 @@ function Page15_AudioViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="files" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <FileListPane
                 files={mockManifestFiles}
                 selectedFile=".original.json"
