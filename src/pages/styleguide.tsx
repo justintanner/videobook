@@ -1304,9 +1304,7 @@ function BackFaceTabBar({ active }: { active: 'settings' | 'files' | 'history' }
           </span>
         ))}
       </div>
-      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">@vid-aurora-sky</span>
-      </span>
+      <span className="font-mono text-xs font-bold text-muted-foreground truncate">@vid-aurora-sky</span>
       <div className="w-6 h-6 flex items-center justify-center text-muted-foreground"><RotateCcw className="w-4 h-4 stroke-[2.5]" /></div>
     </div>
   );
