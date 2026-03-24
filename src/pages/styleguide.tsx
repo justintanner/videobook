@@ -46,7 +46,7 @@ import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
-  Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
+  Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet, ImageIcon,
   Zap, Info, Settings, User, Copy, Trash2,
   Plus, Pencil,
   Loader2, Mic,
@@ -58,7 +58,10 @@ import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
 import { ModelSelector } from '@/components/gen/ui/ModelSelector';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
-import type { ModelOption, ResolvedAsset } from '@/components/gen/types';
+import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
+import { ErrorPage } from '@/components/gen/state/ErrorPage';
+import { JsonNode } from '@/components/ui/JsonNode';
+import type { ModelOption, ResolvedAsset, JSONSchemaProperty } from '@/components/gen/types';
 import type { UseMcpResult } from 'use-mcp/react';
 
 const colors = [
@@ -192,6 +195,111 @@ const page2ModelOptions: ModelOption[] = [
 const page2ResolvedAssets: ResolvedAsset[] = [
   { slug: '@img-neon-fox', src: '/styleguide-img-neon-fox.jpg', thumbnailSrc: '/styleguide-img-neon-fox.jpg', type: 'image' },
 ];
+
+// ── Page 16 & 17 Mock Data ──
+
+const page16ImageModelOptions: ModelOption[] = [
+  {
+    key: 'imagen4', label: 'Imagen 4', tool_name: 'generate_imagen4_image', description: 'Google Imagen 4 image generation',
+    schema: { type: 'object', properties: {
+      prompt: { type: 'string', description: 'Image generation prompt' },
+      aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:3', '3:4'] },
+      style: { type: 'string', enum: ['photorealistic', 'digital_art', 'anime'] },
+      negative_prompt: { type: 'string', description: 'What to avoid in the image' },
+    }, required: ['prompt'] },
+    prefilled_values: { prompt: 'A luminous fox made of neon particles drifting through a cyberpunk alley at midnight', aspect_ratio: '1:1', style: 'digital_art' },
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+  {
+    key: 'flux_pro', label: 'Flux Pro', tool_name: 'generate_flux_pro_image', description: 'Black Forest Labs Flux Pro',
+    schema: { type: 'object', properties: {
+      prompt: { type: 'string', description: 'Image generation prompt' },
+      aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16'] },
+    }, required: ['prompt'] },
+    prefilled_values: { prompt: 'A luminous fox made of neon particles' },
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+  {
+    key: 'dall_e_4', label: 'DALL-E 4', tool_name: 'generate_dall_e_4_image', description: 'OpenAI DALL-E 4 image generation',
+    schema: { type: 'object', properties: {
+      prompt: { type: 'string', description: 'Image generation prompt' },
+      aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16'] },
+      style: { type: 'string', enum: ['natural', 'vivid'] },
+    }, required: ['prompt'] },
+    prefilled_values: { prompt: 'A luminous fox made of neon particles', style: 'vivid' },
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+];
+
+const page17VideoModelOptions: ModelOption[] = [
+  {
+    key: 'veo3', label: 'Veo 3', tool_name: 'generate_veo3_video', description: 'Veo 3 video generation',
+    schema: { type: 'object', properties: {
+      prompt: { type: 'string', description: 'Video generation prompt' },
+      aspect_ratio: { type: 'string', enum: ['16:9', '9:16'] },
+      duration: { type: 'integer', enum: [5, 8] },
+      model: { type: 'string', enum: ['veo3_fast', 'veo3'] },
+    }, required: ['prompt'] },
+    prefilled_values: { prompt: 'Aerial drone shot sweeping over a bioluminescent forest at twilight, camera slowly descending through the canopy', aspect_ratio: '16:9', duration: 8, model: 'veo3' },
+    validation: { valid: true, missing_required: [], warnings: [] },
+  },
+  {
+    key: 'kling3', label: 'Kling 3.0', tool_name: 'generate_kling30_video', description: 'Kling 3.0 video generation',
+    schema: { type: 'object', properties: {
+      prompt: { type: 'string', description: 'Video generation prompt' },
+      aspect_ratio: { type: 'string', enum: ['16:9', '9:16', '1:1'] },
+      duration: { type: 'integer', enum: [5, 10] },
+      mode: { type: 'string', enum: ['std', 'pro'] },
+      image_slugs: { type: 'array', items: { type: 'string' }, maxItems: 2 },
+      element1_slugs: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      element1_name: { type: 'string' },
+      element1_desc: { type: 'string' },
+      element2_slugs: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      element2_name: { type: 'string' },
+      element2_desc: { type: 'string' },
+    }, required: ['prompt'] },
+    prefilled_values: {
+      prompt: 'Product showcase with the fox mascot examining a glowing crystal, soft studio lighting',
+      aspect_ratio: '16:9', duration: 10, mode: 'pro',
+      image_slugs: ['@img-neon-fox'],
+      element1_slugs: ['@img-neon-fox'], element1_name: 'fox_mascot', element1_desc: 'The neon fox character from the brand identity',
+    },
+    validation: { valid: true, missing_required: [], warnings: [], image_slots: { min: 0, max: 2 } },
+  },
+];
+
+const page17MockToolCallPayload = {
+  tool_name: 'generate_veo3_video',
+  args: {
+    prompt: 'Aerial drone shot sweeping over a bioluminescent forest at twilight',
+    aspect_ratio: '16:9',
+    duration: 8,
+    generation_type: 'TEXT_2_VIDEO',
+    model: 'veo3',
+    project_slug: 'vax',
+  },
+};
+
+const page17MockProviderPayload = {
+  model: 'veo-3.0-generate-preview',
+  contents: [{ parts: [{ text: 'Aerial drone shot sweeping over a bioluminescent forest at twilight' }], role: 'user' }],
+  generationConfig: {
+    aspect_ratio: '16:9',
+    duration: '8s',
+    generate_audio: true,
+    person_generation: 'allow_adult',
+    generation_type: 'TEXT_2_VIDEO',
+  },
+};
+
+const page17ElementSchemas: Map<string, JSONSchemaProperty> = new Map([
+  ['element1_slugs', { type: 'array', items: { type: 'string' }, maxItems: 4 }],
+  ['element1_name', { type: 'string' }],
+  ['element1_desc', { type: 'string' }],
+  ['element2_slugs', { type: 'array', items: { type: 'string' }, maxItems: 4 }],
+  ['element2_name', { type: 'string' }],
+  ['element2_desc', { type: 'string' }],
+]);
 
 function SelectWithChevronDemo() {
   const [value, setValue] = useState('veo3');
@@ -2210,6 +2318,300 @@ function Page15_AudioViewer() {
   );
 }
 
+// ── Slide 16: Image Gen ──
+
+function Page16_ImageGen() {
+  const [imgPrompt, setImgPrompt] = useState('A luminous fox made of neon particles drifting through a cyberpunk alley at midnight');
+  const [imgAspect, setImgAspect] = useState<string>('1:1');
+  const [imgStyle, setImgStyle] = useState<string>('digital_art');
+  const [imgNeg, setImgNeg] = useState('');
+  const [imgModel, setImgModel] = useState('imagen4');
+
+  return (
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Category Picker */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Category Picker</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel label="GENERATE" icon={<Zap className="w-4 h-4" />} onClose={noop}>
+            <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
+              <span className="text-xs font-bold tracking-[0.15em] text-primary/50 uppercase">Choose type</span>
+              <div className="flex gap-4">
+                <button type="button" className={cn('flex flex-col items-center gap-3 px-8 py-6 rounded border-2', 'border-primary/30 bg-black/40 text-primary/70', 'hover:border-primary hover:text-primary hover:bg-primary/10', 'transition-all duration-200')}>
+                  <Film className="w-8 h-8" />
+                  <span className="text-xs font-bold tracking-[0.15em] uppercase">Video</span>
+                </button>
+                <button type="button" className={cn('flex flex-col items-center gap-3 px-8 py-6 rounded border-2', 'border-primary/30 bg-black/40 text-primary/70', 'hover:border-primary hover:text-primary hover:bg-primary/10', 'transition-all duration-200')}>
+                  <ImageIcon className="w-8 h-8" />
+                  <span className="text-xs font-bold tracking-[0.15em] uppercase">Image</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-primary/40 font-mono max-w-sm truncate">prompt: A luminous fox made of neon particles drifting through a cyberpunk alley</p>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Top-right: Image Gen Form */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Image Gen Form</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel
+            label="IMAGE GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            footer={
+              <div className="flex items-center justify-between">
+                <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
+                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+              <div className="mb-3">
+                <GenField label="PROMPT" required>
+                  <GenTextarea value={imgPrompt} onChange={setImgPrompt} rows={5} />
+                </GenField>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-4">
+                <GenField label="Aspect Ratio">
+                  <GenToggle value={imgAspect} onChange={setImgAspect} options={['1:1', '16:9', '9:16', '4:3', '3:4']} />
+                </GenField>
+                <GenField label="Style">
+                  <GenToggle value={imgStyle} onChange={setImgStyle} options={['photorealistic', 'digital_art', 'anime']} />
+                </GenField>
+                <GenField label="Negative Prompt">
+                  <GenTextarea value={imgNeg} onChange={setImgNeg} placeholder="What to avoid..." rows={2} />
+                </GenField>
+              </div>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Bottom-left: Loading */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Loading</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel label="IMAGE GEN" icon={<Zap className="w-4 h-4" />} onClose={noop}>
+            <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-xs font-mono tracking-wider">Routing prompt...</span>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Bottom-right: Error */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Error</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel label="IMAGE GEN" icon={<Zap className="w-4 h-4" />} onClose={noop}>
+            <ErrorPage message="Model 'flux-ultra' is not available. Available image models: imagen4, flux_pro, dall_e_4" />
+          </GenPanel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slide 17: Video Gen ──
+
+function Page17_VideoGen() {
+  const [vidPrompt, setVidPrompt] = useState('Aerial drone shot sweeping over a bioluminescent forest at twilight, camera slowly descending through the canopy');
+  const [vidAspect, setVidAspect] = useState<string>('16:9');
+  const [vidDuration, setVidDuration] = useState<string>('8');
+  const [vidModel, setVidModel] = useState<string>('veo3');
+  const [vidSelectedModel, setVidSelectedModel] = useState('veo3');
+
+  const [vid2Prompt, setVid2Prompt] = useState('Product showcase with the fox mascot examining a glowing crystal, soft studio lighting');
+  const [vid2Aspect, setVid2Aspect] = useState<string>('16:9');
+  const [vid2Duration, setVid2Duration] = useState<string>('10');
+  const [vid2Mode, setVid2Mode] = useState<string>('pro');
+  const [vid2ImageSlugs, setVid2ImageSlugs] = useState<string[]>(['@img-neon-fox']);
+  const [vid2SelectedModel, setVid2SelectedModel] = useState('kling3');
+  const [vid2FormValues] = useState<Record<string, unknown>>({
+    element1_slugs: ['@img-neon-fox'],
+    element1_name: 'fox_mascot',
+    element1_desc: 'The neon fox character from the brand identity',
+  });
+
+  return (
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Video Gen (text-to-video) */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Video (text-to-video)</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel
+            label="VIDEO GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            footer={
+              <div className="flex items-center justify-between">
+                <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
+                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+              <div className="mb-3">
+                <GenField label="PROMPT" required>
+                  <GenTextarea value={vidPrompt} onChange={setVidPrompt} rows={5} />
+                </GenField>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-4">
+                <GenField label="Aspect Ratio">
+                  <GenToggle value={vidAspect} onChange={setVidAspect} options={['16:9', '9:16']} />
+                </GenField>
+                <GenField label="Duration">
+                  <GenToggle value={vidDuration} onChange={setVidDuration} options={['5', '8']} compact />
+                </GenField>
+                <GenField label="Model">
+                  <GenToggle value={vidModel} onChange={setVidModel} options={['veo3_fast', 'veo3']} />
+                </GenField>
+              </div>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Top-right: Video Gen (with assets + elements) */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Video (assets + elements)</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel
+            label="VIDEO GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            footer={
+              <div className="flex items-center justify-between">
+                <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
+                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <div className="mb-3">
+                    <GenField label="PROMPT" required>
+                      <GenTextarea value={vid2Prompt} onChange={setVid2Prompt} rows={5} />
+                    </GenField>
+                  </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-4">
+                    <GenField label="Aspect Ratio">
+                      <GenToggle value={vid2Aspect} onChange={setVid2Aspect} options={['16:9', '9:16', '1:1']} />
+                    </GenField>
+                    <GenField label="Duration">
+                      <GenToggle value={vid2Duration} onChange={setVid2Duration} options={['5', '10']} compact />
+                    </GenField>
+                    <GenField label="Mode">
+                      <GenToggle value={vid2Mode} onChange={setVid2Mode} options={['std', 'pro']} />
+                    </GenField>
+                  </div>
+                </div>
+                <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
+                  <ImageParamSlots
+                    assetFields={[{
+                      name: 'image_slugs',
+                      schema: { type: 'array', items: { type: 'string' } },
+                      value: vid2ImageSlugs,
+                      required: false,
+                    }]}
+                    resolvedAssets={page2ResolvedAssets}
+                    imageSlots={{ min: 0, max: 2 }}
+                    onChange={(_fieldName, value) => setVid2ImageSlugs(value as string[])}
+                  />
+                  <ElementGroupEditor
+                    elementGroupIndices={[1, 2]}
+                    elementSchemas={page17ElementSchemas}
+                    formValues={vid2FormValues}
+                    resolvedAssets={page2ResolvedAssets}
+                    assets={[]}
+                    onChange={noop}
+                  />
+                </div>
+              </div>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Bottom-left: Submitting */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Submitting</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel
+            label="VIDEO GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeDisabled
+            closeHidden
+            footer={
+              <div className="flex items-center justify-between">
+                <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
+                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" state="submitting" />
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+              <div className="mb-3">
+                <GenField label="PROMPT" required>
+                  <GenTextarea value="Aerial drone shot sweeping over a bioluminescent forest at twilight" onChange={noop} rows={5} disabled />
+                </GenField>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-4">
+                <GenField label="Aspect Ratio">
+                  <GenToggle value="16:9" onChange={noop} options={['16:9', '9:16']} disabled />
+                </GenField>
+                <GenField label="Duration">
+                  <GenToggle value="8" onChange={noop} options={['5', '8']} compact disabled />
+                </GenField>
+              </div>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+
+      {/* Bottom-right: JSON Payload (back face) */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — JSON Payload</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <GenPanel
+            label="VIDEO GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            headerExtra={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
+          >
+            <div className="flex-1 flex overflow-hidden">
+              <div className="flex-1 overflow-auto pl-4 pr-2 py-4">
+                <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">Tool Call</div>
+                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                  <JsonNode data={page17MockToolCallPayload} />
+                </pre>
+              </div>
+              <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20">
+                <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">Provider Payload</div>
+                <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                  <JsonNode data={page17MockProviderPayload} />
+                </pre>
+              </div>
+            </div>
+          </GenPanel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -2228,6 +2630,8 @@ const SLIDE_PAGES = [
   Page13_VideoViewer,
   Page14_ScriptViewer,
   Page15_AudioViewer,
+  Page16_ImageGen,
+  Page17_VideoGen,
 ];
 
 // ── Main Styleguide ──
