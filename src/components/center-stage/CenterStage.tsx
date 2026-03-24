@@ -81,21 +81,21 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
 }
 
 const mdComponents = {
-  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-bold text-primary/80 mt-4 mb-2 font-mono uppercase tracking-wider">{children}</h1>,
-  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-bold text-primary/60 mt-3 mb-1.5 font-mono">{children}</h2>,
-  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-bold text-primary/50 mt-2 mb-1 font-mono">{children}</h3>,
-  p: ({ children }: { children?: React.ReactNode }) => <p className="text-sm leading-relaxed text-primary/40 mb-3">{children}</p>,
-  strong: ({ children }: { children?: React.ReactNode }) => <strong className="text-primary/70 font-bold">{children}</strong>,
-  em: ({ children }: { children?: React.ReactNode }) => <em className="text-primary/50 italic">{children}</em>,
-  ul: ({ children }: { children?: React.ReactNode }) => <ul className="text-sm text-primary/40 pl-5 mb-2 list-disc">{children}</ul>,
-  ol: ({ children }: { children?: React.ReactNode }) => <ol className="text-sm text-primary/40 pl-5 mb-2 list-decimal">{children}</ol>,
+  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-bold text-primary mt-4 mb-2 font-mono uppercase tracking-wider">{children}</h1>,
+  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-bold text-primary/90 mt-3 mb-1.5 font-mono">{children}</h2>,
+  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-bold text-primary/80 mt-2 mb-1 font-mono">{children}</h3>,
+  p: ({ children }: { children?: React.ReactNode }) => <p className="text-sm leading-relaxed text-primary/70 mb-3">{children}</p>,
+  strong: ({ children }: { children?: React.ReactNode }) => <strong className="text-primary font-bold">{children}</strong>,
+  em: ({ children }: { children?: React.ReactNode }) => <em className="text-primary/80 italic">{children}</em>,
+  ul: ({ children }: { children?: React.ReactNode }) => <ul className="text-sm text-primary/70 pl-5 mb-2 list-disc">{children}</ul>,
+  ol: ({ children }: { children?: React.ReactNode }) => <ol className="text-sm text-primary/70 pl-5 mb-2 list-decimal">{children}</ol>,
   li: ({ children }: { children?: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
-  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="border-l-2 border-primary/20 pl-3 text-primary/30 italic my-2">{children}</blockquote>,
+  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="border-l-2 border-primary/40 pl-3 text-primary/60 italic my-2">{children}</blockquote>,
   code: ({ children, className }: { children?: React.ReactNode; className?: string }) =>
     className
-      ? <code className="block font-mono text-xs bg-black/60 text-primary/50 p-3 rounded border border-zinc-800/40 overflow-x-auto mb-3">{children}</code>
-      : <code className="font-mono text-xs bg-primary/5 text-primary/60 px-1 py-0.5 rounded">{children}</code>,
-  hr: () => <hr className="border-zinc-700/30 my-4" />,
+      ? <code className="block font-mono text-xs bg-black/60 text-primary/80 p-3 rounded border border-zinc-800/40 overflow-x-auto mb-3">{children}</code>
+      : <code className="font-mono text-xs bg-primary/10 text-primary/90 px-1 py-0.5 rounded">{children}</code>,
+  hr: () => <hr className="border-zinc-700/50 my-4" />,
 };
 
 function ScriptViewer({ item }: { item: MediaItem }) {
