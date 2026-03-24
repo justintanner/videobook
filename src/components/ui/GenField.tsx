@@ -67,9 +67,10 @@ export function GenTextarea({ value, onChange, placeholder, disabled, rows = 3, 
         'w-full px-3 py-2 resize-none',
         'bg-black/60 rounded',
         theme ? cn(theme.controlBorder, 'border') : 'border border-primary/30',
-        'text-primary/90 placeholder:text-primary/30',
+        theme ? cn(theme.valueText, 'placeholder:text-primary/30') : 'text-primary/90 placeholder:text-primary/30',
         'font-mono text-sm leading-relaxed',
-        'focus:outline-none focus:border-primary/60',
+        'focus:outline-none',
+        theme?.focusBorder ?? 'focus:border-primary/60',
         'transition-all duration-200',
         disabled && 'opacity-50 cursor-not-allowed'
       )}

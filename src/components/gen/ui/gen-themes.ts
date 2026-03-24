@@ -16,6 +16,7 @@ export interface GenTheme {
   controlHover: string;
   valueText: string;
   unitText: string;
+  focusBorder: string;
 }
 
 export const genThemes = {
@@ -35,6 +36,7 @@ export const genThemes = {
     controlHover: 'hover:text-cyan-300/60 hover:bg-cyan-500/10',
     valueText: 'text-cyan-200',
     unitText: 'text-cyan-400/30',
+    focusBorder: 'focus:border-cyan-400/40',
   },
   violet: {
     labelText: 'text-violet-400/50',
@@ -52,6 +54,7 @@ export const genThemes = {
     controlHover: 'hover:text-violet-300/60 hover:bg-violet-500/10',
     valueText: 'text-violet-200',
     unitText: 'text-violet-400/30',
+    focusBorder: 'focus:border-violet-400/40',
   },
   amber: {
     labelText: 'text-amber-400/50',
@@ -69,6 +72,7 @@ export const genThemes = {
     controlHover: 'hover:text-amber-300/60 hover:bg-amber-500/10',
     valueText: 'text-amber-200',
     unitText: 'text-amber-400/30',
+    focusBorder: 'focus:border-amber-400/40',
   },
   emerald: {
     labelText: 'text-emerald-400/50',
@@ -86,5 +90,6 @@ export const genThemes = {
     controlHover: 'hover:text-emerald-300/60 hover:bg-emerald-500/10',
     valueText: 'text-emerald-200',
     unitText: 'text-emerald-400/30',
+    focusBorder: 'focus:border-emerald-400/40',
   },
 } as const;

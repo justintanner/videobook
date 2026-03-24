@@ -41,6 +41,7 @@ import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { CloseButton } from '@/components/gen/ui';
+import { genThemes } from '@/components/gen/ui/gen-themes';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
@@ -875,7 +876,7 @@ function Page2_VideoGeneration() {
                         </GenField>
                       </div>
                     </div>
-                    <div className="w-56 shrink-0 p-3 space-y-3">
+                    <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
                       <ImageParamSlots
                         assetFields={[{
                           name: 'image_slugs',
@@ -2218,16 +2219,27 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-              <div className="mb-3">
-                <GenField label="/prompt" required>
-                  <GenTextarea value="Cyberpunk street market at midnight, rain reflections on neon-lit pavement" onChange={noop} rows={5} />
-                </GenField>
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+              <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                  <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <GenTextarea value="Cyberpunk street market at midnight, rain reflections on neon-lit pavement" onChange={noop} rows={5} theme={genThemes.emerald} />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect" horizontal>
-                  <GenToggle value="16:9" onChange={noop} options={['1:1', '16:9', '9:16']} />
-                </GenField>
+              <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <GenField label="/aspect" horizontal>
+                      <GenToggle value="16:9" onChange={noop} options={['1:1', '16:9', '9:16']} />
+                    </GenField>
+                  </div>
+                </div>
               </div>
             </div>
           </GenPanel>
@@ -2258,22 +2270,33 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-              <div className="mb-3">
-                <GenField label="/prompt" required>
-                  <GenTextarea value={imgPrompt} onChange={setImgPrompt} rows={5} />
-                </GenField>
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+              <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                  <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <GenTextarea value={imgPrompt} onChange={setImgPrompt} rows={5} theme={genThemes.emerald} />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect" horizontal>
-                  <GenToggle value={imgAspect} onChange={setImgAspect} options={['1:1', '16:9', '9:16', '4:3', '3:4']} />
-                </GenField>
-                <GenField label="/style" horizontal>
-                  <GenToggle value={imgStyle} onChange={setImgStyle} options={['photorealistic', 'digital_art', 'anime']} />
-                </GenField>
-                <GenField label="/neg">
-                  <GenTextarea value={imgNeg} onChange={setImgNeg} placeholder="What to avoid..." rows={2} />
-                </GenField>
+              <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                </div>
+                <div className="px-3 py-2.5 space-y-3">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <GenField label="/aspect" horizontal>
+                      <GenToggle value={imgAspect} onChange={setImgAspect} options={['1:1', '16:9', '9:16', '4:3', '3:4']} />
+                    </GenField>
+                    <GenField label="/style" horizontal>
+                      <GenToggle value={imgStyle} onChange={setImgStyle} options={['photorealistic', 'digital_art', 'anime']} />
+                    </GenField>
+                  </div>
+                  <GenField label="/neg">
+                    <GenTextarea value={imgNeg} onChange={setImgNeg} placeholder="What to avoid..." rows={2} />
+                  </GenField>
+                </div>
               </div>
             </div>
           </GenPanel>
@@ -2376,22 +2399,33 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-              <div className="mb-3">
-                <GenField label="/prompt" required>
-                  <GenTextarea value={vidPrompt} onChange={setVidPrompt} rows={5} />
-                </GenField>
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+              <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                  <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <GenTextarea value={vidPrompt} onChange={setVidPrompt} rows={5} theme={genThemes.emerald} />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect" horizontal>
-                  <GenToggle value={vidAspect} onChange={setVidAspect} options={['16:9', '9:16']} />
-                </GenField>
-                <GenField label="/duration" horizontal>
-                  <GenToggle value={vidDuration} onChange={setVidDuration} options={['5', '8']} compact />
-                </GenField>
-                <GenField label="/model" horizontal>
-                  <GenToggle value={vidModel} onChange={setVidModel} options={['veo3_fast', 'veo3']} />
-                </GenField>
+              <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <GenField label="/aspect" horizontal>
+                      <GenToggle value={vidAspect} onChange={setVidAspect} options={['16:9', '9:16']} />
+                    </GenField>
+                    <GenField label="/duration" horizontal>
+                      <GenToggle value={vidDuration} onChange={setVidDuration} options={['5', '8']} />
+                    </GenField>
+                    <GenField label="/model" horizontal>
+                      <GenToggle value={vidModel} onChange={setVidModel} options={['veo3_fast', 'veo3']} />
+                    </GenField>
+                  </div>
+                </div>
               </div>
             </div>
           </GenPanel>
@@ -2424,25 +2458,36 @@ function Page17_VideoGen() {
           >
             <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
               <div className="flex gap-4">
-                <div className="flex-1">
-                  <div className="mb-3">
-                    <GenField label="/prompt" required>
-                      <GenTextarea value={vid2Prompt} onChange={setVid2Prompt} rows={5} />
-                    </GenField>
+                <div className="flex-1 space-y-3">
+                  <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                      <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                      <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <GenTextarea value={vid2Prompt} onChange={setVid2Prompt} rows={5} theme={genThemes.emerald} />
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-6 gap-y-4">
-                    <GenField label="/aspect" horizontal>
-                      <GenToggle value={vid2Aspect} onChange={setVid2Aspect} options={['16:9', '9:16', '1:1']} />
-                    </GenField>
-                    <GenField label="/duration" horizontal>
-                      <GenToggle value={vid2Duration} onChange={setVid2Duration} options={['5', '10']} compact />
-                    </GenField>
-                    <GenField label="/mode" horizontal>
-                      <GenToggle value={vid2Mode} onChange={setVid2Mode} options={['std', 'pro']} />
-                    </GenField>
+                  <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                      <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                        <GenField label="/aspect" horizontal>
+                          <GenToggle value={vid2Aspect} onChange={setVid2Aspect} options={['16:9', '9:16', '1:1']} />
+                        </GenField>
+                        <GenField label="/duration" horizontal>
+                          <GenToggle value={vid2Duration} onChange={setVid2Duration} options={['5', '10']} />
+                        </GenField>
+                        <GenField label="/mode" horizontal>
+                          <GenToggle value={vid2Mode} onChange={setVid2Mode} options={['std', 'pro']} />
+                        </GenField>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="w-56 shrink-0 p-3 space-y-3">
+                <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
                   <ImageParamSlots
                     assetFields={[{
                       name: 'image_slugs',
@@ -2494,19 +2539,30 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
-              <div className="mb-3">
-                <GenField label="/prompt" required>
-                  <GenTextarea value="Aerial drone shot sweeping over a bioluminescent forest at twilight" onChange={noop} rows={5} disabled />
-                </GenField>
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4 space-y-3">
+              <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                  <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <GenTextarea value="Aerial drone shot sweeping over a bioluminescent forest at twilight" onChange={noop} rows={5} disabled theme={genThemes.emerald} />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect" horizontal>
-                  <GenToggle value="16:9" onChange={noop} options={['16:9', '9:16']} disabled />
-                </GenField>
-                <GenField label="/duration" horizontal>
-                  <GenToggle value="8" onChange={noop} options={['5', '8']} compact disabled />
-                </GenField>
+              <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                  <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                </div>
+                <div className="px-3 py-2.5">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <GenField label="/aspect" horizontal>
+                      <GenToggle value="16:9" onChange={noop} options={['16:9', '9:16']} disabled />
+                    </GenField>
+                    <GenField label="/duration" horizontal>
+                      <GenToggle value="8" onChange={noop} options={['5', '8']} disabled />
+                    </GenField>
+                  </div>
+                </div>
               </div>
             </div>
           </GenPanel>
@@ -2530,13 +2586,13 @@ function Page17_VideoGen() {
           >
             <div className="flex-1 flex overflow-hidden">
               <div className="flex-1 overflow-auto pl-4 pr-2 py-4">
-                <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">Tool Call</div>
+                <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">Tool Call</div>
                 <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
                   <JsonNode data={page17MockToolCallPayload} />
                 </pre>
               </div>
               <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20">
-                <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">Provider Payload</div>
+                <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">Provider Payload</div>
                 <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
                   <JsonNode data={page17MockProviderPayload} />
                 </pre>

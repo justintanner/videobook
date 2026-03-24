@@ -347,46 +347,60 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
             <div className="flex gap-4">
               {/* Left column: prompt + inline params */}
-              <div className="flex-1">
-                {/* Prompt field (full width) */}
+              <div className="flex-1 space-y-3">
+                {/* Prompt field in /prompt section */}
                 {regularFields
                   .filter(([name]) => name === 'prompt')
-                  .map(([name, s]) => (
-                    <div key={name} className="mb-3">
-                      <DynamicField
-                        name={name}
-                        schema={s}
-                        value={formValues[name]}
-                        onChange={(v) => handleFieldChange(name, v)}
-                        required={schema?.required?.includes(name)}
-                        disabled={isDisabled}
-                        autoFocus
-
-                      />
+                  .map(([name]) => (
+                    <div key={name} className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                        <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                        {schema?.required?.includes(name) && (
+                          <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                        )}
+                      </div>
+                      <div className="px-3 py-2.5">
+                        <textarea
+                          value={typeof formValues[name] === 'string' ? (formValues[name] as string).replace(/\\n/g, '\n') : ''}
+                          onChange={(e) => handleFieldChange(name, e.target.value)}
+                          disabled={isDisabled}
+                          autoFocus
+                          rows={12}
+                          className="w-full px-3 py-2 resize-none bg-black/60 border border-emerald-500/15 rounded text-emerald-200 placeholder:text-emerald-400/30 font-mono text-sm leading-relaxed focus:outline-none focus:border-emerald-400/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </div>
                     </div>
                   ))}
-                {/* Other fields (horizontal wrap) */}
-                <div className="flex flex-wrap gap-x-6 gap-y-4">
-                  {regularFields
-                    .filter(([name]) => name !== 'prompt')
-                    .map(([name, s]) => (
-                      <DynamicField
-                        key={name}
-                        name={name}
-                        schema={s}
-                        value={formValues[name]}
-                        onChange={(v) => handleFieldChange(name, v)}
-                        required={schema?.required?.includes(name)}
-                        disabled={isDisabled}
-
-                      />
-                    ))}
-                </div>
+                {/* Other fields in /settings section */}
+                {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
+                  <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+                      <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                        {regularFields
+                          .filter(([name]) => name !== 'prompt')
+                          .map(([name, s]) => (
+                            <DynamicField
+                              key={name}
+                              name={name}
+                              schema={s}
+                              value={formValues[name]}
+                              onChange={(v) => handleFieldChange(name, v)}
+                              required={schema?.required?.includes(name)}
+                              disabled={isDisabled}
+                            />
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Right column: asset slots + element groups */}
               {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
-                <div className="w-56 shrink-0 p-3 space-y-3">
+                <div className="w-56 shrink-0 px-2 pb-3 space-y-3">
                   {assetFieldInfos.length > 0 && (
                     <ImageParamSlots
                       assetFields={assetFieldInfos}
@@ -418,7 +432,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <div className="flip-card-back absolute inset-0 flex">
             {/* Left pane: Raw MCP tool call */}
             <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
-              <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">
+              <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">
                 Tool Call
               </div>
               <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
@@ -428,7 +442,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
             {/* Right pane: Translated provider payload */}
             <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
-              <div className="text-[10px] font-bold tracking-[0.15em] text-primary/40 uppercase mb-2">
+              <div className="font-mono text-[13px] font-bold text-primary/40 mb-3">
                 Provider Payload
               </div>
               {translateLoading ? (
