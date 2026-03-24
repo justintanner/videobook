@@ -202,11 +202,11 @@ export function JsonTerminal({ data, loading }: { data: string | null; loading: 
   try {
     parsed = JSON.parse(data);
   } catch {
-    return <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all">{data}</pre>;
+    return <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all">{data}</pre>;
   }
 
   return (
-    <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+    <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
       <JsonNode data={parsed} />
     </pre>
   );
@@ -221,7 +221,10 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
 }) {
   return (
     <div className="py-1">
-      <div className="flex items-center justify-end px-3 py-1">
+      <div className="flex items-center justify-between px-3 py-1">
+        <span className="text-[10px] font-mono text-muted-foreground/30 uppercase tracking-wider">
+          {loading ? '...' : `${files.length} files`}
+        </span>
         <button
           tabIndex={-1}
           onClick={onRefresh}
@@ -236,7 +239,7 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
           tabIndex={-1}
           onClick={() => onSelectFile(f.name)}
           className={cn(
-            'w-full text-left px-3 py-1.5 text-xs font-mono flex items-center gap-2 transition-colors',
+            'w-full text-left px-3 py-2 text-sm font-mono flex items-center gap-2 transition-colors',
             selectedFile === f.name
               ? 'bg-primary/10 border-l-2 border-primary text-primary'
               : 'border-l-2 border-transparent hover:bg-white/5',
@@ -244,7 +247,7 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
           )}
         >
           <span className="truncate flex-1">{f.name}</span>
-          <span className="text-[10px] text-muted-foreground/30 shrink-0">{formatBytes(f.size_bytes)}</span>
+          <span className="text-xs text-muted-foreground/30 shrink-0">{formatBytes(f.size_bytes)}</span>
         </button>
       ))}
     </div>
@@ -293,7 +296,7 @@ export function FileContentPane({ content, loading, fileName, fileUrl }: {
   }
 
   return (
-    <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed">{content}</pre>
+    <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed">{content}</pre>
   );
 }
 
@@ -416,7 +419,7 @@ export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, s
 
   return (
     <div className="flex-1 flex min-h-0">
-      <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+      <div className="w-[340px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
         <HistoryListPane
           commits={commits}
           selectedHash={selectedCommitHash}

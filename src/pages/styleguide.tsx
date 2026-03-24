@@ -1408,13 +1408,13 @@ function Page8_BackFacePanels() {
         </div>
       </div>
 
-      {/* /history tab */}
+      {/* /history tab — HEAD (current version) */}
       <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /history tab</p>
-        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-600/50">
+        <p className="text-[12px] font-mono uppercase tracking-[0.12em] shrink-0" style={{ color: '#D8E7FF', opacity: 0.5 }}>Back Face — /history (HEAD)</p>
+        <div className="flex-[1] flex flex-col overflow-hidden border border-zinc-600/50 min-h-0">
           <BackFaceTabBar active="history" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[220px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+            <div className="w-[260px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <HistoryListPane
                 commits={mockGitCommits}
                 selectedHash={mockGitCommits[0].hash}
@@ -1427,6 +1427,28 @@ function Page8_BackFacePanels() {
               <HistoryDetailPane
                 commit={mockGitCommits[0]}
                 isHead={true}
+                onRestore={noop}
+              />
+            </div>
+          </div>
+        </div>
+        {/* /history tab — old commit with /restore */}
+        <div className="flex-[1] flex flex-col overflow-hidden border border-zinc-600/50 min-h-0">
+          <BackFaceTabBar active="history" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[260px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <HistoryListPane
+                commits={mockGitCommits}
+                selectedHash={mockGitCommits[2].hash}
+                onSelectCommit={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto bg-black">
+              <HistoryDetailPane
+                commit={mockGitCommits[2]}
+                isHead={false}
                 onRestore={noop}
               />
             </div>
@@ -1901,7 +1923,7 @@ function Page12_ImageViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="history" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+            <div className="w-[340px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <HistoryListPane
                 commits={mockGitCommits}
                 selectedHash={mockGitCommits[0].hash}
@@ -2059,7 +2081,7 @@ function Page14_ScriptViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="history" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+            <div className="w-[340px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <HistoryListPane
                 commits={mockGitCommits}
                 selectedHash={mockGitCommits[0].hash}
@@ -2135,7 +2157,7 @@ function Page15_AudioViewer() {
         <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
           <BackFaceTabBar active="history" />
           <div className="flex-1 flex min-h-0">
-            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+            <div className="w-[340px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
               <HistoryListPane
                 commits={mockGitCommits}
                 selectedHash={mockGitCommits[0].hash}

@@ -1,27 +1,28 @@
 import { RefreshCw, RotateCcw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
+import { CommandButton } from '@/components/commands';
 import type { GitCommit } from '@/hooks/useAssetHistory';
 
 type CommitOperation =
   | 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename'
   | 'write' | 'process_video' | 'transcribe' | 'render-timeline' | 'delete-file' | 'rename-file' | 'copy-file';
 
-const OPERATION_STYLES: Record<CommitOperation, { dot: string; label: string; glow: string }> = {
-  create:            { dot: 'bg-emerald-500', label: 'text-emerald-400', glow: 'shadow-[0_0_8px_rgba(16,185,129,0.4)]' },
-  generate:          { dot: 'bg-primary',     label: 'text-primary',     glow: 'shadow-[0_0_8px_rgba(0,217,255,0.4)]' },
-  upload:            { dot: 'bg-blue-500',    label: 'text-blue-400',    glow: 'shadow-[0_0_8px_rgba(59,130,246,0.4)]' },
-  render:            { dot: 'bg-amber-500',   label: 'text-amber-400',   glow: 'shadow-[0_0_8px_rgba(245,158,11,0.4)]' },
-  restore:           { dot: 'bg-violet-500',  label: 'text-violet-400',  glow: 'shadow-[0_0_8px_rgba(139,92,246,0.4)]' },
-  delete:            { dot: 'bg-red-500',     label: 'text-red-400',     glow: 'shadow-[0_0_8px_rgba(239,68,68,0.4)]' },
-  rename:            { dot: 'bg-zinc-500',    label: 'text-zinc-400',    glow: 'shadow-[0_0_8px_rgba(161,161,170,0.4)]' },
-  write:             { dot: 'bg-emerald-500', label: 'text-emerald-400', glow: 'shadow-[0_0_8px_rgba(16,185,129,0.4)]' },
-  'process_video':   { dot: 'bg-amber-500',   label: 'text-amber-400',   glow: 'shadow-[0_0_8px_rgba(245,158,11,0.4)]' },
-  transcribe:        { dot: 'bg-sky-500',     label: 'text-sky-400',     glow: 'shadow-[0_0_8px_rgba(14,165,233,0.4)]' },
-  'render-timeline': { dot: 'bg-amber-500',   label: 'text-amber-400',   glow: 'shadow-[0_0_8px_rgba(245,158,11,0.4)]' },
-  'delete-file':     { dot: 'bg-red-500',     label: 'text-red-400',     glow: 'shadow-[0_0_8px_rgba(239,68,68,0.4)]' },
-  'rename-file':     { dot: 'bg-zinc-500',    label: 'text-zinc-400',    glow: 'shadow-[0_0_8px_rgba(161,161,170,0.4)]' },
-  'copy-file':       { dot: 'bg-blue-500',    label: 'text-blue-400',    glow: 'shadow-[0_0_8px_rgba(59,130,246,0.4)]' },
+const OPERATION_STYLES: Record<CommitOperation, { dot: string; label: string }> = {
+  create:            { dot: 'bg-emerald-500', label: 'text-emerald-400' },
+  generate:          { dot: 'bg-primary',     label: 'text-primary' },
+  upload:            { dot: 'bg-blue-500',    label: 'text-blue-400' },
+  render:            { dot: 'bg-amber-500',   label: 'text-amber-400' },
+  restore:           { dot: 'bg-violet-500',  label: 'text-violet-400' },
+  delete:            { dot: 'bg-red-500',     label: 'text-red-400' },
+  rename:            { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
+  write:             { dot: 'bg-emerald-500', label: 'text-emerald-400' },
+  'process_video':   { dot: 'bg-amber-500',   label: 'text-amber-400' },
+  transcribe:        { dot: 'bg-sky-500',     label: 'text-sky-400' },
+  'render-timeline': { dot: 'bg-amber-500',   label: 'text-amber-400' },
+  'delete-file':     { dot: 'bg-red-500',     label: 'text-red-400' },
+  'rename-file':     { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
+  'copy-file':       { dot: 'bg-blue-500',    label: 'text-blue-400' },
 };
 
 function extractOperation(message: string): CommitOperation {
@@ -45,12 +46,6 @@ function formatDate(dateStr: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
 }
-
-const pixelGridStyle = {
-  backgroundImage:
-    'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)',
-  backgroundSize: '4px 4px',
-};
 
 export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefresh, loading }: {
   commits: GitCommit[];
@@ -128,98 +123,71 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
   const style = OPERATION_STYLES[op];
 
   return (
-    <div className="relative h-full flex flex-col">
-      {/* Scanlines overlay */}
-      <div className="absolute inset-0 pointer-events-none scanlines opacity-10 z-10" />
-      {/* Pixel grid */}
-      <div className="absolute inset-0 pointer-events-none opacity-5" style={pixelGridStyle} />
-
-      {/* Corner accents */}
-      <svg className="absolute top-0 left-0 w-5 h-5 text-cyan-400/20 z-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-        <path d="M0 12 L12 0" /><path d="M0 6 L6 0" />
-      </svg>
-      <svg className="absolute bottom-0 right-0 w-5 h-5 text-cyan-400/20 z-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-        <path d="M24 12 L12 24" /><path d="M24 18 L18 24" />
-      </svg>
-
-      {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col p-5 gap-5">
-        {/* Operation badge */}
-        <div className="flex items-center gap-3">
-          <div className={cn('px-3 py-1.5 rounded font-mono text-sm font-bold uppercase tracking-[0.15em]', style.label, style.glow)} style={{ background: 'rgba(0,0,0,0.5)' }}>
-            {op}
-          </div>
-          {isHead && (
-            <span className="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase tracking-[0.15em] text-cyan-400 border border-cyan-400/30 bg-cyan-400/5">
-              HEAD
-            </span>
-          )}
-        </div>
-
-        {/* Commit info */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono text-muted-foreground/40 uppercase w-12">Hash</span>
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(commit.hash);
-                toast({ title: 'Copied', description: commit.hash, duration: 2000 });
-              }}
-              className="text-xs font-mono text-muted-foreground hover:text-cyan-400 transition-colors cursor-pointer"
-            >
-              {commit.hash}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono text-muted-foreground/40 uppercase w-12">Date</span>
-            <span className="text-xs font-mono text-muted-foreground">{formatDate(commit.date)}</span>
-          </div>
-        </div>
-
-        {/* Files changed */}
-        {commit.files && commit.files.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-wider">Files changed</span>
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {commit.files.map((file) => (
-                <span key={file} className="text-[11px] font-mono text-muted-foreground/60">{file}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Restore button */}
-        {isHead ? (
-          <div className="flex items-center justify-center py-3 border border-cyan-400/20 rounded bg-cyan-400/5">
-            <span className="text-xs font-mono font-bold tracking-[0.15em] uppercase text-cyan-400/50">Current Version</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => {
-              if (window.confirm(`Rewind to ${commit.hash.slice(0, 7)}? This will restore this version.`)) {
-                onRestore(commit.hash);
-              }
-            }}
-            className={cn(
-              'group/btn flex items-center justify-center gap-2 py-2 px-4 rounded cursor-pointer w-fit',
-              'border border-cyan-400/50 bg-cyan-950/30',
-              'shadow-[0_0_10px_-5px_rgba(0,255,255,0.3)]',
-              'hover:border-cyan-400 hover:bg-cyan-950/50 hover:shadow-[0_0_15px_-5px_rgba(0,255,255,0.5)]',
-              'active:scale-[0.98]',
-              'transition-all duration-150',
-            )}
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-cyan-400/70 group-hover/btn:text-cyan-400 transition-colors" />
-            <span className="font-mono text-xs font-bold tracking-[0.15em] uppercase text-cyan-400/70 group-hover/btn:text-cyan-400 transition-colors">
-              Rewind
-            </span>
-          </button>
+    <div className="h-full flex flex-col p-5 gap-5">
+      {/* Operation label + HEAD indicator */}
+      <div className="flex items-center gap-3">
+        <span className={cn('font-mono text-base font-bold uppercase tracking-widest', style.label)}>
+          {op}
+        </span>
+        {isHead && (
+          <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-500">
+            HEAD
+          </span>
         )}
       </div>
+
+      {/* Commit info */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono uppercase w-16 tracking-wider text-zinc-600">Hash</span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(commit.hash);
+              toast({ title: 'Copied', description: commit.hash, duration: 2000 });
+            }}
+            className="text-sm font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            {commit.hash}
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono uppercase w-16 tracking-wider text-zinc-600">Date</span>
+          <span className="text-sm font-mono text-zinc-400">{formatDate(commit.date)}</span>
+        </div>
+      </div>
+
+      {/* Files changed */}
+      {commit.files && commit.files.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-mono uppercase tracking-wider text-zinc-600">Files changed</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {commit.files.map((file) => (
+              <span key={file} className="text-sm font-mono text-zinc-500">{file}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Action: /restore or current version label */}
+      {isHead ? (
+        <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-zinc-600 text-center">
+          Current Version
+        </span>
+      ) : (
+        <CommandButton
+          command={`/restore ${commit.hash.slice(0, 7)}`}
+          icon={<RotateCcw className="w-4 h-4" />}
+          onClick={() => {
+            if (window.confirm(`Restore to ${commit.hash.slice(0, 7)}? This will revert to this version.`)) {
+              onRestore(commit.hash);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
