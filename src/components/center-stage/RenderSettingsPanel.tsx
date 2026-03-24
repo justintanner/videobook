@@ -98,10 +98,10 @@ const sectionThemes = {
 
 type SectionTheme = typeof sectionThemes[keyof typeof sectionThemes];
 
-const orientationLabels: Record<Orientation, string> = {
-  landscape: '16:9',
-  portrait: '9:16',
-  square: '1:1',
+const orientationCommands: Record<Orientation, string> = {
+  landscape: '/landscape',
+  portrait: '/portrait',
+  square: '/square',
 };
 
 // ── Section header styled like a CommandButton pill ──
@@ -211,7 +211,7 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// ── 2x2 position grid ──
+// ── 2x2 position grid (visual mini-map) ──
 
 function PositionGrid<T extends string>({
   options, value, onChange, disabled, theme,
@@ -223,7 +223,11 @@ function PositionGrid<T extends string>({
   theme: SectionTheme;
 }) {
   return (
-    <div className={cn('grid grid-cols-2 gap-1.5', disabled && 'opacity-30 pointer-events-none')}>
+    <div className={cn(
+      'grid grid-cols-2 gap-1 rounded border p-1',
+      disabled ? 'opacity-30 pointer-events-none' : '',
+      'border-zinc-700/50 bg-zinc-900/40',
+    )}>
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -232,7 +236,7 @@ function PositionGrid<T extends string>({
             disabled={disabled}
             onClick={() => onChange?.(opt.value)}
             className={cn(
-              'h-8 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
+              'h-9 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
               active
                 ? cn(theme.activeBg, theme.activeBorder, theme.activeText)
                 : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600',
@@ -353,21 +357,33 @@ export function RenderSettingsPanel({
     <div className="flex flex-col h-full bg-zinc-950 relative overflow-hidden">
       {/* Scrollable content */}
       <div className="relative flex-1 overflow-auto px-4 pt-3 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {/* Orientation tabs */}
+        {/* Orientation tabs — styled as slash-command pills */}
         <div className="flex gap-2 mb-4">
           {orientations.map((o) => (
             <button
               key={o.orient}
               onClick={() => onOrientationClick?.(o.orient)}
               className={cn(
-                'h-9 px-4 rounded font-mono font-bold text-xs tracking-widest transition-all duration-150 border',
+                'group flex items-center gap-0 h-8 rounded overflow-hidden font-mono font-bold text-xs tracking-widest transition-all duration-150 border',
                 o.active
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                  ? 'bg-cyan-500/10 border-primary/25'
                   : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600',
               )}
-              style={o.active ? { boxShadow: '0 0 12px rgba(34,211,238,0.25)' } : undefined}
             >
-              {orientationLabels[o.orient]}
+              <span className={cn(
+                'flex items-center justify-center px-2 h-full',
+                o.active ? 'text-primary/40' : 'text-zinc-600',
+              )}>
+                ›
+              </span>
+              <span className={cn(
+                'flex items-center h-full px-2.5 transition-all',
+                o.active
+                  ? 'bg-black/40 text-primary/70 shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]'
+                  : 'text-zinc-500',
+              )}>
+                {orientationCommands[o.orient]}
+              </span>
             </button>
           ))}
         </div>
@@ -431,24 +447,27 @@ export function RenderSettingsPanel({
             <div className="space-y-2.5">
               <SectionHeader tag="/bg" icon={<ImageIcon className="w-4 h-4" />} theme={amber} />
               <div className="px-1">
-                <PillToggle theme={amber} disabled={disabled} options={[{ label: 'BLUR', value: 'blur' }, { label: 'BLACK', value: 'black' }]} value={backgroundMode} onChange={onBackgroundChange} />
+                <SegmentedControl theme={amber} disabled={disabled} options={[{ label: 'BLUR', value: 'blur' }, { label: 'BLACK', value: 'black' }]} value={backgroundMode} onChange={onBackgroundChange} />
               </div>
             </div>
 
             {/* /osg */}
             <div className="space-y-2.5">
               <SectionHeader tag="/osg" icon={<Tv className="w-4 h-4" />} theme={emerald} />
-              <div className="space-y-2 px-1">
-                <AssetDropSlot
-                  value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
-                  onChange={(asset) => { onOsgChange?.('assetId', asset?.id ?? null); onOsgChange?.('assetSrc', asset?.src ?? null); }}
-                  acceptTypes={['image']}
-                  disabled={disabled}
-                  compact
-                />
-                <SettingRow label="Position" theme={emerald}>
-                  <PositionGrid theme={emerald} disabled={disabled} options={[{ label: 'TL', value: 'top-left' }, { label: 'TR', value: 'top-right' }, { label: 'BL', value: 'bottom-left' }, { label: 'BR', value: 'bottom-right' }]} value={osgPosition} onChange={(v) => onOsgChange?.('position', v)} />
-                </SettingRow>
+              <div className="space-y-2.5 px-1">
+                <div className="flex gap-2.5 items-stretch">
+                  <div className="flex-1">
+                    <AssetDropSlot
+                      value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
+                      onChange={(asset) => { onOsgChange?.('assetId', asset?.id ?? null); onOsgChange?.('assetSrc', asset?.src ?? null); }}
+                      acceptTypes={['image']}
+                      disabled={disabled}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <PositionGrid theme={emerald} disabled={disabled} options={[{ label: 'TL', value: 'top-left' }, { label: 'TR', value: 'top-right' }, { label: 'BL', value: 'bottom-left' }, { label: 'BR', value: 'bottom-right' }]} value={osgPosition} onChange={(v) => onOsgChange?.('position', v)} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
