@@ -1,4 +1,6 @@
 import { cn } from '@/lib/utils';
+import type { GenTheme } from '@/components/gen/ui/gen-themes';
+import { genThemes } from '@/components/gen/ui/gen-themes';
 
 interface GenToggleProps<T extends string> {
   value: T;
@@ -6,40 +8,36 @@ interface GenToggleProps<T extends string> {
   options: readonly T[];
   disabled?: boolean;
   compact?: boolean;
+  theme?: GenTheme;
 }
 
-export function GenToggle<T extends string>({ value, onChange, options, disabled, compact }: GenToggleProps<T>) {
+export function GenToggle<T extends string>({ value, onChange, options, disabled, compact, theme }: GenToggleProps<T>) {
+  const t = theme ?? genThemes.cyan;
+
   return (
-    <div
-      className={cn(
-        'inline-flex border border-primary/30 rounded overflow-hidden',
-        'bg-black/40',
-        disabled && 'opacity-50'
-      )}
-    >
-      {options.map((option, index) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => !disabled && onChange(option)}
-          disabled={disabled}
-          className={cn(
-            'font-mono font-bold tracking-wider',
-            'transition-all duration-200',
-            compact ? 'px-1.5 h-5 text-[9px]' : 'px-4 h-9 text-xs',
-            // Add border between items
-            index > 0 && 'border-l border-primary/30',
-            // Active state
-            value === option
-              ? 'bg-primary/20 text-primary shadow-[inset_0_0_12px_rgba(0,255,255,0.3)]'
-              : 'text-primary/50 hover:text-primary/80 hover:bg-primary/5',
-            'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:z-10 focus-visible:outline-none',
-            disabled && 'cursor-not-allowed'
-          )}
-        >
-          {option}
-        </button>
-      ))}
+    <div className={cn('flex gap-1.5', disabled && 'opacity-30 pointer-events-none')}>
+      {options.map((option) => {
+        const active = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => !disabled && onChange(option)}
+            disabled={disabled}
+            className={cn(
+              'rounded font-mono font-bold tracking-wider border transition-all duration-150',
+              compact ? 'h-6 min-w-[36px] px-2 text-[10px]' : 'h-8 min-w-[48px] px-3 text-xs',
+              active
+                ? cn(t.activeBg, t.activeBorder, t.activeText)
+                : cn(t.controlBg, t.inactiveBorder, t.inactiveText, t.inactiveHoverText, t.inactiveHoverBorder),
+              'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:outline-none',
+            )}
+            style={active ? { boxShadow: t.activeGlow } : undefined}
+          >
+            {option}
+          </button>
+        );
+      })}
     </div>
   );
 }

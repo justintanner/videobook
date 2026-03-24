@@ -2214,7 +2214,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="violet" />
               </div>
             }
           >
@@ -2225,7 +2225,7 @@ function Page16_ImageGen() {
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect">
+                <GenField label="/aspect" horizontal>
                   <GenToggle value="16:9" onChange={noop} options={['1:1', '16:9', '9:16']} />
                 </GenField>
               </div>
@@ -2254,7 +2254,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="violet" />
               </div>
             }
           >
@@ -2265,10 +2265,10 @@ function Page16_ImageGen() {
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect">
+                <GenField label="/aspect" horizontal>
                   <GenToggle value={imgAspect} onChange={setImgAspect} options={['1:1', '16:9', '9:16', '4:3', '3:4']} />
                 </GenField>
-                <GenField label="/style">
+                <GenField label="/style" horizontal>
                   <GenToggle value={imgStyle} onChange={setImgStyle} options={['photorealistic', 'digital_art', 'anime']} />
                 </GenField>
                 <GenField label="/neg">
@@ -2372,7 +2372,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" />
               </div>
             }
           >
@@ -2383,13 +2383,13 @@ function Page17_VideoGen() {
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect">
+                <GenField label="/aspect" horizontal>
                   <GenToggle value={vidAspect} onChange={setVidAspect} options={['16:9', '9:16']} />
                 </GenField>
-                <GenField label="/duration">
+                <GenField label="/duration" horizontal>
                   <GenToggle value={vidDuration} onChange={setVidDuration} options={['5', '8']} compact />
                 </GenField>
-                <GenField label="/model">
+                <GenField label="/model" horizontal>
                   <GenToggle value={vidModel} onChange={setVidModel} options={['veo3_fast', 'veo3']} />
                 </GenField>
               </div>
@@ -2418,7 +2418,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" />
               </div>
             }
           >
@@ -2431,13 +2431,13 @@ function Page17_VideoGen() {
                     </GenField>
                   </div>
                   <div className="flex flex-wrap gap-x-6 gap-y-4">
-                    <GenField label="/aspect">
+                    <GenField label="/aspect" horizontal>
                       <GenToggle value={vid2Aspect} onChange={setVid2Aspect} options={['16:9', '9:16', '1:1']} />
                     </GenField>
-                    <GenField label="/duration">
+                    <GenField label="/duration" horizontal>
                       <GenToggle value={vid2Duration} onChange={setVid2Duration} options={['5', '10']} compact />
                     </GenField>
-                    <GenField label="/mode">
+                    <GenField label="/mode" horizontal>
                       <GenToggle value={vid2Mode} onChange={setVid2Mode} options={['std', 'pro']} />
                     </GenField>
                   </div>
@@ -2490,7 +2490,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} disabled />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} state="submitting" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" state="submitting" />
               </div>
             }
           >
@@ -2501,10 +2501,10 @@ function Page17_VideoGen() {
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="/aspect">
+                <GenField label="/aspect" horizontal>
                   <GenToggle value="16:9" onChange={noop} options={['16:9', '9:16']} disabled />
                 </GenField>
-                <GenField label="/duration">
+                <GenField label="/duration" horizontal>
                   <GenToggle value="8" onChange={noop} options={['5', '8']} compact disabled />
                 </GenField>
               </div>

@@ -194,6 +194,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
+  const buttonVariant = category === 'video' ? 'amber' as const : 'violet' as const;
 
   // -- Loading state --
   if (loading) {
@@ -315,6 +316,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <CommandButton
             command="/generate"
             icon={<Zap className="w-3.5 h-3.5" />}
+            variant={buttonVariant}
             state={genState}
             onClick={handleGenerate}
             disabled={!selectedOption}
@@ -359,6 +361,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                         required={schema?.required?.includes(name)}
                         disabled={isDisabled}
                         autoFocus
+
                       />
                     </div>
                   ))}
@@ -375,6 +378,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                         onChange={(v) => handleFieldChange(name, v)}
                         required={schema?.required?.includes(name)}
                         disabled={isDisabled}
+
                       />
                     ))}
                 </div>

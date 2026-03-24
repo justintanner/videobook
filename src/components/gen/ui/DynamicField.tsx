@@ -3,6 +3,7 @@ import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { CommandDropdown } from '@/components/commands/CommandDropdown';
 import type { JSONSchemaProperty, VeoGenerationType } from '../types';
+import type { GenTheme } from './gen-themes';
 import { cn } from '@/lib/utils';
 
 interface DynamicFieldProps {
@@ -15,6 +16,7 @@ interface DynamicFieldProps {
   labelOverride?: string;
   placeholderOverride?: string;
   autoFocus?: boolean;
+  theme?: GenTheme;
 }
 
 // Convert field name to display label
@@ -27,15 +29,17 @@ function LockedField({
   label,
   value,
   required,
+  theme,
 }: {
   label: string;
   value: string;
   required?: boolean;
+  theme?: GenTheme;
 }): React.ReactElement {
   return (
-    <GenField label={label} required={required}>
+    <GenField label={label} required={required} theme={theme} horizontal>
       <div className="inline-flex items-center gap-2">
-        <GenToggle value={value} onChange={() => {}} options={[value] as readonly string[]} disabled={true} />
+        <GenToggle value={value} onChange={() => {}} options={[value] as readonly string[]} disabled={true} theme={theme} />
         <span className="text-[10px] font-mono text-yellow-400/60 uppercase tracking-wider">LOCKED</span>
       </div>
     </GenField>
@@ -52,6 +56,7 @@ export function DynamicField({
   labelOverride,
   placeholderOverride,
   autoFocus,
+  theme,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
@@ -88,8 +93,8 @@ export function DynamicField({
 
     return (
       <div className="space-y-2">
-        <label className="text-xs font-mono font-bold tracking-widest text-primary/70">Generation Mode</label>
-        <div className="flex gap-2">
+        <label className={cn('text-xs font-mono font-bold tracking-widest', theme?.labelText ?? 'text-primary/70')}>Generation Mode</label>
+        <div className="flex gap-1.5">
           {options.map((mode) => {
             const isSelected = currentValue === mode;
             const modeInfo = modeLabels[mode];
@@ -101,13 +106,14 @@ export function DynamicField({
                 disabled={disabled}
                 title={modeInfo.description}
                 className={cn(
-                  'flex-1 px-3 py-2 rounded border text-xs font-mono transition-all',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'flex-1 px-3 py-2 rounded border text-xs font-mono font-bold tracking-wider transition-all duration-150',
+                  'disabled:opacity-30 disabled:pointer-events-none',
                   'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:outline-none',
                   isSelected
-                    ? 'bg-primary/20 border-primary text-primary'
-                    : 'bg-black/40 border-primary/30 text-primary/60 hover:border-primary/50 hover:text-primary/80'
+                    ? theme ? cn(theme.activeBg, theme.activeBorder, theme.activeText) : 'bg-primary/20 border-primary text-primary'
+                    : theme ? cn(theme.controlBg, theme.inactiveBorder, theme.inactiveText, theme.inactiveHoverText, theme.inactiveHoverBorder) : 'bg-black/40 border-primary/30 text-primary/60 hover:border-primary/50 hover:text-primary/80'
                 )}
+                style={isSelected && theme ? { boxShadow: theme.activeGlow } : undefined}
               >
                 {modeInfo.short}
               </button>
@@ -125,35 +131,37 @@ export function DynamicField({
     const effectiveValue = (value ?? schema.default ?? options[0]) as string;
 
     return (
-      <GenField label={label} required={required}>
+      <GenField label={label} required={required} theme={theme} horizontal>
         <GenToggle
           value={effectiveValue}
           onChange={(v) => onChange(v)}
           options={options as readonly string[]}
           disabled={disabled}
+          theme={theme}
         />
       </GenField>
     );
   }
 
-  // Handle string type with enum (2-4 items = toggle, 5+ items = select)
+  // Handle string type with enum (2-4 items = toggle, 5+ items = dropdown)
   if (schema.type === 'string' && schema.enum) {
     const options = schema.enum as string[];
 
     if (options.length === 1) {
-      return <LockedField label={label} value={options[0]} required={required} />;
+      return <LockedField label={label} value={options[0]} required={required} theme={theme} />;
     }
 
     const effectiveValue = (value ?? schema.default) as string;
 
     if (options.length >= 2 && options.length <= 4) {
       return (
-        <GenField label={label} required={required}>
+        <GenField label={label} required={required} theme={theme} horizontal>
           <GenToggle
             value={effectiveValue}
             onChange={(v) => onChange(v)}
             options={options as readonly string[]}
             disabled={disabled}
+            theme={theme}
           />
         </GenField>
       );
@@ -170,23 +178,24 @@ export function DynamicField({
     );
   }
 
-  // Handle integer/number type with enum - use toggle or select
+  // Handle integer/number type with enum - use toggle or dropdown
   if ((schema.type === 'integer' || schema.type === 'number') && schema.enum) {
     const options = schema.enum.map(String);
     const effectiveValue = value != null ? String(value) : schema.default != null ? String(schema.default) : '';
 
     if (options.length === 1) {
-      return <LockedField label={label} value={options[0]} required={required} />;
+      return <LockedField label={label} value={options[0]} required={required} theme={theme} />;
     }
 
     if (options.length >= 2 && options.length <= 6) {
       return (
-        <GenField label={label} required={required}>
+        <GenField label={label} required={required} theme={theme} horizontal>
           <GenToggle
             value={effectiveValue}
             onChange={(v) => onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v))}
             options={options as readonly string[]}
             disabled={disabled}
+            theme={theme}
           />
         </GenField>
       );
@@ -206,7 +215,7 @@ export function DynamicField({
   // Handle integer/number type without enum - use number input
   if (schema.type === 'integer' || schema.type === 'number') {
     return (
-      <GenField label={label} required={required}>
+      <GenField label={label} required={required} theme={theme} horizontal>
         <input
           type="number"
           value={value !== undefined && value !== null ? String(value) : ''}
@@ -223,7 +232,12 @@ export function DynamicField({
           step={schema.type === 'integer' ? 1 : 'any'}
           placeholder={schema.description || `Enter ${label.toLowerCase()}...`}
           disabled={disabled}
-          className="w-full px-3 py-2 bg-black/60 border border-primary/30 rounded text-primary/90 font-mono text-sm placeholder:text-primary/30 focus:outline-none focus:border-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={cn(
+            'w-24 px-3 py-1.5 bg-black/60 rounded font-mono text-sm text-right tabular-nums',
+            theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+            'placeholder:text-primary/30 focus:outline-none focus:border-primary/60',
+            'disabled:opacity-50 disabled:cursor-not-allowed'
+          )}
         />
       </GenField>
     );
@@ -232,12 +246,13 @@ export function DynamicField({
   // Handle boolean type - use toggle with Yes/No
   if (schema.type === 'boolean') {
     return (
-      <GenField label={label} required={required}>
+      <GenField label={label} required={required} theme={theme} horizontal>
         <GenToggle
           value={value === true ? 'Yes' : 'No'}
           onChange={(v) => onChange(v === 'Yes')}
           options={['No', 'Yes'] as const}
           disabled={disabled}
+          theme={theme}
         />
       </GenField>
     );
@@ -279,7 +294,7 @@ export function DynamicField({
     const isPrompt = name === 'prompt';
     const placeholder = placeholderOverride || schema.description || `Enter ${label.toLowerCase()}...`;
     return (
-      <GenField label={label} required={required}>
+      <GenField label={label} required={required} theme={theme}>
         <GenTextarea
           value={(value as string) || ''}
           onChange={(v) => onChange(v)}
@@ -287,6 +302,7 @@ export function DynamicField({
           disabled={disabled}
           rows={isPrompt ? 12 : 2}
           autoFocus={autoFocus}
+          theme={theme}
         />
       </GenField>
     );
@@ -294,9 +310,8 @@ export function DynamicField({
 
   // Fallback for unknown types
   return (
-    <GenField label={label} required={required}>
+    <GenField label={label} required={required} theme={theme}>
       <div className="text-xs text-red-400/70 font-mono">Unsupported field type: {schema.type}</div>
     </GenField>
   );
 }
-
