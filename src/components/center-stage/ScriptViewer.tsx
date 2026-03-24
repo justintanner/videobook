@@ -1,0 +1,123 @@
+import { Settings, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { MediaItem } from '@/components/sidebar/types';
+import { useMountKey } from '@/contexts/MountKeyContext';
+import type { UseMcpResult } from 'use-mcp/react';
+import type { BackTab } from './viewer-types';
+import {
+  ScriptContent,
+  ViewerToolbar,
+  BackFaceTabBar,
+  FilesBackPane,
+  HistoryBackPane,
+  useViewerBackFace,
+} from './viewer-shared';
+
+// ── ScriptViewer ──
+
+const SCRIPT_BACK_TABS: BackTab[] = ['files', 'history'];
+
+export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool }: {
+  item: MediaItem;
+  projectSlug: string;
+  flipped: boolean;
+  onFlippedChange: (f: boolean) => void;
+  pendingFilePosition?: number | null;
+  onClearPendingFilePosition?: () => void;
+  pendingBackTab?: BackTab | null;
+  onClearPendingBackTab?: () => void;
+  callTool: UseMcpResult['callTool'];
+}) {
+  useMountKey('viewer');
+
+  const bf = useViewerBackFace({
+    projectSlug,
+    itemId: item.id,
+    callTool,
+    flipped,
+    onFlippedChange,
+    pendingFilePosition,
+    onClearPendingFilePosition,
+    pendingBackTab,
+    onClearPendingBackTab,
+    defaultBackTab: 'files',
+  });
+
+  return (
+    <div className="flex-1 flex items-center justify-center overflow-hidden">
+      <div className="flip-card-perspective w-full h-full">
+        <div className={cn(
+          'flip-card-inner w-full h-full relative',
+          flipped && 'flipped',
+        )}>
+          {/* FRONT FACE */}
+          <div className={cn(
+            'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
+            'border border-zinc-600/50',
+          )}>
+            <ViewerToolbar
+              left={
+                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Markdown</span>
+                </span>
+              }
+              slug={item.slug}
+              right={
+                <button
+                  tabIndex={-1}
+                  onClick={bf.handleFlipToBack}
+                  title="/files"
+                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                >
+                  <Settings className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              }
+            />
+
+            <div className="flex-1 bg-black flex min-h-0 items-stretch">
+              <ScriptContent item={item} />
+            </div>
+          </div>
+
+          {/* BACK FACE */}
+          <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
+            <BackFaceTabBar
+              tabs={SCRIPT_BACK_TABS}
+              active={bf.backTab}
+              onSelect={bf.setBackTab}
+              slug={item.slug}
+              onClose={() => onFlippedChange(false)}
+            />
+
+            {bf.backTab === 'files' ? (
+              <FilesBackPane
+                manifest={bf.manifest}
+                manifestLoading={bf.manifestLoading}
+                selectedFile={bf.selectedFile}
+                fileContent={bf.fileContent}
+                fileLoading={bf.fileLoading}
+                fileUrl={bf.fileUrl}
+                handleSelectFile={bf.handleSelectFile}
+                handleFileKeyDown={bf.handleFileKeyDown}
+                fetchManifest={bf.fetchManifest}
+                fetchFileContent={bf.fetchFileContent}
+              />
+            ) : (
+              <HistoryBackPane
+                commits={bf.commits}
+                historyLoading={bf.historyLoading}
+                selectedCommitHash={bf.selectedCommitHash}
+                setSelectedCommitHash={bf.setSelectedCommitHash}
+                handleRestore={bf.handleRestore}
+                fetchHistory={bf.fetchHistory}
+                itemId={item.id}
+                projectSlug={projectSlug}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

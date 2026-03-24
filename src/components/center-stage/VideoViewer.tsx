@@ -1,0 +1,288 @@
+import { Settings } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { MediaItem } from '@/components/sidebar/types';
+import type { Orientation } from '@/hooks/useTimeline';
+import { RenderingReadout } from './RenderingReadout';
+import { RenderSettingsPanel } from './RenderSettingsPanel';
+import type { RenderSettings } from './render-settings-types';
+import { useMountKey } from '@/contexts/MountKeyContext';
+import type { UseMcpResult } from 'use-mcp/react';
+import { type ViewerSize, type BackTab, RENDERING_STATUSES } from './viewer-types';
+import {
+  RatioToggle,
+  RenderPrompt,
+  ViewerToolbar,
+  BackFaceTabBar,
+  FilesBackPane,
+  HistoryBackPane,
+  useViewerBackFace,
+} from './viewer-shared';
+
+// ── Video-specific components ──
+
+function ClipContent({ item, size, onRender }: {
+  item: MediaItem;
+  size: ViewerSize;
+  onRender?: () => void;
+}) {
+  if (!item.filePath) return null;
+
+  if (size === 'original') {
+    const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
+    return <video key={item.filePath} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+  }
+
+  const orient = size as Orientation;
+  const renders = item.renders ?? [];
+  const status = item.status;
+
+  if (renders.includes(orient)) {
+    const orientedFile = size === 'landscape' ? 'landscape.mp4'
+      : size === 'portrait' ? 'portrait.mp4'
+      : 'square.mp4';
+    const qIdx = item.filePath.indexOf('?');
+    const qs = qIdx >= 0 ? item.filePath.slice(qIdx) : '';
+    const basePath = qIdx >= 0 ? item.filePath.slice(0, qIdx) : item.filePath;
+    const derivedSrc = basePath.replace(/\/[^/]+$/, `/${orientedFile}`) + qs;
+    const thumbFile = size === 'landscape' ? 'landscape.jpg'
+      : size === 'portrait' ? 'portrait.jpg'
+      : 'square.jpg';
+    const thumbSrc = basePath.replace(/\/[^/]+$/, `/${thumbFile}`) + qs;
+    return <video key={derivedSrc} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+  }
+
+  if (status && RENDERING_STATUSES.has(status)) {
+    return <RenderingReadout asset={item} />;
+  }
+
+  return <RenderPrompt item={item} orientation={orient} onRender={onRender} />;
+}
+
+function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onSettingsChange }: {
+  renderOrientation: Orientation;
+  onSizeChange: (s: ViewerSize) => void;
+  onRender?: (settings: RenderSettings) => void;
+  settings: RenderSettings;
+  onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+}) {
+  const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
+
+  const orientationEntries = allOrientations.map((orient) => ({
+    orient,
+    active: orient === renderOrientation,
+  }));
+
+  const handleApply = () => {
+    onRender?.(settings);
+  };
+
+  const handleClick = (orient: Orientation) => {
+    onSizeChange(orient);
+  };
+
+  const subtitleFieldMap: Record<string, keyof RenderSettings> = {
+    enabled: 'subtitlesEnabled',
+    style: 'subtitleStyle',
+    position: 'subtitlePosition',
+    fontSize: 'fontSize',
+    textColor: 'textColor',
+    highlightColor: 'highlightColor',
+    strokeWidth: 'strokeWidth',
+    strokeColor: 'strokeColor',
+    shadowBlur: 'shadowBlur',
+    shadowOpacity: 'shadowOpacity',
+  };
+
+  const handleSubtitleChange = (field: string, value: string | boolean | number) => {
+    const key = subtitleFieldMap[field] ?? field;
+    onSettingsChange({ ...settings, [key]: value });
+  };
+
+  const handleOsgChange = (field: string, value: string | boolean | null) => {
+    const keyMap: Record<string, keyof RenderSettings> = {
+      position: 'osgPosition',
+      assetId: 'osgAssetId',
+      assetSrc: 'osgAssetSrc',
+    };
+    const key = keyMap[field] ?? field;
+    onSettingsChange(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleAudioChange = (field: string, value: number) => {
+    onSettingsChange({ ...settings, [field]: value });
+  };
+
+  const handleBackgroundChange = (mode: 'blur' | 'black') => {
+    onSettingsChange({ ...settings, backgroundMode: mode });
+  };
+
+  return (
+    <RenderSettingsPanel
+      orientations={orientationEntries}
+      onOrientationClick={handleClick}
+      subtitlesEnabled={settings.subtitlesEnabled}
+      subtitleStyle={settings.subtitleStyle}
+      subtitlePosition={settings.subtitlePosition}
+      fontSize={settings.fontSize}
+      textColor={settings.textColor}
+      highlightColor={settings.highlightColor}
+      strokeWidth={settings.strokeWidth}
+      strokeColor={settings.strokeColor}
+      shadowBlur={settings.shadowBlur}
+      shadowOpacity={settings.shadowOpacity}
+      onSubtitleChange={handleSubtitleChange}
+      audioVolume={settings.audioVolume}
+      audioFadeIn={settings.audioFadeIn}
+      audioFadeOut={settings.audioFadeOut}
+      onAudioChange={handleAudioChange}
+      osgAssetId={settings.osgAssetId}
+      osgAssetSrc={settings.osgAssetSrc}
+      osgPosition={settings.osgPosition}
+      onOsgChange={handleOsgChange}
+      backgroundMode={settings.backgroundMode}
+      onBackgroundChange={handleBackgroundChange}
+      onApply={handleApply}
+    />
+  );
+}
+
+// ── VideoViewer ──
+
+const VIDEO_BACK_TABS: BackTab[] = ['settings', 'files', 'history'];
+
+export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool }: {
+  item: MediaItem;
+  projectSlug: string;
+  size: ViewerSize;
+  onSizeChange: (s: ViewerSize) => void;
+  flipped: boolean;
+  onFlippedChange: (f: boolean) => void;
+  renderOrientation: Orientation;
+  onRender?: (settings?: RenderSettings) => void;
+  pendingFilePosition?: number | null;
+  onClearPendingFilePosition?: () => void;
+  pendingBackTab?: BackTab | null;
+  onClearPendingBackTab?: () => void;
+  settings: RenderSettings;
+  onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+  callTool: UseMcpResult['callTool'];
+}) {
+  useMountKey('viewer');
+
+  const bf = useViewerBackFace({
+    projectSlug,
+    itemId: item.id,
+    callTool,
+    flipped,
+    onFlippedChange,
+    pendingFilePosition,
+    onClearPendingFilePosition,
+    pendingBackTab,
+    onClearPendingBackTab,
+    defaultBackTab: 'settings',
+  });
+
+  return (
+    <div className="flex-1 flex items-center justify-center overflow-hidden">
+      <div
+        className={cn(
+          'flip-card-perspective',
+          size === 'original' ? 'w-full h-full'
+          : size === 'landscape' ? 'aspect-video w-full h-full'
+          : size === 'square' ? 'aspect-square w-full h-full'
+          : 'w-full h-full',
+        )}
+      >
+        <div className={cn(
+          'flip-card-inner w-full h-full relative',
+          flipped && 'flipped',
+        )}>
+          {/* FRONT FACE */}
+          <div className={cn(
+            'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
+            'border border-zinc-600/50',
+          )}>
+            <ViewerToolbar
+              left={<RatioToggle active={size} onSelect={onSizeChange} item={item} />}
+              slug={item.slug}
+              right={
+                <button
+                  tabIndex={-1}
+                  onClick={bf.handleFlipToBack}
+                  title="/settings"
+                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                >
+                  <Settings className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              }
+            />
+
+            <div className={cn(
+              'flex-1 bg-black flex min-h-0 items-center justify-center',
+              (size === 'portrait' || size === 'square') && 'py-2',
+            )}>
+              {size === 'portrait' ? (
+                <div className="aspect-[9/16] h-full max-w-full">
+                  <ClipContent item={item} size={size} onRender={onRender} />
+                </div>
+              ) : size === 'square' ? (
+                <div className="aspect-square h-full max-w-full">
+                  <ClipContent item={item} size={size} onRender={onRender} />
+                </div>
+              ) : (
+                <ClipContent item={item} size={size} onRender={onRender} />
+              )}
+            </div>
+          </div>
+
+          {/* BACK FACE */}
+          <div className="flip-card-back absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
+            <BackFaceTabBar
+              tabs={VIDEO_BACK_TABS}
+              active={bf.backTab}
+              onSelect={bf.setBackTab}
+              slug={item.slug}
+              onClose={() => onFlippedChange(false)}
+            />
+
+            {bf.backTab === 'settings' ? (
+              <div className="flex-1 overflow-auto bg-black">
+                <SettingsPane
+                  renderOrientation={renderOrientation}
+                  onSizeChange={onSizeChange}
+                  onRender={onRender}
+                  settings={settings}
+                  onSettingsChange={onSettingsChange}
+                />
+              </div>
+            ) : bf.backTab === 'files' ? (
+              <FilesBackPane
+                manifest={bf.manifest}
+                manifestLoading={bf.manifestLoading}
+                selectedFile={bf.selectedFile}
+                fileContent={bf.fileContent}
+                fileLoading={bf.fileLoading}
+                fileUrl={bf.fileUrl}
+                handleSelectFile={bf.handleSelectFile}
+                handleFileKeyDown={bf.handleFileKeyDown}
+                fetchManifest={bf.fetchManifest}
+                fetchFileContent={bf.fetchFileContent}
+              />
+            ) : (
+              <HistoryBackPane
+                commits={bf.commits}
+                historyLoading={bf.historyLoading}
+                selectedCommitHash={bf.selectedCommitHash}
+                setSelectedCommitHash={bf.setSelectedCommitHash}
+                handleRestore={bf.handleRestore}
+                fetchHistory={bf.fetchHistory}
+                itemId={item.id}
+                projectSlug={projectSlug}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

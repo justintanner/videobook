@@ -30,7 +30,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, FileListPane, FileContentPane, VideoViewer, ImageViewer, ScriptViewer } from '@/components/center-stage';
 import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { HistoryListPane, HistoryDetailPane } from '@/components/center-stage/GitHistoryPanel';
@@ -1884,7 +1884,7 @@ The figure stops, looking up at a massive screen displaying a countdown timer.
 
 const mockCallTool = (() => Promise.resolve({ content: [], isError: false })) as never;
 
-function Page12_AssetViewer() {
+function Page12_ImageViewer() {
   return (
     <MountKeyProvider>
     <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
@@ -1892,14 +1892,14 @@ function Page12_AssetViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <ImageViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Top-right: Portrait (different image) */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage2} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <ImageViewer item={assetViewerMockImage2} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Bottom-left: /files tab */}
@@ -1968,14 +1968,14 @@ function Page13_VideoViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — /original 1920×1080</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Top-right: Landscape */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Bottom-left: /settings */}
@@ -2050,14 +2050,14 @@ function Page14_ScriptViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Content</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockScript} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <ScriptViewer item={assetViewerMockScript} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Top-right: Script empty */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Empty</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={{ ...assetViewerMockScript, id: 'script-empty', slug: '@script-empty', prompt: null }} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <ScriptViewer item={{ ...assetViewerMockScript, id: 'script-empty', slug: '@script-empty', prompt: null }} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
         </div>
       </div>
       {/* Bottom-left: /files tab */}
@@ -2130,7 +2130,7 @@ const SLIDE_PAGES = [
   Page9_Workflow,
   Page10_CommandSystem,
   Page11_InboxReview,
-  Page12_AssetViewer,
+  Page12_ImageViewer,
   Page13_VideoViewer,
   Page14_ScriptViewer,
 ];
