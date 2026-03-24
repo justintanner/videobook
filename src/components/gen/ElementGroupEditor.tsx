@@ -153,15 +153,14 @@ export function ElementGroupEditor({
   };
 
   return (
-    <div className="space-y-3">
-      {/* Section header */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold tracking-[0.15em] text-violet-400/70">/elements</span>
-        <span className="text-[10px] font-mono text-violet-400/50">
+    <div className="rounded border border-violet-500/15 bg-violet-500/[0.03]">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-violet-500/30 bg-violet-500/15">
+        <span className="font-mono font-bold text-xs tracking-widest text-violet-400">/elements</span>
+        <span className="ml-auto text-[10px] font-mono text-violet-400/50">
           {effectiveVisible}/{maxGroups}
         </span>
       </div>
-
+      <div className="px-2.5 py-2.5 space-y-2.5">
       {activeIndices.map((groupIdx) => {
         const slugsSchema = elementSchemas.get(`element${groupIdx}_slugs`);
         const maxItems = slugsSchema?.maxItems ?? 4;
@@ -279,7 +278,6 @@ export function ElementGroupEditor({
                     'text-violet-300/90 placeholder:text-violet-400/30',
                     'font-mono text-xs leading-relaxed',
                     'focus:outline-none focus:border-violet-400/60',
-                    'shadow-[inset_0_0_15px_rgba(139,92,246,0.1)]',
                     'transition-all duration-200',
                     disabled && 'opacity-50 cursor-not-allowed'
                   )}
@@ -310,9 +308,10 @@ export function ElementGroupEditor({
           )}
         >
           <Plus className="w-3 h-3" />
-          <span>Add Element</span>
+          <span>/elements add</span>
         </button>
       )}
+      </div>
     </div>
   );
 }

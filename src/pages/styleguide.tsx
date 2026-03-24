@@ -875,7 +875,7 @@ function Page2_VideoGeneration() {
                         </GenField>
                       </div>
                     </div>
-                    <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3">
+                    <div className="w-56 shrink-0 p-3 space-y-3">
                       <ImageParamSlots
                         assetFields={[{
                           name: 'image_slugs',
@@ -1183,9 +1183,9 @@ function Page3_Trimming() {
       {/* Toolbar + Waveform */}
       <div className="shrink-0 px-6 py-3 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="violet" />
+          <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="emerald" />
           <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" />
-          <CommandButton command="/snap on" icon={<Magnet className="w-4 h-4" />} size="default" variant="violet" />
+          <CommandButton command="/snap on" icon={<Magnet className="w-4 h-4" />} size="default" variant="emerald" />
           <div className="flex-1" />
           <CommandButton command="/trim" icon={<Scissors className="w-4 h-4" />} size="default" />
         </div>
@@ -2214,7 +2214,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="violet" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
               </div>
             }
           >
@@ -2254,7 +2254,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="violet" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
               </div>
             }
           >
@@ -2296,8 +2296,8 @@ function Page16_ImageGen() {
             }
           >
             <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span className="text-xs font-mono tracking-wider">Routing prompt...</span>
+              <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+              <span className="text-xs font-mono tracking-wider text-emerald-400">generating</span>
             </div>
           </GenPanel>
         </div>
@@ -2372,7 +2372,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
               </div>
             }
           >
@@ -2418,7 +2418,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
               </div>
             }
           >
@@ -2442,7 +2442,7 @@ function Page17_VideoGen() {
                     </GenField>
                   </div>
                 </div>
-                <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
+                <div className="w-56 shrink-0 p-3 space-y-3">
                   <ImageParamSlots
                     assetFields={[{
                       name: 'image_slugs',
@@ -2490,7 +2490,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} disabled />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="amber" state="submitting" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" state="submitting" />
               </div>
             }
           >
@@ -2629,7 +2629,7 @@ function Page18_CommandButtons() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
-                <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+                <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="emerald" />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">amber</span>
@@ -2707,7 +2707,7 @@ function Page18_CommandButtons() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
-                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="violet" />
+                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="emerald" />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">amber</span>

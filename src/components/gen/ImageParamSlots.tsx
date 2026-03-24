@@ -134,42 +134,44 @@ export function ImageParamSlots({
         : `${filledCount}/${maxSlots}`;
 
   return (
-    <div className={inline ? 'flex flex-wrap items-start gap-3' : 'flex flex-col gap-3'}>
-      <div className="flex items-center justify-between w-full">
-        <span className="text-sm font-bold tracking-[0.15em] text-primary/70">{sectionLabel}</span>
-        <span className={cn('text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-primary/50')}>
+    <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+        <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">{sectionLabel}</span>
+        <span className={cn('ml-auto text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-cyan-400/50')}>
           {slotCountLabel}
         </span>
       </div>
-      {needsMore && <p className="text-[10px] text-yellow-400/80 font-mono">{minSlots - filledCount} more required</p>}
-      <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
-        {slots.map(({ slug, index, required }) => (
-          <div
-            key={`slot-${index}`}
-            className={cn('relative', required && !slug && 'ring-1 ring-yellow-400/50 rounded')}
-          >
-            <AssetDropSlot
-              value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: assetType } : null}
-              onChange={(asset) => {
-                if (asset) {
-                  const da: ResolvedAsset = {
-                    slug: asset.slug,
-                    src: asset.src,
-                    type: asset.type,
-                  };
-                  handleSlotChange(index, asset, da);
-                } else {
-                  handleSlotChange(index, null);
-                }
-              }}
-              disabled={disabled}
-              acceptTypes={[assetType]}
-            />
-            {required && !slug && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
-            )}
-          </div>
-        ))}
+      <div className="px-3 py-2.5 space-y-2">
+        {needsMore && <p className="text-[10px] text-yellow-400/80 font-mono">{minSlots - filledCount} more required</p>}
+        <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
+          {slots.map(({ slug, index, required }) => (
+            <div
+              key={`slot-${index}`}
+              className={cn('relative', required && !slug && 'ring-1 ring-yellow-400/50 rounded')}
+            >
+              <AssetDropSlot
+                value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: assetType } : null}
+                onChange={(asset) => {
+                  if (asset) {
+                    const da: ResolvedAsset = {
+                      slug: asset.slug,
+                      src: asset.src,
+                      type: asset.type,
+                    };
+                    handleSlotChange(index, asset, da);
+                  } else {
+                    handleSlotChange(index, null);
+                  }
+                }}
+                disabled={disabled}
+                acceptTypes={[assetType]}
+              />
+              {required && !slug && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

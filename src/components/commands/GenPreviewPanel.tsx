@@ -194,7 +194,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
-  const buttonVariant = category === 'video' ? 'amber' as const : 'violet' as const;
+  const buttonVariant = 'emerald' as const;
 
   // -- Loading state --
   if (loading) {
@@ -205,8 +205,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         onClose={onClose}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-xs font-mono tracking-wider">Routing prompt...</span>
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+          <span className="text-xs font-mono tracking-wider text-emerald-400">generating</span>
         </div>
       </GenPanel>
     );
@@ -234,8 +234,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         onClose={onClose}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-xs font-mono tracking-wider">Loading...</span>
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+          <span className="text-xs font-mono tracking-wider text-emerald-400">generating</span>
         </div>
       </GenPanel>
     );
@@ -386,7 +386,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
               {/* Right column: asset slots + element groups */}
               {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
-                <div className="w-44 shrink-0 border-l border-primary/20 bg-black/20 p-3 space-y-4">
+                <div className="w-56 shrink-0 p-3 space-y-3">
                   {assetFieldInfos.length > 0 && (
                     <ImageParamSlots
                       assetFields={assetFieldInfos}
