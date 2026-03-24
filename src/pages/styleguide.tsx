@@ -2609,6 +2609,18 @@ function Page18_CommandButtons() {
                 <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
                 <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
               </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">amber</span>
+                <CommandButton command="/enhance" icon={<Magnet className="w-3.5 h-3.5" />} variant="amber" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">emerald</span>
+                <CommandButton command="/export" icon={<Download className="w-3.5 h-3.5" />} variant="emerald" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">rose</span>
+                <CommandButton command="/remix" icon={<Music className="w-3.5 h-3.5" />} variant="rose" />
+              </div>
             </div>
           </div>
 
@@ -2667,10 +2679,27 @@ function Page18_CommandButtons() {
             </div>
           </div>
 
-          {/* Violet variant */}
+          {/* Variants */}
           <div className="flex flex-col gap-3">
-            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">violet</p>
-            <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="violet" />
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">variants</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
+                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="violet" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">amber</span>
+                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="amber" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">emerald</span>
+                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="emerald" />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">rose</span>
+                <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="rose" />
+              </div>
+            </div>
           </div>
 
           {/* Disabled */}

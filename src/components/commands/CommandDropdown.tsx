@@ -15,7 +15,7 @@ interface CommandDropdownProps {
   onChange: (value: string) => void;
   icon?: ReactNode;
   size?: 'sm' | 'default' | 'lg';
-  variant?: 'default' | 'violet';
+  variant?: keyof typeof variants;
   disabled?: boolean;
   className?: string;
 }
