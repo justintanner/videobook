@@ -122,7 +122,8 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
   const isDisabled = state === 'disabled';
   const isLoading = state != null && ['charging', 'submitting', 'queued', 'processing'].includes(state);
   const isSuccess = state === 'success';
-  const displayCommand = state ? (commandStateOverrides[command]?.[state] ?? stateCommands[size][state] ?? command) : command;
+  const overrideKey = Object.keys(commandStateOverrides).find(k => command.startsWith(k));
+  const displayCommand = state ? ((overrideKey && commandStateOverrides[overrideKey]?.[state]) ?? stateCommands[size][state] ?? command) : command;
 
   let displayIcon = icon;
   if (isLoading) displayIcon = <Loader2 className={cn(s.iconSize, 'animate-spin')} />;

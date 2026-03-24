@@ -319,6 +319,12 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         } catch { /* non-fatal */ }
       }
 
+      // Read script content from original.md for script assets
+      let prompt = (meta?.prompt as string) ?? null;
+      if (!prompt && a.type === "script") {
+        try { prompt = await readFile(join(a.path, "original.md"), "utf-8"); } catch { /* non-fatal */ }
+      }
+
       return {
         ...a,
         media_url,
@@ -327,7 +333,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         width: (meta?.width as number) ?? null,
         height: (meta?.height as number) ?? null,
         origin: (meta?.origin as string) ?? null,
-        prompt: (meta?.prompt as string) ?? null,
+        prompt,
         renders,
         duration,
         waveform,
