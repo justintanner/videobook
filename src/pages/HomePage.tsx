@@ -73,6 +73,7 @@ export function HomePage() {
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | 'history' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+  const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image' | 'auto'; prompt: string } | null>(null);
@@ -129,10 +130,11 @@ export function HomePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [inboxOpen, genPanel]);
 
-  // Refresh assets after each sync or sort change
+  // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
     listAssets(projectSlug, sortOrder);
+    setRenderingOverrides(new Map());
   }, [projectSlug, syncCount, sortOrder, listAssets]);
 
   // Refresh timeline after each sync
@@ -151,7 +153,7 @@ export function HomePage() {
     }
 
     return assetList.map((asset) => {
-      let status: ClipState = (asset.status ?? 'ready') as ClipState;
+      let status: ClipState = (renderingOverrides.get(asset.id) ?? asset.status ?? 'ready') as ClipState;
       if (failedSet.has(asset.id)) status = 'error';
       return {
         id: asset.id,
@@ -172,7 +174,7 @@ export function HomePage() {
         frameDirs: asset.frame_dirs,
       };
     });
-  }, [assetList, result]);
+  }, [assetList, result, renderingOverrides]);
 
   const assets = useMemo(() =>
     mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
@@ -266,8 +268,13 @@ export function HomePage() {
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
     const orient = viewerSize !== 'original' ? viewerSize as Orientation : undefined;
+    // Optimistically show rendering animation immediately
+    if (orient) {
+      setRenderingOverrides(prev => new Map(prev).set(activeSelection.id, `render-queued-${orient}`));
+    }
     await renderAsset(activeSelection.id, projectSlug, orient, settings);
-  }, [projectSlug, activeSelection, renderAsset, viewerSize]);
+    sync(projectSlug);
+  }, [projectSlug, activeSelection, renderAsset, viewerSize, sync]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {

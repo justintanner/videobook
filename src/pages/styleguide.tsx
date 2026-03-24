@@ -1851,6 +1851,37 @@ const assetViewerMockVideo: MediaItem = {
   thumbnailSrc: '/styleguide-img-cover.jpg',
 };
 
+const assetViewerMockScript: MediaItem = {
+  id: 'script-neon-alley',
+  type: 'script',
+  slug: '@script-neon-alley',
+  title: 'Neon Alley',
+  status: 'ready',
+  filePath: '/script.md',
+  prompt: `# INT. NEON ALLEY - NIGHT
+
+A figure in a long coat walks through rain-slicked streets. Holographic advertisements flicker overhead, casting **cyan light** across wet pavement.
+
+## NARRATOR (V.O.)
+
+> In the year 2087, the line between human and machine had blurred beyond recognition.
+
+The figure stops, looking up at a massive screen displaying a countdown timer.
+
+## NARRATOR (V.O.)
+
+> But some things never change. The need to create. To tell stories. *To be heard.*
+
+---
+
+### SCENE NOTES
+
+- **Location**: Downtown sector 7, neon district
+- **Time**: 2:00 AM, light rain
+- **Props**: Holographic displays, countdown timer
+- **Audio**: Ambient rain, distant synth hum`,
+};
+
 const mockCallTool = (() => Promise.resolve({ content: [], isError: false })) as never;
 
 function Page12_AssetViewer() {
@@ -2009,6 +2040,82 @@ function Page13_VideoViewer() {
   );
 }
 
+// ── Slide 14: Script Viewer ──
+
+function Page14_ScriptViewer() {
+  return (
+    <MountKeyProvider>
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Script with content */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Content</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockScript} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Top-right: Script empty */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Empty</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={{ ...assetViewerMockScript, id: 'script-empty', slug: '@script-empty', prompt: null }} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Bottom-left: /files tab */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — /files</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="files" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <FileListPane
+                files={mockManifestFiles}
+                selectedFile=".original.json"
+                onSelectFile={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <FileContentPane
+                content={mockFileContentJson}
+                loading={false}
+                fileName=".original.json"
+                fileUrl=""
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Bottom-right: /history tab */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — /history</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="history" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+              <HistoryListPane
+                commits={mockGitCommits}
+                selectedHash={mockGitCommits[0].hash}
+                onSelectCommit={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto bg-black">
+              <HistoryDetailPane
+                commit={mockGitCommits[0]}
+                isHead={true}
+                onRestore={noop}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </MountKeyProvider>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -2025,6 +2132,7 @@ const SLIDE_PAGES = [
   Page11_InboxReview,
   Page12_AssetViewer,
   Page13_VideoViewer,
+  Page14_ScriptViewer,
 ];
 
 // ── Main Styleguide ──

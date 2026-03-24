@@ -18,6 +18,8 @@ import type { UseMcpResult } from 'use-mcp/react';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
 import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './GitHistoryPanel';
 import { JsonNode } from '@/components/ui/JsonNode';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
@@ -72,23 +74,53 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
   }
 
   if (item.type === 'script' || item.type === 'plan') {
-    return (
-      <div className="flex items-center justify-center w-full h-full p-6">
-        {item.prompt ? (
-          <p className="text-sm leading-relaxed text-primary/50 whitespace-pre-wrap line-clamp-[12] max-w-lg">{item.prompt}</p>
-        ) : (
-          <FileText className="w-16 h-16 text-primary/20" />
-        )}
-      </div>
-    );
+    return <ScriptViewer item={item} />;
   }
 
   return null;
 }
 
+const mdComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-bold text-primary/80 mt-4 mb-2 font-mono uppercase tracking-wider">{children}</h1>,
+  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-bold text-primary/60 mt-3 mb-1.5 font-mono">{children}</h2>,
+  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-bold text-primary/50 mt-2 mb-1 font-mono">{children}</h3>,
+  p: ({ children }: { children?: React.ReactNode }) => <p className="text-sm leading-relaxed text-primary/40 mb-3">{children}</p>,
+  strong: ({ children }: { children?: React.ReactNode }) => <strong className="text-primary/70 font-bold">{children}</strong>,
+  em: ({ children }: { children?: React.ReactNode }) => <em className="text-primary/50 italic">{children}</em>,
+  ul: ({ children }: { children?: React.ReactNode }) => <ul className="text-sm text-primary/40 pl-5 mb-2 list-disc">{children}</ul>,
+  ol: ({ children }: { children?: React.ReactNode }) => <ol className="text-sm text-primary/40 pl-5 mb-2 list-decimal">{children}</ol>,
+  li: ({ children }: { children?: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
+  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="border-l-2 border-primary/20 pl-3 text-primary/30 italic my-2">{children}</blockquote>,
+  code: ({ children, className }: { children?: React.ReactNode; className?: string }) =>
+    className
+      ? <code className="block font-mono text-xs bg-black/60 text-primary/50 p-3 rounded border border-zinc-800/40 overflow-x-auto mb-3">{children}</code>
+      : <code className="font-mono text-xs bg-primary/5 text-primary/60 px-1 py-0.5 rounded">{children}</code>,
+  hr: () => <hr className="border-zinc-700/30 my-4" />,
+};
 
-export function RenderPrompt({ item, onRender }: {
+function ScriptViewer({ item }: { item: MediaItem }) {
+  if (!item.prompt) {
+    return (
+      <div className="flex items-center justify-center w-full h-full">
+        <FileText className="w-16 h-16 text-primary/20" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full overflow-y-auto p-6">
+      <div className="max-w-lg mx-auto">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+          {item.prompt}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
+export function RenderPrompt({ item, orientation, onRender }: {
   item: MediaItem;
+  orientation: Orientation;
   onRender?: () => void;
 }) {
   const [armed, setArmed] = useState(false);
@@ -124,7 +156,7 @@ export function RenderPrompt({ item, onRender }: {
 
         {/* CommandButton */}
         <CommandButton
-          command={armed ? 'confirm /render' : '/render'}
+          command={armed ? '/yes' : `/render ${orientation}`}
           icon={<Zap className="w-5 h-5" />}
           size="lg"
           state={armed ? 'ready' : undefined}
@@ -133,14 +165,6 @@ export function RenderPrompt({ item, onRender }: {
             : undefined}
           onClick={handleClick}
         />
-
-        {/* Status hint */}
-        <span
-          className="text-[10px] font-mono font-bold tracking-[0.15em] uppercase transition-opacity duration-300"
-          style={{ color: primaryColor, opacity: armed ? 0.6 : 0.3 }}
-        >
-          {armed ? 'press again to confirm' : 'no render available'}
-        </span>
       </div>
     </div>
   );
@@ -181,7 +205,7 @@ function ClipContent({ item, size, onRender }: {
     return <RenderingReadout asset={item} />;
   }
 
-  return <RenderPrompt item={item} onRender={onRender} />;
+  return <RenderPrompt item={item} orientation={orient} onRender={onRender} />;
 }
 
 function ratioLabel(size: ViewerSize, item?: MediaItem): string {
@@ -504,6 +528,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 }) {
   useMountKey('viewer');
   const isClip = item.type === 'video' || item.type === 'final';
+  const isText = item.type === 'script' || item.type === 'plan';
   const [backTab, setBackTab] = useState<BackTab>('settings');
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
@@ -680,7 +705,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       <div
         className={cn(
           'flip-card-perspective',
-          size === 'original' ? 'w-full h-full'
+          isText ? 'w-full h-full'
+            : size === 'original' ? 'w-full h-full'
             : size === 'landscape' ? 'aspect-video w-full h-full'
             : size === 'square' ? 'aspect-square w-full h-full'
             : 'w-full h-full',
@@ -697,11 +723,18 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
           )}>
             {/* Top bar */}
             <div className="shrink-0 px-3 py-3 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
-              <RatioToggle
-                active={size}
-                onSelect={onSizeChange}
-                item={item}
-              />
+              {isText ? (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Markdown</span>
+                </span>
+              ) : (
+                <RatioToggle
+                  active={size}
+                  onSelect={onSizeChange}
+                  item={item}
+                />
+              )}
 
               {/* Center slug */}
               <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -721,10 +754,13 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
             {/* Content */}
             <div className={cn(
-              'flex-1 bg-black flex items-center justify-center min-h-0',
-              (size === 'portrait' || size === 'square') && 'py-2',
+              'flex-1 bg-black flex min-h-0',
+              isText ? 'items-stretch' : 'items-center justify-center',
+              !isText && (size === 'portrait' || size === 'square') && 'py-2',
             )}>
-              {size === 'portrait' ? (
+              {isText ? (
+                <ImageViewer item={item} size={size} />
+              ) : size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
                   {isClip
                     ? <ClipContent item={item} size={size} onRender={onRender} />
