@@ -1863,15 +1863,52 @@ function Page12_AssetViewer() {
       {/* Bottom-left: /files tab */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — /files</p>
-        <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="square" onSizeChange={noop} flipped={true} onFlippedChange={noop} pendingBackTab="files" onClearPendingBackTab={noop} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="files" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <FileListPane
+                files={mockManifestFiles}
+                selectedFile=".original.json"
+                onSelectFile={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <FileContentPane
+                content={mockFileContentJson}
+                loading={false}
+                fileName=".original.json"
+                fileUrl=""
+              />
+            </div>
+          </div>
         </div>
       </div>
       {/* Bottom-right: /history tab */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — /history</p>
-        <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockImage2} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={true} onFlippedChange={noop} pendingBackTab="history" onClearPendingBackTab={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="history" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+              <HistoryListPane
+                commits={mockGitCommits}
+                selectedHash={mockGitCommits[0].hash}
+                onSelectCommit={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto bg-black">
+              <HistoryDetailPane
+                commit={mockGitCommits[0]}
+                isHead={true}
+                onRestore={noop}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
