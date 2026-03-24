@@ -1,4 +1,4 @@
-import { Settings, AudioLines } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -17,14 +17,6 @@ import {
 // ── Image content renderer ──
 
 function ImageContent({ item, size }: { item: MediaItem; size: ViewerSize }) {
-  if (item.type === 'audio') {
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <AudioLines className="w-16 h-16 text-primary/30" />
-      </div>
-    );
-  }
-
   if (!item.filePath) return null;
 
   if (size === 'original') {

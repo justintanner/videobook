@@ -6,6 +6,7 @@ import type { UseMcpResult } from 'use-mcp/react';
 import { VideoViewer } from './VideoViewer';
 import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
+import { AudioViewer } from './AudioViewer';
 import type { ViewerSize, BackTab } from './viewer-types';
 
 // Re-export shared types and components so existing imports keep working
@@ -33,6 +34,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isText = item.type === 'script' || item.type === 'plan';
+  const isAudio = item.type === 'audio';
 
   if (isClip) {
     return (
@@ -59,6 +61,22 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   if (isText) {
     return (
       <ScriptViewer
+        item={item}
+        projectSlug={projectSlug}
+        flipped={flipped}
+        onFlippedChange={onFlippedChange}
+        pendingFilePosition={pendingFilePosition}
+        onClearPendingFilePosition={onClearPendingFilePosition}
+        pendingBackTab={pendingBackTab}
+        onClearPendingBackTab={onClearPendingBackTab}
+        callTool={callTool}
+      />
+    );
+  }
+
+  if (isAudio) {
+    return (
+      <AudioViewer
         item={item}
         projectSlug={projectSlug}
         flipped={flipped}

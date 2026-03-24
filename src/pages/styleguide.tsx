@@ -30,7 +30,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, RenderingReadout, FileListPane, FileContentPane, VideoViewer, ImageViewer, ScriptViewer } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, FileListPane, FileContentPane, VideoViewer, ImageViewer, ScriptViewer, AudioViewer } from '@/components/center-stage';
 import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { HistoryListPane, HistoryDetailPane } from '@/components/center-stage/GitHistoryPanel';
@@ -1882,6 +1882,24 @@ The figure stops, looking up at a massive screen displaying a countdown timer.
 - **Audio**: Ambient rain, distant synth hum`,
 };
 
+const assetViewerMockAudio: MediaItem = {
+  id: 'aud-synth-hum',
+  type: 'audio',
+  slug: '@aud-synth-hum',
+  title: 'Synth Hum',
+  status: 'ready',
+  filePath: '/fixtures/audio-synth.mp3',
+};
+
+const assetViewerMockAudio2: MediaItem = {
+  id: 'aud-rain-ambient',
+  type: 'audio',
+  slug: '@aud-rain-ambient',
+  title: 'Rain Ambient',
+  status: 'ready',
+  filePath: '/fixtures/audio-rain.mp3',
+};
+
 const mockCallTool = (() => Promise.resolve({ content: [], isError: false })) as never;
 
 function Page12_ImageViewer() {
@@ -2116,6 +2134,82 @@ function Page14_ScriptViewer() {
   );
 }
 
+// ── Slide 15: Audio Viewer ──
+
+function Page15_AudioViewer() {
+  return (
+    <MountKeyProvider>
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Audio player */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — Playback</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AudioViewer item={assetViewerMockAudio} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Top-right: Second audio */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — Playback (alt)</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AudioViewer item={assetViewerMockAudio2} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Bottom-left: /files tab */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — /files</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="files" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <FileListPane
+                files={mockManifestFiles}
+                selectedFile=".original.json"
+                onSelectFile={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <FileContentPane
+                content={mockFileContentJson}
+                loading={false}
+                fileName=".original.json"
+                fileUrl=""
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Bottom-right: /history tab */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — /history</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="history" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[280px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40 pr-1 pt-1">
+              <HistoryListPane
+                commits={mockGitCommits}
+                selectedHash={mockGitCommits[0].hash}
+                onSelectCommit={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto bg-black">
+              <HistoryDetailPane
+                commit={mockGitCommits[0]}
+                isHead={true}
+                onRestore={noop}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </MountKeyProvider>
+  );
+}
+
 // ── Slide Pages Array ──
 
 const SLIDE_PAGES = [
@@ -2133,6 +2227,7 @@ const SLIDE_PAGES = [
   Page12_ImageViewer,
   Page13_VideoViewer,
   Page14_ScriptViewer,
+  Page15_AudioViewer,
 ];
 
 // ── Main Styleguide ──
