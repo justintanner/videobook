@@ -15,7 +15,7 @@ interface Command {
   category: "action" | "project" | "context_menu" | "viewer";
   icon: string;
   size: "sm" | "default" | "lg";
-  variant: "default" | "violet";
+  variant: "default" | "violet" | "fuchsia" | "blue";
   chevron: "right" | "down";
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[] };
@@ -24,6 +24,34 @@ interface Command {
 }
 
 const HARDCODED_COMMANDS: Command[] = [
+  {
+    command: "/video",
+    description: "Generate video from prompt",
+    example: "/video a dog on a skateboard @bg-neon",
+    category: "action",
+    icon: "Film",
+    size: "default",
+    variant: "fuchsia",
+    chevron: "right",
+    params: [
+      { name: "prompt", type: "string", required: false, description: "The prompt to generate from" },
+    ],
+    uiAction: "open_gen_video",
+  },
+  {
+    command: "/image",
+    description: "Generate image from prompt",
+    example: "/image a neon fox in a cyberpunk alley",
+    category: "action",
+    icon: "Image",
+    size: "default",
+    variant: "blue",
+    chevron: "right",
+    params: [
+      { name: "prompt", type: "string", required: false, description: "The prompt to generate from" },
+    ],
+    uiAction: "open_gen_image",
+  },
   {
     command: "/generate",
     description: "Generate video or image from prompt",

@@ -48,6 +48,8 @@ describe("slash_commands tool", () => {
 
     // Check known hardcoded commands exist
     const commandNames = commands.map((c) => c.command);
+    expect(commandNames).toContain("/video");
+    expect(commandNames).toContain("/image");
     expect(commandNames).toContain("/generate");
     expect(commandNames).toContain("/trim");
     expect(commandNames).toContain("/trim-audio");

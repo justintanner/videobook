@@ -2,6 +2,8 @@ export interface UiActionCallbacks {
   open_upload: () => void;
   open_inbox: () => void;
   open_gen: (type: string, prompt: string) => void;
+  open_gen_video: (prompt: string) => void;
+  open_gen_image: (prompt: string) => void;
   copy_clipboard: (raw: string) => void;
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
@@ -56,6 +58,12 @@ export function executeUiAction(
       break;
     case 'open_gen':
       (fn as UiActionCallbacks['open_gen'])(ctx.args.type ?? '', ctx.args.prompt ?? ctx.raw);
+      break;
+    case 'open_gen_video':
+      (fn as UiActionCallbacks['open_gen_video'])(ctx.args.prompt ?? ctx.raw);
+      break;
+    case 'open_gen_image':
+      (fn as UiActionCallbacks['open_gen_image'])(ctx.args.prompt ?? ctx.raw);
       break;
     case 'switch_project':
       // The command is /{slug}, so extract slug from the command itself

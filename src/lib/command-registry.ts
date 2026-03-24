@@ -12,7 +12,7 @@ export interface ServerCommand {
   category: 'action' | 'project' | 'context_menu' | 'viewer';
   icon: string;
   size: 'sm' | 'default' | 'lg';
-  variant: 'default' | 'violet';
+  variant: 'default' | 'violet' | 'fuchsia' | 'blue';
   chevron: 'right' | 'down';
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[] };

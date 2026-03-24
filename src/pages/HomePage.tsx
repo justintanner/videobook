@@ -451,6 +451,16 @@ export function HomePage() {
       const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
       setGenPanel({ category, prompt: prompt || '' });
     },
+    open_gen_video: (prompt: string) => {
+      setSelectedItem(null);
+      setTimelineSlotIndex(null);
+      setGenPanel({ category: 'video', prompt: prompt || '' });
+    },
+    open_gen_image: (prompt: string) => {
+      setSelectedItem(null);
+      setTimelineSlotIndex(null);
+      setGenPanel({ category: 'image', prompt: prompt || '' });
+    },
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: (assetId: string) => {
       const item = mediaItems.find(m => m.id === assetId);
