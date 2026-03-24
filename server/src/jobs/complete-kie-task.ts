@@ -7,6 +7,7 @@ import { findVideoFile } from "../media-files.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
 import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
+import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -110,6 +111,9 @@ async function completeKling30Video(
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
 
+  // Auto-whitelist generated videos (user-initiated, skip inbox review)
+  await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
+
   const provenance = {
     source_assets: meta.sourceImageIds,
     model: "kling-3.0/video",
@@ -150,6 +154,9 @@ async function completeGrokImagineVideo(
 
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+
+  // Auto-whitelist generated videos (user-initiated, skip inbox review)
+  await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
   const provenance = {
     source_asset: meta.sourceImageId,

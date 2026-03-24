@@ -81,10 +81,12 @@ const stateClassMap: Partial<Record<ClipState, string>> = {
   loading: 'clip-state-loading cursor-wait',
 };
 
-function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, isError: boolean, isReady: boolean): string {
+function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, isError: boolean, isReady: boolean, itemType?: string): string {
   if (isError) return '#ef4444';
   if (isFinal && (isReady || isRenderingState(status ?? ''))) return '#fbbf24';
   if (isReady) return 'var(--color-primary)';
+
+  if (status === 'generating' && itemType === 'image') return 'rgba(59, 130, 246, 0.7)';
 
   const stateColors: Partial<Record<ClipState, string>> = {
     uploading: 'rgba(0, 255, 255, 0.7)',
@@ -161,7 +163,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
           y1="14"
           x2="14"
           y2="0"
-          stroke={getCornerStrokeColor(item.status, isFinal, isError, isReady)}
+          stroke={getCornerStrokeColor(item.status, isFinal, isError, isReady, item.type)}
           strokeWidth={isGold || isError ? '2.5' : '2'}
         />
       </svg>

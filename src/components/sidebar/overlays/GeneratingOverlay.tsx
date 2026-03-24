@@ -13,20 +13,24 @@ const typeFallbackLabels: Record<string, string> = {
 export function GeneratingOverlay({ item }: OverlayProps) {
   const fallbackLabel = typeFallbackLabels[item.type] ?? 'ASSET';
 
-  const primaryColor = '#22c55e';
+  const primaryColor = item.type === 'image' ? '#3b82f6' : '#22c55e';
   const glowStyle = `0 0 8px ${primaryColor}`;
 
-  const hexToRgba = (hex: string, alpha: number) => {
+  const hexToRgb = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    return `${r}, ${g}, ${b}`;
+  };
+
+  const hexToRgba = (hex: string, alpha: number) => {
+    return `rgba(${hexToRgb(hex)}, ${alpha})`;
   };
 
   const colorRgba = (alpha: number) => hexToRgba(primaryColor, alpha);
 
   return (
-    <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden">
+    <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden" style={{ '--gen-color': hexToRgb(primaryColor) } as React.CSSProperties}>
       {/* Layer 1: CRT Scanlines */}
       <div
         className="absolute inset-0 pointer-events-none opacity-50"
@@ -76,10 +80,10 @@ export function GeneratingOverlay({ item }: OverlayProps) {
       </div>
 
       {/* Layer 4: HUD Corner Brackets */}
-      <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2 border-green-500/70" />
-      <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2 border-green-500/70" />
-      <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2 border-green-500/70" />
-      <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2 border-green-500/70" />
+      <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2" style={{ borderColor: colorRgba(0.7) }} />
+      <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2" style={{ borderColor: colorRgba(0.7) }} />
+      <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2" style={{ borderColor: colorRgba(0.7) }} />
+      <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2" style={{ borderColor: colorRgba(0.7) }} />
 
       {/* Layer 5: Center Content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
@@ -118,8 +122,9 @@ export function GeneratingOverlay({ item }: OverlayProps) {
           {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="w-4 h-1.5 border border-green-500/40"
+              className="w-4 h-1.5 border"
               style={{
+                borderColor: colorRgba(0.4),
                 animation: 'generating-segment-fill 2.5s ease-in-out infinite',
                 animationDelay: `${i * 0.4}s`,
               }}
