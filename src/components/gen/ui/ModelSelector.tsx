@@ -1,4 +1,5 @@
-import { SelectWithChevron } from '@/components/ui/SelectWithChevron';
+import { Box, Globe } from 'lucide-react';
+import { CommandDropdown } from '@/components/commands/CommandDropdown';
 import type { ModelOption } from '../types';
 
 interface ModelSelectorProps {
@@ -10,21 +11,14 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabled }: ModelSelectorProps) {
   return (
-    <div className="space-y-1">
-      <span className="text-sm font-bold tracking-[0.15em] text-primary/70">/model</span>
-      <SelectWithChevron
-        value={selectedModelKey}
-        onChange={onChange}
-        disabled={disabled}
-        className="text-xs font-bold tracking-wide"
-      >
-        {modelOptions.map((option) => (
-          <option key={option.key} value={option.key} className="bg-black text-primary">
-            {option.label}
-          </option>
-        ))}
-      </SelectWithChevron>
-    </div>
+    <CommandDropdown
+      command="/model"
+      value={selectedModelKey}
+      options={modelOptions.map((o) => ({ value: o.key, label: o.label }))}
+      onChange={onChange}
+      disabled={disabled}
+      icon={<Box className="w-3.5 h-3.5" />}
+    />
   );
 }
 
@@ -37,20 +31,13 @@ interface ProviderSelectorProps {
 
 export function ProviderSelector({ selectedProvider, providers, onChange, disabled }: ProviderSelectorProps) {
   return (
-    <div className="space-y-1">
-      <span className="text-sm font-bold tracking-[0.15em] text-primary/70">/provider</span>
-      <SelectWithChevron
-        value={selectedProvider}
-        onChange={onChange}
-        disabled={disabled}
-        className="text-xs font-bold tracking-wide"
-      >
-        {providers.map((p) => (
-          <option key={p} value={p} className="bg-black text-primary">
-            {p}
-          </option>
-        ))}
-      </SelectWithChevron>
-    </div>
+    <CommandDropdown
+      command="/provider"
+      value={selectedProvider}
+      options={providers.map((p) => ({ value: p, label: p }))}
+      onChange={onChange}
+      disabled={disabled}
+      icon={<Globe className="w-3.5 h-3.5" />}
+    />
   );
 }

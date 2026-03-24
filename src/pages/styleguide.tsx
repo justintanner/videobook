@@ -47,7 +47,7 @@ import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
-  Zap, Info, Settings, User, Copy, Trash2,
+  Zap, Info, Settings, User, Copy, Trash2, ImageIcon,
   Plus, Pencil,
   Loader2, Mic,
   Check, RotateCcw,
@@ -837,8 +837,8 @@ function Page2_VideoGeneration() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-y-auto flex flex-col">
               <GenPanel
-                label="VIDEO GEN"
-                icon={<Zap className="w-4 h-4" />}
+                label="VIDEO GENERATION"
+                icon={<Film className="w-3.5 h-3.5" />}
                 onClose={() => {}}
                 headerExtra={<CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />}
                 footer={
@@ -2199,8 +2199,8 @@ function Page16_ImageGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Image Gen (Flux Pro)</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="IMAGE GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="IMAGE GENERATION"
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2214,7 +2214,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
               </div>
             }
           >
@@ -2239,8 +2239,8 @@ function Page16_ImageGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Image Gen Form</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="IMAGE GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="IMAGE GENERATION"
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2254,7 +2254,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
               </div>
             }
           >
@@ -2285,8 +2285,8 @@ function Page16_ImageGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Loading</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="IMAGE GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="IMAGE GENERATION"
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2308,8 +2308,8 @@ function Page16_ImageGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Error</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="IMAGE GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="IMAGE GENERATION"
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2357,8 +2357,8 @@ function Page17_VideoGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Video (text-to-video)</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="VIDEO GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="VIDEO GENERATION"
+            icon={<Film className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2372,7 +2372,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
               </div>
             }
           >
@@ -2403,8 +2403,8 @@ function Page17_VideoGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Video (assets + elements)</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="VIDEO GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="VIDEO GENERATION"
+            icon={<Film className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={
@@ -2418,7 +2418,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
               </div>
             }
           >
@@ -2474,8 +2474,8 @@ function Page17_VideoGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Submitting</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="VIDEO GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="VIDEO GENERATION"
+            icon={<Film className="w-3.5 h-3.5" />}
             onClose={noop}
             closeDisabled
             closeHidden
@@ -2490,7 +2490,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} disabled />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" state="submitting" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} state="submitting" />
               </div>
             }
           >
@@ -2518,8 +2518,8 @@ function Page17_VideoGen() {
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — JSON Payload</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <GenPanel
-            label="VIDEO GEN"
-            icon={<Zap className="w-4 h-4" />}
+            label="VIDEO GENERATION"
+            icon={<Film className="w-3.5 h-3.5" />}
             onClose={noop}
             closeHidden
             headerRight={

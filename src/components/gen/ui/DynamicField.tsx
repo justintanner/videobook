@@ -1,7 +1,7 @@
 import { GenField, GenTextarea } from '@/components/ui/GenField';
-import { GenSelect } from '@/components/ui/GenSelect';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
+import { CommandDropdown } from '@/components/commands/CommandDropdown';
 import type { JSONSchemaProperty, VeoGenerationType } from '../types';
 import { cn } from '@/lib/utils';
 
@@ -88,7 +88,7 @@ export function DynamicField({
 
     return (
       <div className="space-y-2">
-        <label className="text-xs font-bold tracking-[0.15em] text-primary/70">Generation Mode</label>
+        <label className="text-xs font-mono font-bold tracking-widest text-primary/70">Generation Mode</label>
         <div className="flex gap-2">
           {options.map((mode) => {
             const isSelected = currentValue === mode;
@@ -105,7 +105,7 @@ export function DynamicField({
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:outline-none',
                   isSelected
-                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_-3px_rgba(0,255,255,0.5)]'
+                    ? 'bg-primary/20 border-primary text-primary'
                     : 'bg-black/40 border-primary/30 text-primary/60 hover:border-primary/50 hover:text-primary/80'
                 )}
               >
@@ -160,14 +160,13 @@ export function DynamicField({
     }
 
     return (
-      <GenField label={label} required={required}>
-        <GenSelect
-          value={effectiveValue}
-          onChange={(v) => onChange(v)}
-          options={options.map((opt) => ({ value: opt, label: opt }))}
-          disabled={disabled}
-        />
-      </GenField>
+      <CommandDropdown
+        command={"/" + name}
+        value={effectiveValue}
+        options={options.map((opt) => ({ value: opt, label: opt }))}
+        onChange={(v) => onChange(v)}
+        disabled={disabled}
+      />
     );
   }
 
@@ -194,14 +193,13 @@ export function DynamicField({
     }
 
     return (
-      <GenField label={label} required={required}>
-        <GenSelect
-          value={effectiveValue}
-          onChange={(v) => onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v))}
-          options={options.map((opt) => ({ value: opt, label: opt }))}
-          disabled={disabled}
-        />
-      </GenField>
+      <CommandDropdown
+        command={"/" + name}
+        value={effectiveValue}
+        options={options.map((opt) => ({ value: opt, label: opt }))}
+        onChange={(v) => onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v))}
+        disabled={disabled}
+      />
     );
   }
 

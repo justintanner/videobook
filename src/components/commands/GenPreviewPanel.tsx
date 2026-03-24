@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Zap, Loader2, Settings } from 'lucide-react';
+import { Zap, Loader2, Settings, ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
@@ -192,14 +192,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     }
   }, [selectedOption, formValues, projectSlug, onClose]);
 
-  const panelLabel = category === 'video' ? 'VIDEO GEN' : 'IMAGE GEN';
+  const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
+  const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
 
   // -- Loading state --
   if (loading) {
     return (
       <GenPanel
         label={panelLabel}
-        icon={<Zap className="w-4 h-4" />}
+        icon={panelIcon}
         onClose={onClose}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
@@ -215,7 +216,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return (
       <GenPanel
         label={panelLabel}
-        icon={<Zap className="w-4 h-4" />}
+        icon={panelIcon}
         onClose={onClose}
       >
         <ErrorPage message={error} />
@@ -228,7 +229,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return (
       <GenPanel
         label={panelLabel}
-        icon={<Zap className="w-4 h-4" />}
+        icon={panelIcon}
         onClose={onClose}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
@@ -313,8 +314,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           </div>
           <CommandButton
             command="/generate"
-            icon={<Zap className="w-4 h-4" />}
-            size="lg"
+            icon={<Zap className="w-3.5 h-3.5" />}
             state={genState}
             onClick={handleGenerate}
             disabled={!selectedOption}

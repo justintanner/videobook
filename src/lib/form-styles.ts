@@ -6,7 +6,6 @@ export const inputBaseStyles = [
   'text-primary/90',
   'font-mono',
   'focus:outline-none focus:border-primary/60',
-  'shadow-[inset_0_0_10px_rgba(0,255,255,0.1)]',
   'transition-all duration-200',
 ].join(' ');
 
