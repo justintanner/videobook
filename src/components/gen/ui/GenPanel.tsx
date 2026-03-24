@@ -44,14 +44,14 @@ export function GenPanel({
   const header = (
     <div
       className={cn(
-        'flex items-center justify-between pl-2.5 pr-2.5 py-1.5 shrink-0',
+        'flex items-center justify-between px-3 py-3 shrink-0',
         'border-b-2 border-inherit',
         'bg-black/50 backdrop-blur-sm'
       )}
     >
       <div className="flex items-center gap-2">
         <span className="text-cyan-400 drop-shadow-[0_0_6px_#22d3ee] [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
-        <span className="text-xs font-bold tracking-[0.15em] text-cyan-400">{label}</span>
+        <span className="text-sm font-bold tracking-[0.15em] text-cyan-400">{label}</span>
       </div>
       <div className="flex items-center gap-1">
         {headerExtra}

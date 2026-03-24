@@ -15,7 +15,7 @@ export function GenField({ label, children, className, required, actions }: GenF
       {/* Label */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold tracking-[0.15em] text-primary/70">{label}</span>
+          <span className="text-sm font-bold tracking-[0.15em] text-primary/70">{label}</span>
           {required && <span className="text-[8px] font-bold text-red-400/80 tracking-wider">*REQ</span>}
         </div>
         {actions}

@@ -11,7 +11,7 @@ interface ModelSelectorProps {
 export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabled }: ModelSelectorProps) {
   return (
     <div className="space-y-1">
-      <span className="text-xs font-bold tracking-[0.15em] text-primary/70">/model</span>
+      <span className="text-sm font-bold tracking-[0.15em] text-primary/70">/model</span>
       <SelectWithChevron
         value={selectedModelKey}
         onChange={onChange}
@@ -38,7 +38,7 @@ interface ProviderSelectorProps {
 export function ProviderSelector({ selectedProvider, providers, onChange, disabled }: ProviderSelectorProps) {
   return (
     <div className="space-y-1">
-      <span className="text-xs font-bold tracking-[0.15em] text-primary/70">/provider</span>
+      <span className="text-sm font-bold tracking-[0.15em] text-primary/70">/provider</span>
       <SelectWithChevron
         value={selectedProvider}
         onChange={onChange}
