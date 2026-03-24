@@ -46,7 +46,7 @@ import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
-  Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet, ImageIcon,
+  Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
   Zap, Info, Settings, User, Copy, Trash2,
   Plus, Pencil,
   Loader2, Mic,
@@ -2329,24 +2329,33 @@ function Page16_ImageGen() {
 
   return (
     <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
-      {/* Top-left: Category Picker */}
+      {/* Top-left: Image Gen Form (Flux Pro) */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Category Picker</p>
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Image Gen (Flux Pro)</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <GenPanel label="GENERATE" icon={<Zap className="w-4 h-4" />} onClose={noop}>
-            <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
-              <span className="text-xs font-bold tracking-[0.15em] text-primary/50 uppercase">Choose type</span>
-              <div className="flex gap-4">
-                <button type="button" className={cn('flex flex-col items-center gap-3 px-8 py-6 rounded border-2', 'border-primary/30 bg-black/40 text-primary/70', 'hover:border-primary hover:text-primary hover:bg-primary/10', 'transition-all duration-200')}>
-                  <Film className="w-8 h-8" />
-                  <span className="text-xs font-bold tracking-[0.15em] uppercase">Video</span>
-                </button>
-                <button type="button" className={cn('flex flex-col items-center gap-3 px-8 py-6 rounded border-2', 'border-primary/30 bg-black/40 text-primary/70', 'hover:border-primary hover:text-primary hover:bg-primary/10', 'transition-all duration-200')}>
-                  <ImageIcon className="w-8 h-8" />
-                  <span className="text-xs font-bold tracking-[0.15em] uppercase">Image</span>
-                </button>
+          <GenPanel
+            label="IMAGE GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            footer={
+              <div className="flex items-center justify-between">
+                <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
+                <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
               </div>
-              <p className="text-[10px] text-primary/40 font-mono max-w-sm truncate">prompt: A luminous fox made of neon particles drifting through a cyberpunk alley</p>
+            }
+          >
+            <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
+              <div className="mb-3">
+                <GenField label="PROMPT" required>
+                  <GenTextarea value="Cyberpunk street market at midnight, rain reflections on neon-lit pavement" onChange={noop} rows={5} />
+                </GenField>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-4">
+                <GenField label="Aspect Ratio">
+                  <GenToggle value="16:9" onChange={noop} options={['1:1', '16:9', '9:16']} />
+                </GenField>
+              </div>
             </div>
           </GenPanel>
         </div>

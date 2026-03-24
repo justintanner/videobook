@@ -76,7 +76,7 @@ export function HomePage() {
   const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image' | 'auto'; prompt: string } | null>(null);
+  const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
@@ -443,9 +443,12 @@ export function HomePage() {
     open_upload: triggerUpload,
     open_inbox: () => setInboxOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
-    open_gen_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'auto', prompt: prompt || '' }); },
-    open_video_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'video', prompt: prompt || '' }); },
-    open_image_preview: (prompt: string) => { setSelectedItem(null); setTimelineSlotIndex(null); setGenPanel({ category: 'image', prompt: prompt || '' }); },
+    open_gen: (type: string, prompt: string) => {
+      setSelectedItem(null);
+      setTimelineSlotIndex(null);
+      const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
+      setGenPanel({ category, prompt: prompt || '' });
+    },
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: (assetId: string) => {
       const item = mediaItems.find(m => m.id === assetId);

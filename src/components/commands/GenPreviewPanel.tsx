@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Zap, Loader2, Film, ImageIcon, Settings } from 'lucide-react';
+import { Zap, Loader2, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
 import { ModelSelector } from '@/components/gen/ui/ModelSelector';
@@ -15,10 +15,8 @@ import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsse
 import type { ExecuteButtonState } from './types';
 import type { UseMcpResult } from 'use-mcp/react';
 
-type GenCategory = 'video' | 'image' | 'auto';
-
 interface GenPreviewPanelProps {
-  category: GenCategory;
+  category: 'video' | 'image';
   prompt: string;
   onClose: () => void;
   callTool: UseMcpResult['callTool'];
@@ -36,10 +34,6 @@ export function GenPreviewPanel({
   callTool,
   projectSlug,
 }: GenPreviewPanelProps) {
-  const [activeCategory, setActiveCategory] = useState<'video' | 'image' | null>(
-    category !== 'auto' ? category : null,
-  );
-  const promptText = initialPrompt;
   const [preview, setPreview] = useState<FullPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,20 +76,13 @@ export function GenPreviewPanel({
     }
   }, [projectSlug]);
 
-  // Auto-fetch when category is known
+  // Fetch preview on mount
   const hasFetched = useRef(false);
   useEffect(() => {
     if (hasFetched.current) return;
-    if (activeCategory) {
-      hasFetched.current = true;
-      fetchPreview(activeCategory, initialPrompt);
-    }
-  }, [activeCategory, initialPrompt, fetchPreview]);
-
-  const handleCategorySelect = useCallback((cat: 'video' | 'image') => {
-    setActiveCategory(cat);
-    fetchPreview(cat, promptText);
-  }, [promptText, fetchPreview]);
+    hasFetched.current = true;
+    fetchPreview(category, initialPrompt);
+  }, [category, initialPrompt, fetchPreview]);
 
   const handleModelChange = useCallback((modelKey: string) => {
     setSelectedModelKey(modelKey);
@@ -173,63 +160,13 @@ export function GenPreviewPanel({
     }
   }, [selectedOption, formValues, projectSlug, onClose]);
 
-  // -- Category picker (auto mode, no category selected yet) --
-  if (!activeCategory) {
-    return (
-      <GenPanel
-        label="GENERATE"
-        icon={<Zap className="w-4 h-4" />}
-        onClose={onClose}
-      >
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
-          <span className="text-xs font-bold tracking-[0.15em] text-primary/50 uppercase">
-            Choose type
-          </span>
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => handleCategorySelect('video')}
-              className={cn(
-                'flex flex-col items-center gap-3 px-8 py-6 rounded border-2',
-                'border-primary/30 bg-black/40 text-primary/70',
-                'hover:border-primary hover:text-primary hover:bg-primary/10',
-                'transition-all duration-200',
-                'focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none',
-              )}
-            >
-              <Film className="w-8 h-8" />
-              <span className="text-xs font-bold tracking-[0.15em] uppercase">Video</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCategorySelect('image')}
-              className={cn(
-                'flex flex-col items-center gap-3 px-8 py-6 rounded border-2',
-                'border-primary/30 bg-black/40 text-primary/70',
-                'hover:border-primary hover:text-primary hover:bg-primary/10',
-                'transition-all duration-200',
-                'focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none',
-              )}
-            >
-              <ImageIcon className="w-8 h-8" />
-              <span className="text-xs font-bold tracking-[0.15em] uppercase">Image</span>
-            </button>
-          </div>
-          {promptText && (
-            <p className="text-[10px] text-primary/40 font-mono max-w-sm truncate">
-              prompt: {promptText}
-            </p>
-          )}
-        </div>
-      </GenPanel>
-    );
-  }
+  const panelLabel = category === 'video' ? 'VIDEO GEN' : 'IMAGE GEN';
 
   // -- Loading state --
   if (loading) {
     return (
       <GenPanel
-        label={activeCategory === 'video' ? 'VIDEO GEN' : 'IMAGE GEN'}
+        label={panelLabel}
         icon={<Zap className="w-4 h-4" />}
         onClose={onClose}
       >
@@ -245,7 +182,7 @@ export function GenPreviewPanel({
   if (error && !preview) {
     return (
       <GenPanel
-        label={activeCategory === 'video' ? 'VIDEO GEN' : 'IMAGE GEN'}
+        label={panelLabel}
         icon={<Zap className="w-4 h-4" />}
         onClose={onClose}
       >
@@ -258,7 +195,7 @@ export function GenPreviewPanel({
   if (!preview) {
     return (
       <GenPanel
-        label={activeCategory === 'video' ? 'VIDEO GEN' : 'IMAGE GEN'}
+        label={panelLabel}
         icon={<Zap className="w-4 h-4" />}
         onClose={onClose}
       >
@@ -306,7 +243,7 @@ export function GenPreviewPanel({
 
   return (
     <GenPanel
-      label={activeCategory === 'video' ? 'VIDEO GEN' : 'IMAGE GEN'}
+      label={panelLabel}
       icon={<Zap className="w-4 h-4" />}
       onClose={onClose}
       closeDisabled={isDisabled}
