@@ -59,7 +59,7 @@ const orientationTabLabels: Record<Orientation, string> = {
 
 function SettingsSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="p-3 space-y-2.5" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
+    <div className="p-3 space-y-2" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
       <div className="flex items-center gap-2">
         {icon && <span className="text-primary/60">{icon}</span>}
         <span className="text-[12px] font-mono font-bold tracking-[0.12em] text-muted-foreground">{title}</span>
@@ -73,17 +73,6 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="w-[96px] shrink-0 text-[13px] leading-[18px] font-mono text-muted-foreground">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function SettingSubGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="pl-2 space-y-1.5"
-      style={{ borderLeft: '2px solid #2A3040' }}
-    >
       {children}
     </div>
   );
@@ -387,23 +376,18 @@ export function RenderSettingsPanel({
               <SettingRow label="Highlight">
                 <ColorSwatch disabled={disabled} value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
               </SettingRow>
-              <div className="h-px" style={{ background: '#1F2A36' }} />
-              <SettingSubGroup>
-                <SettingRow label="Stroke">
-                  <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
-                </SettingRow>
-                <SettingRow label="Stroke Color">
-                  <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
-                </SettingRow>
-              </SettingSubGroup>
-              <SettingSubGroup>
-                <SettingRow label="Shadow">
-                  <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
-                </SettingRow>
-                <SettingRow label="Shadow Opacity">
-                  <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
-                </SettingRow>
-              </SettingSubGroup>
+              <SettingRow label="Stroke">
+                <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
+              </SettingRow>
+              <SettingRow label="Stroke Color">
+                <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
+              </SettingRow>
+              <SettingRow label="Shadow">
+                <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
+              </SettingRow>
+              <SettingRow label="Shadow Opacity">
+                <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
+              </SettingRow>
             </SettingsSection>
 
           </div>
