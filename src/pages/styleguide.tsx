@@ -2340,6 +2340,11 @@ function Page16_ImageGen() {
             icon={<Zap className="w-4 h-4" />}
             onClose={noop}
             closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2375,6 +2380,11 @@ function Page16_ImageGen() {
             icon={<Zap className="w-4 h-4" />}
             onClose={noop}
             closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2411,7 +2421,17 @@ function Page16_ImageGen() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Loading</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <GenPanel label="IMAGE GEN" icon={<Zap className="w-4 h-4" />} onClose={noop}>
+          <GenPanel
+            label="IMAGE GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
+          >
             <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span className="text-xs font-mono tracking-wider">Routing prompt...</span>
@@ -2424,7 +2444,17 @@ function Page16_ImageGen() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Error</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <GenPanel label="IMAGE GEN" icon={<Zap className="w-4 h-4" />} onClose={noop}>
+          <GenPanel
+            label="IMAGE GEN"
+            icon={<Zap className="w-4 h-4" />}
+            onClose={noop}
+            closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
+          >
             <ErrorPage message="Model 'flux-ultra' is not available. Available image models: imagen4, flux_pro, dall_e_4" />
           </GenPanel>
         </div>
@@ -2468,6 +2498,11 @@ function Page17_VideoGen() {
             icon={<Zap className="w-4 h-4" />}
             onClose={noop}
             closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2509,6 +2544,11 @@ function Page17_VideoGen() {
             icon={<Zap className="w-4 h-4" />}
             onClose={noop}
             closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2576,6 +2616,11 @@ function Page17_VideoGen() {
             onClose={noop}
             closeDisabled
             closeHidden
+            headerRight={
+              <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
+                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+              </span>
+            }
             footer={
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2614,9 +2659,9 @@ function Page17_VideoGen() {
             icon={<Zap className="w-4 h-4" />}
             onClose={noop}
             closeHidden
-            headerExtra={
+            headerRight={
               <span className="w-6 h-6 flex items-center justify-center text-muted-foreground">
-                <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+                <RotateCcw className="w-3.5 h-3.5 stroke-[2.5]" />
               </span>
             }
           >
