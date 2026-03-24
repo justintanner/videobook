@@ -9,6 +9,7 @@ import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
+import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer } from '@/components/center-stage';
@@ -554,30 +555,38 @@ export function HomePage() {
                 sortOrder={sortOrder}
                 onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
               />
-              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                {assets.map((item) => {
-                  const menu = (
-                    <AssetMenu
-                      slug={item.slug}
-                      itemType={item.type}
-                      onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
+              {leftCollapsed ? (
+                <div className="flex flex-col items-center gap-2.5 overflow-y-auto flex-1 py-2">
+                  {assets.map(item => (
+                    <SidebarMicroThumb key={item.id} item={item} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                  {assets.map((item) => {
+                    const menu = (
+                      <AssetMenu
+                        slug={item.slug}
+                        itemType={item.type}
+                        onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
 
-                      onAnimateCommand={handleAnimateCommand}
-                      onAnimateEdit={handleAnimateEdit}
-                      MenuItem={ContextMenuItem}
-                    />
-                  );
-                  return (
-                    <div key={item.id} className="w-full">
-                      {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                      {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                      {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                      {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    </div>
-                  );
-                })}
-                <UploadSlot onClick={triggerUpload} />
-              </div>
+                        onAnimateCommand={handleAnimateCommand}
+                        onAnimateEdit={handleAnimateEdit}
+                        MenuItem={ContextMenuItem}
+                      />
+                    );
+                    return (
+                      <div key={item.id} className="w-full">
+                        {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      </div>
+                    );
+                  })}
+                  <UploadSlot onClick={triggerUpload} />
+                </div>
+              )}
             </CollapsibleSidebar>
 
             {/* Center Stage */}
@@ -634,28 +643,36 @@ export function HomePage() {
                 sortOrder={sortOrder}
                 onSortChange={() => setSortOrder(s => s === 'newest' ? 'oldest' : 'newest')}
               />
-              <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
-                {clips.map((item) => {
-                  const menu = (
-                    <AssetMenu
-                      slug={item.slug}
-                      itemType={item.type}
-                      onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
+              {rightCollapsed ? (
+                <div className="flex flex-col items-center gap-2.5 overflow-y-auto flex-1 py-2">
+                  {clips.map(item => (
+                    <SidebarMicroThumb key={item.id} item={item} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
+                  {clips.map((item) => {
+                    const menu = (
+                      <AssetMenu
+                        slug={item.slug}
+                        itemType={item.type}
+                        onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
 
-                      onAnimateCommand={handleAnimateCommand}
-                      onAnimateEdit={handleAnimateEdit}
-                      MenuItem={ContextMenuItem}
-                    />
-                  );
-                  return (
-                    <div key={item.id} className="w-full">
-                      {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                      {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                    </div>
-                  );
-                })}
-                <UploadSlot onClick={triggerUpload} />
-              </div>
+                        onAnimateCommand={handleAnimateCommand}
+                        onAnimateEdit={handleAnimateEdit}
+                        MenuItem={ContextMenuItem}
+                      />
+                    );
+                    return (
+                      <div key={item.id} className="w-full">
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                      </div>
+                    );
+                  })}
+                  <UploadSlot onClick={triggerUpload} />
+                </div>
+              )}
             </CollapsibleSidebar>
           </div>
 

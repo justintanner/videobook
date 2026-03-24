@@ -39,6 +39,7 @@ import { DEFAULT_RENDER_SETTINGS } from '@/components/center-stage/render-settin
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
+import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { CloseButton } from '@/components/gen/ui';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
@@ -628,15 +629,14 @@ function Page1_FinalVideoPreview() {
           onInboxClick={() => {}}
         />
         <div className="flex flex-row overflow-hidden">
-          {/* Left Sidebar — Assets */}
-          <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
-            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={false} onToggle={() => {}} side="left" sortOrder="newest" onSortChange={() => {}} />
-            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              <div className="w-full"><ImageCard item={demoImageMock} /></div>
-              <div className="w-full"><ImageCard item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} /></div>
-              <div className="w-full"><ScriptCard item={{ id: 'demo-script', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} /></div>
-              <div className="w-full"><AudioCard item={{ id: 'demo-audio', type: 'audio', slug: '@bg-music', title: 'Background Music', filePath: '/audio.mp3', status: 'ready' }} /></div>
-              <UploadSlot />
+          {/* Left Sidebar — Assets (collapsed with micro thumbs) */}
+          <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}} collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
+            <SidebarHeader icon={<Grid3x3 className="w-3.5 h-3.5" />} title="Assets" collapsed={true} onToggle={() => {}} side="left" />
+            <div className="flex flex-col items-center gap-2.5 overflow-y-auto flex-1 py-2">
+              <SidebarMicroThumb item={demoImageMock} />
+              <SidebarMicroThumb item={{ ...demoImageMock, id: 'demo-img-2', slug: '@img-cover', thumbnailSrc: '/styleguide-img-cover.jpg', filePath: '/styleguide-img-cover.jpg' }} />
+              <SidebarMicroThumb item={{ id: 'demo-script', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: sampleScript }} />
+              <SidebarMicroThumb item={{ id: 'demo-audio', type: 'audio', slug: '@bg-music', title: 'Background Music', filePath: '/audio.mp3', status: 'ready' }} />
             </div>
           </CollapsibleSidebar>
 
@@ -1362,6 +1362,13 @@ function Page9_Workflow() {
           <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex min-h-0">
             <CollapsibleSidebar side="left" collapsed={true} onToggle={() => {}}>
               <SidebarHeader icon={<Film className="w-4 h-4" />} title="CLIPS" collapsed={true} onToggle={() => {}} side="left" />
+              <div className="flex flex-col items-center gap-2.5 overflow-y-auto flex-1 py-2">
+                <SidebarMicroThumb item={cardOverlayMocks[0].item} />
+                <SidebarMicroThumb item={{ ...cardOverlayMocks[0].item, id: 'sb-v2', slug: '@sky-ghost', title: 'Sky Ghost', thumbnailSrc: '/styleguide-vid-sky-ghost.jpg', filePath: '/styleguide-vid-sky-ghost.jpg', durationSeconds: 45 }} selected />
+                <SidebarMicroThumb item={{ ...cardOverlayMocks[0].item, id: 'sb-v3', slug: '@turret-cyber', title: 'Turret Cyber', thumbnailSrc: '/styleguide-vid-turret-cyber.jpg', filePath: '/styleguide-vid-turret-cyber.jpg', durationSeconds: 60 }} />
+                <SidebarMicroThumb item={cardOverlayMocks[2].item} />
+                <SidebarMicroThumb item={cardOverlayMocks[10].item} />
+              </div>
             </CollapsibleSidebar>
           </div>
         </div>
@@ -1389,6 +1396,13 @@ function Page9_Workflow() {
           <div className="flex-1 border border-zinc-700/50 rounded-lg overflow-hidden flex justify-end min-h-0">
             <CollapsibleSidebar side="right" collapsed={true} onToggle={() => {}}>
               <SidebarHeader icon={<Grid3x3 className="w-4 h-4" />} title="ASSETS" collapsed={true} onToggle={() => {}} side="right" />
+              <div className="flex flex-col items-center gap-2.5 overflow-y-auto flex-1 py-2">
+                <SidebarMicroThumb item={demoImageMock} selected />
+                <SidebarMicroThumb item={{ ...demoImageMock, id: 'sb-img2', slug: '@img-cyber-fresh', title: 'Cyber Fresh', thumbnailSrc: '/styleguide-img-cyber-fresh.jpg', filePath: '/styleguide-img-cyber-fresh.jpg' }} />
+                <SidebarMicroThumb item={{ id: 'sb-aud1', type: 'audio', slug: '@voiceover', title: 'Voiceover', filePath: '/audio.wav', status: 'ready' }} />
+                <SidebarMicroThumb item={{ id: 'sb-script1', type: 'script', slug: '@script', title: 'Script', filePath: '/script.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour.\n\nScene 2: Close-up of hands typing.' }} />
+                <SidebarMicroThumb item={{ id: 'sb-plan1', type: 'plan', slug: '@plan', title: 'Plan', filePath: '/plan.md', status: 'ready', prompt: 'Scene 1: Wide establishing shot of the city skyline at golden hour.\n\nScene 2: Close-up of hands typing.' }} />
+              </div>
             </CollapsibleSidebar>
           </div>
         </div>
