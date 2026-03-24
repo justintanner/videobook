@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Zap, Loader2, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
 import { ModelSelector } from '@/components/gen/ui/ModelSelector';
 import { DynamicField } from '@/components/gen/ui/DynamicField';
@@ -15,6 +16,11 @@ import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsse
 import type { ExecuteButtonState } from './types';
 import type { UseMcpResult } from 'use-mcp/react';
 
+export interface GenPreviewPanelHandle {
+  setField: (name: string, value: string) => void;
+  setModel: (key: string) => void;
+}
+
 interface GenPreviewPanelProps {
   category: 'video' | 'image';
   prompt: string;
@@ -27,13 +33,15 @@ function getPreviewToolName(cat: 'video' | 'image'): string {
   return cat === 'video' ? 'preview_video' : 'preview_image';
 }
 
-export function GenPreviewPanel({
+export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanelProps>(function GenPreviewPanel({
   category,
   prompt: initialPrompt,
   onClose,
   callTool,
   projectSlug,
-}: GenPreviewPanelProps) {
+}, ref) {
+  useMountKey('gen');
+
   const [preview, setPreview] = useState<FullPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +101,15 @@ export function GenPreviewPanel({
       setDroppedAssets(new Map());
     }
   }, [preview, formValues.prompt]);
+
+  useImperativeHandle(ref, () => ({
+    setField: (name: string, value: string) => {
+      setFormValues((prev) => ({ ...prev, [name]: value }));
+    },
+    setModel: (key: string) => {
+      handleModelChange(key);
+    },
+  }), [handleModelChange]);
 
   const handleFieldChange = useCallback((fieldName: string, value: unknown, dropped?: ResolvedAsset) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
@@ -407,4 +424,4 @@ export function GenPreviewPanel({
       </div>
     </GenPanel>
   );
-}
+});

@@ -20,6 +20,13 @@ export interface UiActionCallbacks {
   settings_audio: (field: string, value: string) => void;
   settings_bg: (mode: string) => void;
   settings_osg: (field: string, value: string) => void;
+  gen_prompt: (text: string) => void;
+  gen_model: (key: string) => void;
+  gen_aspect: (ratio: string) => void;
+  gen_duration: (value: string) => void;
+  gen_mode: (value: string) => void;
+  gen_style: (value: string) => void;
+  gen_neg: (text: string) => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;
@@ -66,6 +73,27 @@ export function executeUiAction(
       break;
     case 'settings_osg':
       (fn as UiActionCallbacks['settings_osg'])(ctx.args.field ?? '', ctx.args.value ?? '');
+      break;
+    case 'gen_prompt':
+      (fn as UiActionCallbacks['gen_prompt'])(ctx.args.text ?? ctx.raw);
+      break;
+    case 'gen_model':
+      (fn as UiActionCallbacks['gen_model'])(ctx.args.key ?? ctx.raw);
+      break;
+    case 'gen_aspect':
+      (fn as UiActionCallbacks['gen_aspect'])(ctx.args.ratio ?? ctx.raw);
+      break;
+    case 'gen_duration':
+      (fn as UiActionCallbacks['gen_duration'])(ctx.args.value ?? ctx.raw);
+      break;
+    case 'gen_mode':
+      (fn as UiActionCallbacks['gen_mode'])(ctx.args.value ?? ctx.raw);
+      break;
+    case 'gen_style':
+      (fn as UiActionCallbacks['gen_style'])(ctx.args.value ?? ctx.raw);
+      break;
+    case 'gen_neg':
+      (fn as UiActionCallbacks['gen_neg'])(ctx.args.text ?? ctx.raw);
       break;
     default:
       // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info

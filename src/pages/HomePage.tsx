@@ -22,6 +22,7 @@ import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { InboxDrawer } from '@/components/commands';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
+import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -78,6 +79,7 @@ export function HomePage() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
+  const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
 
@@ -493,6 +495,13 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
+    gen_prompt: (text: string) => genPanelRef.current?.setField('prompt', text),
+    gen_model: (key: string) => genPanelRef.current?.setModel(key),
+    gen_aspect: (ratio: string) => genPanelRef.current?.setField('aspect_ratio', ratio),
+    gen_duration: (value: string) => genPanelRef.current?.setField('duration', value),
+    gen_mode: (value: string) => genPanelRef.current?.setField('mode', value),
+    gen_style: (value: string) => genPanelRef.current?.setField('style', value),
+    gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
@@ -604,6 +613,7 @@ export function HomePage() {
               <div className="flex-1 p-4 overflow-hidden flex flex-col">
                 {genPanel != null ? (
                   <GenPreviewPanel
+                    ref={genPanelRef}
                     category={genPanel.category}
                     prompt={genPanel.prompt}
                     onClose={() => setGenPanel(null)}

@@ -10,7 +10,8 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabled }: ModelSelectorProps) {
   return (
-    <div className="max-w-xs">
+    <div className="flex items-center gap-2 max-w-xs">
+      <span className="text-[10px] font-mono text-primary/40 tracking-wider shrink-0">/model</span>
       <SelectWithChevron
         value={selectedModelKey}
         onChange={onChange}

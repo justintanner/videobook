@@ -2328,7 +2328,9 @@ function Page16_ImageGen() {
   const [imgModel, setImgModel] = useState('imagen4');
 
   return (
-    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+    <div className="w-full h-full flex flex-col gap-4">
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 pl-1">IMAGE GENERATION</h1>
+      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4">
       {/* Top-left: Image Gen Form (Flux Pro) */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Image Gen (Flux Pro)</p>
@@ -2347,12 +2349,12 @@ function Page16_ImageGen() {
           >
             <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
               <div className="mb-3">
-                <GenField label="PROMPT" required>
+                <GenField label="/prompt" required>
                   <GenTextarea value="Cyberpunk street market at midnight, rain reflections on neon-lit pavement" onChange={noop} rows={5} />
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="Aspect Ratio">
+                <GenField label="/aspect">
                   <GenToggle value="16:9" onChange={noop} options={['1:1', '16:9', '9:16']} />
                 </GenField>
               </div>
@@ -2379,18 +2381,18 @@ function Page16_ImageGen() {
           >
             <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
               <div className="mb-3">
-                <GenField label="PROMPT" required>
+                <GenField label="/prompt" required>
                   <GenTextarea value={imgPrompt} onChange={setImgPrompt} rows={5} />
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="Aspect Ratio">
+                <GenField label="/aspect">
                   <GenToggle value={imgAspect} onChange={setImgAspect} options={['1:1', '16:9', '9:16', '4:3', '3:4']} />
                 </GenField>
-                <GenField label="Style">
+                <GenField label="/style">
                   <GenToggle value={imgStyle} onChange={setImgStyle} options={['photorealistic', 'digital_art', 'anime']} />
                 </GenField>
-                <GenField label="Negative Prompt">
+                <GenField label="/neg">
                   <GenTextarea value={imgNeg} onChange={setImgNeg} placeholder="What to avoid..." rows={2} />
                 </GenField>
               </div>
@@ -2421,6 +2423,7 @@ function Page16_ImageGen() {
           </GenPanel>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -2447,7 +2450,9 @@ function Page17_VideoGen() {
   });
 
   return (
-    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+    <div className="w-full h-full flex flex-col gap-4">
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 pl-1">VIDEO GENERATION</h1>
+      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4">
       {/* Top-left: Video Gen (text-to-video) */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">GenPreview — Video (text-to-video)</p>
@@ -2466,18 +2471,18 @@ function Page17_VideoGen() {
           >
             <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
               <div className="mb-3">
-                <GenField label="PROMPT" required>
+                <GenField label="/prompt" required>
                   <GenTextarea value={vidPrompt} onChange={setVidPrompt} rows={5} />
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="Aspect Ratio">
+                <GenField label="/aspect">
                   <GenToggle value={vidAspect} onChange={setVidAspect} options={['16:9', '9:16']} />
                 </GenField>
-                <GenField label="Duration">
+                <GenField label="/duration">
                   <GenToggle value={vidDuration} onChange={setVidDuration} options={['5', '8']} compact />
                 </GenField>
-                <GenField label="Model">
+                <GenField label="/model">
                   <GenToggle value={vidModel} onChange={setVidModel} options={['veo3_fast', 'veo3']} />
                 </GenField>
               </div>
@@ -2506,18 +2511,18 @@ function Page17_VideoGen() {
               <div className="flex gap-4">
                 <div className="flex-1">
                   <div className="mb-3">
-                    <GenField label="PROMPT" required>
+                    <GenField label="/prompt" required>
                       <GenTextarea value={vid2Prompt} onChange={setVid2Prompt} rows={5} />
                     </GenField>
                   </div>
                   <div className="flex flex-wrap gap-x-6 gap-y-4">
-                    <GenField label="Aspect Ratio">
+                    <GenField label="/aspect">
                       <GenToggle value={vid2Aspect} onChange={setVid2Aspect} options={['16:9', '9:16', '1:1']} />
                     </GenField>
-                    <GenField label="Duration">
+                    <GenField label="/duration">
                       <GenToggle value={vid2Duration} onChange={setVid2Duration} options={['5', '10']} compact />
                     </GenField>
-                    <GenField label="Mode">
+                    <GenField label="/mode">
                       <GenToggle value={vid2Mode} onChange={setVid2Mode} options={['std', 'pro']} />
                     </GenField>
                   </div>
@@ -2568,15 +2573,15 @@ function Page17_VideoGen() {
           >
             <div className="flex-1 overflow-y-auto pl-4 pr-6 py-4">
               <div className="mb-3">
-                <GenField label="PROMPT" required>
+                <GenField label="/prompt" required>
                   <GenTextarea value="Aerial drone shot sweeping over a bioluminescent forest at twilight" onChange={noop} rows={5} disabled />
                 </GenField>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-4">
-                <GenField label="Aspect Ratio">
+                <GenField label="/aspect">
                   <GenToggle value="16:9" onChange={noop} options={['16:9', '9:16']} disabled />
                 </GenField>
-                <GenField label="Duration">
+                <GenField label="/duration">
                   <GenToggle value="8" onChange={noop} options={['5', '8']} compact disabled />
                 </GenField>
               </div>
@@ -2616,6 +2621,7 @@ function Page17_VideoGen() {
             </div>
           </GenPanel>
         </div>
+      </div>
       </div>
     </div>
   );
