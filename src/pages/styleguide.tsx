@@ -43,9 +43,6 @@ import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { CloseButton } from '@/components/gen/ui';
 import type { MediaItem } from '@/components/sidebar/types';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
-import { TimelinePlayer } from '@/components/center-stage/TimelinePlayer';
-import type { TimelinePreviewData } from '@/components/center-stage/TimelinePlayer';
-import type { Orientation } from '@/hooks/useTimeline';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
@@ -1930,93 +1927,81 @@ function Page12_AssetViewer() {
   );
 }
 
-// ── Slide 13: Timeline Player ──
+// ── Slide 13: Video Viewer ──
 
-const timelinePreviewByOrientation: Record<Orientation, TimelinePreviewData> = {
-  landscape: {
-    compositionWidth: 1920,
-    compositionHeight: 1080,
-    fps: 30,
-    totalDurationInFrames: 201,
-    slots: [{ src: '/landscape.mp4', durationInFrames: 201, volume: 100, fadeIn: 0, fadeOut: 0 }],
-    slotOffsets: [0],
-    ready: true,
-  },
-  portrait: {
-    compositionWidth: 1080,
-    compositionHeight: 1920,
-    fps: 30,
-    totalDurationInFrames: 300,
-    slots: [{ src: '/portrait.mp4', durationInFrames: 300, volume: 100, fadeIn: 0, fadeOut: 0 }],
-    slotOffsets: [0],
-    ready: true,
-  },
-  square: {
-    compositionWidth: 1080,
-    compositionHeight: 1080,
-    fps: 30,
-    totalDurationInFrames: 1077,
-    slots: [{ src: '/square.mp4', durationInFrames: 1077, volume: 100, fadeIn: 0, fadeOut: 0 }],
-    slotOffsets: [0],
-    ready: true,
-  },
-};
-
-function TimelinePanel({ initialOrientation }: { initialOrientation: Orientation }) {
-  const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
-
-  return (
-    <div className="flex-1 min-h-0 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 flex flex-col">
-      <TimelinePlayer
-        previewData={timelinePreviewByOrientation[orientation]}
-        onOrientationChange={setOrientation}
-      />
-    </div>
-  );
-}
-
-function Page13_TimelinePlayer() {
-  return (
-    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
-      <TimelinePanel initialOrientation="landscape" />
-      <TimelinePanel initialOrientation="portrait" />
-      <TimelinePanel initialOrientation="square" />
-    </div>
-  );
-}
-
-// ── Slide 14: Video Viewer ──
-
-function Page14_VideoViewer() {
+function Page13_VideoViewer() {
   return (
     <MountKeyProvider>
     <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
-      {/* Top-left: Landscape */}
+      {/* Top-left: /original 1920×1080 */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — /original 1920×1080</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        </div>
+      </div>
+      {/* Top-right: Landscape */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
         </div>
       </div>
-      {/* Top-right: Portrait */}
+      {/* Bottom-left: /settings */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Portrait</p>
-        <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — /settings</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="settings" />
+          <div className="flex-1 overflow-hidden">
+            <RenderSettingsPanel
+              orientations={[
+                { orient: 'landscape', active: true },
+                { orient: 'portrait', active: false },
+                { orient: 'square', active: false },
+              ]}
+              subtitlesEnabled={true}
+              subtitleStyle="impact"
+              subtitlePosition="bottom"
+              fontSize="medium"
+              audioVolume={80}
+              audioFadeIn={200}
+              audioFadeOut={500}
+              osgAssetId={null}
+              osgAssetSrc={null}
+              osgPosition="bottom-right"
+              backgroundMode="blur"
+              strokeWidth={6}
+              strokeColor="#000000"
+              shadowBlur={6}
+              shadowOpacity={60}
+            />
+          </div>
         </div>
       </div>
-      {/* Bottom-left: Square */}
+      {/* Bottom-right: /files */}
       <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Square</p>
-        <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="square" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
-        </div>
-      </div>
-      {/* Bottom-right: Original */}
-      <div className="flex flex-col gap-2 min-h-0">
-        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Original</p>
-        <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — /files</p>
+        <div className="flex-1 flex flex-col overflow-hidden border border-zinc-700/50 rounded-lg min-h-0">
+          <BackFaceTabBar active="files" />
+          <div className="flex-1 flex min-h-0">
+            <div className="w-[212px] shrink-0 border-r border-zinc-800/60 overflow-y-auto bg-black/40">
+              <FileListPane
+                files={mockManifestFiles}
+                selectedFile="original.mp4"
+                onSelectFile={noop}
+                onRefresh={noop}
+                loading={false}
+              />
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-black">
+              <FileContentPane
+                content={mockFileContentJson}
+                loading={false}
+                fileName="original.mp4"
+                fileUrl=""
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2039,8 +2024,7 @@ const SLIDE_PAGES = [
   Page10_CommandSystem,
   Page11_InboxReview,
   Page12_AssetViewer,
-  Page13_TimelinePlayer,
-  Page14_VideoViewer,
+  Page13_VideoViewer,
 ];
 
 // ── Main Styleguide ──
