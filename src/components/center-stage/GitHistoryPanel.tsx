@@ -1,4 +1,4 @@
-import { RefreshCw, RotateCcw, Loader2 } from 'lucide-react';
+import { RefreshCw, History, ClipboardCopy, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { CommandButton } from '@/components/commands';
@@ -8,21 +8,21 @@ type CommitOperation =
   | 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename'
   | 'write' | 'process_video' | 'transcribe' | 'render-timeline' | 'delete-file' | 'rename-file' | 'copy-file';
 
-const OPERATION_STYLES: Record<CommitOperation, { dot: string; label: string }> = {
-  create:            { dot: 'bg-emerald-500', label: 'text-emerald-400' },
-  generate:          { dot: 'bg-primary',     label: 'text-primary' },
-  upload:            { dot: 'bg-blue-500',    label: 'text-blue-400' },
-  render:            { dot: 'bg-amber-500',   label: 'text-amber-400' },
-  restore:           { dot: 'bg-violet-500',  label: 'text-violet-400' },
-  delete:            { dot: 'bg-red-500',     label: 'text-red-400' },
-  rename:            { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
-  write:             { dot: 'bg-emerald-500', label: 'text-emerald-400' },
-  'process_video':   { dot: 'bg-amber-500',   label: 'text-amber-400' },
-  transcribe:        { dot: 'bg-sky-500',     label: 'text-sky-400' },
-  'render-timeline': { dot: 'bg-amber-500',   label: 'text-amber-400' },
-  'delete-file':     { dot: 'bg-red-500',     label: 'text-red-400' },
-  'rename-file':     { dot: 'bg-zinc-500',    label: 'text-zinc-400' },
-  'copy-file':       { dot: 'bg-blue-500',    label: 'text-blue-400' },
+const OPERATION_STYLES: Record<CommitOperation, { label: string }> = {
+  create:            { label: 'text-emerald-400' },
+  generate:          { label: 'text-primary' },
+  upload:            { label: 'text-blue-400' },
+  render:            { label: 'text-amber-400' },
+  restore:           { label: 'text-violet-400' },
+  delete:            { label: 'text-red-400' },
+  rename:            { label: 'text-zinc-400' },
+  write:             { label: 'text-emerald-400' },
+  'process_video':   { label: 'text-amber-400' },
+  transcribe:        { label: 'text-sky-400' },
+  'render-timeline': { label: 'text-amber-400' },
+  'delete-file':     { label: 'text-red-400' },
+  'rename-file':     { label: 'text-zinc-400' },
+  'copy-file':       { label: 'text-blue-400' },
 };
 
 function extractOperation(message: string): CommitOperation {
@@ -57,21 +57,20 @@ export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefre
   return (
     <div className="py-1">
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-[10px] font-mono text-muted-foreground/30 uppercase tracking-wider">
+        <span className="text-xs font-mono text-muted-foreground/50 uppercase tracking-wider">
           {loading ? '...' : `${commits.length} commits`}
         </span>
         <button
           tabIndex={-1}
           onClick={onRefresh}
-          className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors"
+          className="w-6 h-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
         >
-          <RefreshCw className={cn('w-3 h-3 stroke-[2.5]', loading && 'animate-spin')} />
+          <RefreshCw className={cn('w-4 h-4 stroke-[2.5]', loading && 'animate-spin')} />
         </button>
       </div>
-      {commits.map((commit, i) => {
+      {commits.map((commit) => {
         const op = extractOperation(commit.message);
         const style = OPERATION_STYLES[op];
-        const isHead = i === 0;
         const isSelected = commit.hash === selectedHash;
         return (
           <button
@@ -79,26 +78,16 @@ export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefre
             tabIndex={-1}
             onClick={() => onSelectCommit(commit.hash)}
             className={cn(
-              'w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors',
+              'w-full text-left px-3 py-2 text-sm font-mono flex items-center gap-2 transition-colors',
               isSelected
                 ? 'bg-primary/10 border-l-2 border-primary text-primary'
                 : 'border-l-2 border-transparent hover:bg-white/5',
             )}
           >
-            <div className="relative shrink-0 flex items-center justify-center w-3">
-              {isHead ? (
-                <>
-                  <div className={cn('w-2.5 h-2.5 rounded-full', style.dot)} />
-                  <div className={cn('absolute w-2.5 h-2.5 rounded-full animate-ping opacity-40', style.dot)} />
-                </>
-              ) : (
-                <div className={cn('w-2 h-2 rounded-full', style.dot)} />
-              )}
-            </div>
             <span className={cn('font-bold shrink-0', style.label)}>{op}</span>
             <span className="text-muted-foreground/30 shrink-0">{commit.hash.slice(0, 7)}</span>
             <span className="flex-1" />
-            <span className="text-[10px] text-muted-foreground/30 shrink-0">{formatDate(commit.date)}</span>
+            <span className="text-xs text-muted-foreground/30 shrink-0">{formatDate(commit.date)}</span>
           </button>
         );
       })}
@@ -124,7 +113,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
 
   return (
     <div className="h-full flex flex-col p-5 gap-5">
-      {/* Operation label + HEAD indicator */}
+      {/* Top row: operation label + copy icon */}
       <div className="flex items-center gap-3">
         <span className={cn('font-mono text-base font-bold uppercase tracking-widest', style.label)}>
           {op}
@@ -134,22 +123,24 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
             HEAD
           </span>
         )}
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(commit.hash);
+            toast({ title: 'Copied', description: commit.hash, duration: 2000 });
+          }}
+          className="w-7 h-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
+        >
+          <ClipboardCopy className="w-5 h-5 stroke-[2]" />
+        </button>
       </div>
 
       {/* Commit info */}
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-3">
           <span className="text-xs font-mono uppercase w-16 tracking-wider text-zinc-600">Hash</span>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(commit.hash);
-              toast({ title: 'Copied', description: commit.hash, duration: 2000 });
-            }}
-            className="text-sm font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            {commit.hash}
-          </button>
+          <span className="text-sm font-mono text-zinc-400">{commit.hash}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs font-mono uppercase w-16 tracking-wider text-zinc-600">Date</span>
@@ -180,7 +171,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
       ) : (
         <CommandButton
           command={`/restore ${commit.hash.slice(0, 7)}`}
-          icon={<RotateCcw className="w-4 h-4" />}
+          icon={<History className="w-4 h-4" />}
           onClick={() => {
             if (window.confirm(`Restore to ${commit.hash.slice(0, 7)}? This will revert to this version.`)) {
               onRestore(commit.hash);

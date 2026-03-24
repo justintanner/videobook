@@ -202,11 +202,11 @@ export function JsonTerminal({ data, loading }: { data: string | null; loading: 
   try {
     parsed = JSON.parse(data);
   } catch {
-    return <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all">{data}</pre>;
+    return <pre className="text-base font-mono text-foreground/80 whitespace-pre-wrap break-all">{data}</pre>;
   }
 
   return (
-    <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
+    <pre className="text-base font-mono leading-relaxed whitespace-pre-wrap break-all">
       <JsonNode data={parsed} />
     </pre>
   );
@@ -228,9 +228,9 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
         <button
           tabIndex={-1}
           onClick={onRefresh}
-          className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-primary transition-colors"
+          className="w-6 h-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
         >
-          <RefreshCw className={cn('w-3 h-3 stroke-[2.5]', loading && 'animate-spin')} />
+          <RefreshCw className={cn('w-4 h-4 stroke-[2.5]', loading && 'animate-spin')} />
         </button>
       </div>
       {files.map((f) => (
