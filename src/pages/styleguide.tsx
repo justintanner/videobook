@@ -849,7 +849,7 @@ function Page2_VideoGeneration() {
                       modelOptions={page2ModelOptions}
                       onChange={setSelectedModel}
                     />
-                    <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" />
+                    <CommandButton command="/generate" icon={<Zap className="w-4 h-4" />} size="lg" variant="fuchsia" />
                   </div>
                 }
               >
@@ -2215,7 +2215,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey="flux_pro" modelOptions={page16ImageModelOptions} onChange={noop} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="blue" />
               </div>
             }
           >
@@ -2266,7 +2266,7 @@ function Page16_ImageGen() {
                   <ModelSelector selectedModelKey={imgModel} modelOptions={page16ImageModelOptions} onChange={setImgModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="blue" />
               </div>
             }
           >
@@ -2395,7 +2395,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vidSelectedModel} modelOptions={page17VideoModelOptions} onChange={setVidSelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="fuchsia" />
               </div>
             }
           >
@@ -2452,7 +2452,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey={vid2SelectedModel} modelOptions={page17VideoModelOptions} onChange={setVid2SelectedModel} />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="fuchsia" />
               </div>
             }
           >
@@ -2535,7 +2535,7 @@ function Page17_VideoGen() {
                   <ModelSelector selectedModelKey="veo3" modelOptions={page17VideoModelOptions} onChange={noop} disabled />
                   <ProviderSelector selectedProvider="Kie" providers={['Kie']} onChange={noop} disabled />
                 </div>
-                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="emerald" state="submitting" />
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} variant="fuchsia" state="submitting" />
               </div>
             }
           >

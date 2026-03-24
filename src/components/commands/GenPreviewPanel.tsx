@@ -194,7 +194,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
-  const buttonVariant = 'emerald' as const;
+  const buttonVariant = category === 'video' ? 'fuchsia' as const : 'blue' as const;
 
   // -- Loading state --
   if (loading) {

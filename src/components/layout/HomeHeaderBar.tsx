@@ -34,8 +34,8 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="fuchsia" />
         <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="blue" />
+        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="fuchsia" />
         <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
       </div>
 
