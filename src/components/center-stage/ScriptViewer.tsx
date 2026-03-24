@@ -271,7 +271,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               left={
                 <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
                   <FileText className="w-3.5 h-3.5" />
-                  <span>Markdown</span>
+                  <span>MARKDOWN</span>
                   {isDirty && <span className="text-yellow-400/80 text-[10px]">(unsaved)</span>}
                 </span>
               }

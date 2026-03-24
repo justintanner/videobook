@@ -58,7 +58,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
               left={
                 <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
                   <AudioLines className="w-3.5 h-3.5" />
-                  <span>Audio</span>
+                  <span>AUDIO</span>
                 </span>
               }
               slug={item.slug}

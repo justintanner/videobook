@@ -155,9 +155,14 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button tabIndex={-1} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold text-cyan-300 border border-cyan-400/25 hover:text-white hover:border-cyan-400/40 hover:bg-primary/10 transition-colors">
+        <button
+          tabIndex={-1}
+          className="h-8 px-3 flex items-center gap-1 font-mono text-[13px] font-bold text-cyan-400 relative transition-all duration-[120ms] hover:text-white"
+          style={{ background: 'rgba(0,217,255,0.06)' }}
+        >
           {ratioLabel(active, item)}
           <ChevronDown className="w-3 h-3" />
+          <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
