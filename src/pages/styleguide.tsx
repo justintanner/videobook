@@ -46,7 +46,7 @@ import type { Orientation } from '@/hooks/useTimeline';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
-  Film, Grid3x3, Scissors, Music, Clapperboard,
+  Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
   Zap, ImageIcon, Info, Settings, User, Copy, Trash2,
   AudioLines, Plus, Pencil,
   Loader2, Mic,
@@ -477,15 +477,14 @@ const trimDemoWords = [
   { text: 'product.', start: 8.4, end: 8.9 },
 ];
 
-const trimDemoCutRegions = [
-  { startPercent: 18, widthPercent: 12 },
-  { startPercent: 62, widthPercent: 8 },
-];
-
-// Words at indices 5,6,7 ("over the lazy") are selected/cut
-const trimSelectedWordIndices = new Set([5, 6, 7]);
 // Active word index (currently playing)
 const trimActiveWordIndex = 11;
+
+// Trim selection range (violet overlay with handles) — matches TrimEditor's TrimRange
+const trimDemoRange = { startPct: 18, endPct: 30 };
+
+// Duration for time marks (matches last word end time)
+const TRIM_DEMO_DURATION = 8.9;
 
 const trimTimelineBadges = Array.from({ length: 6 }, (_, i) => ({
   percent: ((i + 0.5) / 6) * 100,
@@ -493,7 +492,11 @@ const trimTimelineBadges = Array.from({ length: 6 }, (_, i) => ({
   time: `0:${Math.round(((i + 0.5) / 6) * 10).toString().padStart(2, '0')}`,
 }));
 
-const trimStripedBg = 'repeating-linear-gradient(-45deg, rgba(239,68,68,0.15) 0px 4px, rgba(239,68,68,0.35) 4px 8px)';
+function formatTrimTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 
 // ── Player Interface ──
@@ -1119,11 +1122,21 @@ function Page6_CenterStage() {
 function Page7_Trimming() {
   return (
     <div className="w-full h-full flex flex-col bg-zinc-950">
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      {/* Header */}
+      <div className="h-12 shrink-0 flex items-center justify-between px-5 border-b border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 relative">
+        <span className="font-mono text-xs tracking-widest text-zinc-400 uppercase">Trimming</span>
+        <div className="absolute inset-x-0 flex justify-center pointer-events-none">
+          <span className="font-mono text-xs tracking-widest text-zinc-400">@vid-purple-grind</span>
+        </div>
+        <CloseButton onClick={() => {}} />
+      </div>
+
+      {/* Video + Transcript */}
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
         <div className="flex-1 min-w-0 flex items-center justify-center bg-black">
           <video loop playsInline controls muted poster="/styleguide-img-cover.jpg" src="/fixtures/video-frost.mp4" className="w-full h-full object-contain" />
         </div>
-        <div className="w-[280px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+        <div className="relative w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
           <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
             <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
             <span className="text-[10px] font-mono text-zinc-500">25 words &middot; 8.9s</span>
@@ -1131,11 +1144,10 @@ function Page7_Trimming() {
           <div className="flex-1 overflow-y-auto px-4 py-3 leading-relaxed scrollbar-hide">
             <div className="leading-loose">
               {trimDemoWords.map((word, i) => {
-                const isSelected = trimSelectedWordIndices.has(i);
                 const isActive = i === trimActiveWordIndex;
                 return (
                   <span key={i}>
-                    <span className={cn('inline-block text-sm font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isSelected ? 'text-red-400/60 line-through decoration-red-500/80' : isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
+                    <span className={cn('inline-block text-base font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm', isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300')}>{word.text}</span>
                     {word.text.endsWith('.') && <br />}
                   </span>
                 );
@@ -1144,56 +1156,105 @@ function Page7_Trimming() {
           </div>
         </div>
       </div>
-      <div className="shrink-0 px-6 py-3">
-        <div className="relative overflow-visible" style={{ height: 80 }}>
-          <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden" style={{ height: 80 }}>
+
+      {/* Toolbar + Waveform */}
+      <div className="shrink-0 px-6 py-3 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="violet" />
+          <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" />
+          <CommandButton command="/snap on" icon={<Magnet className="w-4 h-4" />} size="default" variant="violet" />
+          <div className="flex-1" />
+          <CommandButton command="/trim" icon={<Scissors className="w-4 h-4" />} size="default" />
+        </div>
+
+        <div className="relative overflow-visible" style={{ height: 96 }}>
+          <div className="relative bg-black border border-zinc-700/50 rounded-md overflow-hidden select-none cursor-col-resize" style={{ height: 96 }}>
             <div className="absolute inset-0 rounded-md overflow-hidden">
-              <StyleguideWaveform url="/fixtures/video-frost.mp4" height={80} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
+              <StyleguideWaveform url="/fixtures/video-frost.mp4" height={96} waveColor="rgba(0, 255, 255, 0.15)" progressColor="rgba(0, 255, 255, 0.5)" progress={TRIM_PLAYHEAD_POS / 100} />
             </div>
-            {trimDemoCutRegions.map((region, i) => (
-              <div key={i} className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: `${region.startPercent}%`, width: `${region.widthPercent}%`, background: trimStripedBg }} />
-            ))}
+
+            {/* Trim selection overlay */}
+            <div
+              className="absolute top-0 bottom-0 bg-violet-500/20 pointer-events-none z-10"
+              style={{ left: `${trimDemoRange.startPct}%`, width: `${trimDemoRange.endPct - trimDemoRange.startPct}%` }}
+            />
+            {/* Start handle */}
+            <div
+              className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
+              style={{ left: `${trimDemoRange.startPct}%`, transform: 'translateX(-50%)', width: 12 }}
+            >
+              <div className="w-0.5 bg-violet-400 mx-auto" />
+            </div>
+            {/* End handle */}
+            <div
+              className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
+              style={{ left: `${trimDemoRange.endPct}%`, transform: 'translateX(-50%)', width: 12 }}
+            >
+              <div className="w-0.5 bg-violet-400 mx-auto" />
+            </div>
+            {/* Handle time labels */}
+            <span
+              className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+              style={{ left: `${trimDemoRange.startPct}%` }}
+            >
+              {formatTrimTime((trimDemoRange.startPct / 100) * TRIM_DEMO_DURATION)}
+            </span>
+            <span
+              className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+              style={{ left: `${trimDemoRange.endPct}%` }}
+            >
+              {formatTrimTime((trimDemoRange.endPct / 100) * TRIM_DEMO_DURATION)}
+            </span>
           </div>
 
-          {/* Thumbnail badges — mini thumbnails that expand on hover */}
+          {/* Thumbnail badges — mini thumbnails with hover expansion */}
           {trimTimelineBadges.map((badge, i) => {
-            const inCut = trimDemoCutRegions.some(
-              (r) => badge.percent >= r.startPercent && badge.percent <= r.startPercent + r.widthPercent,
-            );
             const isStuckHover = i === 2;
             return (
               <div
                 key={i}
                 className={cn('absolute z-20', !isStuckHover && 'group')}
-                style={{
-                  left: `${badge.percent}%`,
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
+                style={{ left: `${badge.percent}%`, top: 0, bottom: 0 }}
               >
-                {/* Timestamp label — visible on hover */}
-                <div className={cn(
-                  'absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 transition-opacity',
-                  isStuckHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-                )}>
-                  <span className="text-[9px] font-mono text-cyan-400/70 whitespace-nowrap">{badge.time}</span>
-                </div>
-                {/* Badge */}
+                {/* Full-height line */}
+                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-cyan-500/30" />
+                {/* Micro thumbnail — centered */}
                 <div
-                  className={cn(
-                    'border border-cyan-500/30 bg-cover bg-center',
-                    isStuckHover
-                      ? 'w-24 h-[72px] -translate-y-[calc(100%+4px)] shadow-[0_0_12px_rgba(34,211,238,0.4)] border-cyan-400/60 z-40 rounded-md'
-                      : 'w-6 h-6 rounded-sm transition-all duration-200 ease-out group-hover:w-24 group-hover:h-[72px] group-hover:-translate-y-[calc(100%+4px)] group-hover:shadow-[0_0_12px_rgba(34,211,238,0.4)] group-hover:border-cyan-400/60 group-hover:z-40 group-hover:rounded-md',
-                    inCut && 'opacity-50',
-                  )}
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-6 rounded-sm border border-cyan-400/60 bg-cover bg-center cursor-pointer shadow-[0_0_6px_rgba(34,211,238,0.3)]"
                   style={{ backgroundImage: `url(${badge.src})` }}
                 />
+                {/* Hover preview above waveform */}
+                <div className={cn(
+                  'absolute left-1/2 -translate-x-1/2 pointer-events-none transition-opacity z-50 flex flex-col items-center gap-1',
+                  isStuckHover ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                )}
+                  style={{ bottom: 'calc(100% + 8px)' }}
+                >
+                  <div
+                    className="w-[140px] h-[94px] rounded border border-cyan-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(34,211,238,0.5)]"
+                    style={{ backgroundImage: `url(${badge.src})` }}
+                  />
+                  <span className="text-[9px] font-mono text-cyan-400/80 whitespace-nowrap">{badge.time}</span>
+                </div>
               </div>
             );
           })}
 
-          <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 80, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
+          {/* Playhead */}
+          <div className="absolute top-0 pointer-events-none z-30" style={{ left: `${TRIM_PLAYHEAD_POS}%`, width: 3, height: 96, marginLeft: -1, backgroundColor: 'rgb(34, 211, 238)', filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))' }} />
+        </div>
+
+        {/* Time marks */}
+        <div className="relative" style={{ height: 16 }}>
+          {[0, 2, 4, 6, 8].map((sec) => (
+            <span
+              key={sec}
+              className="absolute text-[10px] font-mono text-zinc-500 -translate-x-1/2"
+              style={{ left: `${(sec / TRIM_DEMO_DURATION) * 100}%` }}
+            >
+              {formatTrimTime(sec)}
+            </span>
+          ))}
         </div>
       </div>
 
