@@ -327,7 +327,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       <div className="flex-1 overflow-hidden flip-card-perspective">
         <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
           {/* FRONT FACE — form */}
-          <div className="flip-card-face absolute inset-0 overflow-y-auto px-3 py-4">
+          <div className="flip-card-face absolute inset-0 overflow-y-auto px-3 py-2">
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}

@@ -72,7 +72,7 @@ export function GenTextarea({ value, onChange, placeholder, disabled, rows = 3, 
         'focus:outline-none',
         theme?.focusBorder ?? 'focus:border-primary/60',
         'transition-all duration-200',
-        disabled && 'opacity-50 cursor-not-allowed'
+        disabled && 'opacity-70 cursor-not-allowed'
       )}
     />
   );

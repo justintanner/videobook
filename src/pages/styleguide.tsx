@@ -2219,7 +2219,7 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2270,7 +2270,7 @@ function Page16_ImageGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2399,7 +2399,7 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
@@ -2539,7 +2539,7 @@ function Page17_VideoGen() {
               </div>
             }
           >
-            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
               <div className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                   <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
