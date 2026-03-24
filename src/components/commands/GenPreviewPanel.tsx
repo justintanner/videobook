@@ -278,7 +278,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   return (
     <GenPanel
       label={panelLabel}
-      icon={<Zap className="w-4 h-4" />}
+      icon={<Zap className="w-3.5 h-3.5" />}
       onClose={onClose}
       closeDisabled={isDisabled}
       closeHidden
