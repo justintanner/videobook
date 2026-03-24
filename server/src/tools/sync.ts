@@ -380,7 +380,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // Auto-pipeline: advance whitelisted videos through render
   for (const action of renderActions) {
     const stored = await readStoredRenderDefaults(fs, action.assetId, project_slug, orientation);
-    const jobId = `auto-render-${action.assetId}-${Date.now()}`;
+    const jobId = `auto-render-${action.assetId}`;
     await queue.enqueue(jobId, {
       type: "render_project",
       projectSlug: project_slug,
@@ -410,7 +410,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
   // Auto-pipeline: retry missing speech-to-text (gpt4otrans) for whitelisted videos with audio
   for (const action of sttActions) {
-    const jobId = `auto-stt-${action.assetId}-${Date.now()}`;
+    const jobId = `auto-stt-${action.assetId}`;
     await queue.enqueue(jobId, {
       type: "transcribe_video_audio",
       videoPath: action.videoPath,
@@ -423,7 +423,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
   // Auto-pipeline: advance whitelisted+analyzed videos through transcription
   for (const action of transcribeActions) {
-    const jobId = `auto-transcribe-${action.assetId}-${Date.now()}`;
+    const jobId = `auto-transcribe-${action.assetId}`;
     await queue.enqueue(jobId, {
       type: "transcribe",
       audioPath: action.audioPath,

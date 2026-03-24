@@ -265,7 +265,7 @@ async function completeTranscribe(
     if (!videoFile) throw new Error(`No video file found for auto-render: ${assetId}`);
 
     const videoPath = join(assetDir, videoFile.name);
-    const jobId = `auto-render-${assetId}-${Date.now()}`;
+    const jobId = `auto-render-${assetId}`;
 
     // Read orientation from timeline config
     const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", projectSlug);

@@ -94,7 +94,7 @@ export function whitelistDef(fs: ClipfirstFs): ToolDef {
         return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_no_audio", dialog_quality: dialogQuality });
       }
 
-      const jobId = `auto-transcribe-${asset_id}-${Date.now()}`;
+      const jobId = `auto-transcribe-${asset_id}`;
       await queue.enqueue(jobId, {
         type: "transcribe",
         audioPath: join(manifest.path, audioFile.name),
