@@ -78,6 +78,17 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+function SettingSubGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="pl-2 space-y-1.5"
+      style={{ borderLeft: '2px solid #2A3040' }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ToggleGroup<T extends string>({
   options,
   value,
@@ -376,17 +387,38 @@ export function RenderSettingsPanel({
               <SettingRow label="Highlight">
                 <ColorSwatch disabled={disabled} value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
               </SettingRow>
-              <SettingRow label="Stroke">
-                <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
+              <div className="h-px" style={{ background: '#1F2A36' }} />
+              <SettingSubGroup>
+                <SettingRow label="Stroke">
+                  <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
+                </SettingRow>
+                <SettingRow label="Stroke Color">
+                  <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
+                </SettingRow>
+              </SettingSubGroup>
+              <SettingSubGroup>
+                <SettingRow label="Shadow">
+                  <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
+                </SettingRow>
+                <SettingRow label="Shadow Opacity">
+                  <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
+                </SettingRow>
+              </SettingSubGroup>
+            </SettingsSection>
+
+          </div>
+
+          {/* Right column: Audio + Background + OSG */}
+          <div className="space-y-2">
+            <SettingsSection title="/audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
+              <SettingRow label="Volume">
+                <NumberInput disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
               </SettingRow>
-              <SettingRow label="Stroke Color">
-                <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
+              <SettingRow label="Fade In">
+                <NumberInput disabled={disabled} value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
-              <SettingRow label="Shadow">
-                <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
-              </SettingRow>
-              <SettingRow label="Shadow Opacity">
-                <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
+              <SettingRow label="Fade Out">
+                <NumberInput disabled={disabled} value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
               </SettingRow>
             </SettingsSection>
 
@@ -400,21 +432,6 @@ export function RenderSettingsPanel({
                 value={backgroundMode}
                 onChange={onBackgroundChange}
               />
-            </SettingsSection>
-          </div>
-
-          {/* Right column: Audio + OSG */}
-          <div className="space-y-2">
-            <SettingsSection title="/audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
-              <SettingRow label="Volume">
-                <NumberInput disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
-              </SettingRow>
-              <SettingRow label="Fade In">
-                <NumberInput disabled={disabled} value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
-              </SettingRow>
-              <SettingRow label="Fade Out">
-                <NumberInput disabled={disabled} value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
-              </SettingRow>
             </SettingsSection>
 
             <SettingsSection title="/osg" icon={<Tv className="w-3.5 h-3.5" />}>
