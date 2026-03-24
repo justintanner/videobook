@@ -1,4 +1,4 @@
-import { Clapperboard } from 'lucide-react';
+import { Clapperboard, Film, ImageIcon, Settings } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -33,13 +33,18 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
           onProjectChange={onProjectChange}
         />
 
-        {/* Generations */}
-        <InboxButton state={inboxState} generatingCount={generatingCount} readyCount={readyCount} flashKey={readyCount} onClick={onInboxClick} />
+        {/* Generation shortcuts */}
+        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="fuchsia" />
+        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="blue" />
+        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
+        <InboxButton state={inboxState} generatingCount={generatingCount} readyCount={readyCount} flashKey={readyCount} onClick={onInboxClick} />
+        <button className="flex items-center justify-center w-8 h-8 rounded text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+          <Settings className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
