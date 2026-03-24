@@ -1934,50 +1934,56 @@ function Page14_AssetViewer() {
 
 // ── Slide 16: Timeline Player ──
 
-const timelineMockLandscape: TimelinePreviewData = {
-  compositionWidth: 1920,
-  compositionHeight: 1080,
-  fps: 30,
-  totalDurationInFrames: 750, // 25s
-  slots: Array.from({ length: 3 }, (_, i) => ({ id: `ls-${i}`, src: '', durationInFrames: 250, volume: 100, fadeIn: 0, fadeOut: 0 })),
-  slotOffsets: [0, 250, 500],
-  ready: false,
+const timelinePreviewByOrientation: Record<Orientation, TimelinePreviewData> = {
+  landscape: {
+    compositionWidth: 1920,
+    compositionHeight: 1080,
+    fps: 30,
+    totalDurationInFrames: 201,
+    slots: [{ src: '/landscape.mp4', durationInFrames: 201, volume: 100, fadeIn: 0, fadeOut: 0 }],
+    slotOffsets: [0],
+    ready: true,
+  },
+  portrait: {
+    compositionWidth: 1080,
+    compositionHeight: 1920,
+    fps: 30,
+    totalDurationInFrames: 300,
+    slots: [{ src: '/portrait.mp4', durationInFrames: 300, volume: 100, fadeIn: 0, fadeOut: 0 }],
+    slotOffsets: [0],
+    ready: true,
+  },
+  square: {
+    compositionWidth: 1080,
+    compositionHeight: 1080,
+    fps: 30,
+    totalDurationInFrames: 1077,
+    slots: [{ src: '/square.mp4', durationInFrames: 1077, volume: 100, fadeIn: 0, fadeOut: 0 }],
+    slotOffsets: [0],
+    ready: true,
+  },
 };
 
-const timelineMockPortrait: TimelinePreviewData = {
-  compositionWidth: 1080,
-  compositionHeight: 1920,
-  fps: 30,
-  totalDurationInFrames: 480, // 16s
-  slots: Array.from({ length: 2 }, (_, i) => ({ id: `pt-${i}`, src: '', durationInFrames: 240, volume: 100, fadeIn: 0, fadeOut: 0 })),
-  slotOffsets: [0, 240],
-  ready: false,
-};
-
-const timelineMockSquare: TimelinePreviewData = {
-  compositionWidth: 1080,
-  compositionHeight: 1080,
-  fps: 30,
-  totalDurationInFrames: 1110, // 37s
-  slots: Array.from({ length: 4 }, (_, i) => ({ id: `sq-${i}`, src: '', durationInFrames: 277, volume: 100, fadeIn: 0, fadeOut: 0 })),
-  slotOffsets: [0, 277, 554, 831],
-  ready: false,
-};
-
-const timelineMockData: Record<Orientation, TimelinePreviewData> = {
-  landscape: timelineMockLandscape,
-  portrait: timelineMockPortrait,
-  square: timelineMockSquare,
-};
-
-function Page16_TimelinePlayer() {
-  const [orientation, setOrientation] = useState<Orientation>('landscape');
+function TimelinePanel({ initialOrientation }: { initialOrientation: Orientation }) {
+  const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-1 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 min-h-0 flex flex-col">
-        <TimelinePlayer previewData={timelineMockData[orientation]} onOrientationChange={setOrientation} />
-      </div>
+    <div className="flex-1 min-h-0 bg-black/60 rounded-xl overflow-hidden border border-zinc-800/40 flex flex-col">
+      <TimelinePlayer
+        previewData={timelinePreviewByOrientation[orientation]}
+        onOrientationChange={setOrientation}
+      />
+    </div>
+  );
+}
+
+function Page16_TimelinePlayer() {
+  return (
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      <TimelinePanel initialOrientation="landscape" />
+      <TimelinePanel initialOrientation="portrait" />
+      <TimelinePanel initialOrientation="square" />
+      <TimelinePanel initialOrientation="landscape" />
     </div>
   );
 }
