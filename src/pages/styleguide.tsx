@@ -30,7 +30,7 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
-import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane } from '@/components/center-stage';
+import { AssetViewShell, IdleScreen, RenderingReadout, AssetViewer, FileListPane, FileContentPane, RenderPrompt } from '@/components/center-stage';
 import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
 import { HistoryListPane, HistoryDetailPane } from '@/components/center-stage/GitHistoryPanel';
@@ -1844,19 +1844,35 @@ const assetViewerMockVideo: MediaItem = {
 function Page12_AssetViewer() {
   return (
     <MountKeyProvider>
-    <div className="w-full h-full grid grid-cols-2 gap-6">
-      {/* Left: Landscape viewer */}
+    <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4">
+      {/* Top-left: Landscape */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
           <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
         </div>
       </div>
-      {/* Right: Portrait viewer */}
+      {/* Top-right: Portrait */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AssetViewer item={assetViewerMockVideo} projectSlug="demo" size="portrait" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="portrait" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="portrait" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+        </div>
+      </div>
+      {/* Bottom-left: Square */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Square</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <AssetViewer item={assetViewerMockImage} projectSlug="demo" size="square" onSizeChange={() => {}} flipped={false} onFlippedChange={() => {}} renderOrientation="square" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={() => {}} callTool={(() => Promise.resolve({ content: [], isError: false })) as never} />
+        </div>
+      </div>
+      {/* Bottom-right: /render prompt */}
+      <div className="flex flex-col gap-2 min-h-0">
+        <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">RenderPrompt — /render</p>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <div className="flex-1">
+            <RenderPrompt item={assetViewerMockVideo} />
+          </div>
         </div>
       </div>
     </div>
@@ -1915,7 +1931,6 @@ function Page13_TimelinePlayer() {
       <TimelinePanel initialOrientation="landscape" />
       <TimelinePanel initialOrientation="portrait" />
       <TimelinePanel initialOrientation="square" />
-      <TimelinePanel initialOrientation="landscape" />
     </div>
   );
 }

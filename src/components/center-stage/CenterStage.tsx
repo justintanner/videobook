@@ -87,7 +87,7 @@ function ImageViewer({ item, size }: { item: MediaItem; size: ViewerSize }) {
 }
 
 
-function RenderPrompt({ item, onRender }: {
+export function RenderPrompt({ item, onRender }: {
   item: MediaItem;
   onRender?: () => void;
 }) {
