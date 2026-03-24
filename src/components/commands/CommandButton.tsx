@@ -3,45 +3,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ExecuteButtonState } from './types';
-
-const sizes = {
-  sm: {
-    button: 'h-5 border border-primary/25 text-[10px]',
-    chevronPad: 'px-1',
-    promptPad: 'px-1.5 gap-1',
-    iconPad: 'px-1',
-    text: 'text-[10px] tracking-wider',
-    chevron: 'text-xs',
-    cursor: 'h-2',
-    iconSize: 'w-3 h-3',
-    dot: 'w-1 h-1',
-    scanWidth: 'w-6',
-  },
-  default: {
-    button: 'h-8 border border-primary/25',
-    chevronPad: 'px-2',
-    promptPad: 'px-2.5 gap-1.5',
-    iconPad: 'px-2',
-    text: 'text-xs tracking-widest',
-    chevron: 'text-sm',
-    cursor: 'h-3',
-    iconSize: 'w-5 h-5',
-    dot: 'w-1.5 h-1.5',
-    scanWidth: 'w-12',
-  },
-  lg: {
-    button: 'h-12 border-2 border-cyan-400 bg-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)]',
-    chevronPad: 'px-3',
-    promptPad: 'px-4 gap-2',
-    iconPad: 'px-3',
-    text: 'text-sm tracking-[0.2em]',
-    chevron: 'text-xl font-bold',
-    cursor: 'h-4',
-    iconSize: 'w-5 h-5',
-    dot: 'w-1.5 h-1.5',
-    scanWidth: 'w-12',
-  },
-} as const;
+import { sizes, variants } from './command-styles';
 
 const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> = {
   default: {
@@ -80,30 +42,6 @@ const commandStateOverrides: Record<string, Partial<Record<ExecuteButtonState, s
   },
 };
 
-const variants = {
-  default: {
-    bg: 'bg-cyan-500/10',
-    shadow: 'rgba(34,211,238,0.5)',
-    chevron: 'text-primary/40 group-hover:text-primary/50',
-    chevronDown: 'text-primary/40 group-hover:text-primary/60',
-    cursorBg: 'bg-primary/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
-    text: 'text-primary/70 group-hover:text-primary/90',
-    icon: 'text-primary/80 group-hover:text-primary',
-  },
-  violet: {
-    bg: 'bg-violet-500/20 border-violet-500/30',
-    shadow: 'rgba(139,92,246,0.5)',
-    chevron: 'text-violet-400/40 group-hover:text-violet-400/50',
-    chevronDown: 'text-violet-400/40 group-hover:text-violet-400/60',
-    cursorBg: 'bg-violet-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(139,92,246,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.12)]',
-    text: 'text-violet-400/70 group-hover:text-violet-400/90',
-    icon: 'text-violet-400/80 group-hover:text-violet-400',
-  },
-} as const;
 
 interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   command: string;

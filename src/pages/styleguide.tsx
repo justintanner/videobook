@@ -29,7 +29,7 @@ import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { CommandDescriptor } from '@/lib/command-registry';
-import { CommandButton, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
+import { CommandButton, CommandDropdown, InboxButton, type ExecuteButtonState, type GenerationState } from '@/components/commands';
 import { AssetViewShell, IdleScreen, RenderingReadout, FileListPane, FileContentPane, VideoViewer, ImageViewer, ScriptViewer, AudioViewer } from '@/components/center-stage';
 import type { ManifestFile } from '@/components/center-stage';
 import { RenderSettingsPanel } from '@/components/center-stage/RenderSettingsPanel';
@@ -2689,6 +2689,216 @@ function Page17_VideoGen() {
 
 // ── Slide Pages Array ──
 
+// ── Slide 18: Command Buttons ──
+
+const page18ModelOptions = [
+  { value: 'veo3', label: 'veo3' },
+  { value: 'kling3', label: 'kling3' },
+  { value: 'wan21', label: 'wan21' },
+];
+
+const page18ProviderOptions = [
+  { value: 'kie', label: 'kie' },
+  { value: 'replicate', label: 'replicate' },
+  { value: 'fal', label: 'fal' },
+];
+
+const page18AspectOptions = [
+  { value: '16:9', label: '16:9' },
+  { value: '9:16', label: '9:16' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:3', label: '4:3' },
+];
+
+const page18StyleOptions = [
+  { value: 'photorealistic', label: 'photorealistic' },
+  { value: 'digital_art', label: 'digital_art' },
+  { value: 'anime', label: 'anime' },
+];
+
+const page18DurationOptions = [
+  { value: '5', label: '5s' },
+  { value: '8', label: '8s' },
+  { value: '10', label: '10s' },
+];
+
+function Page18_CommandButtons() {
+  const [model, setModel] = useState('veo3');
+  const [provider, setProvider] = useState('kie');
+  const [aspect, setAspect] = useState('16:9');
+  const [style, setStyle] = useState('digital_art');
+  const [duration, setDuration] = useState('8');
+
+  return (
+    <div className="w-full h-full flex flex-col gap-4">
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 px-3 py-3">COMMAND BUTTONS</h1>
+      <div className="flex-1 min-h-0 flex gap-10 px-6">
+        {/* Column 1: CommandButton */}
+        <div className="flex flex-col gap-5">
+          <h2 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CommandButton</h2>
+
+          {/* Sizes */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">sizes</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">sm</span>
+                <CommandButton size="sm" command="/rewrite" icon={<Sparkles className="w-3 h-3" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
+                <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">lg</span>
+                <CommandButton command="/generate" icon={<Zap className="w-5 h-5" />} size="lg" />
+              </div>
+            </div>
+          </div>
+
+          {/* Variants */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">variants</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
+                <CommandButton command="/trim-audio" icon={<Scissors className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">violet</span>
+                <CommandButton command="/vocals" icon={<Mic className="w-3.5 h-3.5" />} variant="violet" />
+              </div>
+            </div>
+          </div>
+
+          {/* Chevrons */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">chevrons</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">right</span>
+                <CommandButton command="/generate" icon={<Zap className="w-3.5 h-3.5" />} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">down</span>
+                <CommandButton command="/inbox" icon={<FolderOpen className="w-3.5 h-3.5" />} chevron="down" />
+              </div>
+            </div>
+          </div>
+
+          {/* States */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">states (lg)</p>
+            <ExecuteButtonStatesDemo />
+          </div>
+        </div>
+
+        {/* Column 2: CommandDropdown */}
+        <div className="flex flex-col gap-5">
+          <h2 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CommandDropdown</h2>
+
+          {/* Default examples */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">default</p>
+            <div className="flex flex-col gap-2">
+              <CommandDropdown command="/model" value={model} options={page18ModelOptions} onChange={setModel} />
+              <CommandDropdown command="/provider" value={provider} options={page18ProviderOptions} onChange={setProvider} />
+              <CommandDropdown command="/aspect" value={aspect} options={page18AspectOptions} onChange={setAspect} />
+            </div>
+          </div>
+
+          {/* Sizes */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">sizes</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">sm</span>
+                <CommandDropdown size="sm" command="/style" value={style} options={page18StyleOptions} onChange={setStyle} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">default</span>
+                <CommandDropdown command="/duration" value={duration} options={page18DurationOptions} onChange={setDuration} />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-14 shrink-0">lg</span>
+                <CommandDropdown size="lg" command="/model" value={model} options={page18ModelOptions} onChange={setModel} />
+              </div>
+            </div>
+          </div>
+
+          {/* Violet variant */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">violet</p>
+            <CommandDropdown command="/style" value={style} options={page18StyleOptions} onChange={setStyle} variant="violet" />
+          </div>
+
+          {/* Disabled */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">disabled</p>
+            <CommandDropdown command="/model" value="veo3" options={page18ModelOptions} onChange={noop} disabled />
+          </div>
+        </div>
+
+        {/* Column 3: InboxButton */}
+        <div className="flex flex-col gap-5">
+          <h2 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">InboxButton</h2>
+          <div className="flex flex-col gap-3">
+            {pendingGenButtonStates.map((s) => (
+              <div key={s.label} className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-muted-foreground/60 w-20 shrink-0">{s.label}</span>
+                <InboxButton state={s.state} generatingCount={s.generatingCount} readyCount={s.readyCount} flashKey={0} onClick={noop} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Column 4: ProjectButton */}
+        <div className="flex flex-col gap-5">
+          <h2 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">ProjectButton</h2>
+          <div className="flex flex-col gap-3">
+            <ProjectButton projectSlug="prod" />
+            <ProjectButton projectSlug="summer-campaign" />
+            <ProjectButton projectSlug={undefined} />
+          </div>
+
+          {/* ProjectDropdown — Open */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">dropdown — open</p>
+            <div className="rounded-md border border-emerald-500/25 bg-card w-56 overflow-hidden">
+              <div className="py-1">
+                {mockProjects.map((p) => (
+                  <div
+                    key={p.slug}
+                    className={cn(
+                      'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
+                      'hover:bg-emerald-500/10',
+                      p.active && 'bg-emerald-500/5'
+                    )}
+                  >
+                    <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', p.active ? 'bg-emerald-400' : 'bg-transparent')} />
+                    <span className="font-mono text-xs tracking-wide text-emerald-400/80 flex-1 truncate">{p.slug}</span>
+                    <button className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-emerald-500/20" />
+              <div className="py-1">
+                <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-500/10 transition-colors">
+                  <Plus className="w-3.5 h-3.5 text-emerald-400/60" />
+                  <span className="font-mono text-xs tracking-wide text-emerald-400/60">New Project</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 const SLIDE_PAGES = [
   Page1_FinalVideoPreview,
   Page2_VideoGeneration,
@@ -2707,6 +2917,7 @@ const SLIDE_PAGES = [
   Page15_AudioViewer,
   Page16_ImageGen,
   Page17_VideoGen,
+  Page18_CommandButtons,
 ];
 
 // ── Main Styleguide ──
