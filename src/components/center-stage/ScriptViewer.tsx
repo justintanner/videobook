@@ -142,34 +142,18 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               }
               slug={item.slug}
               right={
-                <div className="flex items-center gap-1">
-                  {isDirty && (
-                    <button
-                      tabIndex={-1}
-                      onClick={handleSave}
-                      disabled={saving}
-                      title="Save (⌘S)"
-                      className="w-6 h-6 flex items-center justify-center text-yellow-400 hover:text-yellow-300 transition-colors duration-150 rounded hover:bg-yellow-400/10 disabled:opacity-50"
-                    >
-                      {saving
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <Save className="w-4 h-4 stroke-[2.5]" />
-                      }
-                    </button>
-                  )}
-                  <button
-                    tabIndex={-1}
-                    onClick={handleFlipToBack}
-                    title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-                  >
-                    <Settings className="w-4 h-4 stroke-[2.5]" />
-                  </button>
-                </div>
+                <button
+                  tabIndex={-1}
+                  onClick={handleFlipToBack}
+                  title="/files"
+                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                >
+                  <Settings className="w-4 h-4 stroke-[2.5]" />
+                </button>
               }
             />
 
-            <div className="flex-1 bg-black flex min-h-0">
+            <div className="flex-1 bg-black flex min-h-0 relative">
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -185,6 +169,29 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   saving && 'opacity-50 cursor-not-allowed',
                 )}
               />
+              {isDirty && (
+                <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <button
+                    onClick={() => setDraft(item.prompt ?? '')}
+                    disabled={saving}
+                    className="px-3 py-1.5 text-xs font-mono text-primary/60 hover:text-primary bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/50 rounded transition-colors duration-150 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    title="Save (⌘S)"
+                    className="px-3 py-1.5 text-xs font-mono font-bold text-black bg-yellow-400 hover:bg-yellow-300 rounded transition-colors duration-150 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {saving
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Save className="w-3.5 h-3.5" />
+                    }
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
