@@ -47,147 +47,209 @@ export interface RenderSettingsPanelProps {
   disabled?: boolean;
 }
 
-// ── Orientation constants ──
+// ── Color themes for sections ──
 
-const orientationTabLabels: Record<Orientation, string> = {
-  landscape: '/settings-landscape',
-  portrait: '/settings-portrait',
-  square: '/settings-square',
+const sectionThemes = {
+  cyan: {
+    headerBg: 'bg-cyan-500/15',
+    headerBorder: 'border-cyan-500/30',
+    headerText: 'text-cyan-400',
+    headerIcon: 'text-cyan-400/70',
+    activeBg: 'bg-cyan-500/20',
+    activeBorder: 'border-cyan-400',
+    activeText: 'text-cyan-300',
+    activeGlow: '0 0 12px rgba(34,211,238,0.25)',
+    dimText: 'text-zinc-400',
+  },
+  violet: {
+    headerBg: 'bg-violet-500/15',
+    headerBorder: 'border-violet-500/30',
+    headerText: 'text-violet-400',
+    headerIcon: 'text-violet-400/70',
+    activeBg: 'bg-violet-500/20',
+    activeBorder: 'border-violet-400',
+    activeText: 'text-violet-300',
+    activeGlow: '0 0 12px rgba(139,92,246,0.25)',
+    dimText: 'text-zinc-400',
+  },
+  amber: {
+    headerBg: 'bg-amber-500/15',
+    headerBorder: 'border-amber-500/30',
+    headerText: 'text-amber-400',
+    headerIcon: 'text-amber-400/70',
+    activeBg: 'bg-amber-500/20',
+    activeBorder: 'border-amber-400',
+    activeText: 'text-amber-300',
+    activeGlow: '0 0 12px rgba(245,158,11,0.25)',
+    dimText: 'text-zinc-400',
+  },
+  emerald: {
+    headerBg: 'bg-emerald-500/15',
+    headerBorder: 'border-emerald-500/30',
+    headerText: 'text-emerald-400',
+    headerIcon: 'text-emerald-400/70',
+    activeBg: 'bg-emerald-500/20',
+    activeBorder: 'border-emerald-400',
+    activeText: 'text-emerald-300',
+    activeGlow: '0 0 12px rgba(16,185,129,0.25)',
+    dimText: 'text-zinc-400',
+  },
+} as const;
+
+type SectionTheme = typeof sectionThemes[keyof typeof sectionThemes];
+
+const orientationLabels: Record<Orientation, string> = {
+  landscape: '16:9',
+  portrait: '9:16',
+  square: '1:1',
 };
 
-// ── Helper sub-components ──
+// ── Section header styled like a CommandButton pill ──
 
-function SettingsSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+function SectionHeader({ tag, icon, theme }: { tag: string; icon: React.ReactNode; theme: SectionTheme }) {
   return (
-    <div className="p-3 space-y-2" style={{ background: '#11151B', border: '1px solid #1F2A36' }}>
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-primary/60">{icon}</span>}
-        <span className="text-[12px] font-mono font-bold tracking-[0.12em] text-muted-foreground">{title}</span>
-      </div>
+    <div className={cn(
+      'flex items-center gap-2 px-3 py-1.5 rounded border',
+      theme.headerBg, theme.headerBorder,
+    )}>
+      <span className={cn('flex items-center justify-center', theme.headerIcon)}>
+        <span className="font-mono text-sm opacity-60">›</span>
+      </span>
+      <span className={cn('font-mono font-bold text-xs tracking-widest', theme.headerText)}>
+        {tag}
+      </span>
+      <span className={cn('ml-auto', theme.headerIcon)}>{icon}</span>
+    </div>
+  );
+}
+
+// ── Setting row ──
+
+function SettingRow({ label, theme, children }: { label: string; theme: SectionTheme; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 min-h-[32px]">
+      <span className={cn('text-xs font-mono tracking-wide shrink-0', theme.dimText)}>
+        {label}
+      </span>
       {children}
     </div>
   );
 }
 
-function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="w-[96px] shrink-0 text-[13px] leading-[18px] font-mono text-muted-foreground">{label}</span>
-      {children}
-    </div>
-  );
-}
+// ── Toggle pills (like mini command buttons) ──
 
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-  disabled,
+function PillToggle<T extends string>({
+  options, value, onChange, disabled, theme,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
   disabled?: boolean;
+  theme: SectionTheme;
 }) {
   return (
-    <div className={cn('flex gap-1', disabled && 'opacity-40 pointer-events-none')}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          disabled={disabled}
-          onClick={() => onChange?.(opt.value)}
-          className={cn(
-            'h-8 min-w-[56px] px-3 text-[11px] font-mono font-bold transition-all duration-[120ms]',
-            opt.value === value
-              ? 'text-black'
-              : 'text-white/50 hover:text-white/70',
-          )}
-          style={opt.value === value
-            ? { background: '#00D9FF', boxShadow: '0 0 12px rgba(0,217,255,.3)' }
-            : { background: '#1A1E26', border: '1px solid #2A3040' }
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className={cn('flex gap-1.5', disabled && 'opacity-30 pointer-events-none')}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            disabled={disabled}
+            onClick={() => onChange?.(opt.value)}
+            className={cn(
+              'h-8 min-w-[48px] px-3 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
+              active
+                ? cn(theme.activeBg, theme.activeBorder, theme.activeText)
+                : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600',
+            )}
+            style={active ? { boxShadow: theme.activeGlow } : undefined}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
+
+// ── Segmented control ──
 
 function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
-  disabled,
+  options, value, onChange, disabled, theme,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
   disabled?: boolean;
+  theme: SectionTheme;
 }) {
   return (
-    <div className={cn('flex overflow-hidden', disabled && 'opacity-40 pointer-events-none')} style={{ border: '1px solid #1F2A36' }}>
-      {options.map((opt, i) => (
-        <button
-          key={opt.value}
-          disabled={disabled}
-          onClick={() => onChange?.(opt.value)}
-          className={cn(
-            'flex-1 h-8 px-2.5 text-[11px] font-mono font-bold transition-all duration-[120ms]',
-            i > 0 && 'border-l',
-            opt.value === value
-              ? 'text-black'
-              : 'text-muted-foreground hover:text-white/70',
-          )}
-          style={opt.value === value
-            ? { background: '#00D9FF', borderColor: '#00D9FF', boxShadow: '0 0 10px rgba(0,217,255,.25)' }
-            : { background: '#0D0F12', borderColor: '#1F2A36' }
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className={cn(
+      'flex rounded border border-zinc-700/50 overflow-hidden',
+      disabled && 'opacity-30 pointer-events-none',
+    )}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            disabled={disabled}
+            onClick={() => onChange?.(opt.value)}
+            className={cn(
+              'flex-1 h-8 px-3 font-mono font-bold text-xs tracking-wider transition-all duration-150',
+              active
+                ? cn(theme.activeBg, theme.activeText)
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30',
+            )}
+            style={active ? { boxShadow: theme.activeGlow } : undefined}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function ToggleGrid<T extends string>({
-  options,
-  value,
-  onChange,
-  disabled,
+// ── 2x2 position grid ──
+
+function PositionGrid<T extends string>({
+  options, value, onChange, disabled, theme,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
   disabled?: boolean;
+  theme: SectionTheme;
 }) {
   return (
-    <div className={cn('grid grid-cols-2 gap-1 w-full', disabled && 'opacity-40 pointer-events-none')}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          disabled={disabled}
-          onClick={() => onChange?.(opt.value)}
-          className={cn(
-            'h-8 min-w-[56px] text-[11px] font-mono font-bold text-center transition-all duration-[120ms]',
-            opt.value === value
-              ? 'text-black'
-              : 'text-muted-foreground hover:text-white/70',
-          )}
-          style={opt.value === value
-            ? { background: '#00D9FF', boxShadow: '0 0 10px rgba(0,217,255,.25)' }
-            : { background: '#0D0F12', border: '1px solid #1F2A36' }
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className={cn('grid grid-cols-2 gap-1.5', disabled && 'opacity-30 pointer-events-none')}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            disabled={disabled}
+            onClick={() => onChange?.(opt.value)}
+            className={cn(
+              'h-8 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
+              active
+                ? cn(theme.activeBg, theme.activeBorder, theme.activeText)
+                : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600',
+            )}
+            style={active ? { boxShadow: theme.activeGlow } : undefined}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disabled }: {
+// ── Number input with +/- ──
+
+function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disabled, theme }: {
   value: number;
   onChange?: (v: number) => void;
   unit?: string;
@@ -195,12 +257,11 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
   max?: number;
   step?: number;
   disabled?: boolean;
+  theme: SectionTheme;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
-
   const clamp = (n: number) => Math.max(min, Math.min(max, n));
-
   const commitDraft = () => {
     const parsed = parseInt(draft, 10);
     if (!isNaN(parsed)) onChange?.(clamp(parsed));
@@ -209,18 +270,16 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
   };
 
   return (
-    <div className={cn('flex items-center gap-0.5', disabled && 'opacity-40 pointer-events-none')}>
+    <div className={cn('flex items-center gap-0', disabled && 'opacity-30 pointer-events-none')}>
       <button
         disabled={disabled}
         onClick={() => onChange?.(clamp(value - step))}
-        className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
-        style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
+        className="w-8 h-8 flex items-center justify-center rounded-l border border-zinc-700/50 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors"
       >
         <Minus className="w-3 h-3" />
       </button>
       <div
-        className="w-[56px] h-8 px-1.5 flex items-center justify-end gap-0.5 cursor-text"
-        style={{ background: '#0D0F12', border: '1px solid #1F2A36' }}
+        className="w-[64px] h-8 px-2 flex items-center justify-end gap-1 cursor-text border-t border-b border-zinc-700/50 bg-zinc-900/60"
         onClick={() => { if (!disabled) { setDraft(String(value)); setEditing(true); } }}
       >
         {editing ? (
@@ -231,21 +290,21 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitDraft}
             onKeyDown={(e) => { if (e.key === 'Enter') commitDraft(); if (e.key === 'Escape') setEditing(false); }}
-            className="w-full h-full bg-transparent text-right text-[14px] font-mono font-semibold outline-none"
-            style={{ color: '#D8E7FF' }}
+            className={cn('w-full h-full bg-transparent text-right text-sm font-mono font-bold outline-none tabular-nums', theme.activeText)}
           />
         ) : (
           <>
-            <span className="text-[14px] font-mono font-semibold" style={{ color: '#D8E7FF' }}>{value}</span>
-            {unit && <span className="text-[9px] font-mono text-muted-foreground/50">{unit}</span>}
+            <span className="text-sm font-mono font-bold tabular-nums text-white">
+              {value}
+            </span>
+            {unit && <span className={cn('text-[10px] font-mono', theme.dimText)}>{unit}</span>}
           </>
         )}
       </div>
       <button
         disabled={disabled}
         onClick={() => onChange?.(clamp(value + step))}
-        className="w-6 h-8 flex items-center justify-center text-muted-foreground/50 hover:text-white/70 transition-colors"
-        style={{ background: '#1A1E26', border: '1px solid #2A3040' }}
+        className="w-8 h-8 flex items-center justify-center rounded-r border border-zinc-700/50 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors"
       >
         <Plus className="w-3 h-3" />
       </button>
@@ -253,17 +312,21 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
   );
 }
 
+// ── Color swatch ──
+
 function ColorSwatch({ value, onChange, disabled }: { value: string; onChange?: (v: string) => void; disabled?: boolean }) {
   return (
-    <div className={cn('flex items-center gap-2', disabled && 'opacity-40 pointer-events-none')}>
-      <input
-        type="color"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange?.(e.target.value)}
-        className="w-8 h-8 border border-zinc-800/60 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
-      />
-      <span className="text-xs font-mono" style={{ color: '#D8E7FF', opacity: 0.6 }}>{value}</span>
+    <div className={cn('flex items-center gap-2', disabled && 'opacity-30 pointer-events-none')}>
+      <div className="relative w-8 h-8 rounded border border-zinc-700/50 flex items-center justify-center bg-zinc-800/50 overflow-hidden">
+        <input
+          type="color"
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange?.(e.target.value)}
+          className="w-6 h-6 border-0 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-sm"
+        />
+      </div>
+      <span className="text-[11px] font-mono text-zinc-500 tracking-wider">{value}</span>
     </div>
   );
 }
@@ -271,197 +334,135 @@ function ColorSwatch({ value, onChange, disabled }: { value: string; onChange?: 
 // ── Main component ──
 
 export function RenderSettingsPanel({
-  orientations,
-  onOrientationClick,
-  subtitlesEnabled,
-  subtitleStyle,
-  subtitlePosition,
-  fontSize,
-  textColor = '#F8FAFC',
-  highlightColor = '#991B1B',
-  strokeWidth,
-  strokeColor,
-  shadowBlur,
-  shadowOpacity,
-  onSubtitleChange,
-  audioVolume,
-  audioFadeIn,
-  audioFadeOut,
-  onAudioChange,
-  osgAssetId,
-  osgAssetSrc,
-  osgPosition,
-  onOsgChange,
-  backgroundMode,
-  onBackgroundChange,
-  onApply,
-  applyState,
-  disabled,
+  orientations, onOrientationClick,
+  subtitlesEnabled, subtitleStyle, subtitlePosition, fontSize,
+  textColor = '#F8FAFC', highlightColor = '#991B1B',
+  strokeWidth, strokeColor, shadowBlur, shadowOpacity, onSubtitleChange,
+  audioVolume, audioFadeIn, audioFadeOut, onAudioChange,
+  osgAssetId, osgAssetSrc, osgPosition, onOsgChange,
+  backgroundMode, onBackgroundChange,
+  onApply, applyState, disabled,
 }: RenderSettingsPanelProps) {
   const [armed, setArmed] = useState(false);
+  const cyan = sectionThemes.cyan;
+  const violet = sectionThemes.violet;
+  const amber = sectionThemes.amber;
+  const emerald = sectionThemes.emerald;
+
   return (
-    <div className="p-4 flex flex-col gap-2 h-full" style={{ background: '#0D0F12' }}>
-      {/* Scrollable content area */}
-      <div className="flex-1 overflow-auto space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {/* OUTPUT FORMAT — tab bar */}
-        <div className="flex gap-1">
+    <div className="flex flex-col h-full bg-zinc-950 relative overflow-hidden">
+      {/* Scrollable content */}
+      <div className="relative flex-1 overflow-auto px-4 pt-3 pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* Orientation tabs */}
+        <div className="flex gap-2 mb-4">
           {orientations.map((o) => (
             <button
               key={o.orient}
               onClick={() => onOrientationClick?.(o.orient)}
               className={cn(
-                'h-8 px-3 flex items-center font-mono text-[11px] font-bold transition-all duration-[120ms] relative',
-                o.active ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+                'h-9 px-4 rounded font-mono font-bold text-xs tracking-widest transition-all duration-150 border',
+                o.active
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                  : 'bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600',
               )}
-              style={{ background: o.active ? 'rgba(0,217,255,0.06)' : 'transparent' }}
+              style={o.active ? { boxShadow: '0 0 12px rgba(34,211,238,0.25)' } : undefined}
             >
-              <span>{orientationTabLabels[o.orient]}</span>
-              {o.active && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
+              {orientationLabels[o.orient]}
             </button>
           ))}
         </div>
 
-        {/* Settings in 2 columns: Subtitles+Background | Audio+OSG */}
-        <div className="grid grid-cols-2 gap-2 items-start">
-          {/* Left column: Subtitles + Background */}
-          <div className="space-y-2">
-            <SettingsSection title="/subs" icon={<Type className="w-3.5 h-3.5" />}>
-              <SettingRow label="Enabled">
-                <ToggleGroup
-                  disabled={disabled}
-                  options={[
-                    { label: 'ON', value: 'on' },
-                    { label: 'OFF', value: 'off' },
-                  ]}
-                  value={subtitlesEnabled ? 'on' : 'off'}
-                  onChange={(v) => onSubtitleChange?.('enabled', v === 'on')}
-                />
+        {/* Settings in 2 columns */}
+        <div className="grid grid-cols-2 gap-4 items-start">
+          {/* Left column: /subs */}
+          <div className="space-y-2.5">
+            <SectionHeader tag="/subs" icon={<Type className="w-4 h-4" />} theme={cyan} />
+            <div className="space-y-2 px-1">
+              <SettingRow label="Enabled" theme={cyan}>
+                <PillToggle theme={cyan} disabled={disabled} options={[{ label: 'ON', value: 'on' }, { label: 'OFF', value: 'off' }]} value={subtitlesEnabled ? 'on' : 'off'} onChange={(v) => onSubtitleChange?.('enabled', v === 'on')} />
               </SettingRow>
-              <SegmentedControl
-                disabled={disabled}
-                options={[
-                  { label: 'Impact', value: 'impact' },
-                  { label: 'Highlight', value: 'highlight' },
-                ]}
-                value={subtitleStyle}
-                onChange={(v) => onSubtitleChange?.('style', v)}
-              />
-              <SettingRow label="Position">
-                <ToggleGroup
-                  disabled={disabled}
-                  options={[
-                    { label: 'Top', value: 'top' },
-                    { label: 'Mid', value: 'middle' },
-                    { label: 'Bottom', value: 'bottom' },
-                  ]}
-                  value={subtitlePosition}
-                  onChange={(v) => onSubtitleChange?.('position', v)}
-                />
+              <SegmentedControl theme={cyan} disabled={disabled} options={[{ label: 'IMPACT', value: 'impact' }, { label: 'HIGHLIGHT', value: 'highlight' }]} value={subtitleStyle} onChange={(v) => onSubtitleChange?.('style', v)} />
+              <SettingRow label="Position" theme={cyan}>
+                <PillToggle theme={cyan} disabled={disabled} options={[{ label: 'TOP', value: 'top' }, { label: 'MID', value: 'middle' }, { label: 'BTM', value: 'bottom' }]} value={subtitlePosition} onChange={(v) => onSubtitleChange?.('position', v)} />
               </SettingRow>
-              <SettingRow label="Font Size">
-                <ToggleGroup
-                  disabled={disabled}
-                  options={[
-                    { label: 'S', value: 'small' },
-                    { label: 'M', value: 'medium' },
-                    { label: 'L', value: 'large' },
-                  ]}
-                  value={fontSize}
-                  onChange={(v) => onSubtitleChange?.('fontSize', v)}
-                />
+              <SettingRow label="Size" theme={cyan}>
+                <PillToggle theme={cyan} disabled={disabled} options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]} value={fontSize} onChange={(v) => onSubtitleChange?.('fontSize', v)} />
               </SettingRow>
-              <SettingRow label="Text Color">
+              <SettingRow label="Text" theme={cyan}>
                 <ColorSwatch disabled={disabled} value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />
               </SettingRow>
-              <SettingRow label="Highlight">
+              <SettingRow label="Highlight" theme={cyan}>
                 <ColorSwatch disabled={disabled} value={highlightColor} onChange={(v) => onSubtitleChange?.('highlightColor', v)} />
               </SettingRow>
-              <SettingRow label="Stroke">
-                <NumberInput disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
+              <SettingRow label="Stroke" theme={cyan}>
+                <NumberInput theme={cyan} disabled={disabled} value={strokeWidth} onChange={(v) => onSubtitleChange?.('strokeWidth', v)} min={0} max={20} step={1} unit="px" />
               </SettingRow>
-              <SettingRow label="Stroke Color">
+              <SettingRow label="Str Color" theme={cyan}>
                 <ColorSwatch disabled={disabled} value={strokeColor} onChange={(v) => onSubtitleChange?.('strokeColor', v)} />
               </SettingRow>
-              <SettingRow label="Shadow">
-                <NumberInput disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
+              <SettingRow label="Shadow" theme={cyan}>
+                <NumberInput theme={cyan} disabled={disabled} value={shadowBlur} onChange={(v) => onSubtitleChange?.('shadowBlur', v)} min={0} max={30} step={1} unit="px" />
               </SettingRow>
-              <SettingRow label="Shadow Opacity">
-                <NumberInput disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} />
+              <SettingRow label="Opacity" theme={cyan}>
+                <NumberInput theme={cyan} disabled={disabled} value={shadowOpacity} onChange={(v) => onSubtitleChange?.('shadowOpacity', v)} min={0} max={100} step={5} unit="%" />
               </SettingRow>
-            </SettingsSection>
-
+            </div>
           </div>
 
-          {/* Right column: Audio + Background + OSG */}
-          <div className="space-y-2">
-            <SettingsSection title="/audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
-              <SettingRow label="Volume">
-                <NumberInput disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} />
-              </SettingRow>
-              <SettingRow label="Fade In">
-                <NumberInput disabled={disabled} value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
-              </SettingRow>
-              <SettingRow label="Fade Out">
-                <NumberInput disabled={disabled} value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
-              </SettingRow>
-            </SettingsSection>
+          {/* Right column: /audio, /bg, /osg */}
+          <div className="space-y-4">
+            {/* /audio */}
+            <div className="space-y-2.5">
+              <SectionHeader tag="/audio" icon={<Volume2 className="w-4 h-4" />} theme={violet} />
+              <div className="space-y-2 px-1">
+                <SettingRow label="Volume" theme={violet}>
+                  <NumberInput theme={violet} disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} unit="%" />
+                </SettingRow>
+                <SettingRow label="Fade In" theme={violet}>
+                  <NumberInput theme={violet} disabled={disabled} value={audioFadeIn} onChange={(v) => onAudioChange?.('audioFadeIn', v)} min={0} max={2000} step={50} unit="ms" />
+                </SettingRow>
+                <SettingRow label="Fade Out" theme={violet}>
+                  <NumberInput theme={violet} disabled={disabled} value={audioFadeOut} onChange={(v) => onAudioChange?.('audioFadeOut', v)} min={0} max={2000} step={50} unit="ms" />
+                </SettingRow>
+              </div>
+            </div>
 
-            <SettingsSection title="/bg" icon={<ImageIcon className="w-3.5 h-3.5" />}>
-              <ToggleGroup
-                disabled={disabled}
-                options={[
-                  { label: 'Blur', value: 'blur' },
-                  { label: 'Black', value: 'black' },
-                ]}
-                value={backgroundMode}
-                onChange={onBackgroundChange}
-              />
-            </SettingsSection>
+            {/* /bg */}
+            <div className="space-y-2.5">
+              <SectionHeader tag="/bg" icon={<ImageIcon className="w-4 h-4" />} theme={amber} />
+              <div className="px-1">
+                <PillToggle theme={amber} disabled={disabled} options={[{ label: 'BLUR', value: 'blur' }, { label: 'BLACK', value: 'black' }]} value={backgroundMode} onChange={onBackgroundChange} />
+              </div>
+            </div>
 
-            <SettingsSection title="/osg" icon={<Tv className="w-3.5 h-3.5" />}>
-              <AssetDropSlot
-                value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
-                onChange={(asset) => {
-                  onOsgChange?.('assetId', asset?.id ?? null);
-                  onOsgChange?.('assetSrc', asset?.src ?? null);
-                }}
-                acceptTypes={['image']}
-                disabled={disabled}
-                compact
-              />
-              <SettingRow label="Position">
-                <ToggleGrid
+            {/* /osg */}
+            <div className="space-y-2.5">
+              <SectionHeader tag="/osg" icon={<Tv className="w-4 h-4" />} theme={emerald} />
+              <div className="space-y-2 px-1">
+                <AssetDropSlot
+                  value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '', type: 'image' } : null}
+                  onChange={(asset) => { onOsgChange?.('assetId', asset?.id ?? null); onOsgChange?.('assetSrc', asset?.src ?? null); }}
+                  acceptTypes={['image']}
                   disabled={disabled}
-                  options={[
-                    { label: 'TL', value: 'top-left' },
-                    { label: 'TR', value: 'top-right' },
-                    { label: 'BL', value: 'bottom-left' },
-                    { label: 'BR', value: 'bottom-right' },
-                  ]}
-                  value={osgPosition}
-                  onChange={(v) => onOsgChange?.('position', v)}
+                  compact
                 />
-              </SettingRow>
-            </SettingsSection>
+                <SettingRow label="Position" theme={emerald}>
+                  <PositionGrid theme={emerald} disabled={disabled} options={[{ label: 'TL', value: 'top-left' }, { label: 'TR', value: 'top-right' }, { label: 'BL', value: 'bottom-left' }, { label: 'BR', value: 'bottom-right' }]} value={osgPosition} onChange={(v) => onOsgChange?.('position', v)} />
+                </SettingRow>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Docked action bar */}
-      <div className="shrink-0 flex items-center justify-end pt-2 border-t" style={{ borderColor: '#1F2A36' }}>
+      {/* Action bar */}
+      <div className="shrink-0 flex items-center justify-end px-4 py-2.5 border-t border-zinc-800/60">
         <CommandButton
           command={armed ? 'confirm /render' : '/render'}
           icon={<Zap className="w-5 h-5" />}
           size="lg"
           state={applyState}
-          onClick={() => {
-            if (armed) {
-              setArmed(false);
-              onApply?.();
-            } else {
-              setArmed(true);
-            }
-          }}
+          onClick={() => { if (armed) { setArmed(false); onApply?.(); } else { setArmed(true); } }}
         />
       </div>
     </div>

@@ -2825,6 +2825,7 @@ function Page18_CommandButtons() {
   );
 }
 
+
 const SLIDE_PAGES = [
   Page1_FinalVideoPreview,
   Page2_VideoGeneration,
