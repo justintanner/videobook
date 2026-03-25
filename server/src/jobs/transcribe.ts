@@ -36,7 +36,8 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       file: blob,
       filename: audioFilename,
     });
-    const downloadUrl = upload.data!.downloadUrl;
+    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+    const downloadUrl = upload.data.downloadUrl;
 
     const taskResult = await provider.api.v1.jobs.createTask({
       model: "elevenlabs/speech-to-text",
@@ -48,7 +49,8 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       },
     });
 
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, assetId, projectSlug, {
       taskId,

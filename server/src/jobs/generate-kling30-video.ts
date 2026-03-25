@@ -51,7 +51,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
       const upload = await provider.api.fileStreamUpload({ file: blob, filename });
-      imageUrls.push(upload.data!.downloadUrl);
+      if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+      imageUrls.push(upload.data.downloadUrl);
     }
 
     // Upload element media and build KlingElement array
@@ -63,7 +64,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
         if (!readResult.ok) throw new Error(readResult.error.message);
         const blob = new Blob([new Uint8Array(readResult.value)]);
         const elemUpload = await provider.api.fileStreamUpload({ file: blob, filename });
-        urls.push(elemUpload.data!.downloadUrl);
+        if (!elemUpload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+        urls.push(elemUpload.data.downloadUrl);
       }
 
       const element: KlingElement = {
@@ -87,7 +89,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,

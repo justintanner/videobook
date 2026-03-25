@@ -45,7 +45,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
         const blob = new Blob([imageBytes]);
         const upload = await kieProvider.api.fileStreamUpload({ file: blob, filename: imageFilename });
-        imageUrl = upload.data!.downloadUrl;
+        if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+        imageUrl = upload.data.downloadUrl;
       } else {
         // Fallback: base64 data URL
         const ext = imageFilename.split(".").pop()?.toLowerCase() ?? "png";
@@ -93,7 +94,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       file: blob,
       filename: imageFilename,
     });
-    const downloadUrl = upload.data!.downloadUrl;
+    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+    const downloadUrl = upload.data.downloadUrl;
 
     const request = buildGrokImagineVideoPayload(
       { prompt, mode, duration, resolution },
@@ -101,7 +103,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,

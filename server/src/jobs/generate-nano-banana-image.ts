@@ -35,7 +35,8 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
       const upload = await provider.api.fileStreamUpload({ file: blob, filename });
-      uploadedUrls.push(upload.data!.downloadUrl);
+      if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+      uploadedUrls.push(upload.data.downloadUrl);
     }
 
     const request = buildNanoBananaImagePayload(
@@ -44,7 +45,8 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,

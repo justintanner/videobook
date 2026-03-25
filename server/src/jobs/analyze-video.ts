@@ -135,6 +135,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           : providers[0];
         const result = await chat({
           model: "gpt-5.4",
+          stream: false,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userContent },

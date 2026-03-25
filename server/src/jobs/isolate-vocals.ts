@@ -68,7 +68,8 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
       file: blob,
       filename: audioFilename,
     });
-    const downloadUrl = upload.data!.downloadUrl;
+    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+    const downloadUrl = upload.data.downloadUrl;
 
     // Create isolation task
     const taskResult = await provider.api.v1.jobs.createTask({
@@ -78,7 +79,8 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
       },
     });
 
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     // Write pending task
     await writePendingTask(fs, assetId, projectSlug, {

@@ -330,7 +330,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         </div>
       }
     >
-      <div className="flex-1 overflow-hidden flip-card-perspective">
+      <div className="flex-1 min-h-0 overflow-clip flip-card-perspective">
         <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
           {/* FRONT FACE — form */}
           <div className="flip-card-face absolute inset-0 overflow-y-auto px-3 py-2">

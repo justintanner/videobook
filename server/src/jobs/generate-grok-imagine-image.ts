@@ -78,12 +78,14 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       file: blob,
       filename: imageFilename,
     });
-    const downloadUrl = upload.data!.downloadUrl;
+    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
+    const downloadUrl = upload.data.downloadUrl;
 
     const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
-    const taskId = taskResult.data!.taskId;
+    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
