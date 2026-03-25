@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { MoreHorizontal, Eraser } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -321,10 +321,12 @@ export function TimelineSlot({
       <ContextMenuTrigger asChild>{slot}</ContextMenuTrigger>
       {canClear && (
         <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onAnimateCommand!(`/unassign ${label}`)}>
-            <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-            <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">/unassign</span>
-            <span className="ml-2 opacity-80 flex items-center"><Eraser className="h-3 w-3" /></span>
+          <ContextMenuItem
+            onSelect={() => onAnimateCommand!(`/unassign ${label}`)}
+            className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
+          >
+            <span className="text-sm font-semibold leading-none text-foreground">Clear Slot</span>
+            <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/unassign {label}</span>
           </ContextMenuItem>
         </ContextMenuContent>
       )}

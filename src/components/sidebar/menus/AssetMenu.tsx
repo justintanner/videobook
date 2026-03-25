@@ -1,5 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
-import { ClipboardCopy, Film, FolderOpen, Pencil, Scissors, Trash2 } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 
@@ -12,18 +11,25 @@ interface AssetMenuProps {
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
 
-function CommandMenuItem({ icon, command, onSelect, MenuItem, className }: {
-  icon: ReactNode;
+function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect, MenuItem, className }: {
   command: string;
+  title?: string;
+  titleClassName?: string;
+  accentColor?: string;
   onSelect: () => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
   className?: string;
 }) {
   return (
-    <MenuItem onSelect={onSelect} className={cn('py-2.5', className)}>
-      <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">{'\u203A'}</span>
-      <span className="font-mono font-bold text-xs tracking-wider leading-none flex-1">{command}</span>
-      <span className="ml-2 opacity-80 flex items-center">{icon}</span>
+    <MenuItem onSelect={onSelect} className={cn(
+      '!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px]',
+      accentColor ?? 'border-l-cyan-500/30 focus:border-l-cyan-500/60',
+      className,
+    )}>
+      <span className={cn('text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>{title ?? command}</span>
+      {title && (
+        <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">{command}</span>
+      )}
     </MenuItem>
   );
 }
@@ -32,49 +38,60 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
   return (
     <>
       {itemType === 'image' && (
-        <CommandMenuItem
-          icon={<Film className="h-3 w-3" />}
-          command="/video"
-          onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
-          MenuItem={MenuItem}
-        />
+        <>
+          <CommandMenuItem
+            command={`/video ${slug}`}
+            title="Generate Video"
+            titleClassName="text-fuchsia-400"
+            accentColor="border-l-fuchsia-500/50 focus:border-l-fuchsia-500/80"
+            onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
+            MenuItem={MenuItem}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+        </>
       )}
       <CommandMenuItem
-        icon={<ClipboardCopy className="h-3 w-3" />}
         command="/copy"
+        title="Copy Slug"
         onSelect={() => {
           navigator.clipboard.writeText(slug);
           toast({ title: 'Copied', description: slug, duration: 2000 });
         }}
         MenuItem={MenuItem}
       />
+      <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
-        icon={<FolderOpen className="h-3 w-3" />}
         command="/folder"
+        title="Show in Folder"
         onSelect={onShowFolder}
         MenuItem={MenuItem}
       />
-{itemType === 'video' && (
-        <CommandMenuItem
-          icon={<Scissors className="h-3 w-3" />}
-          command="/trim"
-          onSelect={() => onAnimateCommand?.(`/trim ${slug}`)}
-          MenuItem={MenuItem}
-        />
+      {itemType === 'video' && (
+        <>
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/trim ${slug}`}
+            title="Trim Video"
+            onSelect={() => onAnimateCommand?.(`/trim ${slug}`)}
+            MenuItem={MenuItem}
+          />
+        </>
       )}
+      <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
-        icon={<Pencil className="h-3 w-3" />}
-        command="/rename"
+        command={`/rename ${slug}`}
+        title="Rename"
         onSelect={() => onAnimateEdit?.(`/rename ${slug} `)}
         MenuItem={MenuItem}
       />
       <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
-        icon={<Trash2 className="h-3 w-3" />}
-        command="/delete"
+        command={`/delete ${slug}`}
+        title="Delete"
+        titleClassName="text-red-400"
+        accentColor="border-l-red-500/50 focus:border-l-red-500/80"
         onSelect={() => onAnimateCommand?.(`/delete ${slug}`)}
         MenuItem={MenuItem}
-        className="text-red-400"
       />
     </>
   );

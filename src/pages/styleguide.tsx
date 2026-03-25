@@ -18,7 +18,7 @@ import { SelectWithChevron } from '@/components/ui/SelectWithChevron';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/useToast';
 import { Input } from '@/components/ui/input';
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuCheckboxItem, ContextMenuLabel } from '@/components/ui/context-menu';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { SlugBadge, DurationBadge, ResolutionBadge } from '@/components/sidebar/cards/badges';
 import { JsonSyntax } from '@/components/ui/JsonSyntax';
 import { GenToggle } from '@/components/ui/GenToggle';
@@ -48,7 +48,7 @@ import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import {
   FolderOpen, X, Download, Sparkles,
   Film, Grid3x3, Scissors, Music, Clapperboard, Eraser, Magnet,
-  Zap, Info, Settings, User, Copy, Trash2, ImageIcon,
+  Zap, Info, Settings, User, ImageIcon,
   Plus, Pencil,
   Loader2, Mic,
   Check, RotateCcw,
@@ -427,31 +427,6 @@ function AssetDropSlotDemo() {
         <AssetDropSlot value={null} onChange={() => {}} disabled />
       </div>
     </div>
-  );
-}
-
-function ContextMenuDemo() {
-  const [showGrid, setShowGrid] = useState(true);
-  const [showGuides, setShowGuides] = useState(false);
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div className="w-full h-[88px] rounded-lg border border-dashed border-primary/25 bg-card/60 flex items-center justify-center cursor-context-menu select-none">
-          <span className="text-[11px] font-mono text-muted-foreground/60">Right-click this area</span>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuLabel>Edit</ContextMenuLabel>
-        <ContextMenuItem><Copy className="w-3.5 h-3.5 mr-2" /> Copy</ContextMenuItem>
-        <ContextMenuItem><Download className="w-3.5 h-3.5 mr-2" /> Download</ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuLabel>View</ContextMenuLabel>
-        <ContextMenuCheckboxItem checked={showGrid} onCheckedChange={setShowGrid}>Show Grid</ContextMenuCheckboxItem>
-        <ContextMenuCheckboxItem checked={showGuides} onCheckedChange={setShowGuides}>Show Guides</ContextMenuCheckboxItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Delete</ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   );
 }
 
@@ -1077,7 +1052,6 @@ function Page6_FormsControls() {
           <Button variant="outline" size="sm" onClick={() => toast({ title: 'TRANSMISSION RECEIVED', description: 'Asset uploaded.' })}>Toast</Button>
           <UploadSlot />
         </div>
-        <ContextMenuDemo />
         <div className="flex items-center gap-4 mt-2">
           <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">CloseButton</h4>
           <CloseButton onClick={() => {}} />
@@ -2916,6 +2890,76 @@ function Page18_CommandButtons() {
 }
 
 
+// ── Slide 19: Context Menus ──
+
+function StaticMenuItem({ onSelect, children, className }: { onSelect: () => void; children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn('relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm', className)}
+      onClick={onSelect}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Page19_ContextMenus() {
+  return (
+    <div className="w-full h-full flex flex-col gap-6">
+      <h1 className="text-lg font-bold font-mono tracking-[0.2em] text-primary uppercase shrink-0 px-3 py-3">CONTEXT MENUS</h1>
+
+      <div className="flex-1 min-h-0 flex gap-8 px-6">
+        {/* Left: Live demos */}
+        <div className="flex flex-col gap-4 w-[280px] shrink-0">
+          <h2 className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Live Preview</h2>
+
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div className="rounded border border-dashed border-primary/20 bg-card/60 h-20 flex items-center justify-center cursor-context-menu select-none">
+                <span className="text-[11px] font-mono text-muted-foreground/60">Right-click — image asset</span>
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              {clipMenu('@img-neon-fox', 'image')}
+            </ContextMenuContent>
+          </ContextMenu>
+
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div className="rounded border border-dashed border-primary/20 bg-card/60 h-20 flex items-center justify-center cursor-context-menu select-none">
+                <span className="text-[11px] font-mono text-muted-foreground/60">Right-click — video asset</span>
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              {clipMenu('@vid-aurora-sky', 'video')}
+            </ContextMenuContent>
+          </ContextMenu>
+        </div>
+
+        {/* Right: Real AssetMenu rendered statically for image and video */}
+        <div className="flex-1 min-w-0 flex gap-6">
+          <div className="rounded border border-primary/10 bg-card/40 w-[260px]">
+            <div className="px-3 py-2 border-b border-primary/10">
+              <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Image Asset</span>
+            </div>
+            <div className="p-1">
+              <AssetMenu slug="@img-neon-fox" itemType="image" onShowFolder={() => {}} MenuItem={StaticMenuItem} />
+            </div>
+          </div>
+          <div className="rounded border border-primary/10 bg-card/40 w-[260px]">
+            <div className="px-3 py-2 border-b border-primary/10">
+              <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Video Asset</span>
+            </div>
+            <div className="p-1">
+              <AssetMenu slug="@vid-aurora-sky" itemType="video" onShowFolder={() => {}} MenuItem={StaticMenuItem} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const SLIDE_PAGES = [
   Page1_FinalVideoPreview,
   Page2_VideoGeneration,
@@ -2935,6 +2979,7 @@ const SLIDE_PAGES = [
   Page16_ImageGen,
   Page17_VideoGen,
   Page18_CommandButtons,
+  Page19_ContextMenus,
 ];
 
 // ── Main Styleguide ──
