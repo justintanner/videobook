@@ -92,8 +92,8 @@ describe("preview_image tool", () => {
 
     // The resolved asset should appear
     expect(parsed.resolved_assets.length).toBeGreaterThanOrEqual(1);
-    expect(parsed.resolved_assets[0].tag).toBe("@img-sunset");
-    expect(parsed.resolved_assets[0].asset_type).toBe("image");
+    expect(parsed.resolved_assets[0].slug).toBe("@img-sunset");
+    expect(parsed.resolved_assets[0].type).toBe("image");
   });
 
   it("returns preview with empty resolved_assets when prompt has no @tags and dummy API key", async () => {

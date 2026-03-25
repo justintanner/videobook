@@ -55,12 +55,14 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       }
 
       const provider = xai({ apiKey, timeout: 120_000 });
-      const { request_id } = await provider.v1.videos.generations({
+      const request = {
         prompt: prompt ?? "",
         image_url: imageUrl,
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
-      });
+      };
+      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+      const { request_id } = await provider.v1.videos.generations(request);
 
       await writePendingTask(fs, vidAssetId, projectSlug, {
         taskId: request_id,
@@ -96,6 +98,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       { prompt, mode, duration, resolution },
       [downloadUrl],
     );
+    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, vidAssetId, projectSlug, {

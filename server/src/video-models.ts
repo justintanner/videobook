@@ -504,7 +504,9 @@ function buildModelOption(
     if (allowedParams.has(k)) params[k] = v;
   }
 
-  // Prefill from most recent historical usage of this tool
+  // Prefill from most recent historical usage of this tool —
+  // historical settings OVERRIDE router params so the user's last-used
+  // settings persist as defaults across sessions.
   let historicalProvider: string | undefined;
   if (historyEntries) {
     const settingsMap = extractLastSettingsPerModel(historyEntries);
@@ -512,7 +514,7 @@ function buildModelOption(
     if (historical) {
       historicalProvider = historical._provider as string | undefined;
       for (const [k, v] of Object.entries(historical)) {
-        if (allowedParams.has(k) && !(k in params)) {
+        if (allowedParams.has(k)) {
           params[k] = v;
         }
       }

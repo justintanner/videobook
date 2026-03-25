@@ -41,6 +41,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       { prompt, aspect_ratio: aspectRatio, quality },
       uploadedUrls,
     );
+    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, imgAssetId, projectSlug, {

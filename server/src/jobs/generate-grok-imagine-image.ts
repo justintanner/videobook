@@ -43,10 +43,12 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const b64 = Buffer.from(imageBytes).toString("base64");
       const dataUrl = `data:${mime};base64,${b64}`;
 
-      const result = await provider.v1.images.edits({
+      const request = {
         prompt: prompt ?? "",
-        image: { url: dataUrl, type: "image_url" },
-      });
+        image: { url: dataUrl, type: "image_url" as const },
+      };
+      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+      const result = await provider.v1.images.edits(request);
 
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
@@ -78,6 +80,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     });
 
     const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
+    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, imgAssetId, projectSlug, {

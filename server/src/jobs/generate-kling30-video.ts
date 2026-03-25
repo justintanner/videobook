@@ -85,6 +85,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       imageUrls,
       elements,
     );
+    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const { taskId } = await provider.api.v1.jobs.createTask(request);
 
     await writePendingTask(fs, vidAssetId, projectSlug, {

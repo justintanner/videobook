@@ -172,9 +172,9 @@ describe("buildModelOption history integration", () => {
     ];
     const routerParams = { mode: "std", duration: "5" };
     const option = buildModelOption("kling30", kling, routerParams, [], history);
-    // Router params win
-    expect(option.prefilled_values.mode).toBe("std");
-    expect(option.prefilled_values.duration).toBe("5");
+    // History overrides router params (last-used settings persist)
+    expect(option.prefilled_values.mode).toBe("pro");
+    expect(option.prefilled_values.duration).toBe("12");
     // History fills in where router didn't specify
     expect(option.prefilled_values.prompt).toBe("old prompt");
   });
