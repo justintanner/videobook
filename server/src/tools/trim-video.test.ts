@@ -51,7 +51,7 @@ describe("trim_video tool", () => {
 
   afterAll(async () => {
     await queue.stop();
-  });
+  }, 30_000);
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-trim-test-"));
