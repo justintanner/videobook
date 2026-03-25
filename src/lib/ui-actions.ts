@@ -60,10 +60,10 @@ export function executeUiAction(
       (fn as UiActionCallbacks['open_gen'])(ctx.args.type ?? '', ctx.args.prompt ?? ctx.raw);
       break;
     case 'open_gen_video':
-      (fn as UiActionCallbacks['open_gen_video'])(ctx.args.prompt ?? ctx.raw);
+      (fn as UiActionCallbacks['open_gen_video'])(ctx.raw || ctx.args.prompt || '');
       break;
     case 'open_gen_image':
-      (fn as UiActionCallbacks['open_gen_image'])(ctx.args.prompt ?? ctx.raw);
+      (fn as UiActionCallbacks['open_gen_image'])(ctx.raw || ctx.args.prompt || '');
       break;
     case 'switch_project':
       // The command is /{slug}, so extract slug from the command itself

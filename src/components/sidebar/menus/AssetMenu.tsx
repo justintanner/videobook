@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import { ClipboardCopy, FolderOpen, Pencil, Scissors, Trash2 } from 'lucide-react';
+import { ClipboardCopy, Film, FolderOpen, Pencil, Scissors, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 
@@ -31,6 +31,14 @@ function CommandMenuItem({ icon, command, onSelect, MenuItem, className }: {
 export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
   return (
     <>
+      {itemType === 'image' && (
+        <CommandMenuItem
+          icon={<Film className="h-3 w-3" />}
+          command="/video"
+          onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
+          MenuItem={MenuItem}
+        />
+      )}
       <CommandMenuItem
         icon={<ClipboardCopy className="h-3 w-3" />}
         command="/copy"
