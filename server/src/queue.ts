@@ -1,4 +1,6 @@
 import { Queue, MemoryStorage, type Job } from "@platformatic/job-queue";
+import { fs as defaultFs } from "./fs.js";
+import { deletePendingTask } from "./jobs/pending-task.js";
 
 type JobPayload = Record<string, unknown>;
 
@@ -14,6 +16,11 @@ export function registerJobHandler(
   handlers.set(type, handler);
 }
 
+/** Extract the asset ID from a generation job payload (imgAssetId or vidAssetId). */
+function extractAssetId(payload: Record<string, unknown>): string | null {
+  return (payload.imgAssetId as string) ?? (payload.vidAssetId as string) ?? null;
+}
+
 queue.execute(async (job: Job<JobPayload>) => {
   const payload = job.payload as { type: string };
   const handler = handlers.get(payload.type);
@@ -22,6 +29,15 @@ queue.execute(async (job: Job<JobPayload>) => {
     return await handler(job.payload as Record<string, unknown>);
   } catch (err) {
     console.error(`[queue] job ${payload.type} failed:`, err instanceof Error ? err.message : err);
+
+    // Clear the queued pending task so the asset doesn't stay stuck in "generating" state
+    const assetId = extractAssetId(job.payload);
+    const projectSlug = job.payload.projectSlug as string | undefined;
+    if (assetId && projectSlug) {
+      await deletePendingTask(defaultFs, assetId, projectSlug).catch(() => {});
+      console.error(`[queue] cleared pending task for ${assetId} in ${projectSlug}`);
+    }
+
     throw err;
   }
 });

@@ -66,7 +66,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
 
 const stateClassMap: Partial<Record<ClipState, string>> = {
   uploading: 'clip-state-uploading cursor-wait',
-  generating: 'clip-state-generating cursor-wait',
+  generating: 'clip-state-generating cursor-wait',  // video default; overridden for images below
   rendering: 'clip-state-rendering cursor-wait',
   'rendering-landscape': 'clip-state-rendering cursor-wait',
   'rendering-portrait': 'clip-state-rendering cursor-wait',
@@ -108,11 +108,15 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
   const isError = status === 'error';
   const isGold = isFinal && (isReady || isRenderingState(status));
 
+  const generatingClass = status === 'generating' && item.type === 'image'
+    ? 'clip-state-generating-image cursor-wait'
+    : stateClassMap[status];
+
   const classes = cn(
     'relative group overflow-hidden bg-card/30 backdrop-blur-sm clip-corner-br',
     'aspect-video w-full shrink-0',
     // State classes (skip for final on non-rendering states)
-    !isFinal && status !== 'ready' && status !== 'error' && stateClassMap[status],
+    !isFinal && status !== 'ready' && status !== 'error' && generatingClass,
     isRenderingState(status) && stateClassMap.rendering,
     // Ready state
     isReady && !isGold && 'clip-state-ready cursor-pointer hover:border hover:border-primary',
