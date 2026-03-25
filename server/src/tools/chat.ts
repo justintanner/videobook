@@ -110,7 +110,7 @@ Determine which tool to use and what parameters to pass.`;
           max_completion_tokens: 512,
         }, AbortSignal.timeout(15_000));
 
-        decision = JSON.parse(result.content) as ChatDecision;
+        decision = JSON.parse(result.choices[0].message.content) as ChatDecision;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return error(`Routing failed: ${msg}`);

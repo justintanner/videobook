@@ -94,7 +94,7 @@ export function redesignStyleguidePageDef(): ToolDef {
         max_completion_tokens: 4096,
       });
 
-      const analysis = JSON.parse(chatResult.content) as { changes: string[] };
+      const analysis = JSON.parse(chatResult.choices[0].message.content) as { changes: string[] };
 
       return {
         content: [{

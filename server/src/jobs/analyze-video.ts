@@ -118,7 +118,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     const openaiKey = process.env.OPENAI_API_KEY;
     const kieKey = process.env.KIE_API_KEY;
 
-    const providers: Array<(req: Record<string, unknown>, signal?: AbortSignal) => Promise<{ content: string }>> = [];
+    const providers: Array<(req: Record<string, unknown>, signal?: AbortSignal) => Promise<{ choices: Array<{ message: { content: string } }> }>> = [];
     if (openaiKey) {
       const p = openai({ apiKey: openaiKey, timeout: 180_000 });
       providers.push(withRetry(p.v1.chat.completions, { retries: 2, baseMs: 500 }));
@@ -144,7 +144,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           max_completion_tokens: 4096,
           max_tokens: 4096,
         });
-        analysis = JSON.parse(result.content);
+        analysis = JSON.parse(result.choices[0].message.content);
       } catch {
         // all providers failed — use empty fallback
       }

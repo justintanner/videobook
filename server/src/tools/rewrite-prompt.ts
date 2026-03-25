@@ -343,7 +343,7 @@ async function handleStandardRewrite(
     max_completion_tokens: 1024,
   });
 
-  const rewritten = result.content.trim();
+  const rewritten = result.choices[0].message.content.trim();
   const output = buildResult(model, prompt, rewritten, guideFilename(model));
 
   return {
@@ -392,7 +392,7 @@ async function handleSceneRewrite(
     max_completion_tokens: 1024,
   });
 
-  const rewritten = result.content.trim();
+  const rewritten = result.choices[0].message.content.trim();
   const output = buildSceneResult(
     sceneIndex,
     scenes[sceneIndex].prompt,

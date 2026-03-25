@@ -71,7 +71,7 @@ function buildGrokImagineVideoPayload(
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
       ...(args.mode !== undefined ? { mode: args.mode as "fun" | "normal" | "spicy" } : {}),
-      ...(args.duration !== undefined ? { duration: args.duration as "6" | "10" | "15" } : {}),
+      ...(args.duration !== undefined ? { duration: args.duration as "6" | "10" } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
     },
   };

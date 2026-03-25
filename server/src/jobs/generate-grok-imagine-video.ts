@@ -15,7 +15,7 @@ type GenerateGrokImagineVideoPayload = {
   projectSlug: string;
   prompt?: string;
   mode?: "fun" | "normal" | "spicy";
-  duration?: "6" | "10" | "15";
+  duration?: "6" | "10";
   resolution?: "480p" | "720p";
   _provider?: string;
 };
@@ -44,8 +44,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       if (kieKey) {
         const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
         const blob = new Blob([imageBytes]);
-        const { downloadUrl } = await kieProvider.api.fileStreamUpload({ file: blob, filename: imageFilename });
-        imageUrl = downloadUrl;
+        const upload = await kieProvider.api.fileStreamUpload({ file: blob, filename: imageFilename });
+        imageUrl = upload.data!.downloadUrl;
       } else {
         // Fallback: base64 data URL
         const ext = imageFilename.split(".").pop()?.toLowerCase() ?? "png";
@@ -89,17 +89,19 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
     const blob = new Blob([imageBytes]);
 
-    const { downloadUrl } = await provider.api.fileStreamUpload({
+    const upload = await provider.api.fileStreamUpload({
       file: blob,
       filename: imageFilename,
     });
+    const downloadUrl = upload.data!.downloadUrl;
 
     const request = buildGrokImagineVideoPayload(
       { prompt, mode, duration, resolution },
       [downloadUrl],
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const { taskId } = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskId = taskResult.data!.taskId;
 
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,

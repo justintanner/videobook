@@ -471,6 +471,22 @@ function extractLastSettingsPerModel(
   return result;
 }
 
+/**
+ * Return the model key of the most recently used video generation tool,
+ * or null if the log contains no video tool entries.
+ */
+function extractLastUsedModel(log: ActionLogEntry[]): string | null {
+  for (const entry of log) {
+    const toolName = actionNameToToolName(entry.action);
+    if (!toolName) continue;
+    if (typeof entry.payload === "string") continue;
+    for (const [key, info] of Object.entries(VIDEO_MODELS)) {
+      if (info.tool_name === toolName) return key;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Model option builder
 // ---------------------------------------------------------------------------
@@ -597,5 +613,6 @@ export {
   buildVideoRoutingPrompt,
   buildModelOption,
   extractLastSettingsPerModel,
+  extractLastUsedModel,
 };
 export type { VideoModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };

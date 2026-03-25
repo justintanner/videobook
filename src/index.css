@@ -294,6 +294,7 @@
   .flip-card-face {
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
   }
   .flip-card-back {
     backface-visibility: hidden;

@@ -287,6 +287,22 @@ function extractLastImageSettingsPerModel(
   return result;
 }
 
+/**
+ * Return the model key of the most recently used image generation tool,
+ * or null if the log contains no image tool entries.
+ */
+function extractLastUsedImageModel(log: ActionLogEntry[]): string | null {
+  for (const entry of log) {
+    const toolName = imageActionNameToToolName(entry.action);
+    if (!toolName) continue;
+    if (typeof entry.payload === "string") continue;
+    for (const [key, info] of Object.entries(IMAGE_MODELS)) {
+      if (info.tool_name === toolName) return key;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Model option builder
 // ---------------------------------------------------------------------------
@@ -326,7 +342,7 @@ function buildImageModelOption(
     if (historical) {
       historicalProvider = historical._provider as string | undefined;
       for (const [k, v] of Object.entries(historical)) {
-        if (allowedParams.has(k) && !(k in params)) {
+        if (allowedParams.has(k)) {
           params[k] = v;
         }
       }
@@ -387,5 +403,6 @@ export {
   buildImageRoutingPrompt,
   buildImageModelOption,
   extractLastImageSettingsPerModel,
+  extractLastUsedImageModel,
 };
 export type { ImageModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };

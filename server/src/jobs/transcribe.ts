@@ -32,12 +32,13 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
     const blob = new Blob([new Uint8Array(readResult.value)]);
 
-    const { downloadUrl } = await provider.api.fileStreamUpload({
+    const upload = await provider.api.fileStreamUpload({
       file: blob,
       filename: audioFilename,
     });
+    const downloadUrl = upload.data!.downloadUrl;
 
-    const { taskId } = await provider.api.v1.jobs.createTask({
+    const taskResult = await provider.api.v1.jobs.createTask({
       model: "elevenlabs/speech-to-text",
       input: {
         audio_url: downloadUrl,
@@ -46,6 +47,8 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
         ...(languageCode ? { language_code: languageCode } : {}),
       },
     });
+
+    const taskId = taskResult.data!.taskId;
 
     await writePendingTask(fs, assetId, projectSlug, {
       taskId,

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractLastSettingsPerModel,
+  extractLastUsedModel,
   buildModelOption,
   VIDEO_MODELS,
   getVideoToolSchema,
@@ -135,6 +136,70 @@ describe("extractLastSettingsPerModel", () => {
     expect(result.has("extend_veo_video")).toBe(true);
     expect(result.has("generate_seedance_video")).toBe(true);
     expect(result.has("generate_grok_imagine_video")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractLastUsedModel
+// ---------------------------------------------------------------------------
+
+describe("extractLastUsedModel", () => {
+  it("returns null for empty log", () => {
+    expect(extractLastUsedModel([])).toBeNull();
+  });
+
+  it("returns the model key of the most recent video tool entry", () => {
+    const log: ActionLogEntry[] = [
+      {
+        hash: "h1",
+        action: "tool-generate-grok-imagine-video",
+        payload: { prompt: "test" },
+        date: "2026-03-08T02:00:00Z",
+      },
+      {
+        hash: "h2",
+        action: "tool-generate-kling30-video",
+        payload: { prompt: "older" },
+        date: "2026-03-08T01:00:00Z",
+      },
+    ];
+    expect(extractLastUsedModel(log)).toBe("grok_imagine");
+  });
+
+  it("skips non-video tool entries", () => {
+    const log: ActionLogEntry[] = [
+      {
+        hash: "h1",
+        action: "tool-asset-manifest",
+        payload: { project_slug: "test" },
+        date: "2026-03-08T02:00:00Z",
+      },
+      {
+        hash: "h2",
+        action: "tool-generate-seedance-video",
+        payload: { prompt: "test" },
+        date: "2026-03-08T01:00:00Z",
+      },
+    ];
+    expect(extractLastUsedModel(log)).toBe("seedance");
+  });
+
+  it("skips entries with string payloads", () => {
+    const log: ActionLogEntry[] = [
+      {
+        hash: "h1",
+        action: "tool-generate-kling30-video",
+        payload: "some string",
+        date: "2026-03-08T02:00:00Z",
+      },
+      {
+        hash: "h2",
+        action: "tool-generate-veo-video",
+        payload: { prompt: "test" },
+        date: "2026-03-08T01:00:00Z",
+      },
+    ];
+    expect(extractLastUsedModel(log)).toBe("veo31");
   });
 });
 

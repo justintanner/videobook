@@ -50,8 +50,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(assetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const { downloadUrl } = await provider.api.fileStreamUpload({ file: blob, filename });
-      imageUrls.push(downloadUrl);
+      const upload = await provider.api.fileStreamUpload({ file: blob, filename });
+      imageUrls.push(upload.data!.downloadUrl);
     }
 
     // Upload element media and build KlingElement array
@@ -62,8 +62,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
         const readResult = await fs.readFile(assetId, filename, projectSlug);
         if (!readResult.ok) throw new Error(readResult.error.message);
         const blob = new Blob([new Uint8Array(readResult.value)]);
-        const { downloadUrl } = await provider.api.fileStreamUpload({ file: blob, filename });
-        urls.push(downloadUrl);
+        const elemUpload = await provider.api.fileStreamUpload({ file: blob, filename });
+        urls.push(elemUpload.data!.downloadUrl);
       }
 
       const element: KlingElement = {
@@ -86,7 +86,8 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       elements,
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const { taskId } = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskId = taskResult.data!.taskId;
 
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,

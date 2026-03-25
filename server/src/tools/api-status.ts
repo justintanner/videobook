@@ -20,6 +20,7 @@ export function apiStatusDef(): ToolDef {
         const provider = kimicoding({ apiKey });
         await provider.coding.v1.messages({
           model: "k2p5",
+          max_tokens: 1,
           messages: [{ role: "user", content: "hi" }],
         });
         return {

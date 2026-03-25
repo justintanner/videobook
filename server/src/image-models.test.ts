@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractLastImageSettingsPerModel,
+  extractLastUsedImageModel,
   buildImageModelOption,
   getImageToolSchema,
   validateImageParams,
@@ -131,6 +132,52 @@ describe("extractLastImageSettingsPerModel", () => {
 });
 
 // ---------------------------------------------------------------------------
+// extractLastUsedImageModel
+// ---------------------------------------------------------------------------
+
+describe("extractLastUsedImageModel", () => {
+  it("returns null for empty log", () => {
+    expect(extractLastUsedImageModel([])).toBeNull();
+  });
+
+  it("returns the model key of the most recent image tool entry", () => {
+    const log: ActionLogEntry[] = [
+      {
+        hash: "h1",
+        action: "tool-generate-gpt-image",
+        payload: { prompt: "test" },
+        date: "2026-03-08T02:00:00Z",
+      },
+      {
+        hash: "h2",
+        action: "tool-generate-nano-banana-image",
+        payload: { prompt: "older" },
+        date: "2026-03-08T01:00:00Z",
+      },
+    ];
+    expect(extractLastUsedImageModel(log)).toBe("gpt_image");
+  });
+
+  it("skips non-image tool entries", () => {
+    const log: ActionLogEntry[] = [
+      {
+        hash: "h1",
+        action: "tool-asset-manifest",
+        payload: { project_slug: "test" },
+        date: "2026-03-08T02:00:00Z",
+      },
+      {
+        hash: "h2",
+        action: "tool-generate-grok-imagine-image",
+        payload: { prompt: "test" },
+        date: "2026-03-08T01:00:00Z",
+      },
+    ];
+    expect(extractLastUsedImageModel(log)).toBe("grok_imagine_image");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildImageModelOption — history integration
 // ---------------------------------------------------------------------------
 
@@ -153,7 +200,7 @@ describe("buildImageModelOption history integration", () => {
     expect(option.prefilled_values.aspect_ratio).toBe("16:9");
   });
 
-  it("router params take precedence over history params", () => {
+  it("history params override router params (last-used settings persist)", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
@@ -164,8 +211,8 @@ describe("buildImageModelOption history integration", () => {
     ];
     const routerParams = { resolution: "2K", aspect_ratio: "1:1" };
     const option = buildImageModelOption("nano_banana", nanoBanana, routerParams, [], history);
-    expect(option.prefilled_values.resolution).toBe("2K");
-    expect(option.prefilled_values.aspect_ratio).toBe("1:1");
+    expect(option.prefilled_values.resolution).toBe("4K");
+    expect(option.prefilled_values.aspect_ratio).toBe("16:9");
     expect(option.prefilled_values.prompt).toBe("old prompt");
   });
 

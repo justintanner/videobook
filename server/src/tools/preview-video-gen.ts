@@ -12,6 +12,7 @@ import {
   VIDEO_MODELS,
   buildVideoRoutingPrompt,
   buildModelOption,
+  extractLastUsedModel,
 } from "../video-models.js";
 import type { ActionLogEntry } from "../video-models.js";
 import type { ToolDef } from "./tool-def.js";
@@ -98,7 +99,7 @@ Determine which video generation tool to use and what parameters to pass.`;
           max_completion_tokens: 512,
         });
 
-        const decision = JSON.parse(result.content) as {
+        const decision = JSON.parse(result.choices[0].message.content) as {
           tool?: string | null;
           params?: Record<string, unknown>;
         };
@@ -132,8 +133,9 @@ Determine which video generation tool to use and what parameters to pass.`;
         ),
       );
 
-      // 6. Determine selected model
-      const selectedModel = findSelectedModel(routedToolName) ?? "kling30";
+      // 6. Determine selected model — prefer last-used model from history
+      const historicalModel = extractLastUsedModel(historyEntries);
+      const selectedModel = historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 7. Build resolved_assets output (slug/src/type for frontend ResolvedAsset)

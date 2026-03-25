@@ -74,14 +74,16 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
     const blob = new Blob([imageBytes]);
 
-    const { downloadUrl } = await provider.api.fileStreamUpload({
+    const upload = await provider.api.fileStreamUpload({
       file: blob,
       filename: imageFilename,
     });
+    const downloadUrl = upload.data!.downloadUrl;
 
     const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-    const { taskId } = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskId = taskResult.data!.taskId;
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,

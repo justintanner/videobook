@@ -515,8 +515,14 @@ async function processSyncedTask(
   taskInfo: KieTaskInfo,
   result: SyncResult,
 ): Promise<void> {
-  if (taskInfo.state === "success") {
+  const data = taskInfo.data;
+  if (data?.state === "success") {
     const jobId = `complete-${task.taskType}-${task.assetId}-${Date.now()}`;
+
+    const parsed = JSON.parse(data.resultJson ?? "{}") as {
+      resultUrls?: string[];
+      resultObject?: Record<string, unknown>;
+    };
 
     await queue.enqueue(jobId, {
       type: "complete_kie_task",
@@ -526,23 +532,23 @@ async function processSyncedTask(
       assetDir: task.assetDir,
       projectSlug: task.projectSlug,
       meta: task.meta,
-      resultUrls: taskInfo.result?.resultUrls ?? [],
-      resultObject: taskInfo.result?.resultObject,
+      resultUrls: parsed.resultUrls ?? [],
+      resultObject: parsed.resultObject,
     } as unknown as Record<string, unknown>);
 
     result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
-  } else if (taskInfo.state === "fail") {
+  } else if (data?.state === "fail") {
     result.failed.push({
       assetId: task.assetId,
       taskType: task.taskType,
-      failMsg: taskInfo.failMsg ?? "unknown error",
+      failMsg: data.failMsg ?? "unknown error",
     });
   } else {
     result.pending.push({
       assetId: task.assetId,
       taskType: task.taskType,
-      progress: taskInfo.progress,
-      state: taskInfo.state,
+      progress: data?.progress,
+      state: data?.state,
     });
   }
 }

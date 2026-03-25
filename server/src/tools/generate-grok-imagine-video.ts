@@ -33,6 +33,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       mode: z.enum(["fun", "normal", "spicy"]).optional().describe("Generation mode"),
       duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
       resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
+      image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Override which input image variant to select"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {

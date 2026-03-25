@@ -12,6 +12,7 @@ import {
   IMAGE_MODELS,
   buildImageRoutingPrompt,
   buildImageModelOption,
+  extractLastUsedImageModel,
 } from "../image-models.js";
 import type { ActionLogEntry } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
@@ -94,7 +95,7 @@ Determine which image generation tool to use and what parameters to pass.`;
           max_completion_tokens: 512,
         });
 
-        const decision = JSON.parse(result.content) as {
+        const decision = JSON.parse(result.choices[0].message.content) as {
           tool?: string | null;
           params?: Record<string, unknown>;
         };
@@ -125,8 +126,9 @@ Determine which image generation tool to use and what parameters to pass.`;
         ),
       );
 
-      // 6. Determine selected model
-      const selectedModel = findSelectedModel(routedToolName) ?? "nano_banana";
+      // 6. Determine selected model — prefer last-used model from history
+      const historicalModel = extractLastUsedImageModel(historyEntries);
+      const selectedModel = historicalModel ?? findSelectedModel(routedToolName) ?? "nano_banana";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 7. Build resolved_assets output

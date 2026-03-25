@@ -33,8 +33,8 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const { downloadUrl } = await provider.api.fileStreamUpload({ file: blob, filename });
-      uploadedUrls.push(downloadUrl);
+      const upload = await provider.api.fileStreamUpload({ file: blob, filename });
+      uploadedUrls.push(upload.data!.downloadUrl);
     }
 
     const request = buildGptImagePayload(
@@ -42,7 +42,8 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       uploadedUrls,
     );
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-    const { taskId } = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskId = taskResult.data!.taskId;
 
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
