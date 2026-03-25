@@ -218,7 +218,7 @@ function buildXaiGrokImagineVideoPayload(
 ): XaiVideoGenerateRequest {
   return {
     prompt: args.prompt ?? "",
-    ...(imageUrls.length > 0 ? { image_url: imageUrls[0] } : {}),
+    ...(imageUrls.length > 0 ? { image: { url: imageUrls[0] } } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
   };

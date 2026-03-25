@@ -57,7 +57,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = {
         prompt: prompt ?? "",
-        image_url: imageUrl,
+        image: { url: imageUrl },
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
       };
