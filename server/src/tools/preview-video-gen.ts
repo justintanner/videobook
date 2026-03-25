@@ -136,13 +136,15 @@ Determine which video generation tool to use and what parameters to pass.`;
       const selectedModel = findSelectedModel(routedToolName) ?? "kling30";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
-      // 7. Build resolved_assets output
-      const assetDicts = resolvedAssets.map((a) => ({
-        tag: a.tag,
-        asset_id: a.asset_id,
-        asset_type: a.asset_type,
-        file_path: a.file_path,
-      }));
+      // 7. Build resolved_assets output (slug/src/type for frontend ResolvedAsset)
+      const assetDicts = resolvedAssets.map((a) => {
+        const fileName = a.file_path?.split("/").pop() ?? "original.png";
+        return {
+          slug: a.tag,
+          src: a.file_path ? `/files/${slug}/${a.asset_id}/${fileName}` : "",
+          type: a.asset_type === "video" ? "video" as const : "image" as const,
+        };
+      });
 
       // Add unresolved tag warnings
       const allWarnings = [...(selectedOption.validation.warnings ?? [])];
