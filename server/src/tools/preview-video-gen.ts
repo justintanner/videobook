@@ -144,8 +144,17 @@ Determine which video generation tool to use and what parameters to pass.`;
       );
 
       // 6. Use explicit override, then last-used model from history, then routed
+      //    If the chosen model doesn't support the requested provider, pick the first that does.
       const historicalModel = extractLastUsedModel(historyEntries);
-      const selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
+      let selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
+      if (providerOverride) {
+        const chosen = modelOptions.find((o) => o.key === selectedModel);
+        const supportsProvider = chosen?.providers.some((p) => p.key === providerOverride);
+        if (!supportsProvider) {
+          const compatible = modelOptions.find((o) => o.providers.some((p) => p.key === providerOverride));
+          if (compatible) selectedModel = compatible.key;
+        }
+      }
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 7. Build resolved_assets output (slug/src/type for frontend ResolvedAsset)

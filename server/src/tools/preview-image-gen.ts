@@ -66,7 +66,16 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
       );
 
       // 5. Use explicit override, then last successful generation model, then nano_banana
-      const selectedModel = modelOverride ?? extractLastUsedImageModel(historyEntries) ?? "nano_banana";
+      //    If the chosen model doesn't support the requested provider, pick the first that does.
+      let selectedModel = modelOverride ?? extractLastUsedImageModel(historyEntries) ?? "nano_banana";
+      if (providerOverride) {
+        const chosen = modelOptions.find((o) => o.key === selectedModel);
+        const supportsProvider = chosen?.providers.some((p) => p.key === providerOverride);
+        if (!supportsProvider) {
+          const compatible = modelOptions.find((o) => o.providers.some((p) => p.key === providerOverride));
+          if (compatible) selectedModel = compatible.key;
+        }
+      }
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 6. Build resolved_assets output
