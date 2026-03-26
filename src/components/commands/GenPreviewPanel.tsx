@@ -103,9 +103,32 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const currentPrompt = formValues.prompt;
       setFormValues({ ...option.prefilled_values, prompt: currentPrompt });
       setDroppedAssets(new Map());
-      setSelectedProviderKey(option.selected_provider ?? option.providers?.[0]?.key ?? '');
+      // Keep current provider if the new model supports it
+      const keepProvider = option.providers?.some((p) => p.key === selectedProviderKey);
+      if (!keepProvider) {
+        setSelectedProviderKey(option.selected_provider ?? option.providers?.[0]?.key ?? '');
+      }
     }
-  }, [preview, formValues.prompt]);
+  }, [preview, formValues.prompt, selectedProviderKey]);
+
+  const handleProviderChange = useCallback((label: string) => {
+    const allProviders = preview?.model_options.flatMap((o) => o.providers ?? []) ?? [];
+    const match = allProviders.find((p) => p.label === label);
+    if (!match) return;
+    setSelectedProviderKey(match.key);
+    // If current model doesn't support the new provider, switch to first model that does
+    const currentOption = preview?.model_options.find((o) => o.key === selectedModelKey);
+    const currentSupports = currentOption?.providers?.some((p) => p.key === match.key);
+    if (!currentSupports) {
+      const firstMatch = preview?.model_options.find((o) => o.providers?.some((p) => p.key === match.key));
+      if (firstMatch) {
+        setSelectedModelKey(firstMatch.key);
+        const currentPrompt = formValues.prompt;
+        setFormValues({ ...firstMatch.prefilled_values, prompt: currentPrompt });
+        setDroppedAssets(new Map());
+      }
+    }
+  }, [preview, selectedModelKey, formValues.prompt]);
 
   useImperativeHandle(ref, () => ({
     setField: (name: string, value: string) => {
@@ -143,6 +166,29 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const selectedOption: ModelOption | undefined = preview?.model_options.find(
     (o) => o.key === selectedModelKey,
   );
+
+  // Global provider list (union across all models) and models filtered by selected provider
+  const allProviderLabels = useMemo(() => {
+    if (!preview) return ['Kie'];
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const opt of preview.model_options) {
+      for (const p of opt.providers ?? []) {
+        if (!seen.has(p.key)) {
+          seen.add(p.key);
+          labels.push(p.label);
+        }
+      }
+    }
+    return labels.length > 0 ? labels : ['Kie'];
+  }, [preview]);
+
+  const filteredModelOptions = useMemo(() => {
+    if (!preview) return [];
+    return preview.model_options.filter((o) =>
+      o.providers?.some((p) => p.key === selectedProviderKey),
+    );
+  }, [preview, selectedProviderKey]);
 
   const jsonPayload = useMemo(() => {
     if (!selectedOption) return null;
@@ -305,17 +351,17 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <div className="flex items-center gap-4">
             <ModelSelector
               selectedModelKey={selectedModelKey}
-              modelOptions={preview.model_options}
+              modelOptions={filteredModelOptions}
               onChange={handleModelChange}
               disabled={isDisabled}
             />
             <ProviderSelector
-              selectedProvider={selectedOption?.providers?.find((p) => p.key === selectedProviderKey)?.label ?? 'Kie'}
-              providers={selectedOption?.providers?.map((p) => p.label) ?? ['Kie']}
-              onChange={(label) => {
-                const match = selectedOption?.providers?.find((p) => p.label === label);
-                if (match) setSelectedProviderKey(match.key);
-              }}
+              selectedProvider={
+                preview.model_options.flatMap((o) => o.providers ?? []).find((p) => p.key === selectedProviderKey)?.label
+                ?? allProviderLabels[0]
+              }
+              providers={allProviderLabels}
+              onChange={handleProviderChange}
               disabled={isDisabled}
             />
           </div>
