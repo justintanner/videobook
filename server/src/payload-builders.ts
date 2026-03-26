@@ -15,7 +15,7 @@ import type {
   GptImageToImageRequest,
 } from "@nakedapi/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@nakedapi/kie";
-import type { XaiImageEditRequest, XaiVideoGenerateRequest } from "@nakedapi/xai";
+import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest } from "@nakedapi/xai";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -91,6 +91,24 @@ function buildGrokImagineImagePayload(
       image_urls: (imageUrls.length > 0 ? imageUrls : []) as [string],
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
     },
+  };
+}
+
+type GrokImagineTextArgs = {
+  prompt: string;
+  aspect_ratio?: string;
+  resolution?: string;
+};
+
+function buildGrokImagineTextPayload(
+  args: GrokImagineTextArgs,
+): XaiImageGenerateRequest {
+  return {
+    prompt: args.prompt,
+    n: 1,
+    response_format: "url",
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution as "1k" | "2k" } : {}),
   };
 }
 
@@ -306,6 +324,10 @@ function translateToolPayload(
       const payload = buildSeedanceVideoPayload(args as SeedanceVideoArgs, imageSlugs);
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_grok_imagine_text_image": {
+      const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
+      return { provider_path: "xai.v1.images.generations()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
@@ -338,7 +360,7 @@ const VIDEO_TOOLS = new Set([
 ]);
 
 const IMAGE_TOOLS = new Set([
-  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image",
+  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -362,6 +384,7 @@ export {
   buildXaiGrokImagineImagePayload,
   buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
+  buildGrokImagineTextPayload,
   buildGptImagePayload,
   extractKlingElements,
   translateToolPayload,

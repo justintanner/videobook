@@ -59,6 +59,16 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
+  grok_imagine_text: {
+    label: "Grok Imagine (Text)",
+    tool_name: "generate_grok_imagine_text_image",
+    description: "Text-to-image generation (no reference images needed), with optional aspect ratio and resolution",
+    params: ["prompt", "aspect_ratio", "resolution"],
+    defaults: { aspect_ratio: "1:1", resolution: "2k" },
+    providers: [
+      { key: "xai", label: "xAI", provider_path: "xai.v1.images.generations()", envKey: "XAI_API_KEY" },
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -69,6 +79,7 @@ const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
   generate_nano_banana_image: { min: 0, max: 8 },
   generate_grok_imagine_image: { min: 1, max: 1 },
   generate_gpt_image: { min: 1, max: 4 },
+  generate_grok_imagine_text_image: { min: 0, max: 0 },
 };
 
 // ---------------------------------------------------------------------------
@@ -139,6 +150,10 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2"]; }
       if (param === "quality") { prop.enum = ["medium", "high"]; }
       if (param === "image_slugs") prop.description = "1-4 reference image assets (e.g., @img-sunset)";
+    }
+    if (toolName === "generate_grok_imagine_text_image") {
+      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9"]; }
+      if (param === "resolution") { prop.enum = ["1k", "2k"]; }
     }
 
     properties[param] = prop;
@@ -233,11 +248,13 @@ Given a user query (possibly with @asset references), determine:
 
 ROUTING PREFERENCES:
 - PREFER generate_nano_banana_image as the DEFAULT for ALL image generation requests
-- Use generate_grok_imagine_image ONLY when user explicitly mentions "grok" for image
+- Use generate_grok_imagine_text_image when user mentions "grok" for text-to-image (no reference images)
+- Use generate_grok_imagine_image ONLY when user mentions "grok" for image-to-image (with a reference image)
 - Use generate_gpt_image ONLY when user explicitly mentions "gpt", "chatgpt", or "edit"
 
 KEY CONSTRAINTS:
 - For generate_nano_banana_image: aspect_ratio options include 1:1/2:3/3:2/3:4/4:3/4:5/5:4/9:16/16:9/21:9/auto, resolution 1K/2K/4K, output_format png/jpg
+- For generate_grok_imagine_text_image: text-to-image, NO reference images. aspect_ratio 1:1/2:3/3:2/3:4/4:3/4:5/5:4/9:16/16:9, resolution 1k/2k
 - For generate_grok_imagine_image: REQUIRES exactly 1 reference image
 - For generate_gpt_image: REQUIRES 1-4 reference images, aspect_ratio 1:1/2:3/3:2, quality medium/high
 

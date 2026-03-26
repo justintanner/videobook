@@ -35,6 +35,7 @@ import { whitelistDef } from "./whitelist-asset.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
 import { previewImageGenDef } from "./preview-image-gen.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
+import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
@@ -97,6 +98,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     previewVideoGenDef(fs),
     previewImageGenDef(fs),
     generateGrokImagineImageDef(fs),
+    generateGrokImagineTextImageDef(fs),
     generateGptImageDef(fs),
     chatDef(fs),
     getTimelineDef(fs),

@@ -10,6 +10,7 @@ import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-vid
 import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
+import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
@@ -32,6 +33,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateKling30VideoJob(fs);
   registerGenerateNanoBananaImageJob(fs);
   registerGenerateGrokImagineImageJob(fs);
+  registerGenerateGrokImagineTextImageJob(fs);
   registerGenerateGptImageJob(fs);
   registerCompleteKieTaskJob(fs);
   registerRenderProjectJob(fs);
