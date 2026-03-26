@@ -5,7 +5,7 @@ import {
   buildImageModelOption,
   getImageToolSchema,
   validateImageParams,
-  IMAGE_MODELS,
+  getImageModels,
 } from "./image-models.js";
 import type { ActionLogEntry } from "./image-models.js";
 
@@ -182,8 +182,9 @@ describe("extractLastUsedImageModel", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildImageModelOption history integration", () => {
-  const nanoBanana = IMAGE_MODELS.nano_banana;
-  const gptImage = IMAGE_MODELS.gpt_image;
+  const models = getImageModels();
+  const nanoBanana = models.nano_banana;
+  const gptImage = models.gpt_image;
 
   it("history params fill in as defaults when router params are empty", () => {
     const history: ActionLogEntry[] = [
@@ -200,7 +201,7 @@ describe("buildImageModelOption history integration", () => {
     expect(option.prefilled_values.aspect_ratio).toBe("16:9");
   });
 
-  it("history params override router params (last-used settings persist)", () => {
+  it("baseParams override history (UI input takes precedence)", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
@@ -211,8 +212,9 @@ describe("buildImageModelOption history integration", () => {
     ];
     const routerParams = { resolution: "2K", aspect_ratio: "1:1" };
     const option = buildImageModelOption("nano_banana", nanoBanana, routerParams, [], history);
-    expect(option.prefilled_values.resolution).toBe("4K");
-    expect(option.prefilled_values.aspect_ratio).toBe("16:9");
+    expect(option.prefilled_values.resolution).toBe("2K");
+    expect(option.prefilled_values.aspect_ratio).toBe("1:1");
+    // prompt not in baseParams, so history value persists
     expect(option.prefilled_values.prompt).toBe("old prompt");
   });
 
@@ -297,14 +299,14 @@ describe("validateImageParams", () => {
     const result = validateImageParams("generate_grok_imagine_image", {
       image_slugs: [],
     });
-    expect(result.warnings).toContain("Grok Imagine requires at least one reference image");
+    expect(result.warnings.some((w) => w.includes("requires at least"))).toBe(true);
   });
 
   it("grok warns when >1 image", () => {
     const result = validateImageParams("generate_grok_imagine_image", {
       image_slugs: ["@img-a", "@img-b"],
     });
-    expect(result.warnings.some((w) => w.includes("only supports 1 reference image"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("1-1 images"))).toBe(true);
   });
 
   it("gpt warns when >4 images", () => {
@@ -312,6 +314,48 @@ describe("validateImageParams", () => {
       prompt: "edit this",
       image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
     });
-    expect(result.warnings.some((w) => w.includes("supports 1-4 images"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("1-4 images"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getImageModels — provider-driven registry
+// ---------------------------------------------------------------------------
+
+describe("getImageModels", () => {
+  it("returns all 4 image models", () => {
+    const models = getImageModels();
+    expect(Object.keys(models)).toHaveLength(4);
+    expect(models).toHaveProperty("nano_banana");
+    expect(models).toHaveProperty("grok_imagine_image");
+    expect(models).toHaveProperty("gpt_image");
+    expect(models).toHaveProperty("grok_imagine_text");
+  });
+
+  it("params come from Kie schemas with image field renamed to image_slugs", () => {
+    const models = getImageModels();
+    expect(models.nano_banana.params).toContain("image_slugs");
+    expect(models.nano_banana.params).toContain("prompt");
+    expect(models.nano_banana.params).toContain("aspect_ratio");
+    expect(models.nano_banana.params).not.toContain("image_input");
+  });
+
+  it("each model has at least one provider", () => {
+    const models = getImageModels();
+    for (const info of Object.values(models)) {
+      expect(info.providers.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("xai models list xai as a provider", () => {
+    const models = getImageModels();
+    expect(models.grok_imagine_image.providers.some((p) => p.key === "xai")).toBe(true);
+    expect(models.grok_imagine_text.providers.some((p) => p.key === "xai")).toBe(true);
+  });
+
+  it("kie-only models do not list xai as a provider", () => {
+    const models = getImageModels();
+    expect(models.nano_banana.providers.some((p) => p.key === "xai")).toBe(false);
+    expect(models.gpt_image.providers.some((p) => p.key === "xai")).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import { createServer } from "./server.js";
 import { queue } from "./queue.js";
 import { fs } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
+import { initImageModels } from "./image-models.js";
 
 const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
 
@@ -51,6 +52,7 @@ app.get("/mcp", (_req, res) => {
 
 async function start(): Promise<void> {
   registerAllJobHandlers(fs);
+  await initImageModels();
   await queue.start();
   const PORT = process.env.PORT ?? 3001;
   app.listen(PORT, () => {

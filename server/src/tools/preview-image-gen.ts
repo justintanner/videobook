@@ -10,7 +10,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import {
-  IMAGE_MODELS,
+  getImageModels,
   buildImageModelOption,
   extractLastUsedImageModel,
 } from "../image-models.js";
@@ -56,7 +56,8 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
       const cleanPrompt = prompt.replace(/@\S+/g, "").trim();
       const baseParams: Record<string, unknown> = { prompt: cleanPrompt };
 
-      const modelOptions = Object.entries(IMAGE_MODELS).map(([key, info]) =>
+      const imageModels = getImageModels();
+      const modelOptions = Object.entries(imageModels).map(([key, info]) =>
         buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries),
       );
 

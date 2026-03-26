@@ -1,10 +1,20 @@
 /**
- * Image model registry, schemas, validation, and routing prompt.
+ * Image model registry, schemas, validation, and option builder.
+ *
+ * Parameter schemas and enums come from @nakedapi provider packages:
+ *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
+ *   - xAI: xai.v1.imageGenerationModels() (live API, model discovery)
+ *
+ * Only identity, labels, image slot limits, and defaults are configured here.
  */
 import type { ResolvedAsset } from "./asset-resolver.js";
+import { kie } from "@nakedapi/kie";
+import type { KieMediaModel, PayloadFieldSchema } from "@nakedapi/kie";
+import { xai } from "@nakedapi/xai";
+import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@nakedapi/xai";
 
 // ---------------------------------------------------------------------------
-// Provider routes
+// Provider route (unchanged type for backward compat)
 // ---------------------------------------------------------------------------
 
 type ProviderRoute = {
@@ -15,7 +25,161 @@ type ProviderRoute = {
 };
 
 // ---------------------------------------------------------------------------
-// Model registry
+// Slim config — only what providers can't tell us
+// ---------------------------------------------------------------------------
+
+type ImageModelConfig = {
+  key: string;
+  kieModelId: KieMediaModel;
+  xaiEndpoint?: "generations" | "edits";
+  tool_name: string;
+  label: string;
+  description: string;
+  image_slots: { min: number; max: number };
+  kieImageField?: string;
+  defaults: Record<string, unknown>;
+};
+
+const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
+  {
+    key: "nano_banana",
+    kieModelId: "nano-banana-pro",
+    tool_name: "generate_nano_banana_image",
+    label: "Nano Banana Pro",
+    description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
+    image_slots: { min: 0, max: 8 },
+    kieImageField: "image_input",
+    defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
+  },
+  {
+    key: "grok_imagine_image",
+    kieModelId: "grok-imagine/image-to-image",
+    xaiEndpoint: "edits",
+    tool_name: "generate_grok_imagine_image",
+    label: "Grok Imagine Edit",
+    description: "Image-to-image transformation (requires exactly 1 reference image)",
+    image_slots: { min: 1, max: 1 },
+    kieImageField: "image_urls",
+    defaults: {},
+  },
+  {
+    key: "gpt_image",
+    kieModelId: "gpt-image/1.5-image-to-image",
+    tool_name: "generate_gpt_image",
+    label: "GPT Image",
+    description: "Image editing with reference images, aspect ratio and quality control",
+    image_slots: { min: 1, max: 4 },
+    kieImageField: "input_urls",
+    defaults: { aspect_ratio: "1:1", quality: "high" },
+  },
+  {
+    key: "grok_imagine_text",
+    kieModelId: "grok-imagine/text-to-image",
+    xaiEndpoint: "generations",
+    tool_name: "generate_grok_imagine_text_image",
+    label: "Grok Imagine",
+    description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
+    image_slots: { min: 0, max: 0 },
+    defaults: { aspect_ratio: "1:1" },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Provider schemas (read once at module load — no API calls)
+// ---------------------------------------------------------------------------
+
+const kieModelSchemas = kie({ apiKey: "" }).modelInputSchemas;
+
+// xAI discovered models (populated async by initImageModels)
+let xaiImageModels: XaiImageGenerationModel[] | null = null;
+
+// ---------------------------------------------------------------------------
+// Async init — call once at server startup for xAI discovery
+// ---------------------------------------------------------------------------
+
+async function initImageModels(): Promise<void> {
+  if (!process.env.XAI_API_KEY) return;
+  try {
+    const xaiProvider = xai({ apiKey: process.env.XAI_API_KEY });
+    const result = await xaiProvider.v1.imageGenerationModels() as XaiImageGenerationModelListResponse;
+    xaiImageModels = result.models;
+  } catch {
+    // xAI discovery failed — xAI providers still listed via config, filtered by env var
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Schema types (unchanged for backward compat)
+// ---------------------------------------------------------------------------
+
+type ParamSchema = {
+  type: string;
+  description: string;
+  enum?: (string | number | boolean)[];
+  default?: unknown;
+  items?: Record<string, unknown>;
+};
+
+type ToolSchema = {
+  type: string;
+  properties: Record<string, ParamSchema>;
+  required: string[];
+  defaults: Record<string, unknown>;
+};
+
+// ---------------------------------------------------------------------------
+// Convert Kie field to our ParamSchema
+// ---------------------------------------------------------------------------
+
+function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fieldName: string): ParamSchema {
+  const isImageField = fieldName === config.kieImageField;
+  const outputName = isImageField ? "image_slugs" : fieldName;
+
+  const param: ParamSchema = {
+    type: field.type,
+    description: isImageField
+      ? imageSlotsDescription(config.image_slots)
+      : (field.description ?? ""),
+  };
+
+  if (field.enum) param.enum = [...field.enum];
+  if (isImageField || field.items) param.items = { type: "string" };
+  if (outputName in config.defaults) param.default = config.defaults[outputName];
+
+  return param;
+}
+
+function imageSlotsDescription(slots: { min: number; max: number }): string {
+  if (slots.min === 0 && slots.max === 0) return "No reference images";
+  if (slots.min === slots.max) return `Reference image asset (exactly ${slots.min} required)`;
+  return `${slots.min}-${slots.max} reference image assets`;
+}
+
+// ---------------------------------------------------------------------------
+// Schema builder (reads from Kie schemas — no switch statement)
+// ---------------------------------------------------------------------------
+
+function getImageToolSchema(toolName: string): ToolSchema | null {
+  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+  if (!config) return null;
+
+  const modelSchema = kieModelSchemas[config.kieModelId];
+  if (!modelSchema) return null;
+
+  const properties: Record<string, ParamSchema> = {};
+  const required: string[] = [];
+
+  for (const [fieldName, field] of Object.entries(modelSchema.fields)) {
+    const outputName = fieldName === config.kieImageField ? "image_slugs" : fieldName;
+    properties[outputName] = kieFieldToParam(field, config, fieldName);
+    if (field.required) required.push(outputName);
+  }
+
+  return { type: "object", properties, required, defaults: config.defaults };
+}
+
+// ---------------------------------------------------------------------------
+// Build ImageModelInfo from config + provider schemas (backward-compat shape)
 // ---------------------------------------------------------------------------
 
 type ImageModelInfo = {
@@ -27,145 +191,54 @@ type ImageModelInfo = {
   providers: ProviderRoute[];
 };
 
-const IMAGE_MODELS: Record<string, ImageModelInfo> = {
-  nano_banana: {
-    label: "Nano Banana Pro",
-    tool_name: "generate_nano_banana_image",
-    description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
-    params: ["prompt", "image_slugs", "aspect_ratio", "resolution", "output_format"],
-    defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-    ],
-  },
-  grok_imagine_image: {
-    label: "Grok Imagine Edit",
-    tool_name: "generate_grok_imagine_image",
-    description: "Image-to-image transformation (requires exactly 1 reference image)",
-    params: ["prompt", "image_slugs"],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-      { key: "xai", label: "xAI", provider_path: "xai.v1.images.edits()", envKey: "XAI_API_KEY" },
-    ],
-  },
-  gpt_image: {
-    label: "GPT Image",
-    tool_name: "generate_gpt_image",
-    description: "Image editing with reference images, aspect ratio and quality control",
-    params: ["prompt", "image_slugs", "aspect_ratio", "quality"],
-    defaults: { aspect_ratio: "1:1", quality: "high" },
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-    ],
-  },
-  grok_imagine_text: {
-    label: "Grok Imagine",
-    tool_name: "generate_grok_imagine_text_image",
-    description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
-    params: ["prompt", "aspect_ratio"],
-    defaults: { aspect_ratio: "1:1" },
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-      { key: "xai", label: "xAI", provider_path: "xai.v1.images.generations()", envKey: "XAI_API_KEY" },
-    ],
-  },
-};
+function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
+  const providers: ProviderRoute[] = [];
 
-// ---------------------------------------------------------------------------
-// Image slot limits
-// ---------------------------------------------------------------------------
-
-const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
-  generate_nano_banana_image: { min: 0, max: 8 },
-  generate_grok_imagine_image: { min: 1, max: 1 },
-  generate_gpt_image: { min: 1, max: 4 },
-  generate_grok_imagine_text_image: { min: 0, max: 0 },
-};
-
-// ---------------------------------------------------------------------------
-// Parameter schemas (static JSON Schema defs)
-// ---------------------------------------------------------------------------
-
-type ParamSchema = {
-  type: string;
-  description: string;
-  enum?: (string | number | boolean)[];
-  default?: unknown;
-  items?: Record<string, unknown>;
-};
-
-const IMAGE_PARAM_SCHEMAS: Record<string, ParamSchema> = {
-  prompt: { type: "string", description: "Text description of what to generate" },
-  image_slugs: {
-    type: "array",
-    items: { type: "string" },
-    description: "Reference image assets",
-  },
-  aspect_ratio: { type: "string", description: "Output aspect ratio" },
-  resolution: { type: "string", description: "Output resolution" },
-  output_format: { type: "string", description: "Output image format" },
-  quality: { type: "string", description: "Output quality level" },
-};
-
-// ---------------------------------------------------------------------------
-// Schema builder
-// ---------------------------------------------------------------------------
-
-type ToolSchema = {
-  type: string;
-  properties: Record<string, ParamSchema>;
-  required: string[];
-  defaults: Record<string, unknown>;
-};
-
-function getImageToolSchema(toolName: string): ToolSchema | null {
-  const model = Object.values(IMAGE_MODELS).find((m) => m.tool_name === toolName);
-  if (!model) return null;
-
-  const properties: Record<string, ParamSchema> = {};
-  const required: string[] = [];
-
-  for (const param of model.params) {
-    const base = IMAGE_PARAM_SCHEMAS[param];
-    if (!base) continue;
-
-    const prop = { ...base };
-
-    if (param in model.defaults) {
-      prop.default = model.defaults[param];
-    }
-
-    // Tool-specific overrides
-    if (toolName === "generate_nano_banana_image") {
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "auto"]; }
-      if (param === "resolution") { prop.enum = ["1K", "2K", "4K"]; }
-      if (param === "output_format") { prop.enum = ["png", "jpg"]; }
-      if (param === "image_slugs") prop.description = "0-8 reference image assets (e.g., @img-sunset)";
-    }
-    if (toolName === "generate_grok_imagine_image") {
-      if (param === "prompt") prop.description = "Optional text to guide transformation";
-      if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
-    }
-    if (toolName === "generate_gpt_image") {
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2"]; }
-      if (param === "quality") { prop.enum = ["medium", "high"]; }
-      if (param === "image_slugs") prop.description = "1-4 reference image assets (e.g., @img-sunset)";
-    }
-    if (toolName === "generate_grok_imagine_text_image") {
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2", "16:9", "9:16"]; }
-    }
-
-    properties[param] = prop;
-
-    // Required fields
-    if (param === "prompt" && toolName !== "generate_grok_imagine_image") required.push(param);
-    if (param === "image_slugs" && toolName === "generate_grok_imagine_image") required.push(param);
-    if (param === "image_slugs" && toolName === "generate_gpt_image") required.push(param);
-    if (param === "prompt" && toolName === "generate_gpt_image" && !required.includes(param)) required.push(param);
+  if (kieModelSchemas[config.kieModelId]) {
+    providers.push({
+      key: "kie",
+      label: "Kie",
+      provider_path: "kie.api.v1.jobs.createTask()",
+      envKey: "KIE_API_KEY",
+    });
   }
 
-  return { type: "object", properties, required, defaults: model.defaults };
+  if (config.xaiEndpoint) {
+    providers.push({
+      key: "xai",
+      label: "xAI",
+      provider_path: `xai.v1.images.${config.xaiEndpoint}()`,
+      envKey: "XAI_API_KEY",
+    });
+  }
+
+  return providers;
+}
+
+function getImageModels(): Record<string, ImageModelInfo> {
+  const result: Record<string, ImageModelInfo> = {};
+
+  for (const config of IMAGE_MODEL_CONFIGS) {
+    const modelSchema = kieModelSchemas[config.kieModelId];
+    const params: string[] = [];
+
+    if (modelSchema) {
+      for (const fieldName of Object.keys(modelSchema.fields)) {
+        params.push(fieldName === config.kieImageField ? "image_slugs" : fieldName);
+      }
+    }
+
+    result[config.key] = {
+      label: config.label,
+      tool_name: config.tool_name,
+      description: config.description,
+      params,
+      defaults: config.defaults,
+      providers: buildProvidersForConfig(config),
+    };
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +254,7 @@ type ValidationResult = {
 
 function validateImageParams(toolName: string, params: Record<string, unknown>): ValidationResult {
   const schema = getImageToolSchema(toolName);
+  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
   if (!schema) return { valid: false, missing_required: [], warnings: ["Unknown tool"], image_slots: null };
 
   const missing: string[] = [];
@@ -192,7 +266,6 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  // Check enum constraints
   for (const [key, value] of Object.entries(params)) {
     const prop = schema.properties[key];
     if (!prop) continue;
@@ -203,69 +276,18 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  // Tool-specific validation
+  const imageSlots = config?.image_slots ?? null;
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
-  if (toolName === "generate_grok_imagine_image") {
-    if (totalImages === 0) warnings.push("Grok Imagine requires at least one reference image");
-    if (totalImages > 1) warnings.push(`Grok Imagine only supports 1 reference image (got ${totalImages})`);
+  if (imageSlots && imageSlots.min > 0 && totalImages < imageSlots.min) {
+    warnings.push(`${config!.label} requires at least ${imageSlots.min} reference image${imageSlots.min > 1 ? "s" : ""}`);
   }
-
-  if (toolName === "generate_gpt_image") {
-    if (totalImages > 4) warnings.push(`GPT Image supports 1-4 images (got ${totalImages})`);
+  if (imageSlots && imageSlots.max > 0 && totalImages > imageSlots.max) {
+    warnings.push(`${config!.label} supports ${imageSlots.min}-${imageSlots.max} images (got ${totalImages})`);
   }
-
-  const imageSlots = IMAGE_SLOT_LIMITS[toolName] ?? null;
 
   return { valid: missing.length === 0, missing_required: missing, warnings, image_slots: imageSlots };
-}
-
-// ---------------------------------------------------------------------------
-// Routing prompt for GPT-4o-mini
-// ---------------------------------------------------------------------------
-
-const IMAGE_TOOL_NAMES = Object.values(IMAGE_MODELS).map((m) => m.tool_name);
-
-function buildImageRoutingPrompt(): string {
-  const toolLines: string[] = [];
-  for (const model of Object.values(IMAGE_MODELS)) {
-    const paramStr = model.params.filter((p) => p !== "project_slug").join(", ");
-    const defaultStr = Object.entries(model.defaults).map(([k, v]) => `${k}=${String(v)}`).join(", ");
-    toolLines.push(`- ${model.tool_name}: ${model.description}`);
-    toolLines.push(`  Parameters: ${paramStr}`);
-    if (defaultStr) toolLines.push(`  Defaults: ${defaultStr}`);
-  }
-
-  return `You are a routing assistant for an image generation system.
-You ONLY route to these image generation tools:
-
-${toolLines.join("\n")}
-
-Given a user query (possibly with @asset references), determine:
-1. tool: Which tool to use (MUST be one of: ${IMAGE_TOOL_NAMES.join(", ")})
-2. params: Parameters to pass to the tool
-
-ROUTING PREFERENCES:
-- PREFER generate_nano_banana_image as the DEFAULT for ALL image generation requests
-- Use generate_grok_imagine_text_image when user mentions "grok" for text-to-image (no reference images)
-- Use generate_grok_imagine_image ONLY when user mentions "grok" for image-to-image (with a reference image)
-- Use generate_gpt_image ONLY when user explicitly mentions "gpt", "chatgpt", or "edit"
-
-KEY CONSTRAINTS:
-- For generate_nano_banana_image: aspect_ratio options include 1:1/2:3/3:2/3:4/4:3/4:5/5:4/9:16/16:9/21:9/auto, resolution 1K/2K/4K, output_format png/jpg
-- For generate_grok_imagine_text_image: text-to-image, NO reference images. aspect_ratio 1:1/2:3/3:2/3:4/4:3/4:5/5:4/9:16/16:9, resolution 1k/2k
-- For generate_grok_imagine_image: REQUIRES exactly 1 reference image
-- For generate_gpt_image: REQUIRES 1-4 reference images, aspect_ratio 1:1/2:3/3:2, quality medium/high
-
-PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
-DO NOT include project_slug in params.
-
-If the user's intent doesn't match an image generation tool, respond with:
-{"tool": null, "params": {}, "error": "Query does not match an image generation tool"}
-
-Respond with JSON only:
-{"tool": "tool_name", "params": {"param1": "value1", ...}}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +304,7 @@ type ActionLogEntry = {
 function imageActionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
   const toolName = action.slice(5).replace(/-/g, "_");
-  return Object.values(IMAGE_MODELS).some((m) => m.tool_name === toolName) ? toolName : null;
+  return IMAGE_MODEL_CONFIGS.some((c) => c.tool_name === toolName) ? toolName : null;
 }
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
@@ -304,18 +326,13 @@ function extractLastImageSettingsPerModel(
   return result;
 }
 
-/**
- * Return the model key of the most recently used image generation tool,
- * or null if the log contains no image tool entries.
- */
 function extractLastUsedImageModel(log: ActionLogEntry[]): string | null {
   for (const entry of log) {
     const toolName = imageActionNameToToolName(entry.action);
     if (!toolName) continue;
     if (typeof entry.payload === "string") continue;
-    for (const [key, info] of Object.entries(IMAGE_MODELS)) {
-      if (info.tool_name === toolName) return key;
-    }
+    const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+    if (config) return config.key;
   }
   return null;
 }
@@ -348,7 +365,6 @@ function buildImageModelOption(
   const allowedParams = new Set(modelInfo.params);
   const params: Record<string, unknown> = {};
 
-  // Prefill from most recent historical usage of this tool
   let historicalProvider: string | undefined;
   if (historyEntries) {
     const settingsMap = extractLastImageSettingsPerModel(historyEntries);
@@ -363,23 +379,19 @@ function buildImageModelOption(
     }
   }
 
-  // Apply baseParams AFTER history so UI input overrides historical values
   for (const [k, v] of Object.entries(baseParams)) {
     if (allowedParams.has(k)) params[k] = v;
   }
 
-  // Fill image_slugs from resolved assets
   const imageTags = resolvedAssets
     .filter((a) => a.asset_type === "image" && a.file_path)
     .map((a) => a.tag);
   params.image_slugs = imageTags.length > 0 ? imageTags : [];
 
-  // Apply model defaults where not already set
   for (const [k, v] of Object.entries(modelInfo.defaults)) {
     params[k] ??= v;
   }
 
-  // Coerce numeric values to strings for params with string enums
   const schema = getImageToolSchema(toolName);
   if (schema) {
     for (const [k, v] of Object.entries(params)) {
@@ -392,7 +404,6 @@ function buildImageModelOption(
 
   const validation = validateImageParams(toolName, params);
 
-  // Filter providers to those with available API keys
   const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
   const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
   const selectedProvider = (historicalProvider && providerList.some((p) => p.key === historicalProvider))
@@ -413,15 +424,19 @@ function buildImageModelOption(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
 export {
-  IMAGE_MODELS,
-  IMAGE_SLOT_LIMITS,
-  IMAGE_PARAM_SCHEMAS,
+  IMAGE_MODEL_CONFIGS,
+  getImageModels,
   getImageToolSchema,
   validateImageParams,
-  buildImageRoutingPrompt,
   buildImageModelOption,
   extractLastImageSettingsPerModel,
   extractLastUsedImageModel,
+  initImageModels,
+  xaiImageModels,
 };
-export type { ImageModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };
+export type { ImageModelInfo, ImageModelConfig, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };
