@@ -1,7 +1,6 @@
 import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
-import { CommandDropdown } from '@/components/commands/CommandDropdown';
 import type { JSONSchemaProperty, VeoGenerationType } from '../types';
 import type { GenTheme } from './gen-themes';
 import { cn } from '@/lib/utils';
@@ -168,13 +167,23 @@ export function DynamicField({
     }
 
     return (
-      <CommandDropdown
-        command={"/" + name}
-        value={effectiveValue}
-        options={options.map((opt) => ({ value: opt, label: opt }))}
-        onChange={(v) => onChange(v)}
-        disabled={disabled}
-      />
+      <GenField label={label} required={required} theme={theme} horizontal>
+        <select
+          value={effectiveValue}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className={cn(
+            'px-3 py-1.5 bg-black/60 rounded font-mono text-sm appearance-none cursor-pointer',
+            theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+            'focus:outline-none focus:border-primary/60',
+            'disabled:opacity-50 disabled:cursor-not-allowed'
+          )}
+        >
+          {options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      </GenField>
     );
   }
 
@@ -202,13 +211,26 @@ export function DynamicField({
     }
 
     return (
-      <CommandDropdown
-        command={"/" + name}
-        value={effectiveValue}
-        options={options.map((opt) => ({ value: opt, label: opt }))}
-        onChange={(v) => onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v))}
-        disabled={disabled}
-      />
+      <GenField label={label} required={required} theme={theme} horizontal>
+        <select
+          value={effectiveValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v));
+          }}
+          disabled={disabled}
+          className={cn(
+            'px-3 py-1.5 bg-black/60 rounded font-mono text-sm appearance-none cursor-pointer',
+            theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+            'focus:outline-none focus:border-primary/60',
+            'disabled:opacity-50 disabled:cursor-not-allowed'
+          )}
+        >
+          {options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      </GenField>
     );
   }
 
