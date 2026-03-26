@@ -330,10 +330,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         </div>
       }
     >
-      <div className="flex-1 min-h-0 overflow-clip flip-card-perspective">
-        <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
-          {/* FRONT FACE — form */}
-          <div className="flip-card-face absolute inset-0 overflow-y-auto px-3 py-2">
+      <div className="flex-1 min-h-0 relative">
+        {/* FRONT FACE — form (outside 3D context so WebKit scroll works) */}
+        <div className={cn('absolute inset-0 overflow-y-auto px-3 py-2', flipped && 'hidden')}>
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}
@@ -432,10 +431,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                 </div>
               )}
             </div>
-          </div>
+        </div>
 
-          {/* BACK FACE — JSON payloads side by side */}
-          <div className="flip-card-back absolute inset-0 flex">
+        {/* BACK FACE — JSON payloads (only visible when flipped) */}
+        <div className={cn('absolute inset-0 flex', !flipped && 'hidden')}>
             {/* Left pane: Raw MCP tool call */}
             <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
               <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
@@ -466,7 +465,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                 </span>
               )}
             </div>
-          </div>
         </div>
       </div>
     </GenPanel>
