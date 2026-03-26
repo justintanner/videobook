@@ -114,6 +114,7 @@ test.describe("provider ↔ model filtering", () => {
     // Only Grok models should appear
     expect(models).toContain("grok_imagine_image");
     expect(models).toContain("grok_imagine_text");
+    expect(models).toContain("grok_imagine_ref");
     expect(models).not.toContain("nano_banana");
     expect(models).not.toContain("gpt_image");
 
@@ -139,7 +140,7 @@ test.describe("provider ↔ model filtering", () => {
     console.log("Model after xAI switch:", newModel);
 
     // Should have switched to a Grok model
-    expect(["grok_imagine_image", "grok_imagine_text"]).toContain(newModel);
+    expect(["grok_imagine_image", "grok_imagine_text", "grok_imagine_ref"]).toContain(newModel);
 
     await page.screenshot({ path: "tests/screenshots/xai-auto-model-switch.png" });
   });

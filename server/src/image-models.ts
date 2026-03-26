@@ -28,10 +28,19 @@ type ProviderRoute = {
 // Slim config — only what providers can't tell us
 // ---------------------------------------------------------------------------
 
+type XaiSchemaField = {
+  type: string;
+  required?: boolean;
+  description?: string;
+  enum?: readonly (string | number | boolean)[];
+  items?: { type: string };
+};
+
 type ImageModelConfig = {
   key: string;
-  kieModelId: KieMediaModel;
+  kieModelId?: KieMediaModel;
   xaiEndpoint?: "generations" | "edits";
+  xaiSchemaOverride?: Record<string, XaiSchemaField>;
   tool_name: string;
   label: string;
   description: string;
@@ -80,6 +89,21 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Grok Imagine",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
     image_slots: { min: 0, max: 0 },
+    defaults: { aspect_ratio: "1:1" },
+  },
+  {
+    key: "grok_imagine_ref",
+    xaiEndpoint: "edits",
+    xaiSchemaOverride: {
+      prompt: { type: "string", required: true, description: "Text prompt for image generation" },
+      image_slugs: { type: "array", description: "0-4 optional reference images", items: { type: "string" } },
+      aspect_ratio: { type: "string", description: "Aspect ratio" },
+    },
+    tool_name: "generate_grok_imagine_ref_image",
+    label: "Grok Imagine Reference",
+    description: "Image generation guided by optional reference images (0-4 drag-and-drop)",
+    image_slots: { min: 0, max: 4 },
+    kieImageField: "image_slugs",
     defaults: { aspect_ratio: "1:1" },
   },
 ];
@@ -163,19 +187,40 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
   const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
   if (!config) return null;
 
-  const modelSchema = kieModelSchemas[config.kieModelId];
-  if (!modelSchema) return null;
+  // Try Kie schema first
+  const modelSchema = config.kieModelId ? kieModelSchemas[config.kieModelId] : null;
 
-  const properties: Record<string, ParamSchema> = {};
-  const required: string[] = [];
-
-  for (const [fieldName, field] of Object.entries(modelSchema.fields)) {
-    const outputName = fieldName === config.kieImageField ? "image_slugs" : fieldName;
-    properties[outputName] = kieFieldToParam(field, config, fieldName);
-    if (field.required) required.push(outputName);
+  if (modelSchema) {
+    const properties: Record<string, ParamSchema> = {};
+    const required: string[] = [];
+    for (const [fieldName, field] of Object.entries(modelSchema.fields)) {
+      const outputName = fieldName === config.kieImageField ? "image_slugs" : fieldName;
+      properties[outputName] = kieFieldToParam(field, config, fieldName);
+      if (field.required) required.push(outputName);
+    }
+    return { type: "object", properties, required, defaults: config.defaults };
   }
 
-  return { type: "object", properties, required, defaults: config.defaults };
+  // Fallback: use xaiSchemaOverride for xAI-only models
+  if (config.xaiSchemaOverride) {
+    const properties: Record<string, ParamSchema> = {};
+    const required: string[] = [];
+    for (const [fieldName, field] of Object.entries(config.xaiSchemaOverride)) {
+      const isImageField = fieldName === config.kieImageField;
+      const param: ParamSchema = {
+        type: field.type,
+        description: isImageField ? imageSlotsDescription(config.image_slots) : (field.description ?? ""),
+      };
+      if (field.enum) param.enum = [...field.enum];
+      if (isImageField || field.items) param.items = { type: "string" };
+      if (fieldName in config.defaults) param.default = config.defaults[fieldName];
+      properties[fieldName] = param;
+      if (field.required) required.push(fieldName);
+    }
+    return { type: "object", properties, required, defaults: config.defaults };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +239,7 @@ type ImageModelInfo = {
 function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
   const providers: ProviderRoute[] = [];
 
-  if (kieModelSchemas[config.kieModelId]) {
+  if (config.kieModelId && kieModelSchemas[config.kieModelId]) {
     providers.push({
       key: "kie",
       label: "Kie",
@@ -219,13 +264,15 @@ function getImageModels(): Record<string, ImageModelInfo> {
   const result: Record<string, ImageModelInfo> = {};
 
   for (const config of IMAGE_MODEL_CONFIGS) {
-    const modelSchema = kieModelSchemas[config.kieModelId];
+    const modelSchema = config.kieModelId ? kieModelSchemas[config.kieModelId] : null;
     const params: string[] = [];
 
     if (modelSchema) {
       for (const fieldName of Object.keys(modelSchema.fields)) {
         params.push(fieldName === config.kieImageField ? "image_slugs" : fieldName);
       }
+    } else if (config.xaiSchemaOverride) {
+      params.push(...Object.keys(config.xaiSchemaOverride));
     }
 
     result[config.key] = {

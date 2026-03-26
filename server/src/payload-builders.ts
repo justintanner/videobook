@@ -230,6 +230,26 @@ function buildXaiGrokImagineImagePayload(
   };
 }
 
+type GrokImagineRefImageArgs = {
+  prompt: string;
+  aspect_ratio?: string;
+};
+
+function buildXaiGrokImagineRefImagePayload(
+  args: GrokImagineRefImageArgs,
+  imageUrls: string[],
+): XaiImageEditRequest {
+  return {
+    prompt: args.prompt,
+    ...(imageUrls.length === 1
+      ? { image: { url: imageUrls[0], type: "image_url" as const } }
+      : imageUrls.length > 1
+        ? { images: imageUrls.map((url) => ({ url, type: "image_url" as const })) }
+        : {}),
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+  };
+}
+
 function buildXaiGrokImagineVideoPayload(
   args: GrokImagineVideoArgs,
   imageUrls: string[],
@@ -337,6 +357,10 @@ function translateToolPayload(
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_grok_imagine_ref_image": {
+      const payload = buildXaiGrokImagineRefImagePayload(args as GrokImagineRefImageArgs, imageSlugs);
+      return { provider_path: "xai.v1.images.edits()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
@@ -369,7 +393,8 @@ const VIDEO_TOOLS = new Set([
 ]);
 
 const IMAGE_TOOLS = new Set([
-  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
+  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image",
+  "generate_grok_imagine_text_image", "generate_grok_imagine_ref_image",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -391,6 +416,7 @@ export {
   buildGrokImagineVideoPayload,
   buildGrokImagineImagePayload,
   buildXaiGrokImagineImagePayload,
+  buildXaiGrokImagineRefImagePayload,
   buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
   buildGrokImagineTextPayload,

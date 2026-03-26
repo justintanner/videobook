@@ -111,11 +111,12 @@ describe("extractLastImageSettingsPerModel", () => {
     expect(result.size).toBe(0);
   });
 
-  it("handles all 3 image model action names correctly", () => {
+  it("handles all image model action names correctly", () => {
     const actionNames = [
       "tool-generate-nano-banana-image",
       "tool-generate-grok-imagine-image",
       "tool-generate-gpt-image",
+      "tool-generate-grok-imagine-ref-image",
     ];
     const log: ActionLogEntry[] = actionNames.map((action, i) => ({
       hash: `h${i}`,
@@ -124,10 +125,11 @@ describe("extractLastImageSettingsPerModel", () => {
       date: "2026-03-08T00:00:00Z",
     }));
     const result = extractLastImageSettingsPerModel(log);
-    expect(result.size).toBe(3);
+    expect(result.size).toBe(4);
     expect(result.has("generate_nano_banana_image")).toBe(true);
     expect(result.has("generate_grok_imagine_image")).toBe(true);
     expect(result.has("generate_gpt_image")).toBe(true);
+    expect(result.has("generate_grok_imagine_ref_image")).toBe(true);
   });
 });
 
@@ -278,6 +280,16 @@ describe("getImageToolSchema", () => {
     expect(schema!.properties.quality.enum).toEqual(["medium", "high"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "2:3", "3:2"]);
   });
+
+  it("grok_imagine_ref: prompt required, image_slugs optional, aspect_ratio present", () => {
+    const schema = getImageToolSchema("generate_grok_imagine_ref_image");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.properties.aspect_ratio).toBeDefined();
+    expect(schema!.properties.image_slugs).toBeDefined();
+    expect(schema!.properties.image_slugs.items).toEqual({ type: "string" });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -316,6 +328,23 @@ describe("validateImageParams", () => {
     });
     expect(result.warnings.some((w) => w.includes("1-4 images"))).toBe(true);
   });
+
+  it("grok_imagine_ref: 0 images is valid (no warning)", () => {
+    const result = validateImageParams("generate_grok_imagine_ref_image", {
+      prompt: "a sunset",
+      image_slugs: [],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("grok_imagine_ref: >4 images triggers warning", () => {
+    const result = validateImageParams("generate_grok_imagine_ref_image", {
+      prompt: "a sunset",
+      image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
+    });
+    expect(result.warnings.some((w) => w.includes("0-4"))).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -323,13 +352,14 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 4 image models", () => {
+  it("returns all 5 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(4);
+    expect(Object.keys(models)).toHaveLength(5);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
     expect(models).toHaveProperty("grok_imagine_text");
+    expect(models).toHaveProperty("grok_imagine_ref");
   });
 
   it("params come from Kie schemas with image field renamed to image_slugs", () => {
@@ -351,11 +381,18 @@ describe("getImageModels", () => {
     const models = getImageModels();
     expect(models.grok_imagine_image.providers.some((p) => p.key === "xai")).toBe(true);
     expect(models.grok_imagine_text.providers.some((p) => p.key === "xai")).toBe(true);
+    expect(models.grok_imagine_ref.providers.some((p) => p.key === "xai")).toBe(true);
   });
 
   it("kie-only models do not list xai as a provider", () => {
     const models = getImageModels();
     expect(models.nano_banana.providers.some((p) => p.key === "xai")).toBe(false);
     expect(models.gpt_image.providers.some((p) => p.key === "xai")).toBe(false);
+  });
+
+  it("xai-only model does not list kie as a provider", () => {
+    const models = getImageModels();
+    expect(models.grok_imagine_ref.providers.some((p) => p.key === "kie")).toBe(false);
+    expect(models.grok_imagine_ref.providers).toHaveLength(1);
   });
 });
