@@ -29,7 +29,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       resultUrls, resultObject,
     } = payload as CompleteKieTaskPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {

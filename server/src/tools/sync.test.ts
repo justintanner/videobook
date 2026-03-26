@@ -271,6 +271,66 @@ describe("buildAssetList", () => {
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("ready");
   });
+
+  it("clamps non-whitelisted video with lock (no state) to 'generating'", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "locked-no-state", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    // Acquire lock without state — simulates complete_kie_task before fix
+    await fs.acquireLock(assetDir, { durationMs: 60_000 });
+
+    const assets = await buildAssetList(fs, "test-proj");
+    const asset = assets.find(a => a.id === createResult.value.assetId)!;
+    // Pre-whitelist clamp: "loading" → "generating"
+    expect(asset.status).toBe("generating");
+
+    await fs.releaseLock(assetDir);
+  });
+
+  it("does not clamp whitelisted video with lock (no state)", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "wl-locked", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await fs.acquireLock(assetDir, { durationMs: 60_000 });
+
+    const assets = await buildAssetList(fs, "test-proj");
+    const asset = assets.find(a => a.id === createResult.value.assetId)!;
+    // Whitelisted — clamp does not apply, lock fallback "loading" passes through
+    expect(asset.status).toBe("loading");
+
+    await fs.releaseLock(assetDir);
+  });
+
+  it("clamps non-whitelisted video with no media/lock/task to 'generating'", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "empty-vid", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+
+    // Empty asset directory — no media, no lock, no pending task
+    const assets = await buildAssetList(fs, "test-proj");
+    const asset = assets.find(a => a.id === createResult.value.assetId)!;
+    // Pre-whitelist clamp: "loading" → "generating"
+    expect(asset.status).toBe("generating");
+  });
+
+  it("does not clamp non-video assets", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("img", "empty-img", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+
+    // Empty image asset — no media, no lock, no pending task
+    const assets = await buildAssetList(fs, "test-proj");
+    const asset = assets.find(a => a.id === createResult.value.assetId)!;
+    // Image assets are not clamped — "loading" passes through
+    expect(asset.status).toBe("loading");
+  });
 });
 
 describe("performSync", () => {
@@ -334,7 +394,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("shows status 'error' when only a .part file exists (no original.mp4)", async () => {
+  it("clamps non-whitelisted video with .part file to 'generating' (not 'error')", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-download", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -345,10 +405,11 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].status).toBe("error");
+    // Pre-whitelist clamp: "error" → "generating" to keep clip hidden from sidebar
+    expect(assets[0].status).toBe("generating");
   });
 
-  it("shows status 'error' when vid- asset has .part file + thumbnail but no video", async () => {
+  it("clamps non-whitelisted video with .part + thumbnail to 'generating'", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-with-thumb", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -360,7 +421,21 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    // Should be "error" — the thumbnail doesn't mean the video is OK
+    // Pre-whitelist clamp: "error" → "generating"
+    expect(assets[0].status).toBe("generating");
+  });
+
+  it("shows 'error' for whitelisted video with .part file (clamp does not apply)", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "whitelisted-broken", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4.part"), "");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("error");
   });
 

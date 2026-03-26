@@ -49,7 +49,7 @@ export function registerChangeVideoSpeedJob(fs: ClipfirstFs): void {
       assetId, assetDir, projectSlug,
     } = payload as ChangeVideoSpeedPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {

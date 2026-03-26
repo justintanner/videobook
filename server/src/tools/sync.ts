@@ -305,6 +305,16 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         status = "loading";
       }
 
+      // Guarantee: non-whitelisted video assets only surface sidebar-hidden statuses.
+      // Any unexpected status (loading, error, transcribing, etc.) is clamped to
+      // "generating" so the clip stays hidden from the sidebar and shows as pending
+      // in the inbox.
+      if (a.type === "video" && !whitelisted) {
+        if (status !== "unreviewed" && status !== "generating" && status !== "downloading") {
+          status = "generating";
+        }
+      }
+
       const meta = metadata.ok ? metadata.value : null;
 
       // Backfill duration if missing from metadata
