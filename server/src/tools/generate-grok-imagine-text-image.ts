@@ -17,28 +17,30 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_text_image",
     description:
-      "Generate an image from a text prompt using Grok Imagine text-to-image. Creates a new img- asset and enqueues a background job. No reference images needed.",
+      "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
     schema: {
       prompt: z.string().describe("Text prompt for image generation"),
       project_slug: z.string().describe("Project slug"),
       aspect_ratio: z
-        .enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9"])
+        .enum(["1:1", "2:3", "3:2", "16:9", "9:16"])
         .optional()
         .describe("Aspect ratio"),
-      resolution: z.enum(["1k", "2k"]).optional().describe("Output resolution"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, resolution } = args as {
+      const { prompt, project_slug, aspect_ratio, _provider } = args as {
         prompt: string;
         project_slug: string;
         aspect_ratio?: string;
-        resolution?: "1k" | "2k";
+        _provider?: string;
       };
 
-      if (!process.env.XAI_API_KEY) {
+      const isXai = _provider !== undefined && _provider.startsWith("xai");
+      const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
+      if (!process.env[requiredKey]) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "XAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: `${requiredKey} environment variable is not set` }],
         };
       }
 
@@ -72,7 +74,7 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
         imgAssetDir,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
+        ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

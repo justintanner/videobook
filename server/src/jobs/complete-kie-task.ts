@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -39,7 +39,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
-      } else if (taskType === "grok_imagine_image") {
+      } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
         await completeGptImage(fs, assetId, projectSlug, meta, resultUrls);

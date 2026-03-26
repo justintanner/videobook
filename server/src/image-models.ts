@@ -39,7 +39,7 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
     ],
   },
   grok_imagine_image: {
-    label: "Grok Imagine",
+    label: "Grok Imagine Edit",
     tool_name: "generate_grok_imagine_image",
     description: "Image-to-image transformation (requires exactly 1 reference image)",
     params: ["prompt", "image_slugs"],
@@ -60,12 +60,13 @@ const IMAGE_MODELS: Record<string, ImageModelInfo> = {
     ],
   },
   grok_imagine_text: {
-    label: "Grok Imagine (Text)",
+    label: "Grok Imagine",
     tool_name: "generate_grok_imagine_text_image",
-    description: "Text-to-image generation (no reference images needed), with optional aspect ratio and resolution",
-    params: ["prompt", "aspect_ratio", "resolution"],
-    defaults: { aspect_ratio: "1:1", resolution: "2k" },
+    description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
+    params: ["prompt", "aspect_ratio"],
+    defaults: { aspect_ratio: "1:1" },
     providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.v1.images.generations()", envKey: "XAI_API_KEY" },
     ],
   },
@@ -152,8 +153,7 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "1-4 reference image assets (e.g., @img-sunset)";
     }
     if (toolName === "generate_grok_imagine_text_image") {
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9"]; }
-      if (param === "resolution") { prop.enum = ["1k", "2k"]; }
+      if (param === "aspect_ratio") { prop.enum = ["1:1", "2:3", "3:2", "16:9", "9:16"]; }
     }
 
     properties[param] = prop;

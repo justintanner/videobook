@@ -10,6 +10,7 @@ import type {
   MultiShotPrompt,
   GrokImageToVideoRequest,
   GrokImageToImageRequest,
+  GrokTextToImageRequest,
   SeedanceVideoRequest,
   NanoBananaProRequest,
   GptImageToImageRequest,
@@ -97,18 +98,17 @@ function buildGrokImagineImagePayload(
 type GrokImagineTextArgs = {
   prompt: string;
   aspect_ratio?: string;
-  resolution?: string;
 };
 
 function buildGrokImagineTextPayload(
   args: GrokImagineTextArgs,
-): XaiImageGenerateRequest {
+): GrokTextToImageRequest {
   return {
-    prompt: args.prompt,
-    n: 1,
-    response_format: "url",
-    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-    ...(args.resolution !== undefined ? { resolution: args.resolution as "1k" | "2k" } : {}),
+    model: "grok-imagine/text-to-image",
+    input: {
+      prompt: args.prompt,
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokTextToImageRequest["input"]["aspect_ratio"] } : {}),
+    },
   };
 }
 
@@ -325,8 +325,17 @@ function translateToolPayload(
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {
+      if (isXaiProvider(provider)) {
+        const payload: XaiImageGenerateRequest = {
+          prompt: (args as GrokImagineTextArgs).prompt ?? "",
+          n: 1,
+          response_format: "url",
+          ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as string } : {}),
+        };
+        return { provider_path: "xai.v1.images.generations()", payload: payload as unknown as Record<string, unknown> };
+      }
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
-      return { provider_path: "xai.v1.images.generations()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
