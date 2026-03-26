@@ -330,9 +330,6 @@ function buildImageModelOption(
   const toolName = modelInfo.tool_name;
   const allowedParams = new Set(modelInfo.params);
   const params: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(baseParams)) {
-    if (allowedParams.has(k)) params[k] = v;
-  }
 
   // Prefill from most recent historical usage of this tool
   let historicalProvider: string | undefined;
@@ -347,6 +344,11 @@ function buildImageModelOption(
         }
       }
     }
+  }
+
+  // Apply baseParams AFTER history so UI input overrides historical values
+  for (const [k, v] of Object.entries(baseParams)) {
+    if (allowedParams.has(k)) params[k] = v;
   }
 
   // Fill image_slugs from resolved assets

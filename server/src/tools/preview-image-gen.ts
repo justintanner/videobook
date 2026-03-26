@@ -52,8 +52,12 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
       }
 
       // 4. Build model options for all image models
+      // Strip @asset tags from prompt to get the user's text input
+      const cleanPrompt = prompt.replace(/@\S+/g, "").trim();
+      const baseParams: Record<string, unknown> = { prompt: cleanPrompt };
+
       const modelOptions = Object.entries(IMAGE_MODELS).map(([key, info]) =>
-        buildImageModelOption(key, info, {}, resolvedAssets, historyEntries),
+        buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries),
       );
 
       // 5. Default to last successful generation model, fall back to nano_banana
