@@ -46,6 +46,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const [preview, setPreview] = useState<FullPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedModelKey, setSelectedModelKey] = useState('');
   const [selectedProviderKey, setSelectedProviderKey] = useState('');
@@ -57,17 +58,32 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [translateLoading, setTranslateLoading] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
+  const formValuesRef = useRef(formValues);
+  formValuesRef.current = formValues;
+  const refreshIdRef = useRef(0);
 
-  const fetchPreview = useCallback(async (cat: 'video' | 'image', prompt: string) => {
+  const fetchPreview = useCallback(async (
+    cat: 'video' | 'image',
+    prompt: string,
+    overrides?: { selected_model?: string; selected_provider?: string },
+  ) => {
     if (!projectSlug) return;
-    setLoading(true);
+    const isRefresh = !!overrides;
+    const thisRequest = ++refreshIdRef.current;
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setPreview(null);
+    }
     setError(null);
-    setPreview(null);
     try {
-      const result = await callToolRef.current(getPreviewToolName(cat), {
-        prompt,
-        project_slug: projectSlug,
-      });
+      const toolArgs: Record<string, unknown> = { prompt, project_slug: projectSlug };
+      if (overrides?.selected_model) toolArgs.selected_model = overrides.selected_model;
+      if (overrides?.selected_provider) toolArgs.selected_provider = overrides.selected_provider;
+
+      const result = await callToolRef.current(getPreviewToolName(cat), toolArgs);
+      if (thisRequest !== refreshIdRef.current) return; // stale
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }>;
         setError(content[0]?.text ?? 'Preview failed');
@@ -79,12 +95,18 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setSelectedModelKey(data.selected_model);
       const option = data.model_options.find((o) => o.key === data.selected_model);
       setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
-      setFormValues(option?.prefilled_values ?? {});
+      const currentPrompt = isRefresh ? formValuesRef.current.prompt : undefined;
+      const prefilled = option?.prefilled_values ?? {};
+      setFormValues(currentPrompt !== undefined ? { ...prefilled, prompt: currentPrompt } : prefilled);
       setDroppedAssets(new Map());
     } catch (e) {
+      if (thisRequest !== refreshIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Preview failed');
     } finally {
-      setLoading(false);
+      if (thisRequest === refreshIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [projectSlug]);
 
@@ -98,37 +120,22 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const handleModelChange = useCallback((modelKey: string) => {
     setSelectedModelKey(modelKey);
-    const option = preview?.model_options.find((o) => o.key === modelKey);
-    if (option) {
-      const currentPrompt = formValues.prompt;
-      setFormValues({ ...option.prefilled_values, prompt: currentPrompt });
-      setDroppedAssets(new Map());
-      // Keep current provider if the new model supports it
-      const keepProvider = option.providers?.some((p) => p.key === selectedProviderKey);
-      if (!keepProvider) {
-        setSelectedProviderKey(option.selected_provider ?? option.providers?.[0]?.key ?? '');
-      }
-    }
-  }, [preview, formValues.prompt, selectedProviderKey]);
+    fetchPreview(category, initialPrompt, {
+      selected_model: modelKey,
+      selected_provider: selectedProviderKey || undefined,
+    });
+  }, [category, initialPrompt, selectedProviderKey, fetchPreview]);
 
   const handleProviderChange = useCallback((label: string) => {
     const allProviders = preview?.model_options.flatMap((o) => o.providers ?? []) ?? [];
     const match = allProviders.find((p) => p.label === label);
     if (!match) return;
     setSelectedProviderKey(match.key);
-    // If current model doesn't support the new provider, switch to first model that does
-    const currentOption = preview?.model_options.find((o) => o.key === selectedModelKey);
-    const currentSupports = currentOption?.providers?.some((p) => p.key === match.key);
-    if (!currentSupports) {
-      const firstMatch = preview?.model_options.find((o) => o.providers?.some((p) => p.key === match.key));
-      if (firstMatch) {
-        setSelectedModelKey(firstMatch.key);
-        const currentPrompt = formValues.prompt;
-        setFormValues({ ...firstMatch.prefilled_values, prompt: currentPrompt });
-        setDroppedAssets(new Map());
-      }
-    }
-  }, [preview, selectedModelKey, formValues.prompt]);
+    fetchPreview(category, initialPrompt, {
+      selected_model: selectedModelKey || undefined,
+      selected_provider: match.key,
+    });
+  }, [category, initialPrompt, preview, selectedModelKey, fetchPreview]);
 
   useImperativeHandle(ref, () => ({
     setField: (name: string, value: string) => {
@@ -322,7 +329,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const imageSlots = selectedOption?.validation.image_slots ?? null;
 
-  const isDisabled = genState === 'submitting' || genState === 'processing';
+  const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
   return (
     <GenPanel
@@ -415,7 +422,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           </div>
         </div>
         {/* FRONT FACE — form (outside 3D context so WebKit scroll works) */}
-        {!flipped && <div className="absolute inset-0 overflow-y-auto px-3 py-2">
+        {!flipped && <div className={cn('absolute inset-0 overflow-y-auto px-3 py-2', refreshing && 'opacity-50 pointer-events-none transition-opacity duration-150')}>
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}

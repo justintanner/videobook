@@ -533,6 +533,7 @@ function buildModelOption(
   baseParams: Record<string, unknown>,
   resolvedAssets: ResolvedAsset[],
   historyEntries?: ActionLogEntry[],
+  providerOverride?: string,
 ): ModelOption {
   const toolName = modelInfo.tool_name;
   // Only carry over base params that belong to this model's param list
@@ -606,9 +607,11 @@ function buildModelOption(
   // Filter providers to those with available API keys
   const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
   const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
-  const selectedProvider = (historicalProvider && providerList.some((p) => p.key === historicalProvider))
-    ? historicalProvider
-    : providerList[0].key;
+  const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
+    ? providerOverride
+    : (historicalProvider && providerList.some((p) => p.key === historicalProvider))
+      ? historicalProvider
+      : providerList[0].key;
 
   return {
     key: modelKey,

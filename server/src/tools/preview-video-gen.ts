@@ -32,11 +32,15 @@ export function previewVideoGenDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'gen a video of a sunset')"),
       project_slug: z.string().describe("Project slug"),
+      selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'kling30')"),
+      selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'kie')"),
     },
     handler: async (args) => {
-      const { prompt, project_slug: slug } = args as {
+      const { prompt, project_slug: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
         project_slug: string;
+        selected_model?: string;
+        selected_provider?: string;
       };
 
       // 1. Expand @s01 slot refs → actual asset slugs
@@ -49,34 +53,39 @@ export function previewVideoGenDef(fs: ClipfirstFs): ToolDef {
       // 2. Resolve @asset tags
       const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
 
-      // 3. Route prompt via GPT-4o-mini
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
-        };
-      }
-
+      // 3. Route prompt via GPT-4o-mini (skip when model explicitly selected)
       let routedToolName = "generate_kling30_video"; // fallback default
       let routedParams: Record<string, unknown> = {};
 
-      try {
-        const assetContext = resolvedAssets.map((a) => ({
-          tag: a.tag,
-          type: a.asset_type,
-          asset_id: a.asset_id,
-          has_file: a.file_path !== null,
-        }));
+      if (modelOverride) {
+        // Explicit model selection — skip LLM routing, use the model's tool name
+        const overrideInfo = Object.entries(VIDEO_MODELS).find(([key]) => key === modelOverride);
+        if (overrideInfo) routedToolName = overrideInfo[1].tool_name;
+      } else {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
+          };
+        }
 
-        const imageTags = resolvedAssets
-          .filter((a) => a.asset_type === "image")
-          .map((a) => a.tag);
-        const videoTags = resolvedAssets
-          .filter((a) => a.asset_type === "video")
-          .map((a) => a.tag);
+        try {
+          const assetContext = resolvedAssets.map((a) => ({
+            tag: a.tag,
+            type: a.asset_type,
+            asset_id: a.asset_id,
+            has_file: a.file_path !== null,
+          }));
 
-        const userMessage = `User query: ${prompt}
+          const imageTags = resolvedAssets
+            .filter((a) => a.asset_type === "image")
+            .map((a) => a.tag);
+          const videoTags = resolvedAssets
+            .filter((a) => a.asset_type === "video")
+            .map((a) => a.tag);
+
+          const userMessage = `User query: ${prompt}
 
 Referenced assets:
 ${JSON.stringify(assetContext, null, 2)}
@@ -87,29 +96,30 @@ Available assets:
 
 Determine which video generation tool to use and what parameters to pass.`;
 
-        const provider = openai({ apiKey, timeout: 15_000 });
-        const result = await provider.v1.chat.completions({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: buildVideoRoutingPrompt() },
-            { role: "user", content: userMessage },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.1,
-          max_completion_tokens: 512,
-        });
+          const provider = openai({ apiKey, timeout: 15_000 });
+          const result = await provider.v1.chat.completions({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: buildVideoRoutingPrompt() },
+              { role: "user", content: userMessage },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+            max_completion_tokens: 512,
+          });
 
-        const decision = JSON.parse(result.choices[0].message.content) as {
-          tool?: string | null;
-          params?: Record<string, unknown>;
-        };
+          const decision = JSON.parse(result.choices[0].message.content) as {
+            tool?: string | null;
+            params?: Record<string, unknown>;
+          };
 
-        if (decision.tool && Object.values(VIDEO_MODELS).some((m) => m.tool_name === decision.tool)) {
-          routedToolName = decision.tool;
-          routedParams = decision.params ?? {};
+          if (decision.tool && Object.values(VIDEO_MODELS).some((m) => m.tool_name === decision.tool)) {
+            routedToolName = decision.tool;
+            routedParams = decision.params ?? {};
+          }
+        } catch {
+          // LLM routing failure — fall through to kling30 default
         }
-      } catch {
-        // LLM routing failure — fall through to kling30 default
       }
 
       // 4. Load prompt history from action log
@@ -129,13 +139,13 @@ Determine which video generation tool to use and what parameters to pass.`;
         buildModelOption(
           key, info,
           info.tool_name === routedToolName ? routedParams : {},
-          resolvedAssets, historyEntries,
+          resolvedAssets, historyEntries, providerOverride,
         ),
       );
 
-      // 6. Determine selected model — prefer last-used model from history
+      // 6. Use explicit override, then last-used model from history, then routed
       const historicalModel = extractLastUsedModel(historyEntries);
-      const selectedModel = historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
+      const selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 7. Build resolved_assets output (slug/src/type for frontend ResolvedAsset)

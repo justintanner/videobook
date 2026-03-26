@@ -25,11 +25,15 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'generate an image of a sunset')"),
       project_slug: z.string().describe("Project slug"),
+      selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'nano_banana')"),
+      selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'xai')"),
     },
     handler: async (args) => {
-      const { prompt, project_slug: slug } = args as {
+      const { prompt, project_slug: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
         project_slug: string;
+        selected_model?: string;
+        selected_provider?: string;
       };
 
       // 1. Expand @s01 slot refs → actual asset slugs
@@ -58,11 +62,11 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
 
       const imageModels = getImageModels();
       const modelOptions = Object.entries(imageModels).map(([key, info]) =>
-        buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries),
+        buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries, providerOverride),
       );
 
-      // 5. Default to last successful generation model, fall back to nano_banana
-      const selectedModel = extractLastUsedImageModel(historyEntries) ?? "nano_banana";
+      // 5. Use explicit override, then last successful generation model, then nano_banana
+      const selectedModel = modelOverride ?? extractLastUsedImageModel(historyEntries) ?? "nano_banana";
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
       // 6. Build resolved_assets output
