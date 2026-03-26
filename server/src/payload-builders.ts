@@ -230,23 +230,23 @@ function buildXaiGrokImagineImagePayload(
   };
 }
 
-type GrokImagineRefImageArgs = {
+type GrokImagineRefVideoArgs = {
   prompt: string;
+  duration?: string;
+  resolution?: string;
   aspect_ratio?: string;
 };
 
-function buildXaiGrokImagineRefImagePayload(
-  args: GrokImagineRefImageArgs,
+function buildXaiGrokImagineRefVideoPayload(
+  args: GrokImagineRefVideoArgs,
   imageUrls: string[],
-): XaiImageEditRequest {
+): XaiVideoGenerateRequest {
   return {
     prompt: args.prompt,
-    ...(imageUrls.length === 1
-      ? { image: { url: imageUrls[0], type: "image_url" as const } }
-      : imageUrls.length > 1
-        ? { images: imageUrls.map((url) => ({ url, type: "image_url" as const })) }
-        : {}),
-    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+    ...(imageUrls.length > 0 ? { reference_images: imageUrls.map((url) => ({ url })) } : {}),
+    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
 
@@ -357,9 +357,9 @@ function translateToolPayload(
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
       return { provider_path: "kie.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_grok_imagine_ref_image": {
-      const payload = buildXaiGrokImagineRefImagePayload(args as GrokImagineRefImageArgs, imageSlugs);
-      return { provider_path: "xai.v1.images.edits()", payload: payload as unknown as Record<string, unknown> };
+    case "generate_grok_imagine_ref_video": {
+      const payload = buildXaiGrokImagineRefVideoPayload(args as GrokImagineRefVideoArgs, imageSlugs);
+      return { provider_path: "xai.v1.videos.generations()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
@@ -389,12 +389,11 @@ function translateToolPayload(
 
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_veo_video", "extend_veo_video",
-  "generate_seedance_video", "generate_grok_imagine_video",
+  "generate_seedance_video", "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
 ]);
 
 const IMAGE_TOOLS = new Set([
-  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image",
-  "generate_grok_imagine_text_image", "generate_grok_imagine_ref_image",
+  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -416,7 +415,7 @@ export {
   buildGrokImagineVideoPayload,
   buildGrokImagineImagePayload,
   buildXaiGrokImagineImagePayload,
-  buildXaiGrokImagineRefImagePayload,
+  buildXaiGrokImagineRefVideoPayload,
   buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
   buildGrokImagineTextPayload,

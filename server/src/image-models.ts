@@ -91,21 +91,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     image_slots: { min: 0, max: 0 },
     defaults: { aspect_ratio: "1:1" },
   },
-  {
-    key: "grok_imagine_ref",
-    xaiEndpoint: "edits",
-    xaiSchemaOverride: {
-      prompt: { type: "string", required: true, description: "Text prompt for image generation" },
-      image_slugs: { type: "array", description: "0-4 optional reference images", items: { type: "string" } },
-      aspect_ratio: { type: "string", description: "Aspect ratio" },
-    },
-    tool_name: "generate_grok_imagine_ref_image",
-    label: "Grok Imagine Reference",
-    description: "Image generation guided by optional reference images (0-4 drag-and-drop)",
-    image_slots: { min: 0, max: 4 },
-    kieImageField: "image_slugs",
-    defaults: { aspect_ratio: "1:1" },
-  },
 ];
 
 // ---------------------------------------------------------------------------

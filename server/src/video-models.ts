@@ -92,6 +92,16 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
   },
+  grok_imagine_ref: {
+    label: "Grok Imagine Reference",
+    tool_name: "generate_grok_imagine_ref_video",
+    description: "Video generation guided by reference images (0-4 optional)",
+    params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
+    defaults: { duration: "6", resolution: "720p", aspect_ratio: "16:9" },
+    providers: [
+      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -103,6 +113,7 @@ const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
   generate_veo_video: { min: 0, max: 3 },
   generate_seedance_video: { min: 0, max: 2 },
   generate_grok_imagine_video: { min: 1, max: 1 },
+  generate_grok_imagine_ref_video: { min: 0, max: 4 },
   extend_veo_video: { min: 0, max: 0 },
 };
 
@@ -253,6 +264,13 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Video resolution: 480p / 720p"; }
       if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
     }
+    if (toolName === "generate_grok_imagine_ref_video") {
+      if (param === "prompt") { prop.description = "Video description"; }
+      if (param === "duration") { prop.enum = ["6", "10"]; prop.description = "Video duration: 6s / 10s"; }
+      if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Video resolution: 480p / 720p"; }
+      if (param === "aspect_ratio") { prop.enum = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]; prop.description = "Video aspect ratio"; }
+      if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
+    }
 
     properties[param] = prop;
 
@@ -327,6 +345,10 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   if (toolName === "generate_grok_imagine_video") {
     if (totalImages === 0) warnings.push("Grok Imagine requires at least one reference image");
     if (totalImages > 1) warnings.push(`Grok Imagine only supports 1 reference image (got ${totalImages})`);
+  }
+
+  if (toolName === "generate_grok_imagine_ref_video") {
+    if (totalImages > 4) warnings.push(`Grok Imagine Reference supports 0-4 reference images (got ${totalImages})`);
   }
 
   if (toolName === "generate_seedance_video") {

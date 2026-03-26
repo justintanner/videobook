@@ -25,6 +25,7 @@ import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
 import { transcribeDef } from "./transcribe.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
+import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { renderDef } from "./render.js";
@@ -36,7 +37,6 @@ import { previewVideoGenDef } from "./preview-video-gen.js";
 import { previewImageGenDef } from "./preview-image-gen.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
-import { generateGrokImagineRefImageDef } from "./generate-grok-imagine-ref-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
@@ -89,6 +89,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     extractAudioDef(fs),
     transcribeDef(fs),
     generateGrokImagineVideoDef(fs),
+    generateGrokImagineRefVideoDef(fs),
     generateKling30VideoDef(fs),
     generateNanoBananaImageDef(fs),
     renderDef(fs),
@@ -100,7 +101,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     previewImageGenDef(fs),
     generateGrokImagineImageDef(fs),
     generateGrokImagineTextImageDef(fs),
-    generateGrokImagineRefImageDef(fs),
     generateGptImageDef(fs),
     chatDef(fs),
     getTimelineDef(fs),

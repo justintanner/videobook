@@ -29,29 +29,33 @@ type RefImageInput = {
   filename: string;
 };
 
-export function generateGrokImagineRefImageDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineRefVideoDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "generate_grok_imagine_ref_image",
+    name: "generate_grok_imagine_ref_video",
     description:
-      "Generate an image using xAI Grok Imagine with optional reference images (0-4). Creates a new img- asset and enqueues a background job.",
+      "Generate a video using xAI Grok Imagine with optional reference images (0-4). Creates a new vid- asset and enqueues a background job.",
     schema: {
-      prompt: z.string().describe("Text prompt for image generation"),
+      prompt: z.string().describe("Text prompt for video generation"),
       project_slug: z.string().describe("Project slug"),
       image_slugs: z
         .array(z.string())
         .optional()
         .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
+      duration: z.enum(["6", "10"]).optional().describe("Video duration in seconds"),
+      resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
       aspect_ratio: z
-        .enum(["1:1", "2:3", "3:2", "16:9", "9:16"])
+        .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"])
         .optional()
-        .describe("Aspect ratio"),
+        .describe("Video aspect ratio"),
       _provider: z.string().optional().describe("Provider key (always xai)"),
     },
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio } = args as {
+      const { prompt, project_slug, image_slugs, duration, resolution, aspect_ratio } = args as {
         prompt: string;
         project_slug: string;
         image_slugs?: string[];
+        duration?: string;
+        resolution?: string;
         aspect_ratio?: string;
       };
 
@@ -94,37 +98,39 @@ export function generateGrokImagineRefImageDef(fs: ClipfirstFs): ToolDef {
         refImages.push({ assetId, filename: imageFile.name });
       }
 
-      // Create output asset
+      // Create output video asset
       const assetName = slugify(prompt);
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }],
+          content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }],
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, imgAssetId, project_slug, {
+      await writePendingTask(fs, vidAssetId, project_slug, {
         taskId: QUEUED_TASK_ID,
-        taskType: "grok_imagine_ref",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
+        taskType: "xai_grok_imagine_ref_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
         meta: { prompt, refCount: refImages.length },
       });
 
-      const jobId = `grok-imagine-ref-${imgAssetId}-${Date.now()}`;
+      const jobId = `grok-imagine-ref-video-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
-        type: "generate_grok_imagine_ref_image",
+        type: "generate_grok_imagine_ref_video",
         prompt,
-        imgAssetId,
-        imgAssetDir,
+        vidAssetId,
+        vidAssetDir,
         projectSlug: project_slug,
         refImages,
+        ...(duration !== undefined ? { duration } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
       } as unknown as Record<string, unknown>);
 
@@ -132,7 +138,7 @@ export function generateGrokImagineRefImageDef(fs: ClipfirstFs): ToolDef {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            img_asset_id: imgAssetId,
+            vid_asset_id: vidAssetId,
             ref_images: refImages.length,
             job_id: jobId,
             status: "enqueued",
