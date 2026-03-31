@@ -75,6 +75,13 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
         onSelect={onShowFolder}
         MenuItem={MenuItem}
       />
+      <div className="-mx-1 my-1 h-px bg-border" />
+      <CommandMenuItem
+        command={`/duplicate ${slug}`}
+        title="Duplicate"
+        onSelect={() => onAnimateCommand?.(`/duplicate ${slug}`)}
+        MenuItem={MenuItem}
+      />
       {itemType === 'video' && (
         <>
           <div className="-mx-1 my-1 h-px bg-border" />
