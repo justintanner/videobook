@@ -65,6 +65,7 @@ export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
       element3_name: z.string().optional().describe("Name for element 3"),
       element3_desc: z.string().optional().describe("Description for element 3"),
       image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Override which input image variant to select"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
       const {

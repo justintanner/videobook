@@ -36,6 +36,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
       aspect_ratio: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "auto"]).optional().describe("Aspect ratio"),
       resolution: z.enum(["1K", "2K", "4K"]).optional().describe("Output resolution"),
       output_format: z.enum(["png", "jpg"]).optional().describe("Output image format"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as {

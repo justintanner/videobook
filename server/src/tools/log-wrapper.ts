@@ -20,7 +20,9 @@ function withLogging(def: ToolDef, fs: ClipfirstFs): ToolDef {
       if (slug) {
         const actionName = `tool-${def.name.replace(/_/g, "-")}`;
         // Fire-and-forget — don't block tool response on git commit
-        fs.logAction(actionName, args, slug).catch(() => {});
+        fs.logAction(actionName, args, slug).catch((e) => {
+          console.warn(`[mcp] action log failed for ${actionName}:`, e);
+        });
       }
 
       return result;

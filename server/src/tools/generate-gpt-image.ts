@@ -35,6 +35,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
       image_slugs: z.array(z.string()).describe("1-4 @img-* slugs for reference images"),
       aspect_ratio: z.enum(["1:1", "2:3", "3:2"]).optional().describe("Aspect ratio"),
       quality: z.enum(["medium", "high"]).optional().describe("Output quality level"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, aspect_ratio, quality } = args as {

@@ -35,6 +35,25 @@ function getPreviewToolName(cat: 'video' | 'image'): string {
   return cat === 'video' ? 'preview_video' : 'preview_image';
 }
 
+interface SavedGenSettings {
+  model: string;
+  provider: string;
+  fields: Record<string, unknown>;
+}
+
+function loadGenSettings(category: string): SavedGenSettings | null {
+  try {
+    const raw = localStorage.getItem(`clipfirst:gen:${category}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveGenSettings(category: string, data: SavedGenSettings): void {
+  try {
+    localStorage.setItem(`clipfirst:gen:${category}`, JSON.stringify(data));
+  } catch { /* ignore quota errors */ }
+}
+
 export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanelProps>(function GenPreviewPanel({
   category,
   prompt: initialPrompt,
@@ -61,6 +80,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const formValuesRef = useRef(formValues);
   formValuesRef.current = formValues;
   const refreshIdRef = useRef(0);
+  const savedRef = useRef(loadGenSettings(category));
+  const appliedSavedRef = useRef(false);
 
   const fetchPreview = useCallback(async (
     cat: 'video' | 'image',
@@ -115,8 +136,33 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
-    fetchPreview(category, initialPrompt);
+    const saved = savedRef.current;
+    fetchPreview(category, initialPrompt, saved ? {
+      selected_model: saved.model,
+      selected_provider: saved.provider,
+    } : undefined);
   }, [category, initialPrompt, fetchPreview]);
+
+  // Restore saved settings after initial preview loads
+  useEffect(() => {
+    if (!preview || appliedSavedRef.current) return;
+    appliedSavedRef.current = true;
+    const saved = savedRef.current;
+    if (!saved?.fields) return;
+    const option = preview.model_options.find(o => o.key === selectedModelKey);
+    if (!option?.schema) return;
+    const overrides: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(saved.fields)) {
+      if (key in option.schema.properties && key !== 'prompt' && key !== 'project_slug') {
+        const prop = option.schema.properties[key];
+        if (prop.enum && !(prop.enum as unknown[]).includes(value)) continue;
+        overrides[key] = value;
+      }
+    }
+    if (Object.keys(overrides).length > 0) {
+      setFormValues(prev => ({ ...prev, ...overrides }));
+    }
+  }, [preview, selectedModelKey]);
 
   const handleModelChange = useCallback((modelKey: string) => {
     setSelectedModelKey(modelKey);
@@ -229,6 +275,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const handleGenerate = useCallback(async () => {
     if (!selectedOption || !projectSlug) return;
     setGenState('submitting');
+    // Persist settings for next generation
+    const fields: Record<string, unknown> = {};
+    for (const key of Object.keys(selectedOption.schema.properties)) {
+      if (key !== 'prompt' && key !== 'project_slug' && !isAssetField(key) && !isElementField(key) && key in formValues) {
+        fields[key] = formValues[key];
+      }
+    }
+    saveGenSettings(category, { model: selectedModelKey, provider: selectedProviderKey, fields });
     try {
       const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(selectedOption.tool_name, args);
@@ -246,7 +300,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, onClose, selectedProviderKey]);
+  }, [selectedOption, formValues, projectSlug, onClose, selectedProviderKey, category, selectedModelKey]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
