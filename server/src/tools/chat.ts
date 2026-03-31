@@ -67,7 +67,10 @@ export function chatDef(fs: ClipfirstFs): ToolDef {
         if (asset.asset_type === "script" && asset.file_path) {
           const readResult = await fs.readFile(asset.asset_id, "index.md", slug);
           if (readResult.ok) {
-            scriptContents.push({ tag: asset.tag, content: readResult.value });
+            const content = typeof readResult.value === "string"
+              ? readResult.value
+              : new TextDecoder().decode(readResult.value);
+            scriptContents.push({ tag: asset.tag, content });
           }
         }
       }

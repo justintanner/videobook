@@ -18,8 +18,15 @@ import type { ServerCommand } from "../../../src/lib/command-registry.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-function parseResult(result: { content: unknown }): Record<string, unknown> {
-  return JSON.parse((result.content as TextContent)[0].text);
+function parseResult(result: { content?: unknown; toolResult?: unknown }): Record<string, unknown> {
+  let content: unknown;
+  if (result.content) {
+    content = result.content;
+  } else if (result.toolResult) {
+    const toolResult = result.toolResult as { content?: TextContent } | undefined;
+    content = toolResult?.content;
+  }
+  return JSON.parse((content as TextContent)[0].text);
 }
 
 describe("slash commands e2e", () => {

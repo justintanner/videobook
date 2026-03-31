@@ -15,8 +15,16 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-function resultText(result: { content: unknown }): string {
-  return (result.content as TextContent)[0].text;
+function resultText(result: { content?: unknown; toolResult?: unknown }): string {
+  if (result.content) {
+    return (result.content as TextContent)[0].text;
+  }
+  // Handle error results that have toolResult instead of content
+  const toolResult = result.toolResult as { content?: TextContent } | undefined;
+  if (toolResult?.content) {
+    return toolResult.content[0].text;
+  }
+  return "";
 }
 
 describe("freeform chat commands", () => {

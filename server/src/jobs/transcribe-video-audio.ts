@@ -9,7 +9,7 @@ type TranscribeVideoAudioPayload = {
   videoPath: string;
   assetId: string;
   assetDir: string;
-  projectSlug?: string;
+  projectSlug: string;
 };
 
 export function registerTranscribeVideoAudioJob(fs: ClipfirstFs): void {

@@ -10,7 +10,7 @@ export async function createTestClient(projectsDir?: string): Promise<Client> {
   const server = createServer(fs);
   const client = new Client(
     { name: "clipfirst-test", version: "0.0.1" },
-    { capabilities: {}, requestTimeoutMs: 600_000 },
+    { capabilities: {} },
   );
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();

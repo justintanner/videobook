@@ -10,7 +10,7 @@ type AnalyzeVideoPayload = {
   type: "analyze_video";
   assetId: string;
   assetDir: string;
-  projectSlug?: string;
+  projectSlug: string;
   hasTranscription: boolean;
 };
 

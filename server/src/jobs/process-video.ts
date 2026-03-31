@@ -10,7 +10,7 @@ type ProcessVideoPayload = {
   videoPath: string;
   assetId: string;
   assetDir: string;
-  projectSlug?: string;
+  projectSlug: string;
   provenance: Record<string, unknown>;
   force?: boolean;
   skipDownstreamJobs?: boolean;

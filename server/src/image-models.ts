@@ -178,7 +178,7 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
   if (modelSchema) {
     const properties: Record<string, ParamSchema> = {};
     const required: string[] = [];
-    for (const [fieldName, field] of Object.entries(modelSchema.fields)) {
+    for (const [fieldName, field] of Object.entries(modelSchema.fields) as [string, PayloadFieldSchema][]) {
       const outputName = fieldName === config.kieImageField ? "image_slugs" : fieldName;
       properties[outputName] = kieFieldToParam(field, config, fieldName);
       if (field.required) required.push(outputName);

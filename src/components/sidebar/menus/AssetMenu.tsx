@@ -100,6 +100,24 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
             onSelect={() => onAnimateCommand?.(`/trim ${slug}`)}
             MenuItem={MenuItem}
           />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/extract-first-frame ${slug}`}
+            title="Extract First Frame"
+            titleClassName="text-blue-400"
+            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
+            onSelect={() => onAnimateCommand?.(`/extract-first-frame ${slug}`)}
+            MenuItem={MenuItem}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/extract-last-frame ${slug}`}
+            title="Extract Last Frame"
+            titleClassName="text-blue-400"
+            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
+            onSelect={() => onAnimateCommand?.(`/extract-last-frame ${slug}`)}
+            MenuItem={MenuItem}
+          />
         </>
       )}
       <div className="-mx-1 my-1 h-px bg-border" />
