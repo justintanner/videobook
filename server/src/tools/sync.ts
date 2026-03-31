@@ -398,8 +398,12 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
     await Promise.all(kieTasks.map(async (task) => {
-      const taskInfo = await provider.api.v1.jobs.recordInfo(task.taskId);
-      await processSyncedTask(task, taskInfo, result);
+      try {
+        const taskInfo = await provider.api.v1.jobs.recordInfo(task.taskId);
+        await processSyncedTask(task, taskInfo, result);
+      } catch (e) {
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
+      }
     }));
   }
 
