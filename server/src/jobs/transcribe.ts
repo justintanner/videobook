@@ -32,7 +32,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
     const blob = new Blob([new Uint8Array(readResult.value)]);
 
-    const upload = await provider.api.fileStreamUpload({
+    const upload = await provider.api["file-stream-upload"]({
       file: blob,
       filename: audioFilename,
     });

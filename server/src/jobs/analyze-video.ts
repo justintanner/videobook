@@ -125,7 +125,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     }
     if (kieKey) {
       const p = kie({ apiKey: kieKey, timeout: 180_000 });
-      providers.push(withRetry(p.chat.gpt52.v1.chat.completions, { retries: 2, baseMs: 500 }));
+      providers.push(withRetry(p.chat["gpt-5-2"].v1.chat.completions, { retries: 2, baseMs: 500 }));
     }
 
     if (providers.length > 0) {

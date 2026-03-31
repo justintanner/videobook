@@ -33,7 +33,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const upload = await provider.api.fileStreamUpload({ file: blob, filename });
+      const upload = await provider.api["file-stream-upload"]({ file: blob, filename });
       if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
       uploadedUrls.push(upload.data.downloadUrl);
     }

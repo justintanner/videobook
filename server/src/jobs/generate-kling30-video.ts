@@ -50,7 +50,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(assetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const upload = await provider.api.fileStreamUpload({ file: blob, filename });
+      const upload = await provider.api["file-stream-upload"]({ file: blob, filename });
       if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
       imageUrls.push(upload.data.downloadUrl);
     }
@@ -63,7 +63,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
         const readResult = await fs.readFile(assetId, filename, projectSlug);
         if (!readResult.ok) throw new Error(readResult.error.message);
         const blob = new Blob([new Uint8Array(readResult.value)]);
-        const elemUpload = await provider.api.fileStreamUpload({ file: blob, filename });
+        const elemUpload = await provider.api["file-stream-upload"]({ file: blob, filename });
         if (!elemUpload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
         urls.push(elemUpload.data.downloadUrl);
       }

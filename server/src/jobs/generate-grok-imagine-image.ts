@@ -74,7 +74,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
     const blob = new Blob([imageBytes]);
 
-    const upload = await provider.api.fileStreamUpload({
+    const upload = await provider.api["file-stream-upload"]({
       file: blob,
       filename: imageFilename,
     });

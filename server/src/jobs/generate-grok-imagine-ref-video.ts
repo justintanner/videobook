@@ -43,7 +43,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
       if (kieKey) {
         const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
         const blob = new Blob([imageBytes]);
-        const upload = await kieProvider.api.fileStreamUpload({ file: blob, filename: ref.filename });
+        const upload = await kieProvider.api["file-stream-upload"]({ file: blob, filename: ref.filename });
         if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
         imageUrls.push(upload.data.downloadUrl);
       } else {

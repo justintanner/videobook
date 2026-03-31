@@ -64,7 +64,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
 
     // Upload to KIE
     const blob = new Blob([new Uint8Array(uploadBuffer)]);
-    const upload = await provider.api.fileStreamUpload({
+    const upload = await provider.api["file-stream-upload"]({
       file: blob,
       filename: audioFilename,
     });
