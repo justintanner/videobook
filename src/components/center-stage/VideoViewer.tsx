@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -150,7 +150,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
 const VIDEO_BACK_TABS: BackTab[] = ['settings', 'files', 'history'];
 
-export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool }: {
+export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, onClose }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -166,6 +166,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
   callTool: UseMcpResult['callTool'];
+  onClose: () => void;
 }) {
   useMountKey('viewer');
 
@@ -206,14 +207,24 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
               left={<RatioToggle active={size} onSelect={onSizeChange} item={item} />}
               slug={item.slug}
               right={
-                <button
-                  tabIndex={-1}
-                  onClick={bf.handleFlipToBack}
-                  title="/settings"
-                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-                >
-                  <Settings className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    tabIndex={-1}
+                    onClick={bf.handleFlipToBack}
+                    title="/settings"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <Settings className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <button
+                    tabIndex={-1}
+                    onClick={onClose}
+                    title="Close"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <X className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
               }
             />
 

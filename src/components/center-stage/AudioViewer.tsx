@@ -1,4 +1,4 @@
-import { Settings, AudioLines } from 'lucide-react';
+import { Settings, AudioLines, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -16,7 +16,7 @@ import {
 
 const AUDIO_BACK_TABS: BackTab[] = ['files', 'history'];
 
-export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool }: {
+export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
   item: MediaItem;
   projectSlug: string;
   flipped: boolean;
@@ -26,6 +26,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
   pendingBackTab?: BackTab | null;
   onClearPendingBackTab?: () => void;
   callTool: UseMcpResult['callTool'];
+  onClose: () => void;
 }) {
   useMountKey('viewer');
 
@@ -63,14 +64,24 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
               }
               slug={item.slug}
               right={
-                <button
-                  tabIndex={-1}
-                  onClick={bf.handleFlipToBack}
-                  title="/files"
-                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-                >
-                  <Settings className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    tabIndex={-1}
+                    onClick={bf.handleFlipToBack}
+                    title="/files"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <Settings className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <button
+                    tabIndex={-1}
+                    onClick={onClose}
+                    title="Close"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <X className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
               }
             />
 

@@ -15,7 +15,7 @@ export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBa
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, onClose }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -31,6 +31,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
   callTool: UseMcpResult['callTool'];
+  onClose: () => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isText = item.type === 'script' || item.type === 'plan';
@@ -54,6 +55,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         settings={settings}
         onSettingsChange={onSettingsChange}
         callTool={callTool}
+        onClose={onClose}
       />
     );
   }
@@ -70,6 +72,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         pendingBackTab={pendingBackTab}
         onClearPendingBackTab={onClearPendingBackTab}
         callTool={callTool}
+        onClose={onClose}
       />
     );
   }
@@ -86,6 +89,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         pendingBackTab={pendingBackTab}
         onClearPendingBackTab={onClearPendingBackTab}
         callTool={callTool}
+        onClose={onClose}
       />
     );
   }
@@ -103,6 +107,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       pendingBackTab={pendingBackTab}
       onClearPendingBackTab={onClearPendingBackTab}
       callTool={callTool}
+      onClose={onClose}
     />
   );
 }

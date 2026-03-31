@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -43,7 +43,7 @@ function ImageContent({ item, size }: { item: MediaItem; size: ViewerSize }) {
 
 const IMAGE_BACK_TABS: BackTab[] = ['files', 'history'];
 
-export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool }: {
+export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -55,6 +55,7 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
   pendingBackTab?: BackTab | null;
   onClearPendingBackTab?: () => void;
   callTool: UseMcpResult['callTool'];
+  onClose: () => void;
 }) {
   useMountKey('viewer');
 
@@ -95,14 +96,24 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
               left={<RatioToggle active={size} onSelect={onSizeChange} item={item} />}
               slug={item.slug}
               right={
-                <button
-                  tabIndex={-1}
-                  onClick={bf.handleFlipToBack}
-                  title="/files"
-                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-                >
-                  <Settings className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    tabIndex={-1}
+                    onClick={bf.handleFlipToBack}
+                    title="/files"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <Settings className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <button
+                    tabIndex={-1}
+                    onClick={onClose}
+                    title="Close"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <X className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
               }
             />
 

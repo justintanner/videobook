@@ -1867,14 +1867,14 @@ function Page12_ImageViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <ImageViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <ImageViewer item={assetViewerMockImage} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Top-right: Portrait (different image) */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ImageViewer — Portrait</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <ImageViewer item={assetViewerMockImage2} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <ImageViewer item={assetViewerMockImage2} projectSlug="demo" size="portrait" onSizeChange={noop} flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Bottom-left: /files tab */}
@@ -1943,14 +1943,14 @@ function Page13_VideoViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — /original 1920×1080</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="original" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Top-right: Landscape */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">VideoViewer — Landscape</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} />
+          <VideoViewer item={assetViewerMockVideo} projectSlug="demo" size="landscape" onSizeChange={noop} flipped={false} onFlippedChange={noop} renderOrientation="landscape" settings={DEFAULT_RENDER_SETTINGS} onSettingsChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Bottom-left: /settings */}
@@ -2025,14 +2025,14 @@ function Page14_ScriptViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Content</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <ScriptViewer item={assetViewerMockScript} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <ScriptViewer item={assetViewerMockScript} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Top-right: Script empty */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">ScriptViewer — Empty</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <ScriptViewer item={{ ...assetViewerMockScript, id: 'script-empty', slug: '@script-empty', prompt: null }} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <ScriptViewer item={{ ...assetViewerMockScript, id: 'script-empty', slug: '@script-empty', prompt: null }} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Bottom-left: /files tab */}
@@ -2101,14 +2101,14 @@ function Page15_AudioViewer() {
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — Playback</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AudioViewer item={assetViewerMockAudio} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <AudioViewer item={assetViewerMockAudio} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Top-right: Second audio */}
       <div className="flex flex-col gap-2 min-h-0">
         <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest shrink-0">AudioViewer — Playback (alt)</p>
         <div className="flex-1 overflow-hidden flex min-h-0">
-          <AudioViewer item={assetViewerMockAudio2} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} />
+          <AudioViewer item={assetViewerMockAudio2} projectSlug="demo" flipped={false} onFlippedChange={noop} callTool={mockCallTool} onClose={noop} />
         </div>
       </div>
       {/* Bottom-left: /files tab */}
