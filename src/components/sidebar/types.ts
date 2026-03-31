@@ -17,6 +17,7 @@ export type ClipState =
   | 'untranscribed'
   | 'corrupt'
   | 'error'
+  | 'deleting'
   | 'ready'
   | 'approved'
   | 'unreviewed';

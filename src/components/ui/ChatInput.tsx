@@ -185,16 +185,52 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     }, duration);
   }, [onSend]);
 
+  // Show result feedback for an already-in-flight promise (used by animateAndSend)
+  const showResultFeedback = useCallback(async (text: string, dispatchPromise: Promise<boolean>) => {
+    clearTimeout(resultTimeoutRef.current);
+    setResultText(text);
+    setCommandResult('transmitting');
+
+    let success = false;
+    try {
+      success = await dispatchPromise;
+    } catch {
+      success = false;
+    }
+
+    const phase: CommandResultPhase = success ? 'accepted' : 'rejected';
+    const duration = success ? 1200 : 1800;
+    setCommandResult(phase);
+
+    resultTimeoutRef.current = window.setTimeout(() => {
+      setCommandResult(null);
+      setResultText('');
+      const focusWhenReady = () => {
+        if (inputRef.current && !inputRef.current.disabled) {
+          inputRef.current.focus();
+        } else {
+          requestAnimationFrame(focusWhenReady);
+        }
+      };
+      requestAnimationFrame(focusWhenReady);
+    }, duration);
+  }, []);
+
   // Expose imperative handle for animate-and-send / animate-and-edit
   useImperativeHandle(ref, () => ({
     animateAndSend(text: string) {
       history.push(text);
       setChatInput('');
       setConfirmedTokens([]);
+
+      // Fire command NOW (parallel with animation)
+      const dispatchPromise = onSend ? onSend(text).catch(() => false) : Promise.resolve(false);
+
+      // Animation plays concurrently; on complete, show result feedback
       startAnimation(text, () => {
         setChatInput('');
         setConfirmedTokens([]);
-        runResultSequence(text);
+        showResultFeedback(text, dispatchPromise);
       });
     },
     animateAndEdit(text: string) {
@@ -218,7 +254,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     focus() {
       inputRef.current?.focus();
     },
-  }), [runResultSequence, startAnimation, history, commands, assetSlugs]);
+  }), [startAnimation, history, commands, assetSlugs, showResultFeedback, onSend]);
 
   // The displayed text is either animating text, result text, or user input
   const displayText = isAnimating ? animatingText : commandResult ? resultText : chatInput;

@@ -7,7 +7,7 @@ interface UseAnimateTypeResult {
   cancelAnimation: () => void;
 }
 
-const CHAR_DELAY_MS = 40;
+const CHAR_DELAY_MS = 18;
 
 export function useAnimateType(): UseAnimateTypeResult {
   const [animatingText, setAnimatingText] = useState('');

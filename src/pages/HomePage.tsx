@@ -75,6 +75,7 @@ export function HomePage() {
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | 'history' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
@@ -138,6 +139,7 @@ export function HomePage() {
     listAssets(projectSlug, sortOrder);
     return () => {
       setRenderingOverrides(new Map());
+      setDeletingIds(new Set());
     };
   }, [projectSlug, syncCount, sortOrder, listAssets]);
 
@@ -159,6 +161,7 @@ export function HomePage() {
     return assetList.map((asset) => {
       let status: ClipState = (renderingOverrides.get(asset.id) ?? asset.status ?? 'ready') as ClipState;
       if (failedSet.has(asset.id)) status = 'error';
+      if (deletingIds.has(asset.id)) status = 'deleting';
       return {
         id: asset.id,
         type: asset.type as AssetType,
@@ -178,7 +181,7 @@ export function HomePage() {
         frameDirs: asset.frame_dirs,
       };
     });
-  }, [assetList, result, renderingOverrides]);
+  }, [assetList, result, renderingOverrides, deletingIds]);
 
   const assets = useMemo(() =>
     mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
@@ -324,6 +327,12 @@ export function HomePage() {
   }, [mediaItems, handleSelectItem]);
 
   const handleAnimateCommand = useCallback((text: string) => {
+    // Detect /delete @slug and mark asset as deleting immediately
+    const deleteMatch = text.match(/^\/delete\s+@([a-z0-9_-]+)/i);
+    if (deleteMatch) {
+      const assetId = deleteMatch[1];
+      setDeletingIds((prev) => new Set(prev).add(assetId));
+    }
     chatInputRef.current?.animateAndSend(text);
   }, []);
 

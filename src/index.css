@@ -162,6 +162,12 @@
     animation: clip-ice-pulse 2s ease-in-out infinite;
   }
 
+  .clip-state-deleting {
+    opacity: 0.5;
+    border: 2px solid rgba(239, 68, 68, 0.4);
+    filter: grayscale(0.5);
+  }
+
   .clip-state-ready:hover {
     animation: clip-ready-pulse 1.5s ease-in-out;
   }

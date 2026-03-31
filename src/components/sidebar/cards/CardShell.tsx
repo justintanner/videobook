@@ -16,6 +16,7 @@ import {
   CorruptOverlay,
   FailedOverlay,
   LoadingOverlay,
+  DeletingOverlay,
 } from '../overlays';
 
 export interface DragData {
@@ -60,6 +61,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'corrupt' && type !== 'final') return <CorruptOverlay item={item} />;
   if (status === 'error') return <FailedOverlay item={item} />;
   if (status === 'loading') return <LoadingOverlay item={item} />;
+  if (status === 'deleting') return <DeletingOverlay item={item} />;
 
   return null;
 }
@@ -79,10 +81,12 @@ const stateClassMap: Partial<Record<ClipState, string>> = {
   transcribing: 'clip-state-transcribing cursor-pointer',
   corrupt: 'clip-state-corrupt cursor-pointer',
   loading: 'clip-state-loading cursor-wait',
+  deleting: 'clip-state-deleting pointer-events-none cursor-default',
 };
 
 function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, isError: boolean, isReady: boolean, itemType?: string): string {
   if (isError) return '#ef4444';
+  if (status === 'deleting') return 'rgba(239, 68, 68, 0.4)';
   if (isFinal && (isReady || isRenderingState(status ?? ''))) return '#fbbf24';
   if (isReady) return 'var(--color-primary)';
 
