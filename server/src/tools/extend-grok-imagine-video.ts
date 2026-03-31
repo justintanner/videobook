@@ -12,22 +12,22 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
     description: "Extend an existing video asset using Grok Imagine video extension. Creates a new vid- asset and enqueues a background job.",
     schema: {
       asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
-      video_slugs: z.array(z.string()).optional().describe("Video slugs (e.g., ['@vid-sunset']). Used as fallback when asset_id is not provided."),
+      video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide video extension"),
       duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, video_slugs, project_slug, prompt, duration } = args as {
+      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration } = args as {
         asset_id?: string;
-        video_slugs?: string[];
+        video_slug?: string;
         project_slug: string;
         prompt?: string;
         duration?: "6" | "10" | "15";
       };
 
-      // Derive asset_id from video_slugs if not provided directly
-      const asset_id = rawAssetId ?? (video_slugs?.[0]?.replace(/^@/, "") || undefined);
+      // Derive asset_id from video_slug if not provided directly
+      const asset_id = rawAssetId ?? (video_slug?.replace(/^@/, "") || undefined);
 
       // Video extension is xAI-only
       if (!process.env.XAI_API_KEY) {
@@ -40,7 +40,7 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       if (!asset_id) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "asset_id or video_slugs with at least one entry is required" }],
+          content: [{ type: "text" as const, text: "asset_id or video_slug is required" }],
         };
       }
 
