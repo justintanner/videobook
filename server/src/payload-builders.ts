@@ -78,9 +78,7 @@ function buildGrokImagineVideoPayload(
   };
 }
 
-type GrokImagineImageArgs = {
-  prompt?: string;
-};
+type GrokImagineImageArgs = Omit<GrokImageToImageRequest["input"], "image_urls">;
 
 function buildGrokImagineImagePayload(
   args: GrokImagineImageArgs,
@@ -91,6 +89,7 @@ function buildGrokImagineImagePayload(
     input: {
       image_urls: (imageUrls.length > 0 ? imageUrls : []) as [string],
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
     },
   };
 }
@@ -227,6 +226,7 @@ function buildXaiGrokImagineImagePayload(
       : imageUrls.length > 1
         ? { images: imageUrls.map((url) => ({ url, type: "image_url" as const })) }
         : {}),
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
   };
 }
 

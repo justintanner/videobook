@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@nakedapi/kie";
+import type { GrokImageToImageRequest } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
@@ -14,6 +15,7 @@ type GenerateGrokImagineImagePayload = {
   sourceImageId: string;
   projectSlug: string;
   prompt?: string;
+  aspectRatio?: string;
   _provider?: string;
 };
 
@@ -21,7 +23,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_image", async (payload) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,
-      sourceImageId, projectSlug, prompt, _provider,
+      sourceImageId, projectSlug, prompt, aspectRatio, _provider,
     } = payload as GenerateGrokImagineImagePayload;
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
@@ -46,6 +48,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const request = {
         prompt: prompt ?? "",
         image: { url: dataUrl, type: "image_url" as const },
+        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.v1.images.edits(request);
@@ -81,7 +84,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
     const downloadUrl = upload.data.downloadUrl;
 
-    const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
+    const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
@@ -97,6 +100,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       meta: {
         sourceImageId,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
       },
     });
 

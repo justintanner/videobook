@@ -30,14 +30,16 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
       image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
+      aspect_ratio: z.string().optional().describe("Aspect ratio"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, _provider } = args as {
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, aspect_ratio, _provider } = args as {
         asset_id?: string;
         image_slugs?: string[];
         project_slug: string;
         prompt?: string;
+        aspect_ratio?: string;
         _provider?: string;
       };
 
@@ -104,7 +106,7 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
         assetDir: imgAssetDir,
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
-        meta: { sourceImageId: asset_id, ...(prompt !== undefined ? { prompt } : {}) },
+        meta: { sourceImageId: asset_id, ...(prompt !== undefined ? { prompt } : {}), ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}) },
       });
 
       const jobId = `grok-imagine-image-${imgAssetId}-${Date.now()}`;
@@ -118,6 +120,7 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
         sourceImageId: asset_id,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
