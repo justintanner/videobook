@@ -558,6 +558,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       imageSlots={imageSlots}
                       onChange={handleFieldChange}
                       disabled={isDisabled}
+                      modelKey={selectedModelKey}
                     />
                   )}
                   {sortedElementIndices.length > 0 && (

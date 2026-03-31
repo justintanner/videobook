@@ -18,6 +18,7 @@ interface ImageParamSlotsProps {
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
   disabled?: boolean;
   inline?: boolean;
+  modelKey?: string;
 }
 
 function findThumbnail(
@@ -49,6 +50,7 @@ export function ImageParamSlots({
   onChange,
   disabled,
   inline,
+  modelKey,
 }: ImageParamSlotsProps) {
   if (assetFields.length === 0) {
     return null;
@@ -56,7 +58,11 @@ export function ImageParamSlots({
 
   const isVideoField = assetFields.some((f) => f.name === 'video_slug');
   const assetType: 'image' | 'video' = isVideoField ? 'video' : 'image';
-  const sectionLabel = isVideoField ? '/video' : '/images';
+  const sectionLabel = isVideoField
+    ? '/video'
+    : modelKey === 'grok_imagine_ref'
+      ? '/reference-images'
+      : '/images';
 
   const arrayField = assetFields.find((f) => f.schema.type === 'array');
   const stringField = assetFields.find((f) => f.schema.type === 'string');
