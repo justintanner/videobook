@@ -42,8 +42,8 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
           <CommandMenuItem
             command={`/image ${slug}`}
             title="Generate Image"
-            titleClassName="text-fuchsia-400"
-            accentColor="border-l-fuchsia-500/50 focus:border-l-fuchsia-500/80"
+            titleClassName="text-blue-400"
+            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
             onSelect={() => onAnimateCommand?.(`/image ${slug}`)}
             MenuItem={MenuItem}
           />
