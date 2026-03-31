@@ -32,20 +32,22 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().describe("Text prompt for image generation"),
       project_slug: z.string().describe("Project slug"),
-      image_asset_ids: z.array(z.string()).optional().describe("0-8 img-* asset IDs for reference images"),
+      image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
       aspect_ratio: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "auto"]).optional().describe("Aspect ratio"),
       resolution: z.enum(["1K", "2K", "4K"]).optional().describe("Output resolution"),
       output_format: z.enum(["png", "jpg"]).optional().describe("Output image format"),
     },
     handler: async (args) => {
-      const { prompt, project_slug, image_asset_ids, aspect_ratio, resolution, output_format } = args as {
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as {
         prompt: string;
         project_slug: string;
-        image_asset_ids?: string[];
+        image_slugs?: string[];
         aspect_ratio?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9" | "auto";
         resolution?: "1K" | "2K" | "4K";
         output_format?: "png" | "jpg";
       };
+
+      const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -57,19 +59,19 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
       const imageInputs: Array<{ assetId: string; filename: string }> = [];
       const sourceImageIds: string[] = [];
 
-      if (image_asset_ids && image_asset_ids.length > 0) {
-        if (image_asset_ids.length > 8) {
+      if (ids.length > 0) {
+        if (ids.length > 8) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: "Maximum 8 reference images allowed" }],
           };
         }
 
-        for (const id of image_asset_ids) {
+        for (const id of ids) {
           if (!id.startsWith("img-")) {
             return {
               isError: true as const,
-              content: [{ type: "text" as const, text: `image_asset_ids entries must start with img-, got: ${id}` }],
+              content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
             };
           }
 

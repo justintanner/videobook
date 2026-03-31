@@ -31,7 +31,7 @@ describe("getRoutableTool", () => {
     expect(tool!.actualTool).toBe("generate_nano_banana_image");
     expect(tool!.category).toBe("generation");
     expect(tool!.params).toContain("prompt");
-    expect(tool!.params).toContain("image_asset_ids");
+    expect(tool!.params).toContain("image_slugs");
   });
 
   it("returns undefined for nonexistent tool", () => {

@@ -776,7 +776,7 @@ describe("MCP tools e2e", () => {
       arguments: {
         prompt: "a sunset",
         project_slug: PROJECT,
-        image_asset_ids: [renamedAssetId],
+        image_slugs: [`@${renamedAssetId}`],
       },
     });
     expect(result.isError).toBe(true);

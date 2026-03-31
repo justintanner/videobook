@@ -108,7 +108,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     name: "generate_image",
     actualTool: "generate_nano_banana_image",
     description: "Generate an image from a text prompt, optionally with reference images",
-    params: ["prompt", "image_asset_ids", "aspect_ratio"],
+    params: ["prompt", "image_slugs", "aspect_ratio"],
     category: "generation",
   },
 ];
@@ -143,7 +143,7 @@ Parameter guidelines:
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For generate_video: put the generation description in "prompt"
-- For generate_image: put the image description in "prompt"; use image_asset_ids for reference image asset IDs
+- For generate_image: put the image description in "prompt"; use image_slugs for reference image asset IDs (include @ prefix)
 - Do NOT include project_slug in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
 

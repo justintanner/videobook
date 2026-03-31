@@ -49,7 +49,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: ["img-test"],
+        image_slugs: ["@img-test"],
       },
     });
 
@@ -58,7 +58,7 @@ describe("generate_gpt_image tool", () => {
     expect(content[0].text).toContain("not set");
   });
 
-  it("returns error with empty image_asset_ids", async () => {
+  it("returns error with empty image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
@@ -66,7 +66,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: [],
+        image_slugs: [],
       },
     });
 
@@ -83,7 +83,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: ["img-a", "img-b", "img-c", "img-d", "img-e"],
+        image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
       },
     });
 
@@ -92,7 +92,7 @@ describe("generate_gpt_image tool", () => {
     expect(content[0].text).toContain("Maximum 4");
   });
 
-  it("returns error when image_asset_ids entry does not start with img-", async () => {
+  it("returns error when image_slugs entry does not start with img-", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
@@ -100,13 +100,13 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: ["vid-something"],
+        image_slugs: ["@vid-something"],
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("must start with img-");
+    expect(content[0].text).toContain("image_slugs entries must be img-* assets");
   });
 
   it("returns error for nonexistent image asset", async () => {
@@ -117,7 +117,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: ["img-does-not-exist"],
+        image_slugs: ["@img-does-not-exist"],
       },
     });
 
@@ -139,7 +139,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: [asset.value.assetId],
+        image_slugs: [`@${asset.value.assetId}`],
       },
     });
 
@@ -165,7 +165,7 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_asset_ids: [asset.value.assetId],
+        image_slugs: [`@${asset.value.assetId}`],
       },
     });
 

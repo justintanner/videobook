@@ -32,18 +32,20 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().describe("Text prompt for image editing"),
       project_slug: z.string().describe("Project slug"),
-      image_asset_ids: z.array(z.string()).describe("1-4 img-* asset IDs for reference images"),
+      image_slugs: z.array(z.string()).describe("1-4 @img-* slugs for reference images"),
       aspect_ratio: z.enum(["1:1", "2:3", "3:2"]).optional().describe("Aspect ratio"),
       quality: z.enum(["medium", "high"]).optional().describe("Output quality level"),
     },
     handler: async (args) => {
-      const { prompt, project_slug, image_asset_ids, aspect_ratio, quality } = args as {
+      const { prompt, project_slug, image_slugs, aspect_ratio, quality } = args as {
         prompt: string;
         project_slug: string;
-        image_asset_ids: string[];
+        image_slugs: string[];
         aspect_ratio?: "1:1" | "2:3" | "3:2";
         quality?: "medium" | "high";
       };
+
+      const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -52,14 +54,14 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (!image_asset_ids || image_asset_ids.length === 0) {
+      if (ids.length === 0) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "At least 1 reference image is required" }],
         };
       }
 
-      if (image_asset_ids.length > 4) {
+      if (ids.length > 4) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "Maximum 4 reference images allowed" }],
@@ -69,11 +71,11 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
       const imageInputs: Array<{ assetId: string; filename: string }> = [];
       const sourceImageIds: string[] = [];
 
-      for (const id of image_asset_ids) {
+      for (const id of ids) {
         if (!id.startsWith("img-")) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `image_asset_ids entries must start with img-, got: ${id}` }],
+            content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
           };
         }
 
