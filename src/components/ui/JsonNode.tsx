@@ -4,7 +4,23 @@ export function JsonNode({ data, indent = 0 }: { data: unknown; indent?: number 
   if (data === null) return <span className="text-zinc-500">null</span>;
   if (typeof data === 'boolean') return <span className="text-violet-400">{String(data)}</span>;
   if (typeof data === 'number') return <span className="text-amber-400">{data}</span>;
-  if (typeof data === 'string') return <span className="text-emerald-400">"{data}"</span>;
+  if (typeof data === 'string') {
+    // Check if it's a base64 image data URI
+    if (data.startsWith('data:image')) {
+      return (
+        <>
+          <span className="text-emerald-400">"&lt;base64 image...&gt;"</span>
+          <img
+            src={data}
+            alt="Inline thumbnail"
+            className="mt-2 rounded-lg border border-zinc-700 block"
+            style={{ maxWidth: '400px', maxHeight: '400px', width: 'auto', height: 'auto' }}
+          />
+        </>
+      );
+    }
+    return <span className="text-emerald-400">"{data}"</span>;
+  }
 
   if (Array.isArray(data)) {
     if (data.length === 0) return <span className="text-zinc-600">[]</span>;

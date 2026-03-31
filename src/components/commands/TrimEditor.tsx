@@ -201,14 +201,17 @@ export function TrimEditor({
 
   // Reset selection when asset changes
   useEffect(() => {
-    setTrimRange(null);
+    return () => {
+      setTrimRange(null);
+    };
   }, [assetId]);
 
   // Fetch transcript when asset changes
   useEffect(() => {
     if (!open || !assetId || !projectSlug) {
-      setWords([]);
-      return;
+      return () => {
+        setWords([]);
+      };
     }
     let cancelled = false;
     fetch(`/files/${projectSlug}/${assetId}/elevenlabs.json`)
@@ -228,8 +231,9 @@ export function TrimEditor({
   // Fetch analysis markers when asset changes
   useEffect(() => {
     if (!open || !assetId || !projectSlug) {
-      setMarkers([]);
-      return;
+      return () => {
+        setMarkers([]);
+      };
     }
     let cancelled = false;
     fetch(`/files/${projectSlug}/${assetId}/.original.analysis.json`)
@@ -456,7 +460,7 @@ export function TrimEditor({
   const waveform = item?.waveform ?? [];
   const videoSrc = item?.filePath ?? '';
   const posterSrc = item?.thumbnailSrc ?? '';
-  const frameBadges = buildFrameBadges(item, projectSlug);
+  const frameBadges = buildFrameBadges(item);
 
   return (
     <>
@@ -782,7 +786,7 @@ interface FrameBadge {
   time: string;
 }
 
-function buildFrameBadges(item: MediaItem | null, _projectSlug: string | undefined): FrameBadge[] {
+function buildFrameBadges(item: MediaItem | null): FrameBadge[] {
   if (!item || !item.duration) return [];
 
   const frameUrls = item.frameDirs?.original_frames;

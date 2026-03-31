@@ -77,7 +77,9 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate, o
   // Keep slotOffsets in a ref so the seek effect doesn't re-fire when
   // the array reference changes (happens every sync cycle).
   const slotOffsetsRef = useRef(previewData.slotOffsets);
-  slotOffsetsRef.current = previewData.slotOffsets;
+  useEffect(() => {
+    slotOffsetsRef.current = previewData.slotOffsets;
+  }, [previewData.slotOffsets]);
 
   // Seek to the requested slot on mount or when initialSlotIndex changes
   useEffect(() => {

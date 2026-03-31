@@ -136,7 +136,9 @@ export function HomePage() {
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
     listAssets(projectSlug, sortOrder);
-    setRenderingOverrides(new Map());
+    return () => {
+      setRenderingOverrides(new Map());
+    };
   }, [projectSlug, syncCount, sortOrder, listAssets]);
 
   // Refresh timeline after each sync

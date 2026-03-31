@@ -96,7 +96,6 @@ test.describe("noble-salmon-30 timeline fixes", () => {
 
     // At least one slot should not say "empty"
     // vid-yt-youve-lied-about has landscape.mp4 so that slot should have content
-    const slots = page.locator('[class*="slot"], [class*="Slot"]');
     await page.screenshot({ path: "tests/screenshots/timeline-slots.png", fullPage: true });
 
     // Count empty vs populated slots
