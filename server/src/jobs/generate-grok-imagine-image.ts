@@ -86,7 +86,10 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
     const taskResult = await provider.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    if (!taskResult.data?.taskId) {
+      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
+      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
+    }
     const taskId = taskResult.data.taskId;
 
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);

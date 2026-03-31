@@ -49,7 +49,10 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       },
     });
 
-    if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
+    if (!taskResult.data?.taskId) {
+      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
+      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
+    }
     const taskId = taskResult.data.taskId;
 
     await writePendingTask(fs, assetId, projectSlug, {
