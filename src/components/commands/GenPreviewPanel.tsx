@@ -39,6 +39,7 @@ interface SavedGenSettings {
   model: string;
   provider: string;
   fields: Record<string, unknown>;
+  droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' }>;
 }
 
 function loadGenSettings(category: string): SavedGenSettings | null {
@@ -162,6 +163,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (Object.keys(overrides).length > 0) {
       setFormValues(prev => ({ ...prev, ...overrides }));
     }
+    if (saved.droppedAssets?.length) {
+      setDroppedAssets(new Map(saved.droppedAssets.map(a => [a.slug, a])));
+    }
   }, [preview, selectedModelKey]);
 
   const handleModelChange = useCallback((modelKey: string) => {
@@ -278,11 +282,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     // Persist settings for next generation
     const fields: Record<string, unknown> = {};
     for (const key of Object.keys(selectedOption.schema.properties)) {
-      if (key !== 'prompt' && key !== 'project_slug' && !isAssetField(key) && !isElementField(key) && key in formValues) {
+      if (key !== 'prompt' && key !== 'project_slug' && key in formValues) {
         fields[key] = formValues[key];
       }
     }
-    saveGenSettings(category, { model: selectedModelKey, provider: selectedProviderKey, fields });
+    const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
+      slug: a.slug, src: a.src, thumbnailSrc: a.thumbnailSrc ?? null, type: a.type,
+    }));
+    saveGenSettings(category, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
     try {
       const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(selectedOption.tool_name, args);
@@ -300,7 +307,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, onClose, selectedProviderKey, category, selectedModelKey]);
+  }, [selectedOption, formValues, projectSlug, onClose, selectedProviderKey, category, selectedModelKey, droppedAssets]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;

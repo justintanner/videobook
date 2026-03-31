@@ -120,12 +120,21 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               <span className={cn('text-xs font-mono truncate', t.labelText)}>{value.slug}</span>
             </div>
           ) : (value.thumbnailSrc || value.src) ? (
-            <img
-              src={value.thumbnailSrc || value.src}
-              alt={value.slug}
-              draggable={false}
-              className="w-full h-full object-cover"
-            />
+            <>
+              <img src={value.thumbnailSrc || value.src} alt={value.slug} draggable={false} className="w-full h-full object-cover" />
+              <div className="absolute bottom-1 left-1 right-1 z-10 flex justify-start">
+                <span className={cn(
+                  'max-w-full text-[10px] font-mono font-bold truncate px-1.5 py-0.5 rounded',
+                  'bg-black/85 backdrop-blur-md border',
+                  variant === 'violet' ? 'text-violet-300' : 'text-cyan-300',
+                )}
+                style={{
+                  borderColor: variant === 'violet' ? 'rgba(139,92,246,0.4)' : 'rgba(0,255,255,0.2)',
+                }}>
+                  {value.slug}
+                </span>
+              </div>
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <span className={cn('text-xs font-mono truncate px-2', t.labelText)}>{value.slug}</span>
