@@ -50,7 +50,6 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
         image: { url: dataUrl, type: "image_url" as const },
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
-      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.v1.images.edits(request);
 
       const imageUrl = result.data[0]?.url;
@@ -61,7 +60,8 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
       const resultBuffer = Buffer.from(await resp.arrayBuffer());
 
-      // Write to asset
+      // Write payload and result to asset
+      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
 
       // Clear queued pending task written by tool handler
@@ -85,11 +85,11 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     const downloadUrl = upload.data.downloadUrl;
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
     const taskId = taskResult.data.taskId;
 
+    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_image",

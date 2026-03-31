@@ -62,9 +62,9 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
       };
-      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       const { request_id } = await provider.v1.videos.generations(request);
 
+      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       await writePendingTask(fs, vidAssetId, projectSlug, {
         taskId: request_id,
         taskType: "xai_grok_imagine_video",
@@ -101,11 +101,11 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       { prompt, mode, duration, resolution },
       [downloadUrl],
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
     const taskId = taskResult.data.taskId;
 
+    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_video",

@@ -43,11 +43,11 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
       { prompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
       uploadedUrls,
     );
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
     const taskId = taskResult.data.taskId;
 
+    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "nano_banana_image",

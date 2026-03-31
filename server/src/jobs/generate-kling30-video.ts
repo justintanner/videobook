@@ -87,11 +87,11 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       imageUrls,
       elements,
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskResult = await provider.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) throw new Error("KIE createTask failed: no taskId in response");
     const taskId = taskResult.data.taskId;
 
+    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
       taskType: "kling30_video",

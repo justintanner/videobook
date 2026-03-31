@@ -65,11 +65,11 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
       ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
     };
 
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const { request_id } = await provider.v1.videos.generations(
       request as Parameters<typeof provider.v1.videos.generations>[0],
     );
 
+    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId: request_id,
