@@ -8,6 +8,7 @@ import { queue } from "./queue.js";
 import { fs } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
+import { cleanOrphanedQueuedTasks } from "./jobs/pending-task.js";
 
 const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
 
@@ -54,6 +55,8 @@ async function start(): Promise<void> {
   registerAllJobHandlers(fs);
   await initImageModels();
   await queue.start();
+  const cleaned = await cleanOrphanedQueuedTasks(fs);
+  if (cleaned > 0) console.log(`[startup] cleaned ${cleaned} orphaned queued tasks`);
   const PORT = process.env.PORT ?? 3001;
   app.listen(PORT, () => {
     console.log(`MCP server listening on http://127.0.0.1:${PORT}/mcp`);

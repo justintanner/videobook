@@ -33,3 +33,22 @@ export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, ass
   );
   return results.filter((t): t is PendingKieTask => t !== null);
 }
+
+export async function cleanOrphanedQueuedTasks(fs: ClipfirstFs): Promise<number> {
+  const projects = await fs.listProjects();
+  let cleanedCount = 0;
+
+  for (const project of projects) {
+    const assets = await fs.listAssets(project.slug);
+    const pendingTasks = await findPendingTasks(fs, project.slug, assets);
+    const orphanedTasks = pendingTasks.filter((task) => task.taskId === QUEUED_TASK_ID);
+
+    for (const task of orphanedTasks) {
+      await deletePendingTask(fs, task.assetId, task.projectSlug);
+      console.log(`[startup] cleaned orphaned queued task: ${task.assetId} in project ${task.projectSlug}`);
+      cleanedCount++;
+    }
+  }
+
+  return cleanedCount;
+}
