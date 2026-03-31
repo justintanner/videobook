@@ -109,6 +109,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     const taskId = taskResult.data.taskId;
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    await fs.writeMetadata(vidAssetId, "kie-task-id", { taskId }, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_video",

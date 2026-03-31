@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -25,7 +25,7 @@ type CompleteKieTaskPayload = {
 export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
   registerJobHandler("complete_kie_task", async (payload) => {
     const {
-      taskType, assetId, assetDir, projectSlug, meta,
+      taskId, taskType, assetId, assetDir, projectSlug, meta,
       resultUrls, resultObject,
     } = payload as CompleteKieTaskPayload;
 
@@ -37,8 +37,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "kling30_video") {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
-      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video") {
-        await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video" || taskType === "grok_imagine_extend_video") {
+        await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
@@ -141,6 +141,8 @@ async function completeGrokImagineVideo(
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
+  taskType: string,
+  taskId?: string,
 ): Promise<void> {
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
@@ -162,6 +164,12 @@ async function completeGrokImagineVideo(
   };
 
   const videoPath = join(assetDir, "original.mp4");
+
+  // Persist Kie taskId for future extend operations
+  if (taskId !== undefined && !taskType.startsWith("xai_")) {
+    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+  }
+
   const jobId = `process-video-${assetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "process_video",

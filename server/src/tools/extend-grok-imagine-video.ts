@@ -16,24 +16,26 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().optional().describe("Optional prompt to guide video extension"),
       duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
+      _provider: z.string().optional().describe("Provider to use (kie or xai)"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration } = args as {
+      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration, _provider } = args as {
         asset_id?: string;
         video_slug?: string;
         project_slug: string;
         prompt?: string;
         duration?: "6" | "10" | "15";
+        _provider?: string;
       };
 
       // Derive asset_id from video_slug if not provided directly
       const asset_id = rawAssetId ?? (video_slug?.replace(/^@/, "") || undefined);
 
-      // Video extension is xAI-only
-      if (!process.env.XAI_API_KEY) {
+      // Check that at least one provider API key is available
+      if (!process.env.XAI_API_KEY && !process.env.KIE_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "XAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "Neither XAI_API_KEY nor KIE_API_KEY environment variable is set" }],
         };
       }
 
@@ -80,9 +82,13 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
+      // Determine provider - default to xai if XAI_API_KEY is set, otherwise kie
+      const isXai = _provider?.startsWith("xai") ?? (!!process.env.XAI_API_KEY || !process.env.KIE_API_KEY);
+      const taskType = isXai ? "xai_grok_imagine_extend_video" : "grok_imagine_extend_video";
+
       await writePendingTask(fs, vidAssetId, project_slug, {
         taskId: QUEUED_TASK_ID,
-        taskType: "xai_grok_imagine_extend_video",
+        taskType,
         assetId: vidAssetId,
         assetDir: vidAssetDir,
         projectSlug: project_slug,
@@ -99,6 +105,7 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         vidAssetId,
         vidAssetDir,
         projectSlug: project_slug,
+        _provider: isXai ? "xai" : "kie",
         ...(prompt !== undefined ? { prompt } : {}),
         ...(duration !== undefined ? { duration } : {}),
       } as unknown as Record<string, unknown>);

@@ -105,10 +105,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   grok_imagine_extend: {
     label: "Grok Imagine Extend",
     tool_name: "extend_grok_imagine_video",
-    description: "Extend an existing video into a longer video using xAI Grok Imagine",
+    description: "Extend an existing video into a longer video using Grok Imagine",
     params: ["video_slug", "prompt", "duration"],
     defaults: { duration: "6" },
     providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.v1.videos.extensions()", envKey: "XAI_API_KEY" },
     ],
   },
