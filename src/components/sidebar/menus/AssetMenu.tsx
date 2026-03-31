@@ -86,6 +86,15 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
         <>
           <div className="-mx-1 my-1 h-px bg-border" />
           <CommandMenuItem
+            command={`/video ${slug}`}
+            title="Extend Video"
+            titleClassName="text-fuchsia-400"
+            accentColor="border-l-fuchsia-500/50 focus:border-l-fuchsia-500/80"
+            onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
+            MenuItem={MenuItem}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
             command={`/trim ${slug}`}
             title="Trim Video"
             onSelect={() => onAnimateCommand?.(`/trim ${slug}`)}

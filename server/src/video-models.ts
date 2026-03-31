@@ -102,6 +102,16 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
   },
+  grok_imagine_extend: {
+    label: "Grok Imagine Extend",
+    tool_name: "extend_grok_imagine_video",
+    description: "Extend an existing video into a longer video using xAI Grok Imagine",
+    params: ["video_slug", "prompt", "duration"],
+    defaults: { duration: "6" },
+    providers: [
+      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.extensions()", envKey: "XAI_API_KEY" },
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -115,6 +125,7 @@ const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
   generate_grok_imagine_video: { min: 1, max: 1 },
   generate_grok_imagine_ref_video: { min: 0, max: 4 },
   extend_veo_video: { min: 0, max: 0 },
+  extend_grok_imagine_video: { min: 0, max: 0 },
 };
 
 const VEO_IMAGE_SLOTS: Record<string, { min: number; max: number }> = {
@@ -271,13 +282,18 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]; prop.description = "Video aspect ratio"; }
       if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
     }
+    if (toolName === "extend_grok_imagine_video") {
+      if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; }
+      if (param === "duration") { prop.enum = ["6", "10", "15"]; prop.description = "Extension duration: 6s / 10s / 15s"; }
+      if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
+    }
 
     properties[param] = prop;
 
     // Required fields
-    if (param === "prompt" && toolName !== "generate_grok_imagine_video") required.push(param);
+    if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "extend_grok_imagine_video") required.push(param);
     if (param === "image_slugs" && toolName === "generate_grok_imagine_video") required.push(param);
-    if (param === "video_slug" && toolName === "extend_veo_video") required.push(param);
+    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video")) required.push(param);
     if (toolName === "generate_seedance_video" && (param === "aspect_ratio" || param === "duration")) required.push(param);
   }
 
@@ -438,7 +454,8 @@ ROUTING PREFERENCES:
 - Use generate_veo_video ONLY when user explicitly mentions "veo"
 - Use generate_grok_imagine_video ONLY when user explicitly mentions "grok" for video
 - Use generate_seedance_video ONLY when user explicitly mentions "seedance" or "bytedance"
-- Use extend_veo_video ONLY when user explicitly wants to extend an existing video
+- Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
+- Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
@@ -446,6 +463,7 @@ KEY CONSTRAINTS:
 - For generate_veo_video REFERENCE_2_VIDEO: REQUIRES model="veo3_fast" and 16:9/9:16 aspect_ratio
 - For generate_seedance_video: duration "4"/"8"/"12", resolution "480p"/"720p"/"1080p"
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration "6"/"10"
+- For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.
@@ -577,8 +595,8 @@ function buildModelOption(
     params.multi_shots ??= false;
   }
 
-  // For extend_veo_video, prefill video_slug from video assets
-  if (toolName === "extend_veo_video") {
+  // For video extension tools, prefill video_slug from video assets
+  if (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video") {
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;

@@ -378,6 +378,15 @@ function translateToolPayload(
       const payload = buildVeoExtendPayload(args, videoSlug);
       return { provider_path: "kie.veo.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "extend_grok_imagine_video": {
+      const videoSlug = (args.video_slug as string) ?? "";
+      const payload = {
+        prompt: prompt ?? "",
+        video: { url: videoSlug },
+        ...(args.duration !== undefined ? { duration: parseInt(args.duration as string, 10) } : {}),
+      };
+      return { provider_path: "xai.v1.videos.extensions()", payload: payload as unknown as Record<string, unknown> };
+    }
     default:
       return null;
   }
@@ -390,6 +399,7 @@ function translateToolPayload(
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_veo_video", "extend_veo_video",
   "generate_seedance_video", "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
+  "extend_grok_imagine_video",
 ]);
 
 const IMAGE_TOOLS = new Set([

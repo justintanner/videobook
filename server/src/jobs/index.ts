@@ -8,6 +8,7 @@ import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
 import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
+import { registerExtendGrokImagineVideoJob } from "./extend-grok-imagine-video.js";
 import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
@@ -32,6 +33,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerExtractAudioJob(fs);
   registerGenerateGrokImagineVideoJob(fs);
   registerGenerateGrokImagineRefVideoJob(fs);
+  registerExtendGrokImagineVideoJob(fs);
   registerGenerateKling30VideoJob(fs);
   registerGenerateNanoBananaImageJob(fs);
   registerGenerateGrokImagineImageJob(fs);

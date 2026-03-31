@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -37,7 +37,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "kling30_video") {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
-      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video") {
+      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
@@ -152,8 +152,8 @@ async function completeGrokImagineVideo(
   await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
 
   const provenance = {
-    source_asset: meta.sourceImageId,
-    model: "grok-imagine/image-to-video",
+    source_asset: meta.sourceVideoId ?? meta.sourceImageId,
+    model: meta.sourceVideoId ? "grok-imagine/video-extension" : "grok-imagine/image-to-video",
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
     ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
