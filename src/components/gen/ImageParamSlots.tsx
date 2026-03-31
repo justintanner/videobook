@@ -21,6 +21,14 @@ interface ImageParamSlotsProps {
   modelKey?: string;
 }
 
+function videoThumbFallback(asset: ResolvedAsset): string {
+  if (asset.thumbnailSrc) return asset.thumbnailSrc;
+  if (asset.type === 'video' && asset.src) {
+    return asset.src.replace(/\/[^/]+$/, '/original.jpg');
+  }
+  return asset.src || '';
+}
+
 function findThumbnail(
   slug: string,
   resolvedAssets?: ResolvedAsset[],
@@ -29,7 +37,7 @@ function findThumbnail(
   if (!slug) return '';
 
   const dropped = droppedAssets?.get(slug);
-  if (dropped) return dropped.thumbnailSrc || dropped.src || '';
+  if (dropped) return videoThumbFallback(dropped);
 
   if (!resolvedAssets?.length) return '';
 
@@ -39,7 +47,7 @@ function findThumbnail(
     const aClean = a.slug ? stripSlugPrefix(a.slug) : a.slug;
     return a.slug === slug || a.slug === clean || aClean === clean;
   });
-  return asset ? asset.thumbnailSrc || asset.src || '' : '';
+  return asset ? videoThumbFallback(asset) : '';
 }
 
 export function ImageParamSlots({
