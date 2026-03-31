@@ -3,7 +3,7 @@
  *
  * Parameter schemas and enums come from @nakedapi provider packages:
  *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
- *   - xAI: xai.v1.imageGenerationModels() (live API, model discovery)
+ *   - xAI: xai.v1["image-generation-models"]() (live API, model discovery)
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
@@ -110,7 +110,7 @@ async function initImageModels(): Promise<void> {
   if (!process.env.XAI_API_KEY) return;
   try {
     const xaiProvider = xai({ apiKey: process.env.XAI_API_KEY });
-    const result = await xaiProvider.v1.imageGenerationModels() as XaiImageGenerationModelListResponse;
+    const result = await xaiProvider.v1["image-generation-models"]() as XaiImageGenerationModelListResponse;
     xaiImageModels = result.models;
   } catch {
     // xAI discovery failed — xAI providers still listed via config, filtered by env var
