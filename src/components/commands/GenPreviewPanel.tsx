@@ -398,7 +398,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       icon={<Zap className="w-3.5 h-3.5" />}
       onClose={onClose}
       closeDisabled={isDisabled}
-      closeHidden
       headerExtra={
         <button
           tabIndex={-1}
@@ -413,7 +412,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
         </button>
       }
-      headerRight={null}
       footer={
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">

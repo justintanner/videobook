@@ -381,7 +381,7 @@ function translateToolPayload(
     case "extend_grok_imagine_video": {
       const videoSlug = (args.video_slug as string) ?? "";
       const payload = {
-        prompt: prompt ?? "",
+        prompt: (args.prompt as string) ?? "",
         video: { url: videoSlug },
         ...(args.duration !== undefined ? { duration: parseInt(args.duration as string, 10) } : {}),
       };
