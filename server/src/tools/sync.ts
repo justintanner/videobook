@@ -302,7 +302,8 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       } else if (hasPartFile) {
         status = "error";
       } else {
-        status = "loading";
+        // No media file and no pending task — orphaned asset from a failed generation
+        status = "error";
       }
 
       // Guarantee: non-whitelisted video assets only surface sidebar-hidden statuses.
