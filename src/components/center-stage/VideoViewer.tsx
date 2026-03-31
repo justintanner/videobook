@@ -254,6 +254,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
               onSelect={bf.setBackTab}
               slug={item.slug}
               onClose={() => onFlippedChange(false)}
+              onCloseViewer={onClose}
             />
 
             {bf.backTab === 'settings' ? (

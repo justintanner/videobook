@@ -368,6 +368,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               onSelect={bf.setBackTab}
               slug={item.slug}
               onClose={() => onFlippedChange(false)}
+              onCloseViewer={onClose}
             />
 
             {bf.backTab === 'files' ? (

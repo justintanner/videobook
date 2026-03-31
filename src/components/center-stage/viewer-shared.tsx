@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ChevronDown, RotateCcw, RefreshCw, FileText, Check, VideoOff, Zap, Copy } from 'lucide-react';
+import { ChevronDown, RotateCcw, RefreshCw, FileText, Check, VideoOff, Zap, Copy, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
@@ -340,12 +340,13 @@ export function ViewerToolbar({ left, slug, right }: {
   );
 }
 
-export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose }: {
+export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose, onCloseViewer }: {
   tabs: BackTab[];
   active: BackTab;
   onSelect: (t: BackTab) => void;
   slug: string;
   onClose: () => void;
+  onCloseViewer?: () => void;
 }) {
   return (
     <div className="shrink-0 px-3 py-3 flex items-center justify-between relative bg-black/60 border-b border-zinc-800/60">
@@ -369,11 +370,25 @@ export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose }: {
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{slug}</span>
       </span>
-      <div
-        className="w-6 h-6 flex items-center justify-center text-muted-foreground cursor-pointer"
-        onClick={onClose}
-      >
-        <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+      <div className="flex items-center gap-1">
+        <button
+          tabIndex={-1}
+          onClick={onClose}
+          title="Back"
+          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+        >
+          <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+        </button>
+        {onCloseViewer && (
+          <button
+            tabIndex={-1}
+            onClick={onCloseViewer}
+            title="Close"
+            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+          >
+            <X className="w-4 h-4 stroke-[2.5]" />
+          </button>
+        )}
       </div>
     </div>
   );

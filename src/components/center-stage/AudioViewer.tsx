@@ -105,6 +105,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
               onSelect={bf.setBackTab}
               slug={item.slug}
               onClose={() => onFlippedChange(false)}
+              onCloseViewer={onClose}
             />
 
             {bf.backTab === 'files' ? (
