@@ -81,10 +81,13 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
       // 6. Build resolved_assets output
       const assetDicts = resolvedAssets.map((a) => {
         const fileName = a.file_path?.split("/").pop() ?? "original.png";
+        const src = a.file_path ? `/files/${slug}/${a.asset_id}/${fileName}` : "";
+        const isVideo = a.asset_type === "video";
         return {
           slug: a.tag,
-          src: a.file_path ? `/files/${slug}/${a.asset_id}/${fileName}` : "",
-          type: a.asset_type === "video" ? "video" as const : "image" as const,
+          src,
+          thumbnailSrc: isVideo && a.file_path ? `/files/${slug}/${a.asset_id}/original.jpg` : undefined,
+          type: isVideo ? "video" as const : "image" as const,
         };
       });
 
