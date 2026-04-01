@@ -170,6 +170,7 @@ export function ImageParamSlots({
                     const da: ResolvedAsset = {
                       slug: asset.slug,
                       src: asset.src,
+                      thumbnailSrc: asset.thumbnailSrc,
                       type: asset.type,
                     };
                     handleSlotChange(index, asset, da);
