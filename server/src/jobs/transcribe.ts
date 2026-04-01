@@ -32,14 +32,14 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
     const blob = new Blob([new Uint8Array(readResult.value)]);
 
-    const upload = await provider.api["file-stream-upload"]({
+    const upload = await provider.post.api.fileStreamUpload({
       file: blob,
       filename: audioFilename,
     });
     if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
     const downloadUrl = upload.data.downloadUrl;
 
-    const taskResult = await provider.api.v1.jobs.createTask({
+    const taskResult = await provider.post.api.v1.jobs.createTask({
       model: "elevenlabs/speech-to-text",
       input: {
         audio_url: downloadUrl,

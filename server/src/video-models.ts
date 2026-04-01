@@ -42,7 +42,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9", image_orientation: "auto" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
   veo31: {
@@ -55,7 +55,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { aspect_ratio: "16:9", model: "veo3_fast", enable_translation: true, image_orientation: "auto" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.veo.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
     ],
   },
   veo31_extend: {
@@ -65,7 +65,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["video_slug", "prompt", "model", "seeds", "watermark"],
     defaults: {},
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.veo.api.v1.veo.extend()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.extend()", envKey: "KIE_API_KEY" },
     ],
   },
   seedance: {
@@ -78,7 +78,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { aspect_ratio: "16:9", resolution: "1080p", duration: "8", generate_audio: true, image_orientation: "auto" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
   grok_imagine: {
@@ -88,8 +88,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "image_slugs", "mode", "duration", "resolution", "image_orientation"],
     defaults: { mode: "normal", duration: "6", resolution: "720p", image_orientation: "auto" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
   },
   grok_imagine_ref: {
@@ -99,7 +99,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: { duration: "6", resolution: "720p", aspect_ratio: "16:9" },
     providers: [
-      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.generations()", envKey: "XAI_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
   },
   grok_imagine_extend: {
@@ -109,8 +109,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["video_slug", "prompt", "duration"],
     defaults: { duration: "6" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-      { key: "xai", label: "xAI", provider_path: "xai.v1.videos.extensions()", envKey: "XAI_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.extensions()", envKey: "XAI_API_KEY" },
     ],
   },
 };

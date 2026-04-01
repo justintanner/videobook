@@ -3,7 +3,7 @@
  *
  * Parameter schemas and enums come from @nakedapi provider packages:
  *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
- *   - xAI: xai.v1["image-generation-models"]() (live API, model discovery)
+ *   - xAI: xai.get.v1.imageGenerationModels() (live API, model discovery)
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
@@ -106,11 +106,11 @@ let xaiImageModels: XaiImageGenerationModel[] | null = null;
 // Async init — call once at server startup for xAI discovery
 // ---------------------------------------------------------------------------
 
-async function initImageModels(): Promise<void> {
+  async function initImageModels(): Promise<void> {
   if (!process.env.XAI_API_KEY) return;
   try {
     const xaiProvider = xai({ apiKey: process.env.XAI_API_KEY });
-    const result = await xaiProvider.v1["image-generation-models"]() as XaiImageGenerationModelListResponse;
+    const result = await xaiProvider.get.v1.imageGenerationModels() as XaiImageGenerationModelListResponse;
     xaiImageModels = result.models;
   } catch {
     // xAI discovery failed — xAI providers still listed via config, filtered by env var
@@ -228,7 +228,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     providers.push({
       key: "kie",
       label: "Kie",
-      provider_path: "kie.api.v1.jobs.createTask()",
+      provider_path: "kie.post.api.v1.jobs.createTask()",
       envKey: "KIE_API_KEY",
     });
   }
@@ -237,7 +237,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     providers.push({
       key: "xai",
       label: "xAI",
-      provider_path: `xai.v1.images.${config.xaiEndpoint}()`,
+      provider_path: `xai.post.v1.images.${config.xaiEndpoint}()`,
       envKey: "XAI_API_KEY",
     });
   }

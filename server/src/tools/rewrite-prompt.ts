@@ -336,7 +336,7 @@ async function handleStandardRewrite(
     messages = buildRewriteMessages(guide, prompt, maxChars);
   }
 
-  const result = await provider.v1.chat.completions({
+  const result = await provider.post.v1.chat.completions({
     model: REWRITE_MODEL,
     messages,
     temperature: 0.7,
@@ -385,7 +385,7 @@ async function handleSceneRewrite(
   const text = buildSceneRewriteText(guide, scenes, elements, sceneIndex, instruction);
 
   const provider = openai({ apiKey, timeout: 60_000 });
-  const result = await provider.v1.chat.completions({
+  const result = await provider.post.v1.chat.completions({
     model: REWRITE_MODEL,
     messages: [{ role: "user", content: text }],
     temperature: 0.7,

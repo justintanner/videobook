@@ -39,7 +39,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       if (!kieKey) throw new Error("KIE_API_KEY environment variable is not set — required for video upload");
       const kieProvider = kie({ apiKey: kieKey, timeout: 120_000 });
       const blob = new Blob([videoBytes]);
-      const upload = await kieProvider.api["file-stream-upload"]({ file: blob, filename: sourceVideoFilename });
+      const upload = await kieProvider.post.api.fileStreamUpload({ file: blob, filename: sourceVideoFilename });
       if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
       const videoUrl = upload.data.downloadUrl;
 
@@ -49,7 +49,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
         video: { url: videoUrl },
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
       };
-      const { request_id } = await provider.v1.videos.extensions(request);
+      const { request_id } = await provider.post.v1.videos.extensions(request);
 
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       await writePendingTask(fs, vidAssetId, projectSlug, {
@@ -95,7 +95,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       },
     };
 
-    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.post.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) {
       const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
       throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);

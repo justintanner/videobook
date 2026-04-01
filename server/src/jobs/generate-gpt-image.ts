@@ -33,7 +33,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const upload = await provider.api["file-stream-upload"]({ file: blob, filename });
+      const upload = await provider.post.api.fileStreamUpload({ file: blob, filename });
       if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
       uploadedUrls.push(upload.data.downloadUrl);
     }
@@ -42,7 +42,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       { prompt, aspect_ratio: aspectRatio, quality },
       uploadedUrls,
     );
-    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.post.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) {
       const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
       throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);

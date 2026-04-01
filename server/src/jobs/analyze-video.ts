@@ -121,11 +121,11 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     const providers: Array<(req: Record<string, unknown>, signal?: AbortSignal) => Promise<{ choices: Array<{ message: { content: string } }> }>> = [];
     if (openaiKey) {
       const p = openai({ apiKey: openaiKey, timeout: 180_000 });
-      providers.push(withRetry(p.v1.chat.completions, { retries: 2, baseMs: 500 }));
+      providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
     }
     if (kieKey) {
       const p = kie({ apiKey: kieKey, timeout: 180_000 });
-      providers.push(withRetry(p.chat["gpt-5-2"].v1.chat.completions, { retries: 2, baseMs: 500 }));
+      providers.push(withRetry(p.chat.post["gpt-5-2"].v1.chat.completions, { retries: 2, baseMs: 500 }));
     }
 
     if (providers.length > 0) {

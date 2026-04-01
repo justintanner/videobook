@@ -44,7 +44,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       if (kieKey) {
         const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
         const blob = new Blob([imageBytes]);
-        const upload = await kieProvider.api["file-stream-upload"]({ file: blob, filename: imageFilename });
+        const upload = await kieProvider.post.api.fileStreamUpload({ file: blob, filename: imageFilename });
         if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
         imageUrl = upload.data.downloadUrl;
       } else {
@@ -62,7 +62,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
       };
-      const { request_id } = await provider.v1.videos.generations(request);
+      const { request_id } = await provider.post.v1.videos.generations(request);
 
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       await writePendingTask(fs, vidAssetId, projectSlug, {
@@ -90,7 +90,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
     const blob = new Blob([imageBytes]);
 
-    const upload = await provider.api["file-stream-upload"]({
+    const upload = await provider.post.api.fileStreamUpload({
       file: blob,
       filename: imageFilename,
     });
@@ -101,7 +101,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       { prompt, mode, duration, resolution },
       [downloadUrl],
     );
-    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.post.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) {
       const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
       throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);

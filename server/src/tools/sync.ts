@@ -399,7 +399,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
     await Promise.all(kieTasks.map(async (task) => {
       try {
-        const taskInfo = await provider.api.v1.jobs.recordInfo(task.taskId);
+        const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
         await processSyncedTask(task, taskInfo, result);
       } catch (e) {
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
@@ -414,7 +414,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
     await Promise.all(xaiTasks.map(async (task) => {
       try {
-        const videoResult = await provider.v1.videos(task.taskId);
+        const videoResult = await provider.get.v1.videos(task.taskId);
         if (videoResult.status === "done" && videoResult.video?.url) {
           const jobId = `complete-xai-${task.assetId}-${Date.now()}`;
           await queue.enqueue(jobId, {

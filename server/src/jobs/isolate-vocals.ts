@@ -64,7 +64,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
 
     // Upload to KIE
     const blob = new Blob([new Uint8Array(uploadBuffer)]);
-    const upload = await provider.api["file-stream-upload"]({
+    const upload = await provider.post.api.fileStreamUpload({
       file: blob,
       filename: audioFilename,
     });
@@ -72,7 +72,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
     const downloadUrl = upload.data.downloadUrl;
 
     // Create isolation task
-    const taskResult = await provider.api.v1.jobs.createTask({
+    const taskResult = await provider.post.api.v1.jobs.createTask({
       model: "elevenlabs/audio-isolation",
       input: {
         audio_url: downloadUrl,

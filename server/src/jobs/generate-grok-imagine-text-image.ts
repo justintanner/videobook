@@ -36,7 +36,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
         response_format: "url" as const,
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
-      const result = await provider.v1.images.generations(request);
+      const result = await provider.post.v1.images.generations(request);
 
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
@@ -59,7 +59,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const request = buildGrokImagineTextPayload({ prompt, aspect_ratio: aspectRatio });
-    const taskResult = await provider.api.v1.jobs.createTask(request);
+    const taskResult = await provider.post.api.v1.jobs.createTask(request);
     if (!taskResult.data?.taskId) {
       const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
       throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
