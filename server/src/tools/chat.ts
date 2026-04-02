@@ -104,6 +104,7 @@ Determine which tool to use and what parameters to pass.`;
       try {
         const provider = openai({ apiKey, timeout: 15_000 });
         const result = await provider.post.v1.chat.completions({
+          model: "gpt-5.4",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
