@@ -40,6 +40,8 @@ describe("sync tool", () => {
     expect(data.external_uploads).toEqual([]);
     expect(data.auto_render).toEqual([]);
     expect(data.auto_transcribe).toEqual([]);
+    expect(data.auto_speech_to_text).toEqual([]);
+    expect(data.auto_analyze).toEqual([]);
   });
 
   it("sync after creating assets returns result with no errors", async () => {
@@ -356,6 +358,8 @@ describe("performSync", () => {
     expect(result.external_uploads).toEqual([]);
     expect(result.auto_render).toEqual([]);
     expect(result.auto_transcribe).toEqual([]);
+    expect(result.auto_speech_to_text).toEqual([]);
+    expect(result.auto_analyze).toEqual([]);
   });
 
   it("performSync skips KIE task polling when KIE_API_KEY is not set", async () => {

@@ -42,6 +42,7 @@ export type SyncResult = {
   auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
   auto_speech_to_text: Array<{ assetId: string; jobId: string }>;
+  auto_analyze: Array<{ assetId: string; jobId: string }>;
 };
 
 async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
@@ -358,7 +359,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], auto_transcribe: [], auto_speech_to_text: [],
+    external_uploads: [], auto_render: [], auto_transcribe: [], auto_speech_to_text: [], auto_analyze: [],
   };
 
   // Single listAssets call, shared by all consumers
@@ -371,12 +372,13 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     : "landscape";
 
   // Run all discovery steps in parallel
-  const [uploads, tasks, renderActions, transcribeActions, sttActions] = await Promise.all([
+  const [uploads, tasks, renderActions, transcribeActions, sttActions, analyzeActions] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
     findAutoRenderActions(fs, project_slug, assets, orientation),
     findAutoTranscribeActions(fs, project_slug, assets),
     findAutoSpeechToTextActions(fs, project_slug, assets),
+    findAutoAnalyzeActions(fs, project_slug, assets),
   ]);
 
   // Process external uploads
@@ -503,6 +505,19 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       autoRender: true,
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
+  }
+
+  // Auto-pipeline: retry missing analysis for whitelisted videos
+  for (const action of analyzeActions) {
+    const jobId = `auto-analyze-${action.assetId}`;
+    await queue.enqueue(jobId, {
+      type: "analyze_video",
+      assetId: action.assetId,
+      assetDir: action.assetDir,
+      projectSlug: project_slug,
+      hasTranscription: action.hasTranscription,
+    });
+    result.auto_analyze.push({ assetId: action.assetId, jobId });
   }
 
   return result;
@@ -727,6 +742,45 @@ async function findAutoSpeechToTextActions(
     })
   );
   return candidates.filter((c): c is SpeechToTextAction => c !== null);
+}
+
+type AnalyzeAction = {
+  assetId: string;
+  assetDir: string;
+  hasTranscription: boolean;
+};
+
+async function findAutoAnalyzeActions(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assets: AssetEntry[],
+): Promise<AnalyzeAction[]> {
+  // Need at least one API provider for analysis
+  if (!process.env.OPENAI_API_KEY && !process.env.KIE_API_KEY) return [];
+
+  const candidates = await Promise.all(
+    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<AnalyzeAction | null> => {
+      const manifest = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      if (!manifest.ok) return null;
+      const fileNames = new Set(manifest.value.files.map((f) => f.name));
+
+      // Skip: already has analysis
+      if (fileNames.has(".original.analysis.json")) return null;
+      // Skip: process_video hasn't completed (no metadata = no frames)
+      if (!fileNames.has(".original.json")) return null;
+      // Skip: not whitelisted
+      if (!fileNames.has(".whitelisted_at")) return null;
+      // Skip: locked
+      if (await fs.isLocked(manifest.value.path)) return null;
+
+      return {
+        assetId: asset.id,
+        assetDir: manifest.value.path,
+        hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
+      };
+    })
+  );
+  return candidates.filter((c): c is AnalyzeAction => c !== null);
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {
