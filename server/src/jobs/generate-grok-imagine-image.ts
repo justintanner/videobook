@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import type { GrokImageToImageRequest } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { buildGrokImagineImagePayload, buildXaiGrokImagineImagePayload } from "../payload-builders.js";
 
@@ -62,6 +62,21 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       // Write payload and result to asset
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
+
+      // Enqueue post-processing so .original.json and derived crops are created
+      const provenance = {
+        source_asset: sourceImageId,
+        model: "grok-imagine/image-to-image",
+        ...(prompt !== undefined ? { prompt } : {}),
+        generated_at: new Date().toISOString(),
+      };
+      await queue.enqueue(`process-image-${imgAssetId}-${Date.now()}`, {
+        type: "process_image",
+        assetId: imgAssetId,
+        projectSlug,
+        extension: ".png",
+        provenance,
+      } as unknown as Record<string, unknown>);
 
       // Clear queued pending task written by tool handler
       await deletePendingTask(fs, imgAssetId, projectSlug);

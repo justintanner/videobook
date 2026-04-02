@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import type { XaiImageGenerateRequest } from "@nakedapi/xai";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
 
@@ -48,6 +48,22 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
 
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
+
+      // Enqueue post-processing so .original.json and derived crops are created
+      const provenance = {
+        model: "grok-imagine/text-to-image",
+        prompt,
+        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+        generated_at: new Date().toISOString(),
+      };
+      await queue.enqueue(`process-image-${imgAssetId}-${Date.now()}`, {
+        type: "process_image",
+        assetId: imgAssetId,
+        projectSlug,
+        extension: ".png",
+        provenance,
+      } as unknown as Record<string, unknown>);
+
       await deletePendingTask(fs, imgAssetId, projectSlug);
 
       return { success: true, provider: "xai" };
