@@ -5,7 +5,6 @@ import { toast } from '@/hooks/useToast';
 interface AssetMenuProps {
   slug: string;
   itemType?: string;
-  onShowFolder: () => void;
   onAnimateCommand?: (text: string) => void;
   onAnimateEdit?: (text: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
@@ -34,7 +33,7 @@ function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect
   );
 }
 
-export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, itemType, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
   return (
     <>
       {itemType === 'image' && (
@@ -72,7 +71,7 @@ export function AssetMenu({ slug, itemType, onShowFolder, onAnimateCommand, onAn
       <CommandMenuItem
         command="/folder"
         title="Show in Folder"
-        onSelect={onShowFolder}
+        onSelect={() => onAnimateCommand?.(`/folder ${slug}`)}
         MenuItem={MenuItem}
       />
       <div className="-mx-1 my-1 h-px bg-border" />

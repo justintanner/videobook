@@ -1,7 +1,6 @@
 import { Clapperboard, Film, ImageIcon, Settings } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
-import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { UseMcpResult } from 'use-mcp/react';
 interface HomeHeaderBarProps {
   pulseKey: number;
@@ -12,10 +11,10 @@ interface HomeHeaderBarProps {
   generatingCount: number;
   readyCount: number;
   onInboxClick: () => void;
+  onAnimateCommand: (text: string) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick }: HomeHeaderBarProps) {
-  const { dispatch } = useCommandDispatch();
+export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick, onAnimateCommand }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -36,9 +35,9 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="blue" onClick={() => dispatch('/image')} />
-        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="fuchsia" onClick={() => dispatch('/video')} />
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} onClick={() => dispatch('/final')} />
+        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="blue" onClick={() => onAnimateCommand('/image')} />
+        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="fuchsia" onClick={() => onAnimateCommand('/video')} />
+        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} onClick={() => onAnimateCommand('/final')} />
       </div>
 
       {/* Right side */}

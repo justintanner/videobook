@@ -577,6 +577,7 @@ export function HomePage() {
             generatingCount={pendingClips.length}
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
+            onAnimateCommand={handleAnimateCommand}
           />
 
           <div className="flex flex-row overflow-hidden">
@@ -612,8 +613,6 @@ export function HomePage() {
                       <AssetMenu
                         slug={item.slug}
                         itemType={item.type}
-                        onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
                         MenuItem={ContextMenuItem}
@@ -701,8 +700,6 @@ export function HomePage() {
                       <AssetMenu
                         slug={item.slug}
                         itemType={item.type}
-                        onShowFolder={() => callTool('show_folder', { asset_id: item.id, project_slug: projectSlug })}
-
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
                         MenuItem={ContextMenuItem}

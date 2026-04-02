@@ -174,7 +174,7 @@ const styleguideMockCallTool: UseMcpResult['callTool'] = async (name: string) =>
 
 function clipMenu(slug: string, itemType: string) {
   return (
-    <AssetMenu slug={slug} itemType={itemType} onShowFolder={() => {}} MenuItem={ContextMenuItem} />
+    <AssetMenu slug={slug} itemType={itemType} onAnimateCommand={() => {}} MenuItem={ContextMenuItem} />
   );
 }
 
@@ -719,6 +719,7 @@ function Page1_FinalVideoPreview() {
           generatingCount={0}
           readyCount={4}
           onInboxClick={() => {}}
+          onAnimateCommand={() => {}}
         />
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets (collapsed with micro thumbs) */}
@@ -811,6 +812,7 @@ function Page2_VideoGeneration() {
           generatingCount={0}
           readyCount={4}
           onInboxClick={() => {}}
+          onAnimateCommand={() => {}}
         />
         <div className="flex flex-row overflow-hidden">
           <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">
@@ -2943,7 +2945,7 @@ function Page19_ContextMenus() {
               <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Image Asset</span>
             </div>
             <div className="p-1">
-              <AssetMenu slug="@img-neon-fox" itemType="image" onShowFolder={() => {}} MenuItem={StaticMenuItem} />
+              <AssetMenu slug="@img-neon-fox" itemType="image" onAnimateCommand={() => {}} MenuItem={StaticMenuItem} />
             </div>
           </div>
           <div className="rounded border border-primary/10 bg-card/40 w-[260px]">
@@ -2951,7 +2953,7 @@ function Page19_ContextMenus() {
               <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Video Asset</span>
             </div>
             <div className="p-1">
-              <AssetMenu slug="@vid-aurora-sky" itemType="video" onShowFolder={() => {}} MenuItem={StaticMenuItem} />
+              <AssetMenu slug="@vid-aurora-sky" itemType="video" onAnimateCommand={() => {}} MenuItem={StaticMenuItem} />
             </div>
           </div>
         </div>
