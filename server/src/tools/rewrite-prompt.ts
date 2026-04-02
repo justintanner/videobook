@@ -7,7 +7,7 @@ import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openai } from "@nakedapi/openai";
+import { openai, textPart, imageUrlPart, firstContent } from "@nakedapi/openai";
 import type { OpenAiContentPart } from "@nakedapi/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import type { ToolDef } from "./tool-def.js";
@@ -80,11 +80,8 @@ export function buildVisionMessages(
   imageDataUris: string[],
   maxChars?: number,
 ): Array<{ role: "user"; content: OpenAiContentPart[] }> {
-  const content: OpenAiContentPart[] = [];
-  for (const dataUri of imageDataUris) {
-    content.push({ type: "image_url", image_url: { url: dataUri } });
-  }
-  content.push({ type: "text", text: buildRewritePromptText(guide, prompt, maxChars) });
+  const content: OpenAiContentPart[] = imageDataUris.map((uri) => imageUrlPart(uri));
+  content.push(textPart(buildRewritePromptText(guide, prompt, maxChars)));
   return [{ role: "user", content }];
 }
 
@@ -343,7 +340,7 @@ async function handleStandardRewrite(
     max_completion_tokens: 1024,
   });
 
-  const rewritten = result.choices[0].message.content.trim();
+  const rewritten = firstContent(result).trim();
   const output = buildResult(model, prompt, rewritten, guideFilename(model));
 
   return {
@@ -392,7 +389,7 @@ async function handleSceneRewrite(
     max_completion_tokens: 1024,
   });
 
-  const rewritten = result.choices[0].message.content.trim();
+  const rewritten = firstContent(result).trim();
   const output = buildSceneResult(
     sceneIndex,
     scenes[sceneIndex].prompt,

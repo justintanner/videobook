@@ -6,7 +6,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { openai } from "@nakedapi/openai";
+import { openai, firstContent } from "@nakedapi/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import {
   VIDEO_MODELS,
@@ -108,7 +108,7 @@ Determine which video generation tool to use and what parameters to pass.`;
             max_completion_tokens: 512,
           });
 
-          const decision = JSON.parse(result.choices[0].message.content) as {
+          const decision = JSON.parse(firstContent(result)) as {
             tool?: string | null;
             params?: Record<string, unknown>;
           };

@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildGptImagePayload } from "../payload-builders.js";
@@ -33,21 +33,14 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const upload = await provider.post.api.fileStreamUpload({ file: blob, filename });
-      if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-      uploadedUrls.push(upload.data.downloadUrl);
+      uploadedUrls.push(await uploadFile(provider, blob, filename));
     }
 
     const request = buildGptImagePayload(
       { prompt, aspect_ratio: aspectRatio, quality },
       uploadedUrls,
     );
-    const taskResult = await provider.post.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    const taskId = await submitMediaJob(provider, request);
 
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, imgAssetId, projectSlug, {

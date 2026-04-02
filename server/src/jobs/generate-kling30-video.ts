@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import type { KlingElement, MultiShotPrompt } from "@nakedapi/kie";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildKling30VideoPayload } from "../payload-builders.js";
@@ -50,9 +50,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       const readResult = await fs.readFile(assetId, filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const blob = new Blob([new Uint8Array(readResult.value)]);
-      const upload = await provider.post.api.fileStreamUpload({ file: blob, filename });
-      if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-      imageUrls.push(upload.data.downloadUrl);
+      imageUrls.push(await uploadFile(provider, blob, filename));
     }
 
     // Upload element media and build KlingElement array
@@ -63,9 +61,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
         const readResult = await fs.readFile(assetId, filename, projectSlug);
         if (!readResult.ok) throw new Error(readResult.error.message);
         const blob = new Blob([new Uint8Array(readResult.value)]);
-        const elemUpload = await provider.post.api.fileStreamUpload({ file: blob, filename });
-        if (!elemUpload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-        urls.push(elemUpload.data.downloadUrl);
+        urls.push(await uploadFile(provider, blob, filename));
       }
 
       const element: KlingElement = {
@@ -87,12 +83,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
       imageUrls,
       elements,
     );
-    const taskResult = await provider.post.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    const taskId = await submitMediaJob(provider, request);
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {

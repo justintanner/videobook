@@ -1,8 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
-import { openai, withRetry, withFallback } from "@nakedapi/openai";
-import type { OpenAiContentPart } from "@nakedapi/openai";
+import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@nakedapi/openai";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 
@@ -72,14 +71,10 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     }
 
     const sampled = sampleFrames(frameFiles);
-    const frameParts: OpenAiContentPart[] = [];
+    const frameParts = [];
     for (const file of sampled) {
       const buf = await readFile(join(framesDir, file));
-      const dataUri = `data:image/jpeg;base64,${buf.toString("base64")}`;
-      frameParts.push({
-        type: "image_url",
-        image_url: { url: dataUri, detail: "low" },
-      });
+      frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
     }
 
     let transcriptionText = "";
@@ -108,8 +103,8 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     }
     contextParts.push(`${sampled.length} frames from the video are attached below.`);
 
-    const userContent: OpenAiContentPart[] = [
-      { type: "text", text: contextParts.join("\n\n") },
+    const userContent = [
+      textPart(contextParts.join("\n\n")),
       ...frameParts,
     ];
 
@@ -145,7 +140,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           max_completion_tokens: 4096,
           max_tokens: 4096,
         });
-        analysis = JSON.parse(result.choices[0].message.content);
+        analysis = JSON.parse(firstContent(result));
       } catch {
         // all providers failed — use empty fallback
       }

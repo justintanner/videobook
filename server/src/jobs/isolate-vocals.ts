@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { writePendingTask } from "./pending-task.js";
@@ -64,26 +64,16 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
 
     // Upload to KIE
     const blob = new Blob([new Uint8Array(uploadBuffer)]);
-    const upload = await provider.post.api.fileStreamUpload({
-      file: blob,
-      filename: audioFilename,
-    });
-    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-    const downloadUrl = upload.data.downloadUrl;
+    const downloadUrl = await uploadFile(provider, blob, audioFilename);
 
     // Create isolation task
-    const taskResult = await provider.post.api.v1.jobs.createTask({
-      model: "elevenlabs/audio-isolation",
+    const request = {
+      model: "elevenlabs/audio-isolation" as const,
       input: {
         audio_url: downloadUrl,
       },
-    });
-
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    };
+    const taskId = await submitMediaJob(provider, request);
 
     // Write pending task
     await writePendingTask(fs, assetId, projectSlug, {

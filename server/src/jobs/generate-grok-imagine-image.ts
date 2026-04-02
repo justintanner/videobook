@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import type { GrokImageToImageRequest } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
@@ -77,20 +77,10 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
     const blob = new Blob([imageBytes]);
 
-    const upload = await provider.post.api.fileStreamUpload({
-      file: blob,
-      filename: imageFilename,
-    });
-    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-    const downloadUrl = upload.data.downloadUrl;
+    const downloadUrl = await uploadFile(provider, blob, imageFilename);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
-    const taskResult = await provider.post.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    const taskId = await submitMediaJob(provider, request);
 
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, imgAssetId, projectSlug, {

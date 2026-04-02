@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 
@@ -32,28 +32,18 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
     const blob = new Blob([new Uint8Array(readResult.value)]);
 
-    const upload = await provider.post.api.fileStreamUpload({
-      file: blob,
-      filename: audioFilename,
-    });
-    if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-    const downloadUrl = upload.data.downloadUrl;
+    const downloadUrl = await uploadFile(provider, blob, audioFilename);
 
-    const taskResult = await provider.post.api.v1.jobs.createTask({
-      model: "elevenlabs/speech-to-text",
+    const request = {
+      model: "elevenlabs/speech-to-text" as const,
       input: {
         audio_url: downloadUrl,
         tag_audio_events: tagAudioEvents,
         diarize,
         ...(languageCode ? { language_code: languageCode } : {}),
       },
-    });
-
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    };
+    const taskId = await submitMediaJob(provider, request);
 
     await writePendingTask(fs, assetId, projectSlug, {
       taskId,

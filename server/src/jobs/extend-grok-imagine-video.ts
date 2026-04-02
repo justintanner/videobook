@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -39,9 +39,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       if (!kieKey) throw new Error("KIE_API_KEY environment variable is not set — required for video upload");
       const kieProvider = kie({ apiKey: kieKey, timeout: 120_000 });
       const blob = new Blob([videoBytes]);
-      const upload = await kieProvider.post.api.fileStreamUpload({ file: blob, filename: sourceVideoFilename });
-      if (!upload.data?.downloadUrl) throw new Error("KIE upload failed: no download URL in response");
-      const videoUrl = upload.data.downloadUrl;
+      const videoUrl = await uploadFile(kieProvider, blob, sourceVideoFilename);
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = {
@@ -95,12 +93,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       },
     };
 
-    const taskResult = await provider.post.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    const taskId = await submitMediaJob(provider, request);
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {

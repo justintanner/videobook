@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { openai } from "@nakedapi/openai";
-import type { OpenAiContentPart } from "@nakedapi/openai";
+import { openai, textPart, imageBase64Part, firstContent } from "@nakedapi/openai";
 import { takeScreenshot } from "../screenshot.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -74,12 +73,9 @@ export function redesignStyleguidePageDef(): ToolDef {
       const screenshotBuffer = await takeScreenshot({ url: devUrl, width: 1920, height: 1080 });
 
       // 2. Vision analysis via GPT-5.4
-      const base64 = screenshotBuffer.toString("base64");
-      const dataUri = `data:image/png;base64,${base64}`;
-
-      const userContent: OpenAiContentPart[] = [
-        { type: "text", text: "Analyze this UI screenshot and return your top 10 design changes as JSON." },
-        { type: "image_url", image_url: { url: dataUri, detail: "high" } },
+      const userContent = [
+        textPart("Analyze this UI screenshot and return your top 10 design changes as JSON."),
+        imageBase64Part(screenshotBuffer.toString("base64"), "image/png", "high"),
       ];
 
       const provider = openai({ apiKey: process.env.OPENAI_API_KEY, timeout: 180_000 });
@@ -94,7 +90,7 @@ export function redesignStyleguidePageDef(): ToolDef {
         max_completion_tokens: 4096,
       });
 
-      const analysis = JSON.parse(chatResult.choices[0].message.content) as { changes: string[] };
+      const analysis = JSON.parse(firstContent(chatResult)) as { changes: string[] };
 
       return {
         content: [{

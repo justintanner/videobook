@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { openai } from "@nakedapi/openai";
+import { openai, firstContent } from "@nakedapi/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "../chat-log.js";
@@ -113,7 +113,7 @@ Determine which tool to use and what parameters to pass.`;
           max_completion_tokens: 512,
         }, AbortSignal.timeout(15_000));
 
-        decision = JSON.parse(result.choices[0].message.content) as ChatDecision;
+        decision = JSON.parse(firstContent(result)) as ChatDecision;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return error(`Routing failed: ${msg}`);

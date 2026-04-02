@@ -14,6 +14,15 @@ import type {
   SeedanceVideoRequest,
   NanoBananaProRequest,
   GptImageToImageRequest,
+  // Named union types for cleaner type annotations
+  KlingMode,
+  GrokImagineMode,
+  GrokImagineDuration,
+  GrokImagineResolution,
+  SeedanceResolution,
+  NanoBananaResolution,
+  NanoBananaOutputFormat,
+  GptImageQuality,
 } from "@nakedapi/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@nakedapi/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest } from "@nakedapi/xai";
@@ -26,7 +35,7 @@ import { validateImageParams } from "./image-models.js";
 
 type Kling30Args = {
   prompt?: string;
-  mode?: "std" | "pro";
+  mode?: KlingMode;
   duration?: string;
   sound?: boolean;
   aspect_ratio?: string;
@@ -47,7 +56,7 @@ function buildKling30VideoPayload(
       sound: args.sound ?? true,
       duration: (args.duration ?? "8") as KlingVideoRequest["input"]["duration"],
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as "16:9" | "9:16" | "1:1" } : {}),
-      mode: (args.mode ?? "std") as "std" | "pro",
+      mode: (args.mode ?? "std") as KlingMode,
       multi_shots: args.multi_shots ?? false,
       ...(args.multi_prompt && args.multi_prompt.length > 0 ? { multi_prompt: args.multi_prompt } : {}),
       ...(elements.length > 0 ? { kling_elements: elements } : {}),
@@ -57,9 +66,9 @@ function buildKling30VideoPayload(
 
 type GrokImagineVideoArgs = {
   prompt?: string;
-  mode?: string;
-  duration?: string;
-  resolution?: string;
+  mode?: GrokImagineMode;
+  duration?: GrokImagineDuration;
+  resolution?: GrokImagineResolution;
 };
 
 function buildGrokImagineVideoPayload(
@@ -71,9 +80,9 @@ function buildGrokImagineVideoPayload(
     input: {
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      ...(args.mode !== undefined ? { mode: args.mode as "fun" | "normal" | "spicy" } : {}),
-      ...(args.duration !== undefined ? { duration: args.duration as "6" | "10" } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
+      ...(args.mode !== undefined ? { mode: args.mode } : {}),
+      ...(args.duration !== undefined ? { duration: args.duration } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     },
   };
 }
@@ -114,7 +123,7 @@ function buildGrokImagineTextPayload(
 type SeedanceVideoArgs = {
   prompt: string;
   aspect_ratio?: string;
-  resolution?: string;
+  resolution?: SeedanceResolution;
   duration?: string;
   fixed_lens?: boolean;
   generate_audio?: boolean;
@@ -130,7 +139,7 @@ function buildSeedanceVideoPayload(
       prompt: args.prompt,
       ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as SeedanceVideoRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" | "1080p" } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.duration !== undefined ? { duration: args.duration as "4" | "8" | "12" } : {}),
       ...(args.fixed_lens !== undefined ? { fixed_lens: args.fixed_lens } : {}),
       ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
@@ -141,8 +150,8 @@ function buildSeedanceVideoPayload(
 type NanoBananaImageArgs = {
   prompt: string;
   aspect_ratio?: string;
-  resolution?: string;
-  output_format?: string;
+  resolution?: NanoBananaResolution;
+  output_format?: NanoBananaOutputFormat;
 };
 
 function buildNanoBananaImagePayload(
@@ -155,8 +164,8 @@ function buildNanoBananaImagePayload(
       prompt: args.prompt,
       ...(imageInput.length > 0 ? { image_input: imageInput } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as NanoBananaProRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as "1K" | "2K" | "4K" } : {}),
-      ...(args.output_format !== undefined ? { output_format: args.output_format as "png" | "jpg" } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
     },
   };
 }
@@ -164,7 +173,7 @@ function buildNanoBananaImagePayload(
 type GptImageArgs = {
   prompt: string;
   aspect_ratio?: string;
-  quality?: string;
+  quality?: GptImageQuality;
 };
 
 function buildGptImagePayload(
@@ -177,7 +186,7 @@ function buildGptImagePayload(
       prompt: args.prompt,
       input_urls: inputUrls,
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as "1:1" | "2:3" | "3:2" } : {}),
-      ...(args.quality !== undefined ? { quality: args.quality as "medium" | "high" } : {}),
+      ...(args.quality !== undefined ? { quality: args.quality } : {}),
     },
   };
 }
@@ -233,7 +242,7 @@ function buildXaiGrokImagineImagePayload(
 type GrokImagineRefVideoArgs = {
   prompt: string;
   duration?: string;
-  resolution?: string;
+  resolution?: GrokImagineResolution;
   aspect_ratio?: string;
 };
 
@@ -245,7 +254,7 @@ function buildXaiGrokImagineRefVideoPayload(
     prompt: args.prompt,
     ...(imageUrls.length > 0 ? { reference_images: imageUrls.map((url) => ({ url })) } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-    ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
@@ -258,7 +267,7 @@ function buildXaiGrokImagineVideoPayload(
     prompt: args.prompt ?? "",
     ...(imageUrls.length > 0 ? { image: { url: imageUrls[0] } } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-    ...(args.resolution !== undefined ? { resolution: args.resolution as "480p" | "720p" } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
   };
 }
 

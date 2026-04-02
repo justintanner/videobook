@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
@@ -59,12 +59,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const request = buildGrokImagineTextPayload({ prompt, aspect_ratio: aspectRatio });
-    const taskResult = await provider.post.api.v1.jobs.createTask(request);
-    if (!taskResult.data?.taskId) {
-      const msg = (taskResult as Record<string, unknown>).msg as string | undefined;
-      throw new Error(`KIE createTask failed: ${msg ?? 'no taskId in response'}`);
-    }
-    const taskId = taskResult.data.taskId;
+    const taskId = await submitMediaJob(provider, request);
 
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     await writePendingTask(fs, imgAssetId, projectSlug, {
