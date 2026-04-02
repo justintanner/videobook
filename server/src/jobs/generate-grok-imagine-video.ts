@@ -3,7 +3,7 @@ import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
-import { buildGrokImagineVideoPayload } from "../payload-builders.js";
+import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
@@ -54,12 +54,10 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       }
 
       const provider = xai({ apiKey, timeout: 120_000 });
-      const request = {
-        prompt: prompt ?? "",
-        image: { url: imageUrl },
-        ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-      };
+      const request = buildXaiGrokImagineVideoPayload(
+        { prompt, mode, duration, resolution },
+        [imageUrl],
+      );
       const { request_id } = await provider.post.v1.videos.generations(request);
 
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

@@ -4,7 +4,7 @@ import type { GrokImageToImageRequest } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
-import { buildGrokImagineImagePayload } from "../payload-builders.js";
+import { buildGrokImagineImagePayload, buildXaiGrokImagineImagePayload } from "../payload-builders.js";
 
 type GenerateGrokImagineImagePayload = {
   type: "generate_grok_imagine_image";
@@ -45,11 +45,10 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const b64 = Buffer.from(imageBytes).toString("base64");
       const dataUrl = `data:${mime};base64,${b64}`;
 
-      const request = {
-        prompt: prompt ?? "",
-        image: { url: dataUrl, type: "image_url" as const },
-        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
-      };
+      const request = buildXaiGrokImagineImagePayload(
+        { prompt, aspect_ratio: aspectRatio },
+        [dataUrl],
+      );
       const result = await provider.post.v1.images.edits(request);
 
       const imageUrl = result.data[0]?.url;

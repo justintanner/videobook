@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
+import type { XaiVideoExtendRequest } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 
@@ -42,7 +43,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       const videoUrl = await uploadFile(kieProvider, blob, sourceVideoFilename);
 
       const provider = xai({ apiKey, timeout: 120_000 });
-      const request = {
+      const request: XaiVideoExtendRequest = {
         prompt: prompt ?? "",
         video: { url: videoUrl },
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),

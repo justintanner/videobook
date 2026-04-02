@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
 import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@nakedapi/openai";
+import type { OpenAiChatRequest, OpenAiChatResponse } from "@nakedapi/openai";
 import { kie } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 
@@ -113,7 +114,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     const openaiKey = process.env.OPENAI_API_KEY;
     const kieKey = process.env.KIE_API_KEY;
 
-    const providers: Array<(req: Record<string, unknown>, signal?: AbortSignal) => Promise<{ choices: Array<{ message: { content: string } }> }>> = [];
+    const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
     if (openaiKey) {
       const p = openai({ apiKey: openaiKey, timeout: 180_000 });
       providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));

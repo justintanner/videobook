@@ -3,6 +3,7 @@ import { kie, uploadFile } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
 
 type RefImageInput = {
   assetId: string;
@@ -56,17 +57,12 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
 
     const provider = xai({ apiKey, timeout: 120_000 });
 
-    const request: Record<string, unknown> = {
-      prompt,
-      ...(imageUrls.length > 0 ? { reference_images: imageUrls.map((url) => ({ url })) } : {}),
-      ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
-      ...(resolution !== undefined ? { resolution } : {}),
-      ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
-    };
-
-    const { request_id } = await provider.post.v1.videos.generations(
-      request as Parameters<typeof provider.post.v1.videos.generations>[0],
+    const request = buildXaiGrokImagineRefVideoPayload(
+      { prompt, duration, resolution, aspect_ratio: aspectRatio },
+      imageUrls,
     );
+
+    const { request_id } = await provider.post.v1.videos.generations(request);
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)

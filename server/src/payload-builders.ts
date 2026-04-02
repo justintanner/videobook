@@ -25,7 +25,7 @@ import type {
   GptImageQuality,
 } from "@nakedapi/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@nakedapi/kie";
-import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest } from "@nakedapi/xai";
+import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@nakedapi/xai";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -231,9 +231,9 @@ function buildXaiGrokImagineImagePayload(
   return {
     prompt: args.prompt ?? "",
     ...(imageUrls.length === 1
-      ? { image: { url: imageUrls[0], type: "image_url" as const } }
+      ? { image: { url: imageUrls[0], type: "image_url" } as XaiImageReference }
       : imageUrls.length > 1
-        ? { images: imageUrls.map((url) => ({ url, type: "image_url" as const })) }
+        ? { images: imageUrls.map((url): XaiImageReference => ({ url, type: "image_url" })) }
         : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
   };

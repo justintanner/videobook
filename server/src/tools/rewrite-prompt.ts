@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openai, textPart, imageUrlPart, firstContent } from "@nakedapi/openai";
-import type { OpenAiContentPart } from "@nakedapi/openai";
+import type { OpenAiContentPart, OpenAiMessage } from "@nakedapi/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -70,7 +70,7 @@ export function buildRewriteMessages(
   guide: string,
   prompt: string,
   maxChars?: number,
-): Array<{ role: "user"; content: string }> {
+): OpenAiMessage[] {
   return [{ role: "user", content: buildRewritePromptText(guide, prompt, maxChars) }];
 }
 
@@ -79,7 +79,7 @@ export function buildVisionMessages(
   prompt: string,
   imageDataUris: string[],
   maxChars?: number,
-): Array<{ role: "user"; content: OpenAiContentPart[] }> {
+): OpenAiMessage[] {
   const content: OpenAiContentPart[] = imageDataUris.map((uri) => imageUrlPart(uri));
   content.push(textPart(buildRewritePromptText(guide, prompt, maxChars)));
   return [{ role: "user", content }];
@@ -319,7 +319,7 @@ async function handleStandardRewrite(
   const maxChars = model === "kling30" ? 400 : undefined;
   const provider = openai({ apiKey, timeout: 60_000 });
 
-  let messages: Array<{ role: "user"; content: string | OpenAiContentPart[] }>;
+  let messages: OpenAiMessage[];
   if (imageSlugs && imageSlugs.length > 0) {
     const dataUris = await resolveImageDataUris(imageSlugs, fs, projectSlug);
     if (dataUris.length === 0) {

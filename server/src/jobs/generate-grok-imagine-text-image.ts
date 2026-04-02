@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
+import type { XaiImageGenerateRequest } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
@@ -30,10 +31,10 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
 
       const provider = xai({ apiKey, timeout: 120_000 });
 
-      const request = {
+      const request: XaiImageGenerateRequest = {
         prompt,
         n: 1,
-        response_format: "url" as const,
+        response_format: "url",
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
       const result = await provider.post.v1.images.generations(request);
