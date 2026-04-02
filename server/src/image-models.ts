@@ -106,7 +106,7 @@ let xaiImageModels: XaiImageGenerationModel[] | null = null;
 // Async init — call once at server startup for xAI discovery
 // ---------------------------------------------------------------------------
 
-  async function initImageModels(): Promise<void> {
+async function initImageModels(): Promise<void> {
   if (!process.env.XAI_API_KEY) return;
   try {
     const xaiProvider = xai({ apiKey: process.env.XAI_API_KEY });
