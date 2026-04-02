@@ -25,6 +25,7 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
   const syncingRef = useRef(false);
+  const prevSyncJsonRef = useRef<string>('');
 
   const sync = useCallback(async (projectSlug: string) => {
     if (syncingRef.current) return;
@@ -41,10 +42,16 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
         setError(msg);
       } else {
         const content = toolResult.content as Array<{ type: string; text: string }>;
-        const parsed: SyncResult = JSON.parse(content[0].text);
+        const json = content[0].text;
+        const parsed: SyncResult = JSON.parse(json);
         console.log("[sync] result:", parsed);
-        setResult(parsed);
-        setSyncCount((c) => c + 1);
+        // Only bump syncCount (triggering listAssets + fetchTimeline) when
+        // the sync result actually changed — avoids full re-renders on idle polls.
+        if (json !== prevSyncJsonRef.current) {
+          prevSyncJsonRef.current = json;
+          setResult(parsed);
+          setSyncCount((c) => c + 1);
+        }
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
