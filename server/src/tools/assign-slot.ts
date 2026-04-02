@@ -103,7 +103,7 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
             if (renderActions.length > 0) {
               const action = renderActions[0];
               const stored = await readStoredRenderDefaults(fs, asset_id, project_slug, orientation);
-              const jobId = `auto-render-${asset_id}`;
+              const jobId = `auto-render-${asset_id}-${Date.now()}`;
               await queue.enqueue(jobId, {
                 type: "render_project",
                 projectSlug: project_slug,
