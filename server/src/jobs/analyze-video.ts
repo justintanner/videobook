@@ -55,6 +55,8 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
       assetId, assetDir, projectSlug, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
+    console.log(`[analyze_video] START ${assetId} assetDir=${assetDir} projectSlug=${projectSlug}`);
+
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
       assetId, "original", projectSlug
     );
@@ -121,7 +123,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     }
     if (kieKey) {
       const p = kie({ apiKey: kieKey, timeout: 180_000 });
-      providers.push(withRetry(p.chat.post["gpt-5-2"].v1.chat.completions, { retries: 2, baseMs: 500 }));
+      providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
     }
 
     if (providers.length > 0) {
@@ -142,14 +144,16 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           max_tokens: 4096,
         });
         analysis = JSON.parse(firstContent(result));
-      } catch {
-        // all providers failed — use empty fallback
+      } catch (e) {
+        console.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
       }
     }
 
+    console.log(`[analyze_video] Writing analysis for ${assetId}, fallback=${analysis === FALLBACK_ANALYSIS}`);
     const jsonString = JSON.stringify(analysis, null, 2);
     await fs.writeFile(assetId, ".original.analysis.json", jsonString, projectSlug);
 
+    console.log(`[analyze_video] DONE ${assetId}`);
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
   });
 }
