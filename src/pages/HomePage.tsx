@@ -304,10 +304,12 @@ export function HomePage() {
     Promise.allSettled(uploads).then(() => sync(projectSlug));
   }, [projectSlug, upload, sync]);
 
-  const handleApprove = useCallback((video: MediaItem) => {
+  const handleApprove = useCallback(async (video: MediaItem) => {
     if (!projectSlug) return;
-    callTool('whitelist', { asset_id: video.id, project_slug: projectSlug });
-  }, [callTool, projectSlug]);
+    await callTool('whitelist', { asset_id: video.id, project_slug: projectSlug });
+    await listAssets(projectSlug, sortOrder);
+    sync(projectSlug);
+  }, [callTool, projectSlug, listAssets, sortOrder, sync]);
 
   const handleReject = useCallback((video: MediaItem) => {
     if (!projectSlug) return;
