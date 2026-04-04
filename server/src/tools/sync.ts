@@ -3,9 +3,9 @@ import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
 import { readdir, readFile, access, stat } from "node:fs/promises";
-import { kie } from "@nakedapi/kie";
+import { kie, KieError } from "@nakedapi/kie";
 import type { KieTaskInfo } from "@nakedapi/kie";
-import { xai } from "@nakedapi/xai";
+import { xai, XaiError } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -405,6 +405,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         await processSyncedTask(fs, task, taskInfo, result);
       } catch (e) {
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
+        if (e instanceof KieError && e.status >= 400 && e.status < 500) {
+          await deletePendingTask(fs, task.assetId, task.projectSlug);
+        }
       }
     }));
   }
@@ -443,6 +446,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         }
       } catch (e) {
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
+        if (e instanceof XaiError && e.status >= 400 && e.status < 500) {
+          await deletePendingTask(fs, task.assetId, task.projectSlug);
+        }
       }
     }));
   }
