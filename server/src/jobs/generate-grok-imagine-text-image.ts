@@ -37,6 +37,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
         response_format: "url",
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
+      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.post.v1.images.generations(request);
 
       const imageUrl = result.data[0]?.url;
@@ -45,8 +46,6 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
       const resp = await fetch(imageUrl);
       if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
       const resultBuffer = Buffer.from(await resp.arrayBuffer());
-
-      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
 
       // Enqueue post-processing so .original.json and derived crops are created
@@ -76,9 +75,8 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const request = buildGrokImagineTextPayload({ prompt, aspect_ratio: aspectRatio });
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_text",

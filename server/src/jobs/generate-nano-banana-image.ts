@@ -41,9 +41,8 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
       { prompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
       uploadedUrls,
     );
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "nano_banana_image",

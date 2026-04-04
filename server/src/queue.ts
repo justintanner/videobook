@@ -34,6 +34,10 @@ queue.execute(async (job: Job<JobPayload>) => {
     const assetId = extractAssetId(job.payload);
     const projectSlug = job.payload.projectSlug as string | undefined;
     if (assetId && projectSlug) {
+      await defaultFs.writeMetadata(assetId, "generation-error", {
+        message: err instanceof Error ? err.message : String(err),
+        failedAt: new Date().toISOString(),
+      }, projectSlug).catch(() => {});
       await deletePendingTask(defaultFs, assetId, projectSlug).catch(() => {});
       console.error(`[queue] cleared pending task for ${assetId} in ${projectSlug}`);
     }

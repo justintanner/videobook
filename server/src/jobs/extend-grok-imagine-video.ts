@@ -48,9 +48,8 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
         video: { url: videoUrl },
         ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
       };
-      const { request_id } = await provider.post.v1.videos.extensions(request);
-
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+      const { request_id } = await provider.post.v1.videos.extensions(request);
       await writePendingTask(fs, vidAssetId, projectSlug, {
         taskId: request_id,
         taskType: "xai_grok_imagine_extend_video",
@@ -94,9 +93,8 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       },
     };
 
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_extend_video",

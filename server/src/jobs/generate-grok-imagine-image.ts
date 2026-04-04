@@ -49,6 +49,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
         { prompt, aspect_ratio: aspectRatio },
         [dataUrl],
       );
+      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.post.v1.images.edits(request);
 
       const imageUrl = result.data[0]?.url;
@@ -58,9 +59,6 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const resp = await fetch(imageUrl);
       if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
       const resultBuffer = Buffer.from(await resp.arrayBuffer());
-
-      // Write payload and result to asset
-      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
 
       // Enqueue post-processing so .original.json and derived crops are created
@@ -94,9 +92,8 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     const downloadUrl = await uploadFile(provider, blob, imageFilename);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "grok_imagine_image",

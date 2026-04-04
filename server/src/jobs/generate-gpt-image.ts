@@ -40,9 +40,8 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
       { prompt, aspect_ratio: aspectRatio, quality },
       uploadedUrls,
     );
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, imgAssetId, projectSlug, {
       taskId,
       taskType: "gpt_image",

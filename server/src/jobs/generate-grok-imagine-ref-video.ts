@@ -62,9 +62,8 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
       imageUrls,
     );
 
-    const { request_id } = await provider.post.v1.videos.generations(request);
-
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    const { request_id } = await provider.post.v1.videos.generations(request);
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId: request_id,

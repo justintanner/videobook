@@ -58,9 +58,9 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         { prompt, mode, duration, resolution },
         [imageUrl],
       );
+      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       const { request_id } = await provider.post.v1.videos.generations(request);
 
-      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       await writePendingTask(fs, vidAssetId, projectSlug, {
         taskId: request_id,
         taskType: "xai_grok_imagine_video",
@@ -92,9 +92,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       { prompt, mode, duration, resolution },
       [downloadUrl],
     );
-    const taskId = await submitMediaJob(provider, request);
-
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    const taskId = await submitMediaJob(provider, request);
     await fs.writeMetadata(vidAssetId, "kie-task-id", { taskId }, projectSlug);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
