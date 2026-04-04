@@ -18,7 +18,7 @@ export function registerJobHandler(
 
 /** Extract the asset ID from a generation job payload (imgAssetId or vidAssetId). */
 function extractAssetId(payload: Record<string, unknown>): string | null {
-  return (payload.imgAssetId as string) ?? (payload.vidAssetId as string) ?? null;
+  return (payload.imgAssetId as string) ?? (payload.vidAssetId as string) ?? (payload.assetId as string) ?? null;
 }
 
 queue.execute(async (job: Job<JobPayload>) => {

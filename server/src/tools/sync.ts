@@ -9,7 +9,7 @@ import { xai } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, readPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { findPendingTasks, readPendingTask, deletePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -402,7 +402,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     await Promise.all(kieTasks.map(async (task) => {
       try {
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
-        await processSyncedTask(task, taskInfo, result);
+        await processSyncedTask(fs, task, taskInfo, result);
       } catch (e) {
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
       }
@@ -432,6 +432,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: `xAI task ${videoResult.status}` });
+          await deletePendingTask(fs, task.assetId, task.projectSlug);
         } else {
           result.pending.push({
             assetId: task.assetId,
@@ -541,6 +542,7 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
 }
 
 async function processSyncedTask(
+  fs: ClipfirstFs,
   task: PendingKieTask,
   taskInfo: KieTaskInfo,
   result: SyncResult,
@@ -573,6 +575,7 @@ async function processSyncedTask(
       taskType: task.taskType,
       failMsg: data.failMsg ?? "unknown error",
     });
+    await deletePendingTask(fs, task.assetId, task.projectSlug);
   } else {
     result.pending.push({
       assetId: task.assetId,
