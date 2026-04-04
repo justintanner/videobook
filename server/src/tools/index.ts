@@ -14,6 +14,7 @@ import { renameAssetDef } from "./rename-asset.js";
 import { duplicateAssetDef } from "./duplicate-asset.js";
 import { exportAssetDef } from "./export-asset.js";
 import { projectHistoryDef } from "./project-history.js";
+import { projectActivityDef } from "./project-activity.js";
 import { assetHistoryDef } from "./asset-history.js";
 import { restoreAssetVersionDef } from "./restore-asset-version.js";
 import { rewindProjectDef } from "./rewind-project.js";
@@ -79,6 +80,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     duplicateAssetDef(fs),
     exportAssetDef(fs),
     projectHistoryDef(fs),
+    projectActivityDef(fs),
     assetHistoryDef(fs),
     restoreAssetVersionDef(fs),
     rewindProjectDef(fs),

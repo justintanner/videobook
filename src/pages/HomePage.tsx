@@ -578,6 +578,7 @@ export function HomePage() {
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
             onAnimateCommand={handleAnimateCommand}
+            syncResult={result}
           />
 
           <div className="flex flex-row overflow-hidden">
