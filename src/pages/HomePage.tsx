@@ -92,7 +92,7 @@ export function HomePage() {
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
-  const { listAssets, assets: assetList, clearAssets } = useListAssets(callTool);
+  const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
@@ -367,10 +367,18 @@ export function HomePage() {
     setTimelineSlotIndex(slotIndex);
   }, []);
 
-  const handleAfterDispatch = useCallback(() => {
+  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string>) => {
     if (!projectSlug) return;
     fetchTimeline(projectSlug);
-  }, [projectSlug, fetchTimeline]);
+    if (toolName === 'delete_asset') {
+      removeAsset(toolArgs.asset_id);
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(toolArgs.asset_id);
+        return next;
+      });
+    }
+  }, [projectSlug, fetchTimeline, removeAsset]);
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 

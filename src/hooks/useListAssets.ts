@@ -23,6 +23,7 @@ interface UseListAssetsResult {
   listAssets: (projectSlug: string, sort?: "newest" | "oldest") => Promise<ListAsset[] | null>;
   assets: ListAsset[] | undefined;
   clearAssets: () => void;
+  removeAsset: (assetId: string) => void;
 }
 
 export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssetsResult {
@@ -55,5 +56,14 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
     setAssets(undefined);
   }, []);
 
-  return { listAssets, assets, clearAssets };
+  const removeAsset = useCallback((assetId: string) => {
+    setAssets((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((a) => a.id !== assetId);
+      prevJsonRef.current = JSON.stringify({ assets: next });
+      return next;
+    });
+  }, []);
+
+  return { listAssets, assets, clearAssets, removeAsset };
 }
