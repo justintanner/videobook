@@ -20,11 +20,11 @@ const EXCLUDED_ACTIONS = new Set([
   "tool-list-chat-history",
   "tool-show-folder",
   "tool-commands",
-  "tool-push_chat_history",
-  "tool-preview_video",
-  "tool-preview_image",
-  "tool-translate_payload",
-  "tool-update_script",
+  "tool-push-chat-history",
+  "tool-preview-video",
+  "tool-preview-image",
+  "tool-translate-payload",
+  "tool-update-script",
 ]);
 
 export function projectActivityDef(fs: ClipfirstFs): ToolDef {
