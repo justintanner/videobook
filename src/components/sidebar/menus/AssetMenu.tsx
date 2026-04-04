@@ -4,6 +4,7 @@ import { toast } from '@/hooks/useToast';
 
 interface AssetMenuProps {
   slug: string;
+  filePath?: string;
   itemType?: string;
   onAnimateCommand?: (text: string) => void;
   onAnimateEdit?: (text: string) => void;
@@ -33,7 +34,7 @@ function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect
   );
 }
 
-export function AssetMenu({ slug, itemType, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
   return (
     <>
       {itemType === 'image' && (
@@ -56,6 +57,42 @@ export function AssetMenu({ slug, itemType, onAnimateCommand, onAnimateEdit, Men
             MenuItem={MenuItem}
           />
           <div className="-mx-1 my-1 h-px bg-border" />
+          {filePath && (
+            <>
+              <CommandMenuItem
+                command="/copy-image"
+                title="Copy Image"
+                onSelect={() => {
+                  const imgUrl = filePath.replace(/\?.*$/, '');
+                  fetch(imgUrl)
+                    .then((res) => res.blob())
+                    .then((blob) => {
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        canvas.getContext('2d')!.drawImage(img, 0, 0);
+                        canvas.toBlob((pngBlob) => {
+                          if (!pngBlob) {
+                            toast({ title: 'Error', description: 'Failed to convert image', duration: 3000 });
+                            return;
+                          }
+                          navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]).then(
+                            () => toast({ title: 'Copied', description: 'Image copied to clipboard', duration: 2000 }),
+                            () => toast({ title: 'Error', description: 'Failed to copy image', duration: 3000 }),
+                          );
+                        }, 'image/png');
+                      };
+                      img.src = URL.createObjectURL(blob);
+                    })
+                    .catch(() => toast({ title: 'Error', description: 'Failed to fetch image', duration: 3000 }));
+                }}
+                MenuItem={MenuItem}
+              />
+              <div className="-mx-1 my-1 h-px bg-border" />
+            </>
+          )}
         </>
       )}
       <CommandMenuItem

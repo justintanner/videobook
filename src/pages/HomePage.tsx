@@ -612,6 +612,7 @@ export function HomePage() {
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
+                        filePath={item.filePath}
                         itemType={item.type}
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
@@ -699,6 +700,7 @@ export function HomePage() {
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
+                        filePath={item.filePath}
                         itemType={item.type}
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
