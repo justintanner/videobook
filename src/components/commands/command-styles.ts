@@ -93,4 +93,15 @@ export const variants = {
     text: 'text-blue-400/70 group-hover:text-blue-400/90',
     icon: 'text-blue-400/80 group-hover:text-blue-400',
   },
+  zinc: {
+    bg: 'bg-zinc-500/20 border-zinc-500/30',
+    shadow: 'rgba(161,161,170,0.5)',
+    chevron: 'text-zinc-400/40 group-hover:text-zinc-400/50',
+    chevronDown: 'text-zinc-400/40 group-hover:text-zinc-400/60',
+    cursorBg: 'bg-zinc-400/40',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(161,161,170,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(161,161,170,0.12)]',
+    text: 'text-zinc-400/70 group-hover:text-zinc-400/90',
+    icon: 'text-zinc-400/80 group-hover:text-zinc-400',
+  },
 } as const;

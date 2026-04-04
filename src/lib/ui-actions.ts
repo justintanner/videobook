@@ -1,6 +1,7 @@
 export interface UiActionCallbacks {
   open_upload: () => void;
   open_inbox: () => void;
+  open_status: () => void;
   open_gen: (type: string, prompt: string) => void;
   open_gen_video: (prompt: string) => void;
   open_gen_image: (prompt: string) => void;

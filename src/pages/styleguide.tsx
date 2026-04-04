@@ -720,7 +720,8 @@ function Page1_FinalVideoPreview() {
           readyCount={4}
           onInboxClick={() => {}}
           onAnimateCommand={() => {}}
-          syncResult={undefined}
+          onStatusClick={() => {}}
+          hasFailures={false}
         />
         <div className="flex flex-row overflow-hidden">
           {/* Left Sidebar — Assets (collapsed with micro thumbs) */}
@@ -814,7 +815,8 @@ function Page2_VideoGeneration() {
           readyCount={4}
           onInboxClick={() => {}}
           onAnimateCommand={() => {}}
-          syncResult={undefined}
+          onStatusClick={() => {}}
+          hasFailures={false}
         />
         <div className="flex flex-row overflow-hidden">
           <CollapsibleSidebar side="left" collapsed={false} onToggle={() => {}} expandedWidth="240px" collapsedWidth="40px" padding="px-2 pt-2 pb-2" gap="gap-0">

@@ -19,7 +19,8 @@ import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
-import { InboxDrawer } from '@/components/commands';
+import { InboxDrawer, StatusDrawer } from '@/components/commands';
+import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
@@ -67,6 +68,7 @@ export function HomePage() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
@@ -83,6 +85,7 @@ export function HomePage() {
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevInboxOpenRef = useRef(false);
+  const prevStatusOpenRef = useRef(false);
 
   const { callTool, state } = useMcpConnection();
   const { upload } = useUploadFile(callTool);
@@ -93,6 +96,14 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
+  const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
+
+  // Fetch activity when status drawer opens
+  useEffect(() => {
+    if (statusOpen && projectSlug) {
+      fetchActivity(projectSlug);
+    }
+  }, [statusOpen, projectSlug, fetchActivity]);
 
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
@@ -102,11 +113,19 @@ export function HomePage() {
     prevInboxOpenRef.current = inboxOpen;
   }, [inboxOpen]);
 
+  // Refocus ChatInput after StatusDrawer closes
+  useEffect(() => {
+    if (prevStatusOpenRef.current && !statusOpen) {
+      chatInputRef.current?.focus();
+    }
+    prevStatusOpenRef.current = statusOpen;
+  }, [statusOpen]);
+
   // Global focus lock: prevent focus from leaving ChatInput on non-form clicks.
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (inboxOpen || genPanel != null) return;
+    if (inboxOpen || statusOpen || genPanel != null) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -131,7 +150,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [inboxOpen, genPanel]);
+  }, [inboxOpen, statusOpen, genPanel]);
 
   // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
@@ -456,7 +475,8 @@ export function HomePage() {
 
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
-    open_inbox: () => setInboxOpen(true),
+    open_inbox: () => { setStatusOpen(false); setInboxOpen(true); },
+    open_status: () => { setInboxOpen(false); setStatusOpen(true); },
     open_trim: (assetId: string) => setTrimAssetId(assetId),
     open_gen: (type: string, prompt: string) => {
       setSelectedItem(null);
@@ -558,6 +578,16 @@ export function HomePage() {
           callTool={callTool}
           projectSlug={projectSlug}
         />
+        <StatusDrawer
+          open={statusOpen}
+          onClose={() => setStatusOpen(false)}
+          entries={activityEntries}
+          loading={activityLoading}
+          syncResult={result}
+          assetSlugs={assetSlugs}
+          callTool={callTool}
+          projectSlug={projectSlug}
+        />
         <TrimEditor
           open={trimAssetId != null}
           assetId={trimAssetId}
@@ -577,8 +607,9 @@ export function HomePage() {
             generatingCount={pendingClips.length}
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
+            onStatusClick={() => setStatusOpen(true)}
+            hasFailures={(result?.failed?.length ?? 0) > 0}
             onAnimateCommand={handleAnimateCommand}
-            syncResult={result}
           />
 
           <div className="flex flex-row overflow-hidden">

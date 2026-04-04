@@ -15,7 +15,7 @@ interface Command {
   category: "action" | "project" | "context_menu" | "viewer";
   icon: string;
   size: "sm" | "default" | "lg";
-  variant: "default" | "violet" | "fuchsia" | "blue";
+  variant: "default" | "violet" | "fuchsia" | "blue" | "zinc";
   chevron: "right" | "down";
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[] };
@@ -149,6 +149,18 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_inbox",
+  },
+  {
+    command: "/status",
+    description: "View project activity log",
+    example: "/status",
+    category: "action",
+    icon: "History",
+    size: "default",
+    variant: "zinc",
+    chevron: "down",
+    params: [],
+    uiAction: "open_status",
   },
   {
     command: "/copy",
