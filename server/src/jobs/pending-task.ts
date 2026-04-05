@@ -27,6 +27,37 @@ export async function deletePendingTask(fs: ClipfirstFs, assetId: string, projec
   await fs.deleteFile(assetId, ".kie-task.json", projectSlug).catch(() => {});
 }
 
+export type FailureInfo = {
+  message: string;
+  failCode?: string;
+};
+
+/**
+ * Persist a generation failure to disk and clear the pending task.
+ *
+ * Writes `.generation-error.json` first, then deletes `.kie-task.json`. The
+ * order matters: if the metadata write fails the pending task is preserved so
+ * the next sync/poll can retry instead of silently dropping the task.
+ */
+export async function failPendingTask(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  info: FailureInfo,
+): Promise<void> {
+  await fs.writeMetadata(
+    assetId,
+    "generation-error",
+    {
+      message: info.message,
+      ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
+      failedAt: new Date().toISOString(),
+    },
+    projectSlug,
+  ).catch(() => {});
+  await deletePendingTask(fs, assetId, projectSlug);
+}
+
 export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[]): Promise<PendingKieTask[]> {
   const results = await Promise.all(
     assets.map((asset) => readPendingTask(fs, asset.id, projectSlug))

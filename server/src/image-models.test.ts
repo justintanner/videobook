@@ -323,13 +323,14 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 4 image models", () => {
+  it("returns all 5 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(4);
+    expect(Object.keys(models)).toHaveLength(5);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
     expect(models).toHaveProperty("grok_imagine_text");
+    expect(models).toHaveProperty("qwen2_image_edit");
   });
 
   it("params come from Kie schemas with image field renamed to image_slugs", () => {

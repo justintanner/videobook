@@ -9,7 +9,7 @@ import { xai, XaiError } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, readPendingTask, deletePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { findPendingTasks, readPendingTask, failPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -308,11 +308,12 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       }
 
       // Guarantee: non-whitelisted video assets only surface sidebar-hidden statuses.
-      // Any unexpected status (loading, error, transcribing, etc.) is clamped to
-      // "generating" so the clip stays hidden from the sidebar and shows as pending
-      // in the inbox.
+      // Any unexpected status (loading, transcribing, etc.) is clamped to "generating"
+      // so the clip stays hidden from the sidebar and shows as pending in the inbox.
+      // "error" is allowed through so failed generations surface in the inbox instead
+      // of appearing stuck in "generating" forever.
       if (a.type === "video" && !whitelisted) {
-        if (status !== "unreviewed" && status !== "generating" && status !== "downloading") {
+        if (status !== "unreviewed" && status !== "generating" && status !== "downloading" && status !== "error") {
           status = "generating";
         }
       }
@@ -404,9 +405,14 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
         await processSyncedTask(fs, task, taskInfo, result);
       } catch (e) {
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
-        if (e instanceof KieError && e.status >= 400 && e.status < 500) {
-          await deletePendingTask(fs, task.assetId, task.projectSlug);
+        const failMsg = e instanceof Error ? e.message : "Poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+        if (e instanceof KieError) {
+          // TS narrowing on `e` is unreliable here, use an explicit assertion.
+          const kieErr = e as KieError;
+          if (kieErr.status >= 400 && kieErr.status < 500) {
+            await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
+          }
         }
       }
     }));
@@ -434,8 +440,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           } as unknown as Record<string, unknown>);
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
-          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: `xAI task ${videoResult.status}` });
-          await deletePendingTask(fs, task.assetId, task.projectSlug);
+          const failMsg = `xAI task ${videoResult.status}`;
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+          await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
         } else {
           result.pending.push({
             assetId: task.assetId,
@@ -445,9 +452,13 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           });
         }
       } catch (e) {
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg: e instanceof Error ? e.message : "Poll failed" });
-        if (e instanceof XaiError && e.status >= 400 && e.status < 500) {
-          await deletePendingTask(fs, task.assetId, task.projectSlug);
+        const failMsg = e instanceof Error ? e.message : "Poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+        if (e instanceof XaiError) {
+          const xaiErr = e as XaiError;
+          if (xaiErr.status >= 400 && xaiErr.status < 500) {
+            await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
+          }
         }
       }
     }));
@@ -576,12 +587,16 @@ async function processSyncedTask(
 
     result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
   } else if (data?.state === "fail") {
+    const failMsg = data.failMsg ?? "unknown error";
     result.failed.push({
       assetId: task.assetId,
       taskType: task.taskType,
-      failMsg: data.failMsg ?? "unknown error",
+      failMsg,
     });
-    await deletePendingTask(fs, task.assetId, task.projectSlug);
+    await failPendingTask(fs, task.assetId, task.projectSlug, {
+      message: failMsg,
+      ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),
+    });
   } else {
     result.pending.push({
       assetId: task.assetId,

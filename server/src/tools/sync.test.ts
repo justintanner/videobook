@@ -310,16 +310,17 @@ describe("buildAssetList", () => {
     await fs.releaseLock(assetDir);
   });
 
-  it("clamps non-whitelisted video with no media/lock/task to 'generating'", async () => {
+  it("surfaces 'error' for non-whitelisted video with no media/lock/task (orphaned)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "empty-vid", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
-    // Empty asset directory — no media, no lock, no pending task
+    // Empty asset directory — no media, no lock, no pending task — is an
+    // orphaned failed generation. The clamp now allows "error" through so
+    // the inbox shows the failure instead of appearing stuck in "generating".
     const assets = await buildAssetList(fs, "test-proj");
     const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    // Pre-whitelist clamp: "loading" → "generating"
-    expect(asset.status).toBe("generating");
+    expect(asset.status).toBe("error");
   });
 
   it("does not clamp non-video assets", async () => {
@@ -327,11 +328,13 @@ describe("buildAssetList", () => {
     const createResult = await fs.createAsset("img", "empty-img", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
-    // Empty image asset — no media, no lock, no pending task
+    // Empty image asset — no media, no lock, no pending task — is an orphaned
+    // failed generation. The video-only clamp does not apply to images, so
+    // "error" passes through unchanged (it would pass through for videos too
+    // now that "error" is in the clamp allow-list).
     const assets = await buildAssetList(fs, "test-proj");
     const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    // Image assets are not clamped — "loading" passes through
-    expect(asset.status).toBe("loading");
+    expect(asset.status).toBe("error");
   });
 });
 
@@ -398,7 +401,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("clamps non-whitelisted video with .part file to 'generating' (not 'error')", async () => {
+  it("surfaces 'error' for non-whitelisted video with .part file (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-download", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -409,11 +412,12 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    // Pre-whitelist clamp: "error" → "generating" to keep clip hidden from sidebar
-    expect(assets[0].status).toBe("generating");
+    // The clamp now allows "error" through so failed downloads surface in
+    // the inbox instead of appearing stuck in "generating" forever.
+    expect(assets[0].status).toBe("error");
   });
 
-  it("clamps non-whitelisted video with .part + thumbnail to 'generating'", async () => {
+  it("surfaces 'error' for non-whitelisted video with .part + thumbnail (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-with-thumb", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -425,8 +429,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    // Pre-whitelist clamp: "error" → "generating"
-    expect(assets[0].status).toBe("generating");
+    expect(assets[0].status).toBe("error");
   });
 
   it("shows 'error' for whitelisted video with .part file (clamp does not apply)", async () => {

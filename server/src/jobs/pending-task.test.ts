@@ -8,6 +8,7 @@ import {
   writePendingTask,
   readPendingTask,
   deletePendingTask,
+  failPendingTask,
   findPendingTasks,
   type PendingKieTask,
 } from "./pending-task.js";
@@ -74,6 +75,53 @@ describe("pending-task", () => {
     const result = await readPendingTask(fs, assetId, "test");
 
     expect(result).toBeNull();
+  });
+
+  it("failPendingTask writes error file and deletes pending task", async () => {
+    await fs.createProject("test");
+    const { assetId, path: assetDir } = await createAssetOk(fs, "vid", "sample-clip", "test");
+    const task = makeTask(assetId, assetDir, "test");
+
+    await writePendingTask(fs, assetId, "test", task);
+    await failPendingTask(fs, assetId, "test", {
+      message: "Kie content policy rejection",
+      failCode: "430",
+    });
+
+    const pending = await readPendingTask(fs, assetId, "test");
+    expect(pending).toBeNull();
+
+    const errResult = await fs.readMetadata<{ message: string; failCode: string; failedAt: string }>(
+      assetId,
+      "generation-error",
+      "test",
+    );
+    expect(errResult.ok).toBe(true);
+    if (errResult.ok) {
+      expect(errResult.value.message).toBe("Kie content policy rejection");
+      expect(errResult.value.failCode).toBe("430");
+      expect(typeof errResult.value.failedAt).toBe("string");
+    }
+  });
+
+  it("failPendingTask without failCode omits the field", async () => {
+    await fs.createProject("test");
+    const { assetId, path: assetDir } = await createAssetOk(fs, "vid", "sample-clip", "test");
+    const task = makeTask(assetId, assetDir, "test");
+
+    await writePendingTask(fs, assetId, "test", task);
+    await failPendingTask(fs, assetId, "test", { message: "Poll timeout" });
+
+    const errResult = await fs.readMetadata<{ message: string; failCode?: string }>(
+      assetId,
+      "generation-error",
+      "test",
+    );
+    expect(errResult.ok).toBe(true);
+    if (errResult.ok) {
+      expect(errResult.value.message).toBe("Poll timeout");
+      expect(errResult.value.failCode).toBeUndefined();
+    }
   });
 
   it("findPendingTasks returns only assets with tasks", async () => {

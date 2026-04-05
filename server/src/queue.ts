@@ -1,6 +1,6 @@
 import { Queue, MemoryStorage, type Job } from "@platformatic/job-queue";
 import { fs as defaultFs } from "./fs.js";
-import { deletePendingTask } from "./jobs/pending-task.js";
+import { failPendingTask } from "./jobs/pending-task.js";
 
 type JobPayload = Record<string, unknown>;
 
@@ -30,15 +30,14 @@ queue.execute(async (job: Job<JobPayload>) => {
   } catch (err) {
     console.error(`[queue] job ${payload.type} failed:`, err instanceof Error ? err.message : err);
 
-    // Clear the queued pending task so the asset doesn't stay stuck in "generating" state
+    // Persist the failure and clear the queued pending task so the asset
+    // doesn't stay stuck in "generating" state.
     const assetId = extractAssetId(job.payload);
     const projectSlug = job.payload.projectSlug as string | undefined;
     if (assetId && projectSlug) {
-      await defaultFs.writeMetadata(assetId, "generation-error", {
+      await failPendingTask(defaultFs, assetId, projectSlug, {
         message: err instanceof Error ? err.message : String(err),
-        failedAt: new Date().toISOString(),
-      }, projectSlug).catch(() => {});
-      await deletePendingTask(defaultFs, assetId, projectSlug).catch(() => {});
+      }).catch(() => {});
       console.error(`[queue] cleared pending task for ${assetId} in ${projectSlug}`);
     }
 
