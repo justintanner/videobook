@@ -50,6 +50,71 @@ function findThumbnail(
   return asset ? videoThumbFallback(asset) : '';
 }
 
+function prettifySlugFieldName(name: string): string {
+  return name
+    .replace(/_slug$/, '')
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+interface NamedSlotListProps {
+  fields: AssetFieldInfo[];
+  assetType: 'image' | 'video';
+  resolvedAssets?: ResolvedAsset[];
+  droppedAssets?: Map<string, ResolvedAsset>;
+  onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
+  disabled?: boolean;
+}
+
+function NamedSlotList({
+  fields,
+  assetType,
+  resolvedAssets,
+  droppedAssets,
+  onChange,
+  disabled,
+}: NamedSlotListProps) {
+  return (
+    <div className="space-y-2">
+      {fields.map((field) => {
+        const slug = typeof field.value === 'string' ? field.value : '';
+        const label = prettifySlugFieldName(field.name);
+        return (
+          <div key={field.name} className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+              <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/{label.toLowerCase().replace(/\s+/g, '-')}</span>
+              {field.required && (
+                <span className="ml-auto text-[8px] font-bold text-cyan-400/60 tracking-wider">*REQ</span>
+              )}
+            </div>
+            <div className="px-3 py-2.5">
+              <AssetDropSlot
+                value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: assetType } : null}
+                onChange={(asset) => {
+                  if (asset) {
+                    const da: ResolvedAsset = {
+                      slug: asset.slug,
+                      src: asset.src,
+                      thumbnailSrc: asset.thumbnailSrc,
+                      type: asset.type,
+                    };
+                    onChange(field.name, asset.slug, da);
+                  } else {
+                    onChange(field.name, '');
+                  }
+                }}
+                disabled={disabled}
+                acceptTypes={[assetType]}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ImageParamSlots({
   assetFields,
   resolvedAssets,
@@ -66,15 +131,34 @@ export function ImageParamSlots({
 
   const isVideoField = assetFields.some((f) => f.name === 'video_slug');
   const assetType: 'image' | 'video' = isVideoField ? 'video' : 'image';
+
+  const arrayField = assetFields.find((f) => f.schema.type === 'array');
+  const stringFields = assetFields.filter((f) => f.schema.type === 'string');
+
+  // Named-slot mode: multiple distinct string slug fields (e.g. first_frame_slug + last_frame_slug)
+  // render one labeled slot per field instead of funneling everything through one primary field.
+  const isNamedSlotMode = !arrayField && stringFields.length > 1;
+
+  if (isNamedSlotMode) {
+    return (
+      <NamedSlotList
+        fields={stringFields}
+        assetType={assetType}
+        resolvedAssets={resolvedAssets}
+        droppedAssets={droppedAssets}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    );
+  }
+
   const sectionLabel = isVideoField
     ? '/video'
     : modelKey === 'grok_imagine_ref'
       ? '/reference-images'
       : '/images';
 
-  const arrayField = assetFields.find((f) => f.schema.type === 'array');
-  const stringField = assetFields.find((f) => f.schema.type === 'string');
-  const primaryField = arrayField || stringField;
+  const primaryField = arrayField || stringFields[0];
 
   if (!primaryField) {
     return null;

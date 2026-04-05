@@ -3,7 +3,13 @@ import { ELEMENT_FIELD_RE } from '../types';
 
 /** Determine if a field should go in the right column (asset fields) */
 export function isAssetField(name: string): boolean {
-  return name === 'image_slugs' || name === 'image_slug' || name === 'video_slug';
+  return (
+    name === 'image_slugs'
+    || name === 'image_slug'
+    || name === 'video_slug'
+    || name === 'first_frame_slug'
+    || name === 'last_frame_slug'
+  );
 }
 
 /** Determine if a field is an element field (element1_slugs, element2_name, etc.) */

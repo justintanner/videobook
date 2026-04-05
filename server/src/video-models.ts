@@ -85,7 +85,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
   },
   seedance2_frames: {
-    label: "Seedance 2.0 Fast — Frames",
+    label: "Seedance 2.0 Fast — First & Last",
     tool_name: "generate_seedance2_frames_video",
     description: "ByteDance Seedance 2.0 Fast with first and/or last frame image control",
     params: [
