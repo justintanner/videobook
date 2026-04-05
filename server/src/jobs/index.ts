@@ -10,6 +10,9 @@ import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-vid
 import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
 import { registerExtendGrokImagineVideoJob } from "./extend-grok-imagine-video.js";
 import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
+import { registerGenerateSeedance2T2vVideoJob } from "./generate-seedance2-t2v-video.js";
+import { registerGenerateSeedance2FramesVideoJob } from "./generate-seedance2-frames-video.js";
+import { registerGenerateSeedance2ReferenceVideoJob } from "./generate-seedance2-reference-video.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
@@ -35,6 +38,9 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGrokImagineRefVideoJob(fs);
   registerExtendGrokImagineVideoJob(fs);
   registerGenerateKling30VideoJob(fs);
+  registerGenerateSeedance2T2vVideoJob(fs);
+  registerGenerateSeedance2FramesVideoJob(fs);
+  registerGenerateSeedance2ReferenceVideoJob(fs);
   registerGenerateNanoBananaImageJob(fs);
   registerGenerateGrokImagineImageJob(fs);
   registerGenerateGrokImagineTextImageJob(fs);

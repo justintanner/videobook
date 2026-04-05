@@ -68,15 +68,52 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.extend()", envKey: "KIE_API_KEY" },
     ],
   },
-  seedance: {
-    label: "Seedance 1.5 Pro",
-    tool_name: "generate_seedance_video",
-    description: "ByteDance video generation with audio support",
+  seedance2_t2v: {
+    label: "Seedance 2.0 Fast — Text",
+    tool_name: "generate_seedance2_t2v_video",
+    description: "ByteDance Seedance 2.0 Fast text-to-video generation (no reference inputs)",
     params: [
-      "prompt", "image_slugs", "aspect_ratio", "resolution",
-      "duration", "fixed_lens", "generate_audio", "image_orientation",
+      "prompt", "aspect_ratio", "resolution", "duration",
+      "generate_audio", "return_last_frame", "web_search", "image_orientation",
     ],
-    defaults: { aspect_ratio: "16:9", resolution: "1080p", duration: "8", generate_audio: true, image_orientation: "auto" },
+    defaults: {
+      aspect_ratio: "16:9", resolution: "720p", duration: "8",
+      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+    },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  seedance2_frames: {
+    label: "Seedance 2.0 Fast — Frames",
+    tool_name: "generate_seedance2_frames_video",
+    description: "ByteDance Seedance 2.0 Fast with first and/or last frame image control",
+    params: [
+      "prompt", "first_frame_slug", "last_frame_slug",
+      "aspect_ratio", "resolution", "duration",
+      "generate_audio", "return_last_frame", "web_search", "image_orientation",
+    ],
+    defaults: {
+      aspect_ratio: "16:9", resolution: "720p", duration: "8",
+      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+    },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  seedance2_reference: {
+    label: "Seedance 2.0 Fast — Reference",
+    tool_name: "generate_seedance2_reference_video",
+    description: "ByteDance Seedance 2.0 Fast guided by reference images, videos, and/or audio",
+    params: [
+      "prompt", "image_slugs", "video_slugs", "audio_slugs",
+      "aspect_ratio", "resolution", "duration",
+      "generate_audio", "return_last_frame", "web_search", "image_orientation",
+    ],
+    defaults: {
+      aspect_ratio: "16:9", resolution: "720p", duration: "8",
+      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+    },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -122,7 +159,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
 const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
   generate_kling30_video: { min: 0, max: 2 },
   generate_veo_video: { min: 0, max: 3 },
-  generate_seedance_video: { min: 0, max: 2 },
+  generate_seedance2_t2v_video: { min: 0, max: 0 },
+  generate_seedance2_frames_video: { min: 0, max: 0 },
+  generate_seedance2_reference_video: { min: 0, max: 9 },
   generate_grok_imagine_video: { min: 1, max: 1 },
   generate_grok_imagine_ref_video: { min: 0, max: 4 },
   extend_veo_video: { min: 0, max: 0 },
@@ -186,8 +225,21 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   duration: { type: "string", description: "Video duration in seconds" },
   mode: { type: "string", description: "Generation mode" },
   resolution: { type: "string", description: "Output resolution" },
-  fixed_lens: { type: "boolean", description: "Enable static camera mode (Seedance)" },
   generate_audio: { type: "boolean", description: "Generate sound effects (Seedance)" },
+  first_frame_slug: { type: "string", description: "First frame image asset (e.g., @img-sunset)" },
+  last_frame_slug: { type: "string", description: "Last frame image asset (e.g., @img-ending)" },
+  video_slugs: {
+    type: "array",
+    items: { type: "string" },
+    description: "Reference video assets (0-3, total duration ≤15s, e.g., @vid-motion-ref)",
+  },
+  audio_slugs: {
+    type: "array",
+    items: { type: "string" },
+    description: "Reference audio assets (0-3, total duration ≤15s, e.g., @aud-soundtrack)",
+  },
+  return_last_frame: { type: "boolean", description: "Return final frame as image", default: false },
+  web_search: { type: "boolean", description: "Use web search for enhanced grounding", default: false },
   sound: { type: "boolean", description: "Generate audio for the video" },
   multi_shots: { type: "boolean", description: "Enable multi-shot mode" },
   multi_prompt: {
@@ -262,12 +314,24 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "prompt") prop.description = "Describe how to extend the video (actions, scenes, style)";
       if (param === "model") { prop.enum = ["fast", "quality"]; prop.description = "Extension model - fast (default) or quality"; prop.default = "fast"; }
     }
-    if (toolName === "generate_seedance_video") {
+    if (
+      toolName === "generate_seedance2_t2v_video"
+      || toolName === "generate_seedance2_frames_video"
+      || toolName === "generate_seedance2_reference_video"
+    ) {
       if (param === "prompt") { prop.description = "Video description (3-2500 characters)"; prop.minLength = 3; prop.maxLength = 2500; }
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"]; prop.description = "Frame dimensions"; }
-      if (param === "resolution") { prop.enum = ["480p", "720p", "1080p"]; prop.description = "Standard (480p) / HD (720p) / Full HD (1080p)"; }
-      if (param === "duration") { prop.enum = ["4", "8", "12"]; prop.description = "Video duration: 4s / 8s / 12s"; }
-      if (param === "image_slugs") prop.description = "Reference image assets (0-2 slugs like @img-sunset)";
+      if (param === "aspect_ratio") { prop.enum = ["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]; prop.description = "Frame dimensions (adaptive auto-fits to content)"; }
+      if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Standard (480p) / HD (720p)"; }
+      if (param === "duration") { prop.enum = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 4-15 seconds"; }
+    }
+    if (toolName === "generate_seedance2_frames_video") {
+      if (param === "first_frame_slug") prop.description = "First frame image asset (optional, e.g., @img-start)";
+      if (param === "last_frame_slug") prop.description = "Last frame image asset (optional, e.g., @img-end)";
+    }
+    if (toolName === "generate_seedance2_reference_video") {
+      if (param === "image_slugs") prop.description = "Reference image assets (1-9, e.g., @img-style)";
+      if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
+      if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 5000 chars)"; prop.maxLength = 5000; }
@@ -295,7 +359,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "extend_grok_imagine_video") required.push(param);
     if (param === "image_slugs" && toolName === "generate_grok_imagine_video") required.push(param);
     if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video")) required.push(param);
-    if (toolName === "generate_seedance_video" && (param === "aspect_ratio" || param === "duration")) required.push(param);
+    if (
+      (toolName === "generate_seedance2_t2v_video"
+        || toolName === "generate_seedance2_frames_video"
+        || toolName === "generate_seedance2_reference_video")
+      && (param === "aspect_ratio" || param === "duration")
+    ) required.push(param);
   }
 
   return { type: "object", properties, required, defaults: model.defaults };
@@ -368,8 +437,23 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (totalImages > 4) warnings.push(`Grok Imagine Reference supports 0-4 reference images (got ${totalImages})`);
   }
 
-  if (toolName === "generate_seedance_video") {
-    if (totalImages > 2) warnings.push(`Seedance only supports 0-2 images (got ${totalImages})`);
+  if (toolName === "generate_seedance2_frames_video") {
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const lastFrame = params.last_frame_slug as string | undefined;
+    if (!firstFrame && !lastFrame) {
+      warnings.push("Seedance 2.0 Frames mode needs at least first_frame_slug or last_frame_slug");
+    }
+  }
+
+  if (toolName === "generate_seedance2_reference_video") {
+    const videoSlugs = (params.video_slugs as string[] | undefined) ?? [];
+    const audioSlugs = (params.audio_slugs as string[] | undefined) ?? [];
+    if (totalImages === 0 && videoSlugs.length === 0 && audioSlugs.length === 0) {
+      warnings.push("Seedance 2.0 Reference mode requires at least one reference asset (image, video, or audio)");
+    }
+    if (totalImages > 9) warnings.push(`Seedance 2.0 Reference supports 1-9 images (got ${totalImages})`);
+    if (videoSlugs.length > 3) warnings.push(`Seedance 2.0 Reference supports 0-3 videos (got ${videoSlugs.length})`);
+    if (audioSlugs.length > 3) warnings.push(`Seedance 2.0 Reference supports 0-3 audios (got ${audioSlugs.length})`);
   }
 
   // Image slots
@@ -454,7 +538,9 @@ ROUTING PREFERENCES:
 - PREFER generate_kling30_video as the DEFAULT for ALL video generation requests
 - Use generate_veo_video ONLY when user explicitly mentions "veo"
 - Use generate_grok_imagine_video ONLY when user explicitly mentions "grok" for video
-- Use generate_seedance_video ONLY when user explicitly mentions "seedance" or "bytedance"
+- Use generate_seedance2_t2v_video ONLY when user explicitly mentions "seedance" or "bytedance" for text-only video (no reference inputs)
+- Use generate_seedance2_frames_video ONLY when user mentions "seedance" with first/last/start/end frame control
+- Use generate_seedance2_reference_video ONLY when user mentions "seedance" with reference images, reference videos, or reference audio
 - Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 
@@ -462,7 +548,8 @@ KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
 - For generate_veo_video: mode auto-selected by image count (0=TEXT_2_VIDEO, 1=REFERENCE_2_VIDEO, 2=FIRST_AND_LAST_FRAMES_2_VIDEO)
 - For generate_veo_video REFERENCE_2_VIDEO: REQUIRES model="veo3_fast" and 16:9/9:16 aspect_ratio
-- For generate_seedance_video: duration "4"/"8"/"12", resolution "480p"/"720p"/"1080p"
+- For generate_seedance2_*_video: duration "4"-"15", resolution "480p"/"720p", aspect_ratio includes "adaptive"
+- For generate_seedance2_reference_video: REQUIRES at least one of image_slugs / video_slugs / audio_slugs (max 9 / 3 / 3)
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration "6"/"10"
 - For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
 

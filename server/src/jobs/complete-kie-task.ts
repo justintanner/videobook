@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -37,6 +37,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "kling30_video") {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+      } else if (taskType === "seedance2_video") {
+        await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
       } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video" || taskType === "grok_imagine_extend_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
@@ -123,6 +125,61 @@ async function completeKling30Video(
   };
 
   const videoPath = join(assetDir, "original.mp4");
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+    provenance,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeSeedance2Video(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskId?: string,
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in result");
+
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+
+  // Optionally save the returned last frame as a secondary image file
+  if (meta.return_last_frame === true && resultUrls[1]) {
+    const frameResponse = await fetch(resultUrls[1]);
+    if (frameResponse.ok) {
+      const frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
+      await fs.writeFile(assetId, "last_frame.png", frameBuffer, projectSlug);
+    }
+  }
+
+  const provenance = {
+    source_images: meta.sourceImageIds,
+    source_videos: meta.sourceVideoIds,
+    source_audios: meta.sourceAudioIds,
+    model: "bytedance/seedance-2-fast",
+    ...(meta.mode !== undefined ? { seedance_mode: meta.mode } : {}),
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  const videoPath = join(assetDir, "original.mp4");
+
+  // Persist Kie taskId for future operations
+  if (taskId !== undefined) {
+    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+  }
+
   const jobId = `process-video-${assetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "process_video",

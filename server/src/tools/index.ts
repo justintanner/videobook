@@ -29,6 +29,9 @@ import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
 import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
+import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js";
+import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-video.js";
+import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { renderDef } from "./render.js";
 import { syncDef } from "./sync.js";
@@ -95,6 +98,9 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineRefVideoDef(fs),
     extendGrokImagineVideoDef(fs),
     generateKling30VideoDef(fs),
+    generateSeedance2T2vVideoDef(fs),
+    generateSeedance2FramesVideoDef(fs),
+    generateSeedance2ReferenceVideoDef(fs),
     generateNanoBananaImageDef(fs),
     renderDef(fs),
     syncDef(fs),
