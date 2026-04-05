@@ -14,6 +14,7 @@ import type {
   Seedance2FastRequest,
   NanoBananaProRequest,
   GptImageToImageRequest,
+  Qwen2ImageEditRequest,
   // Named union types for cleaner type annotations
   KlingMode,
   GrokImagineMode,
@@ -179,6 +180,29 @@ function buildNanoBananaImagePayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as NanoBananaProRequest["input"]["aspect_ratio"] } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
+    },
+  };
+}
+
+type Qwen2ImageEditArgs = {
+  prompt: string;
+  image_size?: string;
+  output_format?: "png" | "jpeg";
+  seed?: number;
+};
+
+function buildQwen2ImageEditPayload(
+  args: Qwen2ImageEditArgs,
+  imageInput: string[],
+): Qwen2ImageEditRequest {
+  return {
+    model: "qwen2/image-edit",
+    input: {
+      prompt: args.prompt,
+      image_url: imageInput[0] ?? "",
+      ...(args.image_size !== undefined ? { image_size: args.image_size as Qwen2ImageEditRequest["input"]["image_size"] } : {}),
+      ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
 }
@@ -404,6 +428,10 @@ function translateToolPayload(
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_qwen2_image_edit": {
+      const payload = buildQwen2ImageEditPayload(args as Qwen2ImageEditArgs, imageSlugs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_gpt_image": {
       const payload = buildGptImagePayload(args as GptImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
@@ -457,6 +485,7 @@ const VIDEO_TOOLS = new Set([
 
 const IMAGE_TOOLS = new Set([
   "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
+  "generate_qwen2_image_edit",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -481,6 +510,7 @@ export {
   buildXaiGrokImagineRefVideoPayload,
   buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
+  buildQwen2ImageEditPayload,
   buildGrokImagineTextPayload,
   buildGptImagePayload,
   buildSeedance2VideoPayload,

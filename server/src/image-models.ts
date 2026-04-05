@@ -91,6 +91,16 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     image_slots: { min: 0, max: 0 },
     defaults: { aspect_ratio: "1:1" },
   },
+  {
+    key: "qwen2_image_edit",
+    kieModelId: "qwen2/image-edit",
+    tool_name: "generate_qwen2_image_edit",
+    label: "Qwen2 Image Edit",
+    description: "Prompt-driven image edit using Qwen2 (requires exactly 1 reference image)",
+    image_slots: { min: 1, max: 1 },
+    kieImageField: "image_url",
+    defaults: { image_size: "16:9", output_format: "png" },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -145,7 +155,9 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
   const outputName = isImageField ? "image_slugs" : fieldName;
 
   const param: ParamSchema = {
-    type: field.type,
+    // Image fields are exposed to the frontend as `image_slugs: string[]` even
+    // when the underlying provider takes a singular `image_url` string.
+    type: isImageField ? "array" : field.type,
     description: isImageField
       ? imageSlotsDescription(config.image_slots)
       : (field.description ?? ""),

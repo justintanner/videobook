@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -35,6 +35,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     try {
       if (taskType === "nano_banana_image") {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType === "qwen2_image_edit") {
+        await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "kling30_video") {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "seedance2_video") {
@@ -83,6 +85,42 @@ async function completeNanoBananaImage(
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: `.${ext}`,
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeQwen2ImageEdit(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const ext = (meta.outputFormat as string) ?? "png";
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+
+  const origin = {
+    source_asset: meta.sourceImageId,
+    model: "qwen2/image-edit",
+    prompt: meta.prompt,
+    ...(meta.imageSize !== undefined ? { image_size: meta.imageSize } : {}),
+    ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
+    ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
     generated_at: new Date().toISOString(),
   };
   const jobId = `process-image-${assetId}-${Date.now()}`;

@@ -33,6 +33,7 @@ import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js"
 import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-video.js";
 import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
+import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { renderDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
@@ -102,6 +103,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateSeedance2FramesVideoDef(fs),
     generateSeedance2ReferenceVideoDef(fs),
     generateNanoBananaImageDef(fs),
+    generateQwen2ImageEditDef(fs),
     renderDef(fs),
     syncDef(fs),
     listAssetsDef(fs),
