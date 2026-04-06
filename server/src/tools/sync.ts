@@ -9,7 +9,7 @@ import { xai, XaiError } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, readPendingTask, failPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { findPendingTasks, findFailedAssets, readPendingTask, failPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -37,7 +37,7 @@ export type SyncAsset = {
 export type SyncResult = {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
-  failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
+  failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
@@ -373,13 +373,14 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     : "landscape";
 
   // Run all discovery steps in parallel
-  const [uploads, tasks, renderActions, transcribeActions, sttActions, analyzeActions] = await Promise.all([
+  const [uploads, tasks, renderActions, transcribeActions, sttActions, analyzeActions, persistedFailures] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
     findAutoRenderActions(fs, project_slug, assets, orientation),
     findAutoTranscribeActions(fs, project_slug, assets),
     findAutoSpeechToTextActions(fs, project_slug, assets),
     findAutoAnalyzeActions(fs, project_slug, assets),
+    findFailedAssets(fs, project_slug, assets),
   ]);
 
   // Process external uploads
@@ -406,7 +407,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         await processSyncedTask(fs, task, taskInfo, result);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
         if (e instanceof KieError) {
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
@@ -441,7 +442,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
-          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
           await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
         } else {
           result.pending.push({
@@ -453,7 +454,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         }
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg });
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
@@ -462,6 +463,16 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         }
       }
     }));
+  }
+
+  // Merge persisted failures (.generation-error.json) that weren't already
+  // reported by this poll and don't have an active pending task (retry in progress).
+  const reportedAssetIds = new Set(result.failed.map((f) => f.assetId));
+  const pendingAssetIds = new Set(tasks.map((t) => t.assetId));
+  for (const failure of persistedFailures) {
+    if (!reportedAssetIds.has(failure.assetId) && !pendingAssetIds.has(failure.assetId)) {
+      result.failed.push({ assetId: failure.assetId, taskType: "", failMsg: failure.failMsg, failedAt: failure.failedAt });
+    }
   }
 
   // Auto-pipeline: advance whitelisted videos through render
@@ -592,6 +603,7 @@ async function processSyncedTask(
       assetId: task.assetId,
       taskType: task.taskType,
       failMsg,
+      failedAt: new Date().toISOString(),
     });
     await failPendingTask(fs, task.assetId, task.projectSlug, {
       message: failMsg,

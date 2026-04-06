@@ -4,7 +4,7 @@ import type { UseMcpResult } from "use-mcp/react";
 export interface SyncResult {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
-  failed: Array<{ assetId: string; taskType: string; failMsg: string }>;
+  failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
 }

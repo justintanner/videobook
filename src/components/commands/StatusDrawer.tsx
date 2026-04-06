@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StatusHeader } from './StatusHeader';
@@ -9,7 +9,7 @@ import type { ActionLogEntry } from '@/hooks/useProjectActivity';
 import type { SyncResult } from '@/hooks/useSync';
 import type { UseMcpResult } from 'use-mcp/react';
 
-type ActionCategory = 'generate' | 'render' | 'upload' | 'transcribe' | 'sync' | 'edit' | 'create' | 'delete' | 'other';
+type ActionCategory = 'generate' | 'render' | 'upload' | 'transcribe' | 'sync' | 'edit' | 'create' | 'delete' | 'fail' | 'other';
 
 const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
   generate:   { color: 'text-fuchsia-400' },
@@ -20,6 +20,7 @@ const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
   edit:       { color: 'text-zinc-400' },
   create:     { color: 'text-emerald-400' },
   delete:     { color: 'text-red-400' },
+  fail:       { color: 'text-red-400' },
   other:      { color: 'text-zinc-500' },
 };
 
@@ -96,7 +97,22 @@ export function StatusDrawer({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
-  const failures = syncResult?.failed ?? [];
+  const failures = useMemo(() => syncResult?.failed ?? [], [syncResult?.failed]);
+
+  // Merge failures into the activity entries as a single chronological list
+  type MergedEntry = { kind: 'activity'; entry: ActionLogEntry } | { kind: 'fail'; fail: typeof failures[number] };
+  const merged = useMemo(() => {
+    const items: MergedEntry[] = [
+      ...entries.map((entry): MergedEntry => ({ kind: 'activity', entry })),
+      ...failures.map((fail): MergedEntry => ({ kind: 'fail', fail })),
+    ];
+    items.sort((a, b) => {
+      const dateA = a.kind === 'activity' ? a.entry.date : a.fail.failedAt;
+      const dateB = b.kind === 'activity' ? b.entry.date : b.fail.failedAt;
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
+    return items;
+  }, [entries, failures]);
 
   // Two-phase open: mount then animate in
   useEffect(() => {
@@ -183,32 +199,38 @@ export function StatusDrawer({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {/* Live failures */}
-          {failures.length > 0 && (
-            <div className="mb-4 border border-red-500/20 rounded-lg p-4">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-400/70">Failures</span>
-              {failures.map((f, i) => (
-                <div key={`fail-${i}`} className="flex items-center gap-3 py-2 text-sm font-mono">
-                  <span className="text-red-400 font-bold shrink-0">FAIL</span>
-                  <span className="text-muted-foreground/60">{f.assetId}</span>
-                  <span className="text-red-400/50">{f.failMsg}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Activity entries */}
-          {loading && entries.length === 0 ? (
+          {loading && merged.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" />
             </div>
-          ) : entries.length === 0 ? (
+          ) : merged.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <span className="text-sm font-mono text-muted-foreground/30 uppercase tracking-wider">No activity yet</span>
             </div>
           ) : (
             <div>
-              {entries.map((entry) => {
+              {merged.map((item, i) => {
+                if (item.kind === 'fail') {
+                  const style = CATEGORY_STYLES.fail;
+                  return (
+                    <div
+                      key={`fail-${item.fail.assetId}-${i}`}
+                      className="flex items-start gap-4 px-4 py-3 text-sm font-mono hover:bg-white/5 transition-colors border-b border-red-500/10"
+                    >
+                      <span className={cn('font-bold shrink-0 w-28 uppercase text-xs tracking-wider pt-0.5', style.color)}>
+                        fail
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-red-400/70">{item.fail.failMsg}</div>
+                        <div className="text-muted-foreground/50 text-xs mt-0.5">{item.fail.assetId}</div>
+                      </div>
+                      <span className="text-muted-foreground/30 shrink-0 text-xs pt-0.5">
+                        {formatDate(item.fail.failedAt)}
+                      </span>
+                    </div>
+                  );
+                }
+                const entry = item.entry;
                 const cat = categorize(entry.action);
                 const style = CATEGORY_STYLES[cat];
                 const assetId = extractAssetId(entry.payload);

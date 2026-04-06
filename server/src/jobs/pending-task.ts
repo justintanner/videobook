@@ -14,6 +14,8 @@ export type PendingKieTask = {
 };
 
 export async function writePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string, task: PendingKieTask): Promise<void> {
+  // Clear any previous generation error so a retry doesn't show a stale failure
+  await fs.deleteFile(assetId, ".generation-error.json", projectSlug).catch(() => {});
   await fs.writeMetadata(assetId, "kie-task", task, projectSlug);
 }
 
@@ -56,6 +58,19 @@ export async function failPendingTask(
     projectSlug,
   ).catch(() => {});
   await deletePendingTask(fs, assetId, projectSlug);
+}
+
+export async function findFailedAssets(
+  fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[],
+): Promise<Array<{ assetId: string; failMsg: string; failedAt: string }>> {
+  const results = await Promise.all(
+    assets.map(async (asset) => {
+      const result = await fs.readMetadata<{ message: string; failedAt?: string }>(asset.id, "generation-error", projectSlug);
+      if (!result.ok) return null;
+      return { assetId: asset.id, failMsg: result.value.message, failedAt: result.value.failedAt ?? new Date().toISOString() };
+    })
+  );
+  return results.filter((r): r is { assetId: string; failMsg: string; failedAt: string } => r !== null);
 }
 
 export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[]): Promise<PendingKieTask[]> {
