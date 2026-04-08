@@ -51,9 +51,14 @@ function findThumbnail(
   return asset ? videoThumbFallback(asset) : '';
 }
 
+const SLUG_DISPLAY_LABELS: Record<string, string> = {
+  first_clip: 'Continuation',
+};
+
 function prettifySlugFieldName(name: string): string {
-  return name
-    .replace(/_slug$/, '')
+  const base = name.replace(/_slug$/, '');
+  if (SLUG_DISPLAY_LABELS[base]) return SLUG_DISPLAY_LABELS[base];
+  return base
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');

@@ -41,6 +41,8 @@ export function sortFields(fields: [string, JSONSchemaProperty][]): [string, JSO
     if (aIsSidebar && !bIsSidebar) return 1;
     if (!aIsSidebar && bIsSidebar) return -1;
 
+    // Preserve schema-defined order for asset fields (e.g. first-frame before driving-audio)
+    if (aIsSidebar && bIsSidebar) return 0;
     return aName.localeCompare(bName);
   });
 }
