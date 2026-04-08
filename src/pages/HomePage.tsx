@@ -320,8 +320,11 @@ export function HomePage() {
   const handleDrop = useCallback((files: File[]) => {
     if (!projectSlug) return;
     const uploads = files.map((file) => upload(projectSlug, file));
-    Promise.allSettled(uploads).then(() => sync(projectSlug));
-  }, [projectSlug, upload, sync]);
+    Promise.allSettled(uploads).then(() => {
+      listAssets(projectSlug, sortOrder);
+      sync(projectSlug);
+    });
+  }, [projectSlug, upload, sync, listAssets, sortOrder]);
 
   const handleApprove = useCallback(async (video: MediaItem) => {
     if (!projectSlug) return;
