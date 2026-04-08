@@ -53,9 +53,12 @@ function findThumbnail(
 
 const SLUG_DISPLAY_LABELS: Record<string, string> = {
   first_clip: 'Continuation',
+  image_slugs: 'References',
+  video_slugs: 'Reference Videos',
 };
 
 function prettifySlugFieldName(name: string): string {
+  if (SLUG_DISPLAY_LABELS[name]) return SLUG_DISPLAY_LABELS[name];
   const base = name.replace(/_slug$/, '');
   if (SLUG_DISPLAY_LABELS[base]) return SLUG_DISPLAY_LABELS[base];
   return base
@@ -123,6 +126,115 @@ function NamedSlotList({
   );
 }
 
+interface ArraySlotSectionProps {
+  field: AssetFieldInfo;
+  imageSlots?: { min: number; max: number } | null;
+  resolvedAssets?: ResolvedAsset[];
+  droppedAssets?: Map<string, ResolvedAsset>;
+  onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
+  disabled?: boolean;
+  inline?: boolean;
+}
+
+function ArraySlotSection({
+  field,
+  imageSlots,
+  resolvedAssets,
+  droppedAssets,
+  onChange,
+  disabled,
+  inline,
+}: ArraySlotSectionProps) {
+  const fieldAssetType = slugFieldAssetType(field.name);
+  const sectionLabel = `/${prettifySlugFieldName(field.name).toLowerCase().replace(/\s+/g, '-')}`;
+  const currentSlugs = Array.isArray(field.value) ? field.value.map(String).filter(Boolean) : [];
+  const minSlots = imageSlots?.min ?? 0;
+  const maxSlots = Math.max(imageSlots?.max ?? 5, 1);
+  const filledCount = currentSlugs.length;
+  const canAddMore = filledCount < maxSlots;
+  const needsMore = filledCount < minSlots;
+
+  const handleSlotChange = (
+    index: number,
+    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' } | null,
+    droppedAsset?: ResolvedAsset,
+  ) => {
+    const newValues = [...currentSlugs];
+    if (asset) {
+      if (index < newValues.length) {
+        newValues[index] = asset.slug;
+      } else {
+        newValues.push(asset.slug);
+      }
+      onChange(field.name, newValues, droppedAsset);
+    } else {
+      newValues.splice(index, 1);
+      onChange(field.name, newValues);
+    }
+  };
+
+  const slots: Array<{ slug: string | null; index: number; required: boolean }> = [];
+  currentSlugs.forEach((slug, idx) => {
+    slots.push({ slug, index: idx, required: idx < minSlots });
+  });
+  const emptySlotCount = Math.max(minSlots - filledCount, canAddMore ? 1 : 0);
+  for (let i = 0; i < emptySlotCount; i++) {
+    const idx = filledCount + i;
+    slots.push({ slug: null, index: idx, required: idx < minSlots });
+  }
+
+  const slotCountLabel =
+    minSlots === maxSlots
+      ? `${filledCount}/${maxSlots}`
+      : minSlots > 0
+        ? `${filledCount}/${minSlots}-${maxSlots}`
+        : `${filledCount}/${maxSlots}`;
+
+  return (
+    <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
+        <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">{sectionLabel}</span>
+        <span className={cn('ml-auto text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-cyan-400/50')}>
+          {slotCountLabel}
+        </span>
+      </div>
+      <div className="px-3 py-2.5 space-y-2">
+        {needsMore && <p className="text-[10px] text-yellow-400/80 font-mono">{minSlots - filledCount} more required</p>}
+        <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
+          {slots.map(({ slug, index, required }) => (
+            <div
+              key={`slot-${index}`}
+              className={cn('relative', required && !slug && 'ring-1 ring-yellow-400/50 rounded')}
+            >
+              <AssetDropSlot
+                value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: fieldAssetType } : null}
+                onChange={(asset) => {
+                  if (asset) {
+                    const da: ResolvedAsset = {
+                      slug: asset.slug,
+                      src: asset.src,
+                      thumbnailSrc: asset.thumbnailSrc,
+                      type: asset.type,
+                    };
+                    handleSlotChange(index, asset, da);
+                  } else {
+                    handleSlotChange(index, null);
+                  }
+                }}
+                disabled={disabled}
+                acceptTypes={[fieldAssetType]}
+              />
+              {required && !slug && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ImageParamSlots({
   assetFields,
   resolvedAssets,
@@ -140,12 +252,16 @@ export function ImageParamSlots({
   const isVideoField = assetFields.some((f) => f.name === 'video_slug');
   const assetType: 'image' | 'video' = isVideoField ? 'video' : 'image';
 
-  const arrayField = assetFields.find((f) => f.schema.type === 'array');
+  const arrayFields = assetFields.filter((f) => f.schema.type === 'array');
   const stringFields = assetFields.filter((f) => f.schema.type === 'string');
 
   // Named-slot mode: multiple distinct string slug fields (e.g. first_frame_slug + last_frame_slug)
   // render one labeled slot per field instead of funneling everything through one primary field.
-  const isNamedSlotMode = !arrayField && stringFields.length > 1;
+  const isNamedSlotMode = arrayFields.length === 0 && stringFields.length > 1;
+
+  // Hybrid mode: both named string slots AND array slots exist
+  // (e.g. Wan 2.7 Reference: first_frame_slug + audio_slug + image_slugs + video_slugs)
+  const isHybridMode = arrayFields.length > 0 && stringFields.length > 0;
 
   if (isNamedSlotMode) {
     return (
@@ -160,13 +276,40 @@ export function ImageParamSlots({
     );
   }
 
+  if (isHybridMode) {
+    return (
+      <div className="space-y-2">
+        <NamedSlotList
+          fields={stringFields}
+          defaultAssetType={assetType}
+          resolvedAssets={resolvedAssets}
+          droppedAssets={droppedAssets}
+          onChange={onChange}
+          disabled={disabled}
+        />
+        {arrayFields.map((af) => (
+          <ArraySlotSection
+            key={af.name}
+            field={af}
+            imageSlots={imageSlots}
+            resolvedAssets={resolvedAssets}
+            droppedAssets={droppedAssets}
+            onChange={onChange}
+            disabled={disabled}
+            inline={inline}
+          />
+        ))}
+      </div>
+    );
+  }
+
   const sectionLabel = isVideoField
     ? '/video'
     : modelKey === 'grok_imagine_ref'
       ? '/reference-images'
       : '/images';
 
-  const primaryField = arrayField || stringFields[0];
+  const primaryField = arrayFields[0] || stringFields[0];
 
   if (!primaryField) {
     return null;

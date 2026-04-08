@@ -17,6 +17,7 @@ import type {
   Qwen2ImageEditRequest,
   Wan27ImageToVideoRequest,
   Wan27RefToVideoRequest,
+  Wan27VideoEditRequest,
   Wan27ImageRequest,
   Wan27ImageProRequest,
   // Named union types for cleaner type annotations
@@ -383,6 +384,45 @@ function buildWan27ReferenceVideoPayload(
   };
 }
 
+type Wan27VideoEditArgs = {
+  prompt?: string;
+  negative_prompt?: string;
+  resolution?: "720p" | "1080p";
+  aspect_ratio?: string;
+  duration?: string;
+  audio_setting?: "auto" | "origin";
+  prompt_extend?: boolean;
+  nsfw_checker?: boolean;
+  seed?: number;
+};
+
+type Wan27VideoEditOpts = {
+  videoUrl: string;
+  referenceImageUrl?: string;
+};
+
+export function buildWan27VideoEditPayload(
+  args: Wan27VideoEditArgs,
+  opts: Wan27VideoEditOpts,
+): Wan27VideoEditRequest {
+  return {
+    model: "wan/2-7-videoedit",
+    input: {
+      video_url: opts.videoUrl,
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+      ...(opts.referenceImageUrl !== undefined ? { reference_image: opts.referenceImageUrl } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27VideoEditRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+      ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
+      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // xAI payload builders
 // ---------------------------------------------------------------------------
@@ -579,7 +619,7 @@ function translateToolPayload(
       const payload = buildVeoExtendPayload(args, videoSlug);
       return { provider_path: "kie.veo.post.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_wan27_frames_video": {
+    case "generate_wan27_i2v_video": {
       const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameSlug = (args.last_frame_slug as string | undefined) ?? undefined;
       const firstClipSlug = (args.first_clip_slug as string | undefined) ?? undefined;
@@ -592,7 +632,16 @@ function translateToolPayload(
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_wan27_reference_video": {
+    case "generate_wan27_videoedit_video": {
+      const videoSlug = (args.video_slug as string) ?? "";
+      const imageSlug = (args.image_slug as string | undefined) ?? undefined;
+      const payload = buildWan27VideoEditPayload(args as Wan27VideoEditArgs, {
+        videoUrl: videoSlug,
+        referenceImageUrl: imageSlug,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_wan27_r2v_video": {
       const referenceImageUrls = imageSlugs;
       const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? [];
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
@@ -641,7 +690,7 @@ const VIDEO_TOOLS = new Set([
   "generate_seedance2_t2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
-  "generate_wan27_frames_video", "generate_wan27_reference_video",
+  "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video",
 ]);
 
 const IMAGE_TOOLS = new Set([

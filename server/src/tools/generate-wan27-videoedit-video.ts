@@ -1,0 +1,185 @@
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import { z } from "zod";
+import { extname } from "node:path";
+import { queue } from "../queue.js";
+import { findVideoFile } from "../media-files.js";
+import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import type { ToolDef } from "./tool-def.js";
+
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
+function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+  const images = files.filter((f) => {
+    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
+    return IMAGE_EXTENSIONS.has(ext);
+  });
+  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30)
+    .replace(/-$/, "");
+}
+
+type RefInput = { assetId: string; filename: string };
+type ResolveOk = { ok: true; value: RefInput };
+type ResolveErr = { ok: false; error: string };
+
+async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+  const assetId = raw.replace(/^@/, "");
+  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
+  const manifest = await fs.getManifest(assetId, projectSlug);
+  if (!manifest.ok) return { ok: false, error: manifest.error.message };
+  const file = findVideoFile(manifest.value.files);
+  if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
+  return { ok: true, value: { assetId, filename: file.name } };
+}
+
+async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+  const assetId = raw.replace(/^@/, "");
+  if (!assetId.startsWith("img-")) return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
+  const manifest = await fs.getManifest(assetId, projectSlug);
+  if (!manifest.ok) return { ok: false, error: manifest.error.message };
+  const file = findImageFile(manifest.value.files);
+  if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
+  return { ok: true, value: { assetId, filename: file.name } };
+}
+
+export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "generate_wan27_videoedit_video",
+    description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",
+    schema: {
+      project_slug: z.string().describe("Project slug"),
+      prompt: z.string().optional().describe("Edit description (max 5000 chars)"),
+      negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
+      video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
+      image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
+      resolution: z.enum(["720p", "1080p"]).optional().describe("Video resolution (default 1080p)"),
+      aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional().describe("Video aspect ratio (omit to match source)"),
+      duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
+      audio_setting: z.enum(["auto", "origin"]).optional().describe("Audio: auto (model decides) or origin (keep original)"),
+      prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+      nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+      seed: z.number().int().optional().describe("Random seed for reproducibility"),
+      image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Image orientation hint"),
+      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+    },
+    handler: async (args) => {
+      const {
+        project_slug, prompt, negative_prompt,
+        video_slug, image_slug,
+        resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed,
+      } = args as {
+        project_slug: string;
+        prompt?: string;
+        negative_prompt?: string;
+        video_slug: string;
+        image_slug?: string;
+        resolution?: "720p" | "1080p";
+        aspect_ratio?: string;
+        duration?: string;
+        audio_setting?: "auto" | "origin";
+        prompt_extend?: boolean;
+        nsfw_checker?: boolean;
+        seed?: number;
+      };
+
+      if (!process.env.KIE_API_KEY) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+        };
+      }
+
+      if (!video_slug) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Wan 2.7 Video Edit requires video_slug" }],
+        };
+      }
+
+      const videoResult = await resolveVideoSlug(fs, video_slug, project_slug);
+      if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
+      const videoInput = videoResult.value;
+
+      let imageInput: RefInput | undefined;
+      if (image_slug) {
+        const r = await resolveImageSlug(fs, image_slug, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        imageInput = r.value;
+      }
+
+      const videoName = `wan27-edit-${slugify(prompt ?? "") || String(Date.now())}`;
+      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      if (!assetResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }],
+        };
+      }
+
+      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const sourceImageIds = imageInput ? [imageInput.assetId] : [];
+      const sourceVideoIds = [videoInput.assetId];
+      const sourceAudioIds: string[] = [];
+
+      await writePendingTask(fs, vidAssetId, project_slug, {
+        taskId: QUEUED_TASK_ID,
+        taskType: "wan27_videoedit_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        projectSlug: project_slug,
+        createdAt: new Date().toISOString(),
+        meta: {
+          prompt: prompt ?? "",
+          mode: "videoedit",
+          sourceImageIds,
+          sourceVideoIds,
+          sourceAudioIds,
+        },
+      });
+
+      const jobId = `wan27-videoedit-${vidAssetId}-${Date.now()}`;
+
+      await queue.enqueue(jobId, {
+        type: "generate_wan27_videoedit_video",
+        vidAssetId,
+        vidAssetDir,
+        projectSlug: project_slug,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(negative_prompt !== undefined ? { negative_prompt } : {}),
+        videoInput,
+        ...(imageInput ? { imageInput } : {}),
+        sourceImageIds,
+        sourceVideoIds,
+        sourceAudioIds,
+        ...(resolution !== undefined ? { resolution } : {}),
+        ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+        ...(duration !== undefined ? { duration } : {}),
+        ...(audio_setting !== undefined ? { audio_setting } : {}),
+        ...(prompt_extend !== undefined ? { prompt_extend } : {}),
+        ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+      } as unknown as Record<string, unknown>);
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            vid_asset_id: vidAssetId,
+            source_images: sourceImageIds,
+            source_videos: sourceVideoIds,
+            source_audios: sourceAudioIds,
+            job_id: jobId,
+            status: "enqueued",
+          }),
+        }],
+      };
+    },
+  };
+}

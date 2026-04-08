@@ -31,7 +31,7 @@ type ResolveErr = { ok: false; error: string };
 
 async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("img-")) return { ok: false, error: `Frame slugs must be img-* assets, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
@@ -41,7 +41,7 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 
 async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("vid-")) return { ok: false, error: `first_clip_slug must be a vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
@@ -51,7 +51,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 
 async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
+  if (!assetId.startsWith("aud-")) return { ok: false, error: `driving_audio_slug must be an aud-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
@@ -59,21 +59,20 @@ async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "generate_wan27_reference_video",
-    description: "Generate a video using Wan 2.7 guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new vid- asset and enqueues a background job.",
+    name: "generate_wan27_i2v_video",
+    description: "Generate a video using Wan 2.7 Image to Video with first/last frame image control, clip continuation, or driving audio. Creates a new vid- asset and enqueues a background job.",
     schema: {
       project_slug: z.string().describe("Project slug"),
       prompt: z.string().describe("Video description (max 5000 chars)"),
       negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-      image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (max 5 combined with videos)"),
-      video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (max 5 combined with images)"),
-      first_frame_slug: z.string().optional().describe("First frame image asset (overrides aspect_ratio, e.g., @img-start)"),
-      audio_slug: z.string().optional().describe("Voice timbre audio asset (wav/mp3, 1-10s, e.g., @aud-voice)"),
+      first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
+      last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
+      first_clip_slug: z.string().optional().describe("Video asset for continuation (e.g., @vid-scene)"),
+      driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
       resolution: z.enum(["720p", "1080p"]).optional().describe("Video resolution (default 1080p)"),
-      aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional().describe("Video aspect ratio (ignored if first_frame_slug set)"),
-      duration: z.string().optional().describe("Video duration in seconds (2-10)"),
+      duration: z.string().optional().describe("Video duration in seconds (2-15)"),
       prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
       nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
       seed: z.number().int().optional().describe("Random seed for reproducibility"),
@@ -83,18 +82,17 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const {
         project_slug, prompt, negative_prompt,
-        image_slugs, video_slugs, first_frame_slug, audio_slug,
-        resolution, aspect_ratio, duration, prompt_extend, nsfw_checker, seed,
+        first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug,
+        resolution, duration, prompt_extend, nsfw_checker, seed,
       } = args as {
         project_slug: string;
         prompt: string;
         negative_prompt?: string;
-        image_slugs?: string[];
-        video_slugs?: string[];
         first_frame_slug?: string;
-        audio_slug?: string;
+        last_frame_slug?: string;
+        first_clip_slug?: string;
+        driving_audio_slug?: string;
         resolution?: "720p" | "1080p";
-        aspect_ratio?: string;
         duration?: string;
         prompt_extend?: boolean;
         nsfw_checker?: boolean;
@@ -108,29 +106,11 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const imgs = image_slugs ?? [];
-      const vids = video_slugs ?? [];
-      const totalRefs = imgs.length + vids.length;
-
-      if (totalRefs > 5) {
+      if (!first_frame_slug && !last_frame_slug && !first_clip_slug) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Wan 2.7 Reference supports max 5 combined images+videos (got ${totalRefs})` }],
+          content: [{ type: "text" as const, text: "Wan 2.7 Image to Video requires at least first_frame_slug, last_frame_slug, or first_clip_slug" }],
         };
-      }
-
-      const imageInputs: RefInput[] = [];
-      for (const raw of imgs) {
-        const r = await resolveImageSlug(fs, raw, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        imageInputs.push(r.value);
-      }
-
-      const videoInputs: RefInput[] = [];
-      for (const raw of vids) {
-        const r = await resolveVideoSlug(fs, raw, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        videoInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
@@ -140,11 +120,25 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         firstFrame = r.value;
       }
 
-      let voiceRef: RefInput | undefined;
-      if (audio_slug) {
-        const r = await resolveAudioSlug(fs, audio_slug, project_slug);
+      let lastFrame: RefInput | undefined;
+      if (last_frame_slug) {
+        const r = await resolveImageSlug(fs, last_frame_slug, project_slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        voiceRef = r.value;
+        lastFrame = r.value;
+      }
+
+      let firstClip: RefInput | undefined;
+      if (first_clip_slug) {
+        const r = await resolveVideoSlug(fs, first_clip_slug, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        firstClip = r.value;
+      }
+
+      let drivingAudio: RefInput | undefined;
+      if (driving_audio_slug) {
+        const r = await resolveAudioSlug(fs, driving_audio_slug, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        drivingAudio = r.value;
       }
 
       const videoName = `wan27-${slugify(prompt) || String(Date.now())}`;
@@ -157,44 +151,43 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      const sourceImageIds = [...imageInputs.map((i) => i.assetId), ...(firstFrame ? [firstFrame.assetId] : [])];
-      const sourceVideoIds = videoInputs.map((i) => i.assetId);
-      const sourceAudioIds = voiceRef ? [voiceRef.assetId] : [];
+      const sourceImageIds = [firstFrame?.assetId, lastFrame?.assetId].filter((v): v is string => v !== undefined);
+      const sourceVideoIds = firstClip ? [firstClip.assetId] : [];
+      const sourceAudioIds = drivingAudio ? [drivingAudio.assetId] : [];
 
       await writePendingTask(fs, vidAssetId, project_slug, {
         taskId: QUEUED_TASK_ID,
-        taskType: "wan27_reference_video",
+        taskType: "wan27_i2v_video",
         assetId: vidAssetId,
         assetDir: vidAssetDir,
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
         meta: {
           prompt,
-          mode: "reference",
+          mode: "i2v",
           sourceImageIds,
           sourceVideoIds,
           sourceAudioIds,
         },
       });
 
-      const jobId = `wan27-reference-${vidAssetId}-${Date.now()}`;
+      const jobId = `wan27-i2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
-        type: "generate_wan27_reference_video",
+        type: "generate_wan27_i2v_video",
         vidAssetId,
         vidAssetDir,
         projectSlug: project_slug,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
-        imageInputs,
-        videoInputs,
         ...(firstFrame ? { firstFrame } : {}),
-        ...(voiceRef ? { voiceRef } : {}),
+        ...(lastFrame ? { lastFrame } : {}),
+        ...(firstClip ? { firstClip } : {}),
+        ...(drivingAudio ? { drivingAudio } : {}),
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,
         ...(resolution !== undefined ? { resolution } : {}),
-        ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(prompt_extend !== undefined ? { prompt_extend } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),

@@ -6,8 +6,8 @@ import { buildWan27ReferenceVideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
 
-type GenerateWan27ReferenceVideoPayload = {
-  type: "generate_wan27_reference_video";
+type GenerateWan27R2vVideoPayload = {
+  type: "generate_wan27_r2v_video";
   vidAssetId: string;
   vidAssetDir: string;
   projectSlug: string;
@@ -56,14 +56,14 @@ async function uploadSingle(
   return uploadFile(provider, blob, input.filename);
 }
 
-export function registerGenerateWan27ReferenceVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_reference_video", async (payload) => {
+export function registerGenerateWan27R2vVideoJob(fs: ClipfirstFs): void {
+  registerJobHandler("generate_wan27_r2v_video", async (payload) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       imageInputs, videoInputs, firstFrame, voiceRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, aspect_ratio, duration, prompt_extend, nsfw_checker, seed,
-    } = payload as GenerateWan27ReferenceVideoPayload;
+    } = payload as GenerateWan27R2vVideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
@@ -83,7 +83,7 @@ export function registerGenerateWan27ReferenceVideoJob(fs: ClipfirstFs): void {
     const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
-      taskType: "wan27_reference_video",
+      taskType: "wan27_r2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
       projectSlug,

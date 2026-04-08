@@ -2,32 +2,32 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
-import { buildWan27FramesVideoPayload } from "../payload-builders.js";
+import { buildWan27VideoEditPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
 
-type GenerateWan27FramesVideoPayload = {
-  type: "generate_wan27_frames_video";
+type GenerateWan27VideoeditVideoPayload = {
+  type: "generate_wan27_videoedit_video";
   vidAssetId: string;
   vidAssetDir: string;
   projectSlug: string;
-  prompt: string;
+  prompt?: string;
   negative_prompt?: string;
-  firstFrame?: RefInput;
-  lastFrame?: RefInput;
-  firstClip?: RefInput;
-  drivingAudio?: RefInput;
+  videoInput: RefInput;
+  imageInput?: RefInput;
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
   resolution?: "720p" | "1080p";
+  aspect_ratio?: string;
   duration?: string;
+  audio_setting?: "auto" | "origin";
   prompt_extend?: boolean;
   nsfw_checker?: boolean;
   seed?: number;
 };
 
-async function uploadInput(
+async function uploadSingle(
   fs: ClipfirstFs,
   provider: ReturnType<typeof kie>,
   input: RefInput,
@@ -39,41 +39,39 @@ async function uploadInput(
   return uploadFile(provider, blob, input.filename);
 }
 
-export function registerGenerateWan27FramesVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_frames_video", async (payload) => {
+export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
+  registerJobHandler("generate_wan27_videoedit_video", async (payload) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
-      firstFrame, lastFrame, firstClip, drivingAudio,
+      videoInput, imageInput,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, duration, prompt_extend, nsfw_checker, seed,
-    } = payload as GenerateWan27FramesVideoPayload;
+      resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed,
+    } = payload as GenerateWan27VideoeditVideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, provider, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, provider, lastFrame, projectSlug) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, provider, firstClip, projectSlug) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, provider, drivingAudio, projectSlug) : undefined;
+    const videoUrl = await uploadSingle(fs, provider, videoInput, projectSlug);
+    const referenceImageUrl = imageInput ? await uploadSingle(fs, provider, imageInput, projectSlug) : undefined;
 
-    const request = buildWan27FramesVideoPayload(
-      { prompt, negative_prompt, resolution, duration, prompt_extend, nsfw_checker, seed },
-      { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl },
+    const request = buildWan27VideoEditPayload(
+      { prompt, negative_prompt, resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed },
+      { videoUrl, referenceImageUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
     await writePendingTask(fs, vidAssetId, projectSlug, {
       taskId,
-      taskType: "wan27_frames_video",
+      taskType: "wan27_videoedit_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
       projectSlug,
       createdAt: new Date().toISOString(),
       meta: {
-        prompt,
-        mode: "frames",
+        prompt: prompt ?? "",
+        mode: "videoedit",
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,
