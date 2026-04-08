@@ -53,6 +53,7 @@ function findThumbnail(
 
 const SLUG_DISPLAY_LABELS: Record<string, string> = {
   first_clip: 'Continuation',
+  audio: 'Reference Voice',
   image_slugs: 'References',
   video_slugs: 'Reference Videos',
 };
