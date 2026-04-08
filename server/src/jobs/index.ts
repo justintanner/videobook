@@ -13,6 +13,8 @@ import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
 import { registerGenerateSeedance2T2vVideoJob } from "./generate-seedance2-t2v-video.js";
 import { registerGenerateSeedance2FramesVideoJob } from "./generate-seedance2-frames-video.js";
 import { registerGenerateSeedance2ReferenceVideoJob } from "./generate-seedance2-reference-video.js";
+import { registerGenerateWan27FramesVideoJob } from "./generate-wan27-frames-video.js";
+import { registerGenerateWan27ReferenceVideoJob } from "./generate-wan27-reference-video.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateQwen2ImageEditJob } from "./generate-qwen2-image-edit.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
@@ -42,6 +44,8 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateSeedance2T2vVideoJob(fs);
   registerGenerateSeedance2FramesVideoJob(fs);
   registerGenerateSeedance2ReferenceVideoJob(fs);
+  registerGenerateWan27FramesVideoJob(fs);
+  registerGenerateWan27ReferenceVideoJob(fs);
   registerGenerateNanoBananaImageJob(fs);
   registerGenerateQwen2ImageEditJob(fs);
   registerGenerateGrokImagineImageJob(fs);

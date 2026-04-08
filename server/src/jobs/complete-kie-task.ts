@@ -13,7 +13,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_frames_video" | "wan27_reference_video" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -43,6 +43,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
       } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video" || taskType === "grok_imagine_extend_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
+      } else if (taskType === "wan27_frames_video" || taskType === "wan27_reference_video") {
+        await completeWan27Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
@@ -214,6 +216,50 @@ async function completeSeedance2Video(
   const videoPath = join(assetDir, "original.mp4");
 
   // Persist Kie taskId for future operations
+  if (taskId !== undefined) {
+    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+  }
+
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+    provenance,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeWan27Video(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskId?: string,
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in result");
+
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+
+  const provenance = {
+    source_images: meta.sourceImageIds,
+    source_videos: meta.sourceVideoIds,
+    source_audios: meta.sourceAudioIds,
+    model: meta.mode === "reference" ? "wan/2-7-r2v" : "wan/2-7-image-to-video",
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  const videoPath = join(assetDir, "original.mp4");
+
   if (taskId !== undefined) {
     await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
   }

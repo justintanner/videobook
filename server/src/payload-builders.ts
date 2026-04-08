@@ -15,6 +15,8 @@ import type {
   NanoBananaProRequest,
   GptImageToImageRequest,
   Qwen2ImageEditRequest,
+  Wan27ImageToVideoRequest,
+  Wan27RefToVideoRequest,
   // Named union types for cleaner type annotations
   KlingMode,
   GrokImagineMode,
@@ -257,6 +259,82 @@ function buildVeoExtendPayload(
   };
 }
 
+type Wan27FramesVideoArgs = {
+  prompt: string;
+  negative_prompt?: string;
+  resolution?: "720p" | "1080p";
+  duration?: string;
+  prompt_extend?: boolean;
+  seed?: number;
+};
+
+type Wan27FramesVideoOpts = {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+  firstClipUrl?: string;
+  drivingAudioUrl?: string;
+};
+
+function buildWan27FramesVideoPayload(
+  args: Wan27FramesVideoArgs,
+  opts: Wan27FramesVideoOpts,
+): Wan27ImageToVideoRequest {
+  return {
+    model: "wan/2-7-image-to-video",
+    input: {
+      prompt: args.prompt,
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
+      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
+      ...(opts.firstClipUrl !== undefined ? { first_clip_url: opts.firstClipUrl } : {}),
+      ...(opts.drivingAudioUrl !== undefined ? { driving_audio_url: opts.drivingAudioUrl } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    },
+  };
+}
+
+type Wan27ReferenceVideoArgs = {
+  prompt: string;
+  negative_prompt?: string;
+  resolution?: "720p" | "1080p";
+  aspect_ratio?: string;
+  duration?: string;
+  prompt_extend?: boolean;
+  seed?: number;
+};
+
+type Wan27ReferenceVideoOpts = {
+  referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  firstFrameUrl?: string;
+  referenceVoiceUrl?: string;
+};
+
+function buildWan27ReferenceVideoPayload(
+  args: Wan27ReferenceVideoArgs,
+  opts: Wan27ReferenceVideoOpts,
+): Wan27RefToVideoRequest {
+  return {
+    model: "wan/2-7-r2v",
+    input: {
+      prompt: args.prompt,
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image: opts.referenceImageUrls } : {}),
+      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video: opts.referenceVideoUrls } : {}),
+      ...(opts.firstFrameUrl !== undefined ? { first_frame: opts.firstFrameUrl } : {}),
+      ...(opts.referenceVoiceUrl !== undefined ? { reference_voice: opts.referenceVoiceUrl } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27RefToVideoRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // xAI payload builders
 // ---------------------------------------------------------------------------
@@ -445,6 +523,32 @@ function translateToolPayload(
       const payload = buildVeoExtendPayload(args, videoSlug);
       return { provider_path: "kie.veo.post.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_wan27_frames_video": {
+      const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
+      const lastFrameSlug = (args.last_frame_slug as string | undefined) ?? undefined;
+      const firstClipSlug = (args.first_clip_slug as string | undefined) ?? undefined;
+      const drivingAudioSlug = (args.driving_audio_slug as string | undefined) ?? undefined;
+      const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
+        firstFrameUrl: firstFrameSlug,
+        lastFrameUrl: lastFrameSlug,
+        firstClipUrl: firstClipSlug,
+        drivingAudioUrl: drivingAudioSlug,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_wan27_reference_video": {
+      const referenceImageUrls = imageSlugs;
+      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? [];
+      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
+      const referenceVoiceUrl = (args.audio_slug as string | undefined) ?? undefined;
+      const payload = buildWan27ReferenceVideoPayload(args as Wan27ReferenceVideoArgs, {
+        referenceImageUrls,
+        referenceVideoUrls,
+        firstFrameUrl,
+        referenceVoiceUrl,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "extend_grok_imagine_video": {
       if (isXaiProvider(provider)) {
         const videoSlug = (args.video_slug as string) ?? "";
@@ -481,6 +585,7 @@ const VIDEO_TOOLS = new Set([
   "generate_seedance2_t2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
+  "generate_wan27_frames_video", "generate_wan27_reference_video",
 ]);
 
 const IMAGE_TOOLS = new Set([
@@ -514,8 +619,10 @@ export {
   buildGrokImagineTextPayload,
   buildGptImagePayload,
   buildSeedance2VideoPayload,
+  buildWan27FramesVideoPayload,
+  buildWan27ReferenceVideoPayload,
   extractKlingElements,
   translateToolPayload,
   getValidationWarnings,
 };
-export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts };
+export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts };

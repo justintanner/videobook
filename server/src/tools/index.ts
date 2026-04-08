@@ -32,6 +32,8 @@ import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js";
 import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-video.js";
 import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
+import { generateWan27FramesVideoDef } from "./generate-wan27-frames-video.js";
+import { generateWan27ReferenceVideoDef } from "./generate-wan27-reference-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { renderDef } from "./render.js";
@@ -102,6 +104,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateSeedance2T2vVideoDef(fs),
     generateSeedance2FramesVideoDef(fs),
     generateSeedance2ReferenceVideoDef(fs),
+    generateWan27FramesVideoDef(fs),
+    generateWan27ReferenceVideoDef(fs),
     generateNanoBananaImageDef(fs),
     generateQwen2ImageEditDef(fs),
     renderDef(fs),

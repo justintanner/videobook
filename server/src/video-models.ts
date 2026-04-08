@@ -118,6 +118,38 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
+  wan27_frames: {
+    label: "Wan 2.7 — Frames",
+    tool_name: "generate_wan27_frames_video",
+    description: "Wan 2.7 image-to-video with first/last frame, clip continuation, and driving audio",
+    params: [
+      "prompt", "negative_prompt",
+      "first_frame_slug", "last_frame_slug", "first_clip_slug",
+      "driving_audio_slug",
+      "resolution", "duration", "prompt_extend", "seed",
+      "image_orientation",
+    ],
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  wan27_reference: {
+    label: "Wan 2.7 — Reference",
+    tool_name: "generate_wan27_reference_video",
+    description: "Wan 2.7 reference-to-video guided by reference images, videos, voice, and optional first frame",
+    params: [
+      "prompt", "negative_prompt",
+      "image_slugs", "video_slugs", "first_frame_slug",
+      "audio_slug",
+      "resolution", "aspect_ratio", "duration", "prompt_extend", "seed",
+      "image_orientation",
+    ],
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, image_orientation: "auto" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
   grok_imagine: {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
@@ -164,6 +196,8 @@ const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
   generate_seedance2_reference_video: { min: 0, max: 9 },
   generate_grok_imagine_video: { min: 1, max: 1 },
   generate_grok_imagine_ref_video: { min: 0, max: 4 },
+  generate_wan27_frames_video: { min: 0, max: 0 },
+  generate_wan27_reference_video: { min: 0, max: 5 },
   extend_veo_video: { min: 0, max: 0 },
   extend_grok_imagine_video: { min: 0, max: 0 },
 };
@@ -260,6 +294,12 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   element3_slugs: { type: "array", items: { type: "string" }, description: "1-4 image @slugs or 1 video @slug for element 3" },
   element3_name: { type: "string", description: "Name for element 3 (default: derived from first slug)" },
   element3_desc: { type: "string", description: "Description for element 3 (required when element3_slugs set)" },
+  negative_prompt: { type: "string", description: "Negative prompt — things to avoid (max 500 chars)", maxLength: 500 },
+  first_clip_slug: { type: "string", description: "Video asset for continuation (e.g., @vid-scene)" },
+  driving_audio_slug: { type: "string", description: "Audio asset for audio-driven motion (e.g., @aud-music)" },
+  audio_slug: { type: "string", description: "Audio asset for voice timbre reference (e.g., @aud-voice)" },
+  prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
+  seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
   image_orientation: {
     type: "string",
     enum: ["auto", "original", "portrait", "landscape"],
@@ -332,6 +372,19 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "Reference image assets (1-9, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
+    }
+    if (toolName === "generate_wan27_frames_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "resolution") { prop.enum = ["720p", "1080p"]; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
+    }
+    if (toolName === "generate_wan27_reference_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "image_slugs") prop.description = "Reference image assets (max 5 total with videos, e.g., @img-style)";
+      if (param === "video_slugs") prop.description = "Reference video assets (max 5 total with images, e.g., @vid-motion)";
+      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "4:3", "3:4"]; prop.description = "Video aspect ratio (ignored if first_frame_slug set)"; }
+      if (param === "resolution") { prop.enum = ["720p", "1080p"]; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 2-10 seconds"; }
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 5000 chars)"; prop.maxLength = 5000; }
@@ -456,6 +509,21 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (audioSlugs.length > 3) warnings.push(`Seedance 2.0 Reference supports 0-3 audios (got ${audioSlugs.length})`);
   }
 
+  if (toolName === "generate_wan27_frames_video") {
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const lastFrame = params.last_frame_slug as string | undefined;
+    const firstClip = params.first_clip_slug as string | undefined;
+    if (!firstFrame && !lastFrame && !firstClip) {
+      warnings.push("Wan 2.7 Frames mode needs at least first_frame_slug, last_frame_slug, or first_clip_slug");
+    }
+  }
+
+  if (toolName === "generate_wan27_reference_video") {
+    const videoSlugs = (params.video_slugs as string[] | undefined) ?? [];
+    const totalRefs = totalImages + videoSlugs.length;
+    if (totalRefs > 5) warnings.push(`Wan 2.7 Reference supports max 5 combined images+videos (got ${totalRefs})`);
+  }
+
   // Image slots
   let imageSlots = IMAGE_SLOT_LIMITS[toolName] ?? null;
   if (toolName === "generate_veo_video") {
@@ -541,6 +609,8 @@ ROUTING PREFERENCES:
 - Use generate_seedance2_t2v_video ONLY when user explicitly mentions "seedance" or "bytedance" for text-only video (no reference inputs)
 - Use generate_seedance2_frames_video ONLY when user mentions "seedance" with first/last/start/end frame control
 - Use generate_seedance2_reference_video ONLY when user mentions "seedance" with reference images, reference videos, or reference audio
+- Use generate_wan27_frames_video ONLY when user mentions "wan" with first/last frame or clip continuation
+- Use generate_wan27_reference_video ONLY when user mentions "wan" with reference images, reference videos, or voice
 - Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 
@@ -552,6 +622,8 @@ KEY CONSTRAINTS:
 - For generate_seedance2_reference_video: REQUIRES at least one of image_slugs / video_slugs / audio_slugs (max 9 / 3 / 3)
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration "6"/"10"
 - For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
+- For generate_wan27_frames_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
+- For generate_wan27_reference_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.
