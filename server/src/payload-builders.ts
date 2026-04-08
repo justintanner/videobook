@@ -17,6 +17,8 @@ import type {
   Qwen2ImageEditRequest,
   Wan27ImageToVideoRequest,
   Wan27RefToVideoRequest,
+  Wan27ImageRequest,
+  Wan27ImageProRequest,
   // Named union types for cleaner type annotations
   KlingMode,
   GrokImagineMode,
@@ -256,6 +258,48 @@ function buildVeoExtendPayload(
     ...(args.model !== undefined ? { model: args.model as "fast" | "quality" } : {}),
     ...(args.seeds !== undefined ? { seeds: args.seeds as number } : {}),
     ...(args.watermark !== undefined ? { watermark: args.watermark as string } : {}),
+  };
+}
+
+type Wan27ImageArgs = {
+  prompt: string;
+  aspect_ratio?: string;
+  resolution?: string;
+  seed?: number;
+  nsfw_checker?: boolean;
+};
+
+function buildWan27ImagePayload(
+  args: Wan27ImageArgs,
+  inputUrls: string[],
+): Wan27ImageRequest {
+  return {
+    model: "wan/2-7-image",
+    input: {
+      prompt: args.prompt,
+      ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageRequest["input"]["resolution"] } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    },
+  };
+}
+
+function buildWan27ImageProPayload(
+  args: Wan27ImageArgs,
+  inputUrls: string[],
+): Wan27ImageProRequest {
+  return {
+    model: "wan/2-7-image-pro",
+    input: {
+      prompt: args.prompt,
+      ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageProRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageProRequest["input"]["resolution"] } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    },
   };
 }
 
@@ -518,6 +562,14 @@ function translateToolPayload(
       const payload = buildGptImagePayload(args as GptImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_wan27_image": {
+      const payload = buildWan27ImagePayload(args as Wan27ImageArgs, imageSlugs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_wan27_image_pro": {
+      const payload = buildWan27ImageProPayload(args as Wan27ImageArgs, imageSlugs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_veo_video": {
       const payload = buildVeoVideoPayload(args, imageSlugs);
       return { provider_path: "kie.veo.post.api.v1.veo.generate()", payload: payload as unknown as Record<string, unknown> };
@@ -594,7 +646,7 @@ const VIDEO_TOOLS = new Set([
 
 const IMAGE_TOOLS = new Set([
   "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
-  "generate_qwen2_image_edit",
+  "generate_qwen2_image_edit", "generate_wan27_image", "generate_wan27_image_pro",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -625,6 +677,8 @@ export {
   buildSeedance2VideoPayload,
   buildWan27FramesVideoPayload,
   buildWan27ReferenceVideoPayload,
+  buildWan27ImagePayload,
+  buildWan27ImageProPayload,
   extractKlingElements,
   translateToolPayload,
   getValidationWarnings,

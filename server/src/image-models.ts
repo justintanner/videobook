@@ -101,6 +101,26 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieImageField: "image_url",
     defaults: { image_size: "16:9", output_format: "png" },
   },
+  {
+    key: "wan27_image",
+    kieModelId: "wan/2-7-image",
+    tool_name: "generate_wan27_image",
+    label: "Wan 2.7 Image",
+    description: "Text-to-image or image editing with optional reference images (0-9), aspect ratio, resolution, and thinking mode",
+    image_slots: { min: 0, max: 9 },
+    kieImageField: "input_urls",
+    defaults: { aspect_ratio: "1:1", resolution: "2K" },
+  },
+  {
+    key: "wan27_image_pro",
+    kieModelId: "wan/2-7-image-pro",
+    tool_name: "generate_wan27_image_pro",
+    label: "Wan 2.7 Image Pro",
+    description: "Pro text-to-image or image editing with optional reference images (0-9), aspect ratio, resolution, and thinking mode",
+    image_slots: { min: 0, max: 9 },
+    kieImageField: "input_urls",
+    defaults: { aspect_ratio: "1:1", resolution: "2K" },
+  },
 ];
 
 // ---------------------------------------------------------------------------

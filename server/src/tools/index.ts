@@ -34,6 +34,8 @@ import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-vid
 import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
 import { generateWan27FramesVideoDef } from "./generate-wan27-frames-video.js";
 import { generateWan27ReferenceVideoDef } from "./generate-wan27-reference-video.js";
+import { generateWan27ImageDef } from "./generate-wan27-image.js";
+import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { renderDef } from "./render.js";
@@ -106,6 +108,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateSeedance2ReferenceVideoDef(fs),
     generateWan27FramesVideoDef(fs),
     generateWan27ReferenceVideoDef(fs),
+    generateWan27ImageDef(fs),
+    generateWan27ImageProDef(fs),
     generateNanoBananaImageDef(fs),
     generateQwen2ImageEditDef(fs),
     renderDef(fs),
