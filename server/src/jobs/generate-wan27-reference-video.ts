@@ -24,6 +24,7 @@ type GenerateWan27ReferenceVideoPayload = {
   aspect_ratio?: string;
   duration?: string;
   prompt_extend?: boolean;
+  nsfw_checker?: boolean;
   seed?: number;
 };
 
@@ -61,7 +62,7 @@ export function registerGenerateWan27ReferenceVideoJob(fs: ClipfirstFs): void {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       imageInputs, videoInputs, firstFrame, voiceRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, aspect_ratio, duration, prompt_extend, seed,
+      resolution, aspect_ratio, duration, prompt_extend, nsfw_checker, seed,
     } = payload as GenerateWan27ReferenceVideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -75,7 +76,7 @@ export function registerGenerateWan27ReferenceVideoJob(fs: ClipfirstFs): void {
     const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, provider, voiceRef, projectSlug) : undefined;
 
     const request = buildWan27ReferenceVideoPayload(
-      { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, seed },
+      { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, nsfw_checker, seed },
       { referenceImageUrls, referenceVideoUrls, firstFrameUrl, referenceVoiceUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

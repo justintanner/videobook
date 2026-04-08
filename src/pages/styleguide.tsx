@@ -401,13 +401,13 @@ function MultiPromptEditorDemo() {
 }
 
 function AssetDropSlotDemo() {
-  const [filled, setFilled] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>({
+  const [filled, setFilled] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' } | null>({
     slug: '@hero-bg',
     src: '/styleguide-img-cover.jpg',
     thumbnailSrc: '/styleguide-img-cover.jpg',
     type: 'image',
   });
-  const [empty, setEmpty] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' } | null>(null);
+  const [empty, setEmpty] = useState<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' } | null>(null);
   return (
     <div className="flex flex-wrap gap-5">
       <div className="w-[180px] space-y-1.5">

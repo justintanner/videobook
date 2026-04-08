@@ -75,6 +75,7 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional().describe("Video aspect ratio (ignored if first_frame_slug set)"),
       duration: z.string().optional().describe("Video duration in seconds (2-10)"),
       prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+      nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
       seed: z.number().int().optional().describe("Random seed for reproducibility"),
       image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Image orientation hint"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
@@ -83,7 +84,7 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const {
         project_slug, prompt, negative_prompt,
         image_slugs, video_slugs, first_frame_slug, audio_slug,
-        resolution, aspect_ratio, duration, prompt_extend, seed,
+        resolution, aspect_ratio, duration, prompt_extend, nsfw_checker, seed,
       } = args as {
         project_slug: string;
         prompt: string;
@@ -96,6 +97,7 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         aspect_ratio?: string;
         duration?: string;
         prompt_extend?: boolean;
+        nsfw_checker?: boolean;
         seed?: number;
       };
 
@@ -195,6 +197,7 @@ export function generateWan27ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(prompt_extend !== undefined ? { prompt_extend } : {}),
+        ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);
 

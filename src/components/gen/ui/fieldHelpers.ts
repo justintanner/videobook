@@ -9,7 +9,17 @@ export function isAssetField(name: string): boolean {
     || name === 'video_slug'
     || name === 'first_frame_slug'
     || name === 'last_frame_slug'
+    || name === 'first_clip_slug'
+    || name === 'driving_audio_slug'
+    || name === 'audio_slug'
   );
+}
+
+/** Return the accepted asset type for a slug field name */
+export function slugFieldAssetType(name: string): 'image' | 'video' | 'audio' {
+  if (name === 'video_slug' || name === 'first_clip_slug') return 'video';
+  if (name === 'audio_slug' || name === 'driving_audio_slug') return 'audio';
+  return 'image';
 }
 
 /** Determine if a field is an element field (element1_slugs, element2_name, etc.) */

@@ -126,10 +126,10 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "negative_prompt",
       "first_frame_slug", "last_frame_slug", "first_clip_slug",
       "driving_audio_slug",
-      "resolution", "duration", "prompt_extend", "seed",
+      "resolution", "duration", "prompt_extend", "nsfw_checker", "seed",
       "image_orientation",
     ],
-    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, image_orientation: "auto" },
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false, image_orientation: "auto" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -142,10 +142,10 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "negative_prompt",
       "image_slugs", "video_slugs", "first_frame_slug",
       "audio_slug",
-      "resolution", "aspect_ratio", "duration", "prompt_extend", "seed",
+      "resolution", "aspect_ratio", "duration", "prompt_extend", "nsfw_checker", "seed",
       "image_orientation",
     ],
-    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, image_orientation: "auto" },
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, nsfw_checker: false, image_orientation: "auto" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -299,6 +299,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   driving_audio_slug: { type: "string", description: "Audio asset for audio-driven motion (e.g., @aud-music)" },
   audio_slug: { type: "string", description: "Audio asset for voice timbre reference (e.g., @aud-voice)" },
   prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
+  nsfw_checker: { type: "boolean", description: "Content safety filter (default false)", default: false },
   seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
   image_orientation: {
     type: "string",

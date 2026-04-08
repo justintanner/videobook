@@ -39,7 +39,7 @@ interface SavedGenSettings {
   model: string;
   provider: string;
   fields: Record<string, unknown>;
-  droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' }>;
+  droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' }>;
 }
 
 function loadGenSettings(category: string): SavedGenSettings | null {

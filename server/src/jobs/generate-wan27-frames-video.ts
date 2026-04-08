@@ -23,6 +23,7 @@ type GenerateWan27FramesVideoPayload = {
   resolution?: "720p" | "1080p";
   duration?: string;
   prompt_extend?: boolean;
+  nsfw_checker?: boolean;
   seed?: number;
 };
 
@@ -44,7 +45,7 @@ export function registerGenerateWan27FramesVideoJob(fs: ClipfirstFs): void {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       firstFrame, lastFrame, firstClip, drivingAudio,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, duration, prompt_extend, seed,
+      resolution, duration, prompt_extend, nsfw_checker, seed,
     } = payload as GenerateWan27FramesVideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -58,7 +59,7 @@ export function registerGenerateWan27FramesVideoJob(fs: ClipfirstFs): void {
     const drivingAudioUrl = drivingAudio ? await uploadInput(fs, provider, drivingAudio, projectSlug) : undefined;
 
     const request = buildWan27FramesVideoPayload(
-      { prompt, negative_prompt, resolution, duration, prompt_extend, seed },
+      { prompt, negative_prompt, resolution, duration, prompt_extend, nsfw_checker, seed },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ImageIcon, Video, X, Plus } from 'lucide-react';
+import { ImageIcon, Video, Music, X, Plus } from 'lucide-react';
 
 interface ResolvedAsset {
   id?: string;
   slug: string;
   src: string;
   thumbnailSrc?: string | null;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
 }
 
 interface AssetDropSlotProps {
@@ -16,7 +16,7 @@ interface AssetDropSlotProps {
   label?: string;
   required?: boolean;
   disabled?: boolean;
-  acceptTypes?: ('image' | 'video')[];
+  acceptTypes?: ('image' | 'video' | 'audio')[];
   emptyIcon?: React.ReactNode;
   compact?: boolean;
   variant?: 'default' | 'violet';
@@ -51,6 +51,7 @@ const themes = {
 export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'default' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
+  const isAudioOnly = acceptTypes.length === 1 && acceptTypes[0] === 'audio';
   const t = themes[variant];
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -162,6 +163,8 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               <Plus className="w-5 h-5" />
             ) : emptyIcon ? (
               emptyIcon
+            ) : isAudioOnly ? (
+              <Music className="w-5 h-5" />
             ) : isVideoOnly ? (
               <Video className="w-5 h-5" />
             ) : (

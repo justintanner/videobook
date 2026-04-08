@@ -2,6 +2,7 @@ import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { JSONSchemaProperty, ResolvedAsset } from './types';
 import { cn } from '@/lib/utils';
 import { stripSlugPrefix } from '@/lib/slugs';
+import { slugFieldAssetType } from './ui/fieldHelpers';
 
 interface AssetFieldInfo {
   name: string;
@@ -60,7 +61,7 @@ function prettifySlugFieldName(name: string): string {
 
 interface NamedSlotListProps {
   fields: AssetFieldInfo[];
-  assetType: 'image' | 'video';
+  defaultAssetType: 'image' | 'video';
   resolvedAssets?: ResolvedAsset[];
   droppedAssets?: Map<string, ResolvedAsset>;
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
@@ -69,7 +70,7 @@ interface NamedSlotListProps {
 
 function NamedSlotList({
   fields,
-  assetType,
+  defaultAssetType,
   resolvedAssets,
   droppedAssets,
   onChange,
@@ -80,6 +81,8 @@ function NamedSlotList({
       {fields.map((field) => {
         const slug = typeof field.value === 'string' ? field.value : '';
         const label = prettifySlugFieldName(field.name);
+        const fieldType = slugFieldAssetType(field.name);
+        const acceptType = fieldType || defaultAssetType;
         return (
           <div key={field.name} className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
@@ -90,7 +93,7 @@ function NamedSlotList({
             </div>
             <div className="px-3 py-2.5">
               <AssetDropSlot
-                value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: assetType } : null}
+                value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: acceptType } : null}
                 onChange={(asset) => {
                   if (asset) {
                     const da: ResolvedAsset = {
@@ -105,7 +108,7 @@ function NamedSlotList({
                   }
                 }}
                 disabled={disabled}
-                acceptTypes={[assetType]}
+                acceptTypes={[acceptType]}
               />
             </div>
           </div>
@@ -143,7 +146,7 @@ export function ImageParamSlots({
     return (
       <NamedSlotList
         fields={stringFields}
-        assetType={assetType}
+        defaultAssetType={assetType}
         resolvedAssets={resolvedAssets}
         droppedAssets={droppedAssets}
         onChange={onChange}
@@ -183,7 +186,7 @@ export function ImageParamSlots({
 
   const handleSlotChange = (
     index: number,
-    asset: { slug: string; src: string; type: 'image' | 'video' } | null,
+    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' } | null,
     droppedAsset?: ResolvedAsset
   ) => {
     if (primaryField.schema.type === 'array') {

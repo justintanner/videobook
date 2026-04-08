@@ -265,6 +265,7 @@ type Wan27FramesVideoArgs = {
   resolution?: "720p" | "1080p";
   duration?: string;
   prompt_extend?: boolean;
+  nsfw_checker?: boolean;
   seed?: number;
 };
 
@@ -291,6 +292,7 @@ function buildWan27FramesVideoPayload(
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
@@ -303,6 +305,7 @@ type Wan27ReferenceVideoArgs = {
   aspect_ratio?: string;
   duration?: string;
   prompt_extend?: boolean;
+  nsfw_checker?: boolean;
   seed?: number;
 };
 
@@ -330,6 +333,7 @@ function buildWan27ReferenceVideoPayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27RefToVideoRequest["input"]["aspect_ratio"] } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
