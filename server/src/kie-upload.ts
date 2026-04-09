@@ -28,8 +28,32 @@ function inferMimeType(filename: string): string | undefined {
 }
 
 /**
- * Upload raw bytes via base64 encoding.
- * Used for images and as fallback when no stored Kie URL exists.
+ * Upload raw bytes to tmpfiles.org as a fallback when Kie's upload CDN is blocked.
+ * Returns a publicly accessible download URL (valid for ~60 minutes).
+ */
+async function uploadToTmpfiles(data: Uint8Array | Buffer, filename: string): Promise<string> {
+  const mimeType = inferMimeType(filename) ?? "application/octet-stream";
+  const blob = new Blob([new Uint8Array(data)], { type: mimeType });
+  const form = new FormData();
+  form.append("file", blob, filename);
+
+  const res = await fetch("https://tmpfiles.org/api/v1/upload", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`tmpfiles.org upload failed: ${res.status}`);
+  }
+  const json = await res.json() as { status: string; data?: { url?: string } };
+  const url = json.data?.url;
+  if (!url) throw new Error("tmpfiles.org upload returned no URL");
+  // Convert display URL to direct download URL: insert /dl/ after domain
+  return url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+}
+
+/**
+ * Upload raw bytes via Kie base64 endpoint, falling back to tmpfiles.org
+ * when Kie's upload CDN is blocked by Cloudflare.
  */
 export async function uploadBase64(
   provider: KieProvider,
@@ -40,17 +64,24 @@ export async function uploadBase64(
   const base64Data = Buffer.from(data).toString("base64");
   const mimeType = inferMimeType(filename);
 
-  const result = await provider.post.api.fileBase64Upload({
-    base64Data,
-    uploadPath,
-    fileName: filename,
-    ...(mimeType !== undefined ? { mimeType } : {}),
-  });
+  try {
+    const result = await provider.post.api.fileBase64Upload({
+      base64Data,
+      uploadPath,
+      fileName: filename,
+      ...(mimeType !== undefined ? { mimeType } : {}),
+    });
 
-  if (!result.data?.downloadUrl) {
-    throw new KieError("upload failed: no downloadUrl in response", result.code);
+    if (!result.data?.downloadUrl) {
+      throw new KieError("upload failed: no downloadUrl in response", result.code);
+    }
+    return result.data.downloadUrl;
+  } catch (err) {
+    if (err instanceof Error && "status" in err && (err as { status: number }).status === 403) {
+      return uploadToTmpfiles(data, filename);
+    }
+    throw err;
   }
-  return result.data.downloadUrl;
 }
 
 /**
@@ -77,7 +108,8 @@ export async function uploadViaUrl(
 
 /**
  * Upload an asset file to Kie. Tries stored download_url (via fileUrlUpload)
- * first, falls back to reading the file and uploading via base64.
+ * first, falls back to reading the file and uploading via base64 (which itself
+ * falls back to tmpfiles.org if Kie's CDN is blocked).
  */
 export async function uploadAssetFile(
   provider: KieProvider,
@@ -91,7 +123,7 @@ export async function uploadAssetFile(
     try {
       return await uploadViaUrl(provider, meta.value.download_url, filename);
     } catch {
-      // URL may be expired — fall through to base64
+      // URL may be expired or upload CDN blocked — fall through to base64
     }
   }
 
