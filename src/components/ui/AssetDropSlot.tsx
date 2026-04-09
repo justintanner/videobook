@@ -120,6 +120,11 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               )}
               <span className={cn('text-xs font-mono truncate', t.labelText)}>{value.slug}</span>
             </div>
+          ) : value.type === 'audio' ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+              <Music className={cn('w-5 h-5', t.activeText)} />
+              <span className={cn('text-xs font-mono truncate px-2', t.labelText)}>{value.slug}</span>
+            </div>
           ) : (value.thumbnailSrc || value.src) ? (
             <>
               <img src={value.thumbnailSrc || value.src} alt={value.slug} draggable={false} className="w-full h-full object-cover" />
