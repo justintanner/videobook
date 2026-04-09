@@ -467,7 +467,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
                 /tool-call
               </div>
-              <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
+              <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
                 <JsonNode data={jsonPayload ?? {}} />
               </pre>
             </div>
@@ -483,7 +483,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                   <span className="text-[10px] font-mono">Translating...</span>
                 </div>
               ) : translatedPayload ? (
-                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all">
+                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
                   <JsonNode data={translatedPayload} />
                 </pre>
               ) : (

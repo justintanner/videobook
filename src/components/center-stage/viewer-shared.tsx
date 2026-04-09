@@ -208,11 +208,11 @@ export function JsonTerminal({ data, loading }: { data: string | null; loading: 
   try {
     parsed = JSON.parse(data);
   } catch {
-    return <pre className="text-base font-mono text-foreground/80 whitespace-pre-wrap break-all">{data}</pre>;
+    return <pre className="text-base font-mono text-foreground/80 whitespace-pre-wrap break-all select-text">{data}</pre>;
   }
 
   return (
-    <pre className="text-base font-mono leading-relaxed whitespace-pre-wrap break-all">
+    <pre className="text-base font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
       <JsonNode data={parsed} />
     </pre>
   );
@@ -318,7 +318,7 @@ export function FileContentPane({ content, loading, fileName, fileUrl }: {
   }
 
   return (
-    <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed">{content}</pre>
+    <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed select-text">{content}</pre>
   );
 }
 
