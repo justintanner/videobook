@@ -255,6 +255,20 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     };
   }, [selectedOption, formValues, projectSlug, selectedProviderKey]);
 
+  // Live validation warnings derived from current form values
+  const liveWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (selectedOption?.tool_name === 'generate_wan27_i2v_video') {
+      const hasClip = !!formValues.first_clip_slug;
+      const hasFirst = !!formValues.first_frame_slug;
+      const hasLast = !!formValues.last_frame_slug;
+      if (hasClip && hasFirst && hasLast) {
+        warnings.push('Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip.');
+      }
+    }
+    return warnings;
+  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug]);
+
   const fetchTranslatedPayload = useCallback(async () => {
     if (!jsonPayload) return;
     setTranslateLoading(true);
@@ -391,20 +405,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const imageSlots = selectedOption?.validation.image_slots ?? null;
 
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
-
-  // Live validation warnings derived from current form values
-  const liveWarnings = useMemo(() => {
-    const warnings: string[] = [];
-    if (selectedOption?.tool_name === 'generate_wan27_i2v_video') {
-      const hasClip = !!formValues.first_clip_slug;
-      const hasFirst = !!formValues.first_frame_slug;
-      const hasLast = !!formValues.last_frame_slug;
-      if (hasClip && hasFirst && hasLast) {
-        warnings.push('Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip.');
-      }
-    }
-    return warnings;
-  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug]);
 
   return (
     <GenPanel
