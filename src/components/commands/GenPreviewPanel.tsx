@@ -392,6 +392,20 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
+  // Live validation warnings derived from current form values
+  const liveWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (selectedOption?.tool_name === 'generate_wan27_i2v_video') {
+      const hasClip = !!formValues.first_clip_slug;
+      const hasFirst = !!formValues.first_frame_slug;
+      const hasLast = !!formValues.last_frame_slug;
+      if (hasClip && hasFirst && hasLast) {
+        warnings.push('Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip.');
+      }
+    }
+    return warnings;
+  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug]);
+
   return (
     <GenPanel
       label={panelLabel}
@@ -437,7 +451,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             variant={buttonVariant}
             state={genState}
             onClick={handleGenerate}
-            disabled={!selectedOption}
+            disabled={!selectedOption || liveWarnings.length > 0}
           />
         </div>
       }
@@ -488,16 +502,22 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
             )}
 
-            {/* Warnings */}
-            {selectedOption?.validation.warnings && selectedOption.validation.warnings.length > 0 && (
-              <div className="mb-3 space-y-1">
-                {selectedOption.validation.warnings.map((w, i) => (
-                  <div key={i} className="px-3 py-1.5 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-mono">
-                    {w}
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Warnings (server-side + live frontend validation) */}
+            {(() => {
+              const allWarnings = [
+                ...(selectedOption?.validation.warnings ?? []),
+                ...liveWarnings,
+              ];
+              return allWarnings.length > 0 && (
+                <div className="mb-3 space-y-1">
+                  {allWarnings.map((w, i) => (
+                    <div key={i} className="px-3 py-1.5 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-mono">
+                      {w}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <div className="flex gap-2">
               {/* Left column: prompt + inline params */}

@@ -543,6 +543,9 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (!firstFrame && !lastFrame && !firstClip) {
       warnings.push("Wan 2.7 Image to Video needs at least first_frame_slug, last_frame_slug, or first_clip_slug");
     }
+    if (firstClip && firstFrame && lastFrame) {
+      warnings.push("Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame");
+    }
   }
 
   if (toolName === "generate_wan27_videoedit_video") {

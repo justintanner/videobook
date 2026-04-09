@@ -113,6 +113,13 @@ export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      if (first_clip_slug && first_frame_slug && last_frame_slug) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip." }],
+        };
+      }
+
       let firstFrame: RefInput | undefined;
       if (first_frame_slug) {
         const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
