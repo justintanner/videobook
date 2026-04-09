@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react';
 import { Settings, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -8,6 +9,12 @@ import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
 import { type ViewerSize, type BackTab, RENDERING_STATUSES } from './viewer-types';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from '@/components/ui/context-menu';
 import {
   RatioToggle,
   RenderPrompt,
@@ -20,16 +27,47 @@ import {
 
 // ── Video-specific components ──
 
-function ClipContent({ item, size, onRender }: {
+function ClipContent({ item, size, onRender, callTool, projectSlug }: {
   item: MediaItem;
   size: ViewerSize;
   onRender?: () => void;
+  callTool: UseMcpResult['callTool'];
+  projectSlug: string;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleExtractFrame = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    callTool('extract_frame', {
+      asset_id: item.id,
+      project_slug: projectSlug,
+      timestamp: video.currentTime,
+    });
+  }, [callTool, item.id, projectSlug]);
+
   if (!item.filePath) return null;
 
   if (size === 'original') {
     const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
-    return <video key={item.filePath} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="w-full h-full">
+            <video ref={videoRef} key={item.filePath} src={item.filePath} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            onSelect={handleExtractFrame}
+            className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
+          >
+            <span className="text-sm font-semibold leading-none text-foreground">Extract Frame</span>
+            <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/extract-frame</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    );
   }
 
   const orient = size as Orientation;
@@ -48,7 +86,24 @@ function ClipContent({ item, size, onRender }: {
       : size === 'portrait' ? 'portrait.jpg'
       : 'square.jpg';
     const thumbSrc = basePath.replace(/\/[^/]+$/, `/${thumbFile}`) + qs;
-    return <video key={derivedSrc} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />;
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="w-full h-full">
+            <video ref={videoRef} key={derivedSrc} src={derivedSrc} poster={thumbSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            onSelect={handleExtractFrame}
+            className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
+          >
+            <span className="text-sm font-semibold leading-none text-foreground">Extract Frame</span>
+            <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/extract-frame</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    );
   }
 
   if (status && RENDERING_STATUSES.has(status)) {
@@ -234,14 +289,14 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
             )}>
               {size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} />
+                  <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} />
                 </div>
               ) : size === 'square' ? (
                 <div className="aspect-square h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} />
+                  <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} />
                 </div>
               ) : (
-                <ClipContent item={item} size={size} onRender={onRender} />
+                <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} />
               )}
             </div>
           </div>

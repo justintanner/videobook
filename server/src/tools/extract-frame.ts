@@ -50,8 +50,9 @@ async function probeVideo(filePath: string): Promise<ProbeResult> {
 async function extractFrame(
   videoAssetId: string,
   projectSlug: string,
-  mode: "first" | "last",
+  mode: "first" | "last" | "custom",
   fs: ClipfirstFs,
+  customTimestamp?: number,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const manifestResult = await fs.getManifest(videoAssetId, projectSlug);
   if (!manifestResult.ok) {
@@ -83,10 +84,14 @@ async function extractFrame(
     };
   }
 
-  const timestamp = mode === "first" ? 0.1 : Math.max(0, probe.duration - 0.1);
+  const timestamp = mode === "custom"
+    ? Math.max(0, Math.min(customTimestamp ?? 0, probe.duration))
+    : mode === "first" ? 0.1 : Math.max(0, probe.duration - 0.1);
 
   const baseName = videoAssetId.startsWith("vid-") ? videoAssetId.slice(4) : videoAssetId;
-  const imageName = `${baseName}-${mode}-frame`;
+  const imageName = mode === "custom"
+    ? `${baseName}-frame-${String(Math.round((customTimestamp ?? 0) * 100) / 100).replace(".", "-")}s`
+    : `${baseName}-${mode}-frame`;
 
   const assetResult = await fs.createAsset("img", imageName, projectSlug);
   if (!assetResult.ok) {
@@ -146,6 +151,23 @@ export function extractFrameDefs(fs: ClipfirstFs): ToolDef[] {
       handler: async (args) => {
         const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
         return extractFrame(asset_id, project_slug, "last", fs);
+      },
+    },
+    {
+      name: "extract_frame",
+      description: "Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).",
+      schema: {
+        asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
+        project_slug: z.string().describe("Project slug"),
+        timestamp: z.number().describe("Timestamp in seconds to extract the frame from"),
+      },
+      handler: async (args) => {
+        const { asset_id, project_slug, timestamp } = args as {
+          asset_id: string;
+          project_slug: string;
+          timestamp: number;
+        };
+        return extractFrame(asset_id, project_slug, "custom", fs, timestamp);
       },
     },
   ];

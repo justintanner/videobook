@@ -31,7 +31,7 @@ type ExtractFramePayload = {
   projectSlug: string;
   width: number;
   height: number;
-  mode: "first" | "last";
+  mode: "first" | "last" | "custom";
 };
 
 export function registerExtractFrameJob(fs: ClipfirstFs): void {
