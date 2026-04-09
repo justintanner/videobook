@@ -39,15 +39,16 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
       const provider = xai({ apiKey, timeout: 120_000 });
 
-      // Convert to base64 data URL for the image reference
-      const ext = imageFilename.split(".").pop()?.toLowerCase() ?? "png";
-      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
-      const b64 = Buffer.from(imageBytes).toString("base64");
-      const dataUrl = `data:${mime};base64,${b64}`;
+      // Upload image via kie for a publicly accessible URL
+      const kieKey = process.env.KIE_API_KEY;
+      if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
+      const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
+      const blob = new Blob([imageBytes]);
+      const imageUrl = await uploadFile(kieProvider, blob, imageFilename);
 
       const request = buildXaiGrokImagineImagePayload(
         { prompt, aspect_ratio: aspectRatio },
-        [dataUrl],
+        [imageUrl],
       );
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.post.v1.images.edits(request);

@@ -33,26 +33,18 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
     if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
     // Upload reference images to get publicly accessible URLs
+    const kieKey = process.env.KIE_API_KEY;
+    if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
+    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
+
     const imageUrls: string[] = [];
     for (const ref of refImages) {
       const readResult = await fs.readFile(ref.assetId, ref.filename, projectSlug);
       if (!readResult.ok) throw new Error(readResult.error.message);
       const imageBytes = new Uint8Array(readResult.value);
 
-      // Upload via Kie API for a public URL (xAI needs URLs)
-      const kieKey = process.env.KIE_API_KEY;
-      if (kieKey) {
-        const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-        const blob = new Blob([imageBytes]);
-        const imageUrl = await uploadFile(kieProvider, blob, ref.filename);
-        imageUrls.push(imageUrl);
-      } else {
-        // Fallback: base64 data URL
-        const ext = ref.filename.split(".").pop()?.toLowerCase() ?? "png";
-        const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
-        const b64 = Buffer.from(imageBytes).toString("base64");
-        imageUrls.push(`data:${mime};base64,${b64}`);
-      }
+      const blob = new Blob([imageBytes]);
+      imageUrls.push(await uploadFile(kieProvider, blob, ref.filename));
     }
 
     const provider = xai({ apiKey, timeout: 120_000 });

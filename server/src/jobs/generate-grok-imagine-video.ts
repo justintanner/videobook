@@ -38,20 +38,12 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
-      // Upload image via kie for a publicly accessible URL (xai needs a URL, not base64)
+      // Upload image via kie for a publicly accessible URL
       const kieKey = process.env.KIE_API_KEY;
-      let imageUrl: string;
-      if (kieKey) {
-        const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-        const blob = new Blob([imageBytes]);
-        imageUrl = await uploadFile(kieProvider, blob, imageFilename);
-      } else {
-        // Fallback: base64 data URL
-        const ext = imageFilename.split(".").pop()?.toLowerCase() ?? "png";
-        const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
-        const b64 = Buffer.from(imageBytes).toString("base64");
-        imageUrl = `data:${mime};base64,${b64}`;
-      }
+      if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
+      const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
+      const blob = new Blob([imageBytes]);
+      const imageUrl = await uploadFile(kieProvider, blob, imageFilename);
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
