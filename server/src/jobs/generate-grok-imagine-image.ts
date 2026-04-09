@@ -53,11 +53,11 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await provider.post.v1.images.edits(request);
 
-      const imageUrl = result.data[0]?.url;
-      if (!imageUrl) throw new Error("xAI returned no image URL");
+      const resultImageUrl = result.data[0]?.url;
+      if (!resultImageUrl) throw new Error("xAI returned no image URL");
 
       // Download the result image
-      const resp = await fetch(imageUrl);
+      const resp = await fetch(resultImageUrl);
       if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
       const resultBuffer = Buffer.from(await resp.arrayBuffer());
       await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
