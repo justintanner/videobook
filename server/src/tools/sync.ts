@@ -404,7 +404,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     await Promise.all(kieTasks.map(async (task) => {
       try {
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
-        await processSyncedTask(fs, task, taskInfo, result);
+        await processSyncedTask(fs, task, taskInfo, result, project_slug);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
@@ -412,7 +412,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
           }
         }
       }
@@ -428,14 +428,19 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       try {
         const videoResult = await provider.get.v1.videos(task.taskId);
         if (videoResult.status === "done" && videoResult.video?.url) {
+          const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
+          if (!assetDirResult.ok) {
+            await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}` });
+            return;
+          }
           const jobId = `complete-xai-${task.assetId}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
             taskId: task.taskId,
             taskType: task.taskType,
             assetId: task.assetId,
-            assetDir: task.assetDir,
-            projectSlug: task.projectSlug,
+            assetDir: assetDirResult.value,
+            projectSlug: project_slug,
             meta: task.meta,
             resultUrls: [videoResult.video.url],
           } as unknown as Record<string, unknown>);
@@ -443,7 +448,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
-          await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
+          await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
         } else {
           result.pending.push({
             assetId: task.assetId,
@@ -458,7 +463,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
-            await failPendingTask(fs, task.assetId, task.projectSlug, { message: failMsg });
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
           }
         }
       }
@@ -574,9 +579,16 @@ async function processSyncedTask(
   task: PendingKieTask,
   taskInfo: KieTaskInfo,
   result: SyncResult,
+  projectSlug: string,
 ): Promise<void> {
   const data = taskInfo.data;
   if (data?.state === "success") {
+    const assetDirResult = await fs.resolveAssetDir(task.assetId, projectSlug);
+    if (!assetDirResult.ok) {
+      await failPendingTask(fs, task.assetId, projectSlug, { message: `Asset not found: ${task.assetId}` });
+      return;
+    }
+
     const jobId = `complete-${task.taskType}-${task.assetId}-${Date.now()}`;
 
     const parsed = JSON.parse(data.resultJson ?? "{}") as {
@@ -589,8 +601,8 @@ async function processSyncedTask(
       taskId: task.taskId,
       taskType: task.taskType,
       assetId: task.assetId,
-      assetDir: task.assetDir,
-      projectSlug: task.projectSlug,
+      assetDir: assetDirResult.value,
+      projectSlug,
       meta: task.meta,
       resultUrls: parsed.resultUrls ?? [],
       resultObject: parsed.resultObject,
@@ -605,7 +617,7 @@ async function processSyncedTask(
       failMsg,
       failedAt: new Date().toISOString(),
     });
-    await failPendingTask(fs, task.assetId, task.projectSlug, {
+    await failPendingTask(fs, task.assetId, projectSlug, {
       message: failMsg,
       ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),
     });

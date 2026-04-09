@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { writeFile, unlink, readFile as readFsFile, access } from "node:fs/promises";
+import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { runFfmpeg } from "../ffmpeg.js";
@@ -25,17 +25,17 @@ type CompleteKieTaskPayload = {
 export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
   registerJobHandler("complete_kie_task", async (payload) => {
     const {
-      taskId, taskType, assetId, assetDir, projectSlug, meta,
+      taskId, taskType, assetId, projectSlug, meta,
       resultUrls, resultObject,
     } = payload as CompleteKieTaskPayload;
 
-    // If the asset directory was deleted, clean up the pending task and bail.
-    try {
-      await access(assetDir);
-    } catch {
+    // Resolve the asset directory at runtime so renames don't break completion.
+    const assetDirResult = await fs.resolveAssetDir(assetId, projectSlug);
+    if (!assetDirResult.ok) {
       await deletePendingTask(fs, assetId, projectSlug);
       return { success: true, skipped: true };
     }
+    const assetDir = assetDirResult.value;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
