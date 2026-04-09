@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildQwen2ImageEditPayload } from "../payload-builders.js";
@@ -29,10 +30,7 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const readResult = await fs.readFile(sourceImageId, imageFilename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const blob = new Blob([new Uint8Array(readResult.value)]);
-    const uploadedUrl = await uploadFile(provider, blob, imageFilename);
+    const uploadedUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildQwen2ImageEditPayload(
       { prompt, image_size: imageSize, output_format: outputFormat, seed },

@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { xai } from "@nakedapi/xai";
 import type { XaiVideoExtendRequest } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
@@ -31,16 +32,11 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
-      const readResult = await fs.readFile(sourceVideoId, sourceVideoFilename, projectSlug);
-      if (!readResult.ok) throw new Error(readResult.error.message);
-      const videoBytes = new Uint8Array(readResult.value);
-
       // Upload video via KIE for a publicly accessible URL (xAI needs a URL)
       const kieKey = process.env.KIE_API_KEY;
       if (!kieKey) throw new Error("KIE_API_KEY environment variable is not set — required for video upload");
       const kieProvider = kie({ apiKey: kieKey, timeout: 120_000 });
-      const blob = new Blob([videoBytes]);
-      const videoUrl = await uploadFile(kieProvider, blob, sourceVideoFilename);
+      const videoUrl = await uploadAssetFile(kieProvider, fs, sourceVideoId, sourceVideoFilename, projectSlug);
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request: XaiVideoExtendRequest = {

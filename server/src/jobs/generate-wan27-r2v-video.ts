@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27ReferenceVideoPayload } from "../payload-builders.js";
@@ -36,10 +37,7 @@ async function uploadInputs(
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    const readResult = await fs.readFile(assetId, filename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const blob = new Blob([new Uint8Array(readResult.value)]);
-    urls.push(await uploadFile(provider, blob, filename));
+    urls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
   }
   return urls;
 }
@@ -50,10 +48,7 @@ async function uploadSingle(
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
-  const readResult = await fs.readFile(input.assetId, input.filename, projectSlug);
-  if (!readResult.ok) throw new Error(readResult.error.message);
-  const blob = new Blob([new Uint8Array(readResult.value)]);
-  return uploadFile(provider, blob, input.filename);
+  return uploadAssetFile(provider, fs, input.assetId, input.filename, projectSlug);
 }
 
 export function registerGenerateWan27R2vVideoJob(fs: ClipfirstFs): void {

@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27VideoEditPayload } from "../payload-builders.js";
@@ -33,10 +34,7 @@ async function uploadSingle(
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
-  const readResult = await fs.readFile(input.assetId, input.filename, projectSlug);
-  if (!readResult.ok) throw new Error(readResult.error.message);
-  const blob = new Blob([new Uint8Array(readResult.value)]);
-  return uploadFile(provider, blob, input.filename);
+  return uploadAssetFile(provider, fs, input.assetId, input.filename, projectSlug);
 }
 
 export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {

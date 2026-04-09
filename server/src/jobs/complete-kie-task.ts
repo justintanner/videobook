@@ -94,6 +94,7 @@ async function completeNanoBananaImage(
     source_assets: meta.sourceImageIds,
     model: "nano-banana-pro",
     prompt: meta.prompt,
+    download_url: imageUrl,
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
@@ -130,6 +131,7 @@ async function completeWan27Image(
     source_assets: meta.sourceImageIds,
     model: taskType === "wan27_image_pro" ? "wan/2-7-image-pro" : "wan/2-7-image",
     prompt: meta.prompt,
+    download_url: imageUrl,
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
@@ -166,6 +168,7 @@ async function completeQwen2ImageEdit(
     source_asset: meta.sourceImageId,
     model: "qwen2/image-edit",
     prompt: meta.prompt,
+    download_url: imageUrl,
     ...(meta.imageSize !== undefined ? { image_size: meta.imageSize } : {}),
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
     ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
@@ -201,6 +204,7 @@ async function completeKling30Video(
   const provenance = {
     source_assets: meta.sourceImageIds,
     model: "kling-3.0/video",
+    download_url: videoUrl,
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
     ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
@@ -254,6 +258,7 @@ async function completeSeedance2Video(
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
     model: "bytedance/seedance-2-fast",
+    download_url: videoUrl,
     ...(meta.mode !== undefined ? { seedance_mode: meta.mode } : {}),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
@@ -300,6 +305,7 @@ async function completeWan27Video(
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
     model: meta.mode === "reference" ? "wan/2-7-r2v" : "wan/2-7-image-to-video",
+    download_url: videoUrl,
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
   };
@@ -343,6 +349,7 @@ async function completeGrokImagineVideo(
   const provenance = {
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
     model: meta.sourceVideoId ? "grok-imagine/video-extension" : "grok-imagine/image-to-video",
+    download_url: videoUrl,
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
     ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
@@ -387,6 +394,7 @@ async function completeGrokImagineImage(
   const origin = {
     source_asset: meta.sourceImageId,
     model: "grok-imagine/image-to-image",
+    download_url: imageUrl,
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
   };
@@ -420,6 +428,7 @@ async function completeGptImage(
     source_assets: meta.sourceImageIds,
     model: "gpt-image/1.5-image-to-image",
     prompt: meta.prompt,
+    download_url: imageUrl,
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
     generated_at: new Date().toISOString(),

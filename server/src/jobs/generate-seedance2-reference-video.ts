@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
@@ -34,10 +35,7 @@ async function uploadInputs(
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    const readResult = await fs.readFile(assetId, filename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const blob = new Blob([new Uint8Array(readResult.value)]);
-    urls.push(await uploadFile(provider, blob, filename));
+    urls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
   }
   return urls;
 }

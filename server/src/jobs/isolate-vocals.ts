@@ -2,7 +2,8 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadBase64 } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { writePendingTask } from "./pending-task.js";
@@ -63,8 +64,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
     }
 
     // Upload to KIE
-    const blob = new Blob([new Uint8Array(uploadBuffer)]);
-    const downloadUrl = await uploadFile(provider, blob, audioFilename);
+    const downloadUrl = await uploadBase64(provider, uploadBuffer, audioFilename);
 
     // Create isolation task
     const request = {

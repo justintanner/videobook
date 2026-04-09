@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
@@ -29,10 +30,7 @@ async function uploadFrame(
   frame: FrameInput,
   projectSlug: string,
 ): Promise<string> {
-  const readResult = await fs.readFile(frame.assetId, frame.filename, projectSlug);
-  if (!readResult.ok) throw new Error(readResult.error.message);
-  const blob = new Blob([new Uint8Array(readResult.value)]);
-  return uploadFile(provider, blob, frame.filename);
+  return uploadAssetFile(provider, fs, frame.assetId, frame.filename, projectSlug);
 }
 
 export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {

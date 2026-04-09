@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 
@@ -28,11 +29,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const blob = new Blob([new Uint8Array(readResult.value)]);
-
-    const downloadUrl = await uploadFile(provider, blob, audioFilename);
+    const downloadUrl = await uploadAssetFile(provider, fs, assetId, audioFilename, projectSlug);
 
     const request = {
       model: "elevenlabs/speech-to-text" as const,

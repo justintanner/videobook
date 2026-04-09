@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import type { KlingElement, MultiShotPrompt } from "@nakedapi/kie";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildKling30VideoPayload } from "../payload-builders.js";
@@ -47,10 +48,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     // Upload reference images
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      const readResult = await fs.readFile(assetId, filename, projectSlug);
-      if (!readResult.ok) throw new Error(readResult.error.message);
-      const blob = new Blob([new Uint8Array(readResult.value)]);
-      imageUrls.push(await uploadFile(provider, blob, filename));
+      imageUrls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
     }
 
     // Upload element media and build KlingElement array
@@ -58,10 +56,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     for (const elem of elementInputs) {
       const urls: string[] = [];
       for (const { assetId, filename } of elem.inputs) {
-        const readResult = await fs.readFile(assetId, filename, projectSlug);
-        if (!readResult.ok) throw new Error(readResult.error.message);
-        const blob = new Blob([new Uint8Array(readResult.value)]);
-        urls.push(await uploadFile(provider, blob, filename));
+        urls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
       }
 
       const element: KlingElement = {

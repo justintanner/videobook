@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile } from "@nakedapi/kie";
+import { kie } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -39,12 +40,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
 
     const imageUrls: string[] = [];
     for (const ref of refImages) {
-      const readResult = await fs.readFile(ref.assetId, ref.filename, projectSlug);
-      if (!readResult.ok) throw new Error(readResult.error.message);
-      const imageBytes = new Uint8Array(readResult.value);
-
-      const blob = new Blob([imageBytes]);
-      imageUrls.push(await uploadFile(kieProvider, blob, ref.filename));
+      imageUrls.push(await uploadAssetFile(kieProvider, fs, ref.assetId, ref.filename, projectSlug));
     }
 
     const provider = xai({ apiKey, timeout: 120_000 });

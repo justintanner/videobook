@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import type { GrokImageToImageRequest } from "@nakedapi/kie";
 import { xai } from "@nakedapi/xai";
 import { queue, registerJobHandler } from "../queue.js";
@@ -28,10 +29,6 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
 
-    const readResult = await fs.readFile(sourceImageId, imageFilename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const imageBytes = new Uint8Array(readResult.value);
-
     if (isXai) {
       // xAI path — synchronous image generation
       const apiKey = process.env.XAI_API_KEY;
@@ -43,8 +40,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const kieKey = process.env.KIE_API_KEY;
       if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
       const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-      const blob = new Blob([imageBytes]);
-      const imageUrl = await uploadFile(kieProvider, blob, imageFilename);
+      const imageUrl = await uploadAssetFile(kieProvider, fs, sourceImageId, imageFilename, projectSlug);
 
       const request = buildXaiGrokImagineImagePayload(
         { prompt, aspect_ratio: aspectRatio },
@@ -88,9 +84,8 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
     const provider = kie({ apiKey, timeout: 60_000 });
-    const blob = new Blob([imageBytes]);
 
-    const downloadUrl = await uploadFile(provider, blob, imageFilename);
+    const downloadUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);

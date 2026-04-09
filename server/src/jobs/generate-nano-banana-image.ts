@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildNanoBananaImagePayload } from "../payload-builders.js";
@@ -31,10 +32,7 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      const readResult = await fs.readFile(srcAssetId, filename, projectSlug);
-      if (!readResult.ok) throw new Error(readResult.error.message);
-      const blob = new Blob([new Uint8Array(readResult.value)]);
-      uploadedUrls.push(await uploadFile(provider, blob, filename));
+      uploadedUrls.push(await uploadAssetFile(provider, fs, srcAssetId, filename, projectSlug));
     }
 
     const request = buildNanoBananaImagePayload(

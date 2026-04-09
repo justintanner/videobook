@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, uploadFile, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@nakedapi/kie";
+import { uploadAssetFile } from "../kie-upload.js";
 import { xai } from "@nakedapi/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -29,10 +30,6 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
 
-    const readResult = await fs.readFile(sourceImageId, imageFilename, projectSlug);
-    if (!readResult.ok) throw new Error(readResult.error.message);
-    const imageBytes = new Uint8Array(readResult.value);
-
     if (isXai) {
       // xAI path — async video generation with pending task
       const apiKey = process.env.XAI_API_KEY;
@@ -42,8 +39,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       const kieKey = process.env.KIE_API_KEY;
       if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
       const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-      const blob = new Blob([imageBytes]);
-      const imageUrl = await uploadFile(kieProvider, blob, imageFilename);
+      const imageUrl = await uploadAssetFile(kieProvider, fs, sourceImageId, imageFilename, projectSlug);
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
@@ -76,9 +72,8 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
     const provider = kie({ apiKey, timeout: 60_000 });
-    const blob = new Blob([imageBytes]);
 
-    const downloadUrl = await uploadFile(provider, blob, imageFilename);
+    const downloadUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineVideoPayload(
       { prompt, mode, duration, resolution },
