@@ -69,6 +69,7 @@ export function HomePage() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [activitySeenAt, setActivitySeenAt] = useState<string>('');
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
@@ -618,8 +619,11 @@ export function HomePage() {
             generatingCount={pendingClips.length}
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
-            onStatusClick={() => setStatusOpen(true)}
-            failureCount={result?.failed?.length ?? 0}
+            onStatusClick={() => {
+              setStatusOpen(true);
+              setActivitySeenAt(new Date().toISOString());
+            }}
+            failureCount={(result?.failed ?? []).filter((f) => f.failedAt > activitySeenAt).length}
             onAnimateCommand={handleAnimateCommand}
           />
 

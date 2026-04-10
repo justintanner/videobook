@@ -54,7 +54,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
                 'absolute -top-1.5 -right-1.5 z-20',
                 'text-[10px] font-mono font-bold leading-none px-1 min-w-[16px] h-4',
                 'rounded-full inline-flex items-center justify-center',
-                'bg-red-500 text-white pointer-events-none'
+                'bg-red-500/15 border border-red-500/40 text-red-400/90 pointer-events-none'
               )}
             >
               {failureCount}
