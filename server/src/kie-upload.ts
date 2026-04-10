@@ -1,7 +1,12 @@
 import type { KieProvider } from "@nakedapi/kie";
 import { KieError } from "@nakedapi/kie";
 import { free } from "@nakedapi/free";
+import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-fs";
+
+export function contentHash(data: Buffer | Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
+}
 
 const MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -102,9 +107,10 @@ export async function uploadViaUrl(
 }
 
 /**
- * Upload an asset file to Kie. Tries stored download_url (via fileUrlUpload)
- * first, falls back to reading the file and uploading via base64 (which itself
- * falls back to tmpfiles.org if Kie's CDN is blocked).
+ * Upload an asset file to Kie. Uses a cached download_url only when the
+ * current file content matches the stored hash (so local edits like trim,
+ * reverse, or speed change invalidate the cache). Falls back to base64
+ * upload (with tmpfiles.org fallback if Kie's CDN is blocked).
  */
 export async function uploadAssetFile(
   provider: KieProvider,
@@ -113,8 +119,14 @@ export async function uploadAssetFile(
   filename: string,
   projectSlug: string,
 ): Promise<string> {
-  const meta = await fs.readMetadata<{ download_url?: string }>(assetId, "original", projectSlug);
-  if (meta.ok && meta.value.download_url) {
+  const readResult = await fs.readFile(assetId, filename, projectSlug);
+  if (!readResult.ok) throw new Error(readResult.error.message);
+  const fileData = new Uint8Array(readResult.value);
+  const fileHash = contentHash(fileData);
+
+  type OriginalMeta = { download_url?: string; download_url_content_hash?: string };
+  const meta = await fs.readMetadata<OriginalMeta>(assetId, "original", projectSlug);
+  if (meta.ok && meta.value.download_url && meta.value.download_url_content_hash === fileHash) {
     try {
       return await uploadViaUrl(provider, meta.value.download_url, filename);
     } catch {
@@ -122,7 +134,16 @@ export async function uploadAssetFile(
     }
   }
 
-  const readResult = await fs.readFile(assetId, filename, projectSlug);
-  if (!readResult.ok) throw new Error(readResult.error.message);
-  return uploadBase64(provider, new Uint8Array(readResult.value), filename);
+  const url = await uploadBase64(provider, fileData, filename);
+
+  // Cache the new URL + hash so repeated uploads of the same file skip base64.
+  if (meta.ok) {
+    await fs.writeMetadata(assetId, "original", {
+      ...meta.value,
+      download_url: url,
+      download_url_content_hash: fileHash,
+    }, projectSlug).catch(() => {});
+  }
+
+  return url;
 }

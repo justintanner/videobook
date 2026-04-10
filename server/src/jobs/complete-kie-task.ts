@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
+import { contentHash } from "../kie-upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
 import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
@@ -95,6 +96,7 @@ async function completeNanoBananaImage(
     model: "nano-banana-pro",
     prompt: meta.prompt,
     download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
@@ -132,6 +134,7 @@ async function completeWan27Image(
     model: taskType === "wan27_image_pro" ? "wan/2-7-image-pro" : "wan/2-7-image",
     prompt: meta.prompt,
     download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
     ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
@@ -169,6 +172,7 @@ async function completeQwen2ImageEdit(
     model: "qwen2/image-edit",
     prompt: meta.prompt,
     download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.imageSize !== undefined ? { image_size: meta.imageSize } : {}),
     ...(meta.outputFormat !== undefined ? { output_format: meta.outputFormat } : {}),
     ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
@@ -205,6 +209,7 @@ async function completeKling30Video(
     source_assets: meta.sourceImageIds,
     model: "kling-3.0/video",
     download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
     ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
@@ -259,6 +264,7 @@ async function completeSeedance2Video(
     source_audios: meta.sourceAudioIds,
     model: "bytedance/seedance-2-fast",
     download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.mode !== undefined ? { seedance_mode: meta.mode } : {}),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
@@ -306,6 +312,7 @@ async function completeWan27Video(
     source_audios: meta.sourceAudioIds,
     model: meta.mode === "reference" ? "wan/2-7-r2v" : "wan/2-7-image-to-video",
     download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
   };
@@ -350,6 +357,7 @@ async function completeGrokImagineVideo(
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
     model: meta.sourceVideoId ? "grok-imagine/video-extension" : "grok-imagine/image-to-video",
     download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     ...(meta.mode !== undefined ? { mode: meta.mode } : {}),
     ...(meta.duration !== undefined ? { duration: meta.duration } : {}),
@@ -395,6 +403,7 @@ async function completeGrokImagineImage(
     source_asset: meta.sourceImageId,
     model: "grok-imagine/image-to-image",
     download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
     generated_at: new Date().toISOString(),
   };
@@ -429,6 +438,7 @@ async function completeGptImage(
     model: "gpt-image/1.5-image-to-image",
     prompt: meta.prompt,
     download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
     generated_at: new Date().toISOString(),
