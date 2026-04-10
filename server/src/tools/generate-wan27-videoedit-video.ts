@@ -107,6 +107,15 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
+      const MAX_INPUT_DURATION = 10;
+      const meta = await fs.readMetadata<{ duration?: number }>(videoInput.assetId, "original", project_slug);
+      if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Source video is ${meta.value.duration.toFixed(1)}s — Wan 2.7 Video Edit accepts at most ${MAX_INPUT_DURATION}s. Trim the video first.` }],
+        };
+      }
+
       let imageInput: RefInput | undefined;
       if (image_slug) {
         const r = await resolveImageSlug(fs, image_slug, project_slug);

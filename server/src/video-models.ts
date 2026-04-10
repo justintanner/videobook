@@ -661,7 +661,7 @@ KEY CONSTRAINTS:
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration "6"/"10"
 - For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
-- For generate_wan27_videoedit_video: REQUIRES video_slug, optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
+- For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
