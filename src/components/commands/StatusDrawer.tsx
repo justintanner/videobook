@@ -9,7 +9,7 @@ import type { ActionLogEntry } from '@/hooks/useProjectActivity';
 import type { SyncResult } from '@/hooks/useSync';
 import type { UseMcpResult } from 'use-mcp/react';
 
-type ActionCategory = 'generate' | 'render' | 'upload' | 'transcribe' | 'sync' | 'edit' | 'create' | 'delete' | 'fail' | 'other';
+type ActionCategory = 'generate' | 'render' | 'upload' | 'transcribe' | 'sync' | 'trim' | 'edit' | 'create' | 'delete' | 'fail' | 'other';
 
 const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
   generate:   { color: 'text-fuchsia-400' },
@@ -17,6 +17,7 @@ const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
   upload:     { color: 'text-blue-400' },
   transcribe: { color: 'text-sky-400' },
   sync:       { color: 'text-emerald-400' },
+  trim:       { color: 'text-teal-400' },
   edit:       { color: 'text-zinc-400' },
   create:     { color: 'text-emerald-400' },
   delete:     { color: 'text-red-400' },
@@ -24,13 +25,18 @@ const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
   other:      { color: 'text-zinc-500' },
 };
 
+const VISIBLE_CATEGORIES = new Set<ActionCategory>([
+  'generate', 'create', 'delete', 'render', 'upload', 'transcribe', 'trim',
+]);
+
 function categorize(action: string): ActionCategory {
   if (action.includes('generate') || action.includes('grok') || action.includes('kling') || action.includes('nano-banana') || action.includes('gpt-image')) return 'generate';
   if (action.includes('render')) return 'render';
-  if (action.includes('upload')) return 'upload';
+  if (action.includes('upload') || action.includes('download')) return 'upload';
   if (action.includes('transcribe') || action.includes('isolate')) return 'transcribe';
   if (action.includes('sync')) return 'sync';
-  if (action.includes('trim') || action.includes('edit') || action.includes('assign') || action.includes('clear') || action.includes('whitelist') || action.includes('speed') || action.includes('reverse')) return 'edit';
+  if (action.includes('trim')) return 'trim';
+  if (action.includes('edit') || action.includes('assign') || action.includes('clear') || action.includes('whitelist') || action.includes('speed') || action.includes('reverse')) return 'edit';
   if (action.includes('create')) return 'create';
   if (action.includes('delete')) return 'delete';
   return 'other';
@@ -99,11 +105,16 @@ export function StatusDrawer({
 
   const failures = useMemo(() => syncResult?.failed ?? [], [syncResult?.failed]);
 
+  const visibleEntries = useMemo(
+    () => entries.filter((entry) => VISIBLE_CATEGORIES.has(categorize(entry.action))),
+    [entries],
+  );
+
   // Merge failures into the activity entries as a single chronological list
   type MergedEntry = { kind: 'activity'; entry: ActionLogEntry } | { kind: 'fail'; fail: typeof failures[number] };
   const merged = useMemo(() => {
     const items: MergedEntry[] = [
-      ...entries.map((entry): MergedEntry => ({ kind: 'activity', entry })),
+      ...visibleEntries.map((entry): MergedEntry => ({ kind: 'activity', entry })),
       ...failures.map((fail): MergedEntry => ({ kind: 'fail', fail })),
     ];
     items.sort((a, b) => {
@@ -112,7 +123,7 @@ export function StatusDrawer({
       return new Date(dateB).getTime() - new Date(dateA).getTime();
     });
     return items;
-  }, [entries, failures]);
+  }, [visibleEntries, failures]);
 
   // Two-phase open: mount then animate in
   useEffect(() => {
@@ -192,7 +203,7 @@ export function StatusDrawer({
         )}
       >
         <StatusHeader
-          entryCount={entries.length}
+          entryCount={visibleEntries.length}
           failureCount={failures.length}
           onClose={onClose}
         />
