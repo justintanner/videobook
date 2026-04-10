@@ -619,7 +619,7 @@ export function HomePage() {
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
             onStatusClick={() => setStatusOpen(true)}
-            hasFailures={(result?.failed?.length ?? 0) > 0}
+            failureCount={result?.failed?.length ?? 0}
             onAnimateCommand={handleAnimateCommand}
           />
 
