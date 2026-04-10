@@ -316,7 +316,7 @@ export function DynamicField({
     const isPrompt = name === 'prompt';
     const placeholder = placeholderOverride || schema.description || `Enter ${label.toLowerCase()}...`;
     return (
-      <GenField label={label} required={required} theme={theme}>
+      <GenField label={label} required={required} theme={theme} className="w-full">
         <GenTextarea
           value={(value as string) || ''}
           onChange={(v) => onChange(v)}
