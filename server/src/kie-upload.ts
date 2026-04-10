@@ -107,10 +107,19 @@ export async function uploadViaUrl(
 }
 
 /**
- * Upload an asset file to Kie. Uses a cached download_url only when the
- * current file content matches the stored hash (so local edits like trim,
- * reverse, or speed change invalidate the cache). Falls back to base64
- * upload (with tmpfiles.org fallback if Kie's CDN is blocked).
+ * Upload an asset file to Kie. The remote filename is derived from the
+ * file's SHA-256 hash so every distinct file lands at a unique CDN path —
+ * this is what prevents cross-asset collisions where two assets with the
+ * same local filename (`original.mp4`) would otherwise overwrite each
+ * other in Kie's `uploads/{fileName}` bucket.
+ *
+ * A cached download_url is reused only when:
+ *   1. the stored hash matches the current file content, AND
+ *   2. the cached URL path contains that hash (proving it was written
+ *      under the hashed-filename scheme — legacy URLs are invalidated).
+ *
+ * Falls back to base64 upload (with tmpfiles.org fallback if Kie's CDN
+ * is blocked by Cloudflare).
  */
 export async function uploadAssetFile(
   provider: KieProvider,
@@ -124,17 +133,24 @@ export async function uploadAssetFile(
   const fileData = new Uint8Array(readResult.value);
   const fileHash = contentHash(fileData);
 
+  const ext = filename.split(".").pop() ?? "bin";
+  const hashedFilename = `${fileHash}.${ext}`;
+
   type OriginalMeta = { download_url?: string; download_url_content_hash?: string };
   const meta = await fs.readMetadata<OriginalMeta>(assetId, "original", projectSlug);
-  if (meta.ok && meta.value.download_url && meta.value.download_url_content_hash === fileHash) {
+  const cachedUrl = meta.ok ? meta.value.download_url : undefined;
+  const cacheHashMatches = meta.ok && meta.value.download_url_content_hash === fileHash;
+  const cacheUrlIsHashed = cachedUrl !== undefined && cachedUrl.includes(fileHash);
+
+  if (cachedUrl && cacheHashMatches && cacheUrlIsHashed) {
     try {
-      return await uploadViaUrl(provider, meta.value.download_url, filename);
+      return await uploadViaUrl(provider, cachedUrl, hashedFilename);
     } catch {
       // URL may be expired or upload CDN blocked — fall through to base64
     }
   }
 
-  const url = await uploadBase64(provider, fileData, filename);
+  const url = await uploadBase64(provider, fileData, hashedFilename);
 
   // Cache the new URL + hash so repeated uploads of the same file skip base64.
   if (meta.ok) {

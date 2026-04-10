@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
 import { kie, submitMediaJob } from "@nakedapi/kie";
-import { uploadBase64 } from "../kie-upload.js";
+import { uploadBase64, contentHash } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { writePendingTask } from "./pending-task.js";
@@ -63,8 +63,11 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
       }
     }
 
-    // Upload to KIE
-    const downloadUrl = await uploadBase64(provider, uploadBuffer, audioFilename);
+    // Upload to KIE with a content-hash filename to avoid collisions with
+    // other assets that share the same local filename (e.g. `original.mp3`).
+    const ext = audioFilename.split(".").pop() ?? "bin";
+    const hashedName = `${contentHash(uploadBuffer)}.${ext}`;
+    const downloadUrl = await uploadBase64(provider, uploadBuffer, hashedName);
 
     // Create isolation task
     const request = {
