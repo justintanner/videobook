@@ -39,7 +39,17 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     const assetDir = assetDirResult.value;
 
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
+    if (!lockResult.ok) {
+      // LOCKED means another completion job for this same asset is already
+      // running (sync can enqueue duplicates between polls because
+      // .kie-task.json isn't cleared until the completion job finishes).
+      // Treat as a no-op — the other job will finish the work.
+      if (lockResult.error.code === "LOCKED") {
+        console.log(`[complete_kie_task] ${assetId} already being completed, skipping duplicate`);
+        return { success: true, skipped: true };
+      }
+      throw new Error(`Asset is locked: ${lockResult.error.message}`);
+    }
 
     try {
       if (taskType === "nano_banana_image") {

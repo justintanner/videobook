@@ -8,7 +8,7 @@ import { queue } from "./queue.js";
 import { fs } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
-import { cleanOrphanedQueuedTasks } from "./jobs/pending-task.js";
+import { cleanOrphanedQueuedTasks, resetStaleCompletingTasks, cleanStaleLockRaceErrors } from "./jobs/pending-task.js";
 
 const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
 
@@ -57,6 +57,10 @@ async function start(): Promise<void> {
   await queue.start();
   const cleaned = await cleanOrphanedQueuedTasks(fs);
   if (cleaned > 0) console.log(`[startup] cleaned ${cleaned} orphaned queued tasks`);
+  const reset = await resetStaleCompletingTasks(fs);
+  if (reset > 0) console.log(`[startup] reset ${reset} stale completing tasks`);
+  const lockRaces = await cleanStaleLockRaceErrors(fs);
+  if (lockRaces > 0) console.log(`[startup] cleaned ${lockRaces} stale lock-race error files`);
   const PORT = process.env.PORT ?? 3001;
   app.listen(PORT, () => {
     console.log(`MCP server listening on http://127.0.0.1:${PORT}/mcp`);

@@ -11,6 +11,10 @@ export type PendingKieTask = {
   projectSlug: string;
   createdAt: string;
   meta: Record<string, unknown>;
+  /** Set when sync has enqueued a complete_kie_task job for this task.
+   *  Subsequent sync polls skip this task so duplicate completion jobs
+   *  don't race on the asset-directory lock. */
+  completing?: boolean;
 };
 
 export async function writePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string, task: PendingKieTask): Promise<void> {
@@ -29,9 +33,20 @@ export async function deletePendingTask(fs: ClipfirstFs, assetId: string, projec
   await fs.deleteFile(assetId, ".kie-task.json", projectSlug).catch(() => {});
 }
 
+/** Stamp a pending task as "completing" so later sync polls skip it. */
+export async function markTaskCompleting(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  task: PendingKieTask,
+): Promise<void> {
+  await fs.writeMetadata(assetId, "kie-task", { ...task, completing: true }, projectSlug);
+}
+
 export type FailureInfo = {
   message: string;
   failCode?: string;
+  prompt?: string | null;
 };
 
 /**
@@ -53,6 +68,7 @@ export async function failPendingTask(
     {
       message: info.message,
       ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
+      ...(info.prompt != null ? { prompt: info.prompt } : {}),
       failedAt: new Date().toISOString(),
     },
     projectSlug,
@@ -71,15 +87,20 @@ export async function failPendingTask(
 
 export async function findFailedAssets(
   fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[],
-): Promise<Array<{ assetId: string; failMsg: string; failedAt: string }>> {
+): Promise<Array<{ assetId: string; failMsg: string; failedAt: string; prompt: string | null }>> {
   const results = await Promise.all(
     assets.map(async (asset) => {
-      const result = await fs.readMetadata<{ message: string; failedAt?: string }>(asset.id, "generation-error", projectSlug);
+      const result = await fs.readMetadata<{ message: string; failedAt?: string; prompt?: string }>(asset.id, "generation-error", projectSlug);
       if (!result.ok) return null;
-      return { assetId: asset.id, failMsg: result.value.message, failedAt: result.value.failedAt ?? new Date().toISOString() };
+      return {
+        assetId: asset.id,
+        failMsg: result.value.message,
+        failedAt: result.value.failedAt ?? new Date().toISOString(),
+        prompt: typeof result.value.prompt === "string" ? result.value.prompt : null,
+      };
     })
   );
-  return results.filter((r): r is { assetId: string; failMsg: string; failedAt: string } => r !== null);
+  return results.filter((r): r is { assetId: string; failMsg: string; failedAt: string; prompt: string | null } => r !== null);
 }
 
 export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[]): Promise<PendingKieTask[]> {
@@ -101,6 +122,57 @@ export async function cleanOrphanedQueuedTasks(fs: ClipfirstFs): Promise<number>
     for (const task of orphanedTasks) {
       await deletePendingTask(fs, task.assetId, task.projectSlug);
       console.log(`[startup] cleaned orphaned queued task: ${task.assetId} in project ${task.projectSlug}`);
+      cleanedCount++;
+    }
+  }
+
+  return cleanedCount;
+}
+
+/**
+ * On startup, any pending task still stamped `completing: true` belongs to
+ * a completion job that did not survive the restart. Clear the flag so the
+ * next sync poll re-detects success and re-enqueues the completion job.
+ */
+export async function resetStaleCompletingTasks(fs: ClipfirstFs): Promise<number> {
+  const projects = await fs.listProjects();
+  let resetCount = 0;
+
+  for (const project of projects) {
+    const assets = await fs.listAssets(project.slug);
+    const pendingTasks = await findPendingTasks(fs, project.slug, assets);
+    const stale = pendingTasks.filter((t) => t.completing === true);
+
+    for (const task of stale) {
+      const { completing: _dropped, ...rest } = task;
+      void _dropped;
+      await fs.writeMetadata(task.assetId, "kie-task", rest, task.projectSlug);
+      console.log(`[startup] reset stale completing flag: ${task.assetId} in project ${task.projectSlug}`);
+      resetCount++;
+    }
+  }
+
+  return resetCount;
+}
+
+/**
+ * Sweep `.generation-error.json` files whose message is the spurious
+ * "Asset is locked: Lock already held" race artifact from duplicate
+ * completion-job dispatch. These assets completed successfully; only the
+ * stale error file remains and makes the tile show as failed in /inbox.
+ */
+export async function cleanStaleLockRaceErrors(fs: ClipfirstFs): Promise<number> {
+  const LOCK_RACE_MARKER = "Lock already held";
+  const projects = await fs.listProjects();
+  let cleanedCount = 0;
+
+  for (const project of projects) {
+    const assets = await fs.listAssets(project.slug);
+    const failures = await findFailedAssets(fs, project.slug, assets);
+    for (const failure of failures) {
+      if (!failure.failMsg.includes(LOCK_RACE_MARKER)) continue;
+      await fs.deleteFile(failure.assetId, ".generation-error.json", project.slug).catch(() => {});
+      console.log(`[startup] cleared stale lock-race error: ${failure.assetId} in project ${project.slug}`);
       cleanedCount++;
     }
   }

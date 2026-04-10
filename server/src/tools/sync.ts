@@ -9,7 +9,7 @@ import { xai, XaiError } from "@nakedapi/xai";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, findFailedAssets, readPendingTask, failPendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { findPendingTasks, findFailedAssets, readPendingTask, failPendingTask, markTaskCompleting, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -35,15 +35,21 @@ export type SyncAsset = {
 };
 
 export type SyncResult = {
-  pending: Array<{ assetId: string; taskType: string; progress: number; state: string }>;
+  pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
-  failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string }>;
+  failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
   auto_speech_to_text: Array<{ assetId: string; jobId: string }>;
   auto_analyze: Array<{ assetId: string; jobId: string }>;
 };
+
+function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
+  if (!meta) return null;
+  const p = meta.prompt;
+  return typeof p === "string" ? p : null;
+}
 
 async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
   try {
@@ -392,9 +398,19 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // Queued tasks (not yet submitted to provider) — report as pending, skip polling
   const queuedTasks = tasks.filter((t) => t.taskId === QUEUED_TASK_ID);
   for (const t of queuedTasks) {
-    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 0, state: "queued" });
+    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 0, state: "queued", prompt: metaPrompt(t.meta) });
   }
-  const pollableTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID);
+
+  // Completing tasks — sync already enqueued a completion job for these on a
+  // prior poll. Skip polling + re-enqueueing so duplicate completion jobs
+  // don't race on the asset-directory lock. Report as pending with state
+  // "success" so the inbox tile shows the DOWNLOAD/PROCESS phase.
+  const completingTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing === true);
+  for (const t of completingTasks) {
+    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 100, state: "success", prompt: metaPrompt(t.meta) });
+  }
+
+  const pollableTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
 
   // Poll KIE tasks (only if API key is set)
   const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_"));
@@ -407,12 +423,13 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         await processSyncedTask(fs, task, taskInfo, result, project_slug);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
+        const prompt = metaPrompt(task.meta);
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof KieError) {
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
           }
         }
       }
@@ -425,14 +442,18 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     const provider = xai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
 
     await Promise.all(xaiTasks.map(async (task) => {
+      const prompt = metaPrompt(task.meta);
       try {
         const videoResult = await provider.get.v1.videos(task.taskId);
         if (videoResult.status === "done" && videoResult.video?.url) {
           const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
           if (!assetDirResult.ok) {
-            await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}` });
+            await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
+          // Mark the pending task as completing BEFORE enqueueing so any
+          // overlapping sync poll skips it instead of enqueueing a duplicate.
+          await markTaskCompleting(fs, task.assetId, project_slug, task);
           const jobId = `complete-xai-${task.assetId}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
@@ -447,23 +468,24 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
-          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
-          await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+          await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.assetId,
             taskType: task.taskType,
             progress: videoResult.progress ?? 0,
             state: videoResult.status,
+            prompt,
           });
         }
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
-        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString() });
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
-            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg });
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
           }
         }
       }
@@ -476,7 +498,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   const pendingAssetIds = new Set(tasks.map((t) => t.assetId));
   for (const failure of persistedFailures) {
     if (!reportedAssetIds.has(failure.assetId) && !pendingAssetIds.has(failure.assetId)) {
-      result.failed.push({ assetId: failure.assetId, taskType: "", failMsg: failure.failMsg, failedAt: failure.failedAt });
+      result.failed.push({ assetId: failure.assetId, taskType: "", failMsg: failure.failMsg, failedAt: failure.failedAt, prompt: failure.prompt });
     }
   }
 
@@ -582,10 +604,11 @@ async function processSyncedTask(
   projectSlug: string,
 ): Promise<void> {
   const data = taskInfo.data;
+  const prompt = metaPrompt(task.meta);
   if (data?.state === "success") {
     const assetDirResult = await fs.resolveAssetDir(task.assetId, projectSlug);
     if (!assetDirResult.ok) {
-      await failPendingTask(fs, task.assetId, projectSlug, { message: `Asset not found: ${task.assetId}` });
+      await failPendingTask(fs, task.assetId, projectSlug, { message: `Asset not found: ${task.assetId}`, prompt });
       return;
     }
 
@@ -595,6 +618,10 @@ async function processSyncedTask(
       resultUrls?: string[];
       resultObject?: Record<string, unknown>;
     };
+
+    // Mark the pending task as completing BEFORE enqueueing so any
+    // overlapping sync poll skips it instead of enqueueing a duplicate.
+    await markTaskCompleting(fs, task.assetId, projectSlug, task);
 
     await queue.enqueue(jobId, {
       type: "complete_kie_task",
@@ -616,9 +643,11 @@ async function processSyncedTask(
       taskType: task.taskType,
       failMsg,
       failedAt: new Date().toISOString(),
+      prompt,
     });
     await failPendingTask(fs, task.assetId, projectSlug, {
       message: failMsg,
+      prompt,
       ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),
     });
   } else {
@@ -627,6 +656,7 @@ async function processSyncedTask(
       taskType: task.taskType,
       progress: data?.progress,
       state: data?.state,
+      prompt,
     });
   }
 }

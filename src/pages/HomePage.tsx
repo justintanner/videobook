@@ -40,14 +40,14 @@ import type { Orientation } from '@/hooks/useTimeline';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
-import type { MediaItem, AssetType, ClipState } from '@/components/sidebar/types';
+import type { MediaItem, AssetType, ClipState, PendingState } from '@/components/sidebar/types';
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
 const SIDEBAR_HIDDEN_STATUSES = new Set<string>(['unreviewed', 'generating', 'downloading', 'error', 'loading', 'corrupt']);
-const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading']);
+const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'error']);
 
 function humanizeId(id: string): string {
   const rawName = id.replace(/^[a-z]+-/, '');
@@ -178,17 +178,24 @@ export function HomePage() {
 
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
-    const failedSet = new Set<string>();
+    const failedMap = new Map<string, { failMsg: string; failedAt: string; taskType: string; prompt: string | null }>();
+    const pendingMap = new Map<string, { state: PendingState; progress: number; taskType: string; prompt: string | null }>();
     if (result) {
       for (const f of result.failed) {
-        failedSet.add(f.assetId);
+        failedMap.set(f.assetId, { failMsg: f.failMsg, failedAt: f.failedAt, taskType: f.taskType, prompt: f.prompt });
+      }
+      for (const p of result.pending) {
+        pendingMap.set(p.assetId, { state: p.state as PendingState, progress: p.progress, taskType: p.taskType, prompt: p.prompt });
       }
     }
 
     return assetList.map((asset) => {
       let status: ClipState = (renderingOverrides.get(asset.id) ?? asset.status ?? 'ready') as ClipState;
-      if (failedSet.has(asset.id)) status = 'error';
+      const failed = failedMap.get(asset.id);
+      if (failed) status = 'error';
       if (deletingIds.has(asset.id)) status = 'deleting';
+      const pending = pendingMap.get(asset.id);
+      const prompt = asset.prompt ?? pending?.prompt ?? failed?.prompt ?? null;
       return {
         id: asset.id,
         type: asset.type as AssetType,
@@ -198,14 +205,21 @@ export function HomePage() {
         thumbnailSrc: asset.thumbnail_url,
         status,
         created_at: asset.created_at,
+        createdAt: asset.created_at,
         width: asset.width,
         height: asset.height,
         origin: asset.origin,
-        prompt: asset.prompt,
+        prompt,
         renders: asset.renders ?? [],
         duration: asset.duration,
         waveform: asset.waveform,
         frameDirs: asset.frame_dirs,
+        pendingState: pending?.state,
+        pendingProgress: pending?.progress,
+        pendingTaskType: pending?.taskType,
+        failedAt: failed?.failedAt,
+        failedMessage: failed?.failMsg,
+        failedTaskType: failed?.taskType,
       };
     });
   }, [assetList, result, renderingOverrides, deletingIds]);

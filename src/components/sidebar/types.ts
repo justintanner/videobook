@@ -1,5 +1,7 @@
 export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'plan' | 'final';
 
+export type PendingState = 'queued' | 'processing' | 'success' | 'fail' | 'expired';
+
 export type ClipState =
   | 'uploading'
   | 'loading'
@@ -39,4 +41,11 @@ export interface MediaItem {
   duration?: number | null;
   waveform?: number[] | null;
   frameDirs?: Record<string, string[]>;
+  pendingState?: PendingState;
+  pendingProgress?: number;
+  pendingTaskType?: string;
+  createdAt?: string;
+  failedAt?: string;
+  failedMessage?: string;
+  failedTaskType?: string;
 }
