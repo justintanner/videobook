@@ -6,7 +6,6 @@ import { ChatInput } from '@/components/ui/ChatInput';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import type { ActionLogEntry } from '@/hooks/useProjectActivity';
-import type { SyncResult } from '@/hooks/useSync';
 import type { UseMcpResult } from 'use-mcp/react';
 
 type ActionCategory = 'generate' | 'render' | 'upload' | 'transcribe' | 'sync' | 'trim' | 'edit' | 'create' | 'delete' | 'fail' | 'other';
@@ -26,10 +25,15 @@ const CATEGORY_STYLES: Record<ActionCategory, { color: string }> = {
 };
 
 const VISIBLE_CATEGORIES = new Set<ActionCategory>([
-  'generate', 'create', 'delete', 'render', 'upload', 'transcribe', 'trim',
+  'generate', 'create', 'delete', 'render', 'upload', 'transcribe', 'trim', 'fail',
 ]);
 
-function categorize(action: string): ActionCategory {
+function hasError(payload: string | Record<string, unknown>): boolean {
+  return typeof payload === 'object' && payload !== null && '_error' in payload;
+}
+
+function categorize(action: string, payload: string | Record<string, unknown>): ActionCategory {
+  if (action === 'job-error' || hasError(payload)) return 'fail';
   if (action.includes('generate') || action.includes('grok') || action.includes('kling') || action.includes('nano-banana') || action.includes('gpt-image')) return 'generate';
   if (action.includes('render')) return 'render';
   if (action.includes('upload') || action.includes('download')) return 'upload';
@@ -48,12 +52,17 @@ function shortAction(action: string): string {
 
 function extractAssetId(payload: string | Record<string, unknown>): string | null {
   if (typeof payload === 'string') return null;
-  return (payload.asset_id as string) ?? (payload.vid_asset_id as string) ?? (payload.img_asset_id as string) ?? null;
+  return (payload.assetId as string) ?? (payload.asset_id as string) ?? (payload.vid_asset_id as string) ?? (payload.img_asset_id as string) ?? null;
 }
 
 function extractPrompt(payload: string | Record<string, unknown>): string | null {
   if (typeof payload === 'string') return null;
   return (payload.prompt as string) ?? null;
+}
+
+function extractError(payload: string | Record<string, unknown>): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  return (payload._error as string) ?? (payload.error as string) ?? null;
 }
 
 function formatDate(dateStr: string): string {
@@ -84,7 +93,6 @@ interface StatusDrawerProps {
   onClose: () => void;
   entries: ActionLogEntry[];
   loading: boolean;
-  syncResult: SyncResult | undefined;
   assetSlugs: string[];
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
@@ -95,7 +103,6 @@ export function StatusDrawer({
   onClose,
   entries,
   loading,
-  syncResult,
   assetSlugs,
   callTool,
   projectSlug,
@@ -103,27 +110,17 @@ export function StatusDrawer({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
-  const failures = useMemo(() => syncResult?.failed ?? [], [syncResult?.failed]);
-
   const visibleEntries = useMemo(
-    () => entries.filter((entry) => VISIBLE_CATEGORIES.has(categorize(entry.action))),
+    () => entries
+      .filter((entry) => VISIBLE_CATEGORIES.has(categorize(entry.action, entry.payload)))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [entries],
   );
 
-  // Merge failures into the activity entries as a single chronological list
-  type MergedEntry = { kind: 'activity'; entry: ActionLogEntry } | { kind: 'fail'; fail: typeof failures[number] };
-  const merged = useMemo(() => {
-    const items: MergedEntry[] = [
-      ...visibleEntries.map((entry): MergedEntry => ({ kind: 'activity', entry })),
-      ...failures.map((fail): MergedEntry => ({ kind: 'fail', fail })),
-    ];
-    items.sort((a, b) => {
-      const dateA = a.kind === 'activity' ? a.entry.date : a.fail.failedAt;
-      const dateB = b.kind === 'activity' ? b.entry.date : b.fail.failedAt;
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
-    });
-    return items;
-  }, [visibleEntries, failures]);
+  const failureCount = useMemo(
+    () => visibleEntries.filter((entry) => categorize(entry.action, entry.payload) === 'fail').length,
+    [visibleEntries],
+  );
 
   // Two-phase open: mount then animate in
   useEffect(() => {
@@ -204,62 +201,50 @@ export function StatusDrawer({
       >
         <StatusHeader
           entryCount={visibleEntries.length}
-          failureCount={failures.length}
+          failureCount={failureCount}
           onClose={onClose}
         />
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading && merged.length === 0 ? (
+          {loading && visibleEntries.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" />
             </div>
-          ) : merged.length === 0 ? (
+          ) : visibleEntries.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <span className="text-sm font-mono text-muted-foreground/30 uppercase tracking-wider">No activity yet</span>
             </div>
           ) : (
             <div>
-              {merged.map((item, i) => {
-                if (item.kind === 'fail') {
-                  const style = CATEGORY_STYLES.fail;
-                  return (
-                    <div
-                      key={`fail-${item.fail.assetId}-${i}`}
-                      className="flex items-start gap-4 px-4 py-3 text-sm font-mono hover:bg-white/5 transition-colors border-b border-red-500/10"
-                    >
-                      <span className={cn('font-bold shrink-0 w-28 uppercase text-xs tracking-wider pt-0.5', style.color)}>
-                        fail
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-red-400/70">{item.fail.failMsg}</div>
-                        <div className="text-muted-foreground/50 text-xs mt-0.5">{item.fail.assetId}</div>
-                      </div>
-                      <span className="text-muted-foreground/30 shrink-0 text-xs pt-0.5">
-                        {formatDate(item.fail.failedAt)}
-                      </span>
-                    </div>
-                  );
-                }
-                const entry = item.entry;
-                const cat = categorize(entry.action);
+              {visibleEntries.map((entry) => {
+                const cat = categorize(entry.action, entry.payload);
                 const style = CATEGORY_STYLES[cat];
                 const assetId = extractAssetId(entry.payload);
                 const prompt = extractPrompt(entry.payload);
+                const errorMsg = cat === 'fail' ? extractError(entry.payload) : null;
+                const isFail = cat === 'fail';
                 return (
                   <div
                     key={entry.hash}
-                    className="flex items-start gap-4 px-4 py-3 text-sm font-mono hover:bg-white/5 transition-colors border-b border-border/10"
+                    className={cn(
+                      'flex items-start gap-4 px-4 py-3 text-sm font-mono hover:bg-white/5 transition-colors border-b',
+                      isFail ? 'border-red-500/10' : 'border-border/10',
+                    )}
                   >
                     <span className={cn('font-bold shrink-0 w-28 uppercase text-xs tracking-wider pt-0.5', style.color)}>
                       {cat}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-foreground/80">{shortAction(entry.action)}</div>
+                      {isFail && errorMsg ? (
+                        <div className="text-red-400/70">{errorMsg}</div>
+                      ) : (
+                        <div className="text-foreground/80">{shortAction(entry.action)}</div>
+                      )}
                       {assetId && (
                         <div className="text-muted-foreground/50 text-xs mt-0.5">{assetId}</div>
                       )}
-                      {prompt && (
+                      {!isFail && prompt && (
                         <div className="text-muted-foreground/40 text-xs mt-0.5 italic truncate">{prompt}</div>
                       )}
                     </div>

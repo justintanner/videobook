@@ -19,8 +19,11 @@ function withLogging(def: ToolDef, fs: ClipfirstFs): ToolDef {
       const slug = args.project_slug as string | undefined;
       if (slug) {
         const actionName = `tool-${def.name.replace(/_/g, "-")}`;
+        const logPayload: Record<string, unknown> = result.isError
+          ? { ...args, _error: result.content[0]?.text ?? "unknown error" }
+          : args;
         // Fire-and-forget — don't block tool response on git commit
-        fs.logAction(actionName, args, slug).catch((e) => {
+        fs.logAction(actionName, logPayload, slug).catch((e) => {
           console.warn(`[mcp] action log failed for ${actionName}:`, e);
         });
       }

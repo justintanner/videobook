@@ -58,6 +58,15 @@ export async function failPendingTask(
     projectSlug,
   ).catch(() => {});
   await deletePendingTask(fs, assetId, projectSlug);
+  await fs.logAction(
+    "job-error",
+    {
+      assetId,
+      error: info.message,
+      ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
+    },
+    projectSlug,
+  ).catch(() => {});
 }
 
 export async function findFailedAssets(

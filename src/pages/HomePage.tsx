@@ -106,6 +106,13 @@ export function HomePage() {
     }
   }, [statusOpen, projectSlug, fetchActivity]);
 
+  // Refresh activity after each sync so async job failures surface live
+  useEffect(() => {
+    if (statusOpen && projectSlug && syncCount > 0) {
+      fetchActivity(projectSlug);
+    }
+  }, [syncCount, statusOpen, projectSlug, fetchActivity]);
+
   // Refocus ChatInput after InboxDrawer closes
   useEffect(() => {
     if (prevInboxOpenRef.current && !inboxOpen) {
@@ -595,7 +602,6 @@ export function HomePage() {
           onClose={() => setStatusOpen(false)}
           entries={activityEntries}
           loading={activityLoading}
-          syncResult={result}
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}
