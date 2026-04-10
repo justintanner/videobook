@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@nakedapi/free": "file:../nakedapi/packages/provider/free",
     "@nakedapi/kie": "file:../nakedapi/packages/provider/kie",
     "@nakedapi/kimicoding": "file:../nakedapi/packages/provider/kimicoding",
     "@nakedapi/openai": "file:../nakedapi/packages/provider/openai",

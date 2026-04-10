@@ -1,5 +1,6 @@
 import type { KieProvider } from "@nakedapi/kie";
 import { KieError } from "@nakedapi/kie";
+import { free } from "@nakedapi/free";
 import type { ClipfirstFs } from "clipfirst-fs";
 
 const MIME_TYPES: Record<string, string> = {
@@ -34,18 +35,12 @@ function inferMimeType(filename: string): string | undefined {
 async function uploadToTmpfiles(data: Uint8Array | Buffer, filename: string): Promise<string> {
   const mimeType = inferMimeType(filename) ?? "application/octet-stream";
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
-  const form = new FormData();
-  form.append("file", blob, filename);
+  const file = new File([blob], filename, { type: mimeType });
 
-  const res = await fetch("https://tmpfiles.org/api/v1/upload", {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    throw new Error(`tmpfiles.org upload failed: ${res.status}`);
-  }
-  const json = await res.json() as { status: string; data?: { url?: string } };
-  const url = json.data?.url;
+  const f = free();
+  const result = await f.tmpfiles.api.v1.upload({ file, filename });
+
+  const url = result.data?.url;
   if (!url) throw new Error("tmpfiles.org upload returned no URL");
   // Convert display URL to direct download URL: insert /dl/ after domain
   return url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
