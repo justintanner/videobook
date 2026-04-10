@@ -76,7 +76,6 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
       return_last_frame: z.boolean().optional().describe("Return the final frame as an image (default false)"),
       web_search: z.boolean().optional().describe("Use web search for enhanced grounding (default false)"),
-      image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Image orientation hint"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
     },
     handler: async (args) => {

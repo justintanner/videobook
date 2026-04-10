@@ -38,9 +38,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "element2_slugs", "element2_name", "element2_desc",
       "element3_slugs", "element3_name", "element3_desc",
       "multi_prompt", "multi_shots",
-      "duration", "sound", "aspect_ratio", "image_orientation",
+      "duration", "sound", "aspect_ratio",
     ],
-    defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9", image_orientation: "auto" },
+    defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -51,9 +51,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "Video generation and extension with quality toggle",
     params: [
       "prompt", "generation_type", "image_slugs", "video_path", "frame_timestamps",
-      "aspect_ratio", "model", "seeds", "watermark", "enable_translation", "image_orientation",
+      "aspect_ratio", "model", "seeds", "watermark", "enable_translation",
     ],
-    defaults: { aspect_ratio: "16:9", model: "veo3_fast", enable_translation: true, image_orientation: "auto" },
+    defaults: { aspect_ratio: "16:9", model: "veo3_fast", enable_translation: true },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
     ],
@@ -74,11 +74,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "ByteDance Seedance 2.0 Fast text-to-video generation (no reference inputs)",
     params: [
       "prompt", "aspect_ratio", "resolution", "duration",
-      "generate_audio", "return_last_frame", "web_search", "image_orientation",
+      "generate_audio", "return_last_frame", "web_search",
     ],
     defaults: {
       aspect_ratio: "16:9", resolution: "720p", duration: "8",
-      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+      generate_audio: true, return_last_frame: false, web_search: false,
     },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
@@ -91,11 +91,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt", "first_frame_slug", "last_frame_slug",
       "aspect_ratio", "resolution", "duration",
-      "generate_audio", "return_last_frame", "web_search", "image_orientation",
+      "generate_audio", "return_last_frame", "web_search",
     ],
     defaults: {
       aspect_ratio: "16:9", resolution: "720p", duration: "8",
-      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+      generate_audio: true, return_last_frame: false, web_search: false,
     },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
@@ -108,11 +108,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt", "image_slugs", "video_slugs", "audio_slugs",
       "aspect_ratio", "resolution", "duration",
-      "generate_audio", "return_last_frame", "web_search", "image_orientation",
+      "generate_audio", "return_last_frame", "web_search",
     ],
     defaults: {
       aspect_ratio: "16:9", resolution: "720p", duration: "8",
-      generate_audio: true, return_last_frame: false, web_search: false, image_orientation: "auto",
+      generate_audio: true, return_last_frame: false, web_search: false,
     },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
@@ -127,9 +127,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "first_frame_slug", "last_frame_slug", "first_clip_slug",
       "driving_audio_slug",
       "resolution", "duration", "prompt_extend", "nsfw_checker", "seed",
-      "image_orientation",
     ],
-    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false, image_orientation: "auto" },
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -142,9 +141,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "negative_prompt",
       "video_slug", "image_slug",
       "resolution", "aspect_ratio", "duration", "audio_setting", "prompt_extend", "nsfw_checker", "seed",
-      "image_orientation",
     ],
-    defaults: { resolution: "1080p", duration: "0", audio_setting: "auto", prompt_extend: true, nsfw_checker: false, image_orientation: "auto" },
+    defaults: { resolution: "1080p", duration: "0", audio_setting: "auto", prompt_extend: true, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -158,9 +156,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "image_slugs", "video_slugs", "first_frame_slug",
       "audio_slug",
       "resolution", "aspect_ratio", "duration", "prompt_extend", "nsfw_checker", "seed",
-      "image_orientation",
     ],
-    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, nsfw_checker: false, image_orientation: "auto" },
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -169,8 +166,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
     description: "Grok image-to-video with fun/normal/spicy modes",
-    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "image_orientation"],
-    defaults: { mode: "normal", duration: "6", resolution: "720p", image_orientation: "auto" },
+    params: ["prompt", "image_slugs", "mode", "duration", "resolution"],
+    defaults: { mode: "normal", duration: "6", resolution: "720p" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
@@ -318,12 +315,6 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
   nsfw_checker: { type: "boolean", description: "Content safety filter (default false)", default: false },
   seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
-  image_orientation: {
-    type: "string",
-    enum: ["auto", "original", "portrait", "landscape"],
-    description: "Override which input image variant to select",
-    default: "auto",
-  },
 };
 
 // ---------------------------------------------------------------------------

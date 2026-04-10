@@ -66,7 +66,6 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
       nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
       seed: z.number().int().optional().describe("Random seed for reproducibility"),
-      image_orientation: z.enum(["auto", "original", "portrait", "landscape"]).optional().describe("Image orientation hint"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
     },
     handler: async (args) => {
