@@ -9,6 +9,7 @@ import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "../chat-log.js";
 import { parseTime } from "../time-parse.js";
+import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 type ChatDecision = {
@@ -166,8 +167,9 @@ Determine which tool to use and what parameters to pass.`;
         return error(`Tool handler not found: ${routableTool.actualTool}`);
       }
 
-      // 9. Execute
-      const handlerResult = await targetDef.handler(params as Record<string, unknown>);
+      // 9. Execute (wrapped so the routed tool writes its own action log entry)
+      const wrappedDef = withLogging(targetDef, fs);
+      const handlerResult = await wrappedDef.handler(params as Record<string, unknown>);
 
       // 10. Log chat history (fire-and-forget)
       logUserTurn(fs, slug, prompt);
