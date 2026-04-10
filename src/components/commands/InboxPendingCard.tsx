@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react';
+import type { UseMcpResult } from 'use-mcp/react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PendingPayloadInspector } from './PendingPayloadInspector';
 import {
   getCardOrientation,
   getCardWidthClass,
@@ -14,13 +17,61 @@ import type { MediaItem } from '@/components/sidebar/types';
 
 interface InboxPendingCardProps {
   video: MediaItem;
+  projectSlug: string | undefined;
+  callTool: UseMcpResult['callTool'];
 }
 
 const CYAN_RGB = '6, 182, 212';
 
-export function InboxPendingCard({ video }: InboxPendingCardProps) {
-  if (isFailedPending(video)) return <FailedCard video={video} />;
-  return <ActiveCard video={video} />;
+export function InboxPendingCard({ video, projectSlug, callTool }: InboxPendingCardProps) {
+  const card = isFailedPending(video) ? <FailedCard video={video} /> : <ActiveCard video={video} />;
+  if (!projectSlug) return card;
+  const taskType = video.failedTaskType || video.pendingTaskType || '';
+  return (
+    <PayloadTooltip projectSlug={projectSlug} assetId={video.id} slug={video.slug} taskType={taskType} callTool={callTool}>
+      {card}
+    </PayloadTooltip>
+  );
+}
+
+function PayloadTooltip({
+  projectSlug,
+  assetId,
+  slug,
+  taskType,
+  callTool,
+  children,
+}: {
+  projectSlug: string;
+  assetId: string;
+  slug: string;
+  taskType: string;
+  callTool: UseMcpResult['callTool'];
+  children: ReactNode;
+}) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="shrink-0">{children}</div>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="p-0 border-none bg-transparent shadow-none text-inherit"
+        >
+          <PendingPayloadInspector
+            projectSlug={projectSlug}
+            assetId={assetId}
+            slug={slug}
+            taskType={taskType}
+            callTool={callTool}
+          />
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function ActiveCard({ video }: { video: MediaItem }) {

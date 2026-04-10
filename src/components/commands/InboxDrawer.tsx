@@ -259,7 +259,7 @@ export function InboxDrawer({
                 );
               })}
               {pendingVideos.map((video) => (
-                <InboxPendingCard key={video.id} video={video} />
+                <InboxPendingCard key={video.id} video={video} projectSlug={projectSlug} callTool={callTool} />
               ))}
             </div>
           ) : (

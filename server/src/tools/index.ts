@@ -46,6 +46,7 @@ import { sleepDef } from "./sleep.js";
 import { whitelistDef } from "./whitelist-asset.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
 import { previewImageGenDef } from "./preview-image-gen.js";
+import { generationPayloadDef } from "./generation-payload.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
@@ -121,6 +122,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     whitelistDef(fs),
     previewVideoGenDef(fs),
     previewImageGenDef(fs),
+    generationPayloadDef(fs),
     generateGrokImagineImageDef(fs),
     generateGrokImagineTextImageDef(fs),
     generateGptImageDef(fs),
