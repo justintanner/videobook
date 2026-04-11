@@ -10,6 +10,7 @@ import { getDefaultProjectDef } from "./get-default-project.js";
 import { uploadFileDef } from "./upload-file.js";
 import { assetManifestDef } from "./asset-manifest.js";
 import { deleteAssetDef } from "./delete-asset.js";
+import { clearFailedTasksDef } from "./clear-failed-tasks.js";
 import { renameAssetDef } from "./rename-asset.js";
 import { duplicateAssetDef } from "./duplicate-asset.js";
 import { exportAssetDef } from "./export-asset.js";
@@ -86,6 +87,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     uploadFileDef(fs),
     assetManifestDef(fs),
     deleteAssetDef(fs),
+    clearFailedTasksDef(fs),
     renameAssetDef(fs),
     duplicateAssetDef(fs),
     exportAssetDef(fs),

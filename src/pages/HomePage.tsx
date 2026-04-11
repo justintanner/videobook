@@ -360,6 +360,20 @@ export function HomePage() {
     callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
   }, [callTool, projectSlug]);
 
+  const handleClearFailed = useCallback(async () => {
+    if (!projectSlug) return;
+    const failedIds = pendingClips.filter((c) => c.status === 'error').map((c) => c.id);
+    if (failedIds.length === 0) return;
+    const label = failedIds.length === 1 ? 'task' : 'tasks';
+    if (!window.confirm(`Delete ${failedIds.length} failed ${label}? This cannot be undone.`)) return;
+    const res = await callTool('clear_failed_tasks', { project_slug: projectSlug });
+    if (res.isError) return;
+    const content = res.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text) as { cleared: string[] };
+    for (const id of parsed.cleared) removeAsset(id);
+    sync(projectSlug);
+  }, [projectSlug, pendingClips, callTool, removeAsset, sync]);
+
   const handleProjectChange = useCallback(async (slug: string) => {
     clearAssets();
     setProjectSlug(slug);
@@ -607,6 +621,7 @@ export function HomePage() {
           pendingVideos={pendingClips}
           onApprove={handleApprove}
           onReject={handleReject}
+          onClearFailed={handleClearFailed}
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}

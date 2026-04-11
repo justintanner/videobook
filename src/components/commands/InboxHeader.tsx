@@ -3,11 +3,21 @@ import { X } from 'lucide-react';
 interface InboxHeaderProps {
   reviewCount: number;
   pendingCount: number;
+  failedCount: number;
   activeIndex: number;
   onClose: () => void;
+  onClearFailed: () => void;
 }
 
-export function InboxHeader({ reviewCount, pendingCount, activeIndex, onClose }: InboxHeaderProps) {
+export function InboxHeader({
+  reviewCount,
+  pendingCount,
+  failedCount,
+  activeIndex,
+  onClose,
+  onClearFailed,
+}: InboxHeaderProps) {
+  const activePendingCount = Math.max(0, pendingCount - failedCount);
   return (
     <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
       <span className="text-xs font-mono font-bold tracking-widest text-primary/70 uppercase">REVIEW_QUEUE</span>
@@ -19,10 +29,18 @@ export function InboxHeader({ reviewCount, pendingCount, activeIndex, onClose }:
               : `${reviewCount} ${reviewCount === 1 ? 'VIDEO' : 'VIDEOS'}`}
           </span>
         )}
-        {pendingCount > 0 && (
+        {activePendingCount > 0 && (
           <span className="text-xs font-mono text-amber-400/80">
-            +{pendingCount} pending
+            +{activePendingCount} pending
           </span>
+        )}
+        {failedCount > 0 && (
+          <button
+            onClick={onClearFailed}
+            className="text-[10px] font-mono font-bold tracking-[0.15em] uppercase px-2 py-1 border border-red-900/60 text-red-400 bg-red-950/20 hover:bg-red-950/40 hover:text-red-300 hover:border-red-800 transition-colors rounded"
+          >
+            Clear {failedCount} failed
+          </button>
         )}
         <button
           onClick={onClose}

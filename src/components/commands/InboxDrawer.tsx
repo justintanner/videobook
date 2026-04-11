@@ -4,6 +4,7 @@ import { InboxHeader } from './InboxHeader';
 import { InboxAllClear } from './InboxAllClear';
 import { InboxReviewCard } from './InboxReviewCard';
 import { InboxPendingCard } from './InboxPendingCard';
+import { isFailedPending } from './inbox-utils';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { CommandDescriptor } from '@/lib/command-registry';
@@ -35,6 +36,7 @@ interface InboxDrawerProps {
   pendingVideos: MediaItem[];
   onApprove: (video: MediaItem) => void;
   onReject: (video: MediaItem) => void;
+  onClearFailed: () => void;
   assetSlugs: string[];
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
@@ -47,10 +49,12 @@ export function InboxDrawer({
   pendingVideos,
   onApprove,
   onReject,
+  onClearFailed,
   assetSlugs,
   callTool,
   projectSlug,
 }: InboxDrawerProps) {
+  const failedCount = pendingVideos.filter(isFailedPending).length;
   const dialogRef = useRef<HTMLDivElement>(null);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
@@ -229,8 +233,10 @@ export function InboxDrawer({
         <InboxHeader
           reviewCount={liveVideos.length}
           pendingCount={pendingVideos.length}
+          failedCount={failedCount}
           activeIndex={activeIndex}
           onClose={onClose}
+          onClearFailed={onClearFailed}
         />
 
         {/* Scrollable unified grid */}
