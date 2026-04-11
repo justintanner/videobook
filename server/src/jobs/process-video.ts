@@ -34,6 +34,14 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       await rm(join(assetDir, "original_frames"), { recursive: true, force: true });
       await rm(join(assetDir, "waveform.json"), { force: true }).catch(() => {});
       await rm(join(assetDir, "original.jpg"), { force: true }).catch(() => {});
+      // Renders are derived from the old source video — drop them so the UI
+      // falls back to original.mp4 and prompts a re-render.
+      for (const orient of ["landscape", "portrait", "square"] as const) {
+        await rm(join(assetDir, `${orient}.mp4`), { force: true }).catch(() => {});
+        await rm(join(assetDir, `${orient}.jpg`), { force: true }).catch(() => {});
+        await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
+        await rm(join(assetDir, `.${orient}.render.json`), { force: true }).catch(() => {});
+      }
     }
 
     const timestamps = generateTimestamps(duration);
