@@ -57,9 +57,19 @@ function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
   return typeof p === "string" ? p : null;
 }
 
-async function findPrimaryMediaFile(assetDir: string): Promise<string | null> {
+async function findPrimaryMediaFile(assetId: string, assetDir: string): Promise<string | null> {
   try {
     const files = await readdir(assetDir);
+    if (assetId === "final") {
+      // The final singleton's primary media is the timeline concat output.
+      // Prefer landscape, then portrait, then square — this is just the
+      // fallback order if multiple orientations happen to coexist on disk.
+      for (const orient of RENDER_ORIENTATIONS) {
+        const match = files.find((f) => f.toLowerCase() === `timeline_${orient}.mp4`);
+        if (match) return match;
+      }
+      return null;
+    }
     const video = files.find((f) => /^original\.(mp4|mov)$/i.test(f));
     if (video) return video;
     const image = files.find((f) => /^original\.(png|jpe?g|webp)$/i.test(f));
@@ -249,10 +259,13 @@ export async function readAnalysisRecommendations(
   }
 }
 
-async function findRenderedOrientations(assetDir: string): Promise<string[]> {
+async function findRenderedOrientations(assetId: string, assetDir: string): Promise<string[]> {
   try {
     const files = await readdir(assetDir);
     const fileSet = new Set(files);
+    if (assetId === "final") {
+      return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`timeline_${o}.mp4`));
+    }
     return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
   } catch {
     return [];
@@ -264,14 +277,14 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
       const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile] = await Promise.all([
-        findPrimaryMediaFile(a.path),
+        findPrimaryMediaFile(a.id, a.path),
         findThumbnailFile(a.path),
         fs.getLockData(a.path),
         readPendingTask(fs, a.id, project_slug),
         isWhitelisted(a.path),
         hasRenderMetadata(a.path),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
-        findRenderedOrientations(a.path),
+        findRenderedOrientations(a.id, a.path),
         readOrExtractWaveform(a.path),
         findFrameDirectories(a.path, project_slug, a.id),
         hasPartialDownload(a.path),

@@ -75,16 +75,19 @@ function ClipContent({ item, size, onRender, callTool, projectSlug }: {
   const status = item.status;
 
   if (renders.includes(orient)) {
-    const orientedFile = size === 'landscape' ? 'landscape.mp4'
-      : size === 'portrait' ? 'portrait.mp4'
-      : 'square.mp4';
+    // The final singleton's rendered outputs are `timeline_<orient>.mp4`,
+    // not the bare `<orient>.mp4` that per-clip assets write.
+    const prefix = item.type === 'final' ? 'timeline_' : '';
+    const orientedFile = size === 'landscape' ? `${prefix}landscape.mp4`
+      : size === 'portrait' ? `${prefix}portrait.mp4`
+      : `${prefix}square.mp4`;
     const qIdx = item.filePath.indexOf('?');
     const qs = qIdx >= 0 ? item.filePath.slice(qIdx) : '';
     const basePath = qIdx >= 0 ? item.filePath.slice(0, qIdx) : item.filePath;
     const derivedSrc = basePath.replace(/\/[^/]+$/, `/${orientedFile}`) + qs;
-    const thumbFile = size === 'landscape' ? 'landscape.jpg'
-      : size === 'portrait' ? 'portrait.jpg'
-      : 'square.jpg';
+    const thumbFile = size === 'landscape' ? `${prefix}landscape.jpg`
+      : size === 'portrait' ? `${prefix}portrait.jpg`
+      : `${prefix}square.jpg`;
     const thumbSrc = basePath.replace(/\/[^/]+$/, `/${thumbFile}`) + qs;
     return (
       <ContextMenu>
