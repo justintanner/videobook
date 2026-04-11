@@ -6,7 +6,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { openai, firstContent } from "@nakedapi/openai";
+import { openai, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import {
   VIDEO_MODELS,

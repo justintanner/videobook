@@ -83,9 +83,9 @@ const asset = await fs.createAsset("vid", "intro clip", "my-project");
 ```
 
 ### External APIs
-**ALWAYS use `@nakedapi` providers** — never direct `fetch` to AI/LLM APIs:
+**ALWAYS use `@apicity` providers** — never direct `fetch` to AI/LLM APIs:
 ```typescript
-import { kimicoding } from "@nakedapi/kimicoding";
+import { kimicoding } from "@apicity/kimicoding";
 const provider = kimicoding({ apiKey: process.env.KIMI_CODING_API_KEY! });
 const response = await provider.chat({ model: "k2p5", messages: [...] });
 ```

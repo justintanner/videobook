@@ -1,9 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
-import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@nakedapi/openai";
-import type { OpenAiChatRequest, OpenAiChatResponse } from "@nakedapi/openai";
-import { kie } from "@nakedapi/kie";
+import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
+import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
+import { kie } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 
 type AnalyzeVideoPayload = {

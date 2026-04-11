@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { openai } from "@nakedapi/openai";
+import { openai } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
 

@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@nakedapi/kie";
+import { kie } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
-import { xai } from "@nakedapi/xai";
+import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";

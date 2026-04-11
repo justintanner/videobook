@@ -1,5 +1,5 @@
 /**
- * Shared payload builders: MCP tool args → @nakedapi request bodies.
+ * Shared payload builders: MCP tool args → @apicity request bodies.
  *
  * Used by both `translate_payload` (preview, passes raw slugs) and
  * job handlers (passes real upload URLs). Same functions, different strings.
@@ -28,9 +28,9 @@ import type {
   NanoBananaResolution,
   NanoBananaOutputFormat,
   GptImageQuality,
-} from "@nakedapi/kie";
-import type { VeoGenerateRequest, VeoExtendRequest } from "@nakedapi/kie";
-import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@nakedapi/xai";
+} from "@apicity/kie";
+import type { VeoGenerateRequest, VeoExtendRequest } from "@apicity/kie";
+import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 

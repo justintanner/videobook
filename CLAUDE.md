@@ -37,7 +37,7 @@ IMPORTANT: All project, asset, and file operations MUST use the `clipfirst-fs` p
 
 ## External API Calls
 
-IMPORTANT: All external API calls from the server MUST use `@nakedapi` provider packages. Never call third-party AI/LLM APIs directly with `fetch` or other HTTP clients — always go through the corresponding `@nakedapi` provider (e.g., `kimicoding()` from `@nakedapi/kimicoding`). API keys are stored in `.env` and loaded via `dotenv/config`.
+IMPORTANT: All external API calls from the server MUST use `@apicity` provider packages. Never call third-party AI/LLM APIs directly with `fetch` or other HTTP clients — always go through the corresponding `@apicity` provider (e.g., `kimicoding()` from `@apicity/kimicoding`). API keys are stored in `.env` and loaded via `dotenv/config`.
 
 ## Job Queue
 

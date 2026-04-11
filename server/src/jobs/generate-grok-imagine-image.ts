@@ -1,8 +1,8 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
-import type { GrokImageToImageRequest } from "@nakedapi/kie";
-import { xai } from "@nakedapi/xai";
+import type { GrokImageToImageRequest } from "@apicity/kie";
+import { xai } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { buildGrokImagineImagePayload, buildXaiGrokImagineImagePayload } from "../payload-builders.js";

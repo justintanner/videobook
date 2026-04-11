@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";

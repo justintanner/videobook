@@ -1,17 +1,17 @@
 /**
  * Image model registry, schemas, validation, and option builder.
  *
- * Parameter schemas and enums come from @nakedapi provider packages:
+ * Parameter schemas and enums come from @apicity provider packages:
  *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
  *   - xAI: xai.get.v1.imageGenerationModels() (live API, model discovery)
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
 import type { ResolvedAsset } from "./asset-resolver.js";
-import { kie } from "@nakedapi/kie";
-import type { KieMediaModel, PayloadFieldSchema } from "@nakedapi/kie";
-import { xai } from "@nakedapi/xai";
-import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@nakedapi/xai";
+import { kie } from "@apicity/kie";
+import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
+import { xai } from "@apicity/xai";
+import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
 
 // ---------------------------------------------------------------------------
 // Provider route (unchanged type for backward compat)

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { kimicoding } from "@nakedapi/kimicoding";
+import { kimicoding } from "@apicity/kimicoding";
 import type { ToolDef } from "./tool-def.js";
 
 export function apiStatusDef(): ToolDef {

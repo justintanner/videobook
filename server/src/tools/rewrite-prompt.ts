@@ -7,8 +7,8 @@ import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openai, textPart, imageUrlPart, firstContent } from "@nakedapi/openai";
-import type { OpenAiContentPart, OpenAiMessage } from "@nakedapi/openai";
+import { openai, textPart, imageUrlPart, firstContent } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import type { ToolDef } from "./tool-def.js";
 

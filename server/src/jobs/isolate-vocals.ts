@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
-import { kie, submitMediaJob } from "@nakedapi/kie";
+import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadBase64, contentHash } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";

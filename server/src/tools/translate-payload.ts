@@ -5,7 +5,7 @@ import { translateToolPayload, getValidationWarnings } from "../payload-builders
 export function translatePayloadDef(): ToolDef {
   return {
     name: "translate_payload",
-    description: "Translate gen panel args to the @nakedapi provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.",
+    description: "Translate gen panel args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.",
     schema: {
       tool_name: z.string().describe("MCP tool name (e.g. 'generate_kling30_video')"),
       args_json: z.string().describe("Tool arguments as a JSON string"),

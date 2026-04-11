@@ -1,6 +1,6 @@
-import type { KieProvider } from "@nakedapi/kie";
-import { KieError } from "@nakedapi/kie";
-import { free } from "@nakedapi/free";
+import type { KieProvider } from "@apicity/kie";
+import { KieError } from "@apicity/kie";
+import { free } from "@apicity/free";
 import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-fs";
 

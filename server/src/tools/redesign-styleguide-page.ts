@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { openai, textPart, imageBase64Part, firstContent } from "@nakedapi/openai";
+import { openai, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import { takeScreenshot } from "../screenshot.js";
 import type { ToolDef } from "./tool-def.js";
 
