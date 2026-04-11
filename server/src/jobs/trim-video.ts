@@ -109,13 +109,24 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
       // Re-arm whitelist so transcription pipeline picks up the changed video
       await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
+      // Clear stale analysis from pre-trim content so the full pipeline re-runs
+      // against the new trimmed file. NOT_FOUND is expected for files that weren't
+      // produced the first time around.
+      for (const stale of [
+        ".original.analysis.json",
+        ".analysis.gpt4otrans.json",
+        "elevenlabs.json",
+        ".kie-task.json",
+      ]) {
+        await fs.deleteFile(assetId, stale, projectSlug);
+      }
+
       const videoPath = join(assetDir, inputFilename);
       await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
         type: "process_video",
         videoPath, assetId, assetDir, projectSlug,
         provenance: { origin: "trim", trimmed_at: new Date().toISOString() },
         force: true,
-        skipDownstreamJobs: true,
       } as unknown as Record<string, unknown>);
 
       return { success: true };

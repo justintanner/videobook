@@ -5,6 +5,7 @@ import { YtDlp } from "ytdlp-nodejs";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -386,6 +387,11 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         full,
         downloaded_at: new Date().toISOString(),
       };
+
+      // Auto-whitelist downloaded videos — the user explicitly requested the URL
+      // so they skip manual review and the full sync pipeline (ElevenLabs + render)
+      // can proceed once analysis completes.
+      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug ?? "");
 
       // (g) Enqueue process_video
       const processJobId = `process-video-${assetId}-${Date.now()}`;
