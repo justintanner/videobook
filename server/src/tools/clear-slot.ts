@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { scheduleTimelineRender } from "./schedule-timeline-render.js";
 
 type TimelineSlot = {
   slug: string;
@@ -79,6 +80,7 @@ export function clearSlotDef(fs: ClipfirstFs): ToolDef {
       // Write back
       const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
       if (writeResult.ok) {
+        scheduleTimelineRender(fs, project_slug);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(config) }],
         };
