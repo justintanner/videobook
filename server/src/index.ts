@@ -1,20 +1,17 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { resolve } from "node:path";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
 import { queue } from "./queue.js";
-import { fs } from "./fs.js";
+import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
 import { cleanOrphanedQueuedTasks, resetStaleCompletingTasks, cleanStaleLockRaceErrors } from "./jobs/pending-task.js";
 
-const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? "projects";
-
 const app = express();
 app.use(cors());
-app.use("/files", express.static(resolve(PROJECTS_DIR), { dotfiles: "allow" }));
+app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/api/manifest/:projectSlug/:assetId", async (req, res) => {
