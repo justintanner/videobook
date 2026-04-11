@@ -392,6 +392,7 @@ type Wan27VideoEditArgs = {
   duration?: string;
   audio_setting?: "auto" | "origin";
   prompt_extend?: boolean;
+  watermark?: boolean;
   nsfw_checker?: boolean;
   seed?: number;
 };
@@ -417,6 +418,7 @@ export function buildWan27VideoEditPayload(
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
       ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },

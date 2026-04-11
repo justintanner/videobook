@@ -64,6 +64,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
       audio_setting: z.enum(["auto", "origin"]).optional().describe("Audio: auto (model decides) or origin (keep original)"),
       prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+      watermark: z.boolean().optional().describe("Add 'AI generated' watermark (default false)"),
       nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
       seed: z.number().int().optional().describe("Random seed for reproducibility"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
@@ -72,7 +73,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       const {
         project_slug, prompt, negative_prompt,
         video_slug, image_slug,
-        resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed,
+        resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
       } = args as {
         project_slug: string;
         prompt?: string;
@@ -84,6 +85,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
         duration?: string;
         audio_setting?: "auto" | "origin";
         prompt_extend?: boolean;
+        watermark?: boolean;
         nsfw_checker?: boolean;
         seed?: number;
       };
@@ -171,6 +173,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
         ...(duration !== undefined ? { duration } : {}),
         ...(audio_setting !== undefined ? { audio_setting } : {}),
         ...(prompt_extend !== undefined ? { prompt_extend } : {}),
+        ...(watermark !== undefined ? { watermark } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);

@@ -140,9 +140,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt", "negative_prompt",
       "video_slug", "image_slug",
-      "resolution", "aspect_ratio", "duration", "audio_setting", "prompt_extend", "nsfw_checker", "seed",
+      "resolution", "aspect_ratio", "duration", "audio_setting", "prompt_extend", "watermark", "nsfw_checker", "seed",
     ],
-    defaults: { resolution: "1080p", duration: "0", audio_setting: "auto", prompt_extend: true, nsfw_checker: false },
+    defaults: { resolution: "1080p", duration: "0", audio_setting: "auto", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -273,6 +273,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   mode: { type: "string", description: "Generation mode" },
   resolution: { type: "string", description: "Output resolution" },
   generate_audio: { type: "boolean", description: "Generate sound effects (Seedance)" },
+  image_slug: { type: "string", description: "Reference image asset (e.g., @img-outfit)" },
   first_frame_slug: { type: "string", description: "First frame image asset (e.g., @img-sunset)" },
   last_frame_slug: { type: "string", description: "Last frame image asset (e.g., @img-ending)" },
   video_slugs: {
@@ -395,6 +396,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "4:3", "3:4"]; prop.description = "Video aspect ratio (omit to match source)"; }
       if (param === "duration") { prop.enum = ["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
       if (param === "audio_setting") { prop.enum = ["auto", "origin"]; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "watermark") { prop.type = "boolean"; prop.description = "Add 'AI generated' watermark to lower-right corner (default false)"; prop.default = false; }
     }
     if (toolName === "generate_wan27_r2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }

@@ -24,6 +24,7 @@ type GenerateWan27VideoeditVideoPayload = {
   duration?: string;
   audio_setting?: "auto" | "origin";
   prompt_extend?: boolean;
+  watermark?: boolean;
   nsfw_checker?: boolean;
   seed?: number;
 };
@@ -43,7 +44,7 @@ export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       videoInput, imageInput,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed,
+      resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27VideoeditVideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -55,7 +56,7 @@ export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
     const referenceImageUrl = imageInput ? await uploadSingle(fs, provider, imageInput, projectSlug) : undefined;
 
     const request = buildWan27VideoEditPayload(
-      { prompt, negative_prompt, resolution, aspect_ratio, duration, audio_setting, prompt_extend, nsfw_checker, seed },
+      { prompt, negative_prompt, resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed },
       { videoUrl, referenceImageUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
