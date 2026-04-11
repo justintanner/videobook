@@ -16,6 +16,12 @@ import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import { writeFile } from "node:fs/promises";
 import type { ToolDef } from "./tool-def.js";
 
+/** Upper bound on how long a pending task may sit without reaching success/fail
+ *  before sync ages it out. Guards against providers (observed with Kie's
+ *  elevenlabs/speech-to-text endpoint) that leave jobs in an intermediate
+ *  "waiting" state indefinitely. */
+const PENDING_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
 export type SyncAsset = {
   id: string;
   type: string;
@@ -395,8 +401,27 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
   }
 
+  // Age out any non-completing task older than PENDING_TASK_TIMEOUT_MS so it
+  // stops showing as pending forever. Completing tasks are skipped because the
+  // completion job is already dispatched; resetStaleCompletingTasks handles
+  // that lane on server restart.
+  const nowMs = Date.now();
+  const activeTasks: PendingKieTask[] = [];
+  for (const t of tasks) {
+    const ageMs = nowMs - new Date(t.createdAt).getTime();
+    if (t.completing !== true && Number.isFinite(ageMs) && ageMs > PENDING_TASK_TIMEOUT_MS) {
+      const ageMinutes = Math.round(ageMs / 60000);
+      const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
+      const prompt = metaPrompt(t.meta);
+      result.failed.push({ assetId: t.assetId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      await failPendingTask(fs, t.assetId, project_slug, { message: failMsg, prompt });
+    } else {
+      activeTasks.push(t);
+    }
+  }
+
   // Queued tasks (not yet submitted to provider) — report as pending, skip polling
-  const queuedTasks = tasks.filter((t) => t.taskId === QUEUED_TASK_ID);
+  const queuedTasks = activeTasks.filter((t) => t.taskId === QUEUED_TASK_ID);
   for (const t of queuedTasks) {
     result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 0, state: "queued", prompt: metaPrompt(t.meta) });
   }
@@ -405,12 +430,12 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // prior poll. Skip polling + re-enqueueing so duplicate completion jobs
   // don't race on the asset-directory lock. Report as pending with state
   // "success" so the inbox tile shows the DOWNLOAD/PROCESS phase.
-  const completingTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing === true);
+  const completingTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing === true);
   for (const t of completingTasks) {
     result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 100, state: "success", prompt: metaPrompt(t.meta) });
   }
 
-  const pollableTasks = tasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
+  const pollableTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
 
   // Poll KIE tasks (only if API key is set)
   const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_"));
