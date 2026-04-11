@@ -108,6 +108,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "default",
     chevron: "right",
     params: [],
+    mcpTool: { tool: "render_timeline", autoInject: ["project_slug"] },
   },
   {
     command: "/download",

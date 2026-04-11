@@ -29,7 +29,7 @@ type RenderTimelinePayload = {
 };
 
 function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): string {
-  const filters: string[] = [];
+  const filters: string[] = ["aresample=48000", "aformat=sample_fmts=fltp:channel_layouts=stereo"];
   const vol = slot.volume / 100;
   if (vol !== 1) {
     filters.push(`volume=${vol}`);
@@ -42,9 +42,6 @@ function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): 
   if (fadeOutSec > 0) {
     const startTime = Math.max(0, duration - fadeOutSec);
     filters.push(`afade=t=out:st=${startTime}:d=${fadeOutSec}`);
-  }
-  if (filters.length === 0) {
-    return `[${index}:a:0]acopy[a${index}]`;
   }
   return `[${index}:a:0]${filters.join(",")}[a${index}]`;
 }
@@ -87,9 +84,10 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
       // Build filter_complex
       const filterParts: string[] = [];
 
-      // Video: setsar for each input, then concat
+      // Video: normalize fps, pixel format, and SAR so the concat filter doesn't
+      // fall back to expensive per-frame timebase work when sources disagree.
       for (let i = 0; i < n; i++) {
-        filterParts.push(`[${i}:v:0]setsar=1[v${i}]`);
+        filterParts.push(`[${i}:v:0]fps=30,format=yuv420p,setsar=1[v${i}]`);
       }
 
       // Audio: per-slot volume/fade filters

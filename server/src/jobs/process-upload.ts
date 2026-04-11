@@ -39,6 +39,7 @@ export async function findUnprocessedUploads(
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(
     assets.map(async (asset): Promise<UnprocessedUpload | null> => {
+      if (asset.id === "final") return null;
       const manifest = await fs.getManifest(asset.id, projectSlug);
       if (!manifest.ok) return null;
 
