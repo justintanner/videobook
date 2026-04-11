@@ -730,19 +730,19 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 11. Chat fallback commands: /generate, /trim, /trim-audio, /final
+  // 11. Command dispatch wiring
   // -----------------------------------------------------------------------
-  describe("chat fallback commands", () => {
-    it("/generate has no mcpTool or uiAction (falls to chat)", () => {
+  describe("command dispatch wiring", () => {
+    it("/generate opens the generation panel via uiAction", () => {
       const cmd = findCommand("/generate");
+      expect(cmd.uiAction).toBe("open_gen");
       expect(cmd.mcpTool).toBeUndefined();
-      expect(cmd.uiAction).toBeUndefined();
     });
 
-    it("/trim has no mcpTool or uiAction (falls to chat)", () => {
+    it("/trim opens the trim editor via uiAction", () => {
       const cmd = findCommand("/trim");
+      expect(cmd.uiAction).toBe("open_trim");
       expect(cmd.mcpTool).toBeUndefined();
-      expect(cmd.uiAction).toBeUndefined();
     });
 
     it("/trim-audio has no mcpTool or uiAction (falls to chat)", () => {
@@ -751,9 +751,10 @@ describe("slash commands e2e", () => {
       expect(cmd.uiAction).toBeUndefined();
     });
 
-    it("/final has no mcpTool or uiAction (falls to chat)", () => {
+    it("/final dispatches render_timeline via mcpTool", () => {
       const cmd = findCommand("/final");
-      expect(cmd.mcpTool).toBeUndefined();
+      expect(cmd.mcpTool?.tool).toBe("render_timeline");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
       expect(cmd.uiAction).toBeUndefined();
     });
 

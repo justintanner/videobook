@@ -96,6 +96,13 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: ["sort"],
     category: "action",
   },
+  {
+    name: "render_timeline",
+    actualTool: "render_timeline",
+    description: "Concatenate rendered timeline slots into the final project video (use for /final and 'render the timeline' requests)",
+    params: [],
+    category: "action",
+  },
   // --- Generation tools ---
   {
     name: "generate_video",
