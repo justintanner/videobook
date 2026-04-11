@@ -1,7 +1,6 @@
 import { Clapperboard, Film, ImageIcon, Settings, History } from 'lucide-react';
 import { CommandButton, InboxButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
-import { cn } from '@/lib/utils';
 import type { UseMcpResult } from 'use-mcp/react';
 
 interface HomeHeaderBarProps {
@@ -14,11 +13,10 @@ interface HomeHeaderBarProps {
   readyCount: number;
   onInboxClick: () => void;
   onStatusClick: () => void;
-  failureCount: number;
   onAnimateCommand: (text: string) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick, onStatusClick, failureCount, onAnimateCommand }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -46,21 +44,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <div className="relative">
-          <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="zinc" onClick={onStatusClick} />
-          {failureCount > 0 && (
-            <span
-              className={cn(
-                'absolute -top-1.5 -right-1.5 z-20',
-                'text-[10px] font-mono font-bold leading-none px-1 min-w-[16px] h-4',
-                'rounded-full inline-flex items-center justify-center',
-                'bg-red-500/15 border border-red-500/40 text-red-400/90 pointer-events-none'
-              )}
-            >
-              {failureCount}
-            </span>
-          )}
-        </div>
+        <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="zinc" onClick={onStatusClick} />
 
         <InboxButton state={inboxState} generatingCount={generatingCount} readyCount={readyCount} flashKey={readyCount} onClick={onInboxClick} />
 

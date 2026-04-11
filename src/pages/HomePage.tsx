@@ -19,7 +19,7 @@ import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
-import { InboxDrawer, StatusDrawer } from '@/components/commands';
+import { InboxDrawer, ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
@@ -69,7 +69,6 @@ export function HomePage() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [inboxOpen, setInboxOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const [activitySeenAt, setActivitySeenAt] = useState<string>('');
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
@@ -626,7 +625,7 @@ export function HomePage() {
           callTool={callTool}
           projectSlug={projectSlug}
         />
-        <StatusDrawer
+        <ActivityLogDrawer
           open={statusOpen}
           onClose={() => setStatusOpen(false)}
           entries={activityEntries}
@@ -654,11 +653,7 @@ export function HomePage() {
             generatingCount={pendingClips.length}
             readyCount={unreviewedClips.length}
             onInboxClick={() => setInboxOpen(true)}
-            onStatusClick={() => {
-              setStatusOpen(true);
-              setActivitySeenAt(new Date().toISOString());
-            }}
-            failureCount={(result?.failed ?? []).filter((f) => f.failedAt > activitySeenAt).length}
+            onStatusClick={() => setStatusOpen(true)}
             onAnimateCommand={handleAnimateCommand}
           />
 
