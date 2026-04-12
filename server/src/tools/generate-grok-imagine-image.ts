@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -21,27 +21,24 @@ function deriveImageName(imageAssetId: string): string {
   return `grok-${baseName}`;
 }
 
+const generateGrokImagineImageSchema = {
+  asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
+  image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
+  aspect_ratio: z.string().optional().describe("Aspect ratio"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
+
 export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job.",
-    schema: {
-      asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
-      image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
-      aspect_ratio: z.string().optional().describe("Aspect ratio"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
-    },
+    schema: generateGrokImagineImageSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, aspect_ratio, _provider } = args as {
-        asset_id?: string;
-        image_slugs?: string[];
-        project_slug: string;
-        prompt?: string;
-        aspect_ratio?: string;
-        _provider?: string;
-      };
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, aspect_ratio, _provider } = args as Args;
 
       // Derive asset_id from image_slugs if not provided directly
       const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);

@@ -1,32 +1,32 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { GrokImagineDurationSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import { findVideoFile } from "../media-files.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
+
+const ExtendGrokImagineDurationSchema = z.union([z.enum(GrokImagineDurationSchema.options), z.literal("15")]);
+
+const extendGrokImagineVideoSchema = {
+  asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
+  video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().optional().describe("Optional prompt to guide video extension"),
+  duration: ExtendGrokImagineDurationSchema.optional().describe("Video duration in seconds"),
+  _provider: z.string().optional().describe("Provider to use (kie or xai)"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
 
 export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "extend_grok_imagine_video",
     description: "Extend an existing video asset using Grok Imagine video extension. Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
-      video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().optional().describe("Optional prompt to guide video extension"),
-      duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
-      _provider: z.string().optional().describe("Provider to use (kie or xai)"),
-    },
+    schema: extendGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration, _provider } = args as {
-        asset_id?: string;
-        video_slug?: string;
-        project_slug: string;
-        prompt?: string;
-        duration?: "6" | "10" | "15";
-        _provider?: string;
-      };
+      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration, _provider } = args as Args;
 
       // Derive asset_id from video_slug if not provided directly
       const asset_id = rawAssetId ?? (video_slug?.replace(/^@/, "") || undefined);

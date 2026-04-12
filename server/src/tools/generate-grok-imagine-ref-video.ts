@@ -1,9 +1,11 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import type { XaiVideoGenerateRequest } from "@apicity/xai";
+import { z, type ZodRawShape } from "zod";
+import { GrokImagineDurationSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -29,35 +31,41 @@ type RefImageInput = {
   filename: string;
 };
 
+type XaiVideoAspectRatio = NonNullable<XaiVideoGenerateRequest["aspect_ratio"]>;
+
+const XaiVideoAspectRatioSchema = z.union([
+  z.literal("1:1"),
+  z.literal("16:9"),
+  z.literal("9:16"),
+  z.literal("4:3"),
+  z.literal("3:4"),
+  z.literal("3:2"),
+  z.literal("2:3"),
+]) satisfies z.ZodType<XaiVideoAspectRatio>;
+
+const generateGrokImagineRefVideoSchema = {
+  prompt: z.string().describe("Text prompt for video generation"),
+  project_slug: z.string().describe("Project slug"),
+  image_slugs: z
+    .array(z.string())
+    .optional()
+    .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
+  duration: z.enum(GrokImagineDurationSchema.options).optional().describe("Video duration in seconds"),
+  resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
+  aspect_ratio: XaiVideoAspectRatioSchema.optional().describe("Video aspect ratio"),
+  _provider: z.string().optional().describe("Provider key (always xai)"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateGrokImagineRefVideoSchema>;
+
 export function generateGrokImagineRefVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_ref_video",
     description:
       "Generate a video using xAI Grok Imagine with optional reference images (0-4). Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      prompt: z.string().describe("Text prompt for video generation"),
-      project_slug: z.string().describe("Project slug"),
-      image_slugs: z
-        .array(z.string())
-        .optional()
-        .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
-      duration: z.enum(["6", "10"]).optional().describe("Video duration in seconds"),
-      resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
-      aspect_ratio: z
-        .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"])
-        .optional()
-        .describe("Video aspect ratio"),
-      _provider: z.string().optional().describe("Provider key (always xai)"),
-    },
+    schema: generateGrokImagineRefVideoSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, duration, resolution, aspect_ratio } = args as {
-        prompt: string;
-        project_slug: string;
-        image_slugs?: string[];
-        duration?: string;
-        resolution?: string;
-        aspect_ratio?: string;
-      };
+      const { prompt, project_slug, image_slugs, duration, resolution, aspect_ratio } = args as Args;
 
       if (!process.env.XAI_API_KEY) {
         return {

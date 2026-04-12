@@ -1,9 +1,10 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -42,40 +43,35 @@ async function resolveFrameSlug(
   return { ok: true, value: { assetId, filename: imageFile.name } };
 }
 
+const seedance2FastInputSchema = Seedance2FastRequestSchema.shape.input.shape;
+
+const generateSeedance2FramesVideoSchema = {
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().describe("Video description (3-2500 characters)"),
+  first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
+  last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
+  aspect_ratio: z.enum(seedance2FastInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
+  resolution: z.enum(seedance2FastInputSchema.resolution.unwrap().options).optional().describe("Output resolution"),
+  duration: z.string().optional().describe("Video duration in seconds (4-15)"),
+  generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
+  return_last_frame: z.boolean().optional().describe("Return the final frame as an image (default false)"),
+  web_search: z.boolean().optional().describe("Use web search for enhanced grounding (default false)"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateSeedance2FramesVideoSchema>;
+
 export function generateSeedance2FramesVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_seedance2_frames_video",
     description: "Generate a video using ByteDance Seedance 2.0 Fast with first and/or last frame image control. Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().describe("Video description (3-2500 characters)"),
-      first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
-      last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
-      aspect_ratio: z.enum(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]).optional().describe("Output aspect ratio"),
-      resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
-      duration: z.string().optional().describe("Video duration in seconds (4-15)"),
-      generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
-      return_last_frame: z.boolean().optional().describe("Return the final frame as an image (default false)"),
-      web_search: z.boolean().optional().describe("Use web search for enhanced grounding (default false)"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-    },
+    schema: generateSeedance2FramesVideoSchema,
     handler: async (args) => {
       const {
         project_slug, prompt, first_frame_slug, last_frame_slug,
         aspect_ratio, resolution, duration,
         generate_audio, return_last_frame, web_search,
-      } = args as {
-        project_slug: string;
-        prompt: string;
-        first_frame_slug?: string;
-        last_frame_slug?: string;
-        aspect_ratio?: string;
-        resolution?: "480p" | "720p";
-        duration?: string;
-        generate_audio?: boolean;
-        return_last_frame?: boolean;
-        web_search?: boolean;
-      };
+      } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {

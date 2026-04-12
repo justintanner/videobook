@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -25,28 +26,27 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
+const nanoBananaProInputSchema = NanoBananaProRequestSchema.shape.input.shape;
+
+const generateNanoBananaImageSchema = {
+  prompt: z.string().describe("Text prompt for image generation"),
+  project_slug: z.string().describe("Project slug"),
+  image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
+  aspect_ratio: z.enum(nanoBananaProInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  resolution: z.enum(NanoBananaResolutionSchema.options).optional().describe("Output resolution"),
+  output_format: z.enum(NanoBananaOutputFormatSchema.options).optional().describe("Output image format"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateNanoBananaImageSchema>;
+
 export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_nano_banana_image",
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
-    schema: {
-      prompt: z.string().describe("Text prompt for image generation"),
-      project_slug: z.string().describe("Project slug"),
-      image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
-      aspect_ratio: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "auto"]).optional().describe("Aspect ratio"),
-      resolution: z.enum(["1K", "2K", "4K"]).optional().describe("Output resolution"),
-      output_format: z.enum(["png", "jpg"]).optional().describe("Output image format"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
-    },
+    schema: generateNanoBananaImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as {
-        prompt: string;
-        project_slug: string;
-        image_slugs?: string[];
-        aspect_ratio?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9" | "auto";
-        resolution?: "1K" | "2K" | "4K";
-        output_format?: "png" | "jpg";
-      };
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 

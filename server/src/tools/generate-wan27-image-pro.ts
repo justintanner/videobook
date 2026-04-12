@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -25,30 +26,26 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
+const generateWan27ImageProSchema = {
+  prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
+  project_slug: z.string().describe("Project slug"),
+  image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
+  aspect_ratio: z.enum(Wan27ImageAspectRatioSchema.options).optional().describe("Output aspect ratio (default 1:1)"),
+  resolution: z.enum(Wan27ImageResolutionSchema.options).optional().describe("Output resolution (default 2K)"),
+  seed: z.number().optional().describe("Random seed (0-2147483647)"),
+  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateWan27ImageProSchema>;
+
 export function generateWan27ImageProDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_wan27_image_pro",
     description: "Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
-    schema: {
-      prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
-      project_slug: z.string().describe("Project slug"),
-      image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
-      aspect_ratio: z.enum(["1:1", "16:9", "4:3", "21:9", "3:4", "9:16", "8:1", "1:8"]).optional().describe("Output aspect ratio (default 1:1)"),
-      resolution: z.enum(["1K", "2K", "4K"]).optional().describe("Output resolution (default 2K)"),
-      seed: z.number().optional().describe("Random seed (0-2147483647)"),
-      nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-    },
+    schema: generateWan27ImageProSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as {
-        prompt: string;
-        project_slug: string;
-        image_slugs?: string[];
-        aspect_ratio?: "1:1" | "16:9" | "4:3" | "21:9" | "3:4" | "9:16" | "8:1" | "1:8";
-        resolution?: "1K" | "2K" | "4K";
-        seed?: number;
-        nsfw_checker?: boolean;
-      };
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 

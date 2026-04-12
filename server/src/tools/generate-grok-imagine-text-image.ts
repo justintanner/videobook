@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {
   return text
@@ -13,27 +14,25 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
+const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shape;
+
+const generateGrokImagineTextImageSchema = {
+  prompt: z.string().describe("Text prompt for image generation"),
+  project_slug: z.string().describe("Project slug"),
+  aspect_ratio: z.enum(grokTextToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateGrokImagineTextImageSchema>;
+
 export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_text_image",
     description:
       "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
-    schema: {
-      prompt: z.string().describe("Text prompt for image generation"),
-      project_slug: z.string().describe("Project slug"),
-      aspect_ratio: z
-        .enum(["1:1", "2:3", "3:2", "16:9", "9:16"])
-        .optional()
-        .describe("Aspect ratio"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
-    },
+    schema: generateGrokImagineTextImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, _provider } = args as {
-        prompt: string;
-        project_slug: string;
-        aspect_ratio?: string;
-        _provider?: string;
-      };
+      const { prompt, project_slug, aspect_ratio, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";

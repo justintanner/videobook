@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { GptImageQualitySchema, GptImageToImageRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -25,26 +26,26 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
+const gptImageToImageInputSchema = GptImageToImageRequestSchema.shape.input.shape;
+
+const generateGptImageSchema = {
+  prompt: z.string().describe("Text prompt for image editing"),
+  project_slug: z.string().describe("Project slug"),
+  image_slugs: z.array(z.string()).describe("1-4 @img-* slugs for reference images"),
+  aspect_ratio: z.enum(gptImageToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  quality: z.enum(GptImageQualitySchema.options).optional().describe("Output quality level"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateGptImageSchema>;
+
 export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_gpt_image",
     description: "Generate an image using GPT Image editing with 1-4 reference images. Creates a new img- asset and enqueues a background job.",
-    schema: {
-      prompt: z.string().describe("Text prompt for image editing"),
-      project_slug: z.string().describe("Project slug"),
-      image_slugs: z.array(z.string()).describe("1-4 @img-* slugs for reference images"),
-      aspect_ratio: z.enum(["1:1", "2:3", "3:2"]).optional().describe("Aspect ratio"),
-      quality: z.enum(["medium", "high"]).optional().describe("Output quality level"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
-    },
+    schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, quality } = args as {
-        prompt: string;
-        project_slug: string;
-        image_slugs: string[];
-        aspect_ratio?: "1:1" | "2:3" | "3:2";
-        quality?: "medium" | "high";
-      };
+      const { prompt, project_slug, image_slugs, aspect_ratio, quality } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 

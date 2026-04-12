@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -21,28 +22,27 @@ function deriveImageName(imageAssetId: string): string {
   return `qwen2-${baseName}`;
 }
 
+const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
+
+const generateQwen2ImageEditSchema = {
+  prompt: z.string().describe("Image editing prompt (max 800 chars)"),
+  project_slug: z.string().describe("Project slug"),
+  image_slugs: z.array(z.string()).describe("Exactly 1 @img-* slug for the reference image to edit"),
+  image_size: z.enum(qwen2ImageEditInputSchema.image_size.unwrap().options).optional().describe("Output aspect ratio (default 16:9)"),
+  output_format: z.enum(qwen2ImageEditInputSchema.output_format.unwrap().options).optional().describe("Output image format (default png)"),
+  seed: z.number().optional().describe("Random seed"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
+
 export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_qwen2_image_edit",
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
-    schema: {
-      prompt: z.string().describe("Image editing prompt (max 800 chars)"),
-      project_slug: z.string().describe("Project slug"),
-      image_slugs: z.array(z.string()).describe("Exactly 1 @img-* slug for the reference image to edit"),
-      image_size: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"]).optional().describe("Output aspect ratio (default 16:9)"),
-      output_format: z.enum(["png", "jpeg"]).optional().describe("Output image format (default png)"),
-      seed: z.number().optional().describe("Random seed"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-    },
+    schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as {
-        prompt: string;
-        project_slug: string;
-        image_slugs: string[];
-        image_size?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";
-        output_format?: "png" | "jpeg";
-        seed?: number;
-      };
+      const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
