@@ -1,10 +1,11 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -49,46 +50,36 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
+const generateWan27VideoeditVideoSchema = {
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().optional().describe("Edit description (max 5000 chars)"),
+  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
+  video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
+  image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
+  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
+  aspect_ratio: z.enum(Wan27AspectRatioSchema.options).optional().describe("Video aspect ratio (omit to match source)"),
+  duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
+  audio_setting: z.enum(Wan27AudioSettingSchema.options).optional().describe("Audio: auto (model decides) or origin (keep original)"),
+  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+  watermark: z.boolean().optional().describe("Add 'AI generated' watermark (default false)"),
+  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
+
 export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_wan27_videoedit_video",
     description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().optional().describe("Edit description (max 5000 chars)"),
-      negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-      video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
-      image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
-      resolution: z.enum(["720p", "1080p"]).optional().describe("Video resolution (default 1080p)"),
-      aspect_ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional().describe("Video aspect ratio (omit to match source)"),
-      duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
-      audio_setting: z.enum(["auto", "origin"]).optional().describe("Audio: auto (model decides) or origin (keep original)"),
-      prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-      watermark: z.boolean().optional().describe("Add 'AI generated' watermark (default false)"),
-      nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-      seed: z.number().int().optional().describe("Random seed for reproducibility"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-    },
+    schema: generateWan27VideoeditVideoSchema,
     handler: async (args) => {
       const {
         project_slug, prompt, negative_prompt,
         video_slug, image_slug,
         resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
-      } = args as {
-        project_slug: string;
-        prompt?: string;
-        negative_prompt?: string;
-        video_slug: string;
-        image_slug?: string;
-        resolution?: "720p" | "1080p";
-        aspect_ratio?: string;
-        duration?: string;
-        audio_setting?: "auto" | "origin";
-        prompt_extend?: boolean;
-        watermark?: boolean;
-        nsfw_checker?: boolean;
-        seed?: number;
-      };
+      } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {

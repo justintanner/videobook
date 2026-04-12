@@ -1,4 +1,4 @@
-import type { ZodRawShape } from "zod";
+import type { infer as zInfer, ZodObject, ZodRawShape } from "zod";
 
 type ToolResult = {
   isError?: true;
@@ -14,4 +14,6 @@ type ToolDef = {
   handler: ToolHandler;
 };
 
-export type { ToolDef, ToolResult, ToolHandler };
+type SchemaArgs<TSchema extends ZodRawShape> = zInfer<ZodObject<TSchema>>;
+
+export type { ToolDef, ToolResult, ToolHandler, SchemaArgs };

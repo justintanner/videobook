@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { GrokImageToVideoRequestSchema, GrokImagineDurationSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -21,33 +22,29 @@ function deriveVideoName(imageAssetId: string): string {
   return `grok-${baseName}`;
 }
 
+const grokImageToVideoInputSchema = GrokImageToVideoRequestSchema.shape.input.shape;
+
+const generateGrokImagineVideoSchema = {
+  asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
+  image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().optional().describe("Optional prompt to guide video generation"),
+  mode: z.enum(GrokImagineModeSchema.options).optional().describe("Generation mode"),
+  duration: z.enum(GrokImagineDurationSchema.options).optional().describe("Video duration in seconds"),
+  resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
+  aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
+
 export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_video",
     description: "Generate a video from an image asset using Grok Imagine image-to-video. Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
-      image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().optional().describe("Optional prompt to guide video generation"),
-      mode: z.enum(["fun", "normal", "spicy"]).optional().describe("Generation mode"),
-      duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
-      resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
-      aspect_ratio: z.enum(["16:9", "9:16", "1:1", "2:3", "3:2"]).optional().describe("Output aspect ratio"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
-    },
+    schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, _provider } = args as {
-        asset_id?: string;
-        image_slugs?: string[];
-        project_slug: string;
-        prompt?: string;
-        mode?: "fun" | "normal" | "spicy";
-        duration?: "6" | "10" | "15";
-        resolution?: "480p" | "720p";
-        aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
-        _provider?: string;
-      };
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, _provider } = args as Args;
 
       // Derive asset_id from image_slugs if not provided directly
       const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);

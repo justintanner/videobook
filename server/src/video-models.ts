@@ -2,6 +2,21 @@
  * Video model registry, schemas, validation, and routing prompt.
  */
 import type { ResolvedAsset } from "./asset-resolver.js";
+import {
+  GrokImageToVideoRequestSchema,
+  GrokImagineDurationSchema,
+  GrokImagineModeSchema,
+  GrokImagineResolutionSchema,
+  KlingAspectRatioSchema,
+  KlingDurationSchema,
+  KlingModeSchema,
+  Seedance2FastRequestSchema,
+  VeoExtendRequestSchema,
+  VeoGenerateRequestSchema,
+  Wan27AspectRatioSchema,
+  Wan27AudioSettingSchema,
+  Wan27ResolutionSchema,
+} from "@apicity/kie/zod";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -237,6 +252,37 @@ type ParamSchema = {
   maxLength?: number;
 };
 
+const KLING_MODES = [...KlingModeSchema.options];
+const KLING_DURATIONS = [...KlingDurationSchema.options];
+const KLING_ASPECT_RATIOS = [...KlingAspectRatioSchema.options];
+
+const [VEO_MODEL_QUALITY, VEO_MODEL_FAST] = VeoGenerateRequestSchema.shape.model.unwrap().options;
+const VEO_MODELS = [VEO_MODEL_FAST, VEO_MODEL_QUALITY];
+const VEO_ASPECT_RATIOS = [...VeoGenerateRequestSchema.shape.aspectRatio.unwrap().options];
+const [
+  VEO_TEXT_2_VIDEO,
+  VEO_REFERENCE_2_VIDEO,
+  VEO_FIRST_AND_LAST_FRAMES_2_VIDEO,
+] = VeoGenerateRequestSchema.shape.generationType.unwrap().options;
+const VEO_GENERATION_TYPES = [
+  VEO_TEXT_2_VIDEO,
+  VEO_FIRST_AND_LAST_FRAMES_2_VIDEO,
+  VEO_REFERENCE_2_VIDEO,
+];
+const VEO_EXTEND_MODELS = [...VeoExtendRequestSchema.shape.model.unwrap().options];
+
+const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
+const SEEDANCE2_RESOLUTIONS = [...Seedance2FastRequestSchema.shape.input.shape.resolution.unwrap().options];
+
+const GROK_IMAGINE_MODES = [...GrokImagineModeSchema.options];
+const GROK_IMAGINE_DURATIONS = [...GrokImagineDurationSchema.options];
+const GROK_IMAGINE_RESOLUTIONS = [...GrokImagineResolutionSchema.options];
+const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = [...GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
+
+const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
+const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
+const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
+
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
   image_slugs: {
@@ -247,12 +293,12 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   aspect_ratio: { type: "string", description: "Output aspect ratio" },
   model: {
     type: "string",
-    enum: ["veo3_fast", "veo3"],
+    enum: VEO_MODELS,
     description: "Veo model - veo3_fast (default, cost-efficient) or veo3 (flagship, highest fidelity)",
   },
   generation_type: {
     type: "string",
-    enum: ["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"],
+    enum: VEO_GENERATION_TYPES,
     description: "Veo generation mode. Auto-inferred from image count if not specified.",
   },
   video_path: { type: "string", description: "Path to video file for frame extraction" },
@@ -312,7 +358,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   first_clip_slug: { type: "string", description: "Video asset for continuation (e.g., @vid-scene)" },
   driving_audio_slug: { type: "string", description: "Audio asset for audio-driven motion (e.g., @aud-music)" },
   audio_slug: { type: "string", description: "Audio asset for voice timbre reference (e.g., @aud-voice)" },
-  audio_setting: { type: "string", enum: ["auto", "origin"], description: "Audio: auto (model decides) or origin (keep original)", default: "auto" },
+  audio_setting: { type: "string", enum: WAN27_AUDIO_SETTINGS, description: "Audio: auto (model decides) or origin (keep original)", default: "auto" },
   prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
   nsfw_checker: { type: "boolean", description: "Content safety filter (default false)", default: false },
   seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
@@ -350,19 +396,19 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     // Tool-specific enum/description overrides
     if (toolName === "generate_kling30_video") {
       if (param === "prompt") prop.description = "Video description";
-      if (param === "mode") { prop.enum = ["std", "pro"]; prop.description = "Resolution mode: std (standard) / pro (professional)"; }
-      if (param === "duration") { prop.enum = Array.from({ length: 13 }, (_, i) => String(i + 3)); prop.description = "Video duration: 3s-15s"; }
-      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1"]; prop.description = "Video aspect ratio"; }
+      if (param === "mode") { prop.enum = KLING_MODES; prop.description = "Resolution mode: std (standard) / pro (professional)"; }
+      if (param === "duration") { prop.enum = KLING_DURATIONS; prop.description = "Video duration: 3s-15s"; }
+      if (param === "aspect_ratio") { prop.enum = KLING_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "sound") prop.description = "Generate audio for the video (default: true)";
       if (param === "image_slugs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
     }
     if (toolName === "generate_veo_video") {
-      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "Auto"]; prop.description = "Video aspect ratio (Auto lets the system decide)"; }
-      if (param === "model") { prop.enum = ["veo3_fast", "veo3"]; }
+      if (param === "aspect_ratio") { prop.enum = VEO_ASPECT_RATIOS; prop.description = "Video aspect ratio (Auto lets the system decide)"; }
+      if (param === "model") { prop.enum = VEO_MODELS; }
     }
     if (toolName === "extend_veo_video") {
       if (param === "prompt") prop.description = "Describe how to extend the video (actions, scenes, style)";
-      if (param === "model") { prop.enum = ["fast", "quality"]; prop.description = "Extension model - fast (default) or quality"; prop.default = "fast"; }
+      if (param === "model") { prop.enum = VEO_EXTEND_MODELS; prop.description = "Extension model - fast (default) or quality"; prop.default = "fast"; }
     }
     if (
       toolName === "generate_seedance2_t2v_video"
@@ -370,8 +416,8 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       || toolName === "generate_seedance2_reference_video"
     ) {
       if (param === "prompt") { prop.description = "Video description (3-2500 characters)"; prop.minLength = 3; prop.maxLength = 2500; }
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]; prop.description = "Frame dimensions (adaptive auto-fits to content)"; }
-      if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Standard (480p) / HD (720p)"; }
+      if (param === "aspect_ratio") { prop.enum = SEEDANCE2_ASPECT_RATIOS; prop.description = "Frame dimensions (adaptive auto-fits to content)"; }
+      if (param === "resolution") { prop.enum = SEEDANCE2_RESOLUTIONS; prop.description = "Standard (480p) / HD (720p)"; }
       if (param === "duration") { prop.enum = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 4-15 seconds"; }
     }
     if (toolName === "generate_seedance2_frames_video") {
@@ -385,45 +431,45 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_wan27_i2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "resolution") { prop.enum = ["720p", "1080p"]; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
       if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
     }
     if (toolName === "generate_wan27_videoedit_video") {
       if (param === "prompt") { prop.description = "Edit description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
       if (param === "image_slug") prop.description = "Reference image for character/style guidance (e.g., @img-outfit)";
-      if (param === "resolution") { prop.enum = ["720p", "1080p"]; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "4:3", "3:4"]; prop.description = "Video aspect ratio (omit to match source)"; }
+      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (omit to match source)"; }
       if (param === "duration") { prop.enum = ["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
-      if (param === "audio_setting") { prop.enum = ["auto", "origin"]; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "audio_setting") { prop.enum = WAN27_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
       if (param === "watermark") { prop.type = "boolean"; prop.description = "Add 'AI generated' watermark to lower-right corner (default false)"; prop.default = false; }
     }
     if (toolName === "generate_wan27_r2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "image_slugs") prop.description = "Reference image assets (max 5 total with videos, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (max 5 total with images, e.g., @vid-motion)";
-      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "4:3", "3:4"]; prop.description = "Video aspect ratio (ignored if first_frame_slug set)"; }
-      if (param === "resolution") { prop.enum = ["720p", "1080p"]; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (ignored if first_frame_slug set)"; }
+      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
       if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 2-10 seconds"; }
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "mode") { prop.enum = ["fun", "normal", "spicy"]; prop.description = "Generation style: fun / normal / spicy"; }
-      if (param === "duration") { prop.enum = ["6", "10"]; prop.description = "Video duration: 6s / 10s"; }
-      if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "2:3", "3:2"]; prop.description = "Video aspect ratio"; }
+      if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation style: fun / normal / spicy"; }
+      if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
+      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
+      if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
     }
     if (toolName === "generate_grok_imagine_ref_video") {
       if (param === "prompt") { prop.description = "Video description"; }
-      if (param === "duration") { prop.enum = ["6", "10"]; prop.description = "Video duration: 6s / 10s"; }
-      if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Video resolution: 480p / 720p"; }
+      if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
+      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
       if (param === "aspect_ratio") { prop.enum = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]; prop.description = "Video aspect ratio"; }
       if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
     }
     if (toolName === "extend_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; }
-      if (param === "duration") { prop.enum = ["6", "10", "15"]; prop.description = "Extension duration: 6s / 10s / 15s"; }
+      if (param === "duration") { prop.enum = [...GROK_IMAGINE_DURATIONS, "15"]; prop.description = "Extension duration: 6s / 10s / 15s"; }
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
 

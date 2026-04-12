@@ -1,10 +1,11 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
+import { Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "../media-files.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
-import type { ToolDef } from "./tool-def.js";
+import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -59,44 +60,35 @@ async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
+const generateWan27I2vVideoSchema = {
+  project_slug: z.string().describe("Project slug"),
+  prompt: z.string().describe("Video description (max 5000 chars)"),
+  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
+  first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
+  last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
+  first_clip_slug: z.string().optional().describe("Video asset for continuation (e.g., @vid-scene)"),
+  driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
+  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
+  duration: z.string().optional().describe("Video duration in seconds (2-15)"),
+  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof generateWan27I2vVideoSchema>;
+
 export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_wan27_i2v_video",
     description: "Generate a video using Wan 2.7 Image to Video with first/last frame image control, clip continuation, or driving audio. Creates a new vid- asset and enqueues a background job.",
-    schema: {
-      project_slug: z.string().describe("Project slug"),
-      prompt: z.string().describe("Video description (max 5000 chars)"),
-      negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-      first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
-      last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
-      first_clip_slug: z.string().optional().describe("Video asset for continuation (e.g., @vid-scene)"),
-      driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
-      resolution: z.enum(["720p", "1080p"]).optional().describe("Video resolution (default 1080p)"),
-      duration: z.string().optional().describe("Video duration in seconds (2-15)"),
-      prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-      nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-      seed: z.number().int().optional().describe("Random seed for reproducibility"),
-      _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-    },
+    schema: generateWan27I2vVideoSchema,
     handler: async (args) => {
       const {
         project_slug, prompt, negative_prompt,
         first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug,
         resolution, duration, prompt_extend, nsfw_checker, seed,
-      } = args as {
-        project_slug: string;
-        prompt: string;
-        negative_prompt?: string;
-        first_frame_slug?: string;
-        last_frame_slug?: string;
-        first_clip_slug?: string;
-        driving_audio_slug?: string;
-        resolution?: "720p" | "1080p";
-        duration?: string;
-        prompt_extend?: boolean;
-        nsfw_checker?: boolean;
-        seed?: number;
-      };
+      } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
