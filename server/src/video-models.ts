@@ -17,6 +17,7 @@ import {
   Wan27AudioSettingSchema,
   Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
+import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -279,6 +280,8 @@ const GROK_IMAGINE_DURATIONS = [...GrokImagineDurationSchema.options];
 const GROK_IMAGINE_RESOLUTIONS = [...GrokImagineResolutionSchema.options];
 const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = [...GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
 
+const XAI_VIDEO_ASPECT_RATIOS = [...XaiVideoGenerateRequestSchema.shape.aspect_ratio.unwrap().options];
+
 const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
 const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
 const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
@@ -464,7 +467,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
       if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]; prop.description = "Video aspect ratio"; }
+      if (param === "aspect_ratio") { prop.enum = XAI_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
     }
     if (toolName === "extend_grok_imagine_video") {

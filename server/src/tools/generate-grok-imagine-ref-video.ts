@@ -1,7 +1,7 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
-import type { XaiVideoGenerateRequest } from "@apicity/xai";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
+import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
@@ -31,17 +31,7 @@ type RefImageInput = {
   filename: string;
 };
 
-type XaiVideoAspectRatio = NonNullable<XaiVideoGenerateRequest["aspect_ratio"]>;
-
-const XaiVideoAspectRatioSchema = z.union([
-  z.literal("1:1"),
-  z.literal("16:9"),
-  z.literal("9:16"),
-  z.literal("4:3"),
-  z.literal("3:4"),
-  z.literal("3:2"),
-  z.literal("2:3"),
-]) satisfies z.ZodType<XaiVideoAspectRatio>;
+const XAI_VIDEO_ASPECT_RATIOS = XaiVideoGenerateRequestSchema.shape.aspect_ratio.unwrap().options;
 
 const generateGrokImagineRefVideoSchema = {
   prompt: z.string().describe("Text prompt for video generation"),
@@ -52,7 +42,7 @@ const generateGrokImagineRefVideoSchema = {
     .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
   duration: z.enum(GrokImagineDurationSchema.options).optional().describe("Video duration in seconds"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: XaiVideoAspectRatioSchema.optional().describe("Video aspect ratio"),
+  aspect_ratio: z.enum(XAI_VIDEO_ASPECT_RATIOS).optional().describe("Video aspect ratio"),
   _provider: z.string().optional().describe("Provider key (always xai)"),
 } satisfies ZodRawShape;
 
