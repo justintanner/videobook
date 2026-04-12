@@ -18,6 +18,7 @@ type GenerateGrokImagineVideoPayload = {
   mode?: "fun" | "normal" | "spicy";
   duration?: "6" | "10";
   resolution?: "480p" | "720p";
+  aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
   _provider?: string;
 };
 
@@ -25,7 +26,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload) => {
     const {
       imageFilename, vidAssetId, vidAssetDir,
-      sourceImageId, projectSlug, prompt, mode, duration, resolution, _provider,
+      sourceImageId, projectSlug, prompt, mode, duration, resolution, aspect_ratio, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
@@ -43,7 +44,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
-        { prompt, mode, duration, resolution },
+        { prompt, mode, duration, resolution, aspect_ratio },
         [imageUrl],
       );
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
@@ -76,7 +77,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     const downloadUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineVideoPayload(
-      { prompt, mode, duration, resolution },
+      { prompt, mode, duration, resolution, aspect_ratio },
       [downloadUrl],
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

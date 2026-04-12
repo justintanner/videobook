@@ -74,6 +74,7 @@ type GrokImagineVideoArgs = {
   mode?: GrokImagineMode;
   duration?: GrokImagineDuration;
   resolution?: GrokImagineResolution;
+  aspect_ratio?: string;
 };
 
 function buildGrokImagineVideoPayload(
@@ -88,6 +89,7 @@ function buildGrokImagineVideoPayload(
       ...(args.mode !== undefined ? { mode: args.mode } : {}),
       ...(args.duration !== undefined ? { duration: args.duration } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokImageToVideoRequest["input"]["aspect_ratio"] } : {}),
     },
   };
 }
@@ -473,6 +475,7 @@ function buildXaiGrokImagineVideoPayload(
     ...(imageUrls.length > 0 ? { image: { url: imageUrls[0] } } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
 

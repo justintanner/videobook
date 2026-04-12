@@ -166,8 +166,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
     description: "Grok image-to-video with fun/normal/spicy modes",
-    params: ["prompt", "image_slugs", "mode", "duration", "resolution"],
-    defaults: { mode: "normal", duration: "6", resolution: "720p" },
+    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio"],
+    defaults: { mode: "normal", duration: "6", resolution: "720p", aspect_ratio: "16:9" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
@@ -411,6 +411,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "mode") { prop.enum = ["fun", "normal", "spicy"]; prop.description = "Generation style: fun / normal / spicy"; }
       if (param === "duration") { prop.enum = ["6", "10"]; prop.description = "Video duration: 6s / 10s"; }
       if (param === "resolution") { prop.enum = ["480p", "720p"]; prop.description = "Video resolution: 480p / 720p"; }
+      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "2:3", "3:2"]; prop.description = "Video aspect ratio"; }
       if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
     }
     if (toolName === "generate_grok_imagine_ref_video") {

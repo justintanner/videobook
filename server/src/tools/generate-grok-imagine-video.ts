@@ -33,10 +33,11 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       mode: z.enum(["fun", "normal", "spicy"]).optional().describe("Generation mode"),
       duration: z.enum(["6", "10", "15"]).optional().describe("Video duration in seconds"),
       resolution: z.enum(["480p", "720p"]).optional().describe("Output resolution"),
+      aspect_ratio: z.enum(["16:9", "9:16", "1:1", "2:3", "3:2"]).optional().describe("Output aspect ratio"),
       _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
     },
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, _provider } = args as {
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, _provider } = args as {
         asset_id?: string;
         image_slugs?: string[];
         project_slug: string;
@@ -44,6 +45,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         mode?: "fun" | "normal" | "spicy";
         duration?: "6" | "10" | "15";
         resolution?: "480p" | "720p";
+        aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
         _provider?: string;
       };
 
@@ -126,6 +128,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
+        ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
