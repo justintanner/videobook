@@ -131,6 +131,11 @@ Determine which video generation tool to use and what parameters to pass.`;
         // action log unavailable
       }
 
+      // 4b. Build set of valid asset tags for the current project so
+      //     historical slug references that no longer exist are stripped.
+      const allProjectAssets = await fs.listAssets(slug);
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.id}`));
+
       // 5. Build model options for all 5 video models
       // Only pass router params to the model that was actually routed to;
       // other models get empty base params so shared param names (mode, duration)
@@ -139,7 +144,7 @@ Determine which video generation tool to use and what parameters to pass.`;
         buildModelOption(
           key, info,
           info.tool_name === routedToolName ? routedParams : {},
-          resolvedAssets, historyEntries, providerOverride,
+          resolvedAssets, historyEntries, providerOverride, projectAssetTags,
         ),
       );
 

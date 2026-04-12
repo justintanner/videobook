@@ -55,6 +55,11 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
         // action log unavailable
       }
 
+      // 3b. Build set of valid asset tags for the current project so
+      //     historical slug references that no longer exist are stripped.
+      const allProjectAssets = await fs.listAssets(slug);
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.id}`));
+
       // 4. Build model options for all image models
       // Strip @asset tags from prompt to get the user's text input
       const cleanPrompt = prompt.replace(/@\S+/g, "").trim();
@@ -62,7 +67,7 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
 
       const imageModels = getImageModels();
       const modelOptions = Object.entries(imageModels).map(([key, info]) =>
-        buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries, providerOverride),
+        buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries, providerOverride, projectAssetTags),
       );
 
       // 5. Use explicit override, then last successful generation model, then nano_banana

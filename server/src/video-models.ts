@@ -737,6 +737,22 @@ type ModelOption = {
   selected_provider: string;
 };
 
+function filterInvalidSlugs(
+  params: Record<string, unknown>,
+  validTags: Set<string>,
+): void {
+  for (const [k, v] of Object.entries(params)) {
+    if (k.endsWith("_slug") && typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
+      params[k] = "";
+    }
+    if (k.endsWith("_slugs") && Array.isArray(v)) {
+      params[k] = v.filter(
+        (s) => typeof s === "string" && (!s.startsWith("@") || validTags.has(s)),
+      );
+    }
+  }
+}
+
 function buildModelOption(
   modelKey: string,
   modelInfo: VideoModelInfo,
@@ -744,6 +760,7 @@ function buildModelOption(
   resolvedAssets: ResolvedAsset[],
   historyEntries?: ActionLogEntry[],
   providerOverride?: string,
+  projectAssetTags?: Set<string>,
 ): ModelOption {
   const toolName = modelInfo.tool_name;
   // Only carry over base params that belong to this model's param list
@@ -798,6 +815,11 @@ function buildModelOption(
   // Apply model defaults where not already set
   for (const [k, v] of Object.entries(modelInfo.defaults)) {
     params[k] ??= v;
+  }
+
+  // Strip slug references that don't exist in the current project
+  if (projectAssetTags) {
+    filterInvalidSlugs(params, projectAssetTags);
   }
 
   // Coerce numeric values to strings for params with string enums

@@ -418,6 +418,22 @@ type ModelOption = {
   selected_provider: string;
 };
 
+function filterInvalidSlugs(
+  params: Record<string, unknown>,
+  validTags: Set<string>,
+): void {
+  for (const [k, v] of Object.entries(params)) {
+    if (k.endsWith("_slug") && typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
+      params[k] = "";
+    }
+    if (k.endsWith("_slugs") && Array.isArray(v)) {
+      params[k] = v.filter(
+        (s) => typeof s === "string" && (!s.startsWith("@") || validTags.has(s)),
+      );
+    }
+  }
+}
+
 function buildImageModelOption(
   modelKey: string,
   modelInfo: ImageModelInfo,
@@ -425,6 +441,7 @@ function buildImageModelOption(
   resolvedAssets: ResolvedAsset[],
   historyEntries?: ActionLogEntry[],
   providerOverride?: string,
+  projectAssetTags?: Set<string>,
 ): ModelOption {
   const toolName = modelInfo.tool_name;
   const allowedParams = new Set(modelInfo.params);
@@ -455,6 +472,11 @@ function buildImageModelOption(
 
   for (const [k, v] of Object.entries(modelInfo.defaults)) {
     params[k] ??= v;
+  }
+
+  // Strip slug references that don't exist in the current project
+  if (projectAssetTags) {
+    filterInvalidSlugs(params, projectAssetTags);
   }
 
   const schema = getImageToolSchema(toolName);

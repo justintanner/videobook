@@ -42,16 +42,22 @@ interface SavedGenSettings {
   droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' }>;
 }
 
-function loadGenSettings(category: string): SavedGenSettings | null {
+function genSettingsKey(category: string, projectSlug?: string): string {
+  return projectSlug
+    ? `clipfirst:gen:${category}:${projectSlug}`
+    : `clipfirst:gen:${category}`;
+}
+
+function loadGenSettings(category: string, projectSlug?: string): SavedGenSettings | null {
   try {
-    const raw = localStorage.getItem(`clipfirst:gen:${category}`);
+    const raw = localStorage.getItem(genSettingsKey(category, projectSlug));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function saveGenSettings(category: string, data: SavedGenSettings): void {
+function saveGenSettings(category: string, projectSlug: string | undefined, data: SavedGenSettings): void {
   try {
-    localStorage.setItem(`clipfirst:gen:${category}`, JSON.stringify(data));
+    localStorage.setItem(genSettingsKey(category, projectSlug), JSON.stringify(data));
   } catch { /* ignore quota errors */ }
 }
 
@@ -81,7 +87,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const formValuesRef = useRef(formValues);
   formValuesRef.current = formValues;
   const refreshIdRef = useRef(0);
-  const savedRef = useRef(loadGenSettings(category));
+  const savedRef = useRef(loadGenSettings(category, projectSlug));
   const appliedSavedRef = useRef(false);
 
   const fetchPreview = useCallback(async (
@@ -303,7 +309,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
       slug: a.slug, src: a.src, thumbnailSrc: a.thumbnailSrc ?? null, type: a.type,
     }));
-    saveGenSettings(category, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
+    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
     try {
       const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(selectedOption.tool_name, args);
