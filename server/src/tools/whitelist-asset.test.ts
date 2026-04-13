@@ -130,6 +130,30 @@ describe("whitelist pipeline branches", () => {
     expect(data.transcription).toBe("skipped_in_progress");
   });
 
+  it("returns skipped_prior_failure when asset has .generation-error.json", async () => {
+    const assetResult = await fs.createAsset("vid", "prior-failure", "test");
+    if (!assetResult.ok) throw new Error(assetResult.error.message);
+    const assetId = assetResult.value.assetId;
+
+    await fs.writeFile(assetId, ".original.analysis.json", JSON.stringify({ duration: 10 }), "test");
+    await fs.writeFile(
+      assetId,
+      ".generation-error.json",
+      JSON.stringify({
+        message: "The upstream API service timed out and no results were returned, please try again.",
+        failCode: "500",
+        failedAt: new Date().toISOString(),
+      }),
+      "test",
+    );
+
+    const def = whitelistDef(fs);
+    const result = await def.handler({ asset_id: assetId, project_slug: "test" });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.transcription).toBe("skipped_prior_failure");
+    expect(data.status).toBe("whitelisted");
+  });
+
   it("returns pipeline_pending when asset has no .original.analysis.json", async () => {
     const assetResult = await fs.createAsset("vid", "no-analysis", "test");
     if (!assetResult.ok) throw new Error(assetResult.error.message);

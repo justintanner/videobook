@@ -793,6 +793,9 @@ async function findAutoTranscribeActions(
       if (fileNames.has("elevenlabs.json")) return null;
       // Skip if transcription already in progress
       if (fileNames.has(".kie-task.json")) return null;
+      // Skip if a prior transcription attempt failed — do not auto-retry.
+      // User must manually clear the error to retry.
+      if (fileNames.has(".generation-error.json")) return null;
       // Skip if locked
       if (await fs.isLocked(manifest.path)) return null;
 

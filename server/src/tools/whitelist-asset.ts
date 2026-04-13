@@ -75,6 +75,9 @@ export function whitelistDef(fs: ClipfirstFs): ToolDef {
       if (fileNames.has(".kie-task.json")) {
         return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_in_progress" });
       }
+      if (fileNames.has(".generation-error.json")) {
+        return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "skipped_prior_failure" });
+      }
       if (!fileNames.has(".original.analysis.json")) {
         return ok({ asset_id, status, whitelisted_at: timestamp, transcription: "pipeline_pending" });
       }

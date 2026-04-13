@@ -686,6 +686,31 @@ describe("performSync — auto-transcribe", () => {
     expect(result.auto_transcribe.length).toBe(0);
   });
 
+  it("skips auto-transcribe when a prior transcription failed", async () => {
+    const { performSync } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "prior-failure", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
+    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking about economics",
+    }));
+    await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
+    }));
+    await writeFile(join(assetDir, ".generation-error.json"), JSON.stringify({
+      message: "The upstream API service timed out and no results were returned, please try again.",
+      failCode: "500",
+      failedAt: new Date().toISOString(),
+    }));
+
+    const result = await performSync(fs, "test-proj");
+    expect(result.auto_transcribe.length).toBe(0);
+  });
+
   it("skips auto-transcribe when no dialog detected", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "no-dialog", "test-proj");
