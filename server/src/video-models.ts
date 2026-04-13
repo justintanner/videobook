@@ -10,14 +10,17 @@ import {
   KlingAspectRatioSchema,
   KlingDurationSchema,
   KlingModeSchema,
+  KlingVideoRequestSchema,
   Seedance2FastRequestSchema,
   VeoExtendRequestSchema,
   VeoGenerateRequestSchema,
   Wan27AspectRatioSchema,
   Wan27AudioSettingSchema,
+  Wan27RefToVideoRequestSchema,
   Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
+import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -203,38 +206,27 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine Extend",
     tool_name: "extend_grok_imagine_video",
     description: "Extend an existing video into a longer video using Grok Imagine",
-    params: ["video_slug", "prompt", "duration"],
-    defaults: { duration: "6" },
+    params: ["video_slug", "prompt", "extend_at", "extend_times"],
+    defaults: { extend_times: "6" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.extensions()", envKey: "XAI_API_KEY" },
     ],
   },
 };
 
 // ---------------------------------------------------------------------------
-// Image slot limits
+// Image slot schemas — source of truth is the Apicity Zod request schema.
+// Tools absent from this map have no image-array field; their `image_slots`
+// resolves to null and the UI omits the /images panel.
 // ---------------------------------------------------------------------------
 
-const IMAGE_SLOT_LIMITS: Record<string, { min: number; max: number }> = {
-  generate_kling30_video: { min: 0, max: 2 },
-  generate_veo_video: { min: 0, max: 3 },
-  generate_seedance2_t2v_video: { min: 0, max: 0 },
-  generate_seedance2_frames_video: { min: 0, max: 0 },
-  generate_seedance2_reference_video: { min: 0, max: 9 },
-  generate_grok_imagine_video: { min: 1, max: 1 },
-  generate_grok_imagine_ref_video: { min: 0, max: 4 },
-  generate_wan27_i2v_video: { min: 0, max: 0 },
-  generate_wan27_videoedit_video: { min: 0, max: 0 },
-  generate_wan27_r2v_video: { min: 0, max: 5 },
-  extend_veo_video: { min: 0, max: 0 },
-  extend_grok_imagine_video: { min: 0, max: 0 },
-};
-
-const VEO_IMAGE_SLOTS: Record<string, { min: number; max: number }> = {
-  TEXT_2_VIDEO: { min: 0, max: 0 },
-  FIRST_AND_LAST_FRAMES_2_VIDEO: { min: 1, max: 2 },
-  REFERENCE_2_VIDEO: { min: 1, max: 3 },
+const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unknown }> = {
+  generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
+  generate_veo_video: VeoGenerateRequestSchema.shape.imageUrls,
+  generate_seedance2_reference_video: Seedance2FastRequestSchema.shape.input.shape.reference_image_urls,
+  generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
+  generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
+  generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
 };
 
 // ---------------------------------------------------------------------------
@@ -365,6 +357,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
   nsfw_checker: { type: "boolean", description: "Content safety filter (default false)", default: false },
   seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
+  extend_at: { type: "number", description: "Seconds into the source video to start extending from (default 0)" },
+  extend_times: { type: "string", description: "Extension duration in seconds" },
 };
 
 // ---------------------------------------------------------------------------
@@ -472,16 +466,16 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
     }
     if (toolName === "extend_grok_imagine_video") {
-      if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; }
-      if (param === "duration") { prop.enum = [...GROK_IMAGINE_DURATIONS, "15"]; prop.description = "Extension duration: 6s / 10s / 15s"; }
+      if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; prop.maxLength = 5000; }
+      if (param === "extend_at") { prop.description = "Seconds into the source video to start extending from (default 0)"; }
+      if (param === "extend_times") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Extension duration: 6s / 10s"; }
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
 
     properties[param] = prop;
 
     // Required fields
-    if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "extend_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
-    if (param === "image_slugs" && toolName === "generate_grok_imagine_video") required.push(param);
+    if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
     if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "generate_wan27_videoedit_video")) required.push(param);
     if (
       (toolName === "generate_seedance2_t2v_video"
@@ -502,7 +496,7 @@ type ValidationResult = {
   valid: boolean;
   missing_required: string[];
   warnings: string[];
-  image_slots: { min: number; max: number } | null;
+  image_slots: SlotConstraints | null;
   multi_prompt_slots: number | null;
 };
 
@@ -535,7 +529,6 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   const totalImages = imageSlugs?.length ?? 0;
 
   if (toolName === "generate_kling30_video") {
-    if (totalImages > 2) warnings.push(`Kling 3.0 only supports 0-2 images (got ${totalImages})`);
     const multiPrompt = params.multi_prompt as unknown[] | undefined;
     if (multiPrompt && totalImages > 1) warnings.push(`Kling 3.0 multi-shot mode allows max 1 reference image (got ${totalImages})`);
   }
@@ -552,15 +545,6 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_grok_imagine_video") {
-    if (totalImages === 0) warnings.push("Grok Imagine requires at least one reference image");
-    if (totalImages > 1) warnings.push(`Grok Imagine only supports 1 reference image (got ${totalImages})`);
-  }
-
-  if (toolName === "generate_grok_imagine_ref_video") {
-    if (totalImages > 4) warnings.push(`Grok Imagine Reference supports 0-4 reference images (got ${totalImages})`);
-  }
-
   if (toolName === "generate_seedance2_frames_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
@@ -575,9 +559,6 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (totalImages === 0 && videoSlugs.length === 0 && audioSlugs.length === 0) {
       warnings.push("Seedance 2.0 Reference mode requires at least one reference asset (image, video, or audio)");
     }
-    if (totalImages > 9) warnings.push(`Seedance 2.0 Reference supports 1-9 images (got ${totalImages})`);
-    if (videoSlugs.length > 3) warnings.push(`Seedance 2.0 Reference supports 0-3 videos (got ${videoSlugs.length})`);
-    if (audioSlugs.length > 3) warnings.push(`Seedance 2.0 Reference supports 0-3 audios (got ${audioSlugs.length})`);
   }
 
   if (toolName === "generate_wan27_i2v_video") {
@@ -599,18 +580,7 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_wan27_r2v_video") {
-    const videoSlugs = (params.video_slugs as string[] | undefined) ?? [];
-    const totalRefs = totalImages + videoSlugs.length;
-    if (totalRefs > 5) warnings.push(`Wan 2.7 Reference supports max 5 combined images+videos (got ${totalRefs})`);
-  }
-
-  // Image slots
-  let imageSlots = IMAGE_SLOT_LIMITS[toolName] ?? null;
-  if (toolName === "generate_veo_video") {
-    const genType = (params.generation_type as string) ?? "TEXT_2_VIDEO";
-    imageSlots = VEO_IMAGE_SLOTS[genType] ?? { min: 0, max: 3 };
-  }
+  const imageSlots = readSlotConstraints(IMAGE_FIELD_SCHEMAS[toolName]);
 
   const multiPromptSlots = toolName === "generate_kling30_video" ? 5 : null;
 
@@ -703,7 +673,7 @@ KEY CONSTRAINTS:
 - For generate_seedance2_*_video: duration "4"-"15", resolution "480p"/"720p", aspect_ratio includes "adaptive"
 - For generate_seedance2_reference_video: REQUIRES at least one of image_slugs / video_slugs / audio_slugs (max 9 / 3 / 3)
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration 6-30 (integer seconds)
-- For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
+- For extend_grok_imagine_video: REQUIRES video_slug and prompt; optional extend_at (seconds, default 0) and extend_times "6"/"10"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
@@ -782,7 +752,7 @@ type ModelOption = {
   schema: ToolSchema | null;
   prefilled_values: Record<string, unknown>;
   validation: ValidationResult;
-  image_slots: { min: number; max: number } | null;
+  image_slots: SlotConstraints | null;
   multi_prompt_slots: number | null;
   providers: Array<{ key: string; label: string }>;
   selected_provider: string;
@@ -913,7 +883,7 @@ function buildModelOption(
 
 export {
   VIDEO_MODELS,
-  IMAGE_SLOT_LIMITS,
+  IMAGE_FIELD_SCHEMAS,
   PARAM_SCHEMAS,
   getVideoToolSchema,
   validateVideoParams,

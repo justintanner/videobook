@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "xai_grok_imagine_extend_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -60,7 +60,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "seedance2_video") {
         await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
-      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "xai_grok_imagine_extend_video" || taskType === "grok_imagine_extend_video") {
+      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "grok_imagine_extend_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
       } else if (taskType === "wan27_i2v_video" || taskType === "wan27_videoedit_video" || taskType === "wan27_r2v_video") {
         await completeWan27Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);

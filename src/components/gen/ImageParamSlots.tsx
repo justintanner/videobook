@@ -15,7 +15,7 @@ interface ImageParamSlotsProps {
   assetFields: AssetFieldInfo[];
   resolvedAssets?: ResolvedAsset[];
   droppedAssets?: Map<string, ResolvedAsset>;
-  imageSlots?: { min: number; max: number } | null;
+  imageSlots?: { min: number; max: number | null } | null;
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
   disabled?: boolean;
   inline?: boolean;
@@ -57,6 +57,13 @@ const SLUG_DISPLAY_LABELS: Record<string, string> = {
   image_slugs: 'References',
   video_slugs: 'Reference Videos',
 };
+
+function formatSlotCount(filled: number, min: number, max: number | null): string {
+  if (max === null) return min > 0 ? `${filled}/${min}+` : `${filled}`;
+  if (min === max) return `${filled}/${max}`;
+  if (min > 0) return `${filled}/${min}-${max}`;
+  return `${filled}/${max}`;
+}
 
 function prettifySlugFieldName(name: string): string {
   if (SLUG_DISPLAY_LABELS[name]) return SLUG_DISPLAY_LABELS[name];
@@ -129,7 +136,7 @@ function NamedSlotList({
 
 interface ArraySlotSectionProps {
   field: AssetFieldInfo;
-  imageSlots?: { min: number; max: number } | null;
+  imageSlots?: { min: number; max: number | null } | null;
   resolvedAssets?: ResolvedAsset[];
   droppedAssets?: Map<string, ResolvedAsset>;
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
@@ -150,9 +157,10 @@ function ArraySlotSection({
   const sectionLabel = `/${prettifySlugFieldName(field.name).toLowerCase().replace(/\s+/g, '-')}`;
   const currentSlugs = Array.isArray(field.value) ? field.value.map(String).filter(Boolean) : [];
   const minSlots = imageSlots?.min ?? 0;
-  const maxSlots = Math.max(imageSlots?.max ?? 5, 1);
+  const maxSlotsRaw = imageSlots?.max;
+  const maxSlots: number | null = maxSlotsRaw === null ? null : Math.max(maxSlotsRaw ?? 5, 1);
   const filledCount = currentSlugs.length;
-  const canAddMore = filledCount < maxSlots;
+  const canAddMore = maxSlots === null || filledCount < maxSlots;
   const needsMore = filledCount < minSlots;
 
   const handleSlotChange = (
@@ -184,12 +192,7 @@ function ArraySlotSection({
     slots.push({ slug: null, index: idx, required: idx < minSlots });
   }
 
-  const slotCountLabel =
-    minSlots === maxSlots
-      ? `${filledCount}/${maxSlots}`
-      : minSlots > 0
-        ? `${filledCount}/${minSlots}-${maxSlots}`
-        : `${filledCount}/${maxSlots}`;
+  const slotCountLabel = formatSlotCount(filledCount, minSlots, maxSlots);
 
   return (
     <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
@@ -328,9 +331,10 @@ export function ImageParamSlots({
 
   const currentSlugs = collectSlugs();
   const minSlots = imageSlots?.min ?? 0;
-  const maxSlots = Math.max(imageSlots?.max ?? 1, 1);
+  const maxSlotsRaw = imageSlots?.max;
+  const maxSlots: number | null = maxSlotsRaw === null ? null : Math.max(maxSlotsRaw ?? 1, 1);
   const filledCount = currentSlugs.length;
-  const canAddMore = filledCount < maxSlots;
+  const canAddMore = maxSlots === null || filledCount < maxSlots;
   const needsMore = filledCount < minSlots;
 
   const handleSlotChange = (
@@ -376,12 +380,7 @@ export function ImageParamSlots({
     slots.push({ slug: null, index: idx, required: idx < minSlots });
   }
 
-  const slotCountLabel =
-    minSlots === maxSlots
-      ? `${filledCount}/${maxSlots}`
-      : minSlots > 0
-        ? `${filledCount}/${minSlots}-${maxSlots}`
-        : `${filledCount}/${maxSlots}`;
+  const slotCountLabel = formatSlotCount(filledCount, minSlots, maxSlots);
 
   return (
     <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">

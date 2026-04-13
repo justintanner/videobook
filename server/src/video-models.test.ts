@@ -8,7 +8,7 @@ import {
   validateVideoParams,
   applyVideoToolConstraints,
   buildVideoRoutingPrompt,
-  IMAGE_SLOT_LIMITS,
+  IMAGE_FIELD_SCHEMAS,
   PARAM_SCHEMAS,
 } from "./video-models.js";
 import type { ActionLogEntry } from "./video-models.js";
@@ -353,10 +353,10 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.audio_slugs.type).toBe("array");
   });
 
-  it("grok_imagine: image_slugs required, prompt not required", () => {
+  it("grok_imagine: no hard required fields (matches Zod optionals)", () => {
     const schema = getVideoToolSchema("generate_grok_imagine_video");
     expect(schema).not.toBeNull();
-    expect(schema!.required).toContain("image_slugs");
+    expect(schema!.required).not.toContain("image_slugs");
     expect(schema!.required).not.toContain("prompt");
     expect(schema!.properties.mode.enum).toEqual(["fun", "normal", "spicy"]);
     expect(schema!.properties.duration.type).toBe("integer");
@@ -412,14 +412,6 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("mode") && w.includes("ultra"))).toBe(true);
   });
 
-  it("kling30: warns when too many images", () => {
-    const result = validateVideoParams("generate_kling30_video", {
-      prompt: "test",
-      image_slugs: ["@img-a", "@img-b", "@img-c"],
-    });
-    expect(result.warnings.some((w) => w.includes("only supports 0-2 images"))).toBe(true);
-  });
-
   it("kling30: warns when multi-shot with >1 image", () => {
     const result = validateVideoParams("generate_kling30_video", {
       prompt: "test",
@@ -456,20 +448,6 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("REFERENCE_2_VIDEO"))).toBe(false);
   });
 
-  it("grok_imagine: warns when no images", () => {
-    const result = validateVideoParams("generate_grok_imagine_video", {
-      image_slugs: [],
-    });
-    expect(result.warnings.some((w) => w.includes("requires at least one reference image"))).toBe(true);
-  });
-
-  it("grok_imagine: warns when >1 image", () => {
-    const result = validateVideoParams("generate_grok_imagine_video", {
-      image_slugs: ["@img-a", "@img-b"],
-    });
-    expect(result.warnings.some((w) => w.includes("only supports 1 reference image"))).toBe(true);
-  });
-
   it("seedance2 frames: warns when neither frame slug is set", () => {
     const result = validateVideoParams("generate_seedance2_frames_video", {
       prompt: "test",
@@ -479,52 +457,36 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("first_frame_slug or last_frame_slug"))).toBe(true);
   });
 
-  it("seedance2 reference: warns when no references and when limits exceeded", () => {
+  it("seedance2 reference: warns when no references provided", () => {
     const noRefs = validateVideoParams("generate_seedance2_reference_video", {
       prompt: "test",
       aspect_ratio: "16:9",
       duration: "8",
     });
     expect(noRefs.warnings.some((w) => w.includes("requires at least one reference"))).toBe(true);
-
-    const tooManyVideos = validateVideoParams("generate_seedance2_reference_video", {
-      prompt: "test",
-      aspect_ratio: "16:9",
-      duration: "8",
-      image_slugs: ["@img-a"],
-      video_slugs: ["@vid-a", "@vid-b", "@vid-c", "@vid-d"],
-    });
-    expect(tooManyVideos.warnings.some((w) => w.includes("supports 0-3 videos"))).toBe(true);
-
-    const tooManyImages = validateVideoParams("generate_seedance2_reference_video", {
-      prompt: "test",
-      aspect_ratio: "16:9",
-      duration: "8",
-      image_slugs: Array.from({ length: 10 }, (_, i) => `@img-${i}`),
-    });
-    expect(tooManyImages.warnings.some((w) => w.includes("supports 1-9 images"))).toBe(true);
   });
 
-  it("returns correct image_slots per tool", () => {
+  it("derives image_slots from Apicity Zod: unbounded array → min 0, max null", () => {
     const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
-    expect(klingResult.image_slots).toEqual({ min: 0, max: 2 });
+    expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
     const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
-    expect(grokResult.image_slots).toEqual({ min: 1, max: 1 });
+    expect(grokResult.image_slots).toEqual({ min: 0, max: null });
   });
 
-  it("veo: image_slots depend on generation_type", () => {
-    const textResult = validateVideoParams("generate_veo_video", {
+  it("tools without image-array fields return null image_slots", () => {
+    const framesResult = validateVideoParams("generate_seedance2_frames_video", {
       prompt: "test",
-      generation_type: "TEXT_2_VIDEO",
+      aspect_ratio: "16:9",
+      duration: "8",
     });
-    expect(textResult.image_slots).toEqual({ min: 0, max: 0 });
+    expect(framesResult.image_slots).toBeNull();
 
-    const refResult = validateVideoParams("generate_veo_video", {
+    const extendResult = validateVideoParams("extend_veo_video", {
       prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
+      video_slug: "@vid-a",
     });
-    expect(refResult.image_slots).toEqual({ min: 1, max: 3 });
+    expect(extendResult.image_slots).toBeNull();
   });
 
   it("multi_prompt_slots: 5 for kling30, null for others", () => {
@@ -652,30 +614,24 @@ describe("buildVideoRoutingPrompt", () => {
 });
 
 // ---------------------------------------------------------------------------
-// IMAGE_SLOT_LIMITS & PARAM_SCHEMAS exports
+// IMAGE_FIELD_SCHEMAS & PARAM_SCHEMAS exports
 // ---------------------------------------------------------------------------
 
-describe("IMAGE_SLOT_LIMITS", () => {
-  it("has entries for all video tools", () => {
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_kling30_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_veo_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("extend_veo_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_seedance2_t2v_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_seedance2_frames_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_seedance2_reference_video");
-    expect(IMAGE_SLOT_LIMITS).toHaveProperty("generate_grok_imagine_video");
+describe("IMAGE_FIELD_SCHEMAS", () => {
+  it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kling30_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_veo_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_reference_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_grok_imagine_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_wan27_r2v_video");
   });
 
-  it("extend_veo_video has 0/0 slots (no images)", () => {
-    expect(IMAGE_SLOT_LIMITS.extend_veo_video).toEqual({ min: 0, max: 0 });
-  });
-
-  it("grok_imagine requires exactly 1 image", () => {
-    expect(IMAGE_SLOT_LIMITS.generate_grok_imagine_video).toEqual({ min: 1, max: 1 });
-  });
-
-  it("seedance2 reference supports up to 9 images", () => {
-    expect(IMAGE_SLOT_LIMITS.generate_seedance2_reference_video).toEqual({ min: 0, max: 9 });
+  it("omits tools that take no image-array field (extend, text-to-video, frames)", () => {
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_veo_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_grok_imagine_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_t2v_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_frames_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_wan27_i2v_video");
   });
 });
 

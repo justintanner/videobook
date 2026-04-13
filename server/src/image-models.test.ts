@@ -302,19 +302,19 @@ describe("validateImageParams", () => {
     expect(result.warnings.some((w) => w.includes("requires at least"))).toBe(true);
   });
 
-  it("grok warns when >1 image", () => {
+  it("grok warns when >1 image (Zod tuple caps at 1)", () => {
     const result = validateImageParams("generate_grok_imagine_image", {
       image_slugs: ["@img-a", "@img-b"],
     });
-    expect(result.warnings.some((w) => w.includes("1-1 images"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
   });
 
-  it("gpt warns when >4 images", () => {
+  it("gpt accepts any number of images (Zod array is unbounded)", () => {
     const result = validateImageParams("generate_gpt_image", {
       prompt: "edit this",
       image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
     });
-    expect(result.warnings.some((w) => w.includes("1-4 images"))).toBe(true);
+    expect(result.warnings.some((w) => w.toLowerCase().includes("images (got"))).toBe(false);
   });
 });
 

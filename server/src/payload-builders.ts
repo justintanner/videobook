@@ -668,23 +668,13 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_grok_imagine_video": {
-      if (isXaiProvider(provider)) {
-        const videoSlug = (args.video_slug as string) ?? "";
-        const payload = {
-          prompt: (args.prompt as string) ?? "",
-          video: { url: videoSlug },
-          ...(args.duration !== undefined ? { duration: parseInt(args.duration as string, 10) } : {}),
-        };
-        return { provider_path: "xai.post.v1.videos.extensions()", payload: payload as unknown as Record<string, unknown> };
-      }
-      // Kie path uses task_id from metadata (not available at preview time)
       const payload = {
         model: "grok-imagine/extend",
         input: {
           task_id: "<task_id_from_source_video_metadata>",
           prompt: (args.prompt as string) ?? "",
-          extend_at: 0,
-          extend_times: (args.duration as string) ?? "6",
+          ...(args.extend_at !== undefined ? { extend_at: args.extend_at as number } : {}),
+          ...(args.extend_times !== undefined ? { extend_times: args.extend_times as string } : {}),
         },
       };
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };

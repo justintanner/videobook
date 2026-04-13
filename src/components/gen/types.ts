@@ -16,6 +16,11 @@ export interface JSONSchema {
   defaults?: Record<string, unknown>;
 }
 
+export interface SlotConstraints {
+  min: number;
+  max: number | null;
+}
+
 export interface ModelOption {
   key: string;
   label: string;
@@ -27,7 +32,7 @@ export interface ModelOption {
     valid: boolean;
     missing_required: string[];
     warnings: string[];
-    image_slots?: { min: number; max: number } | null;
+    image_slots?: SlotConstraints | null;
   };
   providers?: Array<{ key: string; label: string }>;
   selected_provider?: string;
@@ -50,7 +55,7 @@ export interface FullPreviewResponse extends DynamicGenerationPreview {
     valid: boolean;
     missing_required: string[];
     warnings: string[];
-    image_slots?: { min: number; max: number } | null;
+    image_slots?: SlotConstraints | null;
   };
 }
 
@@ -67,23 +72,3 @@ export const MAX_ELEMENT_GROUPS = 3;
 
 // Veo 3.1 generation modes
 export type VeoGenerationType = 'TEXT_2_VIDEO' | 'FIRST_AND_LAST_FRAMES_2_VIDEO' | 'REFERENCE_2_VIDEO';
-
-export interface VeoModeConstraint {
-  image_slots: { min: number; max: number };
-  allowed_aspect_ratios?: string[];
-  requires_fast_model?: boolean;
-}
-
-export const VEO_MODE_CONSTRAINTS: Record<VeoGenerationType, VeoModeConstraint> = {
-  TEXT_2_VIDEO: {
-    image_slots: { min: 0, max: 0 },
-  },
-  FIRST_AND_LAST_FRAMES_2_VIDEO: {
-    image_slots: { min: 1, max: 2 },
-  },
-  REFERENCE_2_VIDEO: {
-    image_slots: { min: 1, max: 3 },
-    allowed_aspect_ratios: ['16:9', '9:16'],
-    requires_fast_model: true,
-  },
-};

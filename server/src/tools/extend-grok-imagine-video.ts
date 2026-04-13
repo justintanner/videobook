@@ -7,15 +7,13 @@ import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import { findVideoFile } from "../media-files.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
-const ExtendGrokImagineDurationSchema = z.union([z.enum(GrokImagineDurationSchema.options), z.literal("15")]);
-
 const extendGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
   video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Optional prompt to guide video extension"),
-  duration: ExtendGrokImagineDurationSchema.optional().describe("Video duration in seconds"),
-  _provider: z.string().optional().describe("Provider to use (kie or xai)"),
+  prompt: z.string().min(1).max(5000).describe("Describe how to extend the video"),
+  extend_at: z.number().optional().describe("Seconds into the source video to start extending from (defaults to 0)"),
+  extend_times: z.enum(GrokImagineDurationSchema.options).optional().describe("Extension duration in seconds: 6 or 10"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
@@ -23,19 +21,17 @@ type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
 export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "extend_grok_imagine_video",
-    description: "Extend an existing video asset using Grok Imagine video extension. Creates a new vid- asset and enqueues a background job.",
+    description: "Extend an existing video asset using Kie's grok-imagine/extend. Creates a new vid- asset and enqueues a background job.",
     schema: extendGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, video_slug, project_slug, prompt, duration, _provider } = args as Args;
+      const { asset_id: rawAssetId, video_slug, project_slug, prompt, extend_at, extend_times } = args as Args;
 
-      // Derive asset_id from video_slug if not provided directly
       const asset_id = rawAssetId ?? (video_slug?.replace(/^@/, "") || undefined);
 
-      // Check that at least one provider API key is available
-      if (!process.env.XAI_API_KEY && !process.env.KIE_API_KEY) {
+      if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "Neither XAI_API_KEY nor KIE_API_KEY environment variable is set" }],
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
         };
       }
 
@@ -82,18 +78,19 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      // Determine provider - default to xai if XAI_API_KEY is set, otherwise kie
-      const isXai = _provider?.startsWith("xai") ?? (!!process.env.XAI_API_KEY || !process.env.KIE_API_KEY);
-      const taskType = isXai ? "xai_grok_imagine_extend_video" : "grok_imagine_extend_video";
-
       await writePendingTask(fs, vidAssetId, project_slug, {
         taskId: QUEUED_TASK_ID,
-        taskType,
+        taskType: "grok_imagine_extend_video",
         assetId: vidAssetId,
         assetDir: vidAssetDir,
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
-        meta: { sourceVideoId: asset_id, ...(prompt !== undefined ? { prompt } : {}) },
+        meta: {
+          sourceVideoId: asset_id,
+          prompt,
+          ...(extend_at !== undefined ? { extend_at } : {}),
+          ...(extend_times !== undefined ? { extend_times } : {}),
+        },
       });
 
       const jobId = `grok-imagine-extend-video-${vidAssetId}-${Date.now()}`;
@@ -105,9 +102,9 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         vidAssetId,
         vidAssetDir,
         projectSlug: project_slug,
-        _provider: isXai ? "xai" : "kie",
-        ...(prompt !== undefined ? { prompt } : {}),
-        ...(duration !== undefined ? { duration } : {}),
+        prompt,
+        ...(extend_at !== undefined ? { extend_at } : {}),
+        ...(extend_times !== undefined ? { extend_times } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

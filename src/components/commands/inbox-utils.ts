@@ -56,7 +56,6 @@ const TASK_INFO: Record<string, TaskInfo> = {
   wan27_r2v_video:               { model: 'WAN 2.7 R2V',         provider: 'Kie' },
   xai_grok_imagine_video:        { model: 'Grok Imagine',        provider: 'xAI' },
   xai_grok_imagine_ref_video:    { model: 'Grok Imagine Ref',    provider: 'xAI' },
-  xai_grok_imagine_extend_video: { model: 'Grok Extend',         provider: 'xAI' },
   transcribe:                    { model: 'Whisper',             provider: 'OpenAI' },
   isolate_vocals:                { model: 'Vocal Isolation',     provider: 'Kie' },
 };

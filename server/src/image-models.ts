@@ -10,8 +10,17 @@
 import type { ResolvedAsset } from "./asset-resolver.js";
 import { kie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
+import {
+  GptImageToImageRequestSchema,
+  GrokImageToImageRequestSchema,
+  NanoBananaProRequestSchema,
+  Qwen2ImageEditRequestSchema,
+  Wan27ImageProRequestSchema,
+  Wan27ImageRequestSchema,
+} from "@apicity/kie/zod";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
+import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
 // Provider route (unchanged type for backward compat)
@@ -36,6 +45,8 @@ type XaiSchemaField = {
   items?: { type: string };
 };
 
+type ZodLike = { _def?: unknown; unwrap?: () => unknown };
+
 type ImageModelConfig = {
   key: string;
   kieModelId?: KieMediaModel;
@@ -44,7 +55,8 @@ type ImageModelConfig = {
   tool_name: string;
   label: string;
   description: string;
-  image_slots: { min: number; max: number };
+  /** Apicity Zod schema for the image-asset input field, or null if the tool takes no image input. */
+  imageFieldSchema: ZodLike | null;
   kieImageField?: string;
   defaults: Record<string, unknown>;
 };
@@ -56,7 +68,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_nano_banana_image",
     label: "Nano Banana Pro",
     description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
-    image_slots: { min: 0, max: 8 },
+    imageFieldSchema: NanoBananaProRequestSchema.shape.input.shape.image_input,
     kieImageField: "image_input",
     defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
   },
@@ -67,7 +79,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_grok_imagine_image",
     label: "Grok Imagine Edit",
     description: "Image-to-image transformation (requires exactly 1 reference image)",
-    image_slots: { min: 1, max: 1 },
+    imageFieldSchema: GrokImageToImageRequestSchema.shape.input.shape.image_urls,
     kieImageField: "image_urls",
     defaults: {},
   },
@@ -77,7 +89,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_gpt_image",
     label: "GPT Image",
     description: "Image editing with reference images, aspect ratio and quality control",
-    image_slots: { min: 1, max: 4 },
+    imageFieldSchema: GptImageToImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", quality: "high" },
   },
@@ -88,7 +100,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_grok_imagine_text_image",
     label: "Grok Imagine",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
-    image_slots: { min: 0, max: 0 },
+    imageFieldSchema: null,
     defaults: { aspect_ratio: "1:1" },
   },
   {
@@ -97,7 +109,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_qwen2_image_edit",
     label: "Qwen2 Image Edit",
     description: "Prompt-driven image edit using Qwen2 (requires exactly 1 reference image)",
-    image_slots: { min: 1, max: 1 },
+    imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
     defaults: { image_size: "16:9", output_format: "png" },
   },
@@ -106,8 +118,8 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieModelId: "wan/2-7-image",
     tool_name: "generate_wan27_image",
     label: "Wan 2.7 Image",
-    description: "Text-to-image or image editing with optional reference images (0-9), aspect ratio, resolution, and thinking mode",
-    image_slots: { min: 0, max: 9 },
+    description: "Text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
+    imageFieldSchema: Wan27ImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
   },
@@ -116,12 +128,16 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieModelId: "wan/2-7-image-pro",
     tool_name: "generate_wan27_image_pro",
     label: "Wan 2.7 Image Pro",
-    description: "Pro text-to-image or image editing with optional reference images (0-9), aspect ratio, resolution, and thinking mode",
-    image_slots: { min: 0, max: 9 },
+    description: "Pro text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
+    imageFieldSchema: Wan27ImageProRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
   },
 ];
+
+function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
+  return readSlotConstraints(config.imageFieldSchema);
+}
 
 // ---------------------------------------------------------------------------
 // Provider schemas (read once at module load — no API calls)
@@ -179,7 +195,7 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
     // when the underlying provider takes a singular `image_url` string.
     type: isImageField ? "array" : field.type,
     description: isImageField
-      ? imageSlotsDescription(config.image_slots)
+      ? imageSlotsDescription(getImageSlotsForConfig(config))
       : (field.description ?? ""),
   };
 
@@ -190,9 +206,14 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
   return param;
 }
 
-function imageSlotsDescription(slots: { min: number; max: number }): string {
-  if (slots.min === 0 && slots.max === 0) return "No reference images";
-  if (slots.min === slots.max) return `Reference image asset (exactly ${slots.min} required)`;
+function imageSlotsDescription(slots: SlotConstraints | null): string {
+  if (!slots || (slots.min === 0 && slots.max === 0)) return "No reference images";
+  if (slots.max !== null && slots.min === slots.max) return `Reference image asset (exactly ${slots.min} required)`;
+  if (slots.max === null) {
+    return slots.min > 0
+      ? `${slots.min}+ reference image assets`
+      : "Reference image assets";
+  }
   return `${slots.min}-${slots.max} reference image assets`;
 }
 
@@ -226,7 +247,7 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       const isImageField = fieldName === config.kieImageField;
       const param: ParamSchema = {
         type: field.type,
-        description: isImageField ? imageSlotsDescription(config.image_slots) : (field.description ?? ""),
+        description: isImageField ? imageSlotsDescription(getImageSlotsForConfig(config)) : (field.description ?? ""),
       };
       if (field.enum) param.enum = [...field.enum];
       if (isImageField || field.items) param.items = { type: "string" };
@@ -313,7 +334,7 @@ type ValidationResult = {
   valid: boolean;
   missing_required: string[];
   warnings: string[];
-  image_slots: { min: number; max: number } | null;
+  image_slots: SlotConstraints | null;
 };
 
 function validateImageParams(toolName: string, params: Record<string, unknown>): ValidationResult {
@@ -340,15 +361,16 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  const imageSlots = config?.image_slots ?? null;
+  const imageSlots = config ? getImageSlotsForConfig(config) : null;
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
   if (imageSlots && imageSlots.min > 0 && totalImages < imageSlots.min) {
     warnings.push(`${config!.label} requires at least ${imageSlots.min} reference image${imageSlots.min > 1 ? "s" : ""}`);
   }
-  if (imageSlots && imageSlots.max > 0 && totalImages > imageSlots.max) {
-    warnings.push(`${config!.label} supports ${imageSlots.min}-${imageSlots.max} images (got ${totalImages})`);
+  if (imageSlots && imageSlots.max !== null && totalImages > imageSlots.max) {
+    const range = imageSlots.min === imageSlots.max ? `${imageSlots.max}` : `${imageSlots.min}-${imageSlots.max}`;
+    warnings.push(`${config!.label} supports ${range} images (got ${totalImages})`);
   }
 
   return { valid: missing.length === 0, missing_required: missing, warnings, image_slots: imageSlots };
@@ -413,7 +435,7 @@ type ModelOption = {
   schema: ToolSchema | null;
   prefilled_values: Record<string, unknown>;
   validation: ValidationResult;
-  image_slots: { min: number; max: number } | null;
+  image_slots: SlotConstraints | null;
   providers: Array<{ key: string; label: string }>;
   selected_provider: string;
 };

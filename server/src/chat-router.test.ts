@@ -100,7 +100,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(14);
+    expect(ROUTABLE_TOOLS.length).toBe(15);
   });
 
   it("contains both action and generation categories", () => {
@@ -114,8 +114,9 @@ describe("ROUTABLE_TOOLS", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("every tool has non-empty params array", () => {
+  it("every tool has non-empty params array (except render_timeline, which takes no routing params)", () => {
     for (const tool of ROUTABLE_TOOLS) {
+      if (tool.name === "render_timeline") continue;
       expect(tool.params.length).toBeGreaterThan(0);
     }
   });
