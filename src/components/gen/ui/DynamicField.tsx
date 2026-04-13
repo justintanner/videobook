@@ -234,8 +234,72 @@ export function DynamicField({
     );
   }
 
-  // Handle integer/number type without enum - use number input
+  // Handle integer/number type without enum - use slider when bounded, number input otherwise
   if (schema.type === 'integer' || schema.type === 'number') {
+    const isInteger = schema.type === 'integer';
+    const parseValue = (v: string) => (isInteger ? parseInt(v, 10) : parseFloat(v));
+    const hasRange = schema.minimum !== undefined && schema.maximum !== undefined;
+
+    if (hasRange) {
+      const current = value !== undefined && value !== null
+        ? Number(value)
+        : schema.default !== undefined ? Number(schema.default) : schema.minimum!;
+      const step = isInteger ? 1 : 'any';
+      const clamp = (n: number) => Math.min(schema.maximum!, Math.max(schema.minimum!, n));
+
+      return (
+        <GenField label={label} required={required} theme={theme} horizontal>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <input
+              type="range"
+              value={current}
+              onChange={(e) => onChange(parseValue(e.target.value))}
+              min={schema.minimum}
+              max={schema.maximum}
+              step={step}
+              disabled={disabled}
+              className={cn(
+                'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
+                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-primary/20',
+                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer',
+                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-primary/20',
+                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            />
+            <input
+              type="number"
+              value={current}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '') return;
+                const n = parseValue(v);
+                if (Number.isNaN(n)) return;
+                onChange(n);
+              }}
+              onBlur={(e) => {
+                const v = e.target.value;
+                if (v === '') { onChange(schema.minimum); return; }
+                const n = parseValue(v);
+                if (Number.isNaN(n)) { onChange(schema.minimum); return; }
+                onChange(clamp(n));
+              }}
+              min={schema.minimum}
+              max={schema.maximum}
+              step={step}
+              disabled={disabled}
+              className={cn(
+                'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
+                theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+                'focus:outline-none focus:border-primary/60',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            />
+          </div>
+        </GenField>
+      );
+    }
+
     return (
       <GenField label={label} required={required} theme={theme} horizontal>
         <input
@@ -246,12 +310,12 @@ export function DynamicField({
             if (val === '') {
               onChange(undefined);
             } else {
-              onChange(schema.type === 'integer' ? parseInt(val, 10) : parseFloat(val));
+              onChange(parseValue(val));
             }
           }}
           min={schema.minimum}
           max={schema.maximum}
-          step={schema.type === 'integer' ? 1 : 'any'}
+          step={isInteger ? 1 : 'any'}
           placeholder={schema.description || `Enter ${label.toLowerCase()}...`}
           disabled={disabled}
           className={cn(
