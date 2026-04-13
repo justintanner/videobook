@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
-import { GrokImageToVideoRequestSchema, GrokImagineDurationSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
+import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
@@ -28,11 +28,12 @@ const generateGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
   image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Optional prompt to guide video generation"),
-  mode: z.enum(GrokImagineModeSchema.options).optional().describe("Generation mode"),
-  duration: z.enum(GrokImagineDurationSchema.options).optional().describe("Video duration in seconds"),
+  prompt: z.string().max(5000).optional().describe("Optional prompt to guide video generation (max 5000 chars)"),
+  mode: z.enum(GrokImagineModeSchema.options).optional().describe("Generation mode: fun / normal / spicy. Spicy is only available via task_id; external images force normal."),
+  duration: z.coerce.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
+  aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (ignored for single-image input)"),
+  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -44,7 +45,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
     description: "Generate a video from an image asset using Grok Imagine image-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider } = args as Args;
 
       // Derive asset_id from image_slugs if not provided directly
       const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
@@ -126,6 +127,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+        ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 

@@ -182,8 +182,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
     description: "Grok image-to-video with fun/normal/spicy modes",
-    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio"],
-    defaults: { mode: "normal", duration: "6", resolution: "720p", aspect_ratio: "16:9" },
+    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
+    defaults: { mode: "normal", duration: 6, resolution: "720p", aspect_ratio: "16:9", nsfw_checker: true },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
@@ -457,10 +457,11 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation style: fun / normal / spicy"; }
-      if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
+      if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation style: fun / normal / spicy (spicy not supported for external images)"; }
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
       if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio (ignored for single-image input)"; }
+      if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default true)"; prop.default = true; }
       if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
     }
     if (toolName === "generate_grok_imagine_ref_video") {
@@ -701,7 +702,7 @@ KEY CONSTRAINTS:
 - For generate_veo_video REFERENCE_2_VIDEO: REQUIRES model="veo3_fast" and 16:9/9:16 aspect_ratio
 - For generate_seedance2_*_video: duration "4"-"15", resolution "480p"/"720p", aspect_ratio includes "adaptive"
 - For generate_seedance2_reference_video: REQUIRES at least one of image_slugs / video_slugs / audio_slugs (max 9 / 3 / 3)
-- For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration "6"/"10"
+- For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal"/"spicy", duration 6-30 (integer seconds)
 - For extend_grok_imagine_video: REQUIRES video_slug, duration "6"/"10"/"15"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"

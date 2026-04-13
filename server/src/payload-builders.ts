@@ -23,7 +23,7 @@ import type {
   // Named union types for cleaner type annotations
   KlingMode,
   GrokImagineMode,
-  GrokImagineDuration,
+  GrokImageToVideoDuration,
   GrokImagineResolution,
   NanoBananaResolution,
   NanoBananaOutputFormat,
@@ -72,9 +72,12 @@ function buildKling30VideoPayload(
 type GrokImagineVideoArgs = {
   prompt?: string;
   mode?: GrokImagineMode;
-  duration?: GrokImagineDuration;
+  duration?: GrokImageToVideoDuration;
   resolution?: GrokImagineResolution;
   aspect_ratio?: string;
+  task_id?: string;
+  index?: number;
+  nsfw_checker?: boolean;
 };
 
 function buildGrokImagineVideoPayload(
@@ -84,12 +87,17 @@ function buildGrokImagineVideoPayload(
   return {
     model: "grok-imagine/image-to-video",
     input: {
-      ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
+      ...(args.task_id !== undefined
+        ? { task_id: args.task_id, ...(args.index !== undefined ? { index: args.index } : {}) }
+        : imageUrls.length > 0
+          ? { image_urls: imageUrls }
+          : {}),
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
       ...(args.mode !== undefined ? { mode: args.mode } : {}),
       ...(args.duration !== undefined ? { duration: args.duration } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokImageToVideoRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
   };
 }
@@ -473,7 +481,7 @@ function buildXaiGrokImagineVideoPayload(
   return {
     prompt: args.prompt ?? "",
     ...(imageUrls.length > 0 ? { image: { url: imageUrls[0] } } : {}),
-    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(args.duration !== undefined ? { duration: args.duration } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
