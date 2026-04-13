@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@apicity/fal": "file:../apicity/packages/provider/fal",
     "@apicity/free": "file:../apicity/packages/provider/free",
     "@apicity/kie": "file:../apicity/packages/provider/kie",
     "@apicity/kimicoding": "file:../apicity/packages/provider/kimicoding",

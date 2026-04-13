@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { kie } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
+import { submitTranscribe } from "./transcribe-submit.js";
 
 type TranscribePayload = {
   type: "transcribe";
@@ -24,27 +25,23 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       languageCode, assetId, assetDir, projectSlug, autoRender,
     } = payload as TranscribePayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const kieKey = process.env.KIE_API_KEY;
+    if (!kieKey) throw new Error("KIE_API_KEY environment variable is not set");
 
-    const provider = kie({ apiKey, timeout: 60_000 });
+    // Upload via KIE for the public audio URL (shared across both providers).
+    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
+    const downloadUrl = await uploadAssetFile(kieProvider, fs, assetId, audioFilename, projectSlug);
 
-    const downloadUrl = await uploadAssetFile(provider, fs, assetId, audioFilename, projectSlug);
-
-    const request = {
-      model: "elevenlabs/speech-to-text" as const,
-      input: {
-        audio_url: downloadUrl,
-        tag_audio_events: tagAudioEvents,
-        diarize,
-        ...(languageCode ? { language_code: languageCode } : {}),
-      },
-    };
-    const taskId = await submitMediaJob(provider, request);
+    const { provider, taskId, taskType, statusUrl, responseUrl } = await submitTranscribe({
+      audioUrl: downloadUrl,
+      tagAudioEvents,
+      diarize,
+      ...(languageCode ? { languageCode } : {}),
+    });
 
     await writePendingTask(fs, assetId, projectSlug, {
       taskId,
-      taskType: "transcribe",
+      taskType,
       assetId,
       assetDir,
       projectSlug,
@@ -52,9 +49,11 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       meta: {
         ...(languageCode ? { languageCode } : {}),
         ...(autoRender ? { autoRender } : {}),
+        ...(statusUrl ? { falStatusUrl: statusUrl } : {}),
+        ...(responseUrl ? { falResponseUrl: responseUrl } : {}),
       },
     });
 
-    return { success: true, taskId };
+    return { success: true, taskId, provider };
   });
 }

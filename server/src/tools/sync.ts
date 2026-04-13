@@ -57,6 +57,20 @@ function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
   return typeof p === "string" ? p : null;
 }
 
+type FalStatus = { status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED"; error?: string };
+
+async function fetchFalStatus(statusUrl: string, apiKey: string): Promise<FalStatus> {
+  const res = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } });
+  if (!res.ok) throw new Error(`FAL status fetch failed: ${res.status} ${res.statusText}`);
+  return await res.json() as FalStatus;
+}
+
+async function fetchFalResult(responseUrl: string, apiKey: string): Promise<Record<string, unknown>> {
+  const res = await fetch(responseUrl, { headers: { Authorization: `Key ${apiKey}` } });
+  if (!res.ok) throw new Error(`FAL result fetch failed: ${res.status} ${res.statusText}`);
+  return await res.json() as Record<string, unknown>;
+}
+
 async function findPrimaryMediaFile(assetId: string, assetDir: string): Promise<string | null> {
   try {
     const files = await readdir(assetDir);
@@ -455,7 +469,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   const pollableTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
 
   // Poll KIE tasks (only if API key is set)
-  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_"));
+  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_"));
   if (process.env.KIE_API_KEY && kieTasks.length > 0) {
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
@@ -530,6 +544,68 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
           }
         }
+      }
+    }));
+  }
+
+  // Poll FAL tasks (only if API key is set)
+  const falTasks = pollableTasks.filter((t) => t.taskType.startsWith("fal_"));
+  if (process.env.FAL_API_KEY && falTasks.length > 0) {
+    const apiKey = process.env.FAL_API_KEY;
+
+    await Promise.all(falTasks.map(async (task) => {
+      const prompt = metaPrompt(task.meta);
+      const statusUrl = typeof task.meta?.falStatusUrl === "string" ? task.meta.falStatusUrl : null;
+      const responseUrl = typeof task.meta?.falResponseUrl === "string" ? task.meta.falResponseUrl : null;
+      if (!statusUrl || !responseUrl) {
+        const failMsg = `FAL task missing statusUrl/responseUrl in meta`;
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+        return;
+      }
+      try {
+        const status = await fetchFalStatus(statusUrl, apiKey);
+        if (status.status === "COMPLETED") {
+          if (status.error) {
+            const failMsg = status.error;
+            result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+            return;
+          }
+          const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
+          if (!assetDirResult.ok) {
+            await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
+            return;
+          }
+          const resultObject = await fetchFalResult(responseUrl, apiKey);
+          // Mark the pending task as completing BEFORE enqueueing so any
+          // overlapping sync poll skips it instead of enqueueing a duplicate.
+          await markTaskCompleting(fs, task.assetId, project_slug, task);
+          const jobId = `complete-fal-${task.assetId}-${Date.now()}`;
+          await queue.enqueue(jobId, {
+            type: "complete_kie_task",
+            taskId: task.taskId,
+            taskType: task.taskType,
+            assetId: task.assetId,
+            assetDir: assetDirResult.value,
+            projectSlug: project_slug,
+            meta: task.meta,
+            resultUrls: [],
+            resultObject,
+          } as unknown as Record<string, unknown>);
+          result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
+        } else {
+          result.pending.push({
+            assetId: task.assetId,
+            taskType: task.taskType,
+            progress: 0,
+            state: status.status.toLowerCase(),
+            prompt,
+          });
+        }
+      } catch (e) {
+        const failMsg = e instanceof Error ? e.message : "Poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
       }
     }));
   }

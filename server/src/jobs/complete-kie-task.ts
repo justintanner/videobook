@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -70,7 +70,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
         await completeGptImage(fs, assetId, projectSlug, meta, resultUrls);
-      } else if (taskType === "transcribe") {
+      } else if (taskType === "transcribe" || taskType === "fal_transcribe") {
         await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       } else if (taskType === "isolate_vocals") {
         await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
