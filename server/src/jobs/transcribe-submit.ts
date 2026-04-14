@@ -23,7 +23,7 @@ async function submitFal(args: TranscribeSubmitArgs): Promise<TranscribeSubmitRe
   if (!apiKey) throw new Error("FAL_API_KEY not set");
 
   const provider = fal({ apiKey, timeout: 60_000 });
-  const submitResult = await provider.post.ai.v1.queue.submit({
+  const submitResult = await provider.post.v1.queue.submit({
     endpoint_id: FAL_TRANSCRIBE_ENDPOINT_ID,
     input: {
       audio_url: args.audioUrl,
