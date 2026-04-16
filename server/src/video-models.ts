@@ -182,6 +182,19 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
+  wan27_extend: {
+    label: "Wan 2.7 Extend",
+    tool_name: "extend_wan27_video",
+    description: "Extend an existing video using Wan 2.7 Image to Video with clip continuation",
+    params: [
+      "video_slug", "prompt", "negative_prompt",
+      "resolution", "duration", "prompt_extend", "nsfw_checker", "seed",
+    ],
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
   grok_imagine: {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
@@ -468,6 +481,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
       if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 2-10 seconds"; }
     }
+    if (toolName === "extend_wan27_video") {
+      if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-scene)"; }
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
+    }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation style: fun / normal / spicy (spicy not supported for external images)"; }
@@ -512,7 +531,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
 
     // Required fields
     if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
-    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "generate_wan27_videoedit_video")) required.push(param);
+    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video")) required.push(param);
     if (
       (toolName === "generate_seedance2_t2v_video"
         || toolName === "generate_seedance2_frames_video"
@@ -616,6 +635,13 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "extend_wan27_video") {
+    const videoSlug = params.video_slug as string | undefined;
+    if (!videoSlug) {
+      warnings.push("Wan 2.7 Extend requires video_slug");
+    }
+  }
+
   if (toolName === "generate_alibaba_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
@@ -710,6 +736,7 @@ ROUTING PREFERENCES:
 - Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
+- Use extend_wan27_video ONLY when user explicitly wants to extend an existing Wan 2.7 video
 - Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 - Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
@@ -725,6 +752,7 @@ KEY CONSTRAINTS:
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
+- For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "480P"/"720P"/"1080P", shot_type "single"/"multi", duration is integer seconds
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
@@ -875,7 +903,7 @@ function buildModelOption(
   }
 
   // For video extension tools, prefill video_slug from video assets
-  if (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video") {
+  if (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video") {
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;

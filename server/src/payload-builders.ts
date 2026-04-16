@@ -762,6 +762,13 @@ function translateToolPayload(
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "extend_wan27_video": {
+      const firstClipSlug = (args.video_slug as string) ?? "";
+      const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
+        firstClipUrl: firstClipSlug,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "extend_grok_imagine_video": {
       const payload = {
         model: "grok-imagine/extend",
@@ -827,7 +834,7 @@ const VIDEO_TOOLS = new Set([
   "generate_seedance2_t2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
-  "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video",
+  "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",
   "generate_alibaba_video",
 ]);
 
