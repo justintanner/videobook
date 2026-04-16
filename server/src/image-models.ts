@@ -59,6 +59,8 @@ type ImageModelConfig = {
   imageFieldSchema: ZodLike | null;
   kieImageField?: string;
   defaults: Record<string, unknown>;
+  /** Override slot constraints when the Zod schema doesn't encode them (e.g., unbounded array with runtime limit). */
+  slotConstraints?: SlotConstraints;
 };
 
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
@@ -108,10 +110,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieModelId: "qwen2/image-edit",
     tool_name: "generate_qwen2_image_edit",
     label: "Qwen2 Image Edit",
-    description: "Prompt-driven image edit using Qwen2 (requires exactly 1 reference image)",
+    description: "Prompt-driven image edit using Qwen2 (requires 1-3 reference images)",
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
     defaults: { image_size: "16:9", output_format: "png" },
+    slotConstraints: { min: 1, max: 3 },
   },
   {
     key: "wan27_image",
@@ -136,6 +139,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
 ];
 
 function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
+  if (config.slotConstraints) return config.slotConstraints;
   return readSlotConstraints(config.imageFieldSchema);
 }
 

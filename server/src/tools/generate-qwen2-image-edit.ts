@@ -27,7 +27,7 @@ const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
 const generateQwen2ImageEditSchema = {
   prompt: z.string().describe("Image editing prompt (max 800 chars)"),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).describe("Exactly 1 @img-* slug for the reference image to edit"),
+  image_slugs: z.array(z.string()).describe("1-3 @img-* slugs for reference images to edit"),
   image_size: z.enum(qwen2ImageEditInputSchema.image_size.unwrap().options).optional().describe("Output aspect ratio (default 16:9)"),
   output_format: z.enum(qwen2ImageEditInputSchema.output_format.unwrap().options).optional().describe("Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
@@ -39,7 +39,7 @@ type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_qwen2_image_edit",
-    description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
+    description: "Edit images using Qwen2 image-edit on Kie. Requires 1-3 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as Args;
@@ -52,40 +52,49 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       }
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
-      if (ids.length !== 1) {
+      if (ids.length < 1 || ids.length > 3) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "Qwen2 image edit requires exactly 1 reference image" }],
+          content: [{ type: "text" as const, text: "Qwen2 image edit requires 1-3 reference images" }],
         };
       }
 
-      const sourceImageId = ids[0];
-      if (!sourceImageId.startsWith("img-")) {
+      const invalidIds = ids.filter((id) => !id.startsWith("img-"));
+      if (invalidIds.length > 0) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${sourceImageId}` }],
+          content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${invalidIds.join(", ")}` }],
         };
       }
 
-      const manifestResult = await fs.getManifest(sourceImageId, project_slug);
-      if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
+      const sourceImageIds: string[] = [];
+      const imagePaths: string[] = [];
+      const imageFilenames: string[] = [];
+
+      for (const sourceImageId of ids) {
+        const manifestResult = await fs.getManifest(sourceImageId, project_slug);
+        if (!manifestResult.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: manifestResult.error.message }],
+          };
+        }
+
+        const manifest = manifestResult.value;
+        const imageFile = findImageFile(manifest.files);
+        if (!imageFile) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `No image file found in asset ${sourceImageId}` }],
+          };
+        }
+
+        sourceImageIds.push(sourceImageId);
+        imagePaths.push(join(manifest.path, imageFile.name));
+        imageFilenames.push(imageFile.name);
       }
 
-      const manifest = manifestResult.value;
-      const imageFile = findImageFile(manifest.files);
-      if (!imageFile) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `No image file found in asset ${sourceImageId}` }],
-        };
-      }
-
-      const imagePath = join(manifest.path, imageFile.name);
-      const imgName = deriveImageName(sourceImageId);
+      const imgName = deriveImageName(sourceImageIds[0]!);
       const assetResult = await fs.createAsset("img", imgName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -104,7 +113,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
         meta: {
-          sourceImageId,
+          sourceImageIds,
           prompt,
           ...(image_size !== undefined ? { imageSize: image_size } : {}),
           ...(output_format !== undefined ? { outputFormat: output_format } : {}),
@@ -117,11 +126,11 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       await queue.enqueue(jobId, {
         type: "generate_qwen2_image_edit",
         prompt,
-        imagePath,
-        imageFilename: imageFile.name,
+        imagePaths,
+        imageFilenames,
         imgAssetId,
         imgAssetDir,
-        sourceImageId,
+        sourceImageIds,
         projectSlug: project_slug,
         ...(image_size !== undefined ? { imageSize: image_size } : {}),
         ...(output_format !== undefined ? { outputFormat: output_format } : {}),
@@ -133,7 +142,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
           type: "text" as const,
           text: JSON.stringify({
             img_asset_id: imgAssetId,
-            source_image: sourceImageId,
+            source_images: sourceImageIds,
             job_id: jobId,
             status: "enqueued",
           }),

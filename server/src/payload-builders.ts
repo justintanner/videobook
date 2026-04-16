@@ -214,7 +214,7 @@ function buildQwen2ImageEditPayload(
     model: "qwen2/image-edit",
     input: {
       prompt: args.prompt,
-      image_url: imageInput[0] ?? "",
+      image_url: imageInput,
       ...(args.image_size !== undefined ? { image_size: args.image_size as Qwen2ImageEditRequest["input"]["image_size"] } : {}),
       ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),

@@ -178,7 +178,7 @@ async function completeQwen2ImageEdit(
   await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
 
   const origin = {
-    source_asset: meta.sourceImageId,
+    source_assets: meta.sourceImageIds,
     model: "qwen2/image-edit",
     prompt: meta.prompt,
     download_url: imageUrl,

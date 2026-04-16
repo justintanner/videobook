@@ -8,10 +8,10 @@ import { buildQwen2ImageEditPayload } from "../payload-builders.js";
 type GenerateQwen2ImageEditPayload = {
   type: "generate_qwen2_image_edit";
   prompt: string;
-  imageFilename: string;
+  imageFilenames: string[];
   imgAssetId: string;
   imgAssetDir: string;
-  sourceImageId: string;
+  sourceImageIds: string[];
   projectSlug: string;
   imageSize?: string;
   outputFormat?: "png" | "jpeg";
@@ -21,8 +21,8 @@ type GenerateQwen2ImageEditPayload = {
 export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_qwen2_image_edit", async (payload) => {
     const {
-      prompt, imageFilename, imgAssetId, imgAssetDir,
-      sourceImageId, projectSlug, imageSize, outputFormat, seed,
+      prompt, imageFilenames, imgAssetId, imgAssetDir,
+      sourceImageIds, projectSlug, imageSize, outputFormat, seed,
     } = payload as GenerateQwen2ImageEditPayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -30,11 +30,17 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const uploadedUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
+    const uploadedUrls: string[] = [];
+    for (let i = 0; i < sourceImageIds.length; i++) {
+      const sourceImageId = sourceImageIds[i]!;
+      const imageFilename = imageFilenames[i]!;
+      const uploadedUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
+      uploadedUrls.push(uploadedUrl);
+    }
 
     const request = buildQwen2ImageEditPayload(
       { prompt, image_size: imageSize, output_format: outputFormat, seed },
-      [uploadedUrl],
+      uploadedUrls,
     );
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
@@ -46,7 +52,7 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
       projectSlug,
       createdAt: new Date().toISOString(),
       meta: {
-        sourceImageId,
+        sourceImageIds,
         prompt,
         ...(imageSize !== undefined ? { imageSize } : {}),
         ...(outputFormat !== undefined ? { outputFormat } : {}),
