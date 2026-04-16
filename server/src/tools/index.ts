@@ -51,6 +51,9 @@ import { generationPayloadDef } from "./generation-payload.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
+import { generateAlibabaImageDef } from "./generate-alibaba-image.js";
+import { generateAlibabaImageProDef } from "./generate-alibaba-image-pro.js";
+import { generateAlibabaVideoDef } from "./generate-alibaba-video.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { editTimelineDef } from "./edit-timeline.js";
@@ -128,6 +131,9 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineImageDef(fs),
     generateGrokImagineTextImageDef(fs),
     generateGptImageDef(fs),
+    generateAlibabaImageDef(fs),
+    generateAlibabaImageProDef(fs),
+    generateAlibabaVideoDef(fs),
     chatDef(fs),
     getTimelineDef(fs),
     editTimelineDef(fs),

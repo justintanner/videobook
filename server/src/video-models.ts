@@ -20,6 +20,7 @@ import {
   Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
+import { AlibabaVideoSynthesisRequestSchema } from "@apicity/alibaba/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -212,6 +213,20 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
+  alibaba_video: {
+    label: "Alibaba Video Synthesis",
+    tool_name: "generate_alibaba_video",
+    description: "Alibaba Cloud video synthesis with first/last frame, reference video, driving audio, and resolution control",
+    params: [
+      "prompt", "negative_prompt", "model",
+      "first_frame_slug", "last_frame_slug", "first_clip_slug", "driving_audio_slug", "video_slug",
+      "resolution", "duration", "shot_type", "prompt_extend", "watermark", "audio", "seed",
+    ],
+    defaults: { resolution: "720P", prompt_extend: true, watermark: false, audio: false },
+    providers: [
+      { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
+    ],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -277,6 +292,9 @@ const XAI_VIDEO_ASPECT_RATIOS = [...XaiVideoGenerateRequestSchema.shape.aspect_r
 const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
 const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
 const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
+
+const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisRequestSchema.shape.parameters.unwrap().shape.resolution.unwrap().options];
+const ALIBABA_VIDEO_SHOT_TYPES = [...AlibabaVideoSynthesisRequestSchema.shape.parameters.unwrap().shape.shot_type.unwrap().options];
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -359,6 +377,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
   extend_at: { type: "number", description: "Seconds into the source video to start extending from (default 0)" },
   extend_times: { type: "string", description: "Extension duration in seconds" },
+  shot_type: { type: "string", enum: ALIBABA_VIDEO_SHOT_TYPES, description: "Shot composition: single (one shot) or multi (multiple shots)" },
 };
 
 // ---------------------------------------------------------------------------
@@ -471,6 +490,23 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "extend_times") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Extension duration: 6s / 10s"; }
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
+    if (toolName === "generate_alibaba_video") {
+      if (param === "prompt") { prop.description = "Video description"; }
+      if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
+      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wanx2.1-i2v-14b-720p')"; }
+      if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
+      if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
+      if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }
+      if (param === "driving_audio_slug") { prop.description = "Audio asset for audio-driven motion (e.g., @aud-music)"; }
+      if (param === "video_slug") { prop.description = "Reference video asset (e.g., @vid-ref)"; }
+      if (param === "resolution") { prop.enum = ALIBABA_VIDEO_RESOLUTIONS; prop.description = "Output resolution"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds"; prop.enum = undefined; }
+      if (param === "shot_type") { prop.enum = ALIBABA_VIDEO_SHOT_TYPES; prop.description = "Shot composition: single or multi"; }
+      if (param === "prompt_extend") { prop.description = "Intelligent prompt rewriting (default true)"; }
+      if (param === "watermark") { prop.description = "Add watermark to output video (default false)"; }
+      if (param === "audio") { prop.description = "Generate audio for the video (default false)"; }
+      if (param === "seed") { prop.description = "Random seed for reproducibility"; }
+    }
 
     properties[param] = prop;
 
@@ -580,6 +616,17 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "generate_alibaba_video") {
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const lastFrame = params.last_frame_slug as string | undefined;
+    const firstClip = params.first_clip_slug as string | undefined;
+    const drivingAudio = params.driving_audio_slug as string | undefined;
+    const videoSlug = params.video_slug as string | undefined;
+    if (!firstFrame && !lastFrame && !firstClip && !drivingAudio && !videoSlug) {
+      warnings.push("Alibaba Video Synthesis requires at least one media input (first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug, or video_slug)");
+    }
+  }
+
   const imageSlots = readSlotConstraints(IMAGE_FIELD_SCHEMAS[toolName]);
 
   const multiPromptSlots = toolName === "generate_kling30_video" ? 5 : null;
@@ -665,6 +712,7 @@ ROUTING PREFERENCES:
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
 - Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
+- Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
 
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
@@ -677,6 +725,7 @@ KEY CONSTRAINTS:
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
+- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "480P"/"720P"/"1080P", shot_type "single"/"multi", duration is integer seconds
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.
@@ -830,6 +879,14 @@ function buildModelOption(
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;
+    }
+  }
+
+  // For Alibaba video, prefill first_frame_slug from image assets
+  if (toolName === "generate_alibaba_video") {
+    const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
+    if (imageAssets.length > 0) {
+      params.first_frame_slug ??= imageAssets[0].tag;
     }
   }
 

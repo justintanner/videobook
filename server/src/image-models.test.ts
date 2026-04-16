@@ -347,9 +347,9 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 7 image models", () => {
+  it("returns all 9 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(7);
+    expect(Object.keys(models)).toHaveLength(9);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
@@ -357,6 +357,8 @@ describe("getImageModels", () => {
     expect(models).toHaveProperty("qwen2_image_edit");
     expect(models).toHaveProperty("wan27_image");
     expect(models).toHaveProperty("wan27_image_pro");
+    expect(models).toHaveProperty("alibaba_image");
+    expect(models).toHaveProperty("alibaba_image_pro");
   });
 
   it("params come from Kie schemas with image field renamed to image_slugs", () => {

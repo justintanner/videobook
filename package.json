@@ -22,6 +22,7 @@
     "@apicity/kie": "file:../apicity/packages/provider/kie",
     "@apicity/kimicoding": "file:../apicity/packages/provider/kimicoding",
     "@apicity/openai": "file:../apicity/packages/provider/openai",
+    "@apicity/alibaba": "file:../apicity/packages/provider/alibaba",
     "@apicity/xai": "file:../apicity/packages/provider/xai",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",

@@ -23,6 +23,8 @@ import { registerGenerateQwen2ImageEditJob } from "./generate-qwen2-image-edit.j
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
+import { registerGenerateAlibabaImageJob, registerGenerateAlibabaImageProJob } from "./generate-alibaba-image.js";
+import { registerGenerateAlibabaVideoJob } from "./generate-alibaba-video.js";
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
 import { registerProcessVideoJob } from "./process-video.js";
@@ -57,6 +59,9 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGrokImagineImageJob(fs);
   registerGenerateGrokImagineTextImageJob(fs);
   registerGenerateGptImageJob(fs);
+  registerGenerateAlibabaImageJob(fs);
+  registerGenerateAlibabaImageProJob(fs);
+  registerGenerateAlibabaVideoJob(fs);
   registerCompleteKieTaskJob(fs);
   registerRenderProjectJob(fs);
   registerProcessVideoJob(fs);

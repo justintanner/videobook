@@ -142,6 +142,7 @@ Treat each `useEffect` as technical debt. **No MCP tool calls in effects** — u
 
 - `PORT` (defaults to 3001)
 - `KIMI_CODING_API_KEY`
+- `DASHSCOPE_API_KEY`
 - Never commit secrets
 
 ## Project References

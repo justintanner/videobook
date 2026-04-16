@@ -31,6 +31,11 @@ import type {
 } from "@apicity/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
+import type {
+  AlibabaImageGenerationRequest,
+  AlibabaVideoSynthesisRequest,
+  AlibabaVideoSynthesisInput,
+} from "@apicity/alibaba";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -488,6 +493,96 @@ function buildXaiGrokImagineVideoPayload(
 }
 
 // ---------------------------------------------------------------------------
+// Alibaba payload builders
+// ---------------------------------------------------------------------------
+
+type AlibabaImageArgs = {
+  prompt: string;
+  model?: "wan2.7-image" | "wan2.7-image-pro";
+  size?: string;
+  n?: number;
+  watermark?: boolean;
+  thinking_mode?: boolean;
+  seed?: number;
+};
+
+function buildAlibabaImagePayload(
+  args: AlibabaImageArgs,
+  imageUrls: string[],
+): AlibabaImageGenerationRequest {
+  const content: Array<{ text: string } | { image: string }> = [
+    { text: args.prompt },
+  ];
+  for (const url of imageUrls) {
+    content.push({ image: url });
+  }
+  return {
+    model: args.model ?? "wan2.7-image",
+    input: {
+      messages: [{ role: "user", content }],
+    },
+    parameters: {
+      ...(args.size !== undefined ? { size: args.size } : {}),
+      ...(args.n !== undefined ? { n: args.n } : {}),
+      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
+      ...(args.thinking_mode !== undefined ? { thinking_mode: args.thinking_mode } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    },
+  };
+}
+
+type AlibabaVideoArgs = {
+  prompt: string;
+  negative_prompt?: string;
+  model?: string;
+  resolution?: "480P" | "720P" | "1080P";
+  duration?: number;
+  shot_type?: "single" | "multi";
+  prompt_extend?: boolean;
+  watermark?: boolean;
+  audio?: boolean;
+  seed?: number;
+};
+
+type AlibabaVideoMedia = {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+  firstClipUrl?: string;
+  drivingAudioUrl?: string;
+  videoUrl?: string;
+};
+
+function buildAlibabaVideoPayload(
+  args: AlibabaVideoArgs,
+  media: AlibabaVideoMedia,
+): AlibabaVideoSynthesisRequest {
+  const mediaItems: AlibabaVideoSynthesisInput["media"] = [];
+  if (media.firstFrameUrl) mediaItems.push({ type: "first_frame", url: media.firstFrameUrl });
+  if (media.lastFrameUrl) mediaItems.push({ type: "last_frame", url: media.lastFrameUrl });
+  if (media.firstClipUrl) mediaItems.push({ type: "first_clip", url: media.firstClipUrl });
+  if (media.drivingAudioUrl) mediaItems.push({ type: "driving_audio", url: media.drivingAudioUrl });
+  if (media.videoUrl) mediaItems.push({ type: "video", url: media.videoUrl });
+
+  return {
+    model: args.model ?? "wanx2.1-i2v-14b-720p",
+    input: {
+      prompt: args.prompt,
+      media: mediaItems,
+    },
+    parameters: {
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.duration !== undefined ? { duration: args.duration } : {}),
+      ...(args.shot_type !== undefined ? { shot_type: args.shot_type } : {}),
+      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
+      ...(args.audio !== undefined ? { audio: args.audio } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Kling element extraction helper
 // ---------------------------------------------------------------------------
 
@@ -679,6 +774,45 @@ function translateToolPayload(
       };
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_alibaba_image": {
+      const imageUrls = imageSlugs;
+      const payload = buildAlibabaImagePayload(
+        { prompt: args.prompt as string, model: (args.model as "wan2.7-image" | "wan2.7-image-pro") ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
+        imageUrls,
+      );
+      return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_alibaba_image_pro": {
+      const imageUrls = imageSlugs;
+      const payload = buildAlibabaImagePayload(
+        { prompt: args.prompt as string, model: "wan2.7-image-pro", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
+        imageUrls,
+      );
+      return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_alibaba_video": {
+      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
+      const firstClipUrl = (args.first_clip_slug as string | undefined) ?? undefined;
+      const drivingAudioUrl = (args.driving_audio_slug as string | undefined) ?? undefined;
+      const videoUrl = (args.video_slug as string | undefined) ?? undefined;
+      const payload = buildAlibabaVideoPayload(
+        {
+          prompt: args.prompt as string,
+          negative_prompt: args.negative_prompt as string | undefined,
+          model: args.model as string | undefined,
+          resolution: args.resolution as "480P" | "720P" | "1080P" | undefined,
+          duration: args.duration as number | undefined,
+          shot_type: args.shot_type as "single" | "multi" | undefined,
+          prompt_extend: args.prompt_extend as boolean | undefined,
+          watermark: args.watermark as boolean | undefined,
+          audio: args.audio as boolean | undefined,
+          seed: args.seed as number | undefined,
+        },
+        { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },
+      );
+      return { provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", payload: payload as unknown as Record<string, unknown> };
+    }
     default:
       return null;
   }
@@ -694,11 +828,13 @@ const VIDEO_TOOLS = new Set([
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
   "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video",
+  "generate_alibaba_video",
 ]);
 
 const IMAGE_TOOLS = new Set([
   "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
   "generate_qwen2_image_edit", "generate_wan27_image", "generate_wan27_image_pro",
+  "generate_alibaba_image", "generate_alibaba_image_pro",
 ]);
 
 function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
@@ -731,6 +867,8 @@ export {
   buildWan27ReferenceVideoPayload,
   buildWan27ImagePayload,
   buildWan27ImageProPayload,
+  buildAlibabaImagePayload,
+  buildAlibabaVideoPayload,
   extractKlingElements,
   translateToolPayload,
   getValidationWarnings,

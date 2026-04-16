@@ -6,6 +6,7 @@ import { readdir, readFile, access, stat } from "node:fs/promises";
 import { kie, KieError } from "@apicity/kie";
 import type { KieTaskInfo } from "@apicity/kie";
 import { xai, XaiError } from "@apicity/xai";
+import { alibaba, AlibabaError } from "@apicity/alibaba";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -469,7 +470,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   const pollableTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
 
   // Poll KIE tasks (only if API key is set)
-  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_"));
+  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_") && !t.taskType.startsWith("alibaba_"));
   if (process.env.KIE_API_KEY && kieTasks.length > 0) {
     const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
 
@@ -507,8 +508,6 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
-          // Mark the pending task as completing BEFORE enqueueing so any
-          // overlapping sync poll skips it instead of enqueueing a duplicate.
           await markTaskCompleting(fs, task.assetId, project_slug, task);
           const jobId = `complete-xai-${task.assetId}-${Date.now()}`;
           await queue.enqueue(jobId, {
@@ -541,6 +540,83 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+          }
+        }
+      }
+    }));
+  }
+
+  // Poll Alibaba tasks (only if API key is set)
+  const alibabaTasks = pollableTasks.filter((t) => t.taskType.startsWith("alibaba_"));
+  if (process.env.DASHSCOPE_API_KEY && alibabaTasks.length > 0) {
+    const provider = alibaba({ apiKey: process.env.DASHSCOPE_API_KEY, timeout: 30_000 });
+
+    await Promise.all(alibabaTasks.map(async (task) => {
+      const prompt = metaPrompt(task.meta);
+      try {
+        const taskStatus = await provider.get.api.v1.tasks(task.taskId);
+        const status = taskStatus.output.task_status;
+
+        if (status === "SUCCEEDED") {
+          const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
+          if (!assetDirResult.ok) {
+            await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
+            return;
+          }
+          await markTaskCompleting(fs, task.assetId, project_slug, task);
+          const jobId = `complete-alibaba-${task.assetId}-${Date.now()}`;
+
+          // Video result has video_url, image result has choices with image URLs
+          const resultUrls: string[] = [];
+          if (taskStatus.output.video_url) {
+            resultUrls.push(taskStatus.output.video_url);
+          }
+          if (taskStatus.output.choices) {
+            for (const choice of taskStatus.output.choices) {
+              for (const content of choice.message.content) {
+                if (content.type === "image" && content.image) {
+                  resultUrls.push(content.image);
+                }
+              }
+            }
+          }
+
+          await queue.enqueue(jobId, {
+            type: "complete_kie_task",
+            taskId: task.taskId,
+            taskType: task.taskType,
+            assetId: task.assetId,
+            assetDir: assetDirResult.value,
+            projectSlug: project_slug,
+            meta: task.meta,
+            resultUrls,
+          } as unknown as Record<string, unknown>);
+          result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
+        } else if (status === "FAILED" || status === "CANCELED") {
+          const failMsg = taskStatus.output.message ?? `Alibaba task ${status}`;
+          const code = taskStatus.output.code;
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+          await failPendingTask(fs, task.assetId, project_slug, {
+            message: failMsg,
+            prompt,
+            ...(code !== undefined ? { failCode: code } : {}),
+          });
+        } else {
+          result.pending.push({
+            assetId: task.assetId,
+            taskType: task.taskType,
+            progress: 0,
+            state: status.toLowerCase(),
+            prompt,
+          });
+        }
+      } catch (e) {
+        const failMsg = e instanceof Error ? e.message : "Poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        if (e instanceof AlibabaError) {
+          const alibabaErr = e as AlibabaError;
+          if (alibabaErr.status >= 400 && alibabaErr.status < 500) {
             await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
           }
         }

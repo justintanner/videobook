@@ -20,6 +20,7 @@ import {
 } from "@apicity/kie/zod";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
+import { AlibabaImageGenerationRequestSchema } from "@apicity/alibaba/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -136,6 +137,24 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
   },
+  {
+    key: "alibaba_image",
+    tool_name: "generate_alibaba_image",
+    label: "Alibaba Wan 2.7 Image",
+    description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
+    imageFieldSchema: AlibabaImageGenerationRequestSchema.shape.input.shape.messages,
+    defaults: { model: "wan2.7-image" },
+    slotConstraints: { min: 0, max: 9 },
+  },
+  {
+    key: "alibaba_image_pro",
+    tool_name: "generate_alibaba_image_pro",
+    label: "Alibaba Wan 2.7 Image Pro",
+    description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
+    imageFieldSchema: AlibabaImageGenerationRequestSchema.shape.input.shape.messages,
+    defaults: { model: "wan2.7-image-pro" },
+    slotConstraints: { min: 0, max: 9 },
+  },
 ];
 
 function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
@@ -177,6 +196,8 @@ type ParamSchema = {
   enum?: (string | number | boolean)[];
   default?: unknown;
   items?: Record<string, unknown>;
+  minimum?: number;
+  maximum?: number;
 };
 
 type ToolSchema = {
@@ -262,6 +283,24 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
     return { type: "object", properties, required, defaults: config.defaults };
   }
 
+  // Alibaba image models — custom schema
+  if (config.tool_name === "generate_alibaba_image" || config.tool_name === "generate_alibaba_image_pro") {
+    const properties: Record<string, ParamSchema> = {
+      prompt: { type: "string", description: "Text prompt for image generation (max 5000 chars)" },
+      image_slugs: {
+        type: "array",
+        items: { type: "string" },
+        description: imageSlotsDescription(getImageSlotsForConfig(config)),
+      },
+      size: { type: "string", description: "Output size (e.g., '1024*1024', '720*1280', '1280*720')" },
+      n: { type: "integer", description: "Number of images to generate (1-12)", minimum: 1, maximum: 12 },
+      watermark: { type: "boolean", description: "Add watermark to generated image" },
+      thinking_mode: { type: "boolean", description: "Enable thinking mode for better quality" },
+      seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
+    };
+    return { type: "object", properties, required: ["prompt"], defaults: config.defaults };
+  }
+
   return null;
 }
 
@@ -296,6 +335,15 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
       label: "xAI",
       provider_path: `xai.post.v1.images.${config.xaiEndpoint}()`,
       envKey: "XAI_API_KEY",
+    });
+  }
+
+  if (config.tool_name.startsWith("generate_alibaba_")) {
+    providers.push({
+      key: "alibaba",
+      label: "Alibaba",
+      provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()",
+      envKey: "DASHSCOPE_API_KEY",
     });
   }
 
