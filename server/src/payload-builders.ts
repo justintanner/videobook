@@ -500,9 +500,11 @@ function buildXaiGrokImagineVideoPayload(
 // Alibaba payload builders
 // ---------------------------------------------------------------------------
 
+type AlibabaImageModel = AlibabaImageGenerationRequest["model"];
+
 type AlibabaImageArgs = {
   prompt: string;
-  model?: "wan2.7-image" | "wan2.7-image-pro";
+  model?: AlibabaImageModel;
   size?: string;
   n?: number;
   watermark?: boolean;
@@ -788,7 +790,7 @@ function translateToolPayload(
     case "generate_alibaba_image": {
       const imageUrls = imageSlugs;
       const payload = buildAlibabaImagePayload(
-        { prompt: args.prompt as string, model: (args.model as "wan2.7-image" | "wan2.7-image-pro") ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
+        { prompt: args.prompt as string, model: (args.model as AlibabaImageModel) ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
         imageUrls,
       );
       return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };

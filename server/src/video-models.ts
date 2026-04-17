@@ -20,7 +20,7 @@ import {
   Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
-import { AlibabaVideoSynthesisRequestSchema } from "@apicity/alibaba/zod";
+import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -306,8 +306,8 @@ const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
 const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
 const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
 
-const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisRequestSchema.shape.parameters.unwrap().shape.resolution.unwrap().options];
-const ALIBABA_VIDEO_SHOT_TYPES = [...AlibabaVideoSynthesisRequestSchema.shape.parameters.unwrap().shape.shot_type.unwrap().options];
+const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
+const ALIBABA_VIDEO_SHOT_TYPES = [...AlibabaVideoSynthesisParametersSchema.shape.shot_type.unwrap().options];
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },

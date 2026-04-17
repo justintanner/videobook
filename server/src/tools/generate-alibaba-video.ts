@@ -1,5 +1,6 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
+import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
@@ -69,9 +70,9 @@ const generateAlibabaVideoSchema = {
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),
   driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
   video_slug: z.string().optional().describe("Reference video asset (e.g., @vid-ref)"),
-  resolution: z.enum(["480P", "720P", "1080P"]).optional().describe("Output resolution (default 720P)"),
+  resolution: z.enum(AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options).optional().describe("Output resolution (default 720P)"),
   duration: z.number().int().optional().describe("Video duration in seconds"),
-  shot_type: z.enum(["single", "multi"]).optional().describe("Shot composition: single or multi"),
+  shot_type: z.enum(AlibabaVideoSynthesisParametersSchema.shape.shot_type.unwrap().options).optional().describe("Shot composition: single or multi"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add watermark to output video (default false)"),
   audio: z.boolean().optional().describe("Generate audio for the video (default false)"),

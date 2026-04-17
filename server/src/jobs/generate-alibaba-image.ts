@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@apicity/kie";
-import { alibaba } from "@apicity/alibaba";
+import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -14,7 +14,7 @@ type GenerateAlibabaImagePayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  model: "wan2.7-image" | "wan2.7-image-pro";
+  model: AlibabaImageGenerationRequest["model"];
   size?: string;
   n?: number;
   watermark?: boolean;
