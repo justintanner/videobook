@@ -1,8 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@apicity/kie";
 import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
-
-type AlibabaVideoResolution = NonNullable<AlibabaVideoSynthesisParameters["resolution"]>;
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -26,13 +24,12 @@ type GenerateAlibabaVideoPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
-  resolution?: AlibabaVideoResolution;
-  duration?: number;
-  shot_type?: "single" | "multi";
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  audio?: boolean;
-  seed?: number;
+  resolution?: AlibabaVideoSynthesisParameters["resolution"];
+  duration?: AlibabaVideoSynthesisParameters["duration"];
+  prompt_extend?: AlibabaVideoSynthesisParameters["prompt_extend"];
+  watermark?: AlibabaVideoSynthesisParameters["watermark"];
+  audio_setting?: AlibabaVideoSynthesisParameters["audio_setting"];
+  seed?: AlibabaVideoSynthesisParameters["seed"];
 };
 
 async function uploadInput(
@@ -50,7 +47,7 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt, model,
       firstFrame, lastFrame, firstClip, drivingAudio, videoRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, duration, shot_type, prompt_extend, watermark, audio, seed,
+      resolution, duration, prompt_extend, watermark, audio_setting, seed,
     } = payload as GenerateAlibabaVideoPayload;
 
     const apiKey = process.env.DASHSCOPE_API_KEY;
@@ -75,10 +72,9 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
         model,
         resolution,
         duration,
-        shot_type,
         prompt_extend,
         watermark,
-        audio,
+        audio_setting,
         seed,
       },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },

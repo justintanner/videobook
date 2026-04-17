@@ -233,9 +233,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt", "negative_prompt", "model",
       "first_frame_slug", "last_frame_slug", "first_clip_slug", "driving_audio_slug", "video_slug",
-      "resolution", "duration", "shot_type", "prompt_extend", "watermark", "audio", "seed",
+      "resolution", "duration", "prompt_extend", "watermark", "audio_setting", "seed",
     ],
-    defaults: { resolution: "720P", prompt_extend: true, watermark: false, audio: false },
+    defaults: { resolution: "720P", prompt_extend: true, watermark: false },
     providers: [
       { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
     ],
@@ -307,7 +307,7 @@ const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
 const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
 
 const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
-const ALIBABA_VIDEO_SHOT_TYPES = [...AlibabaVideoSynthesisParametersSchema.shape.shot_type.unwrap().options];
+const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -390,7 +390,6 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   seed: { type: "integer", description: "Random seed for reproducibility" },
   extend_at: { type: "number", description: "Seconds into the source video to start extending from (default 0)" },
   extend_times: { type: "string", description: "Extension duration in seconds" },
-  shot_type: { type: "string", enum: ALIBABA_VIDEO_SHOT_TYPES, description: "Shot composition: single (one shot) or multi (multiple shots)" },
 };
 
 // ---------------------------------------------------------------------------
@@ -512,7 +511,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
-      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wanx2.1-i2v-14b-720p')"; prop.enum = undefined; }
+      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wan2.7-i2v')"; prop.enum = undefined; }
       if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
       if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
       if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }
@@ -520,10 +519,9 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "video_slug") { prop.description = "Reference video asset (e.g., @vid-ref)"; }
       if (param === "resolution") { prop.enum = ALIBABA_VIDEO_RESOLUTIONS; prop.description = "Output resolution"; }
       if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-15)"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 15; }
-      if (param === "shot_type") { prop.enum = ALIBABA_VIDEO_SHOT_TYPES; prop.description = "Shot composition: single or multi"; }
       if (param === "prompt_extend") { prop.description = "Intelligent prompt rewriting (default true)"; }
       if (param === "watermark") { prop.description = "Add watermark to output video (default false)"; }
-      if (param === "audio") { prop.description = "Generate audio for the video (default false)"; }
+      if (param === "audio_setting") { prop.enum = ALIBABA_VIDEO_AUDIO_SETTINGS; prop.description = "Driving-audio behavior: auto (model decides) or origin (keep original)"; }
       if (param === "seed") { prop.description = "Random seed for reproducibility"; }
     }
 
@@ -753,7 +751,7 @@ KEY CONSTRAINTS:
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
 - For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
-- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "480P"/"720P"/"1080P", shot_type "single"/"multi", duration is integer seconds
+- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 2-15 (integer seconds), audio_setting "auto"/"origin"
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.

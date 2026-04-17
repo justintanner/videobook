@@ -38,8 +38,6 @@ import type {
   AlibabaVideoSynthesisInput,
   AlibabaVideoSynthesisParameters,
 } from "@apicity/alibaba";
-
-type AlibabaVideoResolution = NonNullable<AlibabaVideoSynthesisParameters["resolution"]>;
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -537,17 +535,10 @@ function buildAlibabaImagePayload(
   };
 }
 
-type AlibabaVideoArgs = {
+type AlibabaVideoArgs = Partial<AlibabaVideoSynthesisParameters> & {
   prompt: string;
   negative_prompt?: string;
-  model?: string;
-  resolution?: AlibabaVideoResolution;
-  duration?: number;
-  shot_type?: "single" | "multi";
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  audio?: boolean;
-  seed?: number;
+  model?: AlibabaVideoSynthesisRequest["model"];
 };
 
 type AlibabaVideoMedia = {
@@ -570,20 +561,19 @@ function buildAlibabaVideoPayload(
   if (media.videoUrl) mediaItems.push({ type: "video", url: media.videoUrl });
 
   return {
-    model: args.model ?? "wanx2.1-i2v-14b-720p",
+    model: args.model ?? "wan2.7-i2v",
     input: {
       prompt: args.prompt,
       media: mediaItems,
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
     },
     parameters: {
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.duration !== undefined ? { duration: args.duration } : {}),
-      ...(args.shot_type !== undefined ? { shot_type: args.shot_type } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.audio !== undefined ? { audio: args.audio } : {}),
+      ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
     },
   };
 }
@@ -813,14 +803,13 @@ function translateToolPayload(
         {
           prompt: args.prompt as string,
           negative_prompt: args.negative_prompt as string | undefined,
-          model: args.model as string | undefined,
-          resolution: args.resolution as AlibabaVideoResolution | undefined,
-          duration: args.duration as number | undefined,
-          shot_type: args.shot_type as "single" | "multi" | undefined,
-          prompt_extend: args.prompt_extend as boolean | undefined,
-          watermark: args.watermark as boolean | undefined,
-          audio: args.audio as boolean | undefined,
-          seed: args.seed as number | undefined,
+          model: args.model as AlibabaVideoSynthesisRequest["model"] | undefined,
+          resolution: args.resolution as AlibabaVideoSynthesisParameters["resolution"],
+          duration: args.duration as AlibabaVideoSynthesisParameters["duration"],
+          prompt_extend: args.prompt_extend as AlibabaVideoSynthesisParameters["prompt_extend"],
+          watermark: args.watermark as AlibabaVideoSynthesisParameters["watermark"],
+          audio_setting: args.audio_setting as AlibabaVideoSynthesisParameters["audio_setting"],
+          seed: args.seed as AlibabaVideoSynthesisParameters["seed"],
         },
         { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },
       );

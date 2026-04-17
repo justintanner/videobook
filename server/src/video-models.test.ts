@@ -466,12 +466,12 @@ describe("validateVideoParams", () => {
     expect(noRefs.warnings.some((w) => w.includes("requires at least one reference"))).toBe(true);
   });
 
-  it("derives image_slots from Apicity Zod: unbounded array → min 0, max null", () => {
+  it("derives image_slots from Apicity Zod", () => {
     const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
     const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
-    expect(grokResult.image_slots).toEqual({ min: 0, max: null });
+    expect(grokResult.image_slots).toEqual({ min: 0, max: 7 });
   });
 
   it("tools without image-array fields return null image_slots", () => {

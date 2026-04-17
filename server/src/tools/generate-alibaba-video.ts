@@ -71,11 +71,10 @@ const generateAlibabaVideoSchema = {
   driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
   video_slug: z.string().optional().describe("Reference video asset (e.g., @vid-ref)"),
   resolution: z.enum(AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options).optional().describe("Output resolution (default 720P)"),
-  duration: z.number().int().optional().describe("Video duration in seconds"),
-  shot_type: z.enum(AlibabaVideoSynthesisParametersSchema.shape.shot_type.unwrap().options).optional().describe("Shot composition: single or multi"),
+  duration: z.number().int().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add watermark to output video (default false)"),
-  audio: z.boolean().optional().describe("Generate audio for the video (default false)"),
+  audio_setting: z.enum(AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options).optional().describe("Driving-audio behavior: auto or origin"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;
@@ -91,7 +90,7 @@ export function generateAlibabaVideoDef(fs: ClipfirstFs): ToolDef {
       const {
         project_slug, prompt, negative_prompt, model,
         first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug, video_slug,
-        resolution, duration, shot_type, prompt_extend, watermark, audio, seed,
+        resolution, duration, prompt_extend, watermark, audio_setting, seed,
       } = args as Args;
 
       if (!process.env.DASHSCOPE_API_KEY) {
@@ -192,10 +191,9 @@ export function generateAlibabaVideoDef(fs: ClipfirstFs): ToolDef {
         sourceAudioIds,
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),
-        ...(shot_type !== undefined ? { shot_type } : {}),
         ...(prompt_extend !== undefined ? { prompt_extend } : {}),
         ...(watermark !== undefined ? { watermark } : {}),
-        ...(audio !== undefined ? { audio } : {}),
+        ...(audio_setting !== undefined ? { audio_setting } : {}),
         ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);
 
