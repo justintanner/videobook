@@ -235,7 +235,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "first_frame_slug", "last_frame_slug", "first_clip_slug", "driving_audio_slug", "video_slug",
       "resolution", "duration", "prompt_extend", "watermark", "audio_setting", "seed",
     ],
-    defaults: { resolution: "720P", prompt_extend: true, watermark: false },
+    defaults: { model: "wan2.7-i2v", resolution: "720P", prompt_extend: true, watermark: false },
     providers: [
       { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
     ],
@@ -308,6 +308,7 @@ const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
 
 const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
 const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
+const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -511,7 +512,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
-      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wan2.7-i2v')"; prop.enum = undefined; }
+      if (param === "model") { prop.enum = ALIBABA_VIDEO_MODELS; prop.description = "DashScope video model: wan2.7-i2v (image-to-video) or wan2.7-videoedit (video editing)"; }
       if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
       if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
       if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }

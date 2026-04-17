@@ -124,8 +124,13 @@ export function DynamicField({
     );
   }
 
-  // Special handling for 'model' field - always show both veo3 options, never locked
-  if (name === 'model' && schema.type === 'string' && schema.enum) {
+  // Special handling for veo 'model' field - always show both veo3 options, never locked
+  if (
+    name === 'model'
+    && schema.type === 'string'
+    && schema.enum
+    && (schema.enum as string[]).some((o) => o.startsWith('veo'))
+  ) {
     const options = ['veo3_fast', 'veo3'];
     const effectiveValue = (value ?? schema.default ?? options[0]) as string;
 
