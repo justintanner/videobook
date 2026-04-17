@@ -33,7 +33,7 @@ const generateGrokImagineVideoSchema = {
   duration: z.coerce.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
   aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (ignored for single-image input)"),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
+  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 

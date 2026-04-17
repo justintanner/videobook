@@ -200,7 +200,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     tool_name: "generate_grok_imagine_video",
     description: "Grok image-to-video with fun/normal/spicy modes",
     params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
-    defaults: { mode: "normal", duration: 6, resolution: "720p", aspect_ratio: "16:9", nsfw_checker: true },
+    defaults: { mode: "normal", duration: 6, resolution: "720p", aspect_ratio: "16:9", nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
@@ -493,7 +493,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
       if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
       if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio (ignored for single-image input)"; }
-      if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default true)"; prop.default = true; }
+      if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; prop.default = false; }
       if (param === "image_slugs") prop.description = "Reference image asset (exactly 1 required, e.g., @img-sunset)";
     }
     if (toolName === "generate_grok_imagine_ref_video") {
