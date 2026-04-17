@@ -26,5 +26,8 @@
     "@types/node": "^25.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "hono": ">=4.12.14"
   }
 }
