@@ -6,6 +6,7 @@ import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "../media-files.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { zodErrorToToolResult } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -104,21 +105,26 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const vids = video_slugs ?? [];
       const auds = audio_slugs ?? [];
 
+      // Apicity Seedance2FastRequestSchema caps reference arrays at 9/3/3.
+      // The at-least-one rule is not encoded in apicity (the schema covers
+      // t2v, frames, and reference modes) — enforce it here.
       if (imgs.length === 0 && vids.length === 0 && auds.length === 0) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "Seedance 2.0 Reference mode requires at least one reference asset (image, video, or audio)" }],
         };
       }
-      if (imgs.length > 9) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs supports up to 9 (got ${imgs.length})` }] };
-      }
-      if (vids.length > 3) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `video_slugs supports up to 3 (got ${vids.length})` }] };
-      }
-      if (auds.length > 3) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `audio_slugs supports up to 3 (got ${auds.length})` }] };
-      }
+      const apicityCheck = Seedance2FastRequestSchema.safeParse({
+        model: "bytedance/seedance-2-fast",
+        input: {
+          prompt,
+          web_search: web_search ?? false,
+          ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
+          ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
+          ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
+        },
+      });
+      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {

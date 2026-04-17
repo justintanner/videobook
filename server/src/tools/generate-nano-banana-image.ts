@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { zodErrorToToolResult } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -57,17 +58,23 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      // Apicity NanoBananaProRequestSchema enforces image_input .max(8).
+      const apicityCheck = NanoBananaProRequestSchema.safeParse({
+        model: "nano-banana-pro",
+        input: {
+          prompt,
+          ...(ids.length > 0 ? { image_input: ids } : {}),
+          ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
+          ...(output_format !== undefined ? { output_format } : {}),
+        },
+      });
+      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
+
       const imageInputs: Array<{ assetId: string; filename: string }> = [];
       const sourceImageIds: string[] = [];
 
       if (ids.length > 0) {
-        if (ids.length > 8) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: "Maximum 8 reference images allowed" }],
-          };
-        }
-
         for (const id of ids) {
           if (!id.startsWith("img-")) {
             return {

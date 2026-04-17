@@ -1,11 +1,12 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
-import { Wan27ResolutionSchema } from "@apicity/kie/zod";
+import { Wan27ImageToVideoRequestSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "../media-files.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { zodErrorToToolResult } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -97,19 +98,22 @@ export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (!first_frame_slug && !last_frame_slug && !first_clip_slug) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Wan 2.7 Image to Video requires at least first_frame_slug, last_frame_slug, or first_clip_slug" }],
-        };
-      }
-
-      if (first_clip_slug && first_frame_slug && last_frame_slug) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip." }],
-        };
-      }
+      // Apicity Wan27ImageToVideoRequestSchema refines enforce:
+      //   - at least one of first_frame_url, last_frame_url, first_clip_url
+      //   - first_clip_url cannot be combined with first_frame_url or last_frame_url
+      // Only the refine-relevant fields are passed; slugs stand in for URLs
+      // (apicity accepts any string), and unrelated fields (duration, seed)
+      // are omitted so their per-field types don't need coercion here.
+      const apicityCheck = Wan27ImageToVideoRequestSchema.safeParse({
+        model: "wan/2-7-image-to-video",
+        input: {
+          prompt,
+          ...(first_frame_slug ? { first_frame_url: first_frame_slug } : {}),
+          ...(last_frame_slug ? { last_frame_url: last_frame_slug } : {}),
+          ...(first_clip_slug ? { first_clip_url: first_clip_slug } : {}),
+        },
+      });
+      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       let firstFrame: RefInput | undefined;
       if (first_frame_slug) {

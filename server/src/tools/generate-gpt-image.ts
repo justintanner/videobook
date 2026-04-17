@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { zodErrorToToolResult } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -56,19 +57,17 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (ids.length === 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "At least 1 reference image is required" }],
-        };
-      }
-
-      if (ids.length > 4) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Maximum 4 reference images allowed" }],
-        };
-      }
+      // Apicity GptImageToImageRequestSchema enforces input_urls .min(1).max(4).
+      const apicityCheck = GptImageToImageRequestSchema.safeParse({
+        model: "gpt-image/1.5-image-to-image",
+        input: {
+          prompt,
+          input_urls: ids,
+          ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(quality !== undefined ? { quality } : {}),
+        },
+      });
+      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const imageInputs: Array<{ assetId: string; filename: string }> = [];
       const sourceImageIds: string[] = [];

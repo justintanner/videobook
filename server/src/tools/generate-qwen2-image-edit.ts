@@ -6,6 +6,7 @@ import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { zodErrorToToolResult } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -52,12 +53,22 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       }
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
-      if (ids.length < 1 || ids.length > 3) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Qwen2 image edit requires 1-3 reference images" }],
-        };
-      }
+
+      // Apicity Qwen2ImageEditRequestSchema enforces image_url .min(1).max(3)
+      // and prompt .min(1). Slugs stand in for URLs here — they are non-empty
+      // strings that satisfy the inner `z.string().min(1)` constraint. The
+      // actual URLs are resolved post-upload in the job handler.
+      const apicityCheck = Qwen2ImageEditRequestSchema.safeParse({
+        model: "qwen2/image-edit",
+        input: {
+          prompt,
+          image_url: ids,
+          ...(image_size !== undefined ? { image_size } : {}),
+          ...(output_format !== undefined ? { output_format } : {}),
+          ...(seed !== undefined ? { seed } : {}),
+        },
+      });
+      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const invalidIds = ids.filter((id) => !id.startsWith("img-"));
       if (invalidIds.length > 0) {
