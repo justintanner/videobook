@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
-import { contentHash } from "../kie-upload.js";
+import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { deletePendingTask } from "./pending-task.js";
 import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";

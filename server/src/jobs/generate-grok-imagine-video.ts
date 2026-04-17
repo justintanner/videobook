@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -37,11 +37,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
-      // Upload image via kie for a publicly accessible URL
-      const kieKey = process.env.KIE_API_KEY;
-      if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-      const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-      const imageUrl = await uploadAssetFile(kieProvider, fs, sourceImageId, imageFilename, projectSlug);
+      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
@@ -75,7 +71,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const downloadUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
+    const downloadUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineVideoPayload(
       { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },

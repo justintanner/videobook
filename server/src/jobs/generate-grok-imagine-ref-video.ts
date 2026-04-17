@@ -1,6 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -33,14 +32,9 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
-    // Upload reference images to get publicly accessible URLs
-    const kieKey = process.env.KIE_API_KEY;
-    if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-
     const imageUrls: string[] = [];
     for (const ref of refImages) {
-      imageUrls.push(await uploadAssetFile(kieProvider, fs, ref.assetId, ref.filename, projectSlug));
+      imageUrls.push(await uploadAssetFile(fs, ref.assetId, ref.filename, projectSlug));
     }
 
     const provider = xai({ apiKey, timeout: 120_000 });

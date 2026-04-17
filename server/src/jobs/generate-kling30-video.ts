@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import type { KlingElement, MultiShotPrompt } from "@apicity/kie";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildKling30VideoPayload } from "../payload-builders.js";
@@ -48,7 +48,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     // Upload reference images
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
+      imageUrls.push(await uploadAssetFile(fs, assetId, filename, projectSlug));
     }
 
     // Upload element media and build KlingElement array
@@ -56,7 +56,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     for (const elem of elementInputs) {
       const urls: string[] = [];
       for (const { assetId, filename } of elem.inputs) {
-        urls.push(await uploadAssetFile(provider, fs, assetId, filename, projectSlug));
+        urls.push(await uploadAssetFile(fs, assetId, filename, projectSlug));
       }
 
       const element: KlingElement = {

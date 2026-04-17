@@ -1,6 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { submitTranscribe } from "./transcribe-submit.js";
@@ -25,12 +24,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       languageCode, assetId, assetDir, projectSlug, autoRender,
     } = payload as TranscribePayload;
 
-    const kieKey = process.env.KIE_API_KEY;
-    if (!kieKey) throw new Error("KIE_API_KEY environment variable is not set");
-
-    // Upload via KIE for the public audio URL (shared across both providers).
-    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-    const downloadUrl = await uploadAssetFile(kieProvider, fs, assetId, audioFilename, projectSlug);
+    const downloadUrl = await uploadAssetFile(fs, assetId, audioFilename, projectSlug);
 
     const { provider, taskId, taskType, statusUrl, responseUrl } = await submitTranscribe({
       audioUrl: downloadUrl,

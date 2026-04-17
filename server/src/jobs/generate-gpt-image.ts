@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildGptImagePayload } from "../payload-builders.js";
@@ -31,7 +31,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(provider, fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
     }
 
     const request = buildGptImagePayload(

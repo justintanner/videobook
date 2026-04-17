@@ -1,7 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@apicity/kie";
 import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildAlibabaImagePayload } from "../payload-builders.js";
@@ -32,13 +31,9 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
     const apiKey = process.env.DASHSCOPE_API_KEY;
     if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
 
-    const kieKey = process.env.KIE_API_KEY;
-    if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(kieProvider, fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
     }
 
     const provider = alibaba({ apiKey, timeout: 120_000 });
@@ -82,13 +77,9 @@ export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
     const apiKey = process.env.DASHSCOPE_API_KEY;
     if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
 
-    const kieKey = process.env.KIE_API_KEY;
-    if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(kieProvider, fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
     }
 
     const provider = alibaba({ apiKey, timeout: 120_000 });

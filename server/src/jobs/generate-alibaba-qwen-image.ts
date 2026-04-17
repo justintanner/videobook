@@ -1,8 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie } from "@apicity/kie";
 import { alibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { markTaskCompleting, readPendingTask } from "./pending-task.js";
 import { buildAlibabaQwenImagePayload } from "../payload-builders.js";
@@ -38,13 +37,8 @@ async function runQwenImageJob(
   if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
 
   const uploadedUrls: string[] = [];
-  if (imageInputs.length > 0) {
-    const kieKey = process.env.KIE_API_KEY;
-    if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-    const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-    for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(kieProvider, fs, srcAssetId, filename, projectSlug));
-    }
+  for (const { assetId: srcAssetId, filename } of imageInputs) {
+    uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
   }
 
   const provider = alibaba({ apiKey, timeout: 120_000 });

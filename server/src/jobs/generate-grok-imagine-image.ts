@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import type { GrokImageToImageRequest } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
@@ -36,11 +36,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
       const provider = xai({ apiKey, timeout: 120_000 });
 
-      // Upload image via kie for a publicly accessible URL
-      const kieKey = process.env.KIE_API_KEY;
-      if (!kieKey) throw new Error("KIE_API_KEY environment variable is required for image upload");
-      const kieProvider = kie({ apiKey: kieKey, timeout: 60_000 });
-      const imageUrl = await uploadAssetFile(kieProvider, fs, sourceImageId, imageFilename, projectSlug);
+      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 
       const request = buildXaiGrokImagineImagePayload(
         { prompt, aspect_ratio: aspectRatio },
@@ -85,7 +81,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const downloadUrl = await uploadAssetFile(provider, fs, sourceImageId, imageFilename, projectSlug);
+    const downloadUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);

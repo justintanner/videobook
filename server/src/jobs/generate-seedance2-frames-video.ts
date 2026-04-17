@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../kie-upload.js";
+import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
@@ -26,11 +26,10 @@ type GenerateSeedance2FramesVideoPayload = {
 
 async function uploadFrame(
   fs: ClipfirstFs,
-  provider: ReturnType<typeof kie>,
   frame: FrameInput,
   projectSlug: string,
 ): Promise<string> {
-  return uploadAssetFile(provider, fs, frame.assetId, frame.filename, projectSlug);
+  return uploadAssetFile(fs, frame.assetId, frame.filename, projectSlug);
 }
 
 export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {
@@ -47,8 +46,8 @@ export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const firstFrameUrl = firstFrame ? await uploadFrame(fs, provider, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadFrame(fs, provider, lastFrame, projectSlug) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadFrame(fs, firstFrame, projectSlug) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadFrame(fs, lastFrame, projectSlug) : undefined;
 
     const request = buildSeedance2VideoPayload(
       { prompt, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
