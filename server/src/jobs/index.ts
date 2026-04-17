@@ -25,6 +25,7 @@ import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-ima
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
 import { registerGenerateAlibabaImageJob, registerGenerateAlibabaImageProJob } from "./generate-alibaba-image.js";
+import { registerGenerateAlibabaQwenImageJob, registerGenerateAlibabaQwenImageEditJob } from "./generate-alibaba-qwen-image.js";
 import { registerGenerateAlibabaVideoJob } from "./generate-alibaba-video.js";
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
@@ -63,6 +64,8 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGptImageJob(fs);
   registerGenerateAlibabaImageJob(fs);
   registerGenerateAlibabaImageProJob(fs);
+  registerGenerateAlibabaQwenImageJob(fs);
+  registerGenerateAlibabaQwenImageEditJob(fs);
   registerGenerateAlibabaVideoJob(fs);
   registerCompleteKieTaskJob(fs);
   registerRenderProjectJob(fs);

@@ -21,7 +21,17 @@ import {
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
 import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
+import { z } from "zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
+
+// Qwen multimodal endpoint accepts 0-3 reference images for qwen-image-2.0*
+// generation, and 1-3 required for qwen-image-edit*. No matching schema is
+// exported from @apicity/alibaba, so we define slot-constraint shims here.
+const AlibabaQwenImageReferenceSlotsSchema = z.array(z.string()).max(3);
+const AlibabaQwenImageEditReferenceSlotsSchema = z.array(z.string()).min(1).max(3);
+
+const QWEN_GENERATION_MODEL_VALUES = ["qwen-image-2.0-pro", "qwen-image-2.0"] as const;
+const QWEN_EDIT_MODEL_VALUES = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
 
 // ---------------------------------------------------------------------------
 // Provider route (unchanged type for backward compat)
@@ -149,6 +159,22 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
     defaults: { model: "wan2.7-image-pro" },
+  },
+  {
+    key: "alibaba_qwen_image",
+    tool_name: "generate_alibaba_qwen_image",
+    label: "Alibaba Qwen Image",
+    description: "Alibaba Cloud Qwen text-to-image (qwen-image-2.0 family) with 0-3 optional reference images, via the synchronous multimodal endpoint",
+    imageFieldSchema: AlibabaQwenImageReferenceSlotsSchema,
+    defaults: { model: "qwen-image-2.0-pro" },
+  },
+  {
+    key: "alibaba_qwen_image_edit",
+    tool_name: "generate_alibaba_qwen_image_edit",
+    label: "Alibaba Qwen Image Edit",
+    description: "Alibaba Cloud Qwen image editing (qwen-image-edit family) with 1-3 required reference images, via the synchronous multimodal endpoint",
+    imageFieldSchema: AlibabaQwenImageEditReferenceSlotsSchema,
+    defaults: { model: "qwen-image-edit-plus" },
   },
 ];
 
@@ -295,6 +321,29 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
     return { type: "object", properties, required: ["prompt"], defaults: config.defaults };
   }
 
+  // Alibaba Qwen image models — custom schema (sync multimodal endpoint)
+  if (config.tool_name === "generate_alibaba_qwen_image" || config.tool_name === "generate_alibaba_qwen_image_edit") {
+    const isEdit = config.tool_name === "generate_alibaba_qwen_image_edit";
+    const modelEnum = isEdit ? [...QWEN_EDIT_MODEL_VALUES] : [...QWEN_GENERATION_MODEL_VALUES];
+    const properties: Record<string, ParamSchema> = {
+      prompt: { type: "string", description: isEdit ? "Edit instruction text" : "Text prompt for image generation" },
+      image_slugs: {
+        type: "array",
+        items: { type: "string" },
+        description: imageSlotsDescription(getImageSlotsForConfig(config)),
+      },
+      model: { type: "string", description: "Qwen model variant", enum: modelEnum },
+      size: { type: "string", description: "Output size (e.g., '1024*1024'). Not allowed for qwen-image-edit." },
+      n: { type: "integer", description: "Number of images (1-6). qwen-image-edit supports only n=1", minimum: 1, maximum: 6 },
+      negative_prompt: { type: "string", description: "Negative prompt (max 500 chars)" },
+      prompt_extend: { type: "boolean", description: "Let the model expand the prompt. Not allowed for qwen-image-edit." },
+      watermark: { type: "boolean", description: "Add watermark to generated image" },
+      seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
+    };
+    const required = isEdit ? ["prompt", "image_slugs"] : ["prompt"];
+    return { type: "object", properties, required, defaults: config.defaults };
+  }
+
   return null;
 }
 
@@ -332,7 +381,14 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     });
   }
 
-  if (config.tool_name.startsWith("generate_alibaba_")) {
+  if (config.tool_name === "generate_alibaba_qwen_image" || config.tool_name === "generate_alibaba_qwen_image_edit") {
+    providers.push({
+      key: "alibaba",
+      label: "Alibaba",
+      provider_path: "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation()",
+      envKey: "DASHSCOPE_API_KEY",
+    });
+  } else if (config.tool_name.startsWith("generate_alibaba_")) {
     providers.push({
       key: "alibaba",
       label: "Alibaba",

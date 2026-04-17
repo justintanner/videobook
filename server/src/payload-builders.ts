@@ -38,6 +38,7 @@ import type {
   AlibabaVideoSynthesisInput,
   AlibabaVideoSynthesisParameters,
 } from "@apicity/alibaba";
+import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -535,6 +536,40 @@ function buildAlibabaImagePayload(
   };
 }
 
+type AlibabaQwenImageModel = AlibabaMultimodalGenerationRequest["model"];
+
+type AlibabaQwenImageArgs = {
+  prompt: string;
+  model: AlibabaQwenImageModel;
+  size?: string;
+  n?: number;
+  negative_prompt?: string;
+  prompt_extend?: boolean;
+  watermark?: boolean;
+  seed?: number;
+};
+
+function buildAlibabaQwenImagePayload(
+  args: AlibabaQwenImageArgs,
+  imageUrls: string[],
+): AlibabaMultimodalGenerationRequest {
+  const content: Array<{ text: string } | { image: string }> = [];
+  for (const url of imageUrls) content.push({ image: url });
+  content.push({ text: args.prompt });
+  return {
+    model: args.model,
+    input: { messages: [{ role: "user", content }] },
+    parameters: {
+      ...(args.size !== undefined ? { size: args.size } : {}),
+      ...(args.n !== undefined ? { n: args.n } : {}),
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
+      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    },
+  };
+}
+
 type AlibabaVideoArgs = Partial<AlibabaVideoSynthesisParameters> & {
   prompt: string;
   negative_prompt?: string;
@@ -870,6 +905,7 @@ export {
   buildWan27ImagePayload,
   buildWan27ImageProPayload,
   buildAlibabaImagePayload,
+  buildAlibabaQwenImagePayload,
   buildAlibabaVideoPayload,
   extractKlingElements,
   translateToolPayload,

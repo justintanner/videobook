@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -70,6 +70,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeAlibabaVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
       } else if (taskType === "alibaba_image" || taskType === "alibaba_image_pro") {
         await completeAlibabaImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+      } else if (taskType === "alibaba_qwen_image" || taskType === "alibaba_qwen_image_edit") {
+        await completeAlibabaQwenImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
@@ -663,6 +665,55 @@ async function completeAlibabaVideo(
     assetDir,
     projectSlug,
     provenance,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeAlibabaQwenImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: "alibaba_qwen_image" | "alibaba_qwen_image_edit",
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in Alibaba Qwen result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const ext = extensionFromUrl(imageUrl, "png");
+  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+
+  const fallbackModel = taskType === "alibaba_qwen_image_edit"
+    ? "alibaba/qwen-image-edit-plus"
+    : "alibaba/qwen-image-2.0-pro";
+  const modelName = (await readPayloadModel(fs, assetId, projectSlug))
+    ?? (typeof meta.model === "string" ? `alibaba/${meta.model}` : fallbackModel);
+
+  const origin = {
+    source_assets: meta.sourceImageIds,
+    model: modelName,
+    prompt: meta.prompt,
+    download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.size !== undefined ? { size: meta.size } : {}),
+    ...(meta.n !== undefined ? { n: meta.n } : {}),
+    ...(meta.negativePrompt !== undefined ? { negative_prompt: meta.negativePrompt } : {}),
+    ...(meta.promptExtend !== undefined ? { prompt_extend: meta.promptExtend } : {}),
+    ...(meta.watermark !== undefined ? { watermark: meta.watermark } : {}),
+    ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
+    ...(resultUrls.length > 1 ? { additional_urls: resultUrls.slice(1) } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: `.${ext}`,
+    provenance: origin,
   } as unknown as Record<string, unknown>);
 }
 
