@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -66,6 +66,10 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeWan27Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
       } else if (taskType === "wan27_image" || taskType === "wan27_image_pro") {
         await completeWan27Image(fs, assetId, projectSlug, meta, resultUrls, taskType);
+      } else if (taskType === "alibaba_video") {
+        await completeAlibabaVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+      } else if (taskType === "alibaba_image" || taskType === "alibaba_image_pro") {
+        await completeAlibabaImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image") {
@@ -592,4 +596,116 @@ async function completeIsolateVocals(
   }
 
   await fs.commitOperation("isolate_vocals", assetId, { mode: "cloud" }, projectSlug);
+}
+
+function extensionFromUrl(url: string, fallback: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const match = /\.([a-zA-Z0-9]{1,5})$/.exec(pathname);
+    if (match) return match[1].toLowerCase();
+  } catch {
+    // ignore malformed URLs
+  }
+  return fallback;
+}
+
+async function readPayloadModel(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<string | undefined> {
+  const result = await fs.readMetadata<{ model?: string }>(assetId, "generation-payload", projectSlug);
+  if (!result.ok) return undefined;
+  return typeof result.value.model === "string" ? result.value.model : undefined;
+}
+
+async function completeAlibabaVideo(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskId?: string,
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in Alibaba result");
+
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+
+  const modelName = (await readPayloadModel(fs, assetId, projectSlug)) ?? "alibaba/wan2.7-video";
+
+  const provenance = {
+    source_images: meta.sourceImageIds,
+    source_videos: meta.sourceVideoIds,
+    source_audios: meta.sourceAudioIds,
+    model: modelName,
+    download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  if (taskId !== undefined) {
+    await fs.writeMetadata(assetId, "alibaba-task-id", { taskId }, projectSlug);
+  }
+
+  const videoPath = join(assetDir, "original.mp4");
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+    provenance,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeAlibabaImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: "alibaba_image" | "alibaba_image_pro",
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in Alibaba result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const ext = extensionFromUrl(imageUrl, "png");
+  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+
+  const modelName = (await readPayloadModel(fs, assetId, projectSlug))
+    ?? (taskType === "alibaba_image_pro" ? "alibaba/wan2.7-image-pro" : "alibaba/wan2.7-image");
+
+  const origin = {
+    source_assets: meta.sourceImageIds,
+    model: modelName,
+    prompt: meta.prompt,
+    download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.size !== undefined ? { size: meta.size } : {}),
+    ...(meta.n !== undefined ? { n: meta.n } : {}),
+    ...(meta.watermark !== undefined ? { watermark: meta.watermark } : {}),
+    ...(meta.thinkingMode !== undefined ? { thinking_mode: meta.thinkingMode } : {}),
+    ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: `.${ext}`,
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
