@@ -387,7 +387,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   audio_setting: { type: "string", enum: WAN27_AUDIO_SETTINGS, description: "Audio: auto (model decides) or origin (keep original)", default: "auto" },
   prompt_extend: { type: "boolean", description: "Intelligent prompt rewriting (default true)", default: true },
   nsfw_checker: { type: "boolean", description: "Content safety filter (default false)", default: false },
-  seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0, maximum: 2147483647 },
+  seed: { type: "integer", description: "Random seed for reproducibility" },
   extend_at: { type: "number", description: "Seconds into the source video to start extending from (default 0)" },
   extend_times: { type: "string", description: "Extension duration in seconds" },
   shot_type: { type: "string", enum: ALIBABA_VIDEO_SHOT_TYPES, description: "Shot composition: single (one shot) or multi (multiple shots)" },
@@ -519,7 +519,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "driving_audio_slug") { prop.description = "Audio asset for audio-driven motion (e.g., @aud-music)"; }
       if (param === "video_slug") { prop.description = "Reference video asset (e.g., @vid-ref)"; }
       if (param === "resolution") { prop.enum = ALIBABA_VIDEO_RESOLUTIONS; prop.description = "Output resolution"; }
-      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds"; prop.enum = undefined; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-15)"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 15; }
       if (param === "shot_type") { prop.enum = ALIBABA_VIDEO_SHOT_TYPES; prop.description = "Shot composition: single or multi"; }
       if (param === "prompt_extend") { prop.description = "Intelligent prompt rewriting (default true)"; }
       if (param === "watermark") { prop.description = "Add watermark to output video (default false)"; }
