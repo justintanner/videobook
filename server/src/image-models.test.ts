@@ -309,12 +309,20 @@ describe("validateImageParams", () => {
     expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
   });
 
-  it("gpt accepts any number of images (Zod array is unbounded)", () => {
+  it("gpt warns when >4 images (Zod array capped at 4)", () => {
     const result = validateImageParams("generate_gpt_image", {
       prompt: "edit this",
       image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
     });
-    expect(result.warnings.some((w) => w.toLowerCase().includes("images (got"))).toBe(false);
+    expect(result.warnings.some((w) => w.includes("supports 1-4 images"))).toBe(true);
+  });
+
+  it("gpt warns when no images (Zod array requires at least 1)", () => {
+    const result = validateImageParams("generate_gpt_image", {
+      prompt: "edit this",
+      image_slugs: [],
+    });
+    expect(result.warnings.some((w) => w.includes("requires at least 1"))).toBe(true);
   });
 
   it("qwen2 warns when no images provided", () => {

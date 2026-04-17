@@ -20,7 +20,7 @@ import {
 } from "@apicity/kie/zod";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
-import { AlibabaImageGenerationRequestSchema } from "@apicity/alibaba/zod";
+import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -60,8 +60,6 @@ type ImageModelConfig = {
   imageFieldSchema: ZodLike | null;
   kieImageField?: string;
   defaults: Record<string, unknown>;
-  /** Override slot constraints when the Zod schema doesn't encode them (e.g., unbounded array with runtime limit). */
-  slotConstraints?: SlotConstraints;
 };
 
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
@@ -115,7 +113,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
     defaults: { image_size: "16:9", output_format: "png" },
-    slotConstraints: { min: 1, max: 3 },
   },
   {
     key: "wan27_image",
@@ -142,23 +139,20 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_alibaba_image",
     label: "Alibaba Wan 2.7 Image",
     description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
-    imageFieldSchema: AlibabaImageGenerationRequestSchema.shape.input.shape.messages,
+    imageFieldSchema: AlibabaImageReferenceSlotsSchema,
     defaults: { model: "wan2.7-image" },
-    slotConstraints: { min: 0, max: 9 },
   },
   {
     key: "alibaba_image_pro",
     tool_name: "generate_alibaba_image_pro",
     label: "Alibaba Wan 2.7 Image Pro",
     description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
-    imageFieldSchema: AlibabaImageGenerationRequestSchema.shape.input.shape.messages,
+    imageFieldSchema: AlibabaImageReferenceSlotsSchema,
     defaults: { model: "wan2.7-image-pro" },
-    slotConstraints: { min: 0, max: 9 },
   },
 ];
 
 function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
-  if (config.slotConstraints) return config.slotConstraints;
   return readSlotConstraints(config.imageFieldSchema);
 }
 

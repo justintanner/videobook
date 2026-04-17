@@ -11,6 +11,7 @@
 type ZodDef = {
   typeName?: string;
   innerType?: unknown;
+  schema?: unknown;
   minLength?: { value: number } | null;
   maxLength?: { value: number } | null;
   items?: unknown[];
@@ -30,10 +31,16 @@ function unwrapOptional(schema: unknown): { inner: unknown; optional: boolean } 
   let cur: unknown = schema;
   let optional = false;
   let def = defOf(cur);
-  while (def && (def.typeName === "ZodOptional" || def.typeName === "ZodNullable")) {
-    optional = true;
-    if (!def.innerType) break;
-    cur = def.innerType;
+  while (
+    def &&
+    (def.typeName === "ZodOptional" ||
+      def.typeName === "ZodNullable" ||
+      def.typeName === "ZodEffects")
+  ) {
+    if (def.typeName !== "ZodEffects") optional = true;
+    const next = def.typeName === "ZodEffects" ? def.schema : def.innerType;
+    if (!next) break;
+    cur = next;
     def = defOf(cur);
   }
   return { inner: cur, optional };
