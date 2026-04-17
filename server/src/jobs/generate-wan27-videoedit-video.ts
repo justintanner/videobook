@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -19,7 +19,7 @@ type GenerateWan27VideoeditVideoPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
-  resolution?: "720p" | "1080p";
+  resolution?: Wan27Resolution;
   aspect_ratio?: string;
   duration?: string;
   audio_setting?: "auto" | "origin";

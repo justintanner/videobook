@@ -1,6 +1,8 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie } from "@apicity/kie";
-import { alibaba } from "@apicity/alibaba";
+import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
+
+type AlibabaVideoResolution = NonNullable<AlibabaVideoSynthesisParameters["resolution"]>;
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -24,7 +26,7 @@ type GenerateAlibabaVideoPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
-  resolution?: "480P" | "720P" | "1080P";
+  resolution?: AlibabaVideoResolution;
   duration?: number;
   shot_type?: "single" | "multi";
   prompt_extend?: boolean;

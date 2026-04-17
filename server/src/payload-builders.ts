@@ -28,6 +28,7 @@ import type {
   NanoBananaResolution,
   NanoBananaOutputFormat,
   GptImageQuality,
+  Wan27Resolution,
 } from "@apicity/kie";
 import type { VeoGenerateRequest, VeoExtendRequest } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
@@ -35,7 +36,10 @@ import type {
   AlibabaImageGenerationRequest,
   AlibabaVideoSynthesisRequest,
   AlibabaVideoSynthesisInput,
+  AlibabaVideoSynthesisParameters,
 } from "@apicity/alibaba";
+
+type AlibabaVideoResolution = NonNullable<AlibabaVideoSynthesisParameters["resolution"]>;
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
 
@@ -143,7 +147,7 @@ function buildGrokImagineTextPayload(
 type Seedance2VideoArgs = {
   prompt: string;
   aspect_ratio?: string;
-  resolution?: "480p" | "720p";
+  resolution?: NonNullable<Seedance2FastRequest["input"]["resolution"]>;
   duration?: string;
   generate_audio?: boolean;
   return_last_frame?: boolean;
@@ -207,7 +211,7 @@ function buildNanoBananaImagePayload(
 type Qwen2ImageEditArgs = {
   prompt: string;
   image_size?: string;
-  output_format?: "png" | "jpeg";
+  output_format?: NonNullable<Qwen2ImageEditRequest["input"]["output_format"]>;
   seed?: number;
 };
 
@@ -322,7 +326,7 @@ function buildWan27ImageProPayload(
 type Wan27FramesVideoArgs = {
   prompt: string;
   negative_prompt?: string;
-  resolution?: "720p" | "1080p";
+  resolution?: Wan27Resolution;
   duration?: string;
   prompt_extend?: boolean;
   nsfw_checker?: boolean;
@@ -361,7 +365,7 @@ function buildWan27FramesVideoPayload(
 type Wan27ReferenceVideoArgs = {
   prompt: string;
   negative_prompt?: string;
-  resolution?: "720p" | "1080p";
+  resolution?: Wan27Resolution;
   aspect_ratio?: string;
   duration?: string;
   prompt_extend?: boolean;
@@ -402,7 +406,7 @@ function buildWan27ReferenceVideoPayload(
 type Wan27VideoEditArgs = {
   prompt?: string;
   negative_prompt?: string;
-  resolution?: "720p" | "1080p";
+  resolution?: Wan27Resolution;
   aspect_ratio?: string;
   duration?: string;
   audio_setting?: "auto" | "origin";
@@ -535,7 +539,7 @@ type AlibabaVideoArgs = {
   prompt: string;
   negative_prompt?: string;
   model?: string;
-  resolution?: "480P" | "720P" | "1080P";
+  resolution?: AlibabaVideoResolution;
   duration?: number;
   shot_type?: "single" | "multi";
   prompt_extend?: boolean;
@@ -808,7 +812,7 @@ function translateToolPayload(
           prompt: args.prompt as string,
           negative_prompt: args.negative_prompt as string | undefined,
           model: args.model as string | undefined,
-          resolution: args.resolution as "480P" | "720P" | "1080P" | undefined,
+          resolution: args.resolution as AlibabaVideoResolution | undefined,
           duration: args.duration as number | undefined,
           shot_type: args.shot_type as "single" | "multi" | undefined,
           prompt_extend: args.prompt_extend as boolean | undefined,

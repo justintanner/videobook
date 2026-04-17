@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetFile } from "../kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
@@ -18,7 +18,7 @@ type ExtendWan27VideoPayload = {
   sourceVideoIds: string[];
   sourceAudioIds: string[];
   negative_prompt?: string;
-  resolution?: "720p" | "1080p";
+  resolution?: Wan27Resolution;
   duration?: string;
   prompt_extend?: boolean;
   nsfw_checker?: boolean;
