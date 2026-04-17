@@ -512,7 +512,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
-      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wanx2.1-i2v-14b-720p')"; }
+      if (param === "model") { prop.description = "DashScope video model name (e.g., 'wanx2.1-i2v-14b-720p')"; prop.enum = undefined; }
       if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
       if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
       if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }
