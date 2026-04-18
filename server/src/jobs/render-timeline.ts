@@ -118,6 +118,9 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
 
       await runFfmpeg(ffmpegArgs);
 
+      const thumbPath = join(finalDir, "original.jpg");
+      await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath]);
+
       const renderMeta = {
         slotCount: n,
         slots: resolvedSlots.map((s) => s.slug),
