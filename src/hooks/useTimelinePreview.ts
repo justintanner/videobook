@@ -74,11 +74,11 @@ export function useTimelinePreview(
       const hasRender = item.renders?.includes(orientation);
       if (!hasRender) {
         missingRenders.push(item.id);
-        continue;
       }
 
       const durationInFrames = Math.max(1, Math.round((item.duration ?? 0) * FPS));
-      const src = `/files/${projectSlug}/${item.id}/${orientation}.mp4`;
+      const file = hasRender ? `${orientation}.mp4` : 'original.mp4';
+      const src = `/files/${projectSlug}/${item.id}/${file}`;
 
       slotOffsets.push(cumulativeFrames);
       slots.push({
