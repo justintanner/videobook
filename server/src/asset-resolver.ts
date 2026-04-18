@@ -18,10 +18,6 @@ function parseAssetTags(text: string): string[] {
   return [...new Set(Array.from(matches, (m) => m[1]))];
 }
 
-function stripAssetTags(text: string): string {
-  return text.replace(TAG_PATTERN, "").trim();
-}
-
 async function resolveAllAssets(
   text: string,
   fs: ClipfirstFs,
@@ -85,5 +81,5 @@ function expandSlotRefs(
   });
 }
 
-export { parseAssetTags, stripAssetTags, resolveAllAssets, expandSlotRefs };
+export { parseAssetTags, resolveAllAssets, expandSlotRefs };
 export type { ResolvedAsset };

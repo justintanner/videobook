@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFs } from "clipfirst-fs";
 import type { ClipfirstFs } from "clipfirst-fs";
-import { parseAssetTags, stripAssetTags, resolveAllAssets, expandSlotRefs } from "./asset-resolver.js";
+import { parseAssetTags, resolveAllAssets, expandSlotRefs } from "./asset-resolver.js";
 
 describe("parseAssetTags", () => {
   it("parses a single @img- tag", () => {
@@ -51,28 +51,6 @@ describe("parseAssetTags", () => {
   it("deduplicates while preserving order of first occurrence", () => {
     const result = parseAssetTags("@vid-a @img-b @vid-a @img-c @img-b");
     expect(result).toEqual(["vid-a", "img-b", "img-c"]);
-  });
-});
-
-describe("stripAssetTags", () => {
-  it("strips a single tag and trims", () => {
-    expect(stripAssetTags("@img-sunset some text")).toBe("some text");
-  });
-
-  it("strips multiple tags", () => {
-    expect(stripAssetTags("@vid-foo @img-bar trim it")).toBe("trim it");
-  });
-
-  it("returns original text when no tags", () => {
-    expect(stripAssetTags("no tags")).toBe("no tags");
-  });
-
-  it("returns empty string when only a tag", () => {
-    expect(stripAssetTags("@vid-abc")).toBe("");
-  });
-
-  it("preserves text between tags", () => {
-    expect(stripAssetTags("@vid-a merge with @vid-b")).toBe("merge with");
   });
 });
 
