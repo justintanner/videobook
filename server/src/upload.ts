@@ -1,6 +1,7 @@
 import { free } from "@apicity/free";
 import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-fs";
+import { maybeReencodeImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -32,9 +33,14 @@ function inferMimeType(filename: string): string | undefined {
 }
 
 // Upload bytes to a free file host and return a publicly accessible download
-// URL. Tries catbox → litterbox → uguu and returns the first success. We
-// bypass Kie's own CDN because tempfile.redpandaai.co is periodically
-// unreachable from Kie's own workers.
+// URL. Tries litterbox → uguu → tflink and returns the first success.
+//
+// Host selection matters: Alibaba/Kie workers run in China and synchronously
+// fetch the URL server-side during data inspection. Several otherwise-fine
+// hosts (catbox.moe, filebin.net, temp.sh, tmpfiles.org) are unreachable or
+// mis-typed from that side and cause InvalidParameter.DataInspection 400s
+// even when the upload itself succeeded. The three hosts below were verified
+// end-to-end (upload OK + Alibaba submit accepted).
 type UploadAttempt = { host: string; upload: () => Promise<string> };
 
 export async function uploadBytes(data: Uint8Array | Buffer, filename: string): Promise<string> {
@@ -44,7 +50,6 @@ export async function uploadBytes(data: Uint8Array | Buffer, filename: string): 
 
   const f = free();
   const attempts: UploadAttempt[] = [
-    { host: "catbox", upload: () => f.catbox.upload({ file, filename }) },
     { host: "litterbox", upload: () => f.litterbox.upload({ file, filename, time: "1h" }) },
     {
       host: "uguu",
@@ -53,6 +58,13 @@ export async function uploadBytes(data: Uint8Array | Buffer, filename: string): 
         const url = res.files[0]?.url;
         if (!url) throw new Error("uguu upload returned no URL");
         return url;
+      },
+    },
+    {
+      host: "tflink",
+      upload: async () => {
+        const res = await f.tflink.upload({ file, filename });
+        return res.downloadLink;
       },
     },
   ];
@@ -80,9 +92,10 @@ export async function uploadAssetFile(
 ): Promise<string> {
   const readResult = await fs.readFile(assetId, filename, projectSlug);
   if (!readResult.ok) throw new Error(readResult.error.message);
-  const fileData = new Uint8Array(readResult.value);
+  const raw = new Uint8Array(readResult.value);
+  const { data: fileData, filename: outName } = await maybeReencodeImage(raw, filename);
 
-  const ext = filename.split(".").pop() ?? "bin";
+  const ext = outName.split(".").pop() ?? "bin";
   const hashedFilename = `${contentHash(fileData)}.${ext}`;
 
   return uploadBytes(fileData, hashedFilename);
