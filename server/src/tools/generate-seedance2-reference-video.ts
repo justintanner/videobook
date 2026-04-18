@@ -70,8 +70,9 @@ const generateSeedance2ReferenceVideoSchema = {
   image_slugs: z.array(z.string()).optional().describe("1-9 reference image @slugs (e.g., @img-style)"),
   video_slugs: z.array(z.string()).optional().describe("0-3 reference video @slugs, total ≤15s (e.g., @vid-motion)"),
   audio_slugs: z.array(z.string()).optional().describe("0-3 reference audio @slugs, total ≤15s (e.g., @aud-music)"),
+  model: z.enum(["bytedance/seedance-2-fast", "bytedance/seedance-2"]).optional().describe("Seedance model variant (fast default, standard adds 1080p)"),
   aspect_ratio: z.enum(seedance2FastInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
-  resolution: z.enum(seedance2FastInputSchema.resolution.unwrap().options).optional().describe("Output resolution"),
+  resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Output resolution (1080p requires model=bytedance/seedance-2)"),
   duration: z.string().optional().describe("Video duration in seconds (4-15)"),
   generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
   return_last_frame: z.boolean().optional().describe("Return the final frame as an image (default false)"),
@@ -90,7 +91,7 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const {
         project_slug, prompt,
         image_slugs, video_slugs, audio_slugs,
-        aspect_ratio, resolution, duration,
+        model, aspect_ratio, resolution, duration,
         generate_audio, return_last_frame, web_search,
       } = args as Args;
 
@@ -98,6 +99,13 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+        };
+      }
+
+      if (resolution === "1080p" && model !== "bytedance/seedance-2") {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "resolution '1080p' requires model='bytedance/seedance-2' (the fast variant tops out at 720p)" }],
         };
       }
 
@@ -192,6 +200,7 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,
+        ...(model !== undefined ? { model } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),

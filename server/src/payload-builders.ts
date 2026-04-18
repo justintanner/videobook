@@ -12,6 +12,7 @@ import type {
   GrokImageToImageRequest,
   GrokTextToImageRequest,
   Seedance2FastRequest,
+  Seedance2Request,
   NanoBananaProRequest,
   GptImageToImageRequest,
   Qwen2ImageEditRequest,
@@ -143,10 +144,14 @@ function buildGrokImagineTextPayload(
   };
 }
 
+type Seedance2Model = "bytedance/seedance-2-fast" | "bytedance/seedance-2";
+type Seedance2Resolution = "480p" | "720p" | "1080p";
+
 type Seedance2VideoArgs = {
   prompt: string;
+  model?: Seedance2Model;
   aspect_ratio?: string;
-  resolution?: NonNullable<Seedance2FastRequest["input"]["resolution"]>;
+  resolution?: Seedance2Resolution;
   duration?: string;
   generate_audio?: boolean;
   return_last_frame?: boolean;
@@ -164,24 +169,39 @@ type Seedance2VideoOpts = {
 function buildSeedance2VideoPayload(
   args: Seedance2VideoArgs,
   opts: Seedance2VideoOpts,
-): Seedance2FastRequest {
-  return {
-    model: "bytedance/seedance-2-fast",
-    input: {
-      prompt: args.prompt,
-      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
-      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
-      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
-      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
-      ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Seedance2FastRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
-      ...(args.return_last_frame !== undefined ? { return_last_frame: args.return_last_frame } : {}),
-      ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
-    },
+): Seedance2FastRequest | Seedance2Request {
+  const model: Seedance2Model = args.model ?? "bytedance/seedance-2-fast";
+  const input = {
+    prompt: args.prompt,
+    ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
+    ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
+    ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
+    ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
+    ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
+    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Seedance2FastRequest["input"]["aspect_ratio"] } : {}),
+    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
+    ...(args.return_last_frame !== undefined ? { return_last_frame: args.return_last_frame } : {}),
+    ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
   };
+  if (model === "bytedance/seedance-2") {
+    return {
+      model,
+      input: {
+        ...input,
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      },
+    } as Seedance2Request;
+  }
+  return {
+    model,
+    input: {
+      ...input,
+      ...(args.resolution !== undefined && args.resolution !== "1080p"
+        ? { resolution: args.resolution as "480p" | "720p" }
+        : {}),
+    },
+  } as Seedance2FastRequest;
 }
 
 type NanoBananaImageArgs = {
@@ -695,6 +715,11 @@ function translateToolPayload(
       const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, {});
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_seedance2_i2v_video": {
+      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
+      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, { firstFrameUrl });
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_seedance2_frames_video": {
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
@@ -861,7 +886,7 @@ function translateToolPayload(
 
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_veo_video", "extend_veo_video",
-  "generate_seedance2_t2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
+  "generate_seedance2_t2v_video", "generate_seedance2_i2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
   "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",

@@ -13,11 +13,12 @@ type GenerateSeedance2FramesVideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt: string;
-  firstFrame?: FrameInput;
-  lastFrame?: FrameInput;
+  firstFrame: FrameInput;
+  lastFrame: FrameInput;
   sourceImageIds: string[];
+  model?: "bytedance/seedance-2-fast" | "bytedance/seedance-2";
   aspect_ratio?: string;
-  resolution?: "480p" | "720p";
+  resolution?: "480p" | "720p" | "1080p";
   duration?: string;
   generate_audio?: boolean;
   return_last_frame?: boolean;
@@ -37,7 +38,7 @@ export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
       firstFrame, lastFrame, sourceImageIds,
-      aspect_ratio, resolution, duration,
+      model, aspect_ratio, resolution, duration,
       generate_audio, return_last_frame, web_search,
     } = payload as GenerateSeedance2FramesVideoPayload;
 
@@ -46,11 +47,11 @@ export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const firstFrameUrl = firstFrame ? await uploadFrame(fs, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadFrame(fs, lastFrame, projectSlug) : undefined;
+    const firstFrameUrl = await uploadFrame(fs, firstFrame, projectSlug);
+    const lastFrameUrl = await uploadFrame(fs, lastFrame, projectSlug);
 
     const request = buildSeedance2VideoPayload(
-      { prompt, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
+      { prompt, model, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
       { firstFrameUrl, lastFrameUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

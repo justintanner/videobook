@@ -19,8 +19,9 @@ type GenerateSeedance2ReferenceVideoPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
+  model?: "bytedance/seedance-2-fast" | "bytedance/seedance-2";
   aspect_ratio?: string;
-  resolution?: "480p" | "720p";
+  resolution?: "480p" | "720p" | "1080p";
   duration?: string;
   generate_audio?: boolean;
   return_last_frame?: boolean;
@@ -46,7 +47,7 @@ export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): voi
       vidAssetId, vidAssetDir, projectSlug, prompt,
       imageInputs, videoInputs, audioInputs,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      aspect_ratio, resolution, duration,
+      model, aspect_ratio, resolution, duration,
       generate_audio, return_last_frame, web_search,
     } = payload as GenerateSeedance2ReferenceVideoPayload;
 
@@ -60,7 +61,7 @@ export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): voi
     const referenceAudioUrls = await uploadInputs(fs, provider, audioInputs, projectSlug);
 
     const request = buildSeedance2VideoPayload(
-      { prompt, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
+      { prompt, model, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
       { referenceImageUrls, referenceVideoUrls, referenceAudioUrls },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
