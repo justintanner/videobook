@@ -31,22 +31,41 @@ function inferMimeType(filename: string): string | undefined {
   return ext ? MIME_TYPES[ext] : undefined;
 }
 
-// Upload bytes to tmpfiles.org and return a publicly accessible download URL
-// (valid for ~60 minutes). We bypass Kie's own CDN because tempfile.redpandaai.co
-// is periodically unreachable from Kie's own job workers — the workers then
-// fail with InvalidParameter / "Network is unreachable" before processing.
+// Upload bytes to a free file host and return a publicly accessible download
+// URL. Tries catbox → litterbox → uguu and returns the first success. We
+// bypass Kie's own CDN because tempfile.redpandaai.co is periodically
+// unreachable from Kie's own workers.
+type UploadAttempt = { host: string; upload: () => Promise<string> };
+
 export async function uploadBytes(data: Uint8Array | Buffer, filename: string): Promise<string> {
   const mimeType = inferMimeType(filename) ?? "application/octet-stream";
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
 
   const f = free();
-  const result = await f.tmpfiles.api.v1.upload({ file, filename });
+  const attempts: UploadAttempt[] = [
+    { host: "catbox", upload: () => f.catbox.upload({ file, filename }) },
+    { host: "litterbox", upload: () => f.litterbox.upload({ file, filename, time: "1h" }) },
+    {
+      host: "uguu",
+      upload: async () => {
+        const res = await f.uguu.upload({ file, filename });
+        const url = res.files[0]?.url;
+        if (!url) throw new Error("uguu upload returned no URL");
+        return url;
+      },
+    },
+  ];
 
-  const url = result.data?.url;
-  if (!url) throw new Error("tmpfiles.org upload returned no URL");
-  // Convert display URL to direct download URL: insert /dl/ after the domain.
-  return url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+  const failures: string[] = [];
+  for (const { host, upload } of attempts) {
+    try {
+      return await upload();
+    } catch (err) {
+      failures.push(`${host}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  throw new Error(`All upload hosts failed — ${failures.join(" | ")}`);
 }
 
 // Upload an asset file. The remote filename is derived from the file's
