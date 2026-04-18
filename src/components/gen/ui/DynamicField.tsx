@@ -3,6 +3,7 @@ import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { JSONSchemaProperty, VeoGenerationType } from '../types';
 import type { GenTheme } from './gen-themes';
+import { genThemes } from './gen-themes';
 import { cn } from '@/lib/utils';
 
 interface DynamicFieldProps {
@@ -351,6 +352,62 @@ export function DynamicField({
 
   // Handle plain string type (no enum) - use textarea
   if (schema.type === 'string') {
+    // size field: preset aspect ratios + free-text override
+    if (name === 'size') {
+      const presets: { ratio: string; dims: string; value: string }[] = [
+        { ratio: '9:16', dims: '1080×1920', value: '1080*1920' },
+        { ratio: '16:9', dims: '1920×1080', value: '1920*1080' },
+        { ratio: '1:1', dims: '1080×1080', value: '1080*1080' },
+      ];
+      const current = (value as string) ?? '';
+      const t = theme ?? genThemes.cyan;
+      return (
+        <GenField label={label} required={required} theme={theme} horizontal>
+          <div className="flex items-center gap-1.5">
+            {presets.map((p) => {
+              const active = current === p.value;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => !disabled && onChange(p.value)}
+                  disabled={disabled}
+                  className={cn(
+                    'h-8 px-3 rounded font-mono font-bold text-xs tracking-wider border transition-all duration-150',
+                    active
+                      ? cn(t.activeBg, t.activeBorder, t.activeText)
+                      : cn(t.controlBg, t.inactiveBorder, t.inactiveText, t.inactiveHoverText, t.inactiveHoverBorder),
+                    'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:outline-none',
+                    disabled && 'opacity-30 pointer-events-none',
+                  )}
+                  style={active ? { boxShadow: t.activeGlow } : undefined}
+                >
+                  <span className="flex items-baseline gap-1.5">
+                    <span>{p.ratio}</span>
+                    <span className="text-[10px] opacity-60 font-normal">{p.dims}</span>
+                  </span>
+                </button>
+              );
+            })}
+            <input
+              type="text"
+              value={current}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="custom"
+              disabled={disabled}
+              className={cn(
+                'h-8 w-28 px-2 bg-black/60 rounded font-mono text-sm tabular-nums',
+                theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+                'placeholder:text-primary/30 focus:outline-none',
+                theme?.focusBorder ?? 'focus:border-primary/60',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            />
+          </div>
+        </GenField>
+      );
+    }
+
     // image_slug field should use AssetDropSlot
     if (name === 'image_slug') {
       const slug = value as string;
