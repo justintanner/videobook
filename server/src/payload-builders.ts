@@ -806,8 +806,8 @@ function translateToolPayload(
         input: {
           task_id: "<task_id_from_source_video_metadata>",
           prompt: (args.prompt as string) ?? "",
-          ...(args.extend_at !== undefined ? { extend_at: args.extend_at as number } : {}),
-          ...(args.extend_times !== undefined ? { extend_times: args.extend_times as string } : {}),
+          extend_at: String((args.extend_at as number | undefined) ?? 0),
+          extend_times: (args.extend_times as "6" | "10" | undefined) ?? "6",
         },
       };
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };

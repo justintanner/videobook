@@ -38,8 +38,8 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       input: {
         task_id: kieTaskId,
         prompt,
-        ...(extend_at !== undefined ? { extend_at } : {}),
-        ...(extend_times !== undefined ? { extend_times } : {}),
+        extend_at: String(extend_at ?? 0),
+        extend_times: extend_times ?? "6",
       },
     };
 

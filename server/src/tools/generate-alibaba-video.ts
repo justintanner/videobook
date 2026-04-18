@@ -64,7 +64,7 @@ const generateAlibabaVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   negative_prompt: z.string().optional().describe("Negative prompt — things to avoid"),
-  model: z.string().optional().describe("DashScope video model name (e.g., 'wanx2.1-i2v-14b-720p')"),
+  model: z.string().optional().describe("DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')"),
   first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
   last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),
