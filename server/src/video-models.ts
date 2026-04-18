@@ -22,6 +22,10 @@ import {
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
+import {
+  FalSora2TextToVideoRequestSchema,
+  FalSora2ImageToVideoRequestSchema,
+} from "@apicity/fal/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +50,10 @@ type VideoModelInfo = {
   params: string[];
   defaults: Record<string, unknown>;
   providers: ProviderRoute[];
+  /** When set, exposes "fal" as a provider option. The fal tool name is
+   *  picked at submit time by image-slug count: withRefs when one or more
+   *  reference images are present, noRefs otherwise. */
+  falToolNames?: { noRefs?: string; withRefs?: string };
 };
 
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
@@ -65,6 +73,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_kling_v3_pro_i2v_fal" },
   },
   veo31: {
     label: "Veo 3.1",
@@ -78,6 +87,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_veo31_t2v_fal", withRefs: "generate_veo31_i2v_fal" },
   },
   veo31_extend: {
     label: "Veo 3.1 Extend",
@@ -104,6 +114,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_seedance2_t2v_fal" },
   },
   seedance2_i2v: {
     label: "Seedance 2.0 — First Frame",
@@ -122,6 +133,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_seedance2_i2v_fal" },
   },
   seedance2_frames: {
     label: "Seedance 2.0 — First & Last Frames",
@@ -226,6 +238,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_grok_imagine_video_i2v_fal" },
   },
   grok_imagine_ref: {
     label: "Grok Imagine Reference",
@@ -260,6 +273,24 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
     ],
+  },
+  sora2_t2v: {
+    label: "Sora 2 — Text",
+    tool_name: "generate_sora2_t2v_video",
+    description: "OpenAI Sora 2 text-to-video generation via fal.ai",
+    params: ["prompt", "model", "resolution", "aspect_ratio", "duration"],
+    defaults: { resolution: "720p", aspect_ratio: "16:9", duration: 8 },
+    providers: [],
+    falToolNames: { noRefs: "generate_sora2_t2v_fal" },
+  },
+  sora2_i2v: {
+    label: "Sora 2 — First Frame",
+    tool_name: "generate_sora2_i2v_video",
+    description: "OpenAI Sora 2 image-to-video from a first-frame image via fal.ai",
+    params: ["prompt", "first_frame_slug", "model", "resolution", "aspect_ratio", "duration"],
+    defaults: { resolution: "auto", aspect_ratio: "auto", duration: 8 },
+    providers: [],
+    falToolNames: { withRefs: "generate_sora2_i2v_fal" },
   },
 };
 
@@ -339,6 +370,13 @@ const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
 const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
 const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
+
+const SORA2_T2V_MODELS = [...FalSora2TextToVideoRequestSchema.shape.model.unwrap().options];
+const SORA2_T2V_RESOLUTIONS = [...FalSora2TextToVideoRequestSchema.shape.resolution.unwrap().options];
+const SORA2_T2V_ASPECT_RATIOS = [...FalSora2TextToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+const SORA2_I2V_RESOLUTIONS = [...FalSora2ImageToVideoRequestSchema.shape.resolution.unwrap().options];
+const SORA2_I2V_ASPECT_RATIOS = [...FalSora2ImageToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+const SORA2_DURATIONS = [4, 8, 12, 16, 20];
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -545,6 +583,20 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "extend_times") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Extension duration: 6s / 10s"; }
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
+    if (toolName === "generate_sora2_t2v_video" || toolName === "generate_sora2_i2v_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "model") { prop.enum = SORA2_T2V_MODELS; prop.description = "Sora 2 model variant"; }
+      if (param === "resolution") {
+        prop.enum = toolName === "generate_sora2_t2v_video" ? SORA2_T2V_RESOLUTIONS : SORA2_I2V_RESOLUTIONS;
+        prop.description = "Output resolution";
+      }
+      if (param === "aspect_ratio") {
+        prop.enum = toolName === "generate_sora2_t2v_video" ? SORA2_T2V_ASPECT_RATIOS : SORA2_I2V_ASPECT_RATIOS;
+        prop.description = "Output aspect ratio";
+      }
+      if (param === "duration") { prop.type = "integer"; prop.enum = SORA2_DURATIONS; prop.description = "Video duration in seconds (4, 8, 12, 16, or 20)"; }
+      if (param === "first_frame_slug") { prop.description = "First frame image asset (required, e.g., @img-start)"; }
+    }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
@@ -576,6 +628,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       && param === "first_frame_slug"
     ) required.push(param);
     if (toolName === "generate_seedance2_frames_video" && param === "last_frame_slug") required.push(param);
+    if (toolName === "generate_sora2_i2v_video" && param === "first_frame_slug") required.push(param);
   }
 
   return { type: "object", properties, required, defaults: model.defaults };
@@ -829,6 +882,22 @@ function actionNameToToolName(action: string): string | null {
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
 
+function buildProvidersForModel(info: VideoModelInfo): ProviderRoute[] {
+  if (!info.falToolNames) return info.providers;
+  return [
+    ...info.providers,
+    { key: "fal", label: "Fal", provider_path: "fal.post.v1.queue.submit()", envKey: "FAL_API_KEY" },
+  ];
+}
+
+function resolveFalVideoToolName(info: VideoModelInfo, imageSlugCount: number): string | null {
+  const names = info.falToolNames;
+  if (!names) return null;
+  if (imageSlugCount > 0 && names.withRefs) return names.withRefs;
+  if (imageSlugCount === 0 && names.noRefs) return names.noRefs;
+  return names.withRefs ?? names.noRefs ?? null;
+}
+
 function extractLastSettingsPerModel(
   log: ActionLogEntry[],
 ): Map<string, Record<string, unknown>> {
@@ -988,18 +1057,28 @@ function buildModelOption(
   const validation = validateVideoParams(toolName, params);
 
   // Filter providers to those with available API keys
-  const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
-  const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
+  const allProviders = buildProvidersForModel(modelInfo);
+  const availableProviders = allProviders.filter((p) => process.env[p.envKey]);
+  const providerList = availableProviders.length > 0 ? availableProviders : allProviders;
   const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
     ? providerOverride
     : (historicalProvider && providerList.some((p) => p.key === historicalProvider))
       ? historicalProvider
       : providerList[0].key;
 
+  let effectiveToolName = toolName;
+  if (selectedProvider === "fal") {
+    const slugCount = Array.isArray(params.image_slugs)
+      ? (params.image_slugs as unknown[]).length
+      : (typeof params.first_frame_slug === "string" && params.first_frame_slug !== "" ? 1 : 0);
+    const falName = resolveFalVideoToolName(modelInfo, slugCount);
+    if (falName) effectiveToolName = falName;
+  }
+
   return {
     key: modelKey,
     label: modelInfo.label,
-    tool_name: toolName,
+    tool_name: effectiveToolName,
     description: modelInfo.description,
     schema,
     prefilled_values: params,

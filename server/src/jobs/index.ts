@@ -48,6 +48,12 @@ import { registerGenerateWan27ProFalJob } from "./generate-wan27-pro-fal.js";
 import { registerGenerateWan27ProEditFalJob } from "./generate-wan27-pro-edit-fal.js";
 import { registerGenerateGrokImagineImageFalJob } from "./generate-grok-imagine-image-fal.js";
 import { registerGenerateGrokImagineImageEditFalJob } from "./generate-grok-imagine-image-edit-fal.js";
+import { registerGenerateSora2T2vFalJob } from "./generate-sora2-t2v-fal.js";
+import { registerGenerateSora2I2vFalJob } from "./generate-sora2-i2v-fal.js";
+import { registerGenerateVeo31T2vFalJob } from "./generate-veo31-t2v-fal.js";
+import { registerGenerateVeo31I2vFalJob } from "./generate-veo31-i2v-fal.js";
+import { registerGenerateKlingV3ProI2vFalJob } from "./generate-kling-v3-pro-i2v-fal.js";
+import { registerGenerateGrokImagineVideoI2vFalJob } from "./generate-grok-imagine-video-i2v-fal.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -101,4 +107,10 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateWan27ProEditFalJob(fs);
   registerGenerateGrokImagineImageFalJob(fs);
   registerGenerateGrokImagineImageEditFalJob(fs);
+  registerGenerateSora2T2vFalJob(fs);
+  registerGenerateSora2I2vFalJob(fs);
+  registerGenerateVeo31T2vFalJob(fs);
+  registerGenerateVeo31I2vFalJob(fs);
+  registerGenerateKlingV3ProI2vFalJob(fs);
+  registerGenerateGrokImagineVideoI2vFalJob(fs);
 }

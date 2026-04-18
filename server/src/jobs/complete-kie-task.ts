@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_sora2_t2v" | "fal_sora2_i2v" | "fal_veo31_t2v" | "fal_veo31_i2v" | "fal_kling_v3_pro_i2v" | "fal_grok_imagine_video_i2v";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -82,7 +82,13 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType.startsWith("fal_")) {
         const urls = extractFalUrls(taskType, resultObject);
-        if (taskType === "fal_seedance2_i2v" || taskType === "fal_seedance2_t2v") {
+        if (
+          taskType === "fal_seedance2_i2v" || taskType === "fal_seedance2_t2v"
+          || taskType === "fal_sora2_t2v" || taskType === "fal_sora2_i2v"
+          || taskType === "fal_veo31_t2v" || taskType === "fal_veo31_i2v"
+          || taskType === "fal_kling_v3_pro_i2v"
+          || taskType === "fal_grok_imagine_video_i2v"
+        ) {
           await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, urls, taskId);
         } else if (taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit") {
           await completeNanoBananaImage(fs, assetId, projectSlug, meta, urls);
@@ -108,9 +114,17 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
   });
 }
 
+const FAL_VIDEO_TASK_PREFIXES = [
+  "fal_seedance2_",
+  "fal_sora2_",
+  "fal_veo31_",
+  "fal_kling_v3_pro_",
+  "fal_grok_imagine_video_",
+];
+
 function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>): string[] {
   if (!resultObject) return [];
-  if (taskType.startsWith("fal_seedance2_")) {
+  if (FAL_VIDEO_TASK_PREFIXES.some((prefix) => taskType.startsWith(prefix))) {
     const v = (resultObject as { video?: { url?: string } }).video?.url;
     return typeof v === "string" ? [v] : [];
   }
