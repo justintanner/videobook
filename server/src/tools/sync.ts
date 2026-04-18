@@ -66,9 +66,42 @@ async function fetchFalStatus(statusUrl: string, apiKey: string): Promise<FalSta
   return await res.json() as FalStatus;
 }
 
+class FalResultError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "FalResultError";
+  }
+}
+
+type FalErrorDetailItem = { msg?: unknown; type?: unknown };
+type FalErrorBody = { detail?: string | FalErrorDetailItem[] };
+
+function extractFalDetail(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const detail = (body as FalErrorBody).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0];
+    const msg = typeof first?.msg === "string" ? first.msg : null;
+    const type = typeof first?.type === "string" ? first.type : null;
+    if (msg && type) return `${msg} (${type})`;
+    return msg;
+  }
+  return null;
+}
+
 async function fetchFalResult(responseUrl: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch(responseUrl, { headers: { Authorization: `Key ${apiKey}` } });
-  if (!res.ok) throw new Error(`FAL result fetch failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail: string | null = null;
+    try {
+      detail = extractFalDetail(await res.json());
+    } catch {
+      // Response body wasn't JSON; fall back to statusText.
+    }
+    const suffix = detail ? `: ${detail}` : ` ${res.statusText}`;
+    throw new FalResultError(res.status, `FAL result fetch failed: ${res.status}${suffix}`);
+  }
   return await res.json() as Record<string, unknown>;
 }
 
@@ -682,6 +715,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        if (e instanceof FalResultError && e.status >= 400 && e.status < 500) {
+          await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+        }
       }
     }));
   }
