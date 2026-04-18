@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -80,6 +80,24 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       } else if (taskType === "isolate_vocals") {
         await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType.startsWith("fal_")) {
+        const urls = extractFalUrls(taskType, resultObject);
+        if (taskType === "fal_seedance2_i2v" || taskType === "fal_seedance2_t2v") {
+          await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, urls, taskId);
+        } else if (taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit") {
+          await completeNanoBananaImage(fs, assetId, projectSlug, meta, urls);
+        } else if (
+          taskType === "fal_wan27" || taskType === "fal_wan27_edit" ||
+          taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
+        ) {
+          const variant = taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
+            ? "wan27_image_pro" : "wan27_image";
+          await completeWan27Image(fs, assetId, projectSlug, meta, urls, variant);
+        } else if (taskType === "fal_grok_imagine_image" || taskType === "fal_grok_imagine_image_edit") {
+          await completeGrokImagineImage(fs, assetId, projectSlug, meta, urls);
+        } else if (taskType === "fal_seedream_v5_lite" || taskType === "fal_seedream_v5_lite_edit") {
+          await completeSeedreamV5LiteImage(fs, assetId, projectSlug, meta, urls, taskType);
+        }
       }
 
       await deletePendingTask(fs, assetId, projectSlug);
@@ -88,6 +106,56 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       await fs.releaseLock(assetDir);
     }
   });
+}
+
+function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>): string[] {
+  if (!resultObject) return [];
+  if (taskType.startsWith("fal_seedance2_")) {
+    const v = (resultObject as { video?: { url?: string } }).video?.url;
+    return typeof v === "string" ? [v] : [];
+  }
+  const images = (resultObject as { images?: { url?: string }[] }).images;
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((i) => i?.url)
+    .filter((u): u is string => typeof u === "string");
+}
+
+async function completeSeedreamV5LiteImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: string,
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+
+  const origin = {
+    source_assets: meta.sourceImageIds,
+    model: taskType === "fal_seedream_v5_lite_edit" ? "bytedance/seedream-v5-lite-edit" : "bytedance/seedream-v5-lite",
+    prompt: meta.prompt,
+    download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.imageSize !== undefined ? { image_size: meta.imageSize } : {}),
+    ...(meta.seed !== undefined ? { seed: meta.seed } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: ".png",
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeNanoBananaImage(

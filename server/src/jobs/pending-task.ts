@@ -5,7 +5,7 @@ export const QUEUED_TASK_ID = "queued";
 
 export type PendingKieTask = {
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_image" | "wan27_image_pro" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_video" | "alibaba_qwen_image" | "alibaba_qwen_image_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_image" | "wan27_image_pro" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_video" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;

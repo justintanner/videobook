@@ -74,6 +74,18 @@ import { commandsDef } from "./commands.js";
 import { renderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
+import { generateSeedance2I2vFalDef } from "./generate-seedance2-i2v-fal.js";
+import { generateSeedance2T2vFalDef } from "./generate-seedance2-t2v-fal.js";
+import { generateNanoBananaProFalDef } from "./generate-nano-banana-pro-fal.js";
+import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
+import { generateSeedreamV5LiteFalDef } from "./generate-seedream-v5-lite-fal.js";
+import { generateSeedreamV5LiteEditFalDef } from "./generate-seedream-v5-lite-edit-fal.js";
+import { generateWan27FalDef } from "./generate-wan27-fal.js";
+import { generateWan27EditFalDef } from "./generate-wan27-edit-fal.js";
+import { generateWan27ProFalDef } from "./generate-wan27-pro-fal.js";
+import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
+import { generateGrokImagineImageFalDef } from "./generate-grok-imagine-image-fal.js";
+import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -159,5 +171,17 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     renderSettingsDef(fs),
     translatePayloadDef(),
     updateScriptDef(fs),
+    generateSeedance2I2vFalDef(fs),
+    generateSeedance2T2vFalDef(fs),
+    generateNanoBananaProFalDef(fs),
+    generateNanoBananaProEditFalDef(fs),
+    generateSeedreamV5LiteFalDef(fs),
+    generateSeedreamV5LiteEditFalDef(fs),
+    generateWan27FalDef(fs),
+    generateWan27EditFalDef(fs),
+    generateWan27ProFalDef(fs),
+    generateWan27ProEditFalDef(fs),
+    generateGrokImagineImageFalDef(fs),
+    generateGrokImagineImageEditFalDef(fs),
   ];
 }

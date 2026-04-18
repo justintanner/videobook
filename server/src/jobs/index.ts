@@ -36,6 +36,18 @@ import { registerAnalyzeVideoJob } from "./analyze-video.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
 import { registerProcessImageJob } from "./process-image.js";
 import { registerIsolateVocalsJob } from "./isolate-vocals.js";
+import { registerGenerateSeedance2I2vFalJob } from "./generate-seedance2-i2v-fal.js";
+import { registerGenerateSeedance2T2vFalJob } from "./generate-seedance2-t2v-fal.js";
+import { registerGenerateNanoBananaProFalJob } from "./generate-nano-banana-pro-fal.js";
+import { registerGenerateNanoBananaProEditFalJob } from "./generate-nano-banana-pro-edit-fal.js";
+import { registerGenerateSeedreamV5LiteFalJob } from "./generate-seedream-v5-lite-fal.js";
+import { registerGenerateSeedreamV5LiteEditFalJob } from "./generate-seedream-v5-lite-edit-fal.js";
+import { registerGenerateWan27FalJob } from "./generate-wan27-fal.js";
+import { registerGenerateWan27EditFalJob } from "./generate-wan27-edit-fal.js";
+import { registerGenerateWan27ProFalJob } from "./generate-wan27-pro-fal.js";
+import { registerGenerateWan27ProEditFalJob } from "./generate-wan27-pro-edit-fal.js";
+import { registerGenerateGrokImagineImageFalJob } from "./generate-grok-imagine-image-fal.js";
+import { registerGenerateGrokImagineImageEditFalJob } from "./generate-grok-imagine-image-edit-fal.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -77,4 +89,16 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerRenderTimelineJob(fs);
   registerProcessImageJob(fs);
   registerIsolateVocalsJob(fs);
+  registerGenerateSeedance2I2vFalJob(fs);
+  registerGenerateSeedance2T2vFalJob(fs);
+  registerGenerateNanoBananaProFalJob(fs);
+  registerGenerateNanoBananaProEditFalJob(fs);
+  registerGenerateSeedreamV5LiteFalJob(fs);
+  registerGenerateSeedreamV5LiteEditFalJob(fs);
+  registerGenerateWan27FalJob(fs);
+  registerGenerateWan27EditFalJob(fs);
+  registerGenerateWan27ProFalJob(fs);
+  registerGenerateWan27ProEditFalJob(fs);
+  registerGenerateGrokImagineImageFalJob(fs);
+  registerGenerateGrokImagineImageEditFalJob(fs);
 }
