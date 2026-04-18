@@ -70,6 +70,10 @@ type ImageModelConfig = {
   imageFieldSchema: ZodLike | null;
   kieImageField?: string;
   defaults: Record<string, unknown>;
+  /** Optional fal.ai routing — when set, adds "fal" as a provider option.
+   *  Tool name is picked by image-slug count at submit time: withRefs when
+   *  one or more reference images are present, noRefs otherwise. */
+  falToolNames?: { noRefs?: string; withRefs?: string };
 };
 
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
@@ -82,6 +86,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: NanoBananaProRequestSchema.shape.input.shape.image_input,
     kieImageField: "image_input",
     defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
+    falToolNames: { noRefs: "generate_nano_banana_pro_fal", withRefs: "generate_nano_banana_pro_edit_fal" },
   },
   {
     key: "grok_imagine_image",
@@ -93,6 +98,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: GrokImageToImageRequestSchema.shape.input.shape.image_urls,
     kieImageField: "image_urls",
     defaults: {},
+    falToolNames: { withRefs: "generate_grok_imagine_image_edit_fal" },
   },
   {
     key: "gpt_image",
@@ -113,6 +119,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
     imageFieldSchema: null,
     defaults: { aspect_ratio: "1:1" },
+    falToolNames: { noRefs: "generate_grok_imagine_image_fal" },
   },
   {
     key: "qwen2_image_edit",
@@ -133,6 +140,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: Wan27ImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
+    falToolNames: { noRefs: "generate_wan27_fal", withRefs: "generate_wan27_edit_fal" },
   },
   {
     key: "wan27_image_pro",
@@ -143,6 +151,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: Wan27ImageProRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
+    falToolNames: { noRefs: "generate_wan27_pro_fal", withRefs: "generate_wan27_pro_edit_fal" },
   },
   {
     key: "alibaba_image",
@@ -397,7 +406,24 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     });
   }
 
+  if (config.falToolNames) {
+    providers.push({
+      key: "fal",
+      label: "Fal",
+      provider_path: "fal.post.v1.queue.submit()",
+      envKey: "FAL_API_KEY",
+    });
+  }
+
   return providers;
+}
+
+function resolveFalToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
+  const names = config.falToolNames;
+  if (!names) return null;
+  if (imageSlugCount > 0 && names.withRefs) return names.withRefs;
+  if (imageSlugCount === 0 && names.noRefs) return names.noRefs;
+  return names.withRefs ?? names.noRefs ?? null;
 }
 
 function getImageModels(): Record<string, ImageModelInfo> {
@@ -623,10 +649,18 @@ function buildImageModelOption(
       ? historicalProvider
       : providerList[0].key;
 
+  let effectiveToolName = toolName;
+  if (selectedProvider === "fal") {
+    const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+    const slugCount = Array.isArray(params.image_slugs) ? (params.image_slugs as unknown[]).length : 0;
+    const falName = config ? resolveFalToolName(config, slugCount) : null;
+    if (falName) effectiveToolName = falName;
+  }
+
   return {
     key: modelKey,
     label: modelInfo.label,
-    tool_name: toolName,
+    tool_name: effectiveToolName,
     description: modelInfo.description,
     schema,
     prefilled_values: params,
