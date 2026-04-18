@@ -408,6 +408,8 @@ export function HomePage() {
   const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string>) => {
     if (!projectSlug) return;
     fetchTimeline(projectSlug);
+    listAssets(projectSlug, sortOrder);
+    sync(projectSlug);
     if (toolName === 'delete_asset') {
       removeAsset(toolArgs.asset_id);
       setDeletingIds((prev) => {
@@ -416,7 +418,7 @@ export function HomePage() {
         return next;
       });
     }
-  }, [projectSlug, fetchTimeline, removeAsset]);
+  }, [projectSlug, fetchTimeline, listAssets, sortOrder, sync, removeAsset]);
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
