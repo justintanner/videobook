@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildAlibabaVideoPayload } from "../payload-builders.js";
@@ -35,8 +35,9 @@ async function uploadInput(
   fs: ClipfirstFs,
   input: RefInput,
   projectSlug: string,
+  model: string,
 ): Promise<string> {
-  return uploadAssetFile(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToAlibaba(fs, input.assetId, input.filename, projectSlug, model);
 }
 
 export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
@@ -51,11 +52,12 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
     const apiKey = process.env.DASHSCOPE_API_KEY;
     if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug) : undefined;
-    const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug) : undefined;
+    const uploadModel = model ?? "wan2.7-i2v";
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug, uploadModel) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug, uploadModel) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug, uploadModel) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug, uploadModel) : undefined;
+    const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug, uploadModel) : undefined;
 
     const provider = alibaba({ apiKey, timeout: 120_000 });
 

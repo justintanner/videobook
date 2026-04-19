@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27ImageProPayload } from "../payload-builders.js";
@@ -33,7 +33,7 @@ export function registerGenerateWan27ImageProJob(fs: ClipfirstFs): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, projectSlug));
     }
 
     const request = buildWan27ImageProPayload(

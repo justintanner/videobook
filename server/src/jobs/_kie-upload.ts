@@ -1,0 +1,45 @@
+import { kie } from "@apicity/kie";
+import type { ClipfirstFs } from "clipfirst-fs";
+import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
+
+// Upload an asset to Kie's native storage via POST /api/file-stream-upload.
+// Kie workers run in China — using their first-party CDN avoids the
+// InvalidParameter.DataInspection failures we'd hit when the free-host URL
+// is unreachable from their side. Falls back to the free-host rotation only
+// if the native endpoint fails (missing key, timeout, 5xx, etc.).
+export async function uploadAssetToKie(
+  fs: ClipfirstFs,
+  assetId: string,
+  filename: string,
+  projectSlug: string,
+): Promise<string> {
+  const { data, hashedFilename, contentType } = await prepareAssetForUpload(
+    fs,
+    assetId,
+    filename,
+    projectSlug,
+  );
+
+  const apiKey = process.env.KIE_API_KEY;
+  if (apiKey) {
+    try {
+      const provider = kie({ apiKey, timeout: 120_000 });
+      const blob = new Blob([new Uint8Array(data)], { type: contentType });
+      const res = await provider.post.api.fileStreamUpload({
+        file: blob,
+        filename: hashedFilename,
+        uploadPath: "uploads",
+      });
+      const url = res.data?.downloadUrl;
+      if (!url) throw new Error("kie upload returned no downloadUrl");
+      return url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[kie-upload] native failed, falling back to free host: ${msg}`);
+    }
+  } else {
+    console.warn("[kie-upload] KIE_API_KEY not set, using free host");
+  }
+
+  return uploadBytesToFreeHost(data, hashedFilename);
+}

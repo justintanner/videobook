@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
@@ -34,7 +34,7 @@ async function uploadInput(
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
-  return uploadAssetFile(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 }
 
 export function registerGenerateWan27I2vVideoJob(fs: ClipfirstFs): void {

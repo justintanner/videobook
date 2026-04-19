@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import type { GrokImageToImageRequest } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
@@ -81,7 +82,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const downloadUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
+    const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);

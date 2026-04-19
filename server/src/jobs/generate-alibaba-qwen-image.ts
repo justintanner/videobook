@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { alibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { markTaskCompleting, readPendingTask } from "./pending-task.js";
 import { buildAlibabaQwenImagePayload } from "../payload-builders.js";
@@ -38,7 +38,7 @@ async function runQwenImageJob(
 
   const uploadedUrls: string[] = [];
   for (const { assetId: srcAssetId, filename } of imageInputs) {
-    uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
+    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
   }
 
   const provider = alibaba({ apiKey, timeout: 120_000 });

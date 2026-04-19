@@ -27,13 +27,25 @@ const MIME_TYPES: Record<string, string> = {
   m4a: "audio/mp4",
 };
 
-function inferMimeType(filename: string): string | undefined {
+export function inferMimeType(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase();
-  return ext ? MIME_TYPES[ext] : undefined;
+  return (ext && MIME_TYPES[ext]) ?? "application/octet-stream";
+}
+
+type UploadAttempt = { host: string; upload: () => Promise<string> };
+
+function shuffle<T>(arr: T[]): T[] {
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 // Upload bytes to a free file host and return a publicly accessible download
-// URL. Tries litterbox → uguu → tflink and returns the first success.
+// URL. Rotation picks a random order across litterbox/uguu/tflink on each call
+// and returns the first success.
 //
 // Host selection matters: Alibaba/Kie workers run in China and synchronously
 // fetch the URL server-side during data inspection. Several otherwise-fine
@@ -41,10 +53,11 @@ function inferMimeType(filename: string): string | undefined {
 // mis-typed from that side and cause InvalidParameter.DataInspection 400s
 // even when the upload itself succeeded. The three hosts below were verified
 // end-to-end (upload OK + Alibaba submit accepted).
-type UploadAttempt = { host: string; upload: () => Promise<string> };
-
-export async function uploadBytes(data: Uint8Array | Buffer, filename: string): Promise<string> {
-  const mimeType = inferMimeType(filename) ?? "application/octet-stream";
+export async function uploadBytesToFreeHost(
+  data: Uint8Array | Buffer,
+  filename: string,
+): Promise<string> {
+  const mimeType = inferMimeType(filename);
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
 
@@ -70,7 +83,7 @@ export async function uploadBytes(data: Uint8Array | Buffer, filename: string): 
   ];
 
   const failures: string[] = [];
-  for (const { host, upload } of attempts) {
+  for (const { host, upload } of shuffle(attempts)) {
     try {
       return await upload();
     } catch (err) {
@@ -80,23 +93,43 @@ export async function uploadBytes(data: Uint8Array | Buffer, filename: string): 
   throw new Error(`All upload hosts failed — ${failures.join(" | ")}`);
 }
 
-// Upload an asset file. The remote filename is derived from the file's
-// SHA-256 hash so every distinct file lands at a unique path — this prevents
-// cross-asset collisions where two assets with the same local filename
-// (`original.mp4`) would otherwise overwrite each other.
+// Back-compat alias for callers that still reach into the free-host path
+// directly (e.g. provider-agnostic helpers). New code should prefer the
+// provider-specific `uploadAssetTo{Fal,Kie,Alibaba}` wrappers which try the
+// provider's native endpoint first.
+export const uploadBytes = uploadBytesToFreeHost;
+
+// Read an asset, optionally re-encode it, and hash its final bytes for use as
+// a collision-free remote filename. Shared preamble for every provider-native
+// upload wrapper.
+export async function prepareAssetForUpload(
+  fs: ClipfirstFs,
+  assetId: string,
+  filename: string,
+  projectSlug: string,
+): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
+  const readResult = await fs.readFile(assetId, filename, projectSlug);
+  if (!readResult.ok) throw new Error(readResult.error.message);
+  const raw = new Uint8Array(readResult.value);
+  const { data, filename: outName } = await maybeReencodeImage(raw, filename);
+
+  const ext = outName.split(".").pop() ?? "bin";
+  const hashedFilename = `${contentHash(data)}.${ext}`;
+  const contentType = inferMimeType(outName);
+
+  return { data, hashedFilename, contentType };
+}
+
+// Upload an asset file via the free-host rotation. Kept for
+// provider-agnostic callers (e.g. `transcribe.ts`) that don't target a
+// specific AI provider. Provider-specific jobs should call the matching
+// `uploadAssetTo{Fal,Kie,Alibaba}` wrapper instead.
 export async function uploadAssetFile(
   fs: ClipfirstFs,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<string> {
-  const readResult = await fs.readFile(assetId, filename, projectSlug);
-  if (!readResult.ok) throw new Error(readResult.error.message);
-  const raw = new Uint8Array(readResult.value);
-  const { data: fileData, filename: outName } = await maybeReencodeImage(raw, filename);
-
-  const ext = outName.split(".").pop() ?? "bin";
-  const hashedFilename = `${contentHash(fileData)}.${ext}`;
-
-  return uploadBytes(fileData, hashedFilename);
+  const { data, hashedFilename } = await prepareAssetForUpload(fs, assetId, filename, projectSlug);
+  return uploadBytesToFreeHost(data, hashedFilename);
 }

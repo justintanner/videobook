@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
@@ -38,7 +38,7 @@ export function registerGenerateSeedance2I2vVideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const firstFrameUrl = await uploadAssetFile(fs, firstFrame.assetId, firstFrame.filename, projectSlug);
+    const firstFrameUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug);
 
     const request = buildSeedance2VideoPayload(
       { prompt, model, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },

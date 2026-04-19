@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
@@ -39,7 +39,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const firstClipUrl = await uploadAssetFile(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
+    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
 
     const request = buildWan27FramesVideoPayload(
       { prompt, negative_prompt, resolution, duration, prompt_extend, nsfw_checker, seed },

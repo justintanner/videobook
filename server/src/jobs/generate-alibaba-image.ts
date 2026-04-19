@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildAlibabaImagePayload } from "../payload-builders.js";
@@ -33,7 +33,7 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
     }
 
     const provider = alibaba({ apiKey, timeout: 120_000 });
@@ -79,7 +79,7 @@ export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetFile(fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, "wan2.7-image-pro"));
     }
 
     const provider = alibaba({ apiKey, timeout: 120_000 });

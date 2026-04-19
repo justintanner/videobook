@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildQwen2ImageEditPayload } from "../payload-builders.js";
@@ -34,7 +34,7 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
     for (let i = 0; i < sourceImageIds.length; i++) {
       const sourceImageId = sourceImageIds[i]!;
       const imageFilename = imageFilenames[i]!;
-      const uploadedUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
+      const uploadedUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
       uploadedUrls.push(uploadedUrl);
     }
 
