@@ -1,4 +1,4 @@
-export function calculateFrameCount(duration: number): number {
+function calculateFrameCount(duration: number): number {
   const interval = duration <= 10 ? 2.0 : 5.0;
   const count = Math.floor(duration / interval);
   return Math.max(3, Math.min(30, count));

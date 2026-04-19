@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-export const JPEG_REENCODE_THRESHOLD_BYTES = 3 * 1024 * 1024;
+const JPEG_REENCODE_THRESHOLD_BYTES = 3 * 1024 * 1024;
 
 const REENCODABLE_FORMATS = new Set(["jpeg", "png", "webp", "bmp", "tiff", "avif"]);
 
