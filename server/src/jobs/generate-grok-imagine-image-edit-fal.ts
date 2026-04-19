@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { registerJobHandler } from "../queue.js";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type ImageInput = { assetId: string; filename: string };
@@ -23,7 +23,7 @@ export function registerGenerateGrokImagineImageEditFalJob(fs: ClipfirstFs): voi
     const p = payload as Payload;
 
     const image_urls = await Promise.all(
-      p.imageInputs.map((i) => uploadAssetFile(fs, i.assetId, i.filename, p.projectSlug)),
+      p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug)),
     );
 
     const input: Record<string, unknown> = {

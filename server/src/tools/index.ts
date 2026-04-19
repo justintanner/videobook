@@ -92,6 +92,21 @@ import { generateVeo31T2vFalDef } from "./generate-veo31-t2v-fal.js";
 import { generateVeo31I2vFalDef } from "./generate-veo31-i2v-fal.js";
 import { generateKlingV3ProI2vFalDef } from "./generate-kling-v3-pro-i2v-fal.js";
 import { generateGrokImagineVideoI2vFalDef } from "./generate-grok-imagine-video-i2v-fal.js";
+import { generateNanoBananaFalDef } from "./generate-nano-banana-fal.js";
+import { generateNanoBananaEditFalDef } from "./generate-nano-banana-edit-fal.js";
+import { generateNanoBanana2FalDef } from "./generate-nano-banana-2-fal.js";
+import { generateNanoBanana2EditFalDef } from "./generate-nano-banana-2-edit-fal.js";
+import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
+import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
+import { generateGptImage1p5FalDef } from "./generate-gpt-image-1-5-fal.js";
+import { generateGptImage1p5EditFalDef } from "./generate-gpt-image-1-5-edit-fal.js";
+import { generateSeedance2FastT2vFalDef } from "./generate-seedance2-fast-t2v-fal.js";
+import { generateSeedance2FastI2vFalDef } from "./generate-seedance2-fast-i2v-fal.js";
+import { generateWan27T2vFalDef } from "./generate-wan27-t2v-fal.js";
+import { generateWan27I2vFalDef } from "./generate-wan27-i2v-fal.js";
+import { generateKlingV3ProT2vFalDef } from "./generate-kling-v3-pro-t2v-fal.js";
+import { generateKlingV3StandardT2vFalDef } from "./generate-kling-v3-standard-t2v-fal.js";
+import { generateKlingV3StandardI2vFalDef } from "./generate-kling-v3-standard-i2v-fal.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -195,5 +210,20 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateVeo31I2vFalDef(fs),
     generateKlingV3ProI2vFalDef(fs),
     generateGrokImagineVideoI2vFalDef(fs),
+    generateNanoBananaFalDef(fs),
+    generateNanoBananaEditFalDef(fs),
+    generateNanoBanana2FalDef(fs),
+    generateNanoBanana2EditFalDef(fs),
+    generateQwenImageFalDef(fs),
+    generateQwenImageEditFalDef(fs),
+    generateGptImage1p5FalDef(fs),
+    generateGptImage1p5EditFalDef(fs),
+    generateSeedance2FastT2vFalDef(fs),
+    generateSeedance2FastI2vFalDef(fs),
+    generateWan27T2vFalDef(fs),
+    generateWan27I2vFalDef(fs),
+    generateKlingV3ProT2vFalDef(fs),
+    generateKlingV3StandardT2vFalDef(fs),
+    generateKlingV3StandardI2vFalDef(fs),
   ];
 }

@@ -1,0 +1,60 @@
+import type { ClipfirstFs } from "clipfirst-fs";
+import { registerJobHandler } from "../queue.js";
+import { uploadAssetToFal } from "./_fal-upload.js";
+import { submitFalJob } from "./_fal-shared.js";
+
+type ImageInput = { assetId: string; filename: string };
+
+type Payload = {
+  type: "generate_qwen_image_edit_fal";
+  imgAssetId: string;
+  imgAssetDir: string;
+  projectSlug: string;
+  prompt: string;
+  refImage: ImageInput;
+  sourceImageIds: string[];
+  image_size?: string;
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  num_images?: number;
+  output_format?: string;
+  negative_prompt?: string;
+  acceleration?: string;
+  enable_safety_checker?: boolean;
+  seed?: number;
+};
+
+export function registerGenerateQwenImageEditFalJob(fs: ClipfirstFs): void {
+  registerJobHandler("generate_qwen_image_edit_fal", async (payload) => {
+    const p = payload as Payload;
+
+    const image_url = await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug);
+
+    const input: Record<string, unknown> = {
+      prompt: p.prompt,
+      image_url,
+      ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
+      ...(p.num_inference_steps !== undefined ? { num_inference_steps: p.num_inference_steps } : {}),
+      ...(p.guidance_scale !== undefined ? { guidance_scale: p.guidance_scale } : {}),
+      ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
+      ...(p.output_format !== undefined ? { output_format: p.output_format } : {}),
+      ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
+      ...(p.acceleration !== undefined ? { acceleration: p.acceleration } : {}),
+      ...(p.enable_safety_checker !== undefined ? { enable_safety_checker: p.enable_safety_checker } : {}),
+      ...(p.seed !== undefined ? { seed: p.seed } : {}),
+    };
+
+    const taskId = await submitFalJob({
+      fs,
+      projectSlug: p.projectSlug,
+      assetId: p.imgAssetId,
+      assetDir: p.imgAssetDir,
+      endpointId: "fal-ai/qwen-image/edit",
+      input,
+      taskType: "fal_qwen_image_edit",
+      meta: { prompt: p.prompt, sourceImageIds: p.sourceImageIds },
+    });
+
+    return { success: true, taskId };
+  });
+}

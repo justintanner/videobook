@@ -54,6 +54,21 @@ import { registerGenerateVeo31T2vFalJob } from "./generate-veo31-t2v-fal.js";
 import { registerGenerateVeo31I2vFalJob } from "./generate-veo31-i2v-fal.js";
 import { registerGenerateKlingV3ProI2vFalJob } from "./generate-kling-v3-pro-i2v-fal.js";
 import { registerGenerateGrokImagineVideoI2vFalJob } from "./generate-grok-imagine-video-i2v-fal.js";
+import { registerGenerateNanoBananaFalJob } from "./generate-nano-banana-fal.js";
+import { registerGenerateNanoBananaEditFalJob } from "./generate-nano-banana-edit-fal.js";
+import { registerGenerateNanoBanana2FalJob } from "./generate-nano-banana-2-fal.js";
+import { registerGenerateNanoBanana2EditFalJob } from "./generate-nano-banana-2-edit-fal.js";
+import { registerGenerateQwenImageFalJob } from "./generate-qwen-image-fal.js";
+import { registerGenerateQwenImageEditFalJob } from "./generate-qwen-image-edit-fal.js";
+import { registerGenerateGptImage1p5FalJob } from "./generate-gpt-image-1-5-fal.js";
+import { registerGenerateGptImage1p5EditFalJob } from "./generate-gpt-image-1-5-edit-fal.js";
+import { registerGenerateSeedance2FastT2vFalJob } from "./generate-seedance2-fast-t2v-fal.js";
+import { registerGenerateSeedance2FastI2vFalJob } from "./generate-seedance2-fast-i2v-fal.js";
+import { registerGenerateWan27T2vFalJob } from "./generate-wan27-t2v-fal.js";
+import { registerGenerateWan27I2vFalJob } from "./generate-wan27-i2v-fal.js";
+import { registerGenerateKlingV3ProT2vFalJob } from "./generate-kling-v3-pro-t2v-fal.js";
+import { registerGenerateKlingV3StandardT2vFalJob } from "./generate-kling-v3-standard-t2v-fal.js";
+import { registerGenerateKlingV3StandardI2vFalJob } from "./generate-kling-v3-standard-i2v-fal.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -113,4 +128,19 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateVeo31I2vFalJob(fs);
   registerGenerateKlingV3ProI2vFalJob(fs);
   registerGenerateGrokImagineVideoI2vFalJob(fs);
+  registerGenerateNanoBananaFalJob(fs);
+  registerGenerateNanoBananaEditFalJob(fs);
+  registerGenerateNanoBanana2FalJob(fs);
+  registerGenerateNanoBanana2EditFalJob(fs);
+  registerGenerateQwenImageFalJob(fs);
+  registerGenerateQwenImageEditFalJob(fs);
+  registerGenerateGptImage1p5FalJob(fs);
+  registerGenerateGptImage1p5EditFalJob(fs);
+  registerGenerateSeedance2FastT2vFalJob(fs);
+  registerGenerateSeedance2FastI2vFalJob(fs);
+  registerGenerateWan27T2vFalJob(fs);
+  registerGenerateWan27I2vFalJob(fs);
+  registerGenerateKlingV3ProT2vFalJob(fs);
+  registerGenerateKlingV3StandardT2vFalJob(fs);
+  registerGenerateKlingV3StandardI2vFalJob(fs);
 }

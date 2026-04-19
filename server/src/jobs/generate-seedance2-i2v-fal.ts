@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { uploadAssetFile } from "../upload.js";
+import { uploadAssetToFal } from "./_fal-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { submitFalJob } from "./_fal-shared.js";
 
@@ -25,9 +25,9 @@ export function registerGenerateSeedance2I2vFalJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_seedance2_i2v_fal", async (payload) => {
     const p = payload as Payload;
 
-    const image_url = await uploadAssetFile(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
+    const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
     const end_image_url = p.endFrame
-      ? await uploadAssetFile(fs, p.endFrame.assetId, p.endFrame.filename, p.projectSlug)
+      ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.projectSlug)
       : undefined;
 
     const input: Record<string, unknown> = {

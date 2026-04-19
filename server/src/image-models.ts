@@ -109,6 +109,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: GptImageToImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", quality: "high" },
+    falToolNames: { withRefs: "generate_gpt_image_1_5_edit_fal" },
   },
   {
     key: "grok_imagine_text",
@@ -130,6 +131,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
     defaults: { image_size: "16:9", output_format: "png" },
+    falToolNames: { withRefs: "generate_qwen_image_edit_fal" },
   },
   {
     key: "wan27_image",
