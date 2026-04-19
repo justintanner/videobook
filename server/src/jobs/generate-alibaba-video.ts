@@ -66,7 +66,7 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
     const provider = alibaba({
       apiKey,
       timeout: 120_000,
-      fetch: (input, init) => {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : (input instanceof URL ? input.href : input.url);
         if (url.includes("/services/aigc/video-generation/video-synthesis")) {
           const headers = new Headers(init?.headers);
