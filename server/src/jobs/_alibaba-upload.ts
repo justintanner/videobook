@@ -4,11 +4,11 @@ import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 
 // Upload an asset to DashScope's OSS bucket via GET /api/v1/uploads?action=getPolicy
 // + OSS PostObject. The policy is model-scoped, so callers must pass the model
-// name that will later receive this URL. DashScope exposes uploaded objects via
-// standard OSS public URLs (`https://{upload_host}/{upload_dir}/{filename}`),
-// which Alibaba's own workers fetch over their internal network — no free-host
-// reachability issues. Falls back to the free-host rotation if the policy
-// fetch or OSS POST fails.
+// name that will later receive this URL. Objects uploaded this way are private,
+// so callers must reference them via `oss://{upload_dir}/{filename}` — DashScope
+// resolves that scheme internally. A plain https URL would 403 during data
+// inspection ("Don't have authorization to access the media resource"). Falls
+// back to the free-host rotation if the policy fetch or OSS POST fails.
 export async function uploadAssetToAlibaba(
   fs: ClipfirstFs,
   assetId: string,
@@ -71,6 +71,5 @@ async function uploadViaPolicy(
     throw new Error(`OSS POST failed: ${res.status} ${res.statusText} ${body}`);
   }
 
-  const host = p.upload_host.replace(/^https?:\/\//, "");
-  return `https://${host}/${key}`;
+  return `oss://${key}`;
 }
