@@ -104,6 +104,17 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
         }}
         MenuItem={MenuItem}
       />
+      {(itemType === 'video' || itemType === 'image') && (
+        <>
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/export ${slug}`}
+            title="Export to Downloads"
+            onSelect={() => onAnimateCommand?.(`/export ${slug}`)}
+            MenuItem={MenuItem}
+          />
+        </>
+      )}
       <div className="-mx-1 my-1 h-px bg-border" />
       <CommandMenuItem
         command="/folder"
@@ -120,6 +131,13 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
       />
       {itemType === 'video' && (
         <>
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/copy-video ${slug}`}
+            title="Copy Video"
+            onSelect={() => onAnimateCommand?.(`/copy-video ${slug}`)}
+            MenuItem={MenuItem}
+          />
           <div className="-mx-1 my-1 h-px bg-border" />
           <CommandMenuItem
             command={`/video ${slug}`}
