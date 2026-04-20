@@ -77,7 +77,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
-    falToolNames: { noRefs: "generate_kling_v3_pro_t2v_fal", withRefs: "generate_kling_v3_pro_i2v_fal" },
   },
   veo31: {
     label: "Veo 3.1",
@@ -340,6 +339,15 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: { aspect_ratio: "16:9" },
     providers: [],
     falToolNames: { noRefs: "generate_kling_v3_standard_t2v_fal", withRefs: "generate_kling_v3_standard_i2v_fal" },
+  },
+  kling30_pro_fal: {
+    label: "Kling 3.0 Pro",
+    tool_name: "generate_kling30_pro_video",
+    description: "Kling Video v3 Pro tier via fal.ai (text- or image-to-video)",
+    params: ["prompt", "first_frame_slug", "end_frame_slug", "duration", "aspect_ratio", "generate_audio", "shot_type", "negative_prompt", "cfg_scale"],
+    defaults: { aspect_ratio: "16:9" },
+    providers: [],
+    falToolNames: { noRefs: "generate_kling_v3_pro_t2v_fal", withRefs: "generate_kling_v3_pro_i2v_fal" },
   },
   wan27_r2v_fal: {
     label: "Wan v2.7 — Reference (fal)",
