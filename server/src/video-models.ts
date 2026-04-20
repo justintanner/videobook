@@ -13,8 +13,6 @@ import {
   KlingVideoRequestSchema,
   Seedance2FastRequestSchema,
   Seedance2RequestSchema,
-  VeoExtendRequestSchema,
-  VeoGenerateRequestSchema,
   Wan27AspectRatioSchema,
   Wan27AudioSettingSchema,
   Wan27RefToVideoRequestSchema,
@@ -23,8 +21,6 @@ import {
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import {
-  FalSora2TextToVideoRequestSchema,
-  FalSora2ImageToVideoRequestSchema,
   FalWanV2p7EditVideoRequestSchema,
   FalSeedance2p0ReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
@@ -76,30 +72,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
-    ],
-  },
-  veo31: {
-    label: "Veo 3.1",
-    tool_name: "generate_veo_video",
-    description: "Video generation and extension with quality toggle",
-    params: [
-      "prompt", "generation_type", "image_slugs", "video_path", "frame_timestamps",
-      "aspect_ratio", "model", "seeds", "watermark", "enable_translation",
-    ],
-    defaults: { aspect_ratio: "16:9", model: "veo3_fast", enable_translation: true },
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate()", envKey: "KIE_API_KEY" },
-    ],
-    falToolNames: { noRefs: "generate_veo31_t2v_fal", withRefs: "generate_veo31_i2v_fal" },
-  },
-  veo31_extend: {
-    label: "Veo 3.1 Extend",
-    tool_name: "extend_veo_video",
-    description: "Extend an existing Veo video with additional content",
-    params: ["video_slug", "prompt", "model", "seeds", "watermark"],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.extend()", envKey: "KIE_API_KEY" },
     ],
   },
   seedance2_t2v: {
@@ -277,24 +249,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
     ],
   },
-  sora2_t2v: {
-    label: "Sora 2 — Text",
-    tool_name: "generate_sora2_t2v_video",
-    description: "OpenAI Sora 2 text-to-video generation via fal.ai",
-    params: ["prompt", "model", "resolution", "aspect_ratio", "duration"],
-    defaults: { resolution: "720p", aspect_ratio: "16:9", duration: 8 },
-    providers: [],
-    falToolNames: { noRefs: "generate_sora2_t2v_fal" },
-  },
-  sora2_i2v: {
-    label: "Sora 2 — First Frame",
-    tool_name: "generate_sora2_i2v_video",
-    description: "OpenAI Sora 2 image-to-video from a first-frame image via fal.ai",
-    params: ["prompt", "first_frame_slug", "model", "resolution", "aspect_ratio", "duration"],
-    defaults: { resolution: "auto", aspect_ratio: "auto", duration: 8 },
-    providers: [],
-    falToolNames: { withRefs: "generate_sora2_i2v_fal" },
-  },
   seedance2_fast_t2v: {
     label: "Seedance 2.0 Fast — Text",
     tool_name: "generate_seedance2_fast_t2v_video",
@@ -422,7 +376,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
 
 const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unknown }> = {
   generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
-  generate_veo_video: VeoGenerateRequestSchema.shape.imageUrls,
   generate_seedance2_reference_video: Seedance2FastRequestSchema.shape.input.shape.reference_image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
@@ -448,21 +401,6 @@ type ParamSchema = {
 const KLING_MODES = [...KlingModeSchema.options];
 const KLING_DURATIONS = [...KlingDurationSchema.options];
 const KLING_ASPECT_RATIOS = [...KlingAspectRatioSchema.options];
-
-const [VEO_MODEL_QUALITY, VEO_MODEL_FAST] = VeoGenerateRequestSchema.shape.model.unwrap().options;
-const VEO_MODELS = [VEO_MODEL_FAST, VEO_MODEL_QUALITY];
-const VEO_ASPECT_RATIOS = [...VeoGenerateRequestSchema.shape.aspectRatio.unwrap().options];
-const [
-  VEO_TEXT_2_VIDEO,
-  VEO_REFERENCE_2_VIDEO,
-  VEO_FIRST_AND_LAST_FRAMES_2_VIDEO,
-] = VeoGenerateRequestSchema.shape.generationType.unwrap().options;
-const VEO_GENERATION_TYPES = [
-  VEO_TEXT_2_VIDEO,
-  VEO_FIRST_AND_LAST_FRAMES_2_VIDEO,
-  VEO_REFERENCE_2_VIDEO,
-];
-const VEO_EXTEND_MODELS = [...VeoExtendRequestSchema.shape.model.unwrap().options];
 
 const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
 const SEEDANCE2_FAST_RESOLUTIONS = [...Seedance2FastRequestSchema.shape.input.shape.resolution.unwrap().options];
@@ -503,13 +441,6 @@ const FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS = [...FalXaiGrokImagineVideoRefer
 const FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS = [...FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
 const FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS = [...FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution.unwrap().options];
 
-const SORA2_T2V_MODELS = [...FalSora2TextToVideoRequestSchema.shape.model.unwrap().options];
-const SORA2_T2V_RESOLUTIONS = [...FalSora2TextToVideoRequestSchema.shape.resolution.unwrap().options];
-const SORA2_T2V_ASPECT_RATIOS = [...FalSora2TextToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
-const SORA2_I2V_RESOLUTIONS = [...FalSora2ImageToVideoRequestSchema.shape.resolution.unwrap().options];
-const SORA2_I2V_ASPECT_RATIOS = [...FalSora2ImageToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
-const SORA2_DURATIONS = [4, 8, 12, 16, 20];
-
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
   image_slugs: {
@@ -518,29 +449,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
     description: "List of asset slugs (e.g., '@img-sunset') for reference images",
   },
   aspect_ratio: { type: "string", description: "Output aspect ratio" },
-  model: {
-    type: "string",
-    enum: VEO_MODELS,
-    description: "Veo model - veo3_fast (default, cost-efficient) or veo3 (flagship, highest fidelity)",
-  },
-  generation_type: {
-    type: "string",
-    enum: VEO_GENERATION_TYPES,
-    description: "Veo generation mode. Auto-inferred from image count if not specified.",
-  },
-  video_path: { type: "string", description: "Path to video file for frame extraction" },
-  frame_timestamps: {
-    type: "array",
-    items: { type: "number" },
-    description: "Timestamps in seconds for frame extraction from video",
-  },
-  seeds: { type: "integer", description: "Random seed (10000-99999) for reproducibility", minimum: 10000, maximum: 99999 },
+  model: { type: "string", description: "Model variant" },
   watermark: { type: "string", description: "Optional watermark text" },
-  enable_translation: {
-    type: "boolean",
-    description: "Auto-translate prompt to English for better results (default: true)",
-    default: true,
-  },
   video_slug: { type: "string", description: "Video asset to extend (e.g., @vid-sunset-drone)" },
   duration: { type: "string", description: "Video duration in seconds" },
   mode: { type: "string", description: "Generation mode" },
@@ -633,14 +543,6 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "sound") prop.description = "Generate audio for the video (default: true)";
       if (param === "image_slugs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
     }
-    if (toolName === "generate_veo_video") {
-      if (param === "aspect_ratio") { prop.enum = VEO_ASPECT_RATIOS; prop.description = "Video aspect ratio (Auto lets the system decide)"; }
-      if (param === "model") { prop.enum = VEO_MODELS; }
-    }
-    if (toolName === "extend_veo_video") {
-      if (param === "prompt") prop.description = "Describe how to extend the video (actions, scenes, style)";
-      if (param === "model") { prop.enum = VEO_EXTEND_MODELS; prop.description = "Extension model - fast (default) or quality"; prop.default = "fast"; }
-    }
     if (SEEDANCE2_TOOL_NAMES.includes(toolName)) {
       if (param === "prompt") { prop.description = "Video description (3-2500 characters)"; prop.minLength = 3; prop.maxLength = 2500; }
       if (param === "aspect_ratio") { prop.enum = SEEDANCE2_ASPECT_RATIOS; prop.description = "Frame dimensions (adaptive auto-fits to content)"; }
@@ -718,20 +620,6 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "extend_times") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Extension duration: 6s / 10s"; }
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
-    if (toolName === "generate_sora2_t2v_video" || toolName === "generate_sora2_i2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "model") { prop.enum = SORA2_T2V_MODELS; prop.description = "Sora 2 model variant"; }
-      if (param === "resolution") {
-        prop.enum = toolName === "generate_sora2_t2v_video" ? SORA2_T2V_RESOLUTIONS : SORA2_I2V_RESOLUTIONS;
-        prop.description = "Output resolution";
-      }
-      if (param === "aspect_ratio") {
-        prop.enum = toolName === "generate_sora2_t2v_video" ? SORA2_T2V_ASPECT_RATIOS : SORA2_I2V_ASPECT_RATIOS;
-        prop.description = "Output aspect ratio";
-      }
-      if (param === "duration") { prop.type = "integer"; prop.enum = SORA2_DURATIONS; prop.description = "Video duration in seconds (4, 8, 12, 16, or 20)"; }
-      if (param === "first_frame_slug") { prop.description = "First frame image asset (required, e.g., @img-start)"; }
-    }
     if (toolName === "generate_wan27_r2v_fal_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "image_slugs") prop.description = "Reference image assets (max 4, e.g., @img-style)";
@@ -802,7 +690,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
 
     // Required fields
     if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
-    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video")) required.push(param);
+    if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video")) required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
       && (param === "aspect_ratio" || param === "duration")
@@ -812,7 +700,6 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       && param === "first_frame_slug"
     ) required.push(param);
     if (toolName === "generate_seedance2_frames_video" && param === "last_frame_slug") required.push(param);
-    if (toolName === "generate_sora2_i2v_video" && param === "first_frame_slug") required.push(param);
   }
 
   return { type: "object", properties, required, defaults: model.defaults };
@@ -861,18 +748,6 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   if (toolName === "generate_kling30_video") {
     const multiPrompt = params.multi_prompt as unknown[] | undefined;
     if (multiPrompt && totalImages > 1) warnings.push(`Kling 3.0 multi-shot mode allows max 1 reference image (got ${totalImages})`);
-  }
-
-  if (toolName === "generate_veo_video") {
-    const genType = params.generation_type as string | undefined;
-    const effectiveGenType = genType
-      ?? (totalImages === 0 ? "TEXT_2_VIDEO" : totalImages === 2 ? "FIRST_AND_LAST_FRAMES_2_VIDEO" : "REFERENCE_2_VIDEO");
-
-    if (effectiveGenType === "REFERENCE_2_VIDEO") {
-      if (params.model && params.model !== "veo3_fast") warnings.push(`REFERENCE_2_VIDEO mode requires model='veo3_fast' (got ${String(params.model)})`);
-      if (params.aspect_ratio && !["16:9", "9:16"].includes(params.aspect_ratio as string))
-        warnings.push(`REFERENCE_2_VIDEO mode requires 16:9 or 9:16 aspect ratio (got ${String(params.aspect_ratio)})`);
-    }
   }
 
   if (toolName === "generate_seedance2_reference_video") {
@@ -948,36 +823,8 @@ function applyVideoToolConstraints(
   schema: ToolSchema,
   params: Record<string, unknown>,
 ): void {
-  if (toolName === "generate_veo_video") {
-    const imageSlugs = params.image_slugs as string[] | undefined;
-    const totalImages = imageSlugs?.length ?? 0;
-    const genType = params.generation_type as string | undefined;
-    const effectiveGenType = genType
-      ?? (totalImages === 0 ? "TEXT_2_VIDEO" : totalImages === 2 ? "FIRST_AND_LAST_FRAMES_2_VIDEO" : "REFERENCE_2_VIDEO");
-
-    if (effectiveGenType === "REFERENCE_2_VIDEO") {
-      if (schema.properties.model) {
-        schema.properties.model = {
-          ...schema.properties.model,
-          enum: ["veo3_fast"],
-          description: "Veo model (REFERENCE_2_VIDEO mode only supports veo3_fast)",
-          default: "veo3_fast",
-        };
-      }
-      if (schema.properties.aspect_ratio) {
-        schema.properties.aspect_ratio = {
-          ...schema.properties.aspect_ratio,
-          enum: ["16:9", "9:16"],
-          description: "Aspect ratio (REFERENCE_2_VIDEO mode supports 16:9 and 9:16)",
-          default: "16:9",
-        };
-      }
-      params.model = "veo3_fast";
-      if (!["16:9", "9:16"].includes(params.aspect_ratio as string)) {
-        params.aspect_ratio = "16:9";
-      }
-    }
-  }
+  void toolName; void schema; void params;
+  // No tool currently needs cross-field constraint rewriting.
 }
 
 // ---------------------------------------------------------------------------
@@ -1007,7 +854,6 @@ Given a user query (possibly with @asset references), determine:
 
 ROUTING PREFERENCES:
 - PREFER generate_kling30_video as the DEFAULT for ALL video generation requests
-- Use generate_veo_video ONLY when user explicitly mentions "veo"
 - Use generate_grok_imagine_video ONLY when user explicitly mentions "grok" for video
 - Use generate_seedance2_t2v_video ONLY when user explicitly mentions "seedance" or "bytedance" for text-only video (no reference inputs)
 - Use generate_seedance2_i2v_video ONLY when user mentions "seedance" with a single start/first frame image (no last frame)
@@ -1017,14 +863,11 @@ ROUTING PREFERENCES:
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
 - Use extend_wan27_video ONLY when user explicitly wants to extend an existing Wan 2.7 video
-- Use extend_veo_video ONLY when user explicitly wants to extend an existing video with Veo
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 - Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
 
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
-- For generate_veo_video: mode auto-selected by image count (0=TEXT_2_VIDEO, 1=REFERENCE_2_VIDEO, 2=FIRST_AND_LAST_FRAMES_2_VIDEO)
-- For generate_veo_video REFERENCE_2_VIDEO: REQUIRES model="veo3_fast" and 16:9/9:16 aspect_ratio
 - For generate_seedance2_*_video: duration "4"-"15", aspect_ratio includes "adaptive"; seedance2_t2v resolution is "480p"/"720p" only; seedance2_i2v/frames/reference accept "480p"/"720p"/"1080p" — 1080p REQUIRES model="bytedance/seedance-2" (else default model="bytedance/seedance-2-fast")
 - For generate_seedance2_i2v_video: REQUIRES first_frame_slug (single image)
 - For generate_seedance2_frames_video: REQUIRES both first_frame_slug AND last_frame_slug
@@ -1201,7 +1044,7 @@ function buildModelOption(
   }
 
   // For video extension tools, prefill video_slug from video assets
-  if (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video") {
+  if (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video") {
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;

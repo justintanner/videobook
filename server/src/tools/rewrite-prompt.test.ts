@@ -32,11 +32,6 @@ describe("loadGuide", () => {
     expect(guide.length).toBeGreaterThan(0);
   });
 
-  it("loads the veo guide successfully", async () => {
-    const guide = await loadGuide("veo");
-    expect(guide.length).toBeGreaterThan(0);
-  });
-
   it("loads the grok_imagine guide successfully", async () => {
     const guide = await loadGuide("grok_imagine");
     expect(guide.length).toBeGreaterThan(0);
@@ -208,7 +203,7 @@ describe("extractSceneContext", () => {
 
 describe("validateSceneRewrite", () => {
   it("throws when tool is not kling30", () => {
-    expect(() => validateSceneRewrite({ tool: "generate_veo_video" }, 0)).toThrow(
+    expect(() => validateSceneRewrite({ tool: "generate_grok_imagine_video" }, 0)).toThrow(
       "Scene rewrite requires a Kling 3.0 asset",
     );
   });

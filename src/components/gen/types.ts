@@ -69,6 +69,3 @@ export interface ResolvedAsset {
 // Element group field pattern: element1_slugs, element2_name, element3_desc, etc.
 export const ELEMENT_FIELD_RE = /^element(\d+)_(slugs|name|desc)$/;
 export const MAX_ELEMENT_GROUPS = 3;
-
-// Veo 3.1 generation modes
-export type VeoGenerationType = 'TEXT_2_VIDEO' | 'FIRST_AND_LAST_FRAMES_2_VIDEO' | 'REFERENCE_2_VIDEO';

@@ -1,7 +1,7 @@
 import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
-import type { JSONSchemaProperty, VeoGenerationType } from '../types';
+import type { JSONSchemaProperty } from '../types';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
 import { cn } from '@/lib/utils';
@@ -78,74 +78,6 @@ export function DynamicField({
     }
 
     return null;
-  }
-
-  // Special handling for generation_type field - render as prominent mode selector
-  if (name === 'generation_type' && schema.type === 'string' && schema.enum) {
-    const options = schema.enum as VeoGenerationType[];
-    const currentValue = (value ?? schema.default) as VeoGenerationType;
-
-    const modeLabels: Record<VeoGenerationType, { short: string; description: string }> = {
-      TEXT_2_VIDEO: { short: 'Text', description: 'Generate from text prompt only' },
-      FIRST_AND_LAST_FRAMES_2_VIDEO: { short: 'Keyframes', description: 'Generate from first/last frame images' },
-      REFERENCE_2_VIDEO: { short: 'Reference', description: 'Generate using reference images (veo3_fast only)' },
-    };
-
-    return (
-      <div className="space-y-2">
-        <label className={cn('text-xs font-mono font-bold tracking-widest', theme?.labelText ?? 'text-primary/70')}>Generation Mode</label>
-        <div className="flex gap-1.5">
-          {options.map((mode) => {
-            const isSelected = currentValue === mode;
-            const modeInfo = modeLabels[mode];
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onChange(mode)}
-                disabled={disabled}
-                title={modeInfo.description}
-                className={cn(
-                  'flex-1 px-3 py-2 rounded border text-xs font-mono font-bold tracking-wider transition-all duration-150',
-                  'disabled:opacity-30 disabled:pointer-events-none',
-                  'focus-visible:ring-1 focus-visible:ring-primary/60 focus-visible:outline-none',
-                  isSelected
-                    ? theme ? cn(theme.activeBg, theme.activeBorder, theme.activeText) : 'bg-primary/20 border-primary text-primary'
-                    : theme ? cn(theme.controlBg, theme.inactiveBorder, theme.inactiveText, theme.inactiveHoverText, theme.inactiveHoverBorder) : 'bg-black/40 border-primary/30 text-primary/60 hover:border-primary/50 hover:text-primary/80'
-                )}
-                style={isSelected && theme ? { boxShadow: theme.activeGlow } : undefined}
-              >
-                {modeInfo.short}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[10px] text-zinc-500 font-mono">{modeLabels[currentValue]?.description}</p>
-      </div>
-    );
-  }
-
-  // Special handling for veo 'model' field - always show both veo3 options, never locked
-  if (
-    name === 'model'
-    && schema.type === 'string'
-    && schema.enum
-    && (schema.enum as string[]).some((o) => o.startsWith('veo'))
-  ) {
-    const options = ['veo3_fast', 'veo3'];
-    const effectiveValue = (value ?? schema.default ?? options[0]) as string;
-
-    return (
-      <GenField label={label} required={required} theme={theme} horizontal>
-        <GenToggle
-          value={effectiveValue}
-          onChange={(v) => onChange(v)}
-          options={options as readonly string[]}
-          disabled={disabled}
-          theme={theme}
-        />
-      </GenField>
-    );
   }
 
   // Handle string type with enum (2-4 items = toggle, 5+ items = dropdown)

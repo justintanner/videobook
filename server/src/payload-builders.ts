@@ -36,12 +36,6 @@ import type {
   Wan27ImageAspectRatio,
   Wan27ImageResolution,
 } from "@apicity/kie";
-import type {
-  VeoGenerateRequest,
-  VeoExtendRequest,
-  VeoModel,
-  VeoGenerationType,
-} from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
   AlibabaImageGenerationRequest,
@@ -278,35 +272,6 @@ function buildGptImagePayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as "1:1" | "2:3" | "3:2" } : {}),
       ...(args.quality !== undefined ? { quality: args.quality } : {}),
     },
-  };
-}
-
-function buildVeoVideoPayload(
-  args: Record<string, unknown>,
-  imageUrls: string[],
-): VeoGenerateRequest {
-  return {
-    prompt: args.prompt as string,
-    ...(args.model !== undefined ? { model: args.model as VeoModel } : {}),
-    ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio as VeoGenerateRequest["aspectRatio"] } : {}),
-    ...(args.generation_type !== undefined ? { generationType: args.generation_type as VeoGenerationType } : {}),
-    ...(imageUrls.length > 0 ? { imageUrls } : {}),
-    ...(args.seeds !== undefined ? { seeds: args.seeds as number } : {}),
-    ...(args.watermark !== undefined ? { watermark: args.watermark as string } : {}),
-    ...(args.enable_translation !== undefined ? { enableTranslation: args.enable_translation as boolean } : {}),
-  };
-}
-
-function buildVeoExtendPayload(
-  args: Record<string, unknown>,
-  taskId: string,
-): VeoExtendRequest {
-  return {
-    taskId,
-    prompt: args.prompt as string,
-    ...(args.model !== undefined ? { model: args.model as VeoExtendRequest["model"] } : {}),
-    ...(args.seeds !== undefined ? { seeds: args.seeds as number } : {}),
-    ...(args.watermark !== undefined ? { watermark: args.watermark as string } : {}),
   };
 }
 
@@ -785,15 +750,6 @@ function translateToolPayload(
       const payload = buildWan27ImageProPayload(args as Wan27ImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_veo_video": {
-      const payload = buildVeoVideoPayload(args, imageSlugs);
-      return { provider_path: "kie.veo.post.api.v1.veo.generate()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "extend_veo_video": {
-      const videoSlug = (args.video_slug as string) ?? "";
-      const payload = buildVeoExtendPayload(args, videoSlug);
-      return { provider_path: "kie.veo.post.api.v1.veo.extend()", payload: payload as unknown as Record<string, unknown> };
-    }
     case "generate_wan27_i2v_video": {
       const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameSlug = (args.last_frame_slug as string | undefined) ?? undefined;
@@ -896,7 +852,7 @@ function translateToolPayload(
 // ---------------------------------------------------------------------------
 
 const VIDEO_TOOLS = new Set([
-  "generate_kling30_video", "generate_veo_video", "extend_veo_video",
+  "generate_kling30_video",
   "generate_seedance2_t2v_video", "generate_seedance2_i2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
   "generate_grok_imagine_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",

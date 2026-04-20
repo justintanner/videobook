@@ -28,12 +28,9 @@ export function isElementField(name: string): boolean {
   return ELEMENT_FIELD_RE.test(name);
 }
 
-/** Sort fields: generation_type first, prompt second, then alphabetically, asset fields last */
+/** Sort fields: prompt first, then alphabetically, asset fields last */
 export function sortFields(fields: [string, JSONSchemaProperty][]): [string, JSONSchemaProperty][] {
   return [...fields].sort(([aName], [bName]) => {
-    if (aName === 'generation_type') return -1;
-    if (bName === 'generation_type') return 1;
-
     if (aName === 'prompt') return -1;
     if (bName === 'prompt') return 1;
 

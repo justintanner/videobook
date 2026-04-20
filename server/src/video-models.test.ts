@@ -118,8 +118,6 @@ describe("extractLastSettingsPerModel", () => {
   it("handles all video model action names correctly", () => {
     const actionNames = [
       "tool-generate-kling30-video",
-      "tool-generate-veo-video",
-      "tool-extend-veo-video",
       "tool-generate-seedance2-t2v-video",
       "tool-generate-seedance2-i2v-video",
       "tool-generate-seedance2-frames-video",
@@ -133,10 +131,8 @@ describe("extractLastSettingsPerModel", () => {
       date: "2026-03-08T00:00:00Z",
     }));
     const result = extractLastSettingsPerModel(log);
-    expect(result.size).toBe(8);
+    expect(result.size).toBe(6);
     expect(result.has("generate_kling30_video")).toBe(true);
-    expect(result.has("generate_veo_video")).toBe(true);
-    expect(result.has("extend_veo_video")).toBe(true);
     expect(result.has("generate_seedance2_t2v_video")).toBe(true);
     expect(result.has("generate_seedance2_i2v_video")).toBe(true);
     expect(result.has("generate_seedance2_frames_video")).toBe(true);
@@ -200,12 +196,12 @@ describe("extractLastUsedModel", () => {
       },
       {
         hash: "h2",
-        action: "tool-generate-veo-video",
+        action: "tool-generate-grok-imagine-video",
         payload: { prompt: "test" },
         date: "2026-03-08T01:00:00Z",
       },
     ];
-    expect(extractLastUsedModel(log)).toBe("veo31");
+    expect(extractLastUsedModel(log)).toBe("grok_imagine");
   });
 });
 
@@ -300,27 +296,6 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.duration.enum).toHaveLength(13); // "3" through "15"
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1"]);
     expect(schema!.properties.sound).toBeDefined();
-  });
-
-  it("veo: prompt required, model enum, aspect_ratio enum", () => {
-    const schema = getVideoToolSchema("generate_veo_video");
-    expect(schema).not.toBeNull();
-    expect(schema!.required).toContain("prompt");
-    expect(schema!.properties.model.enum).toEqual(["veo3_fast", "veo3"]);
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "Auto"]);
-    expect(schema!.properties.generation_type.enum).toEqual([
-      "TEXT_2_VIDEO",
-      "FIRST_AND_LAST_FRAMES_2_VIDEO",
-      "REFERENCE_2_VIDEO",
-    ]);
-  });
-
-  it("extend_veo: video_slug required, prompt not required for grok_imagine", () => {
-    const schema = getVideoToolSchema("extend_veo_video");
-    expect(schema).not.toBeNull();
-    expect(schema!.required).toContain("video_slug");
-    expect(schema!.properties.model.enum).toEqual(["fast", "quality"]);
-    expect(schema!.properties.model.default).toBe("fast");
   });
 
   it("seedance2 t2v: aspect_ratio and duration required, correct enums", () => {
@@ -439,33 +414,6 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("multi-shot mode allows max 1"))).toBe(true);
   });
 
-  it("veo: REFERENCE_2_VIDEO warns about model restriction", () => {
-    const result = validateVideoParams("generate_veo_video", {
-      prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
-      model: "veo3",
-    });
-    expect(result.warnings.some((w) => w.includes("REFERENCE_2_VIDEO") && w.includes("veo3_fast"))).toBe(true);
-  });
-
-  it("veo: REFERENCE_2_VIDEO warns about aspect_ratio restriction", () => {
-    const result = validateVideoParams("generate_veo_video", {
-      prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
-      aspect_ratio: "Auto",
-    });
-    expect(result.warnings.some((w) => w.includes("16:9 or 9:16"))).toBe(true);
-  });
-
-  it("veo: auto-infers generation_type from image count", () => {
-    // 0 images => TEXT_2_VIDEO (no warnings about model)
-    const result = validateVideoParams("generate_veo_video", {
-      prompt: "test",
-      model: "veo3",
-    });
-    expect(result.warnings.some((w) => w.includes("REFERENCE_2_VIDEO"))).toBe(false);
-  });
-
   it("seedance2 frames: missing last_frame_slug is flagged as missing_required", () => {
     const result = validateVideoParams("generate_seedance2_frames_video", {
       prompt: "test",
@@ -537,7 +485,7 @@ describe("validateVideoParams", () => {
     });
     expect(framesResult.image_slots).toBeNull();
 
-    const extendResult = validateVideoParams("extend_veo_video", {
+    const extendResult = validateVideoParams("extend_wan27_video", {
       prompt: "test",
       video_slug: "@vid-a",
     });
@@ -548,8 +496,8 @@ describe("validateVideoParams", () => {
     const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
     expect(klingResult.multi_prompt_slots).toBe(5);
 
-    const veoResult = validateVideoParams("generate_veo_video", { prompt: "test" });
-    expect(veoResult.multi_prompt_slots).toBeNull();
+    const grokResult = validateVideoParams("generate_grok_imagine_video", { prompt: "test" });
+    expect(grokResult.multi_prompt_slots).toBeNull();
   });
 });
 
@@ -558,73 +506,7 @@ describe("validateVideoParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyVideoToolConstraints", () => {
-  it("constrains veo REFERENCE_2_VIDEO model to veo3_fast", () => {
-    const schema = getVideoToolSchema("generate_veo_video")!;
-    const params: Record<string, unknown> = {
-      prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
-      model: "veo3",
-      aspect_ratio: "16:9",
-    };
-    applyVideoToolConstraints("generate_veo_video", schema, params);
-    expect(params.model).toBe("veo3_fast");
-    expect(schema.properties.model.enum).toEqual(["veo3_fast"]);
-  });
-
-  it("constrains veo REFERENCE_2_VIDEO aspect_ratio to 16:9 or 9:16", () => {
-    const schema = getVideoToolSchema("generate_veo_video")!;
-    const params: Record<string, unknown> = {
-      prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
-      model: "veo3",
-      aspect_ratio: "Auto",
-    };
-    applyVideoToolConstraints("generate_veo_video", schema, params);
-    expect(params.aspect_ratio).toBe("16:9");
-    expect(schema.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
-  });
-
-  it("preserves valid aspect_ratio for REFERENCE_2_VIDEO", () => {
-    const schema = getVideoToolSchema("generate_veo_video")!;
-    const params: Record<string, unknown> = {
-      prompt: "test",
-      generation_type: "REFERENCE_2_VIDEO",
-      model: "veo3",
-      aspect_ratio: "9:16",
-    };
-    applyVideoToolConstraints("generate_veo_video", schema, params);
-    expect(params.aspect_ratio).toBe("9:16");
-  });
-
-  it("auto-infers REFERENCE_2_VIDEO from 1 image", () => {
-    const schema = getVideoToolSchema("generate_veo_video")!;
-    const params: Record<string, unknown> = {
-      prompt: "test",
-      image_slugs: ["@img-a"],
-      model: "veo3",
-      aspect_ratio: "Auto",
-    };
-    applyVideoToolConstraints("generate_veo_video", schema, params);
-    // With 1 image, effective gen type is REFERENCE_2_VIDEO
-    expect(params.model).toBe("veo3_fast");
-    expect(params.aspect_ratio).toBe("16:9");
-  });
-
-  it("does nothing for TEXT_2_VIDEO", () => {
-    const schema = getVideoToolSchema("generate_veo_video")!;
-    const params: Record<string, unknown> = {
-      prompt: "test",
-      generation_type: "TEXT_2_VIDEO",
-      model: "veo3",
-      aspect_ratio: "Auto",
-    };
-    applyVideoToolConstraints("generate_veo_video", schema, params);
-    // No constraints applied
-    expect(params.model).toBe("veo3");
-    expect(params.aspect_ratio).toBe("Auto");
-  });
-
-  it("does nothing for non-veo tools", () => {
+  it("is a no-op for tools without cross-field rewriting", () => {
     const schema = getVideoToolSchema("generate_kling30_video")!;
     const params: Record<string, unknown> = {
       prompt: "test",
@@ -648,8 +530,6 @@ describe("buildVideoRoutingPrompt", () => {
   it("mentions all video tool names", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("generate_kling30_video");
-    expect(prompt).toContain("generate_veo_video");
-    expect(prompt).toContain("extend_veo_video");
     expect(prompt).toContain("generate_seedance2_t2v_video");
     expect(prompt).toContain("generate_seedance2_i2v_video");
     expect(prompt).toContain("generate_seedance2_frames_video");
@@ -676,14 +556,12 @@ describe("buildVideoRoutingPrompt", () => {
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kling30_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_veo_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_reference_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_grok_imagine_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_wan27_r2v_video");
   });
 
   it("omits tools that take no image-array field (extend, text-to-video, frames)", () => {
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_veo_video");
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_grok_imagine_video");
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_t2v_video");
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_i2v_video");
@@ -699,12 +577,6 @@ describe("PARAM_SCHEMAS", () => {
 
   it("image_slugs param has type array", () => {
     expect(PARAM_SCHEMAS.image_slugs.type).toBe("array");
-  });
-
-  it("seeds param has integer type with min/max", () => {
-    expect(PARAM_SCHEMAS.seeds.type).toBe("integer");
-    expect(PARAM_SCHEMAS.seeds.minimum).toBe(10000);
-    expect(PARAM_SCHEMAS.seeds.maximum).toBe(99999);
   });
 });
 
@@ -729,11 +601,11 @@ describe("buildModelOption resolved assets and coercion", () => {
     expect(option.prefilled_values.image_slugs).toEqual([]);
   });
 
-  it("extend_veo prefills video_slug from video assets", () => {
+  it("extend_wan27 prefills video_slug from video assets", () => {
     const resolvedAssets = [
       { tag: "@vid-clip", asset_id: "vid-clip", asset_type: "video", file_path: "/path/clip.mp4", asset_dir: "/path" },
     ];
-    const option = buildModelOption("veo31_extend", VIDEO_MODELS.veo31_extend, {}, resolvedAssets);
+    const option = buildModelOption("wan27_extend", VIDEO_MODELS.wan27_extend, {}, resolvedAssets);
     expect(option.prefilled_values.video_slug).toBe("@vid-clip");
   });
 

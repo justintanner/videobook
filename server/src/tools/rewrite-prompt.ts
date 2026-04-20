@@ -23,7 +23,6 @@ const GUIDE_FILES: Record<string, string> = {
   kling30: "kling_3_0_prompting_guide.md",
   grok_imagine: "grok_imagine_prompting_guide.md",
   grok_image: "grok_imagine_prompting_guide.md",
-  veo: "veo_3_1_prompting_guide.md",
 };
 
 const SUPPORTED_MODELS = Object.keys(GUIDE_FILES).sort();
@@ -241,7 +240,7 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().optional().describe("Prompt to rewrite. In scene mode, serves as optional creative direction."),
       model: z
-        .enum(["nano_banana", "gpt15", "kling30", "grok_imagine", "grok_image", "veo"])
+        .enum(["nano_banana", "gpt15", "kling30", "grok_imagine", "grok_image"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
       image_slugs: z

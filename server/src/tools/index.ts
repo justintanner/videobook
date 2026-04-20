@@ -88,10 +88,6 @@ import { generateWan27ProFalDef } from "./generate-wan27-pro-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateGrokImagineImageFalDef } from "./generate-grok-imagine-image-fal.js";
 import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
-import { generateSora2T2vFalDef } from "./generate-sora2-t2v-fal.js";
-import { generateSora2I2vFalDef } from "./generate-sora2-i2v-fal.js";
-import { generateVeo31T2vFalDef } from "./generate-veo31-t2v-fal.js";
-import { generateVeo31I2vFalDef } from "./generate-veo31-i2v-fal.js";
 import { generateKlingV3ProI2vFalDef } from "./generate-kling-v3-pro-i2v-fal.js";
 import { generateGrokImagineVideoI2vFalDef } from "./generate-grok-imagine-video-i2v-fal.js";
 import { generateNanoBananaFalDef } from "./generate-nano-banana-fal.js";
@@ -215,10 +211,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateWan27ProEditFalDef(fs),
     generateGrokImagineImageFalDef(fs),
     generateGrokImagineImageEditFalDef(fs),
-    generateSora2T2vFalDef(fs),
-    generateSora2I2vFalDef(fs),
-    generateVeo31T2vFalDef(fs),
-    generateVeo31I2vFalDef(fs),
     generateKlingV3ProI2vFalDef(fs),
     generateGrokImagineVideoI2vFalDef(fs),
     generateNanoBananaFalDef(fs),

@@ -281,26 +281,23 @@ const page17VideoModelOptions: ModelOption[] = [
 ];
 
 const page17MockToolCallPayload = {
-  tool_name: 'generate_veo3_video',
+  tool_name: 'generate_kling30_video',
   args: {
     prompt: 'Aerial drone shot sweeping over a bioluminescent forest at twilight',
     aspect_ratio: '16:9',
-    duration: 8,
-    generation_type: 'TEXT_2_VIDEO',
-    model: 'veo3',
+    duration: '8',
+    mode: 'pro',
     project_slug: 'vax',
   },
 };
 
 const page17MockProviderPayload = {
-  model: 'veo-3.0-generate-preview',
-  contents: [{ parts: [{ text: 'Aerial drone shot sweeping over a bioluminescent forest at twilight' }], role: 'user' }],
-  generationConfig: {
+  model: 'kling-3.0',
+  input: {
+    prompt: 'Aerial drone shot sweeping over a bioluminescent forest at twilight',
     aspect_ratio: '16:9',
-    duration: '8s',
-    generate_audio: true,
-    person_generation: 'allow_adult',
-    generation_type: 'TEXT_2_VIDEO',
+    duration: '8',
+    sound: true,
   },
 };
 
@@ -314,13 +311,13 @@ const page17ElementSchemas: Map<string, JSONSchemaProperty> = new Map([
 ]);
 
 function SelectWithChevronDemo() {
-  const [value, setValue] = useState('veo3');
+  const [value, setValue] = useState('kling3');
   return (
     <SelectWithChevron value={value} onChange={setValue}>
-      <option value="veo3">Veo 3</option>
       <option value="kling3">Kling 3.0</option>
-      <option value="wan21">Wan 2.1</option>
-      <option value="sora">Sora</option>
+      <option value="seedance2">Seedance 2.0</option>
+      <option value="wan27">Wan 2.7</option>
+      <option value="grok">Grok Imagine</option>
     </SelectWithChevron>
   );
 }
@@ -378,10 +375,10 @@ function GenSelectDemo() {
         value={value}
         onChange={setValue}
         options={[
-          { value: 'veo3', label: 'Veo 3' },
           { value: 'kling3', label: 'Kling 3.0' },
-          { value: 'wan21', label: 'Wan 2.1' },
-          { value: 'sora', label: 'Sora' },
+          { value: 'seedance2', label: 'Seedance 2.0' },
+          { value: 'wan27', label: 'Wan 2.7' },
+          { value: 'grok', label: 'Grok Imagine' },
         ]}
       />
     </div>
