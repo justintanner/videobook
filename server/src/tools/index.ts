@@ -107,6 +107,8 @@ import { generateWan27I2vFalDef } from "./generate-wan27-i2v-fal.js";
 import { generateKlingV3ProT2vFalDef } from "./generate-kling-v3-pro-t2v-fal.js";
 import { generateKlingV3StandardT2vFalDef } from "./generate-kling-v3-standard-t2v-fal.js";
 import { generateKlingV3StandardI2vFalDef } from "./generate-kling-v3-standard-i2v-fal.js";
+import { generateWan27R2vFalDef } from "./generate-wan27-r2v-fal.js";
+import { generateWan27VideoeditFalDef } from "./generate-wan27-videoedit-fal.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -225,5 +227,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateKlingV3ProT2vFalDef(fs),
     generateKlingV3StandardT2vFalDef(fs),
     generateKlingV3StandardI2vFalDef(fs),
+    generateWan27R2vFalDef(fs),
+    generateWan27VideoeditFalDef(fs),
   ];
 }

@@ -25,6 +25,7 @@ import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import {
   FalSora2TextToVideoRequestSchema,
   FalSora2ImageToVideoRequestSchema,
+  FalWanV2p7EditVideoRequestSchema,
 } from "@apicity/fal/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
@@ -337,6 +338,24 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [],
     falToolNames: { noRefs: "generate_kling_v3_standard_t2v_fal", withRefs: "generate_kling_v3_standard_i2v_fal" },
   },
+  wan27_r2v_fal: {
+    label: "Wan v2.7 — Reference (fal)",
+    tool_name: "generate_wan27_r2v_fal_video",
+    description: "Alibaba Wan v2.7 reference-to-video via fal.ai, guided by reference images and/or videos",
+    params: ["prompt", "image_slugs", "video_slugs", "aspect_ratio", "resolution", "duration", "multi_shots", "negative_prompt", "enable_safety_checker", "seed"],
+    defaults: { aspect_ratio: "16:9", resolution: "1080p", duration: 5 },
+    providers: [],
+    falToolNames: { noRefs: "generate_wan27_r2v_fal", withRefs: "generate_wan27_r2v_fal" },
+  },
+  wan27_videoedit_fal: {
+    label: "Wan v2.7 — Video Edit (fal)",
+    tool_name: "generate_wan27_videoedit_fal_video",
+    description: "Alibaba Wan v2.7 video editing via fal.ai with optional reference image for character/style guidance",
+    params: ["prompt", "video_slug", "image_slug", "aspect_ratio", "resolution", "duration", "audio_setting", "negative_prompt", "enable_safety_checker", "seed"],
+    defaults: { aspect_ratio: "16:9", resolution: "1080p" },
+    providers: [],
+    falToolNames: { noRefs: "generate_wan27_videoedit_fal", withRefs: "generate_wan27_videoedit_fal" },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -416,6 +435,10 @@ const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shap
 const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
 
+const FAL_WAN27_ASPECT_RATIOS = [...FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+const FAL_WAN27_RESOLUTIONS = [...FalWanV2p7EditVideoRequestSchema.shape.resolution.unwrap().options];
+const FAL_WAN27_AUDIO_SETTINGS = [...FalWanV2p7EditVideoRequestSchema.shape.audio_setting.unwrap().options];
+
 const SORA2_T2V_MODELS = [...FalSora2TextToVideoRequestSchema.shape.model.unwrap().options];
 const SORA2_T2V_RESOLUTIONS = [...FalSora2TextToVideoRequestSchema.shape.resolution.unwrap().options];
 const SORA2_T2V_ASPECT_RATIOS = [...FalSora2TextToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
@@ -476,6 +499,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   web_search: { type: "boolean", description: "Use web search for enhanced grounding", default: false },
   sound: { type: "boolean", description: "Generate audio for the video" },
   multi_shots: { type: "boolean", description: "Enable multi-shot mode" },
+  enable_safety_checker: { type: "boolean", description: "Content safety filter" },
+  enable_prompt_expansion: { type: "boolean", description: "Intelligent prompt rewriting" },
   multi_prompt: {
     type: "array",
     items: {
@@ -642,6 +667,28 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "duration") { prop.type = "integer"; prop.enum = SORA2_DURATIONS; prop.description = "Video duration in seconds (4, 8, 12, 16, or 20)"; }
       if (param === "first_frame_slug") { prop.description = "First frame image asset (required, e.g., @img-start)"; }
     }
+    if (toolName === "generate_wan27_r2v_fal_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "image_slugs") prop.description = "Reference image assets (max 4, e.g., @img-style)";
+      if (param === "video_slugs") prop.description = "Reference video assets (max 4, e.g., @vid-motion)";
+      if (param === "aspect_ratio") { prop.enum = FAL_WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "resolution") { prop.enum = FAL_WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Video duration in seconds (2-10)"; }
+      if (param === "multi_shots") prop.description = "Enable multi-shot mode";
+      if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
+      if (param === "enable_safety_checker") { prop.description = "Content safety filter"; prop.default = false; }
+    }
+    if (toolName === "generate_wan27_videoedit_fal_video") {
+      if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
+      if (param === "image_slug") prop.description = "Optional reference image for character/style guidance";
+      if (param === "aspect_ratio") { prop.enum = FAL_WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (omit to match source)"; }
+      if (param === "resolution") { prop.enum = FAL_WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 0; prop.maximum = 10; prop.description = "Video duration in seconds (0 = full source, otherwise 2-10)"; }
+      if (param === "audio_setting") { prop.enum = FAL_WAN27_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
+      if (param === "enable_safety_checker") { prop.description = "Content safety filter"; prop.default = false; }
+    }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
@@ -663,7 +710,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
 
     // Required fields
     if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
-    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video")) required.push(param);
+    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video")) required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
       && (param === "aspect_ratio" || param === "duration")
