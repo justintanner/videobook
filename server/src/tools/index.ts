@@ -111,6 +111,9 @@ import { generateWan27R2vFalDef } from "./generate-wan27-r2v-fal.js";
 import { generateWan27VideoeditFalDef } from "./generate-wan27-videoedit-fal.js";
 import { generateSeedance2R2vFalDef } from "./generate-seedance2-r2v-fal.js";
 import { generateSeedance2FastR2vFalDef } from "./generate-seedance2-fast-r2v-fal.js";
+import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
+import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
+import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -233,5 +236,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateWan27VideoeditFalDef(fs),
     generateSeedance2R2vFalDef(fs),
     generateSeedance2FastR2vFalDef(fs),
+    generateGrokImagineVideoR2vFalDef(fs),
+    generateGrokImagineVideoExtendFalDef(fs),
+    generateGrokImagineVideoEditFalDef(fs),
   ];
 }

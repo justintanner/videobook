@@ -73,6 +73,9 @@ import { registerGenerateWan27R2vFalJob } from "./generate-wan27-r2v-fal.js";
 import { registerGenerateWan27VideoeditFalJob } from "./generate-wan27-videoedit-fal.js";
 import { registerGenerateSeedance2R2vFalJob } from "./generate-seedance2-r2v-fal.js";
 import { registerGenerateSeedance2FastR2vFalJob } from "./generate-seedance2-fast-r2v-fal.js";
+import { registerGenerateGrokImagineVideoR2vFalJob } from "./generate-grok-imagine-video-r2v-fal.js";
+import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-imagine-video-extend-fal.js";
+import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -151,4 +154,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateWan27VideoeditFalJob(fs);
   registerGenerateSeedance2R2vFalJob(fs);
   registerGenerateSeedance2FastR2vFalJob(fs);
+  registerGenerateGrokImagineVideoR2vFalJob(fs);
+  registerGenerateGrokImagineVideoExtendFalJob(fs);
+  registerGenerateGrokImagineVideoEditFalJob(fs);
 }

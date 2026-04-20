@@ -1,0 +1,44 @@
+import type { ClipfirstFs } from "clipfirst-fs";
+import { registerJobHandler } from "../queue.js";
+import { uploadAssetToFal } from "./_fal-upload.js";
+import { submitFalJob } from "./_fal-shared.js";
+
+type RefInput = { assetId: string; filename: string };
+
+type Payload = {
+  type: "generate_grok_imagine_video_edit_fal";
+  vidAssetId: string;
+  vidAssetDir: string;
+  projectSlug: string;
+  prompt: string;
+  sourceVideo: RefInput;
+  sourceVideoIds: string[];
+  resolution?: string;
+};
+
+export function registerGenerateGrokImagineVideoEditFalJob(fs: ClipfirstFs): void {
+  registerJobHandler("generate_grok_imagine_video_edit_fal", async (payload) => {
+    const p = payload as Payload;
+
+    const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.projectSlug);
+
+    const input: Record<string, unknown> = {
+      prompt: p.prompt,
+      video_url,
+      ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
+    };
+
+    const taskId = await submitFalJob({
+      fs,
+      projectSlug: p.projectSlug,
+      assetId: p.vidAssetId,
+      assetDir: p.vidAssetDir,
+      endpointId: "xai/grok-imagine-video/edit-video",
+      input,
+      taskType: "fal_grok_imagine_video_edit",
+      meta: { prompt: p.prompt, mode: "videoedit", sourceVideoIds: p.sourceVideoIds },
+    });
+
+    return { success: true, taskId };
+  });
+}
