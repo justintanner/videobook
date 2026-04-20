@@ -187,6 +187,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     const match = allProviders.find((p) => p.label === label);
     if (!match) return;
     setSelectedProviderKey(match.key);
+    setGenState(undefined);
+    setFlipped(false);
+    setTranslatedPayload(null);
+    setTranslateLoading(false);
     fetchPreview(category, initialPrompt, {
       selected_model: selectedModelKey || undefined,
       selected_provider: match.key,
