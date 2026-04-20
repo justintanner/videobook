@@ -62,7 +62,6 @@ import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { editTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
-import { redesignStyleguidePageDef } from "./redesign-styleguide-page.js";
 import { showFolderDef } from "./show-folder.js";
 import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
 import { exportToDownloadsDef } from "./export-to-downloads.js";
@@ -184,7 +183,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     getTimelineDef(fs),
     editTimelineDef(fs),
     renderTimelineDef(fs),
-    redesignStyleguidePageDef(),
     showFolderDef(fs),
     copyFileToClipboardDef(fs),
     exportToDownloadsDef(fs),

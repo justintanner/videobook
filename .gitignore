@@ -28,9 +28,6 @@ dist-ssr
 .env.*
 !.env.example
 
-# Styleguide fixture media
-public/fixtures/
-
 # Projects directory
 projects/
 
