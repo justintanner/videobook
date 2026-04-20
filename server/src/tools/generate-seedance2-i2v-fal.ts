@@ -15,7 +15,8 @@ const generateSeedance2I2vFalSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
-  end_frame_slug: z.string().optional().describe("Optional end frame image asset"),
+  end_frame_slug: z.string().optional().describe("Optional end frame image asset (fal-native name)"),
+  last_frame_slug: z.string().optional().describe("Optional last frame image asset (alias for end_frame_slug used by the dual-provider UI)"),
   resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
   duration: z.enum(durationOptions).optional().describe("Video duration in seconds"),
   aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
@@ -31,13 +32,14 @@ export function generateSeedance2I2vFalDef(fs: ClipfirstFs): ToolDef {
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",
     schema: generateSeedance2I2vFalSchema,
     handler: async (args) => {
-      const { project_slug, prompt, first_frame_slug, end_frame_slug, resolution, duration, aspect_ratio, generate_audio, seed } = args as Args;
+      const { project_slug, prompt, first_frame_slug, end_frame_slug, last_frame_slug, resolution, duration, aspect_ratio, generate_audio, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const slugs = end_frame_slug ? [first_frame_slug, end_frame_slug] : [first_frame_slug];
+      const endSlug = end_frame_slug ?? last_frame_slug;
+      const slugs = endSlug ? [first_frame_slug, endSlug] : [first_frame_slug];
       const resolved = await resolveImageSlugs(fs, slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 

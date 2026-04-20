@@ -49,6 +49,7 @@ const generateSeedance2I2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (3-2500 characters)"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
+  last_frame_slug: z.string().optional().describe("Last frame image asset (optional, e.g., @img-end)"),
   model: z.enum(["bytedance/seedance-2-fast", "bytedance/seedance-2"]).optional().describe("Seedance model variant (fast default, standard adds 1080p)"),
   aspect_ratio: z.enum(seedance2FastInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Output resolution (1080p requires model=bytedance/seedance-2)"),
@@ -68,7 +69,7 @@ export function generateSeedance2I2vVideoDef(fs: ClipfirstFs): ToolDef {
     schema: generateSeedance2I2vVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, first_frame_slug,
+        project_slug, prompt, first_frame_slug, last_frame_slug,
         model, aspect_ratio, resolution, duration,
         generate_audio, return_last_frame, web_search,
       } = args as Args;
@@ -91,6 +92,13 @@ export function generateSeedance2I2vVideoDef(fs: ClipfirstFs): ToolDef {
       if (!firstResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: firstResult.error }] };
       const firstFrame: FrameInput = firstResult.value;
 
+      let lastFrame: FrameInput | undefined;
+      if (last_frame_slug) {
+        const lastResult = await resolveFrameSlug(fs, last_frame_slug, project_slug);
+        if (!lastResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: lastResult.error }] };
+        lastFrame = lastResult.value;
+      }
+
       const videoName = `seedance2-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -101,7 +109,7 @@ export function generateSeedance2I2vVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      const sourceImageIds = [firstFrame.assetId];
+      const sourceImageIds = lastFrame ? [firstFrame.assetId, lastFrame.assetId] : [firstFrame.assetId];
 
       await writePendingTask(fs, vidAssetId, project_slug, {
         taskId: QUEUED_TASK_ID,
@@ -127,6 +135,7 @@ export function generateSeedance2I2vVideoDef(fs: ClipfirstFs): ToolDef {
         projectSlug: project_slug,
         prompt,
         firstFrame,
+        ...(lastFrame ? { lastFrame } : {}),
         sourceImageIds,
         ...(model !== undefined ? { model } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),

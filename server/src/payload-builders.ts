@@ -727,7 +727,8 @@ function translateToolPayload(
     }
     case "generate_seedance2_i2v_video": {
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
-      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, { firstFrameUrl });
+      const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
+      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, { firstFrameUrl, lastFrameUrl });
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_seedance2_frames_video": {

@@ -125,7 +125,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
       const currentPrompt = isRefresh ? formValuesRef.current.prompt : undefined;
       const prefilled = option?.prefilled_values ?? {};
-      setFormValues(currentPrompt !== undefined ? { ...prefilled, prompt: currentPrompt } : prefilled);
+      const seededPrompt = currentPrompt
+        ?? (prefilled as { prompt?: unknown }).prompt
+        ?? prompt
+        ?? '';
+      setFormValues({ ...prefilled, prompt: seededPrompt });
       setDroppedAssets(new Map());
     } catch (e) {
       if (thisRequest !== refreshIdRef.current) return;

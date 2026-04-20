@@ -123,9 +123,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   seedance2_i2v: {
     label: "Seedance 2.0 — First Frame",
     tool_name: "generate_seedance2_i2v_video",
-    description: "ByteDance Seedance 2.0 image-to-video with a single first-frame reference",
+    description: "ByteDance Seedance 2.0 image-to-video from a first frame with optional last frame",
     params: [
-      "prompt", "first_frame_slug",
+      "prompt", "first_frame_slug", "last_frame_slug",
       "model", "aspect_ratio", "resolution", "duration",
       "generate_audio", "return_last_frame", "web_search",
     ],
@@ -648,6 +648,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_seedance2_i2v_video") {
       if (param === "first_frame_slug") prop.description = "First frame image asset (required, e.g., @img-start)";
+      if (param === "last_frame_slug") prop.description = "Last frame image asset (optional, e.g., @img-end)";
     }
     if (toolName === "generate_seedance2_frames_video") {
       if (param === "first_frame_slug") prop.description = "First frame image asset (required, e.g., @img-start)";

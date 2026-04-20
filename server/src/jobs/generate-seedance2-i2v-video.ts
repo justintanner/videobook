@@ -14,6 +14,7 @@ type GenerateSeedance2I2vVideoPayload = {
   projectSlug: string;
   prompt: string;
   firstFrame: FrameInput;
+  lastFrame?: FrameInput;
   sourceImageIds: string[];
   model?: "bytedance/seedance-2-fast" | "bytedance/seedance-2";
   aspect_ratio?: string;
@@ -28,7 +29,7 @@ export function registerGenerateSeedance2I2vVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_seedance2_i2v_video", async (payload) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
-      firstFrame, sourceImageIds,
+      firstFrame, lastFrame, sourceImageIds,
       model, aspect_ratio, resolution, duration,
       generate_audio, return_last_frame, web_search,
     } = payload as GenerateSeedance2I2vVideoPayload;
@@ -39,10 +40,13 @@ export function registerGenerateSeedance2I2vVideoJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const firstFrameUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug);
+    const lastFrameUrl = lastFrame
+      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename, projectSlug)
+      : undefined;
 
     const request = buildSeedance2VideoPayload(
       { prompt, model, aspect_ratio, resolution, duration, generate_audio, return_last_frame, web_search },
-      { firstFrameUrl },
+      { firstFrameUrl, ...(lastFrameUrl ? { lastFrameUrl } : {}) },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);

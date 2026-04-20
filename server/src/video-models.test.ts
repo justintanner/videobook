@@ -336,12 +336,13 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.prompt.maxLength).toBe(2500);
   });
 
-  it("seedance2 i2v: exposes first_frame_slug (required), model, 1080p resolution", () => {
+  it("seedance2 i2v: exposes first_frame_slug (required) and optional last_frame_slug, model, 1080p resolution", () => {
     const schema = getVideoToolSchema("generate_seedance2_i2v_video");
     expect(schema).not.toBeNull();
     expect(schema!.properties.first_frame_slug).toBeDefined();
-    expect(schema!.properties.last_frame_slug).toBeUndefined();
+    expect(schema!.properties.last_frame_slug).toBeDefined();
     expect(schema!.required).toContain("first_frame_slug");
+    expect(schema!.required).not.toContain("last_frame_slug");
     expect(schema!.properties.model.enum).toEqual(["bytedance/seedance-2-fast", "bytedance/seedance-2"]);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
   });
