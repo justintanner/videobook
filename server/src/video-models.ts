@@ -27,6 +27,8 @@ import {
   FalSora2ImageToVideoRequestSchema,
   FalWanV2p7EditVideoRequestSchema,
   FalSeedance2p0ReferenceToVideoRequestSchema,
+  FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
+  FalXaiGrokImagineVideoEditVideoRequestSchema,
 } from "@apicity/fal/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
@@ -375,6 +377,33 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [],
     falToolNames: { noRefs: "generate_seedance2_fast_r2v_fal", withRefs: "generate_seedance2_fast_r2v_fal" },
   },
+  grok_imagine_r2v_fal: {
+    label: "Grok Imagine — Reference (fal)",
+    tool_name: "generate_grok_imagine_r2v_fal_video",
+    description: "xAI Grok Imagine reference-to-video via fal.ai, guided by 1-7 reference images",
+    params: ["prompt", "image_slugs", "duration", "aspect_ratio", "resolution"],
+    defaults: { aspect_ratio: "16:9", resolution: "720p", duration: 6 },
+    providers: [],
+    falToolNames: { noRefs: "generate_grok_imagine_video_r2v_fal", withRefs: "generate_grok_imagine_video_r2v_fal" },
+  },
+  grok_imagine_extend_fal: {
+    label: "Grok Imagine — Extend (fal)",
+    tool_name: "generate_grok_imagine_extend_fal_video",
+    description: "xAI Grok Imagine extend-video via fal.ai, continues an existing video",
+    params: ["prompt", "video_slug", "duration"],
+    defaults: { duration: 6 },
+    providers: [],
+    falToolNames: { noRefs: "generate_grok_imagine_video_extend_fal", withRefs: "generate_grok_imagine_video_extend_fal" },
+  },
+  grok_imagine_edit_fal: {
+    label: "Grok Imagine — Video Edit (fal)",
+    tool_name: "generate_grok_imagine_edit_fal_video",
+    description: "xAI Grok Imagine edit-video via fal.ai, re-renders a source video",
+    params: ["prompt", "video_slug", "resolution"],
+    defaults: { resolution: "auto" },
+    providers: [],
+    falToolNames: { noRefs: "generate_grok_imagine_video_edit_fal", withRefs: "generate_grok_imagine_video_edit_fal" },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -461,6 +490,10 @@ const FAL_WAN27_AUDIO_SETTINGS = [...FalWanV2p7EditVideoRequestSchema.shape.audi
 const FAL_SEEDANCE2_REF_RESOLUTIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
 const FAL_SEEDANCE2_REF_DURATIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration.unwrap().options];
 const FAL_SEEDANCE2_REF_ASPECT_RATIOS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+
+const FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS = [...FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+const FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS = [...FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
+const FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS = [...FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution.unwrap().options];
 
 const SORA2_T2V_MODELS = [...FalSora2TextToVideoRequestSchema.shape.model.unwrap().options];
 const SORA2_T2V_RESOLUTIONS = [...FalSora2TextToVideoRequestSchema.shape.resolution.unwrap().options];
@@ -711,6 +744,23 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = FAL_SEEDANCE2_REF_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
       if (param === "generate_audio") { prop.description = "Generate synchronized audio (default true)"; prop.default = true; }
     }
+    if (toolName === "generate_grok_imagine_r2v_fal_video") {
+      if (param === "prompt") prop.description = "Video description";
+      if (param === "image_slugs") prop.description = "Reference image assets (1-7 required, e.g., @img-style)";
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 1; prop.maximum = 10; prop.description = "Video duration in seconds (1-10)"; }
+      if (param === "aspect_ratio") { prop.enum = FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "resolution") { prop.enum = FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
+    }
+    if (toolName === "generate_grok_imagine_extend_fal_video") {
+      if (param === "prompt") prop.description = "Describe how to extend the video";
+      if (param === "video_slug") prop.description = "Source video asset to extend (e.g., @vid-scene)";
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Extension duration in seconds (2-10)"; }
+    }
+    if (toolName === "generate_grok_imagine_edit_fal_video") {
+      if (param === "prompt") prop.description = "Edit instruction";
+      if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
+      if (param === "resolution") { prop.enum = FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS; prop.description = "Output resolution: auto / 480p / 720p"; }
+    }
     if (toolName === "generate_wan27_videoedit_fal_video") {
       if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
@@ -743,7 +793,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
 
     // Required fields
     if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
-    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video")) required.push(param);
+    if (param === "video_slug" && (toolName === "extend_veo_video" || toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video")) required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
       && (param === "aspect_ratio" || param === "duration")
