@@ -71,6 +71,8 @@ import { registerGenerateKlingV3StandardT2vFalJob } from "./generate-kling-v3-st
 import { registerGenerateKlingV3StandardI2vFalJob } from "./generate-kling-v3-standard-i2v-fal.js";
 import { registerGenerateWan27R2vFalJob } from "./generate-wan27-r2v-fal.js";
 import { registerGenerateWan27VideoeditFalJob } from "./generate-wan27-videoedit-fal.js";
+import { registerGenerateSeedance2R2vFalJob } from "./generate-seedance2-r2v-fal.js";
+import { registerGenerateSeedance2FastR2vFalJob } from "./generate-seedance2-fast-r2v-fal.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -147,4 +149,6 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateKlingV3StandardI2vFalJob(fs);
   registerGenerateWan27R2vFalJob(fs);
   registerGenerateWan27VideoeditFalJob(fs);
+  registerGenerateSeedance2R2vFalJob(fs);
+  registerGenerateSeedance2FastR2vFalJob(fs);
 }

@@ -26,6 +26,7 @@ import {
   FalSora2TextToVideoRequestSchema,
   FalSora2ImageToVideoRequestSchema,
   FalWanV2p7EditVideoRequestSchema,
+  FalSeedance2p0ReferenceToVideoRequestSchema,
 } from "@apicity/fal/zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
 
@@ -356,6 +357,24 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [],
     falToolNames: { noRefs: "generate_wan27_videoedit_fal", withRefs: "generate_wan27_videoedit_fal" },
   },
+  seedance2_r2v_fal: {
+    label: "Seedance 2.0 — Reference (fal)",
+    tool_name: "generate_seedance2_r2v_fal_video",
+    description: "ByteDance Seedance 2.0 reference-to-video via fal.ai, guided by reference images, videos, and/or audio",
+    params: ["prompt", "image_slugs", "video_slugs", "audio_slugs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
+    defaults: { resolution: "720p", duration: "auto", aspect_ratio: "auto", generate_audio: true },
+    providers: [],
+    falToolNames: { noRefs: "generate_seedance2_r2v_fal", withRefs: "generate_seedance2_r2v_fal" },
+  },
+  seedance2_fast_r2v_fal: {
+    label: "Seedance 2.0 Fast — Reference (fal)",
+    tool_name: "generate_seedance2_fast_r2v_fal_video",
+    description: "ByteDance Seedance 2.0 Fast reference-to-video via fal.ai, guided by reference images, videos, and/or audio",
+    params: ["prompt", "image_slugs", "video_slugs", "audio_slugs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
+    defaults: { resolution: "720p", duration: "auto", aspect_ratio: "auto", generate_audio: true },
+    providers: [],
+    falToolNames: { noRefs: "generate_seedance2_fast_r2v_fal", withRefs: "generate_seedance2_fast_r2v_fal" },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -438,6 +457,10 @@ const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
 const FAL_WAN27_ASPECT_RATIOS = [...FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio.unwrap().options];
 const FAL_WAN27_RESOLUTIONS = [...FalWanV2p7EditVideoRequestSchema.shape.resolution.unwrap().options];
 const FAL_WAN27_AUDIO_SETTINGS = [...FalWanV2p7EditVideoRequestSchema.shape.audio_setting.unwrap().options];
+
+const FAL_SEEDANCE2_REF_RESOLUTIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
+const FAL_SEEDANCE2_REF_DURATIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration.unwrap().options];
+const FAL_SEEDANCE2_REF_ASPECT_RATIOS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
 
 const SORA2_T2V_MODELS = [...FalSora2TextToVideoRequestSchema.shape.model.unwrap().options];
 const SORA2_T2V_RESOLUTIONS = [...FalSora2TextToVideoRequestSchema.shape.resolution.unwrap().options];
@@ -677,6 +700,16 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "multi_shots") prop.description = "Enable multi-shot mode";
       if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
       if (param === "enable_safety_checker") { prop.description = "Content safety filter"; prop.default = false; }
+    }
+    if (toolName === "generate_seedance2_r2v_fal_video" || toolName === "generate_seedance2_fast_r2v_fal_video") {
+      if (param === "prompt") prop.description = "Video description (reference items can be mentioned as @Image1, @Video1, @Audio1, etc.)";
+      if (param === "image_slugs") prop.description = "Reference image assets (0-9)";
+      if (param === "video_slugs") prop.description = "Reference video assets (0-3, combined 2-15s)";
+      if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, combined ≤15s)";
+      if (param === "resolution") { prop.enum = FAL_SEEDANCE2_REF_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
+      if (param === "duration") { prop.enum = FAL_SEEDANCE2_REF_DURATIONS; prop.description = "Duration in seconds or 'auto'"; }
+      if (param === "aspect_ratio") { prop.enum = FAL_SEEDANCE2_REF_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "generate_audio") { prop.description = "Generate synchronized audio (default true)"; prop.default = true; }
     }
     if (toolName === "generate_wan27_videoedit_fal_video") {
       if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars)"; prop.maxLength = 5000; }
