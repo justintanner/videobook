@@ -23,6 +23,8 @@ import type {
   Wan27ImageProRequest,
   // Named union types for cleaner type annotations
   KlingMode,
+  KlingDuration,
+  KlingAspectRatio,
   GrokImagineMode,
   GrokImageToVideoDuration,
   GrokImagineResolution,
@@ -30,8 +32,16 @@ import type {
   NanoBananaOutputFormat,
   GptImageQuality,
   Wan27Resolution,
+  Wan27AspectRatio,
+  Wan27ImageAspectRatio,
+  Wan27ImageResolution,
 } from "@apicity/kie";
-import type { VeoGenerateRequest, VeoExtendRequest } from "@apicity/kie";
+import type {
+  VeoGenerateRequest,
+  VeoExtendRequest,
+  VeoModel,
+  VeoGenerationType,
+} from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
   AlibabaImageGenerationRequest,
@@ -68,8 +78,8 @@ function buildKling30VideoPayload(
       ...(args.prompt ? { prompt: args.prompt } : {}),
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
       sound: args.sound ?? true,
-      duration: (args.duration ?? "8") as KlingVideoRequest["input"]["duration"],
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as "16:9" | "9:16" | "1:1" } : {}),
+      duration: (args.duration ?? "8") as KlingDuration,
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as KlingAspectRatio } : {}),
       mode: (args.mode ?? "std") as KlingMode,
       multi_shots: args.multi_shots ?? false,
       ...(args.multi_prompt && args.multi_prompt.length > 0 ? { multi_prompt: args.multi_prompt } : {}),
@@ -277,9 +287,9 @@ function buildVeoVideoPayload(
 ): VeoGenerateRequest {
   return {
     prompt: args.prompt as string,
-    ...(args.model !== undefined ? { model: args.model as VeoGenerateRequest["model"] } : {}),
+    ...(args.model !== undefined ? { model: args.model as VeoModel } : {}),
     ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio as VeoGenerateRequest["aspectRatio"] } : {}),
-    ...(args.generation_type !== undefined ? { generationType: args.generation_type as VeoGenerateRequest["generationType"] } : {}),
+    ...(args.generation_type !== undefined ? { generationType: args.generation_type as VeoGenerationType } : {}),
     ...(imageUrls.length > 0 ? { imageUrls } : {}),
     ...(args.seeds !== undefined ? { seeds: args.seeds as number } : {}),
     ...(args.watermark !== undefined ? { watermark: args.watermark as string } : {}),
@@ -294,7 +304,7 @@ function buildVeoExtendPayload(
   return {
     taskId,
     prompt: args.prompt as string,
-    ...(args.model !== undefined ? { model: args.model as "fast" | "quality" } : {}),
+    ...(args.model !== undefined ? { model: args.model as VeoExtendRequest["model"] } : {}),
     ...(args.seeds !== undefined ? { seeds: args.seeds as number } : {}),
     ...(args.watermark !== undefined ? { watermark: args.watermark as string } : {}),
   };
@@ -317,8 +327,8 @@ function buildWan27ImagePayload(
     input: {
       prompt: args.prompt,
       ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageRequest["input"]["resolution"] } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageAspectRatio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageResolution } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
@@ -334,8 +344,8 @@ function buildWan27ImageProPayload(
     input: {
       prompt: args.prompt,
       ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageProRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageProRequest["input"]["resolution"] } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27ImageAspectRatio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageResolution } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
@@ -413,7 +423,7 @@ function buildWan27ReferenceVideoPayload(
       ...(opts.firstFrameUrl !== undefined ? { first_frame: opts.firstFrameUrl } : {}),
       ...(opts.referenceVoiceUrl !== undefined ? { reference_voice: opts.referenceVoiceUrl } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27RefToVideoRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27AspectRatio } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
@@ -452,7 +462,7 @@ export function buildWan27VideoEditPayload(
       ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
       ...(opts.referenceImageUrl !== undefined ? { reference_image: opts.referenceImageUrl } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27VideoEditRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Wan27AspectRatio } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
       ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
