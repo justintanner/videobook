@@ -252,9 +252,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const filteredModelOptions = useMemo(() => {
     if (!preview) return [];
-    return preview.model_options.filter((o) =>
-      o.providers?.some((p) => p.key === selectedProviderKey),
-    );
+    return preview.model_options
+      .filter((o) => o.providers?.some((p) => p.key === selectedProviderKey))
+      .slice()
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [preview, selectedProviderKey]);
 
   const jsonPayload = useMemo(() => {

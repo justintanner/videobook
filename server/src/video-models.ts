@@ -101,9 +101,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
   },
   seedance2_t2v: {
-    label: "Seedance 2.0 Fast — Text",
+    label: "Seedance 2.0 — Text",
     tool_name: "generate_seedance2_t2v_video",
-    description: "ByteDance Seedance 2.0 Fast text-to-video generation (no reference inputs)",
+    description: "ByteDance Seedance 2.0 text-to-video generation (no reference inputs)",
     params: [
       "prompt", "aspect_ratio", "resolution", "duration",
       "generate_audio", "return_last_frame", "web_search",
