@@ -184,7 +184,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     }
   }, [genInFlight, isDirty, callTool, item.id, item.prompt, projectSlug]);
 
-  const rewriteDisabled = rewriting || item.status === 'generating';
+  const isGenerating = rewriting || item.status === 'generating';
+  const rewriteDisabled = isGenerating;
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(draft).then(
@@ -436,7 +437,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   onKeyUp={updateCursorPos}
                   onClick={updateCursorPos}
                   onSelect={updateCursorPos}
-                  disabled={saving}
+                  disabled={saving || isGenerating}
                   placeholder="Write your script here..."
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
@@ -445,9 +446,54 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     'font-mono',
                     'focus:outline-none',
                     'overflow-y-auto scrollbar-cyan',
-                    saving && 'opacity-50 cursor-not-allowed',
+                    (saving || isGenerating) && 'opacity-40 cursor-not-allowed select-none',
                   )}
                 />
+
+                {isGenerating && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+                    {/* Dim backdrop so stale content reads as stale */}
+                    <div className="absolute inset-0 bg-black/60" />
+                    {/* CRT scanlines on top of the dim */}
+                    <div
+                      className="absolute inset-0 pointer-events-none opacity-40"
+                      style={{
+                        background: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(245,158,11,0.06) 2px, rgba(245,158,11,0.06) 4px)`,
+                      }}
+                    />
+                    <div className="relative flex flex-col items-center gap-3">
+                      <div
+                        className="px-3 py-1.5 flex items-center gap-2 border rounded"
+                        style={{
+                          color: '#fbbf24',
+                          borderColor: 'rgba(245,158,11,0.6)',
+                          backgroundColor: 'rgba(245,158,11,0.12)',
+                          boxShadow: '0 0 12px rgba(245,158,11,0.35)',
+                          textShadow: '0 0 8px #f59e0b',
+                          animation: 'generating-model-pulse 2s ease-in-out infinite',
+                        }}
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.18em]">
+                          Rewriting Script
+                        </span>
+                      </div>
+                      <div className="flex gap-0.5">
+                        {[0, 1, 2, 3, 4].map((i) => (
+                          <div
+                            key={i}
+                            className="w-5 h-1.5 border"
+                            style={{
+                              borderColor: 'rgba(245,158,11,0.45)',
+                              animation: 'generating-segment-fill 2.5s ease-in-out infinite',
+                              animationDelay: `${i * 0.4}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Slash command autocomplete */}
