@@ -717,6 +717,7 @@ export function HomePage() {
               <div className="flex-1 p-4 overflow-hidden flex flex-col">
                 {genPanel != null ? (
                   <GenPreviewPanel
+                    key={genPanel.category}
                     ref={genPanelRef}
                     category={genPanel.category}
                     prompt={genPanel.prompt}
