@@ -4,28 +4,23 @@ import { toast } from "@/hooks/useToast";
 import type { GitCommit } from "@/hooks/useAssetHistory";
 
 /**
- * Navigate a script asset's git history non-destructively.
+ * Step a script asset's HEAD backward/forward through its git history in one click.
  *
- * index 0  = HEAD (no preview — show current item.prompt)
- * index >0 = N commits back; `preview` holds the markdown content from that commit
+ * Each PREV/NEXT call invokes restore_asset_version against the target commit and
+ * issues a sync so the normal item.prompt flow picks up the new content. There is
+ * no preview mode — the viewer always reflects HEAD.
  *
- * `revert` restores the currently-previewed commit to HEAD (destructive, creates a new commit).
+ * `idx` is the current position in the ORIGINAL history list captured on first
+ * fetch. We don't refetch after each restore so the Next button keeps meaning
+ * "move toward where I started".
  */
 
 export interface UseScriptHistoryNavResult {
-  commits: GitCommit[];
-  commitsLoading: boolean;
-  index: number;
-  preview: string | null;
-  previewLoading: boolean;
+  loading: boolean;
   canPrev: boolean;
   canNext: boolean;
-  prev: () => void;
-  next: () => void;
-  reset: () => void;
-  reverting: boolean;
-  revert: () => Promise<boolean>;
-  currentCommit: GitCommit | null;
+  prev: () => Promise<void>;
+  next: () => Promise<void>;
 }
 
 const FILENAME = "original.md";
@@ -38,169 +33,88 @@ interface Args {
 
 export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): UseScriptHistoryNavResult {
   const [commits, setCommits] = useState<GitCommit[]>([]);
-  const [commitsLoading, setCommitsLoading] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [reverting, setReverting] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
+  const inFlightRef = useRef(false);
 
-  // Reset local nav state whenever the asset changes
+  // Reset per-asset when switching viewers
   useEffect(() => {
-    setIndex(0);
-    setPreview(null);
     setCommits([]);
+    setIdx(0);
   }, [assetId]);
 
-  // Only include commits that actually touched original.md — otherwise Prev/Next
-  // would step through unrelated commits (renames in sibling files, etc.) with
-  // identical content
   const fetchCommits = useCallback(async (): Promise<GitCommit[]> => {
-    setCommitsLoading(true);
-    try {
-      const result = await callToolRef.current("asset_history", {
-        asset_id: assetId,
-        project_slug: projectSlug,
-        limit: 50,
-      });
-      if (result.isError) {
-        setCommits([]);
-        return [];
-      }
-      const content = result.content as Array<{ type: string; text: string }>;
-      const raw: GitCommit[] = JSON.parse(content[0].text);
-      const filtered = raw.filter((c) => !c.files || c.files.length === 0 || c.files.includes(FILENAME));
-      setCommits(filtered);
-      return filtered;
-    } catch (e: unknown) {
-      console.error("[history-nav] fetch failed:", e instanceof Error ? e.message : String(e));
-      setCommits([]);
-      return [];
-    } finally {
-      setCommitsLoading(false);
-    }
+    const result = await callToolRef.current("asset_history", {
+      asset_id: assetId,
+      project_slug: projectSlug,
+      limit: 50,
+    });
+    if (result.isError) return [];
+    const content = result.content as Array<{ type: string; text: string }>;
+    const raw: GitCommit[] = JSON.parse(content[0].text);
+    const filtered = raw.filter((c) => !c.files || c.files.length === 0 || c.files.includes(FILENAME));
+    setCommits(filtered);
+    return filtered;
   }, [assetId, projectSlug]);
 
-  const fetchPreview = useCallback(async (commitHash: string): Promise<string | null> => {
-    setPreviewLoading(true);
-    try {
-      const result = await callToolRef.current("read_file_at_commit", {
-        asset_id: assetId,
-        filename: FILENAME,
-        commit_hash: commitHash,
-        project_slug: projectSlug,
-      });
-      if (result.isError) {
-        const content = result.content as Array<{ type: string; text: string }> | undefined;
-        const msg = content?.[0]?.text ?? "Failed to load preview";
-        toast({ title: "Preview failed", description: msg, duration: 3000 });
-        return null;
-      }
-      const content = result.content as Array<{ type: string; text: string }>;
-      return content[0].text;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Preview failed", description: msg, duration: 3000 });
-      return null;
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [assetId, projectSlug]);
-
-  const applyIndex = useCallback(async (nextIndex: number, knownCommits: GitCommit[]) => {
-    if (nextIndex <= 0) {
-      setIndex(0);
-      setPreview(null);
-      return;
-    }
-    const commit = knownCommits[nextIndex];
+  const stepTo = useCallback(async (targetIdx: number, list: GitCommit[]) => {
+    const commit = list[targetIdx];
     if (!commit) return;
-    setIndex(nextIndex);
-    const content = await fetchPreview(commit.hash);
-    if (content === null) {
-      // Roll back on failure
-      setIndex(0);
-      setPreview(null);
+    const result = await callToolRef.current("restore_asset_version", {
+      asset_id: assetId,
+      commit_hash: commit.hash,
+      project_slug: projectSlug,
+    });
+    if (result.isError) {
+      const content = result.content as Array<{ type: string; text: string }> | undefined;
+      toast({ title: "Restore failed", description: content?.[0]?.text ?? "Unknown error", duration: 3500 });
       return;
     }
-    setPreview(content);
-  }, [fetchPreview]);
+    setIdx(targetIdx);
+    await callToolRef.current("sync", { project_slug: projectSlug });
+  }, [assetId, projectSlug]);
 
   const prev = useCallback(async () => {
-    let list = commits;
-    if (list.length === 0) {
-      list = await fetchCommits();
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    setLoading(true);
+    try {
+      let list = commits;
       if (list.length === 0) {
-        toast({ title: "No history", description: "This script has no previous versions", duration: 2500 });
-        return;
+        list = await fetchCommits();
+        if (list.length <= 1) {
+          toast({ title: "No older versions", duration: 2000 });
+          return;
+        }
       }
+      if (idx + 1 >= list.length) return;
+      await stepTo(idx + 1, list);
+    } finally {
+      inFlightRef.current = false;
+      setLoading(false);
     }
-    const next = index + 1;
-    if (next >= list.length) return;
-    await applyIndex(next, list);
-  }, [commits, index, fetchCommits, applyIndex]);
+  }, [commits, idx, fetchCommits, stepTo]);
 
   const next = useCallback(async () => {
-    if (index <= 0) return;
-    await applyIndex(index - 1, commits);
-  }, [index, commits, applyIndex]);
-
-  const reset = useCallback(() => {
-    setIndex(0);
-    setPreview(null);
-  }, []);
-
-  const revert = useCallback(async (): Promise<boolean> => {
-    const commit = commits[index];
-    if (!commit || index <= 0) return false;
-    setReverting(true);
+    if (inFlightRef.current || idx <= 0 || commits.length === 0) return;
+    inFlightRef.current = true;
+    setLoading(true);
     try {
-      const result = await callToolRef.current("restore_asset_version", {
-        asset_id: assetId,
-        commit_hash: commit.hash,
-        project_slug: projectSlug,
-      });
-      if (result.isError) {
-        const content = result.content as Array<{ type: string; text: string }> | undefined;
-        const msg = content?.[0]?.text ?? "Revert failed";
-        toast({ title: "Revert failed", description: msg, duration: 3500 });
-        return false;
-      }
-      toast({
-        title: "Reverted",
-        description: `Restored ${commit.hash.slice(0, 7)}`,
-        duration: 2000,
-      });
-      await callToolRef.current("sync", { project_slug: projectSlug });
-      // Fresh history + clear preview so the viewer drops back to HEAD
-      setCommits([]);
-      setIndex(0);
-      setPreview(null);
-      return true;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Revert failed", description: msg, duration: 3500 });
-      return false;
+      await stepTo(idx - 1, commits);
     } finally {
-      setReverting(false);
+      inFlightRef.current = false;
+      setLoading(false);
     }
-  }, [commits, index, assetId, projectSlug]);
+  }, [commits, idx, stepTo]);
 
   return {
-    commits,
-    commitsLoading,
-    index,
-    preview,
-    previewLoading,
-    canPrev: commits.length === 0 ? true : index + 1 < commits.length,
-    canNext: index > 0,
+    loading,
+    canPrev: commits.length === 0 ? true : idx + 1 < commits.length,
+    canNext: idx > 0,
     prev,
     next,
-    reset,
-    reverting,
-    revert,
-    currentCommit: index > 0 ? commits[index] ?? null : null,
   };
 }
