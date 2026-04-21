@@ -117,6 +117,40 @@
     );
   }
 
+  /* Flush scrollbar — no track margin, thinner thumb border. Scoped to opt-in
+     containers (e.g. the script viewer textarea) so the global 4px track
+     margin still applies everywhere else. */
+  .scrollbar-flush::-webkit-scrollbar-track {
+    margin: 0;
+  }
+  .scrollbar-flush::-webkit-scrollbar-thumb {
+    border: 1px solid transparent;
+    border-radius: 3px;
+  }
+
+  /* Horizontal scan-bar sweep — 2px cyan line that drifts top → bottom.
+     Used as ambient CRT decoration over viewer content. Stays low opacity
+     throughout so it never competes with text. */
+  @keyframes viewer-scan {
+    0%   { top: 0;    opacity: 0.35; }
+    50%  {            opacity: 0.18; }
+    100% { top: 100%; opacity: 0;    }
+  }
+  .viewer-scan-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 255, 255, 0.4) 50%,
+      transparent 100%
+    );
+    pointer-events: none;
+    animation: viewer-scan 4s linear infinite;
+  }
+
   /* ==================== CLIP STATE UTILITIES ==================== */
 
   .clip-state-uploading {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X } from 'lucide-react';
+import { Settings, FileText, Save, Loader2, X, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -266,11 +267,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
           {/* FRONT FACE */}
           <div className={cn(
             'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
-            'border border-zinc-600/50',
+            'border border-primary/40 clip-corner-both',
+            'shadow-[inset_0_0_20px_rgba(0,255,255,0.08),0_0_15px_rgba(0,255,255,0.15)]',
           )}>
             <ViewerToolbar
               left={
-                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/90 drop-shadow-[0_0_4px_rgba(0,255,255,0.5)]">
                   <FileText className="w-3.5 h-3.5" />
                   <span>MARKDOWN</span>
                   {isDirty && <span className="text-yellow-400/80 text-[10px]">(unsaved)</span>}
@@ -279,6 +281,19 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               slug={item.slug}
               right={
                 <div className="flex items-center gap-1">
+                  <button
+                    tabIndex={-1}
+                    onClick={() => {
+                      navigator.clipboard.writeText(draft).then(
+                        () => toast({ title: 'Copied', description: item.slug, duration: 2000 }),
+                        () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
+                      );
+                    }}
+                    title="Copy markdown"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  >
+                    <Copy className="w-4 h-4 stroke-[2.5]" />
+                  </button>
                   <button
                     tabIndex={-1}
                     onClick={handleFlipToBack}
@@ -300,6 +315,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
             />
 
             <div className="flex-1 bg-black flex min-h-0 relative">
+              {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
+              <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
+
+              {/* Scan-bar sweep — ambient "live readout" decoration */}
+              <div className="viewer-scan-bar z-0" />
+
               <textarea
                 ref={textareaRef}
                 value={draft}
@@ -311,12 +332,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 disabled={saving}
                 placeholder="Write your script here..."
                 className={cn(
-                  'w-full h-full resize-none p-6',
+                  'relative z-10 w-full h-full mx-auto max-w-[72ch] resize-none px-8 py-6',
                   'bg-transparent',
-                  'text-sm leading-relaxed text-primary/70 placeholder:text-primary/20',
+                  'text-[15px] leading-7 tracking-[0.01em] text-foreground/90 placeholder:text-primary/20 caret-primary',
                   'font-mono',
                   'focus:outline-none',
-                  'overflow-y-auto',
+                  'overflow-y-auto scrollbar-flush',
                   saving && 'opacity-50 cursor-not-allowed',
                 )}
               />
