@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images } from 'lucide-react';
+import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -307,11 +307,18 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   });
 
   // Guard flip-to-back when dirty
-  const { handleFlipToBack: bfFlip } = bf;
+  const { handleFlipToBack: bfFlip, setBackTab: bfSetBackTab } = bf;
   const handleFlipToBack = useCallback(() => {
     if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
     bfFlip();
   }, [isDirty, bfFlip]);
+
+  // Jump straight to the history back face from the inner toolbar
+  const handleOpenHistory = useCallback(() => {
+    if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
+    bfSetBackTab('history');
+    onFlippedChange(true);
+  }, [isDirty, bfSetBackTab, onFlippedChange]);
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -410,22 +417,40 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   }
                 />
 
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={handleCopy}
-                  title="Copy markdown"
-                  className={cn(
-                    'ml-auto h-7 px-2.5 flex items-center gap-1.5 rounded',
-                    'text-[11px] font-mono font-bold uppercase tracking-wider',
-                    'text-zinc-300/90 hover:text-zinc-100',
-                    'bg-zinc-500/5 hover:bg-zinc-500/15 border border-zinc-500/30 hover:border-zinc-400/60',
-                    'transition-colors duration-150',
-                  )}
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy
-                </button>
+                <div className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={handleOpenHistory}
+                    title="View git history of this script"
+                    className={cn(
+                      'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                      'text-[11px] font-mono font-bold uppercase tracking-wider',
+                      'text-violet-300/90 hover:text-violet-200',
+                      'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
+                      'transition-colors duration-150',
+                    )}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    History
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={handleCopy}
+                    title="Copy markdown"
+                    className={cn(
+                      'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                      'text-[11px] font-mono font-bold uppercase tracking-wider',
+                      'text-zinc-300/90 hover:text-zinc-100',
+                      'bg-zinc-500/5 hover:bg-zinc-500/15 border border-zinc-500/30 hover:border-zinc-400/60',
+                      'transition-colors duration-150',
+                    )}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 flex min-h-0 relative">
@@ -445,7 +470,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
                     'bg-transparent',
-                    'text-[15px] leading-7 tracking-[0.01em] text-emerald-300 placeholder:text-emerald-300/20 caret-emerald-200',
+                    'text-[15px] leading-7 tracking-[0.01em] text-sky-300 placeholder:text-sky-300/25 caret-sky-200',
                     'font-mono',
                     'focus:outline-none',
                     'overflow-y-auto scrollbar-cyan',
