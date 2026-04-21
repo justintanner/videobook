@@ -70,6 +70,7 @@ import { exportToDownloadsDef } from "./export-to-downloads.js";
 import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
+import { describeImageDef } from "./describe-image.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
 import { assignSlotDef } from "./assign-slot.js";
 import { clearSlotDef } from "./clear-slot.js";
@@ -194,6 +195,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     pushChatHistoryDef(fs),
     listChatHistoryDef(fs),
     rewritePromptDef(fs),
+    describeImageDef(fs),
     isolateVocalsDef(fs),
     assignSlotDef(fs),
     clearSlotDef(fs),

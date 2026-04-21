@@ -192,6 +192,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "show_folder", autoInject: ["project_slug"] },
   },
   {
+    command: "/describe",
+    description: "Describe image into a reproduction-ready prompt",
+    example: "/describe @product-shot",
+    category: "context_menu",
+    icon: "ScanEye",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Image asset to describe" },
+    ],
+    mcpTool: { tool: "describe_image", autoInject: ["project_slug"] },
+  },
+  {
     command: "/copy-video",
     description: "Copy video file to clipboard",
     example: "/copy-video @hero-intro",
