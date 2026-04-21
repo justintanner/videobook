@@ -71,6 +71,7 @@ import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
 import { describeImageDef } from "./describe-image.js";
+import { rewriteScriptDef } from "./rewrite-script.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
 import { assignSlotDef } from "./assign-slot.js";
 import { clearSlotDef } from "./clear-slot.js";
@@ -114,6 +115,7 @@ import { generateSeedance2FastR2vFalDef } from "./generate-seedance2-fast-r2v-fa
 import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
+import { genImagesAllDef } from "./gen-images-all.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -196,6 +198,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     listChatHistoryDef(fs),
     rewritePromptDef(fs),
     describeImageDef(fs),
+    rewriteScriptDef(fs),
     isolateVocalsDef(fs),
     assignSlotDef(fs),
     clearSlotDef(fs),
@@ -239,5 +242,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineVideoR2vFalDef(fs),
     generateGrokImagineVideoExtendFalDef(fs),
     generateGrokImagineVideoEditFalDef(fs),
+    genImagesAllDef(fs),
   ];
 }

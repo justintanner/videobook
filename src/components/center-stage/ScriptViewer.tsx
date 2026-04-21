@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X, Copy } from 'lucide-react';
+import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -140,6 +140,68 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
+
+  // TLDR handler — re-invokes describe_image with variant=tldr, writing back to this asset
+  const [tldrInFlight, setTldrInFlight] = useState(false);
+  const handleTldr = useCallback(async () => {
+    if (tldrInFlight) return;
+    if (isDirty && !window.confirm('You have unsaved changes. Discard them and run TLDR?')) return;
+    setTldrInFlight(true);
+    try {
+      const result = await callTool('rewrite_script', {
+        asset_id: item.id,
+        variant: 'tldr',
+        project_slug: projectSlug,
+      });
+      if (result.isError) {
+        const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'TLDR failed';
+        toast({ title: 'TLDR failed', description: msg, duration: 4000 });
+        return;
+      }
+      toast({ title: 'TLDR queued', description: item.slug, duration: 2000 });
+      await callTool('sync', { project_slug: projectSlug });
+    } finally {
+      setTldrInFlight(false);
+    }
+  }, [tldrInFlight, isDirty, callTool, item.id, item.slug, projectSlug]);
+
+  // GEN IMAGES handler — fan out the script's prompt across leading t2i models
+  const [genInFlight, setGenInFlight] = useState(false);
+  const handleGenImages = useCallback(async () => {
+    if (genInFlight) return;
+    const prompt = (item.prompt ?? '').trim();
+    if (!prompt) {
+      toast({ title: 'Script is empty', description: 'Write a prompt first', duration: 2500 });
+      return;
+    }
+    if (isDirty && !window.confirm('You have unsaved changes. Discard them and gen images from the saved script?')) return;
+    setGenInFlight(true);
+    try {
+      const result = await callTool('gen_images_all_models', {
+        prompt,
+        project_slug: projectSlug,
+        source_script_id: item.id,
+      });
+      if (result.isError) {
+        const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'Gen images failed';
+        toast({ title: 'Gen images failed', description: msg, duration: 4000 });
+        return;
+      }
+      toast({ title: 'Image jobs queued', description: '5 models', duration: 2000 });
+      await callTool('sync', { project_slug: projectSlug });
+    } finally {
+      setGenInFlight(false);
+    }
+  }, [genInFlight, isDirty, callTool, item.id, item.prompt, projectSlug]);
+
+  const tldrDisabled = tldrInFlight || item.status === 'generating';
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(draft).then(
+      () => toast({ title: 'Copied', description: item.slug, duration: 2000 }),
+      () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
+    );
+  }, [draft, item.slug]);
 
   // Save handler
   const handleSave = useCallback(async () => {
@@ -300,46 +362,85 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               }
             />
 
-            <div className="flex-1 bg-black flex min-h-0 relative">
-              {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
-              <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
+            <div className="flex-1 bg-black flex flex-col min-h-0 relative">
+              {/* Inner toolbar — Rewrite + TLDR + Copy above the markdown body */}
+              <div className="shrink-0 flex items-center justify-end gap-1 px-3 py-1.5 border-b border-zinc-800/60 bg-black/40 z-10">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={handleGenImages}
+                  disabled={genInFlight || saving || !(item.prompt ?? '').trim()}
+                  title="Generate image across 5 leading t2i models (Nano Banana Pro, Wan 2.7 Pro, Seedream, GPT Image 1.5, Grok Imagine)"
+                  className={cn(
+                    'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                    'text-[11px] font-mono font-bold uppercase tracking-wider',
+                    'text-cyan-300/90 hover:text-cyan-200',
+                    'bg-cyan-500/5 hover:bg-cyan-500/15 border border-cyan-500/30 hover:border-cyan-400/60',
+                    'transition-colors duration-150',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                >
+                  {genInFlight
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Images className="w-3.5 h-3.5" />}
+                  Gen Images
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={handleTldr}
+                  disabled={tldrDisabled || saving}
+                  title="Rewrite as 1–2 sentence TLDR (git-preserved)"
+                  className={cn(
+                    'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                    'text-[11px] font-mono font-bold uppercase tracking-wider',
+                    'text-amber-300/90 hover:text-amber-200',
+                    'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
+                    'transition-colors duration-150',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                >
+                  {tldrInFlight
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Zap className="w-3.5 h-3.5" />}
+                  TLDR
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={handleCopy}
+                  title="Copy markdown"
+                  className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                >
+                  <Copy className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
 
-              {/* Copy-to-clipboard — inside the panel, top-right */}
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => {
-                  navigator.clipboard.writeText(draft).then(
-                    () => toast({ title: 'Copied', description: item.slug, duration: 2000 }),
-                    () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
-                  );
-                }}
-                title="Copy markdown"
-                className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-              >
-                <Copy className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              <div className="flex-1 flex min-h-0 relative">
+                {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
+                <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
 
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(e) => { setDraft(e.target.value); updateCursorPos(); }}
-                onKeyDown={handleKeyDown}
-                onKeyUp={updateCursorPos}
-                onClick={updateCursorPos}
-                onSelect={updateCursorPos}
-                disabled={saving}
-                placeholder="Write your script here..."
-                className={cn(
-                  'relative z-10 w-full h-full resize-none px-8 py-6',
-                  'bg-transparent',
-                  'text-[15px] leading-7 tracking-[0.01em] text-amber-100 placeholder:text-amber-100/20 caret-amber-200',
-                  'font-mono',
-                  'focus:outline-none',
-                  'overflow-y-auto scrollbar-cyan',
-                  saving && 'opacity-50 cursor-not-allowed',
-                )}
-              />
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(e) => { setDraft(e.target.value); updateCursorPos(); }}
+                  onKeyDown={handleKeyDown}
+                  onKeyUp={updateCursorPos}
+                  onClick={updateCursorPos}
+                  onSelect={updateCursorPos}
+                  disabled={saving}
+                  placeholder="Write your script here..."
+                  className={cn(
+                    'relative z-10 w-full h-full resize-none px-8 py-6',
+                    'bg-transparent',
+                    'text-[15px] leading-7 tracking-[0.01em] text-amber-300 placeholder:text-amber-300/20 caret-amber-200',
+                    'font-mono',
+                    'focus:outline-none',
+                    'overflow-y-auto scrollbar-cyan',
+                    saving && 'opacity-50 cursor-not-allowed',
+                  )}
+                />
+              </div>
 
               {/* Slash command autocomplete */}
               {showSuggestions && (

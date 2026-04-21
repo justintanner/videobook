@@ -26,7 +26,7 @@ export function CommandRegistryProvider({
   state: string;
   projectSlug: string | undefined;
   uiActions: UiActionMap;
-  onAfterDispatch?: (toolName: string, toolArgs: Record<string, string>) => void;
+  onAfterDispatch?: (toolName: string, toolArgs: Record<string, string | number | boolean>) => void;
   children: React.ReactNode;
 }) {
   const mountKeys = useMountKeys();
@@ -90,9 +90,12 @@ export function CommandRegistryProvider({
 
           // mcpTool dispatch
           if (cmd.mcpTool) {
-            const toolArgs: Record<string, string> = { ...args };
+            const toolArgs: Record<string, string | number | boolean> = { ...args };
             if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
               toolArgs.project_slug = projectSlug;
+            }
+            if (cmd.mcpTool.injectParams) {
+              Object.assign(toolArgs, cmd.mcpTool.injectParams);
             }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);
             if (!result.isError) onAfterDispatch?.(cmd.mcpTool.tool, toolArgs);

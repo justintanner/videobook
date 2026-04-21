@@ -405,16 +405,17 @@ export function HomePage() {
     setTimelineSlotIndex(slotIndex);
   }, []);
 
-  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string>) => {
+  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string | number | boolean>) => {
     if (!projectSlug) return;
     fetchTimeline(projectSlug);
     listAssets(projectSlug, sortOrder);
     sync(projectSlug);
     if (toolName === 'delete_asset') {
-      removeAsset(toolArgs.asset_id);
+      const assetId = typeof toolArgs.asset_id === 'string' ? toolArgs.asset_id : String(toolArgs.asset_id);
+      removeAsset(assetId);
       setDeletingIds((prev) => {
         const next = new Set(prev);
-        next.delete(toolArgs.asset_id);
+        next.delete(assetId);
         return next;
       });
     }

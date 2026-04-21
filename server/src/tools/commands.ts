@@ -18,7 +18,7 @@ interface Command {
   variant: "default" | "violet" | "fuchsia" | "blue" | "zinc";
   chevron: "right" | "down";
   params: CommandParam[];
-  mcpTool?: { tool: string; autoInject?: string[] };
+  mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
 }
@@ -204,6 +204,34 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Image asset to describe" },
     ],
     mcpTool: { tool: "describe_image", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/rewrite",
+    description: "Rewrite a script asset in place with the full describe model",
+    example: "/rewrite @script-desc-product-shot",
+    category: "context_menu",
+    icon: "RefreshCw",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Script asset to rewrite" },
+    ],
+    mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "full" } },
+  },
+  {
+    command: "/tldr",
+    description: "Rewrite a script asset in place as a 1–2 sentence TLDR",
+    example: "/tldr @script-desc-product-shot",
+    category: "context_menu",
+    icon: "Zap",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Script asset to rewrite" },
+    ],
+    mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "tldr" } },
   },
   {
     command: "/copy-video",

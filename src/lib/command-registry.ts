@@ -15,7 +15,7 @@ export interface ServerCommand {
   variant: 'default' | 'violet' | 'fuchsia' | 'blue' | 'zinc';
   chevron: 'right' | 'down';
   params: CommandParam[];
-  mcpTool?: { tool: string; autoInject?: string[] };
+  mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
 }
