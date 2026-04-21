@@ -22,6 +22,8 @@ import { registerGenerateWan27ImageJob } from "./generate-wan27-image.js";
 import { registerGenerateWan27ImageProJob } from "./generate-wan27-image-pro.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateQwen2ImageEditJob } from "./generate-qwen2-image-edit.js";
+import { registerGenerateSeedreamTextImageJob } from "./generate-seedream-text-image.js";
+import { registerGenerateSeedreamImageJob } from "./generate-seedream-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
@@ -97,6 +99,8 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateWan27ImageProJob(fs);
   registerGenerateNanoBananaImageJob(fs);
   registerGenerateQwen2ImageEditJob(fs);
+  registerGenerateSeedreamTextImageJob(fs);
+  registerGenerateSeedreamImageJob(fs);
   registerGenerateGrokImagineImageJob(fs);
   registerGenerateGrokImagineTextImageJob(fs);
   registerGenerateGptImageJob(fs);

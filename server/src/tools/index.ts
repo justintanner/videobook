@@ -42,6 +42,8 @@ import { generateWan27ImageDef } from "./generate-wan27-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
+import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
+import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
@@ -163,6 +165,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateWan27ImageProDef(fs),
     generateNanoBananaImageDef(fs),
     generateQwen2ImageEditDef(fs),
+    generateSeedreamTextImageDef(fs),
+    generateSeedreamImageDef(fs),
     renderDef(fs),
     syncDef(fs),
     listAssetsDef(fs),

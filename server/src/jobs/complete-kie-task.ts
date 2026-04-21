@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_gpt_image_1_5" | "fal_gpt_image_1_5_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_gpt_image_1_5" | "fal_gpt_image_1_5_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -56,6 +56,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "qwen2_image_edit") {
         await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType === "seedream_text_image" || taskType === "seedream_image") {
+        await completeSeedreamImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "kling30_video") {
         await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
       } else if (taskType === "seedance2_video") {
@@ -141,6 +143,46 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
   return images
     .map((i) => i?.url)
     .filter((u): u is string => typeof u === "string");
+}
+
+async function completeSeedreamImage(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: "seedream_text_image" | "seedream_image",
+): Promise<void> {
+  const imageUrl = resultUrls[0];
+  if (!imageUrl) throw new Error("No image URL in result");
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+
+  const origin = {
+    source_assets: meta.sourceImageIds,
+    model: taskType === "seedream_image"
+      ? "seedream/5-lite-image-to-image"
+      : "seedream/5-lite-text-to-image",
+    prompt: meta.prompt,
+    download_url: imageUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
+    ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
+    ...(meta.nsfwChecker !== undefined ? { nsfw_checker: meta.nsfwChecker } : {}),
+    generated_at: new Date().toISOString(),
+  };
+  const jobId = `process-image-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_image",
+    assetId,
+    projectSlug,
+    extension: ".png",
+    provenance: origin,
+  } as unknown as Record<string, unknown>);
 }
 
 async function completeSeedreamV5LiteImage(
