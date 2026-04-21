@@ -364,7 +364,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
 
             <div className="flex-1 bg-black flex flex-col min-h-0 relative">
               {/* Inner toolbar — Rewrite + TLDR + Copy above the markdown body */}
-              <div className="shrink-0 flex items-center justify-end gap-1 px-3 py-1.5 border-b border-zinc-800/60 bg-black/40 z-10">
+              <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-zinc-800/60 bg-black/40 z-10">
                 <button
                   type="button"
                   tabIndex={-1}
@@ -410,9 +410,16 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   tabIndex={-1}
                   onClick={handleCopy}
                   title="Copy markdown"
-                  className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                  className={cn(
+                    'ml-auto h-7 px-2.5 flex items-center gap-1.5 rounded',
+                    'text-[11px] font-mono font-bold uppercase tracking-wider',
+                    'text-zinc-300/90 hover:text-zinc-100',
+                    'bg-zinc-500/5 hover:bg-zinc-500/15 border border-zinc-500/30 hover:border-zinc-400/60',
+                    'transition-colors duration-150',
+                  )}
                 >
-                  <Copy className="w-4 h-4 stroke-[2.5]" />
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
                 </button>
               </div>
 
@@ -433,7 +440,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
                     'bg-transparent',
-                    'text-[15px] leading-7 tracking-[0.01em] text-amber-300 placeholder:text-amber-300/20 caret-amber-200',
+                    'text-[15px] leading-7 tracking-[0.01em] text-emerald-300 placeholder:text-emerald-300/20 caret-emerald-200',
                     'font-mono',
                     'focus:outline-none',
                     'overflow-y-auto scrollbar-cyan',

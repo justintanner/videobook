@@ -49,6 +49,10 @@ function buildSystemPrompt(guide: string): string {
     "for an image generator. Follow the guide below exactly. Return ONLY a JSON object matching the schema " +
     "described in the guide. Do not wrap it in prose or markdown fences.\n\n" +
     `HARD LIMIT: the "prompt" field MUST be ${PROMPT_CHAR_LIMIT} characters or fewer. Trim detail to fit; never exceed.\n\n` +
+    "REGISTER: If the image reads as a casual phone/social snapshot (candid framing, available light, " +
+    "unretouched skin, compression artifacts), use the Authentic-photo register from the guide. Do not " +
+    "inject editorial film-stock, 'cinematic', 'masterpiece', or pro-film vocabulary into snapshots. " +
+    "Default to authentic phone capture when in doubt.\n\n" +
     `--- REPRODUCTION GUIDE ---\n${guide}\n--- END GUIDE ---`
   );
 }
@@ -57,6 +61,11 @@ function buildTldrSystemPrompt(): string {
   return (
     "You are an expert image-to-prompt analyst. Describe this image as a single, tight reproduction " +
     "prompt of 1–2 sentences (roughly 40–70 words) that captures subject, setting, framing, light, and mood. " +
+    "Match the image's register: if it reads as a casual phone/social photo, include authentic-capture " +
+    "cues (e.g. authentic iPhone photo, mild grain, subtle sensor noise, tiny chromatic aberration, no " +
+    "beauty filter, unedited skin) and AVOID words like 'editorial', 'cinematic', 'masterpiece', or " +
+    "named film stocks (Portra, Cinestill, etc.). Only use film-stock / cinematic vocabulary if the " +
+    "image is clearly a pro editorial or film still. Never apply camera vocabulary to a painting or render.\n" +
     "Return ONLY a JSON object: { \"prompt\": string }. No breakdown fields. No markdown fences, no prose."
   );
 }
