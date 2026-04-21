@@ -9,6 +9,9 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
 type RewriteVariant = "full" | "tldr";
+type RewritePlatform = "ig" | "tiktok" | "youtube";
+
+const CUSTOM_PROMPT_MAX = 500;
 
 type OriginalMeta = {
   origin?: string;
@@ -33,17 +36,25 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
     description:
       "Rewrite a generated script asset in-place using the same model that originally created it. " +
       "Variants: \"full\" (full reproduction prompt + breakdown) or \"tldr\" (1–2 sentence summary). " +
-      "Previous versions are preserved in git history via clipfirst-fs. Returns immediately; sync " +
-      "reports status=\"generating\" until the new markdown is written.",
+      "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that " +
+      "feed. Optional custom_prompt injects a small transformation instruction (e.g. \"replace the pig " +
+      "with a man in a blue suit\"). Previous versions are preserved in git history via clipfirst-fs. " +
+      "Returns immediately; sync reports status=\"generating\" until the new markdown is written.",
     schema: {
       asset_id: z.string().describe("Script asset ID (script-*)"),
       variant: z.enum(["full", "tldr"]).describe("Rewrite style"),
+      platform: z.enum(["ig", "tiktok", "youtube"]).optional()
+        .describe("Platform preset — tunes authentic-capture cues for the target feed"),
+      custom_prompt: z.string().max(CUSTOM_PROMPT_MAX).optional()
+        .describe("Optional small transformation instruction, e.g. 'replace the pig with a man in a blue suit'"),
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, variant, project_slug } = args as {
+      const { asset_id, variant, platform, custom_prompt, project_slug } = args as {
         asset_id: string;
         variant: RewriteVariant;
+        platform?: RewritePlatform;
+        custom_prompt?: string;
         project_slug: string;
       };
 
@@ -88,7 +99,12 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
         assetDir: scriptAssetDir,
         projectSlug: project_slug,
         createdAt: new Date().toISOString(),
-        meta: { sourceAssetId, variant },
+        meta: {
+          sourceAssetId,
+          variant,
+          ...(platform ? { platform } : {}),
+          ...(custom_prompt ? { customPrompt: custom_prompt } : {}),
+        },
       });
 
       const jobId = `rewrite-script-${variant}-${asset_id}-${Date.now()}`;
@@ -99,6 +115,8 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
         assetId: asset_id,
         projectSlug: project_slug,
         tldr: variant === "tldr",
+        platform: platform ?? null,
+        customPrompt: custom_prompt ?? null,
       } as unknown as Record<string, unknown>);
 
       return {
@@ -110,6 +128,8 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
             job_id: jobId,
             status: "enqueued",
             variant,
+            ...(platform ? { platform } : {}),
+            ...(custom_prompt ? { custom_prompt } : {}),
           }),
         }],
       };

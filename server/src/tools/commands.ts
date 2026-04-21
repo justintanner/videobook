@@ -216,6 +216,8 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Script asset to rewrite" },
+      { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
+      { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
     mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "full" } },
   },
@@ -230,6 +232,8 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Script asset to rewrite" },
+      { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
+      { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
     mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "tldr" } },
   },

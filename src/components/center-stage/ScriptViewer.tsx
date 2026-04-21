@@ -16,6 +16,8 @@ import {
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { AutocompleteItem, ColorScheme } from '@/components/ui/AutocompleteDropdown';
+import { useRewriteScript } from '@/hooks/useRewriteScript';
+import { RewritePopover } from './RewritePopover';
 
 // ── ScriptViewer ──
 
@@ -141,29 +143,17 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // TLDR handler — re-invokes describe_image with variant=tldr, writing back to this asset
-  const [tldrInFlight, setTldrInFlight] = useState(false);
-  const handleTldr = useCallback(async () => {
-    if (tldrInFlight) return;
-    if (isDirty && !window.confirm('You have unsaved changes. Discard them and run TLDR?')) return;
-    setTldrInFlight(true);
-    try {
-      const result = await callTool('rewrite_script', {
-        asset_id: item.id,
-        variant: 'tldr',
-        project_slug: projectSlug,
-      });
-      if (result.isError) {
-        const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'TLDR failed';
-        toast({ title: 'TLDR failed', description: msg, duration: 4000 });
-        return;
-      }
-      toast({ title: 'TLDR queued', description: item.slug, duration: 2000 });
-      await callTool('sync', { project_slug: projectSlug });
-    } finally {
-      setTldrInFlight(false);
-    }
-  }, [tldrInFlight, isDirty, callTool, item.id, item.slug, projectSlug]);
+  // Rewrite handler — invokes rewrite_script with variant + optional platform/customPrompt
+  const { rewrite, rewriting } = useRewriteScript(callTool);
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const handleRewriteSubmit = useCallback(
+    (args: { variant: 'full' | 'tldr'; platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string }) => {
+      if (isDirty && !window.confirm('You have unsaved changes. Discard them and rewrite?')) return;
+      setRewriteOpen(false);
+      void rewrite(item.id, projectSlug, args);
+    },
+    [isDirty, rewrite, item.id, projectSlug],
+  );
 
   // GEN IMAGES handler — fan out the script's prompt across leading t2i models
   const [genInFlight, setGenInFlight] = useState(false);
@@ -194,7 +184,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     }
   }, [genInFlight, isDirty, callTool, item.id, item.prompt, projectSlug]);
 
-  const tldrDisabled = tldrInFlight || item.status === 'generating';
+  const rewriteDisabled = rewriting || item.status === 'generating';
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(draft).then(
@@ -385,26 +375,37 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     : <Images className="w-3.5 h-3.5" />}
                   Gen Images
                 </button>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={handleTldr}
-                  disabled={tldrDisabled || saving}
-                  title="Rewrite as 1–2 sentence TLDR (git-preserved)"
-                  className={cn(
-                    'h-7 px-2.5 flex items-center gap-1.5 rounded',
-                    'text-[11px] font-mono font-bold uppercase tracking-wider',
-                    'text-amber-300/90 hover:text-amber-200',
-                    'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
-                    'transition-colors duration-150',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                  )}
-                >
-                  {tldrInFlight
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Zap className="w-3.5 h-3.5" />}
-                  TLDR
-                </button>
+                <RewritePopover
+                  open={rewriteOpen}
+                  onOpenChange={setRewriteOpen}
+                  onSubmit={handleRewriteSubmit}
+                  rewriting={rewriting}
+                  disabled={saving}
+                  trigger={
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setRewriteOpen((o) => !o)}
+                      disabled={rewriteDisabled || saving}
+                      title="Rewrite script (TLDR/Full, optional platform preset + instruction)"
+                      className={cn(
+                        'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'text-amber-300/90 hover:text-amber-200',
+                        'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
+                        'transition-colors duration-150',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        rewriteOpen && 'bg-amber-500/15 border-amber-400/60 text-amber-200',
+                      )}
+                    >
+                      {rewriting
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Zap className="w-3.5 h-3.5" />}
+                      Rewrite
+                    </button>
+                  }
+                />
+
                 <button
                   type="button"
                   tabIndex={-1}
