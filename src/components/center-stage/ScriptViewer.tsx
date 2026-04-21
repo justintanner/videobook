@@ -267,8 +267,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
           {/* FRONT FACE */}
           <div className={cn(
             'flip-card-face absolute inset-0 flex flex-col overflow-hidden',
-            'border border-primary/40 clip-corner-both',
-            'shadow-[inset_0_0_20px_rgba(0,255,255,0.08),0_0_15px_rgba(0,255,255,0.15)]',
+            'border border-zinc-600/50',
           )}>
             <ViewerToolbar
               left={
@@ -281,19 +280,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               slug={item.slug}
               right={
                 <div className="flex items-center gap-1">
-                  <button
-                    tabIndex={-1}
-                    onClick={() => {
-                      navigator.clipboard.writeText(draft).then(
-                        () => toast({ title: 'Copied', description: item.slug, duration: 2000 }),
-                        () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
-                      );
-                    }}
-                    title="Copy markdown"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-                  >
-                    <Copy className="w-4 h-4 stroke-[2.5]" />
-                  </button>
                   <button
                     tabIndex={-1}
                     onClick={handleFlipToBack}
@@ -318,8 +304,21 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
               {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
               <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
 
-              {/* Scan-bar sweep — ambient "live readout" decoration */}
-              <div className="viewer-scan-bar z-0" />
+              {/* Copy-to-clipboard — inside the panel, top-right */}
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => {
+                  navigator.clipboard.writeText(draft).then(
+                    () => toast({ title: 'Copied', description: item.slug, duration: 2000 }),
+                    () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
+                  );
+                }}
+                title="Copy markdown"
+                className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+              >
+                <Copy className="w-4 h-4 stroke-[2.5]" />
+              </button>
 
               <textarea
                 ref={textareaRef}
@@ -332,12 +331,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 disabled={saving}
                 placeholder="Write your script here..."
                 className={cn(
-                  'relative z-10 w-full h-full mx-auto max-w-[72ch] resize-none px-8 py-6',
+                  'relative z-10 w-full h-full resize-none px-8 py-6',
                   'bg-transparent',
-                  'text-[15px] leading-7 tracking-[0.01em] text-foreground/90 placeholder:text-primary/20 caret-primary',
+                  'text-[15px] leading-7 tracking-[0.01em] text-amber-100 placeholder:text-amber-100/20 caret-amber-200',
                   'font-mono',
                   'focus:outline-none',
-                  'overflow-y-auto scrollbar-flush',
+                  'overflow-y-auto scrollbar-cyan',
                   saving && 'opacity-50 cursor-not-allowed',
                 )}
               />
