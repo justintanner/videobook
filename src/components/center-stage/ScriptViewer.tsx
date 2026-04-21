@@ -150,9 +150,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     (args: { variant: 'full' | 'tldr'; platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string }) => {
       if (isDirty && !window.confirm('You have unsaved changes. Discard them and rewrite?')) return;
       setRewriteOpen(false);
+      // Clear dirty state before kicking off the rewrite so the Save/Cancel
+      // buttons don't flash during the overlay → new-prompt transition.
+      setDraft(item.prompt ?? '');
       void rewrite(item.id, projectSlug, args);
     },
-    [isDirty, rewrite, item.id, projectSlug],
+    [isDirty, rewrite, item.id, item.prompt, projectSlug],
   );
 
   // GEN IMAGES handler — fan out the script's prompt across leading t2i models
@@ -454,22 +457,22 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
                     {/* Dim backdrop so stale content reads as stale */}
                     <div className="absolute inset-0 bg-black/60" />
-                    {/* CRT scanlines on top of the dim */}
+                    {/* CRT scanlines on top of the dim — matches the sidebar card's green generating state */}
                     <div
                       className="absolute inset-0 pointer-events-none opacity-40"
                       style={{
-                        background: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(245,158,11,0.06) 2px, rgba(245,158,11,0.06) 4px)`,
+                        background: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(34,197,94,0.06) 2px, rgba(34,197,94,0.06) 4px)`,
                       }}
                     />
                     <div className="relative flex flex-col items-center gap-3">
                       <div
                         className="px-3 py-1.5 flex items-center gap-2 border rounded"
                         style={{
-                          color: '#fbbf24',
-                          borderColor: 'rgba(245,158,11,0.6)',
-                          backgroundColor: 'rgba(245,158,11,0.12)',
-                          boxShadow: '0 0 12px rgba(245,158,11,0.35)',
-                          textShadow: '0 0 8px #f59e0b',
+                          color: '#22c55e',
+                          borderColor: 'rgba(34,197,94,0.6)',
+                          backgroundColor: 'rgba(34,197,94,0.12)',
+                          boxShadow: '0 0 12px rgba(34,197,94,0.35)',
+                          textShadow: '0 0 8px #22c55e',
                           animation: 'generating-model-pulse 2s ease-in-out infinite',
                         }}
                       >
@@ -484,7 +487,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                             key={i}
                             className="w-5 h-1.5 border"
                             style={{
-                              borderColor: 'rgba(245,158,11,0.45)',
+                              borderColor: 'rgba(34,197,94,0.45)',
                               animation: 'generating-segment-fill 2.5s ease-in-out infinite',
                               animationDelay: `${i * 0.4}s`,
                             }}
@@ -508,8 +511,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 </div>
               )}
 
-              {/* /save and /cancel buttons */}
-              {isDirty && (
+              {/* /save and /cancel buttons — hidden during rewrite so they don't flash
+                  during the transition from stale draft to the fresh prompt from sync */}
+              {isDirty && !isGenerating && (
                 <div className="absolute bottom-3 right-3 flex items-center gap-2">
                   <button
                     onClick={() => setDraft(item.prompt ?? '')}
