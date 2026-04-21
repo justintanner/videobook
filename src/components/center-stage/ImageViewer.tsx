@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Settings, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
+import { isFailedPending } from '@/components/commands/inbox-utils';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { ViewerSize, BackTab } from './viewer-types';
 import {
@@ -58,6 +60,17 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClose: () => void;
 }) {
   useMountKey('viewer');
+
+  // Auto-flip to back face when the asset is failed and has no image to show —
+  // the back face exposes the generation-error file and commit history.
+  const lastAutoFlippedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastAutoFlippedId.current === item.id) return;
+    if (isFailedPending(item) && !item.filePath) {
+      lastAutoFlippedId.current = item.id;
+      if (!flipped) onFlippedChange(true);
+    }
+  }, [item, flipped, onFlippedChange]);
 
   const bf = useViewerBackFace({
     projectSlug,
