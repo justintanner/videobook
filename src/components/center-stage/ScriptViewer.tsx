@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, History } from 'lucide-react';
+import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, History, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -18,6 +18,7 @@ import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { AutocompleteItem, ColorScheme } from '@/components/ui/AutocompleteDropdown';
 import { useRewriteScript } from '@/hooks/useRewriteScript';
 import { RewritePopover } from './RewritePopover';
+import { useScriptHistoryNav } from '@/hooks/useScriptHistoryNav';
 
 // ── ScriptViewer ──
 
@@ -142,6 +143,27 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
+
+  // Script history navigation — Prev/Next previews, Revert commits
+  const historyNav = useScriptHistoryNav({ callTool, assetId: item.id, projectSlug });
+  const isPreviewing = historyNav.index > 0;
+
+  const guardedPrev = useCallback(() => {
+    if (isDirty && !window.confirm('You have unsaved changes. Discard them to browse history?')) return;
+    if (isDirty) setDraft(item.prompt ?? '');
+    void historyNav.prev();
+  }, [isDirty, historyNav, item.prompt]);
+
+  const guardedNext = useCallback(() => {
+    void historyNav.next();
+  }, [historyNav]);
+
+  const handleRevert = useCallback(async () => {
+    const commit = historyNav.currentCommit;
+    if (!commit) return;
+    if (!window.confirm(`Revert to ${commit.hash.slice(0, 7)}? This writes the previewed version back to HEAD.`)) return;
+    await historyNav.revert();
+  }, [historyNav]);
 
   // Rewrite handler — invokes rewrite_script with variant + optional platform/customPrompt
   const { rewrite, rewriting } = useRewriteScript(callTool);
@@ -418,6 +440,65 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 />
 
                 <div className="ml-auto flex items-center gap-1">
+                  {/* PREV / NEXT / REVERT — non-destructive preview of prior versions */}
+                  <div className="flex items-center rounded overflow-hidden border border-violet-500/30">
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={guardedPrev}
+                      disabled={!historyNav.canPrev || historyNav.previewLoading || historyNav.reverting || isGenerating}
+                      title="Preview previous version"
+                      className={cn(
+                        'h-7 w-7 flex items-center justify-center',
+                        'text-violet-300/90 hover:text-violet-200',
+                        'bg-violet-500/5 hover:bg-violet-500/15',
+                        'transition-colors duration-150',
+                        'disabled:opacity-40 disabled:cursor-not-allowed',
+                      )}
+                    >
+                      {historyNav.previewLoading && historyNav.index + 1 !== historyNav.index
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <ChevronLeft className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={guardedNext}
+                      disabled={!historyNav.canNext || historyNav.previewLoading || historyNav.reverting || isGenerating}
+                      title="Preview next version"
+                      className={cn(
+                        'h-7 w-7 flex items-center justify-center border-l border-violet-500/30',
+                        'text-violet-300/90 hover:text-violet-200',
+                        'bg-violet-500/5 hover:bg-violet-500/15',
+                        'transition-colors duration-150',
+                        'disabled:opacity-40 disabled:cursor-not-allowed',
+                      )}
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {isPreviewing && historyNav.currentCommit && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={handleRevert}
+                      disabled={historyNav.reverting || isGenerating}
+                      title={`Revert HEAD to ${historyNav.currentCommit.hash.slice(0, 7)}`}
+                      className={cn(
+                        'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'text-fuchsia-300/90 hover:text-fuchsia-200',
+                        'bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/40 hover:border-fuchsia-400/70',
+                        'transition-colors duration-150',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                      )}
+                    >
+                      {historyNav.reverting
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <RotateCcw className="w-3.5 h-3.5" />}
+                      Revert
+                    </button>
+                  )}
                   <button
                     type="button"
                     tabIndex={-1}
@@ -457,15 +538,33 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
                 <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
 
+                {isPreviewing && historyNav.currentCommit && (
+                  <div
+                    className={cn(
+                      'absolute top-3 right-3 z-20 px-2.5 py-1 rounded',
+                      'text-[10px] font-mono font-bold uppercase tracking-[0.15em]',
+                      'text-violet-300 border border-violet-500/50 bg-violet-500/10',
+                      'shadow-[0_0_10px_rgba(139,92,246,0.25)] pointer-events-none',
+                    )}
+                  >
+                    Viewing {historyNav.currentCommit.hash.slice(0, 7)} · {historyNav.index}/{historyNav.commits.length - 1} back
+                  </div>
+                )}
+
                 <textarea
                   ref={textareaRef}
-                  value={draft}
-                  onChange={(e) => { setDraft(e.target.value); updateCursorPos(); }}
+                  value={isPreviewing ? (historyNav.preview ?? '') : draft}
+                  onChange={(e) => {
+                    if (isPreviewing) return;
+                    setDraft(e.target.value);
+                    updateCursorPos();
+                  }}
                   onKeyDown={handleKeyDown}
                   onKeyUp={updateCursorPos}
                   onClick={updateCursorPos}
                   onSelect={updateCursorPos}
-                  disabled={saving || isGenerating}
+                  disabled={saving || isGenerating || isPreviewing}
+                  readOnly={isPreviewing}
                   placeholder="Write your script here..."
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
@@ -475,6 +574,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     'focus:outline-none',
                     'overflow-y-auto scrollbar-cyan',
                     (saving || isGenerating) && 'opacity-40 cursor-not-allowed select-none',
+                    isPreviewing && 'text-violet-300/90 cursor-default',
                   )}
                 />
 

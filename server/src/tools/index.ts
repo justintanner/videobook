@@ -18,6 +18,7 @@ import { projectHistoryDef } from "./project-history.js";
 import { projectActivityDef } from "./project-activity.js";
 import { assetHistoryDef } from "./asset-history.js";
 import { restoreAssetVersionDef } from "./restore-asset-version.js";
+import { readFileAtCommitDef } from "./read-file-at-commit.js";
 import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
 import { downloadVideoDef } from "./download-video.js";
@@ -144,6 +145,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     projectActivityDef(fs),
     assetHistoryDef(fs),
     restoreAssetVersionDef(fs),
+    readFileAtCommitDef(fs),
     rewindProjectDef(fs),
     trimVideoDef(fs),
     downloadVideoDef(fs),
