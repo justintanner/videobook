@@ -29,8 +29,8 @@ const generateQwen2ImageEditSchema = {
   prompt: z.string().describe("Image editing prompt (max 800 chars)"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).describe("1-3 @img-* slugs for reference images to edit"),
-  image_size: z.enum(qwen2ImageEditInputSchema.image_size.unwrap().options).optional().describe("Output aspect ratio (default 16:9)"),
-  output_format: z.enum(qwen2ImageEditInputSchema.output_format.unwrap().options).optional().describe("Output image format (default png)"),
+  image_size: z.enum(qwen2ImageEditInputSchema.image_size.removeDefault().options).optional().describe("Output aspect ratio (default 16:9)"),
+  output_format: z.enum(qwen2ImageEditInputSchema.output_format.removeDefault().options).optional().describe("Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
