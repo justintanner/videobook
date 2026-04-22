@@ -26,6 +26,8 @@ import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
 import { PosesDialog } from '@/components/poses/PosesDialog';
 import { useGeneratePoses } from '@/hooks/useGeneratePoses';
+import { OutfitDialog } from '@/components/outfit/OutfitDialog';
+import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -84,6 +86,7 @@ export function HomePage() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const [posesDialog, setPosesDialog] = useState<{ initialSlug: string | null } | null>(null);
+  const [outfitDialog, setOutfitDialog] = useState<{ initialSlug: string | null } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +102,7 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generatePoses, submitting: posesSubmitting } = useGeneratePoses(callTool);
+  const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
 
@@ -604,6 +608,10 @@ export function HomePage() {
       const cleaned = initialSlug.trim();
       setPosesDialog({ initialSlug: cleaned ? cleaned : null });
     },
+    open_outfit_dialog: (initialSlug: string) => {
+      const cleaned = initialSlug.trim();
+      setOutfitDialog({ initialSlug: cleaned ? cleaned : null });
+    },
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
@@ -872,6 +880,16 @@ export function HomePage() {
         initialSlug={posesDialog?.initialSlug ?? null}
         generate={generatePoses}
         submitting={posesSubmitting}
+      />
+      <OutfitDialog
+        open={!!outfitDialog}
+        onOpenChange={(next) => { if (!next) setOutfitDialog(null); }}
+        imageAssets={mediaItems.filter((m) => m.type === 'image')}
+        projectSlug={projectSlug}
+        initialSlug={outfitDialog?.initialSlug ?? null}
+        callTool={callTool}
+        generate={generateOutfit}
+        submitting={outfitSubmitting}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>

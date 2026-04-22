@@ -119,6 +119,7 @@ import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-vi
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 import { generatePosesDef } from "./generate-poses.js";
+import { generateOutfitDef } from "./generate-outfit.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -249,5 +250,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
     generatePosesDef(fs),
+    generateOutfitDef(fs),
   ];
 }

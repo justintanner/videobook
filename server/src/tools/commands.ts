@@ -67,6 +67,20 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_poses_dialog",
   },
   {
+    command: "/outfit",
+    description: "Put a garment on a model in a chosen pose (BlazePose skeleton)",
+    example: "/outfit @img-exactly-girl",
+    category: "action",
+    icon: "Shirt",
+    size: "default",
+    variant: "blue",
+    chevron: "down",
+    params: [
+      { name: "model_slug", type: "string", required: false, description: "Optional model @img-* to preselect" },
+    ],
+    uiAction: "open_outfit_dialog",
+  },
+  {
     command: "/generate",
     description: "Generate video or image from prompt",
     example: "/generate video a dog on a skateboard @bg-neon",

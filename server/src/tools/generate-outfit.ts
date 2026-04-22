@@ -1,0 +1,160 @@
+import type { ClipfirstFs } from "clipfirst-fs";
+import { z, type ZodRawShape } from "zod";
+import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
+import {
+  SUPPORTED_POSE_MODELS,
+  POSE_PROVIDERS,
+  type PoseModelKey,
+  type PoseProvider,
+} from "./generate-poses.js";
+import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
+import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
+import { generateGptImage1p5EditFalDef } from "./generate-gpt-image-1-5-edit-fal.js";
+import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
+import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
+import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
+import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
+import { generateGptImageDef } from "./generate-gpt-image.js";
+import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
+import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
+
+const CUSTOM_PROMPT_MAX = 500;
+
+const schema = {
+  project_slug: z.string().describe("Project slug"),
+  model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
+  garment_image_slug: z.string().describe("@img-* slug of the garment/clothing (Image 2)"),
+  pose_image_slug: z.string().describe("@img-* slug of the BlazePose skeleton overlay (Image 3)"),
+  models: z
+    .array(z.enum(SUPPORTED_POSE_MODELS))
+    .min(1)
+    .describe("Image edit models to run. One job enqueued per model."),
+  provider: z
+    .enum(POSE_PROVIDERS)
+    .optional()
+    .describe("Image-edit provider (kie | fal). Defaults to kie."),
+  custom_prompt: z
+    .string()
+    .max(CUSTOM_PROMPT_MAX)
+    .optional()
+    .describe("Optional free-form instruction appended to the outfit prompt"),
+} satisfies ZodRawShape;
+
+type Args = SchemaArgs<typeof schema>;
+
+type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
+
+const DISPATCH: Record<PoseProvider, Record<PoseModelKey, ToolDefFactory>> = {
+  kie: {
+    nano_banana_pro: generateNanoBananaImageDef,
+    qwen_image_edit: generateQwen2ImageEditDef,
+    gpt_image_1_5: generateGptImageDef,
+    wan27_pro: generateWan27ImageProDef,
+    grok_imagine: generateGrokImagineImageDef,
+  },
+  fal: {
+    nano_banana_pro: generateNanoBananaProEditFalDef,
+    qwen_image_edit: generateQwenImageEditFalDef,
+    gpt_image_1_5: generateGptImage1p5EditFalDef,
+    wan27_pro: generateWan27ProEditFalDef,
+    grok_imagine: generateGrokImagineImageEditFalDef,
+  },
+};
+
+interface EnqueueOutcome {
+  model: PoseModelKey;
+  provider: PoseProvider;
+  prompt: string;
+  img_asset_id?: string;
+  job_id?: string;
+  error?: string;
+}
+
+function extractEnqueueResult(res: ToolResult): { assetId?: string; jobId?: string; error?: string } {
+  if (res.isError) {
+    const content = res.content as Array<{ type: string; text: string }>;
+    return { error: content[0]?.text ?? "enqueue failed" };
+  }
+  const content = res.content as Array<{ type: string; text: string }>;
+  try {
+    const parsed = JSON.parse(content[0].text) as { img_asset_id?: string; job_id?: string };
+    return { assetId: parsed.img_asset_id, jobId: parsed.job_id };
+  } catch {
+    return { error: "could not parse enqueue response" };
+  }
+}
+
+function withAt(slug: string): string {
+  return slug.startsWith("@") ? slug : `@${slug}`;
+}
+
+function buildOutfitPrompt(customPrompt: string | undefined): string {
+  const base =
+    "The person in Image 1 wears the garment from Image 2 and adopts the exact pose shown by the " +
+    "skeleton in Image 3. Preserve the identity, face, hair and skin of the person in Image 1. " +
+    "Match the cut, color, pattern and silhouette of the garment in Image 2 as closely as possible. " +
+    "Align limb angles, torso rotation and head tilt to the Image 3 skeleton. " +
+    "Render a photorealistic result with natural lighting and a tasteful background.";
+  const extra = customPrompt?.trim();
+  return extra ? `${base} ${extra}` : base;
+}
+
+export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "generate_outfit",
+    description:
+      "Virtual try-on: compose a model photo (Image 1), a garment (Image 2), and a BlazePose skeleton " +
+      "overlay (Image 3) into a generated image. Dispatches to the selected image-edit models through " +
+      "the chosen provider (kie | fal).",
+    schema,
+    handler: async (args) => {
+      const a = args as Args;
+      const provider: PoseProvider = a.provider ?? "kie";
+      const providerEnvKey = provider === "kie" ? "KIE_API_KEY" : "FAL_API_KEY";
+      if (!process.env[providerEnvKey]) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `${providerEnvKey} environment variable is not set` }],
+        };
+      }
+
+      const prompt = buildOutfitPrompt(a.custom_prompt);
+      const image_slugs = [
+        withAt(a.model_image_slug),
+        withAt(a.garment_image_slug),
+        withAt(a.pose_image_slug),
+      ];
+
+      const outcomes: EnqueueOutcome[] = [];
+      for (const model of a.models) {
+        const factory = DISPATCH[provider][model];
+        const def = factory(fs);
+        const res = await def.handler({
+          project_slug: a.project_slug,
+          prompt,
+          image_slugs,
+        } as unknown as Record<string, unknown>);
+        const r = extractEnqueueResult(res);
+        const outcome: EnqueueOutcome = { model, provider, prompt };
+        if (r.error) outcome.error = r.error;
+        if (r.assetId) outcome.img_asset_id = r.assetId;
+        if (r.jobId) outcome.job_id = r.jobId;
+        outcomes.push(outcome);
+      }
+
+      const enqueued = outcomes.filter((o) => !o.error).length;
+      const failed = outcomes.filter((o) => !!o.error).length;
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: enqueued > 0 ? "enqueued" : "failed",
+            enqueued,
+            failed,
+            outcomes,
+          }),
+        }],
+      };
+    },
+  };
+}

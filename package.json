@@ -17,12 +17,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@apicity/alibaba": "file:../apicity/packages/provider/alibaba",
     "@apicity/fal": "file:../apicity/packages/provider/fal",
     "@apicity/free": "file:../apicity/packages/provider/free",
     "@apicity/kie": "file:../apicity/packages/provider/kie",
     "@apicity/kimicoding": "file:../apicity/packages/provider/kimicoding",
     "@apicity/openai": "file:../apicity/packages/provider/openai",
-    "@apicity/alibaba": "file:../apicity/packages/provider/alibaba",
     "@apicity/xai": "file:../apicity/packages/provider/xai",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -35,6 +35,8 @@
     "@remotion/google-fonts": "^4.0.434",
     "@remotion/player": "4.0.434",
     "@remotion/renderer": "^4.0.434",
+    "@tensorflow-models/pose-detection": "^2.1.3",
+    "@tensorflow/tfjs": "^4.22.0",
     "@wavesurfer/react": "^1.0.12",
     "class-variance-authority": "^0.7.1",
     "clipfirst-fs": "file:../clipfirst-fs",
