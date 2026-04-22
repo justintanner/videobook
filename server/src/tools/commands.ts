@@ -53,6 +53,20 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_gen_image",
   },
   {
+    command: "/poses",
+    description: "Generate 3 platform-typical poses per source image via research + image edit",
+    example: "/poses @img-driver-thai-street-nu-2",
+    category: "action",
+    icon: "Users",
+    size: "default",
+    variant: "blue",
+    chevron: "down",
+    params: [
+      { name: "source_slug", type: "string", required: false, description: "Optional source @img-* to preselect" },
+    ],
+    uiAction: "open_poses_dialog",
+  },
+  {
     command: "/generate",
     description: "Generate video or image from prompt",
     example: "/generate video a dog on a skateboard @bg-neon",

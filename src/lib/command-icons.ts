@@ -11,6 +11,7 @@ import {
   FolderOpen,
   History,
   Eye,
+  Users,
 } from 'lucide-react';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -25,6 +26,7 @@ const iconMap: Record<string, LucideIcon> = {
   FolderOpen,
   History,
   Eye,
+  Users,
 };
 
 export function resolveIcon(name: string): LucideIcon | undefined {
