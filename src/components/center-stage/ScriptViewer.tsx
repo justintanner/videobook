@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -317,18 +317,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   });
 
   // Guard flip-to-back when dirty
-  const { handleFlipToBack: bfFlip, setBackTab: bfSetBackTab } = bf;
+  const { handleFlipToBack: bfFlip } = bf;
   const handleFlipToBack = useCallback(() => {
     if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
     bfFlip();
   }, [isDirty, bfFlip]);
-
-  // Jump straight to the history back face from the inner toolbar
-  const handleOpenHistory = useCallback(() => {
-    if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
-    bfSetBackTab('history');
-    onFlippedChange(true);
-  }, [isDirty, bfSetBackTab, onFlippedChange]);
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -465,22 +458,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={handleOpenHistory}
-                    title="View git history of this script"
-                    className={cn(
-                      'h-7 px-2.5 flex items-center gap-1.5 rounded',
-                      'text-[11px] font-mono font-bold uppercase tracking-wider',
-                      'text-violet-300/90 hover:text-violet-200',
-                      'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
-                      'transition-colors duration-150',
-                    )}
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    History
-                  </button>
                   <button
                     type="button"
                     tabIndex={-1}

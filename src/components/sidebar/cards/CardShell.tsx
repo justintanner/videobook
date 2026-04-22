@@ -59,7 +59,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'transcribing' && (type === 'video' || type === 'audio')) return <TranscribingOverlay item={item} />;
   if (status === 'untranscribed' && (type === 'video' || type === 'audio')) return <UntranscribedOverlay item={item} />;
   if (status === 'corrupt' && type !== 'final') return <CorruptOverlay item={item} />;
-  if (status === 'error') return <FailedOverlay item={item} />;
+  if (status === 'error' && type !== 'script') return <FailedOverlay item={item} />;
   if (status === 'loading') return <LoadingOverlay item={item} />;
   if (status === 'deleting') return <DeletingOverlay item={item} />;
 
@@ -109,7 +109,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
-  const isError = status === 'error';
+  const isError = status === 'error' && item.type !== 'script';
   const isGold = isFinal && (isReady || isRenderingState(status));
 
   const generatingClass = status === 'generating' && item.type === 'image'
