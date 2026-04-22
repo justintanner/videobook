@@ -300,12 +300,17 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   const rewriteDisabled = isGenerating;
   isGeneratingRef.current = isGenerating;
 
-  // Refresh last-rewrite metadata after a rewrite completes (item.status flips off 'generating').
+  // Refresh last-rewrite metadata and force-sync the textarea after a rewrite completes.
+  // item.prompt gets replaced externally, which would otherwise flip isDirty to true
+  // (because draft still holds the pre-rewrite text) and block the regular sync effect.
   const wasGenerating = useRef(isGenerating);
   useEffect(() => {
-    if (wasGenerating.current && !isGenerating) refreshLastRewrite();
+    if (wasGenerating.current && !isGenerating) {
+      refreshLastRewrite();
+      setDraft(item.prompt ?? '');
+    }
     wasGenerating.current = isGenerating;
-  }, [isGenerating, refreshLastRewrite]);
+  }, [isGenerating, refreshLastRewrite, item.prompt]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(draft).then(

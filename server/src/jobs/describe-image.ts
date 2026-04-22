@@ -8,20 +8,15 @@ import { kie } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { deletePendingTask } from "./pending-task.js";
 
-type Platform = "ig" | "tiktok" | "youtube";
-
 type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
   sourceImageFilename: string;
   assetId: string;
   projectSlug: string;
-  tldr?: boolean;
-  platform?: Platform | null;
-  customPrompt?: string | null;
 };
 
-type DescribeImageResult = {
+export type DescribeImageResult = {
   prompt: string;
   subject?: string;
   composition?: string;
@@ -33,12 +28,14 @@ type DescribeImageResult = {
   post?: string;
 };
 
+export type VisionChatFn = (req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>;
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
-const SCRIPT_FILENAME = "original.md";
-const VISION_MODEL = "gpt-5.2";
-const PROMPT_CHAR_LIMIT = 1900;
+export const SCRIPT_FILENAME = "original.md";
+export const VISION_MODEL = "gpt-5.2";
+export const PROMPT_CHAR_LIMIT = 1900;
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
   const ext = extname(filename).replace(/^\./, "").toLowerCase();
@@ -61,53 +58,7 @@ function buildSystemPrompt(guide: string): string {
   );
 }
 
-function platformGuidance(p: Platform): string {
-  switch (p) {
-    case "ig":
-      return (
-        "PLATFORM: Instagram. Target 4:5 portrait or 1:1 square framing. " +
-        "Aesthetic-candid register — curated but unstaged: natural daylight or soft indoor light, " +
-        "warm/golden cast acceptable, light film grain tolerated. Mild VSCO-style lift in shadows; " +
-        "skin kept natural with no heavy beautify. Avoid HDR crunch, over-saturation, and harsh " +
-        "on-camera flash unless the image is clearly a flash-aesthetic shot. Default device read: " +
-        "iPhone main camera. Never use editorial/film-stock vocabulary unless the image is clearly " +
-        "a professional editorial photo."
-      );
-    case "tiktok":
-      return (
-        "PLATFORM: TikTok. Target 9:16 vertical framing. Raw phone snapshot energy — candid framing, " +
-        "slight motion softness, mild compression artifacts, auto-HDR lifted blacks. Indoor scenes: " +
-        "ring-light rim or warm tungsten acceptable; at night, harsh on-camera flash is on-brand. " +
-        "Front-camera selfies (with visible mirror/arm) are native to the platform. Skin unretouched, " +
-        "tiny chromatic aberration on high-contrast edges. Never apply editorial polish, cinematic " +
-        "color grading, or named film-stock vocabulary (Portra, Cinestill, etc.). No 'cinematic', " +
-        "'masterpiece', 'editorial' — this is a phone snapshot."
-      );
-    case "youtube":
-      return (
-        "PLATFORM: YouTube. Default to 16:9 landscape unless the image is clearly a Short (then 9:16). " +
-        "Slightly elevated production versus TikTok: punchier contrast, cleaner key light, faces " +
-        "expressive and readable at small thumbnail sizes. Colour can sit slightly saturated for " +
-        "thumbnail legibility but avoid over-stylised filters. Keep the result photographic rather " +
-        "than graphic-design; no logo overlays, no title text baked in."
-      );
-  }
-}
-
-function buildTldrSystemPrompt(): string {
-  return (
-    "You are an expert image-to-prompt analyst. Describe this image as a single, tight reproduction " +
-    "prompt of 1–2 sentences (roughly 40–70 words) that captures subject, setting, framing, light, and mood. " +
-    "Match the image's register: if it reads as a casual phone/social photo, include authentic-capture " +
-    "cues (e.g. authentic iPhone photo, mild grain, subtle sensor noise, tiny chromatic aberration, no " +
-    "beauty filter, unedited skin) and AVOID words like 'editorial', 'cinematic', 'masterpiece', or " +
-    "named film stocks (Portra, Cinestill, etc.). Only use film-stock / cinematic vocabulary if the " +
-    "image is clearly a pro editorial or film still. Never apply camera vocabulary to a painting or render.\n" +
-    "Return ONLY a JSON object: { \"prompt\": string }. No breakdown fields. No markdown fences, no prose."
-  );
-}
-
-function formatMarkdown(r: DescribeImageResult): string {
+export function formatMarkdown(r: DescribeImageResult): string {
   const lines: string[] = [];
   lines.push(r.prompt.trim(), "");
   const rows: Array<[string, string | undefined]> = [
@@ -129,8 +80,20 @@ function formatMarkdown(r: DescribeImageResult): string {
   return lines.join("\n");
 }
 
-function formatTldrMarkdown(r: DescribeImageResult): string {
-  return `${r.prompt.trim()}\n`;
+export function buildVisionChat(openaiKey: string | undefined, kieKey: string | undefined): VisionChatFn {
+  const providers: VisionChatFn[] = [];
+  if (openaiKey) {
+    const p = openai({ apiKey: openaiKey, timeout: 120_000 });
+    providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
+  }
+  if (kieKey) {
+    const p = kie({ apiKey: kieKey, timeout: 120_000 });
+    providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
+  }
+  if (providers.length === 0) {
+    throw new Error("Neither OPENAI_API_KEY nor KIE_API_KEY is set");
+  }
+  return providers.length > 1 ? withFallback(providers) : providers[0];
 }
 
 export function registerDescribeImageJob(fs: ClipfirstFs): void {
@@ -140,21 +103,13 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       sourceImageFilename,
       assetId: scriptAssetId,
       projectSlug,
-      tldr,
-      platform,
-      customPrompt,
     } = payload as DescribeImagePayload;
 
     console.log(
-      `[describe_image] START source=${sourceAssetId} script=${scriptAssetId} project=${projectSlug} ` +
-      `tldr=${!!tldr} platform=${platform ?? "none"} customPrompt=${customPrompt ? `"${customPrompt.slice(0, 40)}..."` : "none"}`,
+      `[describe_image] START source=${sourceAssetId} script=${scriptAssetId} project=${projectSlug}`,
     );
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const kieKey = process.env.KIE_API_KEY;
-    if (!openaiKey && !kieKey) {
-      throw new Error("Neither OPENAI_API_KEY nor KIE_API_KEY is set");
-    }
+    const chat = buildVisionChat(process.env.OPENAI_API_KEY, process.env.KIE_API_KEY);
 
     const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
     if (!readResult.ok) {
@@ -163,33 +118,11 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     const buffer = Buffer.from(readResult.value);
     const mime = mimeForFilename(sourceImageFilename);
 
-    const basePrompt = tldr
-      ? buildTldrSystemPrompt()
-      : buildSystemPrompt(await readFile(GUIDE_PATH, "utf-8"));
-    const systemPrompt = platform
-      ? `${basePrompt}\n\n--- PLATFORM OVERRIDE ---\n${platformGuidance(platform)}\n--- END PLATFORM ---`
-      : basePrompt;
-    const baseInstruction = tldr
-      ? "Produce the 1–2 sentence TLDR prompt for this image."
-      : "Analyze this image and produce the reproduction prompt as specified.";
-    const userInstruction = customPrompt && customPrompt.trim().length > 0
-      ? `${baseInstruction}\n\nAPPLY THIS TRANSFORMATION before writing the prompt — the generated prompt should describe the image AS IF the following change were already applied, while preserving the original setting, framing, lighting, palette, and register: ${customPrompt.trim()}`
-      : baseInstruction;
+    const systemPrompt = buildSystemPrompt(await readFile(GUIDE_PATH, "utf-8"));
     const userContent = [
-      textPart(userInstruction),
+      textPart("Analyze this image and produce the reproduction prompt as specified."),
       imageBase64Part(buffer.toString("base64"), mime, "high"),
     ];
-
-    const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
-    if (openaiKey) {
-      const p = openai({ apiKey: openaiKey, timeout: 120_000 });
-      providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
-    }
-    if (kieKey) {
-      const p = kie({ apiKey: kieKey, timeout: 120_000 });
-      providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
-    }
-    const chat = providers.length > 1 ? withFallback(providers) : providers[0];
 
     const response = await chat({
       model: VISION_MODEL,
@@ -213,12 +146,12 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       throw new Error(`Vision model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
     }
 
-    if (!tldr && parsed.prompt.length > PROMPT_CHAR_LIMIT) {
+    if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
       console.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
       parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
     }
 
-    const markdown = tldr ? formatTldrMarkdown(parsed) : formatMarkdown(parsed);
+    const markdown = formatMarkdown(parsed);
     const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
     if (!writeResult.ok) {
       throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
@@ -232,9 +165,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
         sourceAssetId,
         model: VISION_MODEL,
         processed_at: new Date().toISOString(),
-        variant: tldr ? "tldr" : "full",
-        ...(platform ? { platform } : {}),
-        ...(customPrompt ? { customPrompt } : {}),
+        variant: "full",
       },
       projectSlug,
     );
