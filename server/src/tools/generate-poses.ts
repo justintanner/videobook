@@ -23,6 +23,47 @@ const MAX_POSES_PER_PLATFORM = 6;
 export const POSE_PROVIDERS = ["kie", "fal"] as const;
 export type PoseProvider = typeof POSE_PROVIDERS[number];
 
+export const POSE_TYPES = [
+  "selfie",
+  "mirror_selfie",
+  "portrait",
+  "full_body",
+  "candid",
+  "action",
+  "close_up",
+  "pov",
+  "group",
+] as const;
+export type PoseType = typeof POSE_TYPES[number];
+
+const POSE_TYPE_GUIDANCE: Record<PoseType, string> = {
+  selfie: "handheld selfies — arm's-length framing, direct eye contact with the lens, shallow depth",
+  mirror_selfie: "mirror selfies — phone visible in frame, full/half body in a mirror, casual angle",
+  portrait: "head-and-shoulder portraits — shot from just above waist, intentional framing, subject dominant",
+  full_body: "full-body shots — subject from head to feet, framing that reads the outfit and stance",
+  candid: "candid, off-guard moments — not looking at the lens, natural motion, unstaged feel",
+  action: "action shots — movement, motion blur or freeze-motion, dynamic body language",
+  close_up: "close-ups — tight crop on face or hands, textured detail, intimate feel",
+  pov: "point-of-view shots — first-person perspective, hand/arm/feet visible, subject-as-camera",
+  group: "group shots — subject plus additional people/context, layered composition",
+};
+
+const POSE_TYPE_LABELS: Record<PoseType, string> = {
+  selfie: "Selfie",
+  mirror_selfie: "Mirror Selfie",
+  portrait: "Portrait",
+  full_body: "Full Body",
+  candid: "Candid",
+  action: "Action",
+  close_up: "Close-up",
+  pov: "POV",
+  group: "Group",
+};
+
+export function poseTypeOptions(): Array<{ key: PoseType; label: string }> {
+  return POSE_TYPES.map((k) => ({ key: k, label: POSE_TYPE_LABELS[k] }));
+}
+
 export const SUPPORTED_POSE_MODELS = [
   "nano_banana_pro",
   "qwen_image_edit",
@@ -69,6 +110,15 @@ const schema = {
     .max(MAX_POSES_PER_PLATFORM)
     .optional()
     .describe(`How many poses to research per (source × platform). 1-${MAX_POSES_PER_PLATFORM}, default ${DEFAULT_POSES_PER_PLATFORM}.`),
+  pose_type: z
+    .enum(POSE_TYPES)
+    .optional()
+    .describe("Optional pose-type bias for the researcher (selfie, portrait, full_body, candid, action, etc.)"),
+  custom_prompt: z
+    .string()
+    .max(500)
+    .optional()
+    .describe("Optional free-form instruction appended to the researcher prompt (e.g. 'outdoor setting, no hat')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -77,9 +127,24 @@ function platformLabel(p: Platform): string {
   return p === "ig" ? "Instagram" : p === "tiktok" ? "TikTok" : "YouTube";
 }
 
-export function buildPoseResearchText(platform: Platform, count: number): string {
+export interface PoseResearchExtras {
+  poseType?: PoseType;
+  customPrompt?: string;
+}
+
+export function buildPoseResearchText(
+  platform: Platform,
+  count: number,
+  extras: PoseResearchExtras = {},
+): string {
   const n = Math.max(1, Math.min(MAX_POSES_PER_PLATFORM, Math.floor(count)));
   const shapeExample = Array.from({ length: n }, (_, i) => `"prompt ${i + 1}"`).join(", ");
+  const poseTypeSection = extras.poseType
+    ? `\n--- POSE TYPE BIAS ---\nEvery pose MUST be a ${POSE_TYPE_LABELS[extras.poseType].toLowerCase()} — ${POSE_TYPE_GUIDANCE[extras.poseType]}.\n--- END POSE TYPE BIAS ---\n\n`
+    : "";
+  const customSection = extras.customPrompt && extras.customPrompt.trim()
+    ? `\nADDITIONAL INSTRUCTION FROM USER: ${extras.customPrompt.trim()}\n\n`
+    : "";
   return (
     `You are a visual culture expert. Look at the reference image and produce ${n} ` +
     `distinct, highly typical ${platformLabel(platform)} poses/shots that would feel native on the ` +
@@ -91,7 +156,9 @@ export function buildPoseResearchText(platform: Platform, count: number): string
     "from the source image — we're restyling pose + framing, not the person.\n\n" +
     "--- PLATFORM AESTHETIC ---\n" +
     platformGuidance(platform) +
-    "\n--- END PLATFORM AESTHETIC ---\n\n" +
+    "\n--- END PLATFORM AESTHETIC ---\n" +
+    poseTypeSection +
+    customSection +
     "RULES:\n" +
     "- Output ONLY a valid JSON object, no markdown fences, no prose.\n" +
     `- Shape: {"poses": [${shapeExample}]}\n` +
@@ -140,12 +207,13 @@ async function researchPoses(
   platform: Platform,
   projectSlug: string,
   count: number,
+  extras: PoseResearchExtras,
 ): Promise<{ ok: true; poses: string[] } | { ok: false; error: string }> {
   const assetId = sourceSlug.replace(/^@/, "");
   const dataUri = await readImageAsDataUri(fs, assetId, projectSlug);
   if (!dataUri) return { ok: false, error: `could not resolve image file for ${sourceSlug}` };
 
-  const content: OpenAiContentPart[] = [imageUrlPart(dataUri), textPart(buildPoseResearchText(platform, count))];
+  const content: OpenAiContentPart[] = [imageUrlPart(dataUri), textPart(buildPoseResearchText(platform, count, extras))];
   const messages: OpenAiMessage[] = [{ role: "user", content }];
 
   const provider = openai({ apiKey, timeout: 60_000 });
@@ -241,6 +309,10 @@ export function generatePosesDef(fs: ClipfirstFs): ToolDef {
       const { project_slug, source_slugs, platforms, models } = args as Args;
       const provider: PoseProvider = (args as Args).provider ?? "kie";
       const posesPerPlatform = (args as Args).poses_per_platform ?? DEFAULT_POSES_PER_PLATFORM;
+      const researchExtras: PoseResearchExtras = {
+        poseType: (args as Args).pose_type,
+        customPrompt: (args as Args).custom_prompt,
+      };
 
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -262,7 +334,7 @@ export function generatePosesDef(fs: ClipfirstFs): ToolDef {
 
       for (const sourceSlug of source_slugs) {
         for (const platform of platforms) {
-          const research = await researchPoses(fs, apiKey, sourceSlug, platform, project_slug, posesPerPlatform);
+          const research = await researchPoses(fs, apiKey, sourceSlug, platform, project_slug, posesPerPlatform, researchExtras);
           if (!research.ok) {
             researchErrors.push(`${sourceSlug} / ${platform}: ${research.error}`);
             continue;

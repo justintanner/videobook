@@ -7,12 +7,15 @@ import {
   POSE_PLATFORMS,
   POSE_MODEL_OPTIONS,
   POSE_PROVIDERS,
+  POSE_TYPE_OPTIONS,
   POSE_COUNT_MIN,
   POSE_COUNT_MAX,
   POSE_COUNT_DEFAULT,
+  CUSTOM_PROMPT_MAX,
   type PosePlatform,
   type PoseModelKey,
   type PoseProvider,
+  type PoseType,
   type UseGeneratePosesResult,
 } from '@/hooks/useGeneratePoses';
 
@@ -46,6 +49,8 @@ export function PosesDialog({
   const [selectedModels, setSelectedModels] = useState<Set<PoseModelKey>>(new Set(['nano_banana_pro']));
   const [selectedProvider, setSelectedProvider] = useState<PoseProvider>('kie');
   const [posesPerPlatform, setPosesPerPlatform] = useState<number>(POSE_COUNT_DEFAULT);
+  const [poseType, setPoseType] = useState<PoseType | ''>('');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
 
   // Seed selections when the dialog opens
   useEffect(() => {
@@ -59,6 +64,8 @@ export function PosesDialog({
     setSelectedModels(new Set(['nano_banana_pro']));
     setSelectedProvider('kie');
     setPosesPerPlatform(POSE_COUNT_DEFAULT);
+    setPoseType('');
+    setCustomPrompt('');
     // Reset only when open transitions to true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -108,10 +115,12 @@ export function PosesDialog({
       models: [...selectedModels],
       provider: selectedProvider,
       posesPerPlatform,
+      poseType: poseType || undefined,
+      customPrompt: customPrompt.trim() || undefined,
       projectSlug,
     });
     if (res) onOpenChange(false);
-  }, [canSubmit, projectSlug, generate, selectedSources, selectedPlatforms, selectedModels, selectedProvider, posesPerPlatform, onOpenChange]);
+  }, [canSubmit, projectSlug, generate, selectedSources, selectedPlatforms, selectedModels, selectedProvider, posesPerPlatform, poseType, customPrompt, onOpenChange]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -289,6 +298,57 @@ export function PosesDialog({
                   );
                 })}
               </div>
+            </section>
+
+            {/* Pose Type (optional) */}
+            <section>
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70">
+                  Pose Type
+                </h3>
+                <span className="text-[10px] font-mono text-amber-500/50">optional</span>
+              </div>
+              <select
+                value={poseType}
+                onChange={(e) => setPoseType(e.target.value as PoseType | '')}
+                disabled={submitting}
+                className={cn(
+                  'h-7 px-2 rounded border border-amber-500/30 bg-black/60 text-amber-200',
+                  'text-[11px] font-mono',
+                  'focus:outline-none focus:border-amber-400',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              >
+                <option value="">Any (platform-typical mix)</option>
+                {POSE_TYPE_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+            </section>
+
+            {/* Custom Prompt (optional) */}
+            <section>
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70">
+                  Additional Instruction
+                </h3>
+                <span className="text-[10px] font-mono text-amber-500/50 tabular-nums">
+                  {customPrompt.length} / {CUSTOM_PROMPT_MAX}
+                </span>
+              </div>
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value.slice(0, CUSTOM_PROMPT_MAX))}
+                disabled={submitting}
+                placeholder="e.g. outdoor setting, no hat, keep the jacket"
+                rows={2}
+                className={cn(
+                  'w-full px-2 py-1.5 rounded border border-amber-500/30 bg-black/60 text-amber-200',
+                  'text-[11px] font-mono placeholder:text-amber-500/40',
+                  'focus:outline-none focus:border-amber-400 resize-none',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              />
             </section>
 
             {/* Models */}

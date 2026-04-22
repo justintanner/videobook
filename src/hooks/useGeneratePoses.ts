@@ -20,9 +20,24 @@ export const POSE_PROVIDERS = [
 ] as const;
 export type PoseProvider = typeof POSE_PROVIDERS[number]["key"];
 
+export const POSE_TYPE_OPTIONS = [
+  { key: "selfie", label: "Selfie" },
+  { key: "mirror_selfie", label: "Mirror Selfie" },
+  { key: "portrait", label: "Portrait" },
+  { key: "full_body", label: "Full Body" },
+  { key: "candid", label: "Candid" },
+  { key: "action", label: "Action" },
+  { key: "close_up", label: "Close-up" },
+  { key: "pov", label: "POV" },
+  { key: "group", label: "Group" },
+] as const;
+export type PoseType = typeof POSE_TYPE_OPTIONS[number]["key"];
+
 export const POSE_COUNT_MIN = 1;
 export const POSE_COUNT_MAX = 6;
 export const POSE_COUNT_DEFAULT = 3;
+
+export const CUSTOM_PROMPT_MAX = 500;
 
 export interface GeneratePosesArgs {
   sourceSlugs: string[];
@@ -30,6 +45,8 @@ export interface GeneratePosesArgs {
   models: PoseModelKey[];
   provider: PoseProvider;
   posesPerPlatform: number;
+  poseType?: PoseType;
+  customPrompt?: string;
   projectSlug: string;
 }
 
@@ -56,7 +73,8 @@ export function useGeneratePoses(callTool: UseMcpResult["callTool"]): UseGenerat
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const toolArgs = {
+      const trimmedCustom = args.customPrompt?.trim();
+      const toolArgs: Record<string, unknown> = {
         project_slug: args.projectSlug,
         source_slugs: args.sourceSlugs.map((s) => (s.startsWith("@") ? s : `@${s}`)),
         platforms: args.platforms,
@@ -64,6 +82,8 @@ export function useGeneratePoses(callTool: UseMcpResult["callTool"]): UseGenerat
         provider: args.provider,
         poses_per_platform: args.posesPerPlatform,
       };
+      if (args.poseType) toolArgs.pose_type = args.poseType;
+      if (trimmedCustom) toolArgs.custom_prompt = trimmedCustom;
       const result = await callToolRef.current(
         "generate_poses",
         toolArgs as unknown as Record<string, unknown>,
