@@ -1,8 +1,8 @@
-import { RefreshCw, History, Copy, Loader2 } from 'lucide-react';
+import { RefreshCw, History, Copy, Loader2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { CommandButton } from '@/components/commands';
-import type { GitCommit } from '@/hooks/useAssetHistory';
+import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
 
 type CommitOperation =
   | 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename'
@@ -95,10 +95,65 @@ export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefre
   );
 }
 
-export function HistoryDetailPane({ commit, isHead, onRestore }: {
+function RewriteMetadataBlock({ rewrite, onReuse }: {
+  rewrite: RewriteMeta;
+  onReuse?: (meta: RewriteMeta) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-amber-300/90">
+        <Zap className="w-3 h-3" />
+        Rewrite
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono uppercase w-16 tracking-wider text-amber-500/50">Model</span>
+          <span className="text-sm font-mono text-amber-100">{rewrite.model}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono uppercase w-16 tracking-wider text-amber-500/50">Variant</span>
+          <span className="text-sm font-mono text-amber-100">{rewrite.variant}</span>
+        </div>
+        {rewrite.platform && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono uppercase w-16 tracking-wider text-amber-500/50">Platform</span>
+            <span className="text-sm font-mono text-amber-100">{rewrite.platform}</span>
+          </div>
+        )}
+        {rewrite.customPrompt && (
+          <div className="flex items-start gap-3">
+            <span className="shrink-0 text-xs font-mono uppercase w-16 tracking-wider text-amber-500/50 pt-0.5">Prompt</span>
+            <span className="text-sm font-mono text-amber-100 whitespace-pre-wrap break-words">
+              {rewrite.customPrompt}
+            </span>
+          </div>
+        )}
+      </div>
+      {onReuse && (
+        <button
+          type="button"
+          onClick={() => onReuse(rewrite)}
+          className={cn(
+            'mt-1 h-7 px-2.5 flex items-center justify-center gap-1.5 rounded',
+            'text-[11px] font-mono font-bold uppercase tracking-wider',
+            'text-amber-200 hover:text-amber-100',
+            'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/50 hover:border-amber-300/80',
+            'transition-colors duration-150',
+          )}
+        >
+          <Zap className="w-3.5 h-3.5" />
+          Use this prompt
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: {
   commit: GitCommit | null;
   isHead: boolean;
   onRestore: (hash: string) => void;
+  onReusePrompt?: (meta: RewriteMeta) => void;
 }) {
   if (!commit) {
     return (
@@ -158,6 +213,11 @@ export function HistoryDetailPane({ commit, isHead, onRestore }: {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Rewrite metadata (scripts only) */}
+      {commit.rewrite && (
+        <RewriteMetadataBlock rewrite={commit.rewrite} onReuse={onReusePrompt} />
       )}
 
       {/* Spacer */}

@@ -13,7 +13,6 @@ interface ScriptCardProps {
 
 export function ScriptCard({ item, contextMenuContent, selected, onClick }: ScriptCardProps) {
   const status = item.status ?? 'ready';
-  const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const scriptText = item.prompt;
 
@@ -33,7 +32,7 @@ export function ScriptCard({ item, contextMenuContent, selected, onClick }: Scri
       </div>
 
       {/* Slug badge */}
-      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
+      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={false} />}
     </CardShell>
   );
 }

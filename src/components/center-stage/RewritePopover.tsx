@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Zap, ChevronDown } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,12 @@ export interface RewriteSubmit {
   customPrompt?: string;
 }
 
+export interface RewriteInitial {
+  variant?: RewriteVariant;
+  platform?: RewritePlatform;
+  customPrompt?: string;
+}
+
 interface RewritePopoverProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,6 +32,7 @@ interface RewritePopoverProps {
   rewriting: boolean;
   disabled?: boolean;
   trigger: React.ReactNode;
+  initial?: RewriteInitial | null;
 }
 
 export function RewritePopover({
@@ -35,11 +42,22 @@ export function RewritePopover({
   rewriting,
   disabled,
   trigger,
+  initial,
 }: RewritePopoverProps) {
   const [variant, setVariant] = useState<RewriteVariant>('tldr');
   const [platform, setPlatform] = useState<RewritePlatform | ''>('');
   const [customPrompt, setCustomPrompt] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Seed state from `initial` each time the popover opens.
+  useEffect(() => {
+    if (!open) return;
+    setVariant(initial?.variant ?? 'tldr');
+    setPlatform(initial?.platform ?? '');
+    setCustomPrompt(initial?.customPrompt ?? '');
+    // Intentionally only re-seed when `open` flips — ignore identity changes of `initial`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Reset draft state whenever popover closes so it always opens fresh
   const handleOpenChange = useCallback((next: boolean) => {

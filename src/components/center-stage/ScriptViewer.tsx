@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Save, Loader2, X, Copy, Zap, Images, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, FileText, Loader2, X, Copy, Zap, Images, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
+import { ToastAction } from '@/components/ui/toast';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -17,8 +18,11 @@ import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { AutocompleteItem, ColorScheme } from '@/components/ui/AutocompleteDropdown';
 import { useRewriteScript } from '@/hooks/useRewriteScript';
-import { RewritePopover } from './RewritePopover';
+import { RewritePopover, type RewriteInitial } from './RewritePopover';
 import { useScriptHistoryNav } from '@/hooks/useScriptHistoryNav';
+import { useAssetOriginalMeta } from '@/hooks/useAssetOriginalMeta';
+import { LastRewriteChip } from './LastRewriteChip';
+import type { RewriteMeta } from '@/hooks/useAssetHistory';
 
 // ── ScriptViewer ──
 
@@ -32,10 +36,7 @@ const COMMAND_COLORS: Record<string, ColorScheme> = {
   editor: 'cyan',
 };
 
-const LOCAL_COMMANDS: AutocompleteItem[] = [
-  { type: 'command', value: '/save', label: '/save', description: 'Save changes (⌘S)', icon: 'save', colorScheme: 'cyan' },
-  { type: 'command', value: '/cancel', label: '/cancel', description: 'Discard changes', icon: 'x', colorScheme: 'cyan' },
-];
+const AUTOSAVE_DEBOUNCE_MS = 800;
 
 /** Extract the current line text up to cursor position */
 function getCurrentLineAtCursor(text: string, cursorPos: number): { line: string; lineStart: number } {
@@ -79,15 +80,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     return { filter: match[1] };
   }, [draft, cursorPos]);
 
-  // Build autocomplete items: local commands + registry commands
+  // Build autocomplete items: registry commands only
   const autocompleteItems = useMemo((): AutocompleteItem[] => {
     if (!slashTrigger) return [];
     const filter = slashTrigger.filter.toLowerCase();
 
-    const localFiltered = LOCAL_COMMANDS.filter(
-      (c) => c.value.slice(1).toLowerCase().includes(filter),
-    );
-    const registryFiltered = commands
+    return commands
       .filter((c) => c.command.slice(1).toLowerCase().includes(filter))
       .map((c) => ({
         type: 'command' as const,
@@ -99,8 +97,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
         icon: c.icon,
         colorScheme: (COMMAND_COLORS[c.category] ?? 'cyan') as ColorScheme,
       }));
-
-    return [...localFiltered, ...registryFiltered];
   }, [slashTrigger, commands]);
 
   const showSuggestions = slashTrigger !== null && autocompleteItems.length > 0 && !dismissed;
@@ -114,13 +110,10 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     if (selectedIndex !== 0) setSelectedIndex(0);
   }
 
-  // Reset draft when switching items (with confirmation if dirty)
+  // Track item changes — autosave effect below flushes any pending edit before the switch.
   const prevItemId = useRef(item.id);
   useEffect(() => {
     if (item.id !== prevItemId.current) {
-      if (dirtyRef.current && !window.confirm('You have unsaved changes. Discard them?')) {
-        return;
-      }
       prevItemId.current = item.id;
       setDraft(item.prompt ?? '');
     }
@@ -147,26 +140,131 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   // Script history navigation — Prev/Next instantly restore HEAD one step back/forward
   const historyNav = useScriptHistoryNav({ callTool, assetId: item.id, projectSlug });
 
+  // Last-rewrite metadata (model/variant/platform/customPrompt) from .original.json
+  const { meta: lastRewrite, refresh: refreshLastRewrite } = useAssetOriginalMeta(
+    callTool,
+    item.id,
+    projectSlug,
+  );
+
+  // Pre-filled args when user clicks the chip or "Use this prompt" in history.
+  const [pendingRewriteArgs, setPendingRewriteArgs] = useState<RewriteInitial | null>(null);
+
   const guardedPrev = useCallback(() => {
-    if (isDirty && !window.confirm('You have unsaved changes. Discard them to step back?')) return;
-    if (isDirty) setDraft(item.prompt ?? '');
     void historyNav.prev();
-  }, [isDirty, historyNav, item.prompt]);
+  }, [historyNav]);
 
   // Rewrite handler — invokes rewrite_script with variant + optional platform/customPrompt
   const { rewrite, rewriting } = useRewriteScript(callTool);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const handleRewriteSubmit = useCallback(
     (args: { variant: 'full' | 'tldr'; platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string }) => {
-      if (isDirty && !window.confirm('You have unsaved changes. Discard them and rewrite?')) return;
       setRewriteOpen(false);
-      // Clear dirty state before kicking off the rewrite so the Save/Cancel
-      // buttons don't flash during the overlay → new-prompt transition.
+      setPendingRewriteArgs(null);
+      // Clear dirty state before kicking off the rewrite so the overlay →
+      // new-prompt transition stays clean.
       setDraft(item.prompt ?? '');
       void rewrite(item.id, projectSlug, args);
     },
-    [isDirty, rewrite, item.id, item.prompt, projectSlug],
+    [rewrite, item.id, item.prompt, projectSlug],
   );
+
+  const openRewriteWith = useCallback((meta: Pick<RewriteMeta, 'variant' | 'platform' | 'customPrompt'>) => {
+    setPendingRewriteArgs({
+      variant: meta.variant,
+      platform: meta.platform,
+      customPrompt: meta.customPrompt,
+    });
+    setRewriteOpen(true);
+  }, []);
+
+  const handleReuseFromHistory = useCallback((meta: RewriteMeta) => {
+    onFlippedChange(false);
+    openRewriteWith(meta);
+  }, [onFlippedChange, openRewriteWith]);
+
+  const handleRewriteOpenChange = useCallback((open: boolean) => {
+    setRewriteOpen(open);
+    if (!open) setPendingRewriteArgs(null);
+  }, []);
+
+  // Recently-saved indicator — drives the toolbar chip for ~1.5s after a save.
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Silent save used by autosave, blur, ⌘S, and Undo.
+  // Returns the prior value (from `item.prompt` at call time) so callers can build an Undo toast.
+  const savingRef = useRef(false);
+  const saveNow = useCallback(async (content: string, options?: { showUndoToast?: boolean }): Promise<string | null> => {
+    if (savingRef.current) return null;
+    const prior = item.prompt ?? '';
+    if (content === prior) return null;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const result = await callTool('update_script', {
+        asset_id: item.id,
+        content,
+        project_slug: projectSlug,
+      });
+      if (result.isError) {
+        const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'Save failed';
+        toast({ title: 'Save failed', description: msg, duration: 4000 });
+        return null;
+      }
+      await callTool('sync', { project_slug: projectSlug });
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      setJustSaved(true);
+      savedTimerRef.current = setTimeout(() => setJustSaved(false), 1500);
+      if (options?.showUndoToast !== false) {
+        toast({
+          title: 'Saved',
+          duration: 4000,
+          action: (
+            <ToastAction
+              altText="Undo save"
+              onClick={() => {
+                // Reset the draft first so the autosave effect doesn't re-dirty the doc
+                // the moment the revert-save completes.
+                setDraft(prior);
+                void saveNow(prior, { showUndoToast: false });
+              }}
+            >
+              Undo
+            </ToastAction>
+          ),
+        });
+      }
+      return prior;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [callTool, item.id, item.prompt, projectSlug]);
+
+  // Debounced autosave on draft change
+  const isGeneratingRef = useRef(false);
+  useEffect(() => {
+    if (!isDirty || isGeneratingRef.current) return;
+    const handle = setTimeout(() => { void saveNow(draft); }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [draft, isDirty, saveNow]);
+
+  // Cmd+S / Ctrl+S — flush immediately
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (dirtyRef.current) void saveNow(draft);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [saveNow, draft]);
+
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+  }, []);
 
   // GEN IMAGES handler — fan out the script's prompt across leading t2i models
   const [genInFlight, setGenInFlight] = useState(false);
@@ -177,7 +275,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
       toast({ title: 'Script is empty', description: 'Write a prompt first', duration: 2500 });
       return;
     }
-    if (isDirty && !window.confirm('You have unsaved changes. Discard them and gen images from the saved script?')) return;
+    // Autosave keeps item.prompt current; if there's an in-flight draft, flush it first.
+    if (isDirty) await saveNow(draft, { showUndoToast: false });
     setGenInFlight(true);
     try {
       const result = await callTool('gen_images_all_models', {
@@ -195,10 +294,18 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     } finally {
       setGenInFlight(false);
     }
-  }, [genInFlight, isDirty, callTool, item.id, item.prompt, projectSlug]);
+  }, [genInFlight, isDirty, draft, saveNow, callTool, item.id, item.prompt, projectSlug]);
 
   const isGenerating = rewriting || item.status === 'generating';
   const rewriteDisabled = isGenerating;
+  isGeneratingRef.current = isGenerating;
+
+  // Refresh last-rewrite metadata after a rewrite completes (item.status flips off 'generating').
+  const wasGenerating = useRef(isGenerating);
+  useEffect(() => {
+    if (wasGenerating.current && !isGenerating) refreshLastRewrite();
+    wasGenerating.current = isGenerating;
+  }, [isGenerating, refreshLastRewrite]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(draft).then(
@@ -206,40 +313,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
       () => toast({ title: 'Error', description: 'Failed to copy', duration: 2500 }),
     );
   }, [draft, item.slug]);
-
-  // Save handler
-  const handleSave = useCallback(async () => {
-    if (saving || !isDirty) return;
-    setSaving(true);
-    try {
-      const result = await callTool('update_script', {
-        asset_id: item.id,
-        content: draft,
-        project_slug: projectSlug,
-      });
-      if (result.isError) {
-        const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'Save failed';
-        alert(msg);
-        return;
-      }
-      // Trigger sync so item.prompt refreshes
-      await callTool('sync', { project_slug: projectSlug });
-    } finally {
-      setSaving(false);
-    }
-  }, [saving, isDirty, callTool, item.id, draft, projectSlug]);
-
-  // Cmd+S / Ctrl+S keyboard shortcut
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        if (dirtyRef.current) handleSave();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleSave]);
 
   // Strip the current /command line from the draft
   const stripCommandLine = useCallback(() => {
@@ -259,18 +332,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     }, 0);
   }, [draft, cursorPos]);
 
-  // Execute a slash command (local or registry)
+  // Execute a slash command (registry only — /save and /cancel were removed in favor of autosave)
   const executeCommand = useCallback((commandValue: string) => {
-    if (commandValue === '/save') {
-      stripCommandLine();
-      handleSave();
-    } else if (commandValue === '/cancel') {
-      setDraft(item.prompt ?? '');
-    } else {
-      stripCommandLine();
-      dispatch(commandValue);
-    }
-  }, [stripCommandLine, handleSave, item.prompt, dispatch]);
+    stripCommandLine();
+    dispatch(commandValue);
+  }, [stripCommandLine, dispatch]);
 
   // Select an autocomplete suggestion
   const selectSuggestion = useCallback((acItem: AutocompleteItem) => {
@@ -316,12 +382,12 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     defaultBackTab: 'files',
   });
 
-  // Guard flip-to-back when dirty
+  // Flip to back — autosave runs in the background, no confirm needed.
   const { handleFlipToBack: bfFlip } = bf;
   const handleFlipToBack = useCallback(() => {
-    if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
+    if (isDirty) void saveNow(draft, { showUndoToast: false });
     bfFlip();
-  }, [isDirty, bfFlip]);
+  }, [isDirty, draft, saveNow, bfFlip]);
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -340,7 +406,21 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/90 drop-shadow-[0_0_4px_rgba(0,255,255,0.5)]">
                   <FileText className="w-3.5 h-3.5" />
                   <span>MARKDOWN</span>
-                  {isDirty && <span className="text-yellow-400/80 text-[10px]">(unsaved)</span>}
+                  {saving && (
+                    <span className="flex items-center gap-1 text-yellow-400/80 text-[10px]">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Saving…
+                    </span>
+                  )}
+                  {!saving && justSaved && (
+                    <span className="flex items-center gap-1 text-emerald-400/90 text-[10px]">
+                      <Check className="w-3 h-3" />
+                      Saved
+                    </span>
+                  )}
+                  {!saving && !justSaved && isDirty && (
+                    <span className="text-yellow-400/60 text-[10px]">editing…</span>
+                  )}
                 </span>
               }
               slug={item.slug}
@@ -391,10 +471,10 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 </button>
                 <RewritePopover
                   open={rewriteOpen}
-                  onOpenChange={setRewriteOpen}
+                  onOpenChange={handleRewriteOpenChange}
                   onSubmit={handleRewriteSubmit}
                   rewriting={rewriting}
-                  disabled={saving}
+                  initial={pendingRewriteArgs}
                   trigger={
                     <button
                       type="button"
@@ -477,6 +557,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 </div>
               </div>
 
+              {/* Last-rewrite metadata chip — click to re-run with the same args */}
+              {lastRewrite && !isGenerating && (
+                <LastRewriteChip meta={lastRewrite} onClick={openRewriteWith} />
+              )}
+
               <div className="flex-1 flex min-h-0 relative">
                 {/* CRT scanlines — behind the text, ≤20% opacity so glyphs stay sharp */}
                 <div className="absolute inset-0 scanlines pointer-events-none opacity-20 z-0" />
@@ -489,7 +574,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   onKeyUp={updateCursorPos}
                   onClick={updateCursorPos}
                   onSelect={updateCursorPos}
-                  disabled={saving || isGenerating}
+                  onBlur={() => { if (dirtyRef.current) void saveNow(draft, { showUndoToast: false }); }}
+                  disabled={isGenerating}
                   placeholder="Write your script here..."
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
@@ -498,7 +584,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     'font-mono',
                     'focus:outline-none',
                     'overflow-y-auto scrollbar-cyan',
-                    (saving || isGenerating) && 'opacity-40 cursor-not-allowed select-none',
+                    isGenerating && 'opacity-40 cursor-not-allowed select-none',
                   )}
                 />
 
@@ -560,31 +646,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 </div>
               )}
 
-              {/* /save and /cancel buttons — hidden during rewrite so they don't flash
-                  during the transition from stale draft to the fresh prompt from sync */}
-              {isDirty && !isGenerating && (
-                <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                  <button
-                    onClick={() => setDraft(item.prompt ?? '')}
-                    disabled={saving}
-                    className="px-3 py-1.5 text-xs font-mono text-primary/60 hover:text-primary bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/50 rounded transition-colors duration-150 disabled:opacity-50"
-                  >
-                    /cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    title="Save (⌘S)"
-                    className="px-3 py-1.5 text-xs font-mono font-bold text-black bg-yellow-400 hover:bg-yellow-300 rounded transition-colors duration-150 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {saving
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Save className="w-3.5 h-3.5" />
-                    }
-                    /save
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
@@ -620,6 +681,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 setSelectedCommitHash={bf.setSelectedCommitHash}
                 handleRestore={bf.handleRestore}
                 fetchHistory={bf.fetchHistory}
+                onReusePrompt={handleReuseFromHistory}
                 itemId={item.id}
                 projectSlug={projectSlug}
               />

@@ -14,7 +14,7 @@ import { CommandButton } from '@/components/commands';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
 import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './GitHistoryPanel';
-import type { GitCommit } from '@/hooks/useAssetHistory';
+import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
 import { JsonNode } from '@/components/ui/JsonNode';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -436,7 +436,7 @@ export function FilesBackPane({ manifest, manifestLoading, selectedFile, fileCon
   );
 }
 
-export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, setSelectedCommitHash, handleRestore, fetchHistory, itemId, projectSlug }: {
+export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, setSelectedCommitHash, handleRestore, fetchHistory, itemId, projectSlug, onReusePrompt }: {
   commits: GitCommit[];
   historyLoading: boolean;
   selectedCommitHash: string | null;
@@ -445,6 +445,7 @@ export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, s
   fetchHistory: (itemId: string, projectSlug: string) => void;
   itemId: string;
   projectSlug: string;
+  onReusePrompt?: (meta: RewriteMeta) => void;
 }) {
   if (commits.length === 0) {
     return (
@@ -470,6 +471,7 @@ export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, s
           commit={commits.find(c => c.hash === selectedCommitHash) ?? null}
           isHead={selectedCommitHash === commits[0]?.hash}
           onRestore={handleRestore}
+          onReusePrompt={onReusePrompt}
         />
       </div>
     </div>

@@ -230,8 +230,9 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       {
         origin: "describe_image",
         sourceAssetId,
+        model: VISION_MODEL,
         processed_at: new Date().toISOString(),
-        ...(tldr ? { variant: "tldr" } : {}),
+        variant: tldr ? "tldr" : "full",
         ...(platform ? { platform } : {}),
         ...(customPrompt ? { customPrompt } : {}),
       },

@@ -1,12 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
+export type RewriteVariant = 'full' | 'tldr';
+export type RewritePlatform = 'ig' | 'tiktok' | 'youtube';
+
+export interface RewriteMeta {
+  model: string;
+  variant: RewriteVariant;
+  platform?: RewritePlatform;
+  customPrompt?: string;
+  processedAt?: string;
+}
+
 export interface GitCommit {
   hash: string;
   message: string;
   date: string;
   author?: string;
   files?: string[];
+  rewrite?: RewriteMeta;
 }
 
 interface UseAssetHistoryResult {
