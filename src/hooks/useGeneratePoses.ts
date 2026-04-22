@@ -9,13 +9,27 @@ export const POSE_MODEL_OPTIONS = [
   { key: "nano_banana_pro", label: "Nano Banana Pro" },
   { key: "qwen_image_edit", label: "Qwen Image Edit" },
   { key: "gpt_image_1_5", label: "GPT Image 1.5" },
+  { key: "wan27_pro", label: "Wan 2.7 Pro" },
+  { key: "grok_imagine", label: "Grok Imagine" },
 ] as const;
 export type PoseModelKey = typeof POSE_MODEL_OPTIONS[number]["key"];
+
+export const POSE_PROVIDERS = [
+  { key: "kie", label: "Kie" },
+  { key: "fal", label: "Fal" },
+] as const;
+export type PoseProvider = typeof POSE_PROVIDERS[number]["key"];
+
+export const POSE_COUNT_MIN = 1;
+export const POSE_COUNT_MAX = 6;
+export const POSE_COUNT_DEFAULT = 3;
 
 export interface GeneratePosesArgs {
   sourceSlugs: string[];
   platforms: PosePlatform[];
   models: PoseModelKey[];
+  provider: PoseProvider;
+  posesPerPlatform: number;
   projectSlug: string;
 }
 
@@ -47,6 +61,8 @@ export function useGeneratePoses(callTool: UseMcpResult["callTool"]): UseGenerat
         source_slugs: args.sourceSlugs.map((s) => (s.startsWith("@") ? s : `@${s}`)),
         platforms: args.platforms,
         models: args.models,
+        provider: args.provider,
+        poses_per_platform: args.posesPerPlatform,
       };
       const result = await callToolRef.current(
         "generate_poses",
@@ -60,9 +76,10 @@ export function useGeneratePoses(callTool: UseMcpResult["callTool"]): UseGenerat
       }
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed = JSON.parse(content[0].text) as GeneratePosesResult;
+      const providerLabel = args.provider === "kie" ? "Kie" : "Fal";
       const desc = parsed.research_errors.length > 0
-        ? `${parsed.enqueued} jobs queued · ${parsed.research_errors.length} research errors`
-        : `${parsed.enqueued} jobs queued`;
+        ? `${parsed.enqueued} jobs queued via ${providerLabel} · ${parsed.research_errors.length} research errors`
+        : `${parsed.enqueued} jobs queued via ${providerLabel}`;
       toast({ title: "Poses generating", description: desc, duration: 3000 });
       await callToolRef.current("sync", { project_slug: args.projectSlug });
       return parsed;

@@ -6,8 +6,13 @@ import type { MediaItem } from '@/components/sidebar/types';
 import {
   POSE_PLATFORMS,
   POSE_MODEL_OPTIONS,
+  POSE_PROVIDERS,
+  POSE_COUNT_MIN,
+  POSE_COUNT_MAX,
+  POSE_COUNT_DEFAULT,
   type PosePlatform,
   type PoseModelKey,
+  type PoseProvider,
   type UseGeneratePosesResult,
 } from '@/hooks/useGeneratePoses';
 
@@ -39,6 +44,8 @@ export function PosesDialog({
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PosePlatform>>(new Set(['ig']));
   const [selectedModels, setSelectedModels] = useState<Set<PoseModelKey>>(new Set(['nano_banana_pro']));
+  const [selectedProvider, setSelectedProvider] = useState<PoseProvider>('kie');
+  const [posesPerPlatform, setPosesPerPlatform] = useState<number>(POSE_COUNT_DEFAULT);
 
   // Seed selections when the dialog opens
   useEffect(() => {
@@ -50,6 +57,8 @@ export function PosesDialog({
     setSelectedSources(initial);
     setSelectedPlatforms(new Set(['ig']));
     setSelectedModels(new Set(['nano_banana_pro']));
+    setSelectedProvider('kie');
+    setPosesPerPlatform(POSE_COUNT_DEFAULT);
     // Reset only when open transitions to true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -79,15 +88,17 @@ export function PosesDialog({
   }, []);
 
   const jobCount = useMemo(
-    () => selectedSources.size * selectedPlatforms.size * selectedModels.size * 3,
-    [selectedSources.size, selectedPlatforms.size, selectedModels.size],
+    () => selectedSources.size * selectedPlatforms.size * selectedModels.size * posesPerPlatform,
+    [selectedSources.size, selectedPlatforms.size, selectedModels.size, posesPerPlatform],
   );
 
   const canSubmit = !submitting
     && !!projectSlug
     && selectedSources.size > 0
     && selectedPlatforms.size > 0
-    && selectedModels.size > 0;
+    && selectedModels.size > 0
+    && posesPerPlatform >= POSE_COUNT_MIN
+    && posesPerPlatform <= POSE_COUNT_MAX;
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || !projectSlug) return;
@@ -95,10 +106,12 @@ export function PosesDialog({
       sourceSlugs: [...selectedSources],
       platforms: [...selectedPlatforms],
       models: [...selectedModels],
+      provider: selectedProvider,
+      posesPerPlatform,
       projectSlug,
     });
     if (res) onOpenChange(false);
-  }, [canSubmit, projectSlug, generate, selectedSources, selectedPlatforms, selectedModels, onOpenChange]);
+  }, [canSubmit, projectSlug, generate, selectedSources, selectedPlatforms, selectedModels, selectedProvider, posesPerPlatform, onOpenChange]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -213,6 +226,71 @@ export function PosesDialog({
               </div>
             </section>
 
+            {/* Provider */}
+            <section>
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70 mb-2">
+                Provider
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {POSE_PROVIDERS.map((p) => {
+                  const selected = selectedProvider === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setSelectedProvider(p.key)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 px-3 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        selected
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-100'
+                          : 'bg-transparent border-amber-500/30 text-amber-300/70 hover:border-amber-400/60 hover:text-amber-200',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Poses per platform */}
+            <section>
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70">
+                  Poses per Platform
+                </h3>
+                <span className="text-[10px] font-mono text-amber-500/50 tabular-nums">
+                  {POSE_COUNT_MIN}–{POSE_COUNT_MAX}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: POSE_COUNT_MAX - POSE_COUNT_MIN + 1 }, (_, i) => i + POSE_COUNT_MIN).map((n) => {
+                  const selected = posesPerPlatform === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPosesPerPlatform(n)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 w-9 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold tabular-nums',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        selected
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-100'
+                          : 'bg-transparent border-amber-500/30 text-amber-300/70 hover:border-amber-400/60 hover:text-amber-200',
+                      )}
+                    >
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             {/* Models */}
             <section>
               <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70 mb-2">
@@ -250,7 +328,7 @@ export function PosesDialog({
               <span className="text-amber-200 font-bold">{jobCount}</span> image{jobCount === 1 ? '' : 's'} will be queued
               {jobCount > 0 && (
                 <span className="text-amber-500/50 ml-1">
-                  ({selectedSources.size}×{selectedPlatforms.size}×{selectedModels.size}×3)
+                  ({selectedSources.size}×{selectedPlatforms.size}×{selectedModels.size}×{posesPerPlatform})
                 </span>
               )}
             </div>
