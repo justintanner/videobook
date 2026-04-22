@@ -20,7 +20,7 @@ const GUIDES_DIR = join(__dirname, "../guides");
 
 const GUIDE_FILES: Record<string, string> = {
   nano_banana: "nano_banana_pro_prompting_guide.md",
-  gpt15: "gpt_image_1_5_prompting_guide.md",
+  gpt_image: "gpt_image_2_prompting_guide.md",
   kling30: "kling_3_0_prompting_guide.md",
   grok_imagine: "grok_imagine_prompting_guide.md",
   grok_image: "grok_imagine_prompting_guide.md",
@@ -272,7 +272,7 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
     schema: {
       prompt: z.string().optional().describe("Prompt to rewrite. In scene mode, serves as optional creative direction."),
       model: z
-        .enum(["nano_banana", "gpt15", "kling30", "grok_imagine", "grok_image"])
+        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
       image_slugs: z

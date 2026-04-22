@@ -75,7 +75,7 @@ describe("generate_gpt_image tool", () => {
     expect(content[0].text).toContain("at least 1");
   });
 
-  it("returns error with more than 4 images", async () => {
+  it("returns error with more than 16 images", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
@@ -83,13 +83,13 @@ describe("generate_gpt_image tool", () => {
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
+        image_slugs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("at most 4");
+    expect(content[0].text).toContain("at most 16");
   });
 
   it("returns error when image_slugs entry does not start with img-", async () => {

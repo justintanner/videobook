@@ -7,7 +7,6 @@ import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { findImageFile } from "./_fal-shared.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
-import { generateGptImage1p5EditFalDef } from "./generate-gpt-image-1-5-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
@@ -67,7 +66,7 @@ export function poseTypeOptions(): Array<{ key: PoseType; label: string }> {
 export const SUPPORTED_POSE_MODELS = [
   "nano_banana_pro",
   "qwen_image_edit",
-  "gpt_image_1_5",
+  "gpt_image_2",
   "wan27_pro",
   "grok_imagine",
 ] as const;
@@ -76,7 +75,7 @@ export type PoseModelKey = typeof SUPPORTED_POSE_MODELS[number];
 const POSE_MODEL_LABELS: Record<PoseModelKey, string> = {
   nano_banana_pro: "Nano Banana Pro",
   qwen_image_edit: "Qwen Image Edit",
-  gpt_image_1_5: "GPT Image 1.5",
+  gpt_image_2: "GPT Image 2.0",
   wan27_pro: "Wan 2.7 Pro",
   grok_imagine: "Grok Imagine",
 };
@@ -261,18 +260,17 @@ function extractEnqueueResult(res: ToolResult): { assetId?: string; jobId?: stri
 
 type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
 
-const DISPATCH: Record<PoseProvider, Record<PoseModelKey, ToolDefFactory>> = {
+const DISPATCH: Record<PoseProvider, Partial<Record<PoseModelKey, ToolDefFactory>>> = {
   kie: {
     nano_banana_pro: generateNanoBananaImageDef,
     qwen_image_edit: generateQwen2ImageEditDef,
-    gpt_image_1_5: generateGptImageDef,
+    gpt_image_2: generateGptImageDef,
     wan27_pro: generateWan27ImageProDef,
     grok_imagine: generateGrokImagineImageDef,
   },
   fal: {
     nano_banana_pro: generateNanoBananaProEditFalDef,
     qwen_image_edit: generateQwenImageEditFalDef,
-    gpt_image_1_5: generateGptImage1p5EditFalDef,
     wan27_pro: generateWan27ProEditFalDef,
     grok_imagine: generateGrokImagineImageEditFalDef,
   },
@@ -292,6 +290,9 @@ async function enqueueForModel(
     image_slugs: [sourceSlug.startsWith("@") ? sourceSlug : `@${sourceSlug}`],
   };
   const factory = DISPATCH[provider][model];
+  if (!factory) {
+    return { error: `model ${model} is not available via provider ${provider}` };
+  }
   const def = factory(fs);
   const res = await def.handler(args as unknown as Record<string, unknown>);
   return extractEnqueueResult(res);

@@ -57,6 +57,7 @@ import { generationPayloadDef } from "./generation-payload.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
+import { generateGptImageTextDef } from "./generate-gpt-image-text.js";
 import { generateAlibabaImageDef } from "./generate-alibaba-image.js";
 import { generateAlibabaImageProDef } from "./generate-alibaba-image-pro.js";
 import { generateAlibabaQwenImageDef } from "./generate-alibaba-qwen-image.js";
@@ -101,8 +102,6 @@ import { generateNanoBanana2FalDef } from "./generate-nano-banana-2-fal.js";
 import { generateNanoBanana2EditFalDef } from "./generate-nano-banana-2-edit-fal.js";
 import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
-import { generateGptImage1p5FalDef } from "./generate-gpt-image-1-5-fal.js";
-import { generateGptImage1p5EditFalDef } from "./generate-gpt-image-1-5-edit-fal.js";
 import { generateSeedance2FastT2vFalDef } from "./generate-seedance2-fast-t2v-fal.js";
 import { generateSeedance2FastI2vFalDef } from "./generate-seedance2-fast-i2v-fal.js";
 import { generateWan27T2vFalDef } from "./generate-wan27-t2v-fal.js";
@@ -187,6 +186,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineImageDef(fs),
     generateGrokImagineTextImageDef(fs),
     generateGptImageDef(fs),
+    generateGptImageTextDef(fs),
     generateAlibabaImageDef(fs),
     generateAlibabaImageProDef(fs),
     generateAlibabaQwenImageDef(fs),
@@ -232,8 +232,6 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateNanoBanana2EditFalDef(fs),
     generateQwenImageFalDef(fs),
     generateQwenImageEditFalDef(fs),
-    generateGptImage1p5FalDef(fs),
-    generateGptImage1p5EditFalDef(fs),
     generateSeedance2FastT2vFalDef(fs),
     generateSeedance2FastI2vFalDef(fs),
     generateWan27T2vFalDef(fs),

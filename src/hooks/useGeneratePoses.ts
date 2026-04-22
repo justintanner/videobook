@@ -8,7 +8,7 @@ export type PosePlatform = typeof POSE_PLATFORMS[number];
 export const POSE_MODEL_OPTIONS = [
   { key: "nano_banana_pro", label: "Nano Banana Pro" },
   { key: "qwen_image_edit", label: "Qwen Image Edit" },
-  { key: "gpt_image_1_5", label: "GPT Image 1.5" },
+  { key: "gpt_image_2", label: "GPT Image 2.0" },
   { key: "wan27_pro", label: "Wan 2.7 Pro" },
   { key: "grok_imagine", label: "Grok Imagine" },
 ] as const;

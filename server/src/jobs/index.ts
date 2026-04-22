@@ -27,6 +27,7 @@ import { registerGenerateSeedreamImageJob } from "./generate-seedream-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
+import { registerGenerateGptImageTextJob } from "./generate-gpt-image-text.js";
 import { registerGenerateAlibabaImageJob, registerGenerateAlibabaImageProJob } from "./generate-alibaba-image.js";
 import { registerGenerateAlibabaQwenImageJob, registerGenerateAlibabaQwenImageEditJob } from "./generate-alibaba-qwen-image.js";
 import { registerGenerateAlibabaVideoJob } from "./generate-alibaba-video.js";
@@ -60,8 +61,6 @@ import { registerGenerateNanoBanana2FalJob } from "./generate-nano-banana-2-fal.
 import { registerGenerateNanoBanana2EditFalJob } from "./generate-nano-banana-2-edit-fal.js";
 import { registerGenerateQwenImageFalJob } from "./generate-qwen-image-fal.js";
 import { registerGenerateQwenImageEditFalJob } from "./generate-qwen-image-edit-fal.js";
-import { registerGenerateGptImage1p5FalJob } from "./generate-gpt-image-1-5-fal.js";
-import { registerGenerateGptImage1p5EditFalJob } from "./generate-gpt-image-1-5-edit-fal.js";
 import { registerGenerateSeedance2FastT2vFalJob } from "./generate-seedance2-fast-t2v-fal.js";
 import { registerGenerateSeedance2FastI2vFalJob } from "./generate-seedance2-fast-i2v-fal.js";
 import { registerGenerateWan27T2vFalJob } from "./generate-wan27-t2v-fal.js";
@@ -106,6 +105,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGrokImagineImageJob(fs);
   registerGenerateGrokImagineTextImageJob(fs);
   registerGenerateGptImageJob(fs);
+  registerGenerateGptImageTextJob(fs);
   registerGenerateAlibabaImageJob(fs);
   registerGenerateAlibabaImageProJob(fs);
   registerGenerateAlibabaQwenImageJob(fs);
@@ -141,8 +141,6 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateNanoBanana2EditFalJob(fs);
   registerGenerateQwenImageFalJob(fs);
   registerGenerateQwenImageEditFalJob(fs);
-  registerGenerateGptImage1p5FalJob(fs);
-  registerGenerateGptImage1p5EditFalJob(fs);
   registerGenerateSeedance2FastT2vFalJob(fs);
   registerGenerateSeedance2FastI2vFalJob(fs);
   registerGenerateWan27T2vFalJob(fs);

@@ -32,12 +32,6 @@ const MODELS: readonly ModelSpec[] = [
     jobPrefix: "fal-seedream-v5-lite",
   },
   {
-    toolType: "generate_gpt_image_1_5_fal",
-    taskType: "fal_gpt_image_1_5",
-    slugPrefix: "gpt-image",
-    jobPrefix: "fal-gpt-image-1-5",
-  },
-  {
     toolType: "generate_grok_imagine_image_fal",
     taskType: "fal_grok_imagine_image",
     slugPrefix: "grok",
@@ -105,7 +99,7 @@ export function genImagesAllDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "gen_images_all_models",
     description:
-      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, GPT Image 1.5, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.",
+      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.",
     schema,
     handler: async (args) => {
       const { prompt, project_slug, source_script_id } = args as Args;

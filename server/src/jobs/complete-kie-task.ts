@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_gpt_image_1_5" | "fal_gpt_image_1_5_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -76,8 +76,8 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeAlibabaQwenImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
-      } else if (taskType === "gpt_image") {
-        await completeGptImage(fs, assetId, projectSlug, meta, resultUrls);
+      } else if (taskType === "gpt_image" || taskType === "gpt_image_text") {
+        await completeGptImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "transcribe" || taskType === "fal_transcribe") {
         await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       } else if (taskType === "isolate_vocals") {
@@ -571,6 +571,7 @@ async function completeGptImage(
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
+  taskType: "gpt_image" | "gpt_image_text",
 ): Promise<void> {
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
@@ -583,12 +584,12 @@ async function completeGptImage(
 
   const origin = {
     source_assets: meta.sourceImageIds,
-    model: "gpt-image/1.5-image-to-image",
+    model: taskType === "gpt_image_text" ? "gpt-image-2-text-to-image" : "gpt-image-2-image-to-image",
     prompt: meta.prompt,
     download_url: imageUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
-    ...(meta.quality !== undefined ? { quality: meta.quality } : {}),
+    ...(meta.nsfwChecker !== undefined ? { nsfw_checker: meta.nsfwChecker } : {}),
     generated_at: new Date().toISOString(),
   };
   const jobId = `process-image-${assetId}-${Date.now()}`;

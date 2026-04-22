@@ -14,7 +14,10 @@ import type {
   Seedance2FastRequest,
   Seedance2Request,
   NanoBananaProRequest,
-  GptImageToImageRequest,
+  GptImage2ImageToImageRequest,
+  GptImage2ImageToImageAspectRatio,
+  GptImage2TextToImageRequest,
+  GptImage2TextToImageAspectRatio,
   SeedreamTextToImageRequest,
   SeedreamImageToImageRequest,
   Qwen2ImageEditRequest,
@@ -32,7 +35,6 @@ import type {
   GrokImagineResolution,
   NanoBananaResolution,
   NanoBananaOutputFormat,
-  GptImageQuality,
   Wan27Resolution,
   Wan27AspectRatio,
   Wan27ImageAspectRatio,
@@ -301,20 +303,39 @@ function buildQwen2ImageEditPayload(
 type GptImageArgs = {
   prompt: string;
   aspect_ratio?: string;
-  quality?: GptImageQuality;
+  nsfw_checker?: boolean;
 };
 
 function buildGptImagePayload(
   args: GptImageArgs,
   inputUrls: string[],
-): GptImageToImageRequest {
+): GptImage2ImageToImageRequest {
   return {
-    model: "gpt-image/1.5-image-to-image",
+    model: "gpt-image-2-image-to-image",
     input: {
       prompt: args.prompt,
       input_urls: inputUrls,
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as "1:1" | "2:3" | "3:2" } : {}),
-      ...(args.quality !== undefined ? { quality: args.quality } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2ImageToImageAspectRatio } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    },
+  };
+}
+
+type GptImageTextArgs = {
+  prompt: string;
+  aspect_ratio?: string;
+  nsfw_checker?: boolean;
+};
+
+function buildGptImageTextPayload(
+  args: GptImageTextArgs,
+): GptImage2TextToImageRequest {
+  return {
+    model: "gpt-image-2-text-to-image",
+    input: {
+      prompt: args.prompt,
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2TextToImageAspectRatio } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
   };
 }
@@ -794,6 +815,10 @@ function translateToolPayload(
       const payload = buildGptImagePayload(args as GptImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_gpt_image_text": {
+      const payload = buildGptImageTextPayload(args as GptImageTextArgs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_wan27_image": {
       const payload = buildWan27ImagePayload(args as Wan27ImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
@@ -913,7 +938,7 @@ const VIDEO_TOOLS = new Set([
 ]);
 
 const IMAGE_TOOLS = new Set([
-  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_grok_imagine_text_image",
+  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_gpt_image_text", "generate_grok_imagine_text_image",
   "generate_qwen2_image_edit", "generate_wan27_image", "generate_wan27_image_pro",
   "generate_seedream_text_image", "generate_seedream_image",
   "generate_alibaba_image", "generate_alibaba_image_pro",
@@ -944,6 +969,7 @@ export {
   buildQwen2ImageEditPayload,
   buildGrokImagineTextPayload,
   buildGptImagePayload,
+  buildGptImageTextPayload,
   buildSeedreamTextImagePayload,
   buildSeedreamImageEditPayload,
   buildSeedance2VideoPayload,

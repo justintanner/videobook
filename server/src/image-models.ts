@@ -11,7 +11,7 @@ import type { ResolvedAsset } from "./asset-resolver.js";
 import { kie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import {
-  GptImageToImageRequestSchema,
+  GptImage2ImageToImageRequestSchema,
   GrokImageToImageRequestSchema,
   NanoBananaProRequestSchema,
   Qwen2ImageEditRequestSchema,
@@ -103,14 +103,22 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   },
   {
     key: "gpt_image",
-    kieModelId: "gpt-image/1.5-image-to-image",
+    kieModelId: "gpt-image-2-image-to-image",
     tool_name: "generate_gpt_image",
-    label: "GPT Image",
-    description: "Image editing with reference images, aspect ratio and quality control",
-    imageFieldSchema: GptImageToImageRequestSchema.shape.input.shape.input_urls,
+    label: "GPT Image 2.0 Edit",
+    description: "Image editing with 1-16 reference images, aspect ratio, and NSFW filter",
+    imageFieldSchema: GptImage2ImageToImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
-    defaults: { aspect_ratio: "1:1", quality: "high" },
-    falToolNames: { withRefs: "generate_gpt_image_1_5_edit_fal" },
+    defaults: { aspect_ratio: "1:1" },
+  },
+  {
+    key: "gpt_image_text",
+    kieModelId: "gpt-image-2-text-to-image",
+    tool_name: "generate_gpt_image_text",
+    label: "GPT Image 2.0",
+    description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
+    imageFieldSchema: null,
+    defaults: { aspect_ratio: "1:1" },
   },
   {
     key: "grok_imagine_text",

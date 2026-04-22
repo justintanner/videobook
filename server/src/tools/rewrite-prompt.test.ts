@@ -42,8 +42,8 @@ describe("loadGuide", () => {
     expect(guide.length).toBeGreaterThan(0);
   });
 
-  it("loads the gpt15 guide successfully", async () => {
-    const guide = await loadGuide("gpt15");
+  it("loads the gpt_image guide successfully", async () => {
+    const guide = await loadGuide("gpt_image");
     expect(guide.length).toBeGreaterThan(0);
   });
 

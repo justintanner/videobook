@@ -5,7 +5,7 @@ import type { RewritePlatform } from "@/hooks/useRewriteScript";
 
 export type ImagePromptGuideModel =
   | "nano_banana"
-  | "gpt15"
+  | "gpt_image"
   | "kling30"
   | "grok_imagine"
   | "grok_image";

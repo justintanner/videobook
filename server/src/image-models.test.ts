@@ -237,13 +237,13 @@ describe("buildImageModelOption history integration", () => {
       {
         hash: "h1",
         action: "tool-generate-gpt-image",
-        payload: { prompt: "test", quality: "high", output_format: "png" },
+        payload: { prompt: "test", aspect_ratio: "16:9", output_format: "png" },
         date: "2026-03-08T00:00:00Z",
       },
     ];
     const option = buildImageModelOption("gpt_image", gptImage, {}, [], history);
     expect(option.prefilled_values.prompt).toBe("test");
-    expect(option.prefilled_values.quality).toBe("high");
+    expect(option.prefilled_values.aspect_ratio).toBe("16:9");
     // output_format is not in gpt_image's allowed params
     expect(option.prefilled_values).not.toHaveProperty("output_format");
   });
@@ -270,13 +270,21 @@ describe("getImageToolSchema", () => {
     expect(schema!.required).toContain("image_slugs");
   });
 
-  it("gpt_image: both prompt and image_slugs required, quality/aspect_ratio enums", () => {
+  it("gpt_image: both prompt and image_slugs required, aspect_ratio enum", () => {
     const schema = getImageToolSchema("generate_gpt_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).toContain("image_slugs");
-    expect(schema!.properties.quality.enum).toEqual(["medium", "high"]);
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "2:3", "3:2"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "16:9", "9:16", "3:2", "2:3"]);
+    expect(schema!.properties).not.toHaveProperty("quality");
+  });
+
+  it("gpt_image_text: prompt required, no image_slugs", () => {
+    const schema = getImageToolSchema("generate_gpt_image_text");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "16:9", "9:16", "3:2"]);
   });
 });
 
@@ -309,12 +317,12 @@ describe("validateImageParams", () => {
     expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
   });
 
-  it("gpt warns when >4 images (Zod array capped at 4)", () => {
+  it("gpt warns when >16 images (Zod array capped at 16)", () => {
     const result = validateImageParams("generate_gpt_image", {
       prompt: "edit this",
-      image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e"],
+      image_slugs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
     });
-    expect(result.warnings.some((w) => w.includes("supports 1-4 images"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("supports 1-16 images"))).toBe(true);
   });
 
   it("gpt warns when no images (Zod array requires at least 1)", () => {
@@ -355,14 +363,17 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 11 image models", () => {
+  it("returns all 14 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(11);
+    expect(Object.keys(models)).toHaveLength(14);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
+    expect(models).toHaveProperty("gpt_image_text");
     expect(models).toHaveProperty("grok_imagine_text");
     expect(models).toHaveProperty("qwen2_image_edit");
+    expect(models).toHaveProperty("seedream_text");
+    expect(models).toHaveProperty("seedream_image");
     expect(models).toHaveProperty("wan27_image");
     expect(models).toHaveProperty("wan27_image_pro");
     expect(models).toHaveProperty("alibaba_image");

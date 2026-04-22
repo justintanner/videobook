@@ -38,18 +38,19 @@ function getPreviewToolName(cat: 'video' | 'image'): string {
 }
 
 // Map an image panel model key (from server's image-models.ts) to the
-// rewrite_prompt tool's guide-model enum. Falls back to gpt15 for models
+// rewrite_prompt tool's guide-model enum. Falls back to gpt_image for models
 // that don't have their own prompting guide.
 const IMAGE_MODEL_TO_GUIDE: Record<string, ImagePromptGuideModel> = {
   nano_banana: 'nano_banana',
   grok_imagine_image: 'grok_imagine',
   grok_imagine_text: 'grok_imagine',
-  gpt_image: 'gpt15',
+  gpt_image: 'gpt_image',
+  gpt_image_text: 'gpt_image',
 };
 
 function guideModelFor(imageModelKey: string | undefined): ImagePromptGuideModel {
-  if (!imageModelKey) return 'gpt15';
-  return IMAGE_MODEL_TO_GUIDE[imageModelKey] ?? 'gpt15';
+  if (!imageModelKey) return 'gpt_image';
+  return IMAGE_MODEL_TO_GUIDE[imageModelKey] ?? 'gpt_image';
 }
 
 interface SavedGenSettings {

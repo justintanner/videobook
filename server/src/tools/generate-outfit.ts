@@ -9,7 +9,6 @@ import {
 } from "./generate-poses.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
-import { generateGptImage1p5EditFalDef } from "./generate-gpt-image-1-5-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
@@ -44,18 +43,17 @@ type Args = SchemaArgs<typeof schema>;
 
 type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
 
-const DISPATCH: Record<PoseProvider, Record<PoseModelKey, ToolDefFactory>> = {
+const DISPATCH: Record<PoseProvider, Partial<Record<PoseModelKey, ToolDefFactory>>> = {
   kie: {
     nano_banana_pro: generateNanoBananaImageDef,
     qwen_image_edit: generateQwen2ImageEditDef,
-    gpt_image_1_5: generateGptImageDef,
+    gpt_image_2: generateGptImageDef,
     wan27_pro: generateWan27ImageProDef,
     grok_imagine: generateGrokImagineImageDef,
   },
   fal: {
     nano_banana_pro: generateNanoBananaProEditFalDef,
     qwen_image_edit: generateQwenImageEditFalDef,
-    gpt_image_1_5: generateGptImage1p5EditFalDef,
     wan27_pro: generateWan27ProEditFalDef,
     grok_imagine: generateGrokImagineImageEditFalDef,
   },
@@ -128,6 +126,12 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
       const outcomes: EnqueueOutcome[] = [];
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
+        const outcome: EnqueueOutcome = { model, provider, prompt };
+        if (!factory) {
+          outcome.error = `model ${model} is not available via provider ${provider}`;
+          outcomes.push(outcome);
+          continue;
+        }
         const def = factory(fs);
         const res = await def.handler({
           project_slug: a.project_slug,
@@ -135,7 +139,6 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           image_slugs,
         } as unknown as Record<string, unknown>);
         const r = extractEnqueueResult(res);
-        const outcome: EnqueueOutcome = { model, provider, prompt };
         if (r.error) outcome.error = r.error;
         if (r.assetId) outcome.img_asset_id = r.assetId;
         if (r.jobId) outcome.job_id = r.jobId;

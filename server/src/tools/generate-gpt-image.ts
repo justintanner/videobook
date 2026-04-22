@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
-import { GptImageQualitySchema, GptImageToImageRequestSchema } from "@apicity/kie/zod";
+import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
@@ -27,15 +27,15 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
-const gptImageToImageInputSchema = GptImageToImageRequestSchema.shape.input.shape;
+const gptImageToImageInputSchema = GptImage2ImageToImageRequestSchema.shape.input.shape;
 
 const generateGptImageSchema = {
   prompt: z.string().describe("Text prompt for image editing"),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).describe("1-4 @img-* slugs for reference images"),
+  image_slugs: z.array(z.string()).describe("1-16 @img-* slugs for reference images"),
   aspect_ratio: z.enum(gptImageToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
-  quality: z.enum(GptImageQualitySchema.options).optional().describe("Output quality level"),
-  _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
+  nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
+  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateGptImageSchema>;
@@ -43,10 +43,10 @@ type Args = SchemaArgs<typeof generateGptImageSchema>;
 export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_gpt_image",
-    description: "Generate an image using GPT Image editing with 1-4 reference images. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, quality } = args as Args;
+      const { prompt, project_slug, image_slugs, aspect_ratio, nsfw_checker } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 
@@ -57,14 +57,14 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Apicity GptImageToImageRequestSchema enforces input_urls .min(1).max(4).
-      const apicityCheck = GptImageToImageRequestSchema.safeParse({
-        model: "gpt-image/1.5-image-to-image",
+      // Apicity GptImage2ImageToImageRequestSchema enforces input_urls .min(1).max(16).
+      const apicityCheck = GptImage2ImageToImageRequestSchema.safeParse({
+        model: "gpt-image-2-image-to-image",
         input: {
           prompt,
           input_urls: ids,
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-          ...(quality !== undefined ? { quality } : {}),
+          ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         },
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
@@ -133,7 +133,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
-        ...(quality !== undefined ? { quality } : {}),
+        ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);
 
       return {
