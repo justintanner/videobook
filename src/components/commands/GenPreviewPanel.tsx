@@ -15,6 +15,8 @@ import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
 import type { ExecuteButtonState } from './types';
 import type { UseMcpResult } from 'use-mcp/react';
+import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePopover';
+import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -33,6 +35,21 @@ interface GenPreviewPanelProps {
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
   return cat === 'video' ? 'preview_video' : 'preview_image';
+}
+
+// Map an image panel model key (from server's image-models.ts) to the
+// rewrite_prompt tool's guide-model enum. Falls back to gpt15 for models
+// that don't have their own prompting guide.
+const IMAGE_MODEL_TO_GUIDE: Record<string, ImagePromptGuideModel> = {
+  nano_banana: 'nano_banana',
+  grok_imagine_image: 'grok_imagine',
+  grok_imagine_text: 'grok_imagine',
+  gpt_image: 'gpt15',
+};
+
+function guideModelFor(imageModelKey: string | undefined): ImagePromptGuideModel {
+  if (!imageModelKey) return 'gpt15';
+  return IMAGE_MODEL_TO_GUIDE[imageModelKey] ?? 'gpt15';
 }
 
 interface SavedGenSettings {
@@ -82,6 +99,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [flipped, setFlipped] = useState(false);
   const [translatedPayload, setTranslatedPayload] = useState<Record<string, unknown> | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const { rewrite: rewriteImagePrompt, rewriting } = useRewriteImagePrompt(callTool);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
   const formValuesRef = useRef(formValues);
@@ -233,6 +252,30 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       });
     }
   }, []);
+
+  const handleRewriteImagePromptSubmit = useCallback(async (
+    submit: { platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string },
+  ) => {
+    if (!projectSlug) return;
+    const currentValues = formValuesRef.current;
+    const currentPrompt = typeof currentValues.prompt === 'string' ? currentValues.prompt : '';
+    const rawSlugs = currentValues.image_slugs;
+    const currentImageSlugs = Array.isArray(rawSlugs)
+      ? (rawSlugs as unknown[]).filter((s): s is string => typeof s === 'string')
+      : [];
+    const rewritten = await rewriteImagePrompt({
+      prompt: currentPrompt,
+      model: guideModelFor(selectedModelKey),
+      imageSlugs: currentImageSlugs,
+      platform: submit.platform,
+      customPrompt: submit.customPrompt,
+      projectSlug,
+    });
+    if (rewritten) {
+      setFormValues((prev) => ({ ...prev, prompt: rewritten }));
+      setRewriteOpen(false);
+    }
+  }, [projectSlug, selectedModelKey, rewriteImagePrompt]);
 
   const selectedOption: ModelOption | undefined = preview?.model_options.find(
     (o) => o.key === selectedModelKey,
@@ -540,17 +583,56 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                 {/* Prompt field in /prompt section */}
                 {regularFields
                   .filter(([name]) => name === 'prompt')
-                  .map(([name]) => (
+                  .map(([name]) => {
+                    const promptValue = typeof formValues[name] === 'string' ? (formValues[name] as string) : '';
+                    const slugsRaw = formValues.image_slugs;
+                    const slugsCount = Array.isArray(slugsRaw) ? slugsRaw.length : 0;
+                    const rewriteDisabled = isDisabled || rewriting || (!promptValue.trim() && slugsCount === 0);
+                    return (
                     <div key={name} className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
                         <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
                         {schema?.required?.includes(name) && (
-                          <span className="ml-auto text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                          <span className="text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                        )}
+                        {category === 'image' && (
+                          <div className="ml-auto">
+                            <ImagePromptRewritePopover
+                              open={rewriteOpen}
+                              onOpenChange={setRewriteOpen}
+                              onSubmit={handleRewriteImagePromptSubmit}
+                              rewriting={rewriting}
+                              disabled={rewriteDisabled && !rewriteOpen}
+                              trigger={
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={() => setRewriteOpen((o) => !o)}
+                                  disabled={rewriteDisabled}
+                                  title="Rewrite prompt to match a platform aesthetic (IG/TikTok/YouTube) and clean up artifacts"
+                                  className={cn(
+                                    'h-6 px-2 flex items-center gap-1.5 rounded',
+                                    'text-[10px] font-mono font-bold uppercase tracking-wider',
+                                    'text-amber-300/90 hover:text-amber-200',
+                                    'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
+                                    'transition-colors duration-150',
+                                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                                    rewriteOpen && 'bg-amber-500/15 border-amber-400/60 text-amber-200',
+                                  )}
+                                >
+                                  {rewriting
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : <Zap className="w-3 h-3" />}
+                                  Rewrite
+                                </button>
+                              }
+                            />
+                          </div>
                         )}
                       </div>
                       <div className="px-3 py-2.5">
                         <textarea
-                          value={typeof formValues[name] === 'string' ? (formValues[name] as string).replace(/\\n/g, '\n') : ''}
+                          value={promptValue.replace(/\\n/g, '\n')}
                           onChange={(e) => handleFieldChange(name, e.target.value)}
                           disabled={isDisabled}
                           autoFocus
@@ -559,7 +641,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                         />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 {/* Other fields in /settings section */}
                 {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
                   <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">

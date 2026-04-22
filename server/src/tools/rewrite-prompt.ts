@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { openai, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
+import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 
 const REWRITE_MODEL = "gpt-5.2";
@@ -43,13 +44,42 @@ function guideFilename(model: string): string {
   return GUIDE_FILES[model] ?? "";
 }
 
-export function buildRewritePromptText(guide: string, prompt: string, maxChars?: number): string {
+export interface BuildRewriteExtras {
+  maxChars?: number;
+  platform?: Platform;
+  customPrompt?: string;
+  hasImages?: boolean;
+}
+
+const IMAGE_CLEANUP_DIRECTIVE =
+  "IMAGE CLEANUP: The reference image(s) may contain AI-generation artifacts " +
+  "(plasticky skin, oversharpened or haloed edges, waxy textures, mushy background detail) " +
+  "or low-resolution noise (blocking, chroma banding, jpeg ringing). Describe the intended " +
+  "subject/scene rather than replicating these artifacts. Produce a prompt that guides the " +
+  "target model to render the scene cleanly at full fidelity, honoring the platform aesthetic above.";
+
+export function buildRewritePromptText(
+  guide: string,
+  prompt: string,
+  extras: BuildRewriteExtras = {},
+): string {
+  const { maxChars, platform, customPrompt, hasImages } = extras;
   let charLimitRule = "";
   if (maxChars) {
     charLimitRule =
       `- HARD LIMIT: The rewritten prompt MUST be under ${maxChars} characters (API max is 500)\n` +
       "- Be concise and visually specific — cut filler words, focus on key actions and details\n";
   }
+  const platformSection = platform
+    ? `\n--- PLATFORM STYLE ---\n${platformGuidance(platform)}\n--- END PLATFORM STYLE ---\n` +
+      (hasImages ? `\n${IMAGE_CLEANUP_DIRECTIVE}\n` : "")
+    : "";
+  const instructionSection = customPrompt
+    ? `\nADDITIONAL INSTRUCTION: ${customPrompt}\n`
+    : "";
+  const userPromptBlock = prompt
+    ? `USER PROMPT TO REWRITE:\n${prompt}`
+    : "USER PROMPT TO REWRITE: (none — describe the reference image(s) directly, applying the guide above)";
   return (
     "You are a prompt engineering expert. Using the model-specific prompting guide below, " +
     "rewrite the user's prompt to follow best practices for this model.\n\n" +
@@ -60,27 +90,29 @@ export function buildRewritePromptText(guide: string, prompt: string, maxChars?:
     "- Preserve the user's creative intent while improving structure and detail\n" +
     "- Apply the guide's recommended prompt structure and techniques\n" +
     "- If images are provided, incorporate visual details you observe into the prompt\n\n" +
-    `--- PROMPTING GUIDE ---\n${guide}\n--- END GUIDE ---\n\n` +
-    `USER PROMPT TO REWRITE:\n${prompt}`
+    `--- PROMPTING GUIDE ---\n${guide}\n--- END GUIDE ---\n` +
+    platformSection +
+    instructionSection +
+    `\n${userPromptBlock}`
   );
 }
 
 export function buildRewriteMessages(
   guide: string,
   prompt: string,
-  maxChars?: number,
+  extras: BuildRewriteExtras = {},
 ): OpenAiMessage[] {
-  return [{ role: "user", content: buildRewritePromptText(guide, prompt, maxChars) }];
+  return [{ role: "user", content: buildRewritePromptText(guide, prompt, extras) }];
 }
 
 export function buildVisionMessages(
   guide: string,
   prompt: string,
   imageDataUris: string[],
-  maxChars?: number,
+  extras: BuildRewriteExtras = {},
 ): OpenAiMessage[] {
   const content: OpenAiContentPart[] = imageDataUris.map((uri) => imageUrlPart(uri));
-  content.push(textPart(buildRewritePromptText(guide, prompt, maxChars)));
+  content.push(textPart(buildRewritePromptText(guide, prompt, { ...extras, hasImages: true })));
   return [{ role: "user", content }];
 }
 
@@ -250,11 +282,20 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
       project_slug: z.string().describe("Project slug"),
       asset_slug: z.string().optional().describe("Asset slug for scene-context rewrite (requires scene_index)"),
       scene_index: z.number().int().optional().describe("0-based scene index to rewrite (requires asset_slug)"),
+      platform: z
+        .enum(["ig", "tiktok", "youtube"])
+        .optional()
+        .describe("Optional platform aesthetic preset (Instagram/TikTok/YouTube)"),
+      custom_prompt: z
+        .string()
+        .max(500)
+        .optional()
+        .describe("Optional free-form additional instruction (max 500 chars)"),
     },
     handler: async (args) => {
       const {
         prompt, model, image_slugs, project_slug,
-        asset_slug, scene_index,
+        asset_slug, scene_index, platform, custom_prompt,
       } = args as {
         prompt?: string;
         model: string;
@@ -262,6 +303,8 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
         project_slug: string;
         asset_slug?: string;
         scene_index?: number;
+        platform?: Platform;
+        custom_prompt?: string;
       };
 
       const apiKey = process.env.OPENAI_API_KEY;
@@ -277,22 +320,28 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
         return handleSceneRewrite(fs, apiKey, asset_slug, scene_index, prompt, project_slug);
       }
 
-      // Standard rewrite mode
-      if (!prompt) {
+      // Standard rewrite mode — require prompt OR reference images
+      const hasImages = !!image_slugs && image_slugs.length > 0;
+      if (!prompt && !hasImages) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "prompt is required for standard rewrite mode" }],
+          content: [{
+            type: "text" as const,
+            text: "Provide a prompt, or reference image_slugs (for vision-based description), or both.",
+          }],
         };
       }
 
       // Expand @s01 slot refs → actual asset slugs
-      let expandedPrompt = prompt;
-      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
-      if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+      let expandedPrompt = prompt ?? "";
+      if (expandedPrompt) {
+        const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
+        if (timelineResult.ok && timelineResult.value.slots) {
+          expandedPrompt = expandSlotRefs(expandedPrompt, timelineResult.value.slots);
+        }
       }
 
-      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, project_slug);
+      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, project_slug, platform, custom_prompt);
     },
   };
 }
@@ -304,6 +353,8 @@ async function handleStandardRewrite(
   model: string,
   imageSlugs: string[] | undefined,
   projectSlug: string,
+  platform: Platform | undefined,
+  customPrompt: string | undefined,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   let guide: string;
   try {
@@ -317,6 +368,7 @@ async function handleStandardRewrite(
 
   const maxChars = model === "kling30" ? 400 : undefined;
   const provider = openai({ apiKey, timeout: 60_000 });
+  const extras = { maxChars, platform, customPrompt };
 
   let messages: OpenAiMessage[];
   if (imageSlugs && imageSlugs.length > 0) {
@@ -327,9 +379,9 @@ async function handleStandardRewrite(
         content: [{ type: "text" as const, text: "Could not resolve any image files from provided slugs" }],
       };
     }
-    messages = buildVisionMessages(guide, prompt, dataUris, maxChars);
+    messages = buildVisionMessages(guide, prompt, dataUris, extras);
   } else {
-    messages = buildRewriteMessages(guide, prompt, maxChars);
+    messages = buildRewriteMessages(guide, prompt, extras);
   }
 
   const result = await provider.post.v1.chat.completions({

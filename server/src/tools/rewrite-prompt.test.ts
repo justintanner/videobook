@@ -65,7 +65,7 @@ describe("buildRewritePromptText", () => {
   });
 
   it("includes character limit rule when maxChars is provided", () => {
-    const text = buildRewritePromptText("guide", "prompt", 400);
+    const text = buildRewritePromptText("guide", "prompt", { maxChars: 400 });
     expect(text).toContain("HARD LIMIT");
     expect(text).toContain("400");
   });
@@ -73,6 +73,29 @@ describe("buildRewritePromptText", () => {
   it("does not include character limit rule when maxChars is omitted", () => {
     const text = buildRewritePromptText("guide", "prompt");
     expect(text).not.toContain("HARD LIMIT");
+  });
+
+  it("injects platform guidance when platform is set", () => {
+    const text = buildRewritePromptText("guide", "prompt", { platform: "ig" });
+    expect(text).toContain("PLATFORM STYLE");
+    expect(text).toContain("Instagram");
+  });
+
+  it("injects cleanup directive only when images are also present", () => {
+    const withImages = buildRewritePromptText("guide", "prompt", { platform: "tiktok", hasImages: true });
+    expect(withImages).toContain("IMAGE CLEANUP");
+    const noImages = buildRewritePromptText("guide", "prompt", { platform: "tiktok" });
+    expect(noImages).not.toContain("IMAGE CLEANUP");
+  });
+
+  it("appends additional instruction when customPrompt is provided", () => {
+    const text = buildRewritePromptText("guide", "prompt", { customPrompt: "make it vertical" });
+    expect(text).toContain("ADDITIONAL INSTRUCTION: make it vertical");
+  });
+
+  it("handles empty prompt (vision-only rewrite)", () => {
+    const text = buildRewritePromptText("guide", "", {});
+    expect(text).toContain("USER PROMPT TO REWRITE: (none");
   });
 });
 
@@ -342,7 +365,7 @@ describe("rewrite_prompt tool", () => {
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("prompt is required");
+    expect(content[0].text).toContain("Provide a prompt");
   });
 
   it("returns error for scene rewrite with no .tool.params.json", async () => {

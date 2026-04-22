@@ -3,13 +3,7 @@ import { Loader2, Zap, ChevronDown } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { RewritePlatform, RewriteVariant } from '@/hooks/useRewriteScript';
-
-const PLATFORM_OPTIONS: Array<{ value: RewritePlatform | ''; label: string }> = [
-  { value: '', label: 'None' },
-  { value: 'ig', label: 'Instagram' },
-  { value: 'tiktok', label: 'TikTok' },
-  { value: 'youtube', label: 'YouTube' },
-];
+import { PLATFORM_OPTIONS } from './rewrite-platforms';
 
 const CUSTOM_PROMPT_MAX = 500;
 
