@@ -284,13 +284,15 @@ function buildQwen2ImageEditPayload(
   args: Qwen2ImageEditArgs,
   imageInput: string[],
 ): Qwen2ImageEditRequest {
+  const image_size = (args.image_size ?? "16:9") as NonNullable<Qwen2ImageEditRequest["input"]["image_size"]>;
+  const output_format = args.output_format ?? "png";
   return {
     model: "qwen2/image-edit",
     input: {
       prompt: args.prompt,
       image_url: imageInput,
-      ...(args.image_size !== undefined ? { image_size: args.image_size as Qwen2ImageEditRequest["input"]["image_size"] } : {}),
-      ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
+      image_size,
+      output_format,
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
