@@ -10,8 +10,11 @@ const base = FalQwenImageEditRequestSchema.shape;
 
 // `image_size` upstream is a union of (enum | {width,height}). Only the enum branch is
 // exposed here; custom width/height isn't wired through the UI.
-const falImageSizeEnum = (base.image_size.unwrap().options as readonly z.ZodTypeAny[])
-  .find((opt): opt is z.ZodEnum<[string, ...string[]]> => opt instanceof z.ZodEnum);
+// `instanceof z.ZodEnum` fails because @apicity/fal bundles its own Zod instance,
+// so branch detection uses `_def.typeName` instead.
+type ZodEnumLike = { _def: { typeName: "ZodEnum" }; options: readonly string[] };
+const falImageSizeEnum = (base.image_size.unwrap().options as readonly unknown[])
+  .find((opt): opt is ZodEnumLike => (opt as { _def?: { typeName?: string } })._def?.typeName === "ZodEnum");
 if (!falImageSizeEnum) throw new Error("FalQwenImageEditRequestSchema.image_size changed shape");
 const falImageSizeOptions = falImageSizeEnum.options as readonly [string, ...string[]];
 type FalImageSize = typeof falImageSizeOptions[number];
