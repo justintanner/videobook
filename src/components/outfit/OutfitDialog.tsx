@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Shirt, Loader2, Zap, X, Upload, AlertTriangle } from 'lucide-react';
+import { Shirt, Loader2, Zap, X, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
-import type { UseMcpResult } from 'use-mcp/react';
 import {
   POSE_MODEL_OPTIONS,
+  POSE_PLATFORMS,
   POSE_PROVIDERS,
   type PoseModelKey,
+  type PosePlatform,
   type PoseProvider,
 } from '@/hooks/useGeneratePoses';
+
+const PLATFORM_LABELS: Record<PosePlatform, string> = {
+  ig: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
 import {
   OUTFIT_CUSTOM_PROMPT_MAX,
   type UseGenerateOutfitResult,
@@ -31,7 +38,6 @@ interface OutfitDialogProps {
   imageAssets: MediaItem[];
   projectSlug: string | undefined;
   initialSlug: string | null;
-  callTool: UseMcpResult['callTool'];
   generate: UseGenerateOutfitResult['generate'];
   submitting: boolean;
 }
@@ -51,27 +57,18 @@ export function OutfitDialog({
   imageAssets,
   projectSlug,
   initialSlug,
-  callTool,
   generate,
   submitting,
 }: OutfitDialogProps) {
   const [model, setModel] = useState<ImageChoice | null>(null);
   const [garment, setGarment] = useState<ImageChoice | null>(null);
   const [pose, setPose] = useState<ImageChoice | null>(null);
-  const [extras, setExtras] = useState<Record<SlotKind, ImageChoice[]>>({
-    model: [],
-    garment: [],
-    pose: [],
-  });
-  const [uploadingSlot, setUploadingSlot] = useState<SlotKind | null>(null);
   const [selectedModels, setSelectedModels] = useState<Set<PoseModelKey>>(new Set(['qwen_image_edit']));
   const [selectedProvider, setSelectedProvider] = useState<PoseProvider>('kie');
+  const [selectedPlatform, setSelectedPlatform] = useState<PosePlatform | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
 
   const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = useBlazePose();
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const pendingUploadSlotRef = useRef<SlotKind | null>(null);
 
   // Seed when dialog opens
   useEffect(() => {
@@ -81,9 +78,9 @@ export function OutfitDialog({
     setModel(match ? mediaItemToChoice(match) : null);
     setGarment(null);
     setPose(null);
-    setExtras({ model: [], garment: [], pose: [] });
     setSelectedModels(new Set(['qwen_image_edit']));
     setSelectedProvider('kie');
+    setSelectedPlatform(null);
     setCustomPrompt('');
     resetPose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,58 +97,13 @@ export function OutfitDialog({
     extractPose(pose.assetId, pose.fullUrl);
   }, [pose, open, extractPose, resetPose, poseResult?.sourceAssetId]);
 
-  const choicesForSlot = useCallback((slot: SlotKind): ImageChoice[] => {
-    const base = imageAssets.map(mediaItemToChoice);
-    return [...extras[slot], ...base];
-  }, [imageAssets, extras]);
+  const choices = useMemo(() => imageAssets.map(mediaItemToChoice), [imageAssets]);
 
   const pickSlot = useCallback((slot: SlotKind, choice: ImageChoice) => {
     if (slot === 'model') setModel(choice);
     else if (slot === 'garment') setGarment(choice);
     else setPose(choice);
   }, []);
-
-  const triggerUpload = useCallback((slot: SlotKind) => {
-    pendingUploadSlotRef.current = slot;
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChosen = useCallback(async (file: File) => {
-    const slot = pendingUploadSlotRef.current;
-    pendingUploadSlotRef.current = null;
-    if (!slot || !projectSlug) return;
-    setUploadingSlot(slot);
-    try {
-      const reader = new FileReader();
-      const data = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const url = reader.result as string;
-          resolve(url.split(',')[1]);
-        };
-        reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
-        reader.readAsDataURL(file);
-      });
-      const res = await callTool('upload_file', {
-        project_slug: projectSlug,
-        filename: file.name,
-        data,
-      });
-      if (res.isError) return;
-      const content = res.content as Array<{ type: string; text: string }>;
-      const parsed = JSON.parse(content[0].text) as { assetId: string; filename: string };
-      const localUrl = URL.createObjectURL(file);
-      const choice: ImageChoice = {
-        assetId: parsed.assetId,
-        slug: parsed.assetId,
-        fullUrl: localUrl,
-        thumbUrl: localUrl,
-      };
-      setExtras((prev) => ({ ...prev, [slot]: [choice, ...prev[slot]] }));
-      pickSlot(slot, choice);
-    } finally {
-      setUploadingSlot(null);
-    }
-  }, [projectSlug, callTool, pickSlot]);
 
   const toggleGenModel = useCallback((m: PoseModelKey) => {
     setSelectedModels((prev) => {
@@ -181,40 +133,25 @@ export function OutfitDialog({
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
       models: [...selectedModels],
       provider: selectedProvider,
+      platform: selectedPlatform ?? undefined,
       customPrompt: customPrompt.trim() || undefined,
     });
     if (res) onOpenChange(false);
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, generate, selectedModels, selectedProvider, customPrompt, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, generate, selectedModels, selectedProvider, selectedPlatform, customPrompt, onOpenChange]);
 
   const jobCount = useMemo(() => selectedModels.size, [selectedModels.size]);
 
   const renderSlot = (slot: SlotKind, selected: ImageChoice | null, label: string) => {
-    const choices = choicesForSlot(slot);
-    const isUploading = uploadingSlot === slot;
     return (
       <section>
         <div className="flex items-baseline justify-between mb-2">
           <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70">
             {label}
           </h3>
-          <button
-            type="button"
-            onClick={() => triggerUpload(slot)}
-            disabled={submitting || isUploading || !projectSlug}
-            className={cn(
-              'h-6 px-2 flex items-center gap-1 rounded border border-amber-500/30',
-              'text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300/80',
-              'hover:bg-amber-500/10 hover:text-amber-200 hover:border-amber-400/60',
-              'disabled:opacity-40 disabled:cursor-not-allowed',
-            )}
-          >
-            {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-            Upload
-          </button>
         </div>
         {choices.length === 0 ? (
           <div className="text-[11px] font-mono text-amber-500/50 italic px-2 py-4 rounded border border-dashed border-amber-500/20">
-            No images yet — upload one.
+            No images in this project yet.
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-2 max-h-[120px] overflow-y-auto pr-1">
@@ -268,18 +205,6 @@ export function OutfitDialog({
           )}
           aria-describedby={undefined}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFileChosen(f);
-              e.target.value = '';
-            }}
-          />
-
           {/* Header */}
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-amber-500/30 bg-amber-500/5">
             <Dialog.Title className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-amber-300">
@@ -333,6 +258,51 @@ export function OutfitDialog({
                 </div>
               </section>
             )}
+
+            {/* Platform aesthetic */}
+            <section>
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70 mb-2">
+                Platform Aesthetic
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlatform(null)}
+                  disabled={submitting}
+                  className={cn(
+                    'h-7 px-3 rounded border transition-colors duration-150',
+                    'text-[11px] font-mono font-bold uppercase tracking-wider',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    selectedPlatform === null
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-100'
+                      : 'bg-transparent border-amber-500/30 text-amber-300/70 hover:border-amber-400/60 hover:text-amber-200',
+                  )}
+                >
+                  None
+                </button>
+                {POSE_PLATFORMS.map((p) => {
+                  const isSelected = selectedPlatform === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSelectedPlatform(p)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 px-3 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-100'
+                          : 'bg-transparent border-amber-500/30 text-amber-300/70 hover:border-amber-400/60 hover:text-amber-200',
+                      )}
+                    >
+                      {PLATFORM_LABELS[p]}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
             {/* Provider */}
             <section>

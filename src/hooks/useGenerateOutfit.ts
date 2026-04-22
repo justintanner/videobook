@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
-import type { PoseModelKey, PoseProvider } from "@/hooks/useGeneratePoses";
+import type { PoseModelKey, PosePlatform, PoseProvider } from "@/hooks/useGeneratePoses";
 
 export const OUTFIT_CUSTOM_PROMPT_MAX = 500;
 
@@ -13,6 +13,7 @@ export interface GenerateOutfitArgs {
   poseSkeletonFilename: string;
   models: PoseModelKey[];
   provider: PoseProvider;
+  platform?: PosePlatform;
   customPrompt?: string;
 }
 
@@ -78,6 +79,7 @@ export function useGenerateOutfit(callTool: UseMcpResult["callTool"]): UseGenera
         provider: args.provider,
       };
       if (trimmedCustom) toolArgs.custom_prompt = trimmedCustom;
+      if (args.platform) toolArgs.platform = args.platform;
       const result = await callToolRef.current("generate_outfit", toolArgs);
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;

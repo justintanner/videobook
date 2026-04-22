@@ -16,8 +16,10 @@ import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
+import { platformGuidance, type Platform } from "../platform-guidance.js";
 
 const CUSTOM_PROMPT_MAX = 500;
+const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -37,6 +39,10 @@ const schema = {
     .max(CUSTOM_PROMPT_MAX)
     .optional()
     .describe("Optional free-form instruction appended to the outfit prompt"),
+  platform: z
+    .enum(PLATFORMS)
+    .optional()
+    .describe("Optional platform aesthetic preset (ig | tiktok | youtube)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -86,15 +92,18 @@ function withAt(slug: string): string {
   return slug.startsWith("@") ? slug : `@${slug}`;
 }
 
-function buildOutfitPrompt(customPrompt: string | undefined): string {
+function buildOutfitPrompt(customPrompt: string | undefined, platform: Platform | undefined): string {
   const base =
     "The person in Image 1 wears the garment from Image 2 and adopts the exact pose shown by the " +
     "skeleton in Image 3. Preserve the identity, face, hair and skin of the person in Image 1. " +
     "Match the cut, color, pattern and silhouette of the garment in Image 2 as closely as possible. " +
     "Align limb angles, torso rotation and head tilt to the Image 3 skeleton. " +
     "Render a photorealistic result with natural lighting and a tasteful background.";
+  const platformSection = platform
+    ? `\n\n--- PLATFORM AESTHETIC ---\n${platformGuidance(platform)}\n--- END PLATFORM AESTHETIC ---`
+    : "";
   const extra = customPrompt?.trim();
-  return extra ? `${base} ${extra}` : base;
+  return `${base}${platformSection}${extra ? ` ${extra}` : ""}`;
 }
 
 export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
@@ -116,7 +125,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const prompt = buildOutfitPrompt(a.custom_prompt);
+      const prompt = buildOutfitPrompt(a.custom_prompt, a.platform);
       const image_slugs = [
         withAt(a.model_image_slug),
         withAt(a.garment_image_slug),

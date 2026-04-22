@@ -887,7 +887,6 @@ export function HomePage() {
         imageAssets={mediaItems.filter((m) => m.type === 'image')}
         projectSlug={projectSlug}
         initialSlug={outfitDialog?.initialSlug ?? null}
-        callTool={callTool}
         generate={generateOutfit}
         submitting={outfitSubmitting}
       />
