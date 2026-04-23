@@ -16,8 +16,7 @@ import {
   NanoBananaProRequestSchema,
   Qwen2ImageEditRequestSchema,
   SeedreamImageToImageRequestSchema,
-  Wan27ImageProRequestSchema,
-  Wan27ImageRequestSchema,
+  Wan27ImageInputSchema,
 } from "@apicity/kie/zod";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
@@ -169,7 +168,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_wan27_image",
     label: "Wan 2.7 Image",
     description: "Text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
-    imageFieldSchema: Wan27ImageRequestSchema.shape.input.shape.input_urls,
+    imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
     falToolNames: { noRefs: "generate_wan27_fal", withRefs: "generate_wan27_edit_fal" },
@@ -180,7 +179,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_wan27_image_pro",
     label: "Wan 2.7 Image Pro",
     description: "Pro text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
-    imageFieldSchema: Wan27ImageProRequestSchema.shape.input.shape.input_urls,
+    imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
     kieImageField: "input_urls",
     defaults: { aspect_ratio: "1:1", resolution: "2K" },
     falToolNames: { noRefs: "generate_wan27_pro_fal", withRefs: "generate_wan27_pro_edit_fal" },

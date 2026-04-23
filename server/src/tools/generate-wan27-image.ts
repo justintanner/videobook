@@ -129,7 +129,7 @@ export function generateWan27ImageDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
+        resolution: resolution ?? "2K",
         ...(seed !== undefined ? { seed } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);

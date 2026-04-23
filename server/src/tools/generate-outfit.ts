@@ -44,12 +44,10 @@ function resolveSizeArgs(
   if (!ratio) return {};
   // Tools that accept ratio strings directly as `aspect_ratio`.
   if (provider === "kie" && model !== "qwen_image_edit") return { aspect_ratio: ratio };
-  if (provider === "fal" && (model === "nano_banana_pro" || model === "qwen_image_edit")) {
-    // fal nano-banana accepts ratio shorthand; fal qwen-edit normalizes shorthand internally.
-    return model === "nano_banana_pro" ? { aspect_ratio: ratio } : { image_size: ratio };
-  }
-  // Tools that only accept FAL-style enum presets via `image_size`.
-  if (provider === "kie" && model === "qwen_image_edit") return { image_size: IMAGE_SIZE_MAP[ratio] };
+  // Tools that accept ratio strings via `image_size` (kie qwen2 image-edit, fal qwen-edit).
+  if (model === "qwen_image_edit") return { image_size: ratio };
+  if (provider === "fal" && model === "nano_banana_pro") return { aspect_ratio: ratio };
+  // fal wan27_pro only accepts FAL-style enum presets via `image_size`.
   if (provider === "fal" && model === "wan27_pro") return { image_size: IMAGE_SIZE_MAP[ratio] };
   // fal grok-imagine has no aspect/size control.
   return {};
