@@ -42,14 +42,10 @@ function resolveSizeArgs(
   ratio: OutfitAspectRatio | undefined,
 ): Record<string, string> {
   if (!ratio) return {};
-  // Tools that accept ratio strings directly as `aspect_ratio`.
   if (provider === "kie" && model !== "qwen_image_edit") return { aspect_ratio: ratio };
-  // Tools that accept ratio strings via `image_size` (kie qwen2 image-edit, fal qwen-edit).
   if (model === "qwen_image_edit") return { image_size: ratio };
   if (provider === "fal" && model === "nano_banana_pro") return { aspect_ratio: ratio };
-  // fal wan27_pro only accepts FAL-style enum presets via `image_size`.
   if (provider === "fal" && model === "wan27_pro") return { image_size: IMAGE_SIZE_MAP[ratio] };
-  // fal grok-imagine has no aspect/size control.
   return {};
 }
 
@@ -57,7 +53,11 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
   garment_image_slug: z.string().describe("@img-* slug of the garment/clothing (Image 2)"),
-  pose_image_slug: z.string().describe("@img-* slug of the MediaPipe Holistic skeleton overlay (Image 3)"),
+  pose_image_slug: z.string().describe("@img-* slug of the pose reference (Image 3)"),
+  backdrop_image_slug: z
+    .string()
+    .optional()
+    .describe("@img-* slug of the backdrop/scene reference (Image 4, optional)"),
   models: z
     .array(z.enum(SUPPORTED_OUTFIT_MODELS))
     .min(1)
@@ -105,6 +105,8 @@ interface EnqueueOutcome {
   model: OutfitModelKey;
   provider: OutfitProvider;
   prompt: string;
+  image_count: number;
+  backdrop_mentioned?: boolean;
   img_asset_id?: string;
   job_id?: string;
   error?: string;
@@ -128,27 +130,161 @@ function withAt(slug: string): string {
   return slug.startsWith("@") ? slug : `@${slug}`;
 }
 
-function buildOutfitPrompt(customPrompt: string | undefined, platform: Platform | undefined): string {
-  const base =
-    "The person in Image 1 wears the garment from Image 2 and adopts the exact pose shown by the " +
-    "skeleton in Image 3. Preserve the identity, face, hair and skin of the person in Image 1. " +
-    "Match the cut, color, pattern and silhouette of the garment in Image 2 as closely as possible. " +
-    "Align limb angles, torso rotation and head tilt to the Image 3 skeleton. " +
-    "Render a photorealistic result with natural lighting and a tasteful background.";
-  const platformSection = platform
+function platformSection(platform: Platform | undefined): string {
+  return platform
     ? `\n\n--- PLATFORM AESTHETIC ---\n${platformGuidance(platform)}\n--- END PLATFORM AESTHETIC ---`
     : "";
-  const extra = customPrompt?.trim();
-  return `${base}${platformSection}${extra ? ` ${extra}` : ""}`;
+}
+
+function customSection(custom: string | undefined): string {
+  const t = custom?.trim();
+  return t ? ` ${t}` : "";
+}
+
+/**
+ * Per-model prompt builders. Each model has its own preferred multi-image
+ * reference convention — passing the right one measurably improves adherence.
+ * See plan notes for sources.
+ */
+
+// Nano Banana Pro — role-based "Reference Image N (the role)" phrasing.
+function promptForNanoBananaPro(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const backdropClause = hasBackdrop
+    ? " Reference Image 4 is the backdrop/scene — place the subject in that location, matching its lighting, depth and colour cast."
+    : " Render a tasteful, photorealistic background that suits the subject.";
+  const base =
+    "Using Reference Image 1 (the person/model), Reference Image 2 (the garment), " +
+    "and Reference Image 3 (the pose reference), generate a photorealistic image " +
+    "of the person from Image 1 wearing the garment from Image 2 and adopting the exact " +
+    "pose shown in Image 3. Preserve the identity, face, hair and skin from Image 1. " +
+    "Match the cut, colour, pattern and silhouette of the garment in Image 2. " +
+    "Align limb angles, torso rotation and head tilt precisely to the pose in Image 3." +
+    backdropClause;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// Qwen Image Edit — lowercase "image 1 / image 2 / image 3", hard cap 3.
+// Never receives the backdrop as an image; describes it in text only.
+function promptForQwenImageEdit(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const backdropClause = hasBackdrop
+    ? " For the background, compose a scene that matches the user's backdrop description; keep lighting and colour cast consistent with that setting."
+    : " Use a tasteful, photorealistic background.";
+  const base =
+    "The person in image 1 wears the garment from image 2 and adopts the exact pose " +
+    "shown in image 3. Preserve the identity, face, hair and skin from image 1. " +
+    "Match the cut, colour, pattern and silhouette of the garment in image 2. " +
+    "Align limb angles, torso rotation and head tilt precisely to the pose in image 3. " +
+    "Render a photorealistic result with natural lighting." +
+    backdropClause;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// GPT Image 2 — labeled "Image N: <role>" prefix format.
+function promptForGptImage2(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const header = hasBackdrop
+    ? "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference. Image 4: the backdrop/scene."
+    : "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
+  const task = hasBackdrop
+    ? "Task: dress the person from Image 1 in the garment from Image 2, pose them exactly as shown in Image 3, and place them in the scene shown in Image 4."
+    : "Task: dress the person from Image 1 in the garment from Image 2, pose them exactly as shown in Image 3, and render a tasteful photorealistic background.";
+  const rules =
+    "Preserve face and identity from Image 1. Match garment cut, colour and pattern from Image 2 precisely. " +
+    "Align limbs, torso and head to the pose in Image 3.";
+  const base = `${header} ${task} ${rules}`;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// Wan 2.7 — "Change / Keep" two-part framing; images addressed by role.
+function promptForWan27Pro(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const changeBackdrop = hasBackdrop
+    ? " Change the background to match the backdrop reference (Image 4)."
+    : " Render a tasteful, photorealistic background.";
+  const base =
+    "Change: dress the person (Image 1) in the garment (Image 2) and pose them to match the pose (Image 3). " +
+    "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
+    changeBackdrop;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// Grok Imagine — single-image focused, plain-language narrative.
+// Even when up to 3 slugs are passed (fal), treat the prompt as describing the transformation.
+function promptForGrokImagine(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const backdropClause = hasBackdrop
+    ? " Place the subject in the backdrop scene provided; match its lighting, depth and colour cast."
+    : " Render a tasteful photorealistic background.";
+  const base =
+    "Edit this photo so the person wears the supplied garment and adopts the supplied pose. " +
+    "Keep the person's identity, face, hair and skin unchanged. " +
+    "Match the garment's cut, colour, pattern and silhouette. " +
+    "Align limbs, torso and head precisely to the supplied pose reference." +
+    backdropClause;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+function buildPromptForModel(
+  model: OutfitModelKey,
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+): string {
+  switch (model) {
+    case "nano_banana_pro":
+      return promptForNanoBananaPro(hasBackdrop, platform, custom);
+    case "qwen_image_edit":
+      return promptForQwenImageEdit(hasBackdrop, platform, custom);
+    case "gpt_image_2":
+      return promptForGptImage2(hasBackdrop, platform, custom);
+    case "wan27_pro":
+      return promptForWan27Pro(hasBackdrop, platform, custom);
+    case "grok_imagine":
+      return promptForGrokImagine(hasBackdrop, platform, custom);
+  }
+}
+
+interface SlugInputs {
+  model: string;
+  garment: string;
+  pose: string;
+  backdrop?: string;
+}
+
+/**
+ * Build the image_slugs array for a given model, respecting its cap:
+ * - qwen_image_edit: 3 images (drops backdrop)
+ * - grok_imagine on kie: effectively 1 image (only first is consumed downstream)
+ * - grok_imagine on fal: 3 images (drops backdrop)
+ * - nano_banana_pro / gpt_image_2 / wan27_pro: 4 images when backdrop supplied
+ */
+function buildImageSlugs(
+  model: OutfitModelKey,
+  provider: OutfitProvider,
+  slugs: SlugInputs,
+): { image_slugs: string[]; backdropMentioned: boolean } {
+  const hasBackdrop = !!slugs.backdrop;
+  const four = hasBackdrop
+    ? [slugs.model, slugs.garment, slugs.pose, slugs.backdrop!]
+    : [slugs.model, slugs.garment, slugs.pose];
+  const three = [slugs.model, slugs.garment, slugs.pose];
+
+  if (model === "qwen_image_edit") {
+    return { image_slugs: three, backdropMentioned: hasBackdrop };
+  }
+  if (model === "grok_imagine" && provider === "kie") {
+    return { image_slugs: [slugs.model], backdropMentioned: hasBackdrop };
+  }
+  if (model === "grok_imagine" && provider === "fal") {
+    return { image_slugs: three, backdropMentioned: hasBackdrop };
+  }
+  return { image_slugs: four, backdropMentioned: false };
 }
 
 export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_outfit",
     description:
-      "Virtual try-on: compose a model photo (Image 1), a garment (Image 2), and a MediaPipe Holistic skeleton " +
-      "overlay (Image 3) into a generated image. Dispatches to the selected image-edit models through " +
-      "the chosen provider (kie | fal).",
+      "Virtual try-on: compose a model photo (Image 1), a garment (Image 2), a pose reference (Image 3), " +
+      "and an optional backdrop/scene (Image 4) into a generated image. Dispatches to the selected " +
+      "image-edit models through the chosen provider (kie | fal) using per-model prompts.",
     schema,
     handler: async (args) => {
       const a = args as Args;
@@ -161,17 +297,26 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const prompt = buildOutfitPrompt(a.custom_prompt, a.platform);
-      const image_slugs = [
-        withAt(a.model_image_slug),
-        withAt(a.garment_image_slug),
-        withAt(a.pose_image_slug),
-      ];
+      const slugs: SlugInputs = {
+        model: withAt(a.model_image_slug),
+        garment: withAt(a.garment_image_slug),
+        pose: withAt(a.pose_image_slug),
+        ...(a.backdrop_image_slug ? { backdrop: withAt(a.backdrop_image_slug) } : {}),
+      };
+      const hasBackdrop = !!slugs.backdrop;
 
       const outcomes: EnqueueOutcome[] = [];
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
-        const outcome: EnqueueOutcome = { model, provider, prompt };
+        const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
+        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt);
+        const outcome: EnqueueOutcome = {
+          model,
+          provider,
+          prompt,
+          image_count: image_slugs.length,
+          ...(backdropMentioned ? { backdrop_mentioned: true } : {}),
+        };
         if (!factory) {
           outcome.error = `model ${model} is not available via provider ${provider}`;
           outcomes.push(outcome);

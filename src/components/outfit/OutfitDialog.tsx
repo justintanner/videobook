@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Shirt, Loader2, Zap, X, AlertTriangle, User, Shirt as GarmentIcon, Move } from 'lucide-react';
+import { Shirt, Loader2, Zap, X, AlertTriangle, User, Shirt as GarmentIcon, Move, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -37,12 +37,14 @@ const OUTFIT_COMMANDS: CommandDescriptor[] = [
   },
 ];
 
-type SlotKind = 'model' | 'garment' | 'pose';
+type SlotKind = 'model' | 'garment' | 'pose' | 'backdrop';
 
-const SLOT_ORDER: SlotKind[] = ['model', 'garment', 'pose'];
-const SLOT_LABELS: Record<SlotKind, string> = { model: 'Model', garment: 'Garment', pose: 'Pose' };
-const SLOT_BADGES: Record<SlotKind, string> = { model: 'M', garment: 'G', pose: 'P' };
-const SLOT_ICONS: Record<SlotKind, typeof User> = { model: User, garment: GarmentIcon, pose: Move };
+const SLOT_ORDER: SlotKind[] = ['model', 'garment', 'pose', 'backdrop'];
+const SLOT_LABELS: Record<SlotKind, string> = { model: 'Model', garment: 'Garment', pose: 'Pose', backdrop: 'Backdrop' };
+const SLOT_BADGES: Record<SlotKind, string> = { model: 'M', garment: 'G', pose: 'P', backdrop: 'B' };
+const SLOT_ICONS: Record<SlotKind, typeof User> = { model: User, garment: GarmentIcon, pose: Move, backdrop: ImageIcon };
+const SLOT_OPTIONAL: Record<SlotKind, boolean> = { model: false, garment: false, pose: false, backdrop: true };
+const MODELS_WITHOUT_BACKDROP_IMAGE: OutfitModelKey[] = ['qwen_image_edit', 'grok_imagine'];
 
 interface ImageChoice {
   assetId: string;
@@ -84,6 +86,7 @@ export function OutfitDialog({
   const [model, setModel] = useState<ImageChoice | null>(null);
   const [garment, setGarment] = useState<ImageChoice | null>(null);
   const [pose, setPose] = useState<ImageChoice | null>(null);
+  const [backdrop, setBackdrop] = useState<ImageChoice | null>(null);
   const [activeSlot, setActiveSlot] = useState<SlotKind>('model');
   const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(['qwen_image_edit']));
   const [selectedProvider, setSelectedProvider] = useState<OutfitProvider>('kie');
@@ -104,6 +107,7 @@ export function OutfitDialog({
     setModel(match ? mediaItemToChoice(match) : null);
     setGarment(null);
     setPose(null);
+    setBackdrop(null);
     setActiveSlot(match ? 'garment' : 'model');
     setSelectedModels(new Set(['qwen_image_edit']));
     setSelectedProvider('kie');
@@ -147,35 +151,38 @@ export function OutfitDialog({
   const choices = useMemo(() => imageAssets.map(mediaItemToChoice), [imageAssets]);
   const assetSlugs = useMemo(() => imageAssets.map((a) => a.slug), [imageAssets]);
 
-  const slotValues: Record<SlotKind, ImageChoice | null> = { model, garment, pose };
+  const slotValues: Record<SlotKind, ImageChoice | null> = { model, garment, pose, backdrop };
   const slotSetters: Record<SlotKind, (c: ImageChoice | null) => void> = {
     model: setModel,
     garment: setGarment,
     pose: setPose,
+    backdrop: setBackdrop,
   };
 
   const assignToActive = useCallback((choice: ImageChoice) => {
     slotSetters[activeSlot](choice);
-    // advance to next empty slot (if any)
+    // advance to next empty required slot (skip optional ones that stay empty)
     const startIdx = SLOT_ORDER.indexOf(activeSlot);
     for (let i = 1; i <= SLOT_ORDER.length; i++) {
       const next = SLOT_ORDER[(startIdx + i) % SLOT_ORDER.length];
       if (next === activeSlot) continue;
+      if (SLOT_OPTIONAL[next]) continue;
       if (!slotValues[next]) {
         setActiveSlot(next);
         return;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSlot, model, garment, pose]);
+  }, [activeSlot, model, garment, pose, backdrop]);
 
   const badgesForAsset = useCallback((assetId: string): SlotKind[] => {
     const out: SlotKind[] = [];
     if (model?.assetId === assetId) out.push('model');
     if (garment?.assetId === assetId) out.push('garment');
     if (pose?.assetId === assetId) out.push('pose');
+    if (backdrop?.assetId === assetId) out.push('backdrop');
     return out;
-  }, [model, garment, pose]);
+  }, [model, garment, pose, backdrop]);
 
   const toggleGenModel = useCallback((m: OutfitModelKey) => {
     setSelectedModels((prev) => {
@@ -203,6 +210,7 @@ export function OutfitDialog({
       garmentImageSlug: garment.assetId,
       poseSkeletonBlob: poseResult.skeleton.blob,
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
+      backdropImageSlug: backdrop?.assetId,
       models: [...selectedModels],
       provider: selectedProvider,
       aspectRatio,
@@ -214,7 +222,7 @@ export function OutfitDialog({
       return true;
     }
     return false;
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, customPrompt, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, customPrompt, onOpenChange]);
 
   const handleOutfitSend = useCallback(async (message: string): Promise<boolean> => {
     const trimmed = message.trim();
@@ -259,7 +267,7 @@ export function OutfitDialog({
             {SLOT_LABELS[slot]}
           </div>
           <span className="text-[9px] font-mono text-purple-400/60 uppercase tracking-wider">
-            {isActive ? 'active' : 'tap'}
+            {isActive ? 'active' : SLOT_OPTIONAL[slot] ? 'optional' : 'tap'}
           </span>
         </div>
 
@@ -341,7 +349,7 @@ export function OutfitDialog({
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-purple-400/80 uppercase">
             <Shirt className="w-3.5 h-3.5" />
-            Outfit — Model + Garment + Pose
+            Outfit — Model + Garment + Pose + Backdrop
           </div>
           <button
             type="button"
@@ -360,6 +368,14 @@ export function OutfitDialog({
           <section className="flex flex-wrap gap-2">
             {SLOT_ORDER.map((slot) => renderSlotChip(slot))}
           </section>
+
+          {backdrop && MODELS_WITHOUT_BACKDROP_IMAGE.some((m) => selectedModels.has(m)) && (
+            <div className="text-[10px] font-mono text-purple-400/60 italic flex items-start gap-1.5">
+              <AlertTriangle className="w-3 h-3 mt-[1px] shrink-0" />
+              Qwen Image Edit and Grok Imagine cap input images at 3 — for those models the backdrop
+              will be referenced in the prompt only, not passed as an image.
+            </div>
+          )}
 
           {/* Single shared carousel */}
           <section>
