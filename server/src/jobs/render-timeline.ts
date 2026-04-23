@@ -1,8 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { registerJobHandler } from "../queue.js";
-import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { runFfmpeg, probeVideo, AUDIO_OPTS } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 900_000; // 15 min
 
@@ -81,42 +82,64 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
 
       const n = resolvedSlots.length;
 
-      // Build filter_complex
-      const filterParts: string[] = [];
-
-      // Video: normalize fps, pixel format, and SAR so the concat filter doesn't
-      // fall back to expensive per-frame timebase work when sources disagree.
-      for (let i = 0; i < n; i++) {
-        filterParts.push(`[${i}:v:0]fps=30,format=yuv420p,setsar=1[v${i}]`);
-      }
-
-      // Audio: per-slot volume/fade filters
-      for (let i = 0; i < n; i++) {
-        filterParts.push(buildAudioFilter(i, resolvedSlots[i], durations[i]));
-      }
-
-      // Concat — inputs must be interleaved per segment: [v0][a0][v1][a1]...
-      const concatInputs = Array.from({ length: n }, (_, i) => `[v${i}][a${i}]`).join("");
-      filterParts.push(`${concatInputs}concat=n=${n}:v=1:a=1[outv][outa]`);
-
-      const filterComplex = filterParts.join(";");
-
-      const ffmpegArgs: string[] = [];
-      for (const p of inputPaths) {
-        ffmpegArgs.push("-i", p);
-      }
-      ffmpegArgs.push(
-        "-filter_complex", filterComplex,
-        "-map", "[outv]",
-        "-map", "[outa]",
-        ...H264_MEDIUM,
-        ...AUDIO_OPTS,
-        "-movflags", "+faststart",
-        "-y",
-        outputPath,
+      // All per-slot renders come from the same Remotion pipeline, so codec,
+      // resolution, fps, and pixel format already match. Use the concat
+      // demuxer to stream-copy video (no re-encode). Audio still needs
+      // per-slot volume/fade filtering when any slot deviates from defaults.
+      const needsAudioFilter = resolvedSlots.some(
+        (s) => s.volume !== 100 || s.fadeIn > 0 || s.fadeOut > 0,
       );
 
-      await runFfmpeg(ffmpegArgs);
+      const concatListDir = await mkdtemp(join(tmpdir(), "clipfirst-concat-"));
+      const concatListPath = join(concatListDir, "list.txt");
+      try {
+        // concat demuxer list: one `file '<path>'` per line, single-quotes
+        // escaped by `'\''`.
+        const listBody = inputPaths
+          .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
+          .join("\n");
+        await writeFile(concatListPath, listBody + "\n", "utf8");
+
+        const ffmpegArgs: string[] = ["-f", "concat", "-safe", "0", "-i", concatListPath];
+
+        if (needsAudioFilter) {
+          // Re-open each slot as its own input so we can apply per-slot audio
+          // filters, then concat the audio streams. Video comes from input 0
+          // (the concat demuxer) and is stream-copied.
+          for (const p of inputPaths) {
+            ffmpegArgs.push("-i", p);
+          }
+
+          const filterParts: string[] = [];
+          for (let i = 0; i < n; i++) {
+            // Input indices for the per-slot reopens start at 1.
+            filterParts.push(buildAudioFilter(i + 1, resolvedSlots[i], durations[i]));
+          }
+          const concatInputs = Array.from({ length: n }, (_, i) => `[a${i + 1}]`).join("");
+          filterParts.push(`${concatInputs}concat=n=${n}:v=0:a=1[outa]`);
+
+          ffmpegArgs.push(
+            "-filter_complex", filterParts.join(";"),
+            "-map", "0:v:0",
+            "-c:v", "copy",
+            "-map", "[outa]",
+            ...AUDIO_OPTS,
+          );
+        } else {
+          // No audio adjustments: stream-copy both tracks.
+          ffmpegArgs.push(
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+            "-c", "copy",
+          );
+        }
+
+        ffmpegArgs.push("-movflags", "+faststart", "-y", outputPath);
+
+        await runFfmpeg(ffmpegArgs);
+      } finally {
+        await rm(concatListDir, { recursive: true, force: true });
+      }
 
       const thumbPath = join(finalDir, "original.jpg");
       await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath]);
