@@ -4,23 +4,21 @@ import { Shirt, Loader2, Zap, X, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
-  POSE_MODEL_OPTIONS,
-  POSE_PLATFORMS,
-  POSE_PROVIDERS,
-  type PoseModelKey,
-  type PosePlatform,
-  type PoseProvider,
-} from '@/hooks/useGeneratePoses';
+  OUTFIT_CUSTOM_PROMPT_MAX,
+  OUTFIT_MODEL_OPTIONS,
+  OUTFIT_PLATFORMS,
+  OUTFIT_PROVIDERS,
+  type OutfitModelKey,
+  type OutfitPlatform,
+  type OutfitProvider,
+  type UseGenerateOutfitResult,
+} from '@/hooks/useGenerateOutfit';
 
-const PLATFORM_LABELS: Record<PosePlatform, string> = {
+const PLATFORM_LABELS: Record<OutfitPlatform, string> = {
   ig: 'Instagram',
   tiktok: 'TikTok',
   youtube: 'YouTube',
 };
-import {
-  OUTFIT_CUSTOM_PROMPT_MAX,
-  type UseGenerateOutfitResult,
-} from '@/hooks/useGenerateOutfit';
 import { useBlazePose } from '@/hooks/useBlazePose';
 
 type SlotKind = 'model' | 'garment' | 'pose';
@@ -63,9 +61,9 @@ export function OutfitDialog({
   const [model, setModel] = useState<ImageChoice | null>(null);
   const [garment, setGarment] = useState<ImageChoice | null>(null);
   const [pose, setPose] = useState<ImageChoice | null>(null);
-  const [selectedModels, setSelectedModels] = useState<Set<PoseModelKey>>(new Set(['qwen_image_edit']));
-  const [selectedProvider, setSelectedProvider] = useState<PoseProvider>('kie');
-  const [selectedPlatform, setSelectedPlatform] = useState<PosePlatform | null>(null);
+  const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(['qwen_image_edit']));
+  const [selectedProvider, setSelectedProvider] = useState<OutfitProvider>('kie');
+  const [selectedPlatform, setSelectedPlatform] = useState<OutfitPlatform | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
 
   const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = useBlazePose();
@@ -105,7 +103,7 @@ export function OutfitDialog({
     else setPose(choice);
   }, []);
 
-  const toggleGenModel = useCallback((m: PoseModelKey) => {
+  const toggleGenModel = useCallback((m: OutfitModelKey) => {
     setSelectedModels((prev) => {
       const next = new Set(prev);
       if (next.has(m)) next.delete(m); else next.add(m);
@@ -280,7 +278,7 @@ export function OutfitDialog({
                 >
                   None
                 </button>
-                {POSE_PLATFORMS.map((p) => {
+                {OUTFIT_PLATFORMS.map((p) => {
                   const isSelected = selectedPlatform === p;
                   return (
                     <button
@@ -310,7 +308,7 @@ export function OutfitDialog({
                 Provider
               </h3>
               <div className="flex flex-wrap gap-2">
-                {POSE_PROVIDERS.map((p) => {
+                {OUTFIT_PROVIDERS.map((p) => {
                   const isSelected = selectedProvider === p.key;
                   return (
                     <button
@@ -340,7 +338,7 @@ export function OutfitDialog({
                 Image Models
               </h3>
               <div className="flex flex-wrap gap-2">
-                {POSE_MODEL_OPTIONS.map((m) => {
+                {OUTFIT_MODEL_OPTIONS.map((m) => {
                   const isSelected = selectedModels.has(m.key);
                   return (
                     <button

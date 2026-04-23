@@ -24,8 +24,6 @@ import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
-import { PosesDialog } from '@/components/poses/PosesDialog';
-import { useGeneratePoses } from '@/hooks/useGeneratePoses';
 import { OutfitDialog } from '@/components/outfit/OutfitDialog';
 import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
@@ -85,7 +83,6 @@ export function HomePage() {
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
-  const [posesDialog, setPosesDialog] = useState<{ initialSlug: string | null } | null>(null);
   const [outfitDialog, setOutfitDialog] = useState<{ initialSlug: string | null } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
@@ -101,7 +98,6 @@ export function HomePage() {
   const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
-  const { generate: generatePoses, submitting: posesSubmitting } = useGeneratePoses(callTool);
   const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
@@ -604,10 +600,6 @@ export function HomePage() {
     gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
     gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
     gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
-    open_poses_dialog: (initialSlug: string) => {
-      const cleaned = initialSlug.trim();
-      setPosesDialog({ initialSlug: cleaned ? cleaned : null });
-    },
     open_outfit_dialog: (initialSlug: string) => {
       const cleaned = initialSlug.trim();
       setOutfitDialog({ initialSlug: cleaned ? cleaned : null });
@@ -872,15 +864,6 @@ export function HomePage() {
           </div>
         </div>
       </div>
-      <PosesDialog
-        open={!!posesDialog}
-        onOpenChange={(next) => { if (!next) setPosesDialog(null); }}
-        imageAssets={mediaItems.filter((m) => m.type === 'image')}
-        projectSlug={projectSlug}
-        initialSlug={posesDialog?.initialSlug ?? null}
-        generate={generatePoses}
-        submitting={posesSubmitting}
-      />
       <OutfitDialog
         open={!!outfitDialog}
         onOpenChange={(next) => { if (!next) setOutfitDialog(null); }}

@@ -1,9 +1,26 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
-import type { PoseModelKey, PosePlatform, PoseProvider } from "@/hooks/useGeneratePoses";
 
 export const OUTFIT_CUSTOM_PROMPT_MAX = 500;
+
+export const OUTFIT_PLATFORMS = ["ig", "tiktok", "youtube"] as const;
+export type OutfitPlatform = typeof OUTFIT_PLATFORMS[number];
+
+export const OUTFIT_MODEL_OPTIONS = [
+  { key: "nano_banana_pro", label: "Nano Banana Pro" },
+  { key: "qwen_image_edit", label: "Qwen Image Edit" },
+  { key: "gpt_image_2", label: "GPT Image 2.0" },
+  { key: "wan27_pro", label: "Wan 2.7 Pro" },
+  { key: "grok_imagine", label: "Grok Imagine" },
+] as const;
+export type OutfitModelKey = typeof OUTFIT_MODEL_OPTIONS[number]["key"];
+
+export const OUTFIT_PROVIDERS = [
+  { key: "kie", label: "Kie" },
+  { key: "fal", label: "Fal" },
+] as const;
+export type OutfitProvider = typeof OUTFIT_PROVIDERS[number]["key"];
 
 export interface GenerateOutfitArgs {
   projectSlug: string;
@@ -11,9 +28,9 @@ export interface GenerateOutfitArgs {
   garmentImageSlug: string;
   poseSkeletonBlob: Blob;
   poseSkeletonFilename: string;
-  models: PoseModelKey[];
-  provider: PoseProvider;
-  platform?: PosePlatform;
+  models: OutfitModelKey[];
+  provider: OutfitProvider;
+  platform?: OutfitPlatform;
   customPrompt?: string;
 }
 

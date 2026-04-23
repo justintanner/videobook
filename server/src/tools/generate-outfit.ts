@@ -1,12 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
-import {
-  SUPPORTED_POSE_MODELS,
-  POSE_PROVIDERS,
-  type PoseModelKey,
-  type PoseProvider,
-} from "./generate-poses.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
@@ -21,17 +15,29 @@ import { platformGuidance, type Platform } from "../platform-guidance.js";
 const CUSTOM_PROMPT_MAX = 500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
+export const SUPPORTED_OUTFIT_MODELS = [
+  "nano_banana_pro",
+  "qwen_image_edit",
+  "gpt_image_2",
+  "wan27_pro",
+  "grok_imagine",
+] as const;
+export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
+
+export const OUTFIT_PROVIDERS = ["kie", "fal"] as const;
+export type OutfitProvider = typeof OUTFIT_PROVIDERS[number];
+
 const schema = {
   project_slug: z.string().describe("Project slug"),
   model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
   garment_image_slug: z.string().describe("@img-* slug of the garment/clothing (Image 2)"),
   pose_image_slug: z.string().describe("@img-* slug of the BlazePose skeleton overlay (Image 3)"),
   models: z
-    .array(z.enum(SUPPORTED_POSE_MODELS))
+    .array(z.enum(SUPPORTED_OUTFIT_MODELS))
     .min(1)
     .describe("Image edit models to run. One job enqueued per model."),
   provider: z
-    .enum(POSE_PROVIDERS)
+    .enum(OUTFIT_PROVIDERS)
     .optional()
     .describe("Image-edit provider (kie | fal). Defaults to kie."),
   custom_prompt: z
@@ -49,7 +55,7 @@ type Args = SchemaArgs<typeof schema>;
 
 type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
 
-const DISPATCH: Record<PoseProvider, Partial<Record<PoseModelKey, ToolDefFactory>>> = {
+const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFactory>>> = {
   kie: {
     nano_banana_pro: generateNanoBananaImageDef,
     qwen_image_edit: generateQwen2ImageEditDef,
@@ -66,8 +72,8 @@ const DISPATCH: Record<PoseProvider, Partial<Record<PoseModelKey, ToolDefFactory
 };
 
 interface EnqueueOutcome {
-  model: PoseModelKey;
-  provider: PoseProvider;
+  model: OutfitModelKey;
+  provider: OutfitProvider;
   prompt: string;
   img_asset_id?: string;
   job_id?: string;
@@ -116,7 +122,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
     schema,
     handler: async (args) => {
       const a = args as Args;
-      const provider: PoseProvider = a.provider ?? "kie";
+      const provider: OutfitProvider = a.provider ?? "kie";
       const providerEnvKey = provider === "kie" ? "KIE_API_KEY" : "FAL_API_KEY";
       if (!process.env[providerEnvKey]) {
         return {

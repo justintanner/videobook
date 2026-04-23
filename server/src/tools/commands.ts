@@ -53,20 +53,6 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_gen_image",
   },
   {
-    command: "/poses",
-    description: "Generate 3 platform-typical poses per source image via research + image edit",
-    example: "/poses @img-driver-thai-street-nu-2",
-    category: "action",
-    icon: "Users",
-    size: "default",
-    variant: "blue",
-    chevron: "down",
-    params: [
-      { name: "source_slug", type: "string", required: false, description: "Optional source @img-* to preselect" },
-    ],
-    uiAction: "open_poses_dialog",
-  },
-  {
     command: "/outfit",
     description: "Put a garment on a model in a chosen pose (BlazePose skeleton)",
     example: "/outfit @img-exactly-girl",
