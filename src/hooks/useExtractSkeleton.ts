@@ -26,11 +26,16 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtractSkeletonResult {
+export function useExtractSkeleton(
+  callTool: UseMcpResult["callTool"],
+  sync: (projectSlug: string) => void,
+): UseExtractSkeletonResult {
   const { extract: runPoseExtract } = usePoseExtract();
   const [submitting, setSubmitting] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
   const inFlightRef = useRef(false);
 
   const extract = useCallback(async (args: ExtractSkeletonArgs): Promise<string | null> => {
@@ -63,7 +68,7 @@ export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtra
         description: `${pose.landmarkCount} landmarks · @${uploaded.assetId}`,
         duration: 3000,
       });
-      await callToolRef.current("sync", { project_slug: args.projectSlug });
+      syncRef.current(args.projectSlug);
       return uploaded.assetId;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

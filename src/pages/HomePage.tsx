@@ -100,7 +100,7 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
-  const { extract: extractSkeleton } = useExtractSkeleton(callTool);
+  const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
 
