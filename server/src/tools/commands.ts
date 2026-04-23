@@ -54,7 +54,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/outfit",
-    description: "Put a garment on a model in a chosen pose (BlazePose skeleton)",
+    description: "Put a garment on a model in a chosen pose (MediaPipe Holistic skeleton)",
     example: "/outfit @img-exactly-girl",
     category: "action",
     icon: "Shirt",

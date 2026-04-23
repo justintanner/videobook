@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
-import { useBlazePose } from "@/hooks/useBlazePose";
+import { usePoseExtract } from "@/hooks/usePoseExtract";
 
 export interface ExtractSkeletonArgs {
   projectSlug: string;
@@ -27,7 +27,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtractSkeletonResult {
-  const { extract: runBlazePose } = useBlazePose();
+  const { extract: runPoseExtract } = usePoseExtract();
   const [submitting, setSubmitting] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
@@ -37,8 +37,9 @@ export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtra
     if (inFlightRef.current) return null;
     inFlightRef.current = true;
     setSubmitting(true);
+    toast({ title: "Extracting pose", description: "Running MediaPipe Holistic…", duration: 2500 });
     try {
-      const pose = await runBlazePose(args.sourceAssetId, args.sourceImageUrl);
+      const pose = await runPoseExtract(args.sourceAssetId, args.sourceImageUrl);
       if (!pose) {
         toast({ title: "Pose extraction failed", description: "No person detected", duration: 4000 });
         return null;
@@ -59,7 +60,7 @@ export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtra
       const uploaded = JSON.parse(content[0].text) as { assetId: string };
       toast({
         title: "Skeleton extracted",
-        description: `${pose.keypoints.length} keypoints · @${uploaded.assetId}`,
+        description: `${pose.landmarkCount} landmarks · @${uploaded.assetId}`,
         duration: 3000,
       });
       await callToolRef.current("sync", { project_slug: args.projectSlug });
@@ -72,7 +73,7 @@ export function useExtractSkeleton(callTool: UseMcpResult["callTool"]): UseExtra
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [runBlazePose]);
+  }, [runPoseExtract]);
 
   return { extract, submitting };
 }

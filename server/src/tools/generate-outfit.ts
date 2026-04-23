@@ -31,7 +31,7 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
   garment_image_slug: z.string().describe("@img-* slug of the garment/clothing (Image 2)"),
-  pose_image_slug: z.string().describe("@img-* slug of the BlazePose skeleton overlay (Image 3)"),
+  pose_image_slug: z.string().describe("@img-* slug of the MediaPipe Holistic skeleton overlay (Image 3)"),
   models: z
     .array(z.enum(SUPPORTED_OUTFIT_MODELS))
     .min(1)
@@ -116,7 +116,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_outfit",
     description:
-      "Virtual try-on: compose a model photo (Image 1), a garment (Image 2), and a BlazePose skeleton " +
+      "Virtual try-on: compose a model photo (Image 1), a garment (Image 2), and a MediaPipe Holistic skeleton " +
       "overlay (Image 3) into a generated image. Dispatches to the selected image-edit models through " +
       "the chosen provider (kie | fal).",
     schema,

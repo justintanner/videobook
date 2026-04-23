@@ -19,7 +19,7 @@ const PLATFORM_LABELS: Record<OutfitPlatform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube',
 };
-import { useBlazePose } from '@/hooks/useBlazePose';
+import { usePoseExtract } from '@/hooks/usePoseExtract';
 
 type SlotKind = 'model' | 'garment' | 'pose';
 
@@ -66,7 +66,7 @@ export function OutfitDialog({
   const [selectedPlatform, setSelectedPlatform] = useState<OutfitPlatform | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
 
-  const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = useBlazePose();
+  const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = usePoseExtract();
 
   // Seed when dialog opens
   useEffect(() => {
@@ -84,7 +84,7 @@ export function OutfitDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Run BlazePose whenever the pose slot changes
+  // Run MediaPipe Holistic whenever the pose slot changes
   useEffect(() => {
     if (!open) return;
     if (!pose) {
@@ -231,10 +231,10 @@ export function OutfitDialog({
               <section>
                 <div className="flex items-baseline justify-between mb-2">
                   <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70">
-                    BlazePose Skeleton
+                    Holistic Skeleton
                   </h3>
                   <span className="text-[10px] font-mono text-amber-500/50">
-                    {poseLoading ? 'detecting…' : poseError ? 'failed' : poseResult ? `${poseResult.keypoints.length} keypoints` : ''}
+                    {poseLoading ? 'detecting…' : poseError ? 'failed' : poseResult ? `${poseResult.landmarkCount} landmarks` : ''}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">

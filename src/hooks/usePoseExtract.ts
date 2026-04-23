@@ -1,14 +1,15 @@
 import { useCallback, useRef, useState } from "react";
-import { detectKeypoints, loadImage, type Keypoint } from "@/lib/blazepose";
-import { renderSkeletonPng, type SkeletonRender } from "@/lib/poseSkeleton";
+import { detectHolistic, loadImage, type HolisticResult } from "@/lib/poseExtract";
+import { renderSkeletonPng, countLandmarks, type SkeletonRender } from "@/lib/poseRender";
 
 export interface PoseExtraction {
   sourceAssetId: string;
-  keypoints: Keypoint[];
+  holistic: HolisticResult;
   skeleton: SkeletonRender;
+  landmarkCount: number;
 }
 
-export interface UseBlazePoseResult {
+export interface UsePoseExtractResult {
   extract: (sourceAssetId: string, imageUrl: string) => Promise<PoseExtraction | null>;
   reset: () => void;
   result: PoseExtraction | null;
@@ -16,7 +17,7 @@ export interface UseBlazePoseResult {
   error: string | null;
 }
 
-export function useBlazePose(): UseBlazePoseResult {
+export function usePoseExtract(): UsePoseExtractResult {
   const [result, setResult] = useState<PoseExtraction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +30,19 @@ export function useBlazePose(): UseBlazePoseResult {
     setError(null);
     try {
       const img = await loadImage(imageUrl);
-      const keypoints = await detectKeypoints(img);
-      if (!keypoints) {
+      const holistic = await detectHolistic(img);
+      if (!holistic.pose && !holistic.face && holistic.hands.length === 0) {
         setError("No person detected in this image.");
         setResult(null);
         return null;
       }
-      const skeleton = await renderSkeletonPng(keypoints, img.naturalWidth, img.naturalHeight);
-      const extraction: PoseExtraction = { sourceAssetId, keypoints, skeleton };
+      const skeleton = await renderSkeletonPng(holistic, img.naturalWidth, img.naturalHeight);
+      const extraction: PoseExtraction = {
+        sourceAssetId,
+        holistic,
+        skeleton,
+        landmarkCount: countLandmarks(holistic),
+      };
       setResult(extraction);
       return extraction;
     } catch (e) {
