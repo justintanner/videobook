@@ -27,6 +27,34 @@ export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
 export const OUTFIT_PROVIDERS = ["kie", "fal"] as const;
 export type OutfitProvider = typeof OUTFIT_PROVIDERS[number];
 
+export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
+export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
+
+const IMAGE_SIZE_MAP: Record<OutfitAspectRatio, "portrait_16_9" | "landscape_16_9" | "square_hd"> = {
+  "9:16": "portrait_16_9",
+  "16:9": "landscape_16_9",
+  "1:1": "square_hd",
+};
+
+function resolveSizeArgs(
+  provider: OutfitProvider,
+  model: OutfitModelKey,
+  ratio: OutfitAspectRatio | undefined,
+): Record<string, string> {
+  if (!ratio) return {};
+  // Tools that accept ratio strings directly as `aspect_ratio`.
+  if (provider === "kie" && model !== "qwen_image_edit") return { aspect_ratio: ratio };
+  if (provider === "fal" && (model === "nano_banana_pro" || model === "qwen_image_edit")) {
+    // fal nano-banana accepts ratio shorthand; fal qwen-edit normalizes shorthand internally.
+    return model === "nano_banana_pro" ? { aspect_ratio: ratio } : { image_size: ratio };
+  }
+  // Tools that only accept FAL-style enum presets via `image_size`.
+  if (provider === "kie" && model === "qwen_image_edit") return { image_size: IMAGE_SIZE_MAP[ratio] };
+  if (provider === "fal" && model === "wan27_pro") return { image_size: IMAGE_SIZE_MAP[ratio] };
+  // fal grok-imagine has no aspect/size control.
+  return {};
+}
+
 const schema = {
   project_slug: z.string().describe("Project slug"),
   model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
@@ -49,6 +77,10 @@ const schema = {
     .enum(PLATFORMS)
     .optional()
     .describe("Optional platform aesthetic preset (ig | tiktok | youtube)"),
+  aspect_ratio: z
+    .enum(OUTFIT_ASPECT_RATIOS)
+    .optional()
+    .describe("Output aspect ratio (9:16 | 16:9 | 1:1). Mapped per model."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -152,6 +184,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           project_slug: a.project_slug,
           prompt,
           image_slugs,
+          ...resolveSizeArgs(provider, model, a.aspect_ratio),
         } as unknown as Record<string, unknown>);
         const r = extractEnqueueResult(res);
         if (r.error) outcome.error = r.error;

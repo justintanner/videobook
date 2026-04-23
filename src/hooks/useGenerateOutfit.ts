@@ -22,6 +22,9 @@ export const OUTFIT_PROVIDERS = [
 ] as const;
 export type OutfitProvider = typeof OUTFIT_PROVIDERS[number]["key"];
 
+export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
+export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
+
 export interface GenerateOutfitArgs {
   projectSlug: string;
   modelImageSlug: string;
@@ -30,6 +33,7 @@ export interface GenerateOutfitArgs {
   poseSkeletonFilename: string;
   models: OutfitModelKey[];
   provider: OutfitProvider;
+  aspectRatio: OutfitAspectRatio;
   platform?: OutfitPlatform;
   customPrompt?: string;
 }
@@ -94,6 +98,7 @@ export function useGenerateOutfit(callTool: UseMcpResult["callTool"]): UseGenera
         pose_image_slug: poseImageSlug,
         models: args.models,
         provider: args.provider,
+        aspect_ratio: args.aspectRatio,
       };
       if (trimmedCustom) toolArgs.custom_prompt = trimmedCustom;
       if (args.platform) toolArgs.platform = args.platform;

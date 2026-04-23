@@ -3,10 +3,12 @@ import { Shirt, Loader2, Zap, X, AlertTriangle, User, Shirt as GarmentIcon, Move
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
+  OUTFIT_ASPECT_RATIOS,
   OUTFIT_CUSTOM_PROMPT_MAX,
   OUTFIT_MODEL_OPTIONS,
   OUTFIT_PLATFORMS,
   OUTFIT_PROVIDERS,
+  type OutfitAspectRatio,
   type OutfitModelKey,
   type OutfitPlatform,
   type OutfitProvider,
@@ -86,6 +88,7 @@ export function OutfitDialog({
   const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(['qwen_image_edit']));
   const [selectedProvider, setSelectedProvider] = useState<OutfitProvider>('kie');
   const [selectedPlatform, setSelectedPlatform] = useState<OutfitPlatform | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<OutfitAspectRatio>('9:16');
   const [customPrompt, setCustomPrompt] = useState('');
   const [visible, setVisible] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -105,6 +108,7 @@ export function OutfitDialog({
     setSelectedModels(new Set(['qwen_image_edit']));
     setSelectedProvider('kie');
     setSelectedPlatform(null);
+    setAspectRatio('9:16');
     setCustomPrompt('');
     resetPose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,6 +205,7 @@ export function OutfitDialog({
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
       models: [...selectedModels],
       provider: selectedProvider,
+      aspectRatio,
       platform: selectedPlatform ?? undefined,
       customPrompt: customPrompt.trim() || undefined,
     });
@@ -209,7 +214,7 @@ export function OutfitDialog({
       return true;
     }
     return false;
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, generate, selectedModels, selectedProvider, selectedPlatform, customPrompt, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, customPrompt, onOpenChange]);
 
   const handleOutfitSend = useCallback(async (message: string): Promise<boolean> => {
     const trimmed = message.trim();
@@ -463,6 +468,36 @@ export function OutfitDialog({
                     )}
                   >
                     {PLATFORM_LABELS[p]}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Aspect Ratio */}
+          <section>
+            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
+              Aspect Ratio
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {OUTFIT_ASPECT_RATIOS.map((r) => {
+                const isSelected = aspectRatio === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setAspectRatio(r)}
+                    disabled={submitting}
+                    className={cn(
+                      'h-7 px-3 rounded border transition-colors duration-150',
+                      'text-[11px] font-mono font-bold uppercase tracking-wider',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      isSelected
+                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                    )}
+                  >
+                    {r}
                   </button>
                 );
               })}
