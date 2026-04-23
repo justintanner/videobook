@@ -879,6 +879,7 @@ export function HomePage() {
         initialSlug={outfitDialog?.initialSlug ?? null}
         generate={generateOutfit}
         submitting={outfitSubmitting}
+        callTool={callTool}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>
