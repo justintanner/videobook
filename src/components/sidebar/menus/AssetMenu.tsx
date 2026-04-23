@@ -8,6 +8,7 @@ interface AssetMenuProps {
   itemType?: string;
   onAnimateCommand?: (text: string) => void;
   onAnimateEdit?: (text: string) => void;
+  onExtractSkeleton?: () => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
 
@@ -34,7 +35,7 @@ function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect
   );
 }
 
-export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, MenuItem }: AssetMenuProps) {
   return (
     <>
       {itemType === 'image' && (
@@ -65,6 +66,19 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={() => onAnimateCommand?.(`/describe ${slug}`)}
             MenuItem={MenuItem}
           />
+          {onExtractSkeleton && (
+            <>
+              <div className="-mx-1 my-1 h-px bg-border" />
+              <CommandMenuItem
+                command={`extract pose ${slug}`}
+                title="Extract Pose Skeleton"
+                titleClassName="text-amber-400"
+                accentColor="border-l-amber-500/50 focus:border-l-amber-500/80"
+                onSelect={onExtractSkeleton}
+                MenuItem={MenuItem}
+              />
+            </>
+          )}
           <div className="-mx-1 my-1 h-px bg-border" />
           {filePath && (
             <>

@@ -25,6 +25,7 @@ import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
 import { OutfitDialog } from '@/components/outfit/OutfitDialog';
+import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
@@ -99,6 +100,7 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
+  const { extract: extractSkeleton } = useExtractSkeleton(callTool);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
 
@@ -697,6 +699,8 @@ export function HomePage() {
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                   {assets.map((item) => {
+                    const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
+                    const itemFilePath = item.filePath;
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -704,6 +708,9 @@ export function HomePage() {
                         itemType={item.type}
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
+                        onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
+                          ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
+                          : undefined}
                         MenuItem={ContextMenuItem}
                       />
                     );
