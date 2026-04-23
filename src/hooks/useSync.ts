@@ -45,13 +45,16 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
         const json = content[0].text;
         const parsed: SyncResult = JSON.parse(json);
         console.log("[sync] result:", parsed);
-        // Only bump syncCount (triggering listAssets + fetchTimeline) when
-        // the sync result actually changed — avoids full re-renders on idle polls.
+        // Always bump syncCount so listAssets/fetchTimeline re-run every tick
+        // and pick up state the sync result doesn't carry (lock release when
+        // a render finishes, new render.json metadata, etc.). useListAssets
+        // diffs its own JSON and will skip the state update when the asset
+        // list is unchanged, so idle ticks still don't cause re-renders.
         if (json !== prevSyncJsonRef.current) {
           prevSyncJsonRef.current = json;
           setResult(parsed);
-          setSyncCount((c) => c + 1);
         }
+        setSyncCount((c) => c + 1);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

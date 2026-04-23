@@ -328,6 +328,24 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return warnings;
   }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug]);
 
+  // Live required-field check derived from current form values. The server
+  // computes validation.missing_required once at preview time; this recomputes
+  // against the latest formValues so disabling tracks user input live.
+  const liveMissingRequired = useMemo(() => {
+    const required = selectedOption?.schema.required ?? [];
+    const missing: string[] = [];
+    for (const name of required) {
+      if (name === 'project_slug') continue;
+      const v = formValues[name];
+      if (v === undefined || v === null || v === '') missing.push(name);
+      else if (Array.isArray(v) && v.length === 0) missing.push(name);
+    }
+    return missing;
+  }, [selectedOption?.schema.required, formValues]);
+
+  const missingRequiredLabel = (name: string): string =>
+    name.replace(/_slugs?$/, '').replace(/_/g, ' ');
+
   const fetchTranslatedPayload = useCallback(async () => {
     if (!jsonPayload) return;
     setTranslateLoading(true);
@@ -510,7 +528,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             variant={buttonVariant}
             state={genState}
             onClick={handleGenerate}
-            disabled={!selectedOption || liveWarnings.length > 0}
+            disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
           />
         </div>
       }
@@ -567,6 +585,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                 ...(selectedOption?.validation.warnings ?? []),
                 ...liveWarnings,
               ];
+              if (liveMissingRequired.length > 0) {
+                allWarnings.unshift(
+                  `Missing required field${liveMissingRequired.length === 1 ? '' : 's'}: ${liveMissingRequired.map(missingRequiredLabel).join(', ')}`,
+                );
+              }
               return allWarnings.length > 0 && (
                 <div className="mb-3 space-y-1">
                   {allWarnings.map((w, i) => (
