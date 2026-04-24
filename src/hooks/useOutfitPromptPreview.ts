@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
-import type { OutfitModelKey, OutfitPlatform, OutfitProvider } from "./useGenerateOutfit";
+import type { OutfitModelKey, OutfitPlatform, OutfitPoseCoverage, OutfitProvider } from "./useGenerateOutfit";
 
 export interface OutfitPromptPreviewEntry {
   model: OutfitModelKey;
@@ -17,6 +17,7 @@ export interface UseOutfitPromptPreviewArgs {
   provider: OutfitProvider;
   hasBackdrop: boolean;
   platform: OutfitPlatform | null;
+  poseCoverage: OutfitPoseCoverage | null;
 }
 
 export interface UseOutfitPromptPreviewResult {
@@ -35,6 +36,7 @@ export function useOutfitPromptPreview({
   provider,
   hasBackdrop,
   platform,
+  poseCoverage,
 }: UseOutfitPromptPreviewArgs): UseOutfitPromptPreviewResult {
   const [prompts, setPrompts] = useState<OutfitPromptPreviewEntry[]>([]);
   const [negativePrompt, setNegativePrompt] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function useOutfitPromptPreview({
         has_backdrop: hasBackdrop,
       };
       if (platform) args.platform = platform;
+      if (poseCoverage) args.pose_coverage = poseCoverage;
       callToolRef.current("preview_outfit_prompts", args).then(
         (result) => {
           if (reqId !== requestIdRef.current) return;
@@ -95,7 +98,7 @@ export function useOutfitPromptPreview({
       );
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [callState, modelsKey, provider, hasBackdrop, platform, models]);
+  }, [callState, modelsKey, provider, hasBackdrop, platform, poseCoverage, models]);
 
   return { prompts, negativePrompt, loading, error };
 }

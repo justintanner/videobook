@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
-import { usePoseExtract } from "@/hooks/usePoseExtract";
+import { detectHolistic, loadImage } from "@/lib/poseExtract";
+import { countLandmarks, renderSkeletonPng } from "@/lib/poseRender";
 
 export interface ExtractSkeletonArgs {
   projectSlug: string;
@@ -30,7 +31,6 @@ export function useExtractSkeleton(
   callTool: UseMcpResult["callTool"],
   sync: (projectSlug: string) => void,
 ): UseExtractSkeletonResult {
-  const { extract: runPoseExtract } = usePoseExtract();
   const [submitting, setSubmitting] = useState(false);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
@@ -44,12 +44,18 @@ export function useExtractSkeleton(
     setSubmitting(true);
     toast({ title: "Extracting pose", description: "Running MediaPipe Holistic…", duration: 2500 });
     try {
-      const pose = await runPoseExtract(args.sourceAssetId, args.sourceImageUrl);
-      if (!pose) {
+      const img = await loadImage(args.sourceImageUrl);
+      const holistic = await detectHolistic(img);
+      if (!holistic.pose && !holistic.face && holistic.hands.length === 0) {
         toast({ title: "Pose extraction failed", description: "No person detected", duration: 4000 });
         return null;
       }
-      const base64 = await blobToBase64(pose.skeleton.blob);
+      // Standalone skeleton asset: keep the source image's aspect ratio.
+      const skeleton = await renderSkeletonPng(holistic, img.naturalWidth, img.naturalHeight, {
+        aspectRatio: img.naturalWidth / img.naturalHeight,
+      });
+      const landmarkCount = countLandmarks(holistic);
+      const base64 = await blobToBase64(skeleton.blob);
       const uploadRes = await callToolRef.current("upload_file", {
         project_slug: args.projectSlug,
         filename: `pose-skeleton-${args.sourceAssetId}.png`,
@@ -65,7 +71,7 @@ export function useExtractSkeleton(
       const uploaded = JSON.parse(content[0].text) as { assetId: string };
       toast({
         title: "Skeleton extracted",
-        description: `${pose.landmarkCount} landmarks · @${uploaded.assetId}`,
+        description: `${landmarkCount} landmarks · @${uploaded.assetId}`,
         duration: 3000,
       });
       syncRef.current(args.projectSlug);
@@ -78,7 +84,7 @@ export function useExtractSkeleton(
       inFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [runPoseExtract]);
+  }, []);
 
   return { extract, submitting };
 }

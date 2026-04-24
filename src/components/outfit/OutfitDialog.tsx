@@ -103,7 +103,11 @@ export function OutfitDialog({
   const [visible, setVisible] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
 
-  const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = usePoseExtract();
+  const aspectRatioNum = useMemo(() => {
+    const [w, h] = aspectRatio.split(':').map(Number);
+    return w / h;
+  }, [aspectRatio]);
+  const { extract: extractPose, reset: resetPose, result: poseResult, loading: poseLoading, error: poseError } = usePoseExtract(aspectRatioNum);
   const { dispatch: contextDispatch } = useCommandDispatch();
 
   // Seed when dialog opens
@@ -134,16 +138,16 @@ export function OutfitDialog({
     setVisible(false);
   }, [open]);
 
-  // Run MediaPipe Holistic whenever the pose slot changes
+  // Run MediaPipe Holistic whenever the pose slot changes. AR changes re-render
+  // the skeleton inside the hook — detection does not re-run.
   useEffect(() => {
     if (!open) return;
     if (!pose) {
       resetPose();
       return;
     }
-    if (poseResult?.sourceAssetId === pose.assetId) return;
     extractPose(pose.assetId, pose.fullUrl);
-  }, [pose, open, extractPose, resetPose, poseResult?.sourceAssetId]);
+  }, [pose, open, extractPose, resetPose]);
 
   // Escape key → close (respecting ChatInput's preventDefault for autocomplete dismissal)
   useEffect(() => {
@@ -219,6 +223,7 @@ export function OutfitDialog({
     provider: selectedProvider,
     hasBackdrop: !!backdrop,
     platform: selectedPlatform,
+    poseCoverage: poseResult?.coverage ?? null,
   });
 
   // The prompt panel shows exactly one model at a time. Keep the user's tab choice
@@ -250,6 +255,7 @@ export function OutfitDialog({
       garmentImageSlug: garment.assetId,
       poseSkeletonBlob: poseResult.skeleton.blob,
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
+      poseCoverage: poseResult.coverage,
       backdropImageSlug: backdrop?.assetId,
       models: [...selectedModels],
       provider: selectedProvider,
@@ -626,13 +632,14 @@ export function OutfitDialog({
             </div>
           </section>
 
-          {/* Avoid list — applied to every outfit generation as an "Avoid:" clause
-              appended to the prompt, and (where supported) passed as the provider
-              negative_prompt field. */}
+          {/* Avoid list — only Wan 2.7 Pro and Qwen Image Edit consume it
+              (native `negative_prompt` on fal; baked into the prompt as an
+              "Avoid:" clause on kie). Nano Banana Pro, Seedream V5 Lite and
+              GPT Image 2 never receive it. */}
           {negativePrompt && (
             <section>
               <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70 mb-2">
-                Avoid (applied to all models)
+                Avoid (Wan 2.7 / Qwen only)
               </h3>
               <div className="rounded border border-amber-500/25 bg-amber-500/5 px-2 py-2 text-[11px] font-mono text-amber-100/90 whitespace-pre-wrap break-words">
                 {negativePrompt}

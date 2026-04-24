@@ -98,19 +98,141 @@ function drawHand(ctx: CanvasRenderingContext2D, W: number, H: number, hand: Nor
   }
 }
 
-export async function renderSkeletonPng(result: HolisticResult, width: number, height: number): Promise<SkeletonRender> {
+interface SubjectBBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+// Subject bbox in source-image normalized coords, over all visible landmarks.
+// Returns null when nothing passes the visibility threshold.
+function computeSubjectBBox(result: HolisticResult): SubjectBBox | null {
+  const pts: NormalizedLandmark[] = [];
+  if (result.pose) {
+    for (const p of result.pose) {
+      if ((p.visibility ?? 1) >= VISIBILITY_THRESHOLD) pts.push(p);
+    }
+  }
+  if (result.face) pts.push(...result.face);
+  for (const hand of result.hands) pts.push(...hand.landmarks);
+  if (pts.length === 0) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.x > x1) x1 = p.x;
+    if (p.y > y1) y1 = p.y;
+  }
+  return { x0, y0, x1, y1 };
+}
+
+export interface RenderSkeletonOptions {
+  // Target aspect ratio as W/H (e.g., 9/16 for portrait, 16/9 for landscape).
+  aspectRatio: number;
+  // Fractional margin around the subject in the output canvas on each side
+  // (0..0.4). Defaults to 0.1 — 10% of the canvas on each edge.
+  padding?: number;
+  // Output canvas long-edge in pixels. Defaults to 1280.
+  longEdge?: number;
+}
+
+// Reframe the skeleton onto a canvas at the requested aspect ratio, with the
+// detected subject centered and padded. The pose is NOT rescaled isotropically
+// relative to itself — we construct a virtual canvas in source-pixel space
+// that (a) has the target AR and (b) contains the subject's bbox with margin,
+// then map landmarks onto the output canvas. Points that fall outside the
+// virtual canvas (e.g., a wrist reaching beyond the padding) still draw —
+// canvas clips them at the edge rather than distorting the pose.
+export async function renderSkeletonPng(
+  result: HolisticResult,
+  srcW: number,
+  srcH: number,
+  opts: RenderSkeletonOptions,
+): Promise<SkeletonRender> {
+  const aspectRatio = opts.aspectRatio;
+  const padding = Math.max(0, Math.min(0.4, opts.padding ?? 0.1));
+  const longEdge = opts.longEdge ?? 1280;
+
+  // Virtual canvas in source-pixel coordinates.
+  let vx0: number;
+  let vy0: number;
+  let vw: number;
+  let vh: number;
+  const bbox = computeSubjectBBox(result);
+  if (bbox) {
+    const bx0 = bbox.x0 * srcW;
+    const by0 = bbox.y0 * srcH;
+    const bx1 = bbox.x1 * srcW;
+    const by1 = bbox.y1 * srcH;
+    const bw = bx1 - bx0;
+    const bh = by1 - by0;
+    const interior = 1 - 2 * padding;
+    // canvasW = canvasH * aspectRatio, and both dims must leave `padding` on
+    // each side around the subject bbox.
+    const canvasH = Math.max(bh / interior, bw / (interior * aspectRatio));
+    const canvasW = canvasH * aspectRatio;
+    const cx = (bx0 + bx1) / 2;
+    const cy = (by0 + by1) / 2;
+    vx0 = cx - canvasW / 2;
+    vy0 = cy - canvasH / 2;
+    vw = canvasW;
+    vh = canvasH;
+  } else {
+    // No subject detected — letterbox the source frame into the target AR.
+    const srcAr = srcW / srcH;
+    if (srcAr >= aspectRatio) {
+      vh = srcH;
+      vw = vh * aspectRatio;
+    } else {
+      vw = srcW;
+      vh = vw / aspectRatio;
+    }
+    vx0 = (srcW - vw) / 2;
+    vy0 = (srcH - vh) / 2;
+  }
+
+  // Output pixel dims: long edge = `longEdge`.
+  let outW: number;
+  let outH: number;
+  if (aspectRatio >= 1) {
+    outW = longEdge;
+    outH = longEdge / aspectRatio;
+  } else {
+    outH = longEdge;
+    outW = longEdge * aspectRatio;
+  }
+  outW = Math.round(outW);
+  outH = Math.round(outH);
+
+  const transform = (p: NormalizedLandmark): NormalizedLandmark => ({
+    x: (p.x * srcW - vx0) / vw,
+    y: (p.y * srcH - vy0) / vh,
+    z: p.z,
+    visibility: p.visibility,
+  });
+
+  const transformed: HolisticResult = {
+    pose: result.pose ? result.pose.map(transform) : null,
+    face: result.face ? result.face.map(transform) : null,
+    hands: result.hands.map((h) => ({
+      landmarks: h.landmarks.map(transform),
+      handedness: h.handedness,
+    })),
+  };
+
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = outW;
+  canvas.height = outH;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("could not acquire 2d context");
 
   ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, outW, outH);
 
-  if (result.pose) drawPose(ctx, width, height, result.pose);
-  if (result.face) drawFace(ctx, width, height, result.face);
-  for (const hand of result.hands) drawHand(ctx, width, height, hand.landmarks);
+  if (transformed.pose) drawPose(ctx, outW, outH, transformed.pose);
+  if (transformed.face) drawFace(ctx, outW, outH, transformed.face);
+  for (const hand of transformed.hands) drawHand(ctx, outW, outH, hand.landmarks);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
@@ -119,7 +241,7 @@ export async function renderSkeletonPng(result: HolisticResult, width: number, h
     }, "image/png");
   });
   const dataUrl = canvas.toDataURL("image/png");
-  return { blob, dataUrl, width, height };
+  return { blob, dataUrl, width: outW, height: outH };
 }
 
 export function countLandmarks(result: HolisticResult): number {

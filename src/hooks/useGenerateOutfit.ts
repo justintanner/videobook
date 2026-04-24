@@ -25,12 +25,16 @@ export type OutfitProvider = typeof OUTFIT_PROVIDERS[number]["key"];
 export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
 
+export const OUTFIT_POSE_COVERAGE = ["face", "upper", "full"] as const;
+export type OutfitPoseCoverage = typeof OUTFIT_POSE_COVERAGE[number];
+
 export interface GenerateOutfitArgs {
   projectSlug: string;
   modelImageSlug: string;
   garmentImageSlug: string;
   poseSkeletonBlob: Blob;
   poseSkeletonFilename: string;
+  poseCoverage: OutfitPoseCoverage;
   backdropImageSlug?: string;
   models: OutfitModelKey[];
   provider: OutfitProvider;
@@ -84,6 +88,7 @@ export function useGenerateOutfit(callTool: UseMcpResult["callTool"]): UseGenera
         garment_image_slug: args.garmentImageSlug,
         pose_image_data: poseBase64,
         pose_filename: args.poseSkeletonFilename,
+        pose_coverage: args.poseCoverage,
         models: args.models,
         provider: args.provider,
         aspect_ratio: args.aspectRatio,

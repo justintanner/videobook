@@ -19,19 +19,38 @@ import { findImageFile } from "./_image-inputs.js";
 const CUSTOM_PROMPT_MAX = 500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
-// Negative-prompt blacklist applied to every outfit generation. Derived from
-// the canonical Wan 2.7 / SDXL anatomy/quality negatives, trimmed to the
-// anatomy traps that matter for virtual try-on (hands, fingers, face, arms).
-// Under Wan's 500-char cap so it can be passed as-is to provider
-// `negative_prompt` fields where supported. For models without a native
-// negative field (nano-banana-pro, gpt-image-2, qwen2/image-edit on kie,
-// wan-2-7-image-pro on kie) the same text is appended to the main prompt as
-// an "Avoid:" clause.
-export const OUTFIT_NEGATIVE_PROMPT =
-  "deformed hands, malformed fingers, extra or missing fingers, fused fingers, crossed fingers, " +
-  "unnatural hand pose, awkward gestures, distorted face, asymmetrical features, uncanny eyes, " +
-  "extra limbs, missing limbs, unnatural arm angles, twisted joints, bad anatomy, " +
-  "low quality, blurry, jpeg artifacts, watermark, text";
+// Negative-prompt fragments, scoped so each model picks what's applicable.
+// Wan 2.7 Pro and Qwen Image Edit (on fal) expose a native `negative_prompt`
+// field; on kie they bake the combined string into the main prompt via
+// `avoidClause()`. Nano Banana Pro and Seedream V5 Lite get NO negative text
+// (Nano Banana's L2 safety filter trips on "Avoid:"-style clauses; Seedream's
+// official guide says *don't* use preemptive negatives). GPT Image 2 embeds
+// exclusions inline in the Task clause rather than as a separate "Avoid:".
+const ANATOMY_NEGATIVE =
+  "deformed hands, malformed fingers, extra or missing fingers, fused fingers, " +
+  "unnatural hand pose, extra limbs, missing limbs, unnatural arm angles, " +
+  "twisted joints, bad anatomy, bad proportions, contorted pose";
+const SKIN_NEGATIVE =
+  "smooth plastic skin, airbrushed, doll-like, waxy, over-retouched";
+const QUALITY_NEGATIVE =
+  "low quality, blurry, jpeg artifacts, watermark, text, distorted face, uncanny eyes";
+
+// Combined negative used for Wan + Qwen. Kept under Wan's 500-char cap so it
+// can be passed as-is to the fal `negative_prompt` field.
+export const WAN_QWEN_NEGATIVE =
+  `${ANATOMY_NEGATIVE}, ${SKIN_NEGATIVE}, ${QUALITY_NEGATIVE}`;
+
+// Positive anchors appended to every per-model prompt. Replaces the old
+// "Avoid:" list approach — most models respond better to positive framing,
+// and for the ones that need a negative we route it explicitly above.
+const ANATOMY_ANCHOR =
+  "Arms relaxed naturally, hands fully visible with five distinct fingers, " +
+  "natural shoulder and wrist rotation, weight-shifted standing pose.";
+const SKIN_ANCHOR =
+  "Natural skin with visible pore texture and subtle subsurface scattering, " +
+  "asymmetric micro-highlights, editorial magazine finish, no beauty filter.";
+const IDENTITY_ANCHOR =
+  "Preserve identity, body proportions and geometry from the subject reference.";
 
 export const SUPPORTED_OUTFIT_MODELS = [
   "nano_banana_pro",
@@ -47,6 +66,9 @@ export type OutfitProvider = typeof OUTFIT_PROVIDERS[number];
 
 export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
+
+export const OUTFIT_POSE_COVERAGE = ["face", "upper", "full"] as const;
+export type OutfitPoseCoverage = typeof OUTFIT_POSE_COVERAGE[number];
 
 const IMAGE_SIZE_MAP: Record<OutfitAspectRatio, "portrait_16_9" | "landscape_16_9" | "square_hd"> = {
   "9:16": "portrait_16_9",
@@ -112,6 +134,15 @@ const schema = {
     .enum(OUTFIT_ASPECT_RATIOS)
     .optional()
     .describe("Output aspect ratio (9:16 | 16:9 | 1:1). Mapped per model."),
+  pose_coverage: z
+    .enum(OUTFIT_POSE_COVERAGE)
+    .optional()
+    .describe(
+      "How much of the body the pose reference covers (face | upper | full). " +
+      "Detected client-side from MediaPipe pose landmarks. When 'face' or 'upper', " +
+      "the prompt swaps the 'align to pose reference' clause for an explicit textual " +
+      "stance directive so the model doesn't freestyle the body. Defaults to 'full'.",
+    ),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -175,119 +206,268 @@ function customSection(custom: string | undefined): string {
   return t ? ` ${t}` : "";
 }
 
-// "Avoid: …" clause appended at the end of each outfit prompt. The list
-// mirrors OUTFIT_NEGATIVE_PROMPT so models without a native negative_prompt
-// field still receive the blacklist.
-const avoidClause = ` Avoid: ${OUTFIT_NEGATIVE_PROMPT}.`;
+// Appended only for models where a separate "Avoid:" clause is known to help:
+// Wan 2.7 on kie and Qwen Image Edit on kie. On fal they use the native
+// negative_prompt field. NBPro, Seedream and GPT Image 2 never receive this.
+function kieAvoidClause(): string {
+  return ` Avoid: ${WAN_QWEN_NEGATIVE}.`;
+}
+
+// Explicit textual stance directive for when the pose reference doesn't
+// carry full-body structure. Without this the image model has no cue for
+// the body below what the reference shows and produces awkward / lying /
+// crouched stances when the reference is a headshot.
+const CONTRAPPOSTO_STANCE =
+  "a relaxed contrapposto standing pose: weight on the back leg, " +
+  "arms falling naturally at the sides, shoulders squared to camera";
+
+// Per-model pose clause, keyed by coverage + the label the model uses for
+// the pose slot. Each model's surrounding prose is different enough that
+// sharing full sentences would read stilted — we keep the builder-local
+// voice and only swap the pose-reference clause.
+function nbProPoseClause(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "Reference Image 3 is the pose — align limb angles, torso rotation and head tilt exactly.";
+    case "upper":
+      return "Reference Image 3 shows head, shoulders and torso — follow its head tilt, shoulder angle and torso rotation. For the legs and stance, use a relaxed standing pose with weight on the back leg.";
+    case "face":
+      return `Reference Image 3 is a head-and-shoulders pose reference — use it for head tilt, gaze and shoulder angle only. For the body, adopt ${CONTRAPPOSTO_STANCE}.`;
+  }
+}
+
+function qwenPoseClause(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "adopts the exact pose shown in image 3";
+    case "upper":
+      return "takes head tilt, shoulder angle and torso rotation from image 3, with legs in a relaxed standing stance and weight on the back leg";
+    case "face":
+      return `takes head tilt, gaze and shoulder angle from the head-and-shoulders reference in image 3, with the body in ${CONTRAPPOSTO_STANCE}`;
+  }
+}
+
+function qwenPoseAlignLine(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "Align limb angles, torso rotation and head tilt precisely to the pose in image 3.";
+    case "upper":
+      return "Match the head, shoulders and torso of image 3 precisely; keep the legs in a natural standing stance.";
+    case "face":
+      return "Match the head tilt, gaze and shoulder angle of image 3 precisely.";
+  }
+}
+
+function gptPoseClause(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "pose them exactly as shown in Image 3";
+    case "upper":
+      return "pose the head, shoulders and torso exactly as shown in Image 3, with legs in a relaxed standing stance and weight on the back leg";
+    case "face":
+      return `take head tilt, gaze and shoulder angle from Image 3 (head and shoulders only), with the body in ${CONTRAPPOSTO_STANCE}`;
+  }
+}
+
+function gptPoseAlignLine(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "Align limbs, torso and head to the pose in Image 3.";
+    case "upper":
+      return "Align head, shoulders and torso to Image 3.";
+    case "face":
+      return "Align head tilt, gaze and shoulder angle to Image 3.";
+  }
+}
+
+function wanPoseClause(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "pose them to match the pose (Image 3)";
+    case "upper":
+      return "match their head, shoulders and torso to Image 3, with legs in a relaxed standing stance";
+    case "face":
+      return `take head tilt, gaze and shoulder angle from Image 3 (head and shoulders only), with the body in ${CONTRAPPOSTO_STANCE}`;
+  }
+}
+
+function seedreamPoseClause(coverage: OutfitPoseCoverage): string {
+  switch (coverage) {
+    case "full":
+      return "in the pose shown in the third reference — aligning limb angles, torso rotation and head tilt";
+    case "upper":
+      return "with head tilt, shoulder angle and torso rotation matching the third reference, and the legs in a relaxed standing stance with weight on the back leg";
+    case "face":
+      return `taking head tilt, gaze and shoulder angle from the third reference, with the body in ${CONTRAPPOSTO_STANCE}`;
+  }
+}
 
 /**
  * Per-model prompt builders. Each model has its own preferred multi-image
- * reference convention — passing the right one measurably improves adherence.
- * See plan notes for sources.
+ * reference convention and safety/quality quirks — see the research plan for
+ * the sources behind each choice.
  */
 
-// Nano Banana Pro — role-based "Reference Image N (the role)" phrasing.
-function promptForNanoBananaPro(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const backdropClause = hasBackdrop
-    ? " Reference Image 4 is the backdrop/scene — place the subject in that location, matching its lighting, depth and colour cast."
-    : " Render a tasteful, photorealistic background that suits the subject.";
+// Nano Banana Pro — "professional fashion photography" framing bypasses most
+// L2 safety-filter false positives on clothing swaps. Strips the tokens that
+// trip the deepfake filter ("keep face", "change into", "change pose",
+// "photorealistic"). No Avoid clause — that itself can trigger the filter.
+function promptForNanoBananaPro(
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+  coverage: OutfitPoseCoverage,
+): string {
+  const backdropClause = backdropDescription
+    ? `Place the subject in this location: ${backdropDescription} Match the lighting, depth and colour cast of that scene.`
+    : hasBackdrop
+    ? "Place the subject in the location described by the user's backdrop reference, matching its lighting, depth and colour cast."
+    : "Use a tasteful background that suits the subject, rendered with natural lighting.";
   const base =
-    "Using Reference Image 1 (the person/model), Reference Image 2 (the garment), " +
-    "and Reference Image 3 (the pose reference), generate a photorealistic image " +
-    "of the person from Image 1 wearing the garment from Image 2 and adopting the exact " +
-    "pose shown in Image 3. Preserve the identity, face, hair and skin from Image 1. " +
-    "Match the cut, colour, pattern and silhouette of the garment in Image 2. " +
-    "Align limb angles, torso rotation and head tilt precisely to the pose in Image 3." +
-    backdropClause;
-  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
+    "Professional fashion photography. " +
+    "Reference Image 1 establishes the model's appearance, hair and skin. " +
+    "Reference Image 2 is the outfit — match its cut, colour, pattern and silhouette. " +
+    `${nbProPoseClause(coverage)} ` +
+    `${backdropClause} ` +
+    `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR} ` +
+    "85mm lens, soft natural lighting, fashion magazine style.";
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
 }
 
 // Qwen Image Edit — lowercase "image 1 / image 2 / image 3", hard cap 3.
-// Never receives the backdrop as an image; describes it in text only. When a
-// backdrop slug is supplied, the caller pre-analyzes the image with vision and
-// passes the resulting description in `backdropDescription`.
+// Like every model in this dispatcher, it receives a vision-described
+// backdrop in `backdropDescription` (the universal 3-image layout means no
+// model ever sees the backdrop as an input slot). On fal the caller also
+// sends WAN_QWEN_NEGATIVE via the native field; on kie the Avoid clause is
+// baked in here.
 function promptForQwenImageEdit(
   hasBackdrop: boolean,
   platform: Platform | undefined,
   custom: string | undefined,
   backdropDescription: string | undefined,
+  provider: OutfitProvider,
+  coverage: OutfitPoseCoverage,
 ): string {
   const backdropClause = backdropDescription
     ? ` For the background, compose this scene: ${backdropDescription} Keep lighting and colour cast consistent with that setting.`
     : hasBackdrop
     ? " For the background, compose a scene that matches the user's backdrop description; keep lighting and colour cast consistent with that setting."
-    : " Use a tasteful, photorealistic background.";
+    : " Use a tasteful, editorial background with natural lighting.";
   const base =
-    "The person in image 1 wears the garment from image 2 and adopts the exact pose " +
-    "shown in image 3. Preserve the identity, face, hair and skin from image 1. " +
+    `The person in image 1 wears the garment from image 2 and ${qwenPoseClause(coverage)}. ` +
     "Match the cut, colour, pattern and silhouette of the garment in image 2. " +
-    "Align limb angles, torso rotation and head tilt precisely to the pose in image 3. " +
-    "Render a photorealistic result with natural lighting." +
-    backdropClause;
-  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
+    qwenPoseAlignLine(coverage) +
+    backdropClause +
+    ` ${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR}`;
+  const tail = provider === "kie" ? kieAvoidClause() : "";
+  return `${base}${tail}${platformSection(platform)}${customSection(custom)}`;
 }
 
-// GPT Image 2 — labeled "Image N: <role>" prefix format.
-function promptForGptImage2(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const header = hasBackdrop
-    ? "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference. Image 4: the backdrop/scene."
-    : "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
-  const task = hasBackdrop
-    ? "Task: dress the person from Image 1 in the garment from Image 2, pose them exactly as shown in Image 3, and place them in the scene shown in Image 4."
-    : "Task: dress the person from Image 1 in the garment from Image 2, pose them exactly as shown in Image 3, and render a tasteful photorealistic background.";
-  const rules =
-    "Preserve face and identity from Image 1. Match garment cut, colour and pattern from Image 2 precisely. " +
-    "Align limbs, torso and head to the pose in Image 3.";
-  const base = `${header} ${task} ${rules}`;
-  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
-}
-
-// Seedream 5 Lite — narrative "Using images 1..N" phrasing. Accepts up to 14
-// references on kie / 10 on fal, so it always gets the full 3–4 image slots.
-function promptForSeedreamV5Lite(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const header = hasBackdrop
-    ? "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference. Image 4: the backdrop/scene."
-    : "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
-  const task = hasBackdrop
-    ? "Compose the person from Image 1 wearing the garment from Image 2, posed exactly as shown in Image 3, placed into the scene from Image 4."
-    : "Compose the person from Image 1 wearing the garment from Image 2, posed exactly as shown in Image 3, against a tasteful photorealistic background.";
-  const rules =
-    "Preserve the face, hair and skin from Image 1. Match the cut, colour, pattern and silhouette of the garment in Image 2 exactly. " +
-    "Align limb angles, torso rotation and head tilt precisely to the pose in Image 3. Render a photorealistic result with natural lighting.";
-  const base = `${header} ${task} ${rules}`;
-  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
-}
-
-// Wan 2.7 — "Change / Keep" two-part framing; images addressed by role.
-function promptForWan27Pro(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const changeBackdrop = hasBackdrop
-    ? " Change the background to match the backdrop reference (Image 4)."
-    : " Render a tasteful, photorealistic background.";
-  const base =
-    "Change: dress the person (Image 1) in the garment (Image 2) and pose them to match the pose (Image 3). " +
-    "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
-    changeBackdrop;
-  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
-}
-
-function buildPromptForModel(
-  model: OutfitModelKey,
+// GPT Image 2 — OpenAI-endorsed "Image N: role" labeling. Fix for the
+// "deformed mutant body" complaint: concrete anatomy anchors + explicit
+// `preserve identity, geometry, and body proportions`. Inline `no ...`
+// exclusions rather than a separate Avoid line per the OpenAI cookbook.
+function promptForGptImage2(
   hasBackdrop: boolean,
   platform: Platform | undefined,
   custom: string | undefined,
   backdropDescription: string | undefined,
+  coverage: OutfitPoseCoverage,
+): string {
+  const header = "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
+  const sceneClause = backdropDescription
+    ? `against this scene: ${backdropDescription} keep lighting and colour cast consistent with that setting`
+    : hasBackdrop
+    ? "against the scene described by the user's backdrop reference, with lighting and colour cast consistent with that setting"
+    : "against an editorial background with natural lighting";
+  const task = `Task: dress the person from Image 1 in the garment from Image 2, ${gptPoseClause(coverage)}, ${sceneClause}.`;
+  const rules =
+    "Preserve identity, geometry, and body proportions from Image 1. Match garment cut, colour and pattern from Image 2 precisely. " +
+    `${gptPoseAlignLine(coverage)} ` +
+    `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ` +
+    "Constraints: no watermark, no extra text, no logos, no logo drift, no extra limbs, no deformed hands.";
+  const base = `${header} ${task} ${rules}`;
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// Seedream V5 Lite — positional narrative references, NOT numbered "Figure N"
+// labels. Observed failure mode: with "Figure 1 … Figure 2 … Figure 3 … Figure 4"
+// the model interpreted the tokens as a render instruction and produced a
+// 4-figure turnaround of the same person (front / side / side-back / back)
+// instead of a single composited image. Using "the first reference / the
+// second reference" etc. avoids the trigger. Negative prompts stay disabled
+// (ByteDance guidance: "Don't use negative prompts preemptively").
+function promptForSeedreamV5Lite(
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+  coverage: OutfitPoseCoverage,
+): string {
+  const backdropClause = backdropDescription
+    ? `, in this location: ${backdropDescription}`
+    : hasBackdrop
+    ? ", in the location described by the user's backdrop reference"
+    : ", against a tasteful background with natural lighting";
+  const base =
+    "Editorial fashion photograph composed from the reference inputs. " +
+    `The subject shown in the first reference is wearing the outfit shown in the second reference, ${seedreamPoseClause(coverage)}${backdropClause}. ` +
+    `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ` +
+    "Preserve the subject's face, hairstyle and body proportions from the first reference exactly. " +
+    "Preserve the cut, colour and pattern of the outfit from the second reference exactly. " +
+    "Render a single photograph of one person, not a multi-view turnaround or figure study.";
+  return `${base}${platformSection(platform)}${customSection(custom)}`;
+}
+
+// Wan 2.7 Pro — keep the Change/Keep structure. Describe framing in prose
+// (Wan 2.7 removed the shot_type parameter). Do NOT use the word
+// "photorealistic" — it triggers 2.6 fallback logic and reduces realism.
+// On fal the caller sends WAN_QWEN_NEGATIVE via the native field; on kie the
+// Avoid clause is baked in here.
+function promptForWan27Pro(
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+  provider: OutfitProvider,
+  coverage: OutfitPoseCoverage,
+): string {
+  const changeBackdrop = backdropDescription
+    ? ` Change the background to: ${backdropDescription} Match lighting and colour cast to that scene.`
+    : hasBackdrop
+    ? " Change the background to match the scene described by the user's backdrop reference."
+    : " Change the background to an editorial fashion-photography setting with natural lighting.";
+  const base =
+    `Change: dress the person (Image 1) in the garment (Image 2) and ${wanPoseClause(coverage)}. ` +
+    "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
+    changeBackdrop +
+    ` ${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR} ` +
+    "Editorial fashion photography, 85mm, f/2.8.";
+  const tail = provider === "kie" ? kieAvoidClause() : "";
+  return `${base}${tail}${platformSection(platform)}${customSection(custom)}`;
+}
+
+function buildPromptForModel(
+  model: OutfitModelKey,
+  provider: OutfitProvider,
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+  coverage: OutfitPoseCoverage,
 ): string {
   switch (model) {
     case "nano_banana_pro":
-      return promptForNanoBananaPro(hasBackdrop, platform, custom);
+      return promptForNanoBananaPro(hasBackdrop, platform, custom, backdropDescription, coverage);
     case "qwen_image_edit":
-      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription);
+      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription, provider, coverage);
     case "gpt_image_2":
-      return promptForGptImage2(hasBackdrop, platform, custom);
+      return promptForGptImage2(hasBackdrop, platform, custom, backdropDescription, coverage);
     case "wan27_pro":
-      return promptForWan27Pro(hasBackdrop, platform, custom);
+      return promptForWan27Pro(hasBackdrop, platform, custom, backdropDescription, provider, coverage);
     case "seedream_v5_lite":
-      return promptForSeedreamV5Lite(hasBackdrop, platform, custom);
+      return promptForSeedreamV5Lite(hasBackdrop, platform, custom, backdropDescription, coverage);
   }
 }
 
@@ -299,23 +479,30 @@ interface SlugInputs {
 }
 
 /**
- * Build the image_slugs array for a given model, respecting its cap:
- * - qwen_image_edit: 3 images (drops backdrop; backdrop described in text)
- * - nano_banana_pro / gpt_image_2 / wan27_pro: 4 images when backdrop supplied
+ * Every model shares a 3-image layout: [model, garment, pose skeleton].
+ * The backdrop is never passed as an image slot — when supplied it is
+ * described in text via a single shared vision pass. This keeps dispatch
+ * uniform and works around Qwen's hard 3-image cap without per-model
+ * branching.
  */
 function buildImageSlugs(
-  model: OutfitModelKey,
+  _model: OutfitModelKey,
   _provider: OutfitProvider,
   slugs: SlugInputs,
 ): { image_slugs: string[]; backdropMentioned: boolean } {
-  const hasBackdrop = !!slugs.backdrop;
-  const three = [slugs.model, slugs.garment, slugs.pose];
-  const four = hasBackdrop ? [...three, slugs.backdrop!] : three;
+  return {
+    image_slugs: [slugs.model, slugs.garment, slugs.pose],
+    backdropMentioned: !!slugs.backdrop,
+  };
+}
 
-  if (model === "qwen_image_edit") {
-    return { image_slugs: three, backdropMentioned: hasBackdrop };
-  }
-  return { image_slugs: four, backdropMentioned: false };
+/** Returns the negative-prompt string for models that show it in the UI —
+ * only Wan / Qwen actually consume it (native on fal, baked into prompt on
+ * kie). When none of the selected models are Wan or Qwen, returns null so
+ * the UI can hide the panel. */
+function previewNegativePromptFor(models: readonly OutfitModelKey[]): string | null {
+  const relevant = models.some((m) => m === "wan27_pro" || m === "qwen_image_edit");
+  return relevant ? WAN_QWEN_NEGATIVE : null;
 }
 
 const previewSchema = {
@@ -340,6 +527,10 @@ const previewSchema = {
     .enum(PLATFORMS)
     .optional()
     .describe("Optional platform aesthetic preset (ig | tiktok | youtube)"),
+  pose_coverage: z
+    .enum(OUTFIT_POSE_COVERAGE)
+    .optional()
+    .describe("How much of the body the pose reference covers (face | upper | full). Defaults to 'full'."),
 } satisfies ZodRawShape;
 
 type PreviewArgs = SchemaArgs<typeof previewSchema>;
@@ -370,9 +561,18 @@ export function previewOutfitPromptsDef(): ToolDef {
         pose: "@img-preview-pose",
         ...(hasBackdrop ? { backdrop: "@img-preview-backdrop" } : {}),
       };
+      const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
-        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt, undefined);
+        const prompt = buildPromptForModel(
+          model,
+          provider,
+          hasBackdrop,
+          a.platform,
+          a.custom_prompt,
+          undefined,
+          coverage,
+        );
         const entry: PreviewEntry = {
           model,
           provider,
@@ -385,7 +585,7 @@ export function previewOutfitPromptsDef(): ToolDef {
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ prompts, negative_prompt: OUTFIT_NEGATIVE_PROMPT }),
+          text: JSON.stringify({ prompts, negative_prompt: previewNegativePromptFor(a.models) }),
         }],
       };
     },
@@ -396,8 +596,8 @@ export function previewOutfitPromptsDef(): ToolDef {
  * Resolve a backdrop slug to its image bytes and run the vision describer.
  * Returns the reproduction-ready `prompt` field from describe-image, which
  * we inject into prompts for models that cannot accept the backdrop as an
- * image slot (qwen, grok). Returns undefined on failure — callers fall back
- * to the generic "user's backdrop description" placeholder clause.
+ * image slot (qwen). Returns undefined on failure — callers fall back to the
+ * generic "user's backdrop description" placeholder clause.
  */
 async function describeBackdropImage(
   fs: ClipfirstFs,
@@ -492,28 +692,27 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
       };
       const hasBackdrop = !!slugs.backdrop;
 
-      // If any selected model/provider combo cannot accept the backdrop as an
-      // image slot (qwen, grok), describe the backdrop image once via vision
-      // and inject the text into those prompts. One vision call per call,
-      // shared across models. No-op when no backdrop is supplied or when all
-      // selected models carry the backdrop as image 4.
-      const needsBackdropText =
-        hasBackdrop &&
-        a.models.some((m) => buildImageSlugs(m, provider, slugs).backdropMentioned);
-      const backdropDescription = needsBackdropText
+      // The backdrop is never passed as an image slot — all models share a
+      // 3-image layout [model, garment, pose skeleton]. When a backdrop is
+      // supplied, describe it once via vision and inject the text into every
+      // prompt. One vision call per invocation, shared across models.
+      const backdropDescription = hasBackdrop
         ? await describeBackdropImage(fs, a.project_slug, a.backdrop_image_slug!)
         : undefined;
 
+      const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
       const outcomes: EnqueueOutcome[] = [];
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
         const prompt = buildPromptForModel(
           model,
+          provider,
           hasBackdrop,
           a.platform,
           a.custom_prompt,
-          backdropMentioned ? backdropDescription : undefined,
+          backdropDescription,
+          coverage,
         );
         const outcome: EnqueueOutcome = {
           model,
@@ -528,8 +727,9 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           continue;
         }
         const def = factory(fs);
-        // Models with a native negative_prompt field — fal qwen/wan27 only.
-        // Everyone else already has the avoid clause baked into `prompt`.
+        // Only Wan and Qwen on fal consume the native negative_prompt field.
+        // Their kie counterparts already carry the Avoid clause in `prompt`.
+        // NBPro, Seedream and GPT Image 2 never receive a negative.
         const nativeNegative =
           provider === "fal" && (model === "qwen_image_edit" || model === "wan27_pro");
         // Seedream 5 Lite on Kie requires `quality` at the API level — pin
@@ -541,7 +741,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           prompt,
           image_slugs,
           ...resolveSizeArgs(provider, model, a.aspect_ratio),
-          ...(nativeNegative ? { negative_prompt: OUTFIT_NEGATIVE_PROMPT } : {}),
+          ...(nativeNegative ? { negative_prompt: WAN_QWEN_NEGATIVE } : {}),
           ...(seedreamKieQuality ? { quality: "high" } : {}),
         } as unknown as Record<string, unknown>);
         const r = extractEnqueueResult(res);
