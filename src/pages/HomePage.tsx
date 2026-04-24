@@ -880,6 +880,7 @@ export function HomePage() {
         generate={generateOutfit}
         submitting={outfitSubmitting}
         callTool={callTool}
+        callState={state}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>

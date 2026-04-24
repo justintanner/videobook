@@ -278,6 +278,77 @@ function buildImageSlugs(
   return { image_slugs: four, backdropMentioned: false };
 }
 
+const previewSchema = {
+  models: z
+    .array(z.enum(SUPPORTED_OUTFIT_MODELS))
+    .min(1)
+    .describe("Image edit models to preview prompts for."),
+  provider: z
+    .enum(OUTFIT_PROVIDERS)
+    .optional()
+    .describe("Image-edit provider (kie | fal). Defaults to kie."),
+  has_backdrop: z
+    .boolean()
+    .optional()
+    .describe("Whether a backdrop/scene image is supplied."),
+  custom_prompt: z
+    .string()
+    .max(CUSTOM_PROMPT_MAX)
+    .optional()
+    .describe("Optional free-form instruction appended to the outfit prompt"),
+  platform: z
+    .enum(PLATFORMS)
+    .optional()
+    .describe("Optional platform aesthetic preset (ig | tiktok | youtube)"),
+} satisfies ZodRawShape;
+
+type PreviewArgs = SchemaArgs<typeof previewSchema>;
+
+interface PreviewEntry {
+  model: OutfitModelKey;
+  provider: OutfitProvider;
+  prompt: string;
+  image_count: number;
+  backdrop_mentioned?: boolean;
+}
+
+export function previewOutfitPromptsDef(_fs: ClipfirstFs): ToolDef {
+  return {
+    name: "preview_outfit_prompts",
+    description:
+      "Preview the per-model prompts that would be sent by generate_outfit, without enqueueing any " +
+      "jobs. Pure function over the inputs — no file I/O, no API calls.",
+    schema: previewSchema,
+    handler: async (args) => {
+      const a = args as PreviewArgs;
+      const provider: OutfitProvider = a.provider ?? "kie";
+      const hasBackdrop = !!a.has_backdrop;
+      // Dummy slugs — only needed so buildImageSlugs can return a length for image_count.
+      const slugs: SlugInputs = {
+        model: "@img-preview-model",
+        garment: "@img-preview-garment",
+        pose: "@img-preview-pose",
+        ...(hasBackdrop ? { backdrop: "@img-preview-backdrop" } : {}),
+      };
+      const prompts: PreviewEntry[] = a.models.map((model) => {
+        const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
+        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt);
+        const entry: PreviewEntry = {
+          model,
+          provider,
+          prompt,
+          image_count: image_slugs.length,
+          ...(backdropMentioned ? { backdrop_mentioned: true } : {}),
+        };
+        return entry;
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ prompts }) }],
+      };
+    },
+  };
+}
+
 export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_outfit",

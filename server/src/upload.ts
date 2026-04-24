@@ -1,7 +1,7 @@
 import { free } from "@apicity/free";
 import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-fs";
-import { maybeReencodeImage } from "./image-compress.js";
+import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -111,7 +111,8 @@ export async function prepareAssetForUpload(
   const readResult = await fs.readFile(assetId, filename, projectSlug);
   if (!readResult.ok) throw new Error(readResult.error.message);
   const raw = new Uint8Array(readResult.value);
-  const { data, filename: outName } = await maybeReencodeImage(raw, filename);
+  const reencoded = await maybeReencodeImage(raw, filename);
+  const { data, filename: outName } = await maybeUpscaleSmallImage(reencoded.data, reencoded.filename);
 
   const ext = outName.split(".").pop() ?? "bin";
   const hashedFilename = `${contentHash(data)}.${ext}`;

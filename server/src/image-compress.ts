@@ -2,6 +2,10 @@ import sharp from "sharp";
 
 const JPEG_REENCODE_THRESHOLD_BYTES = 3 * 1024 * 1024;
 
+// External image-gen APIs reject or silently degrade sub-300px inputs. Keep both
+// dimensions at or above this floor by upscaling small images to JPEG.
+const MIN_IMAGE_DIMENSION = 300;
+
 const REENCODABLE_FORMATS = new Set(["jpeg", "png", "webp", "bmp", "tiff", "avif"]);
 
 function replaceExtension(filename: string, newExt: string): string {
@@ -45,4 +49,45 @@ export async function maybeReencodeImage(
   }
 
   return { data: new Uint8Array(reencoded), filename: replaceExtension(filename, "jpg") };
+}
+
+// Upscale raster images whose shortest side is below MIN_IMAGE_DIMENSION so that
+// both dimensions are at least MIN_IMAGE_DIMENSION, preserving aspect ratio.
+// Output is always JPEG. Returns the input unchanged for non-raster formats or
+// images that already meet the floor.
+export async function maybeUpscaleSmallImage(
+  data: Uint8Array,
+  filename: string,
+): Promise<{ data: Uint8Array; filename: string }> {
+  let format: string | undefined;
+  let width: number | undefined;
+  let height: number | undefined;
+  try {
+    const meta = await sharp(data).metadata();
+    format = meta.format;
+    width = meta.width;
+    height = meta.height;
+  } catch {
+    return { data, filename };
+  }
+
+  if (!format || !REENCODABLE_FORMATS.has(format)) return { data, filename };
+  if (!width || !height) return { data, filename };
+  if (width >= MIN_IMAGE_DIMENSION && height >= MIN_IMAGE_DIMENSION) {
+    return { data, filename };
+  }
+
+  const resized = await sharp(data)
+    .rotate()
+    .flatten({ background: "#ffffff" })
+    .resize({
+      width: MIN_IMAGE_DIMENSION,
+      height: MIN_IMAGE_DIMENSION,
+      fit: "outside",
+      withoutEnlargement: false,
+    })
+    .jpeg({ quality: 92, mozjpeg: true, progressive: true, chromaSubsampling: "4:2:0" })
+    .toBuffer();
+
+  return { data: new Uint8Array(resized), filename: replaceExtension(filename, "jpg") };
 }

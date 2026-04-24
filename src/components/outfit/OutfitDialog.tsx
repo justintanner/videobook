@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Shirt, Loader2, Zap, X, AlertTriangle, User, Shirt as GarmentIcon, Move, Image as ImageIcon } from 'lucide-react';
+import { Shirt, Loader2, Zap, X, AlertTriangle, User, Shirt as GarmentIcon, Move, Image as ImageIcon, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   OUTFIT_ASPECT_RATIOS,
-  OUTFIT_CUSTOM_PROMPT_MAX,
   OUTFIT_MODEL_OPTIONS,
   OUTFIT_PLATFORMS,
   OUTFIT_PROVIDERS,
@@ -14,6 +13,7 @@ import {
   type OutfitProvider,
   type UseGenerateOutfitResult,
 } from '@/hooks/useGenerateOutfit';
+import { useOutfitPromptPreview } from '@/hooks/useOutfitPromptPreview';
 import { usePoseExtract } from '@/hooks/usePoseExtract';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
@@ -45,6 +45,7 @@ const SLOT_BADGES: Record<SlotKind, string> = { model: 'M', garment: 'G', pose: 
 const SLOT_ICONS: Record<SlotKind, typeof User> = { model: User, garment: GarmentIcon, pose: Move, backdrop: ImageIcon };
 const SLOT_OPTIONAL: Record<SlotKind, boolean> = { model: false, garment: false, pose: false, backdrop: true };
 const MODELS_WITHOUT_BACKDROP_IMAGE: OutfitModelKey[] = ['qwen_image_edit', 'grok_imagine'];
+const DEFAULT_MODELS: OutfitModelKey[] = ['qwen_image_edit'];
 
 interface ImageChoice {
   assetId: string;
@@ -62,7 +63,12 @@ interface OutfitDialogProps {
   generate: UseGenerateOutfitResult['generate'];
   submitting: boolean;
   callTool: UseMcpResult['callTool'];
+  callState: UseMcpResult['state'];
 }
+
+const MODEL_LABELS: Record<OutfitModelKey, string> = Object.fromEntries(
+  OUTFIT_MODEL_OPTIONS.map((m) => [m.key, m.label]),
+) as Record<OutfitModelKey, string>;
 
 function mediaItemToChoice(item: MediaItem): ImageChoice {
   return {
@@ -82,17 +88,18 @@ export function OutfitDialog({
   generate,
   submitting,
   callTool,
+  callState,
 }: OutfitDialogProps) {
   const [model, setModel] = useState<ImageChoice | null>(null);
   const [garment, setGarment] = useState<ImageChoice | null>(null);
   const [pose, setPose] = useState<ImageChoice | null>(null);
   const [backdrop, setBackdrop] = useState<ImageChoice | null>(null);
   const [activeSlot, setActiveSlot] = useState<SlotKind>('model');
-  const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(['qwen_image_edit']));
+  const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(DEFAULT_MODELS));
   const [selectedProvider, setSelectedProvider] = useState<OutfitProvider>('kie');
   const [selectedPlatform, setSelectedPlatform] = useState<OutfitPlatform | null>(null);
   const [aspectRatio, setAspectRatio] = useState<OutfitAspectRatio>('9:16');
-  const [customPrompt, setCustomPrompt] = useState('');
+  const [previewModel, setPreviewModel] = useState<OutfitModelKey | null>(null);
   const [visible, setVisible] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -109,11 +116,11 @@ export function OutfitDialog({
     setPose(null);
     setBackdrop(null);
     setActiveSlot(match ? 'garment' : 'model');
-    setSelectedModels(new Set(['qwen_image_edit']));
+    setSelectedModels(new Set(DEFAULT_MODELS));
     setSelectedProvider('kie');
     setSelectedPlatform(null);
     setAspectRatio('9:16');
-    setCustomPrompt('');
+    setPreviewModel(null);
     resetPose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -184,13 +191,46 @@ export function OutfitDialog({
     return out;
   }, [model, garment, pose, backdrop]);
 
-  const toggleGenModel = useCallback((m: OutfitModelKey) => {
+  // Clicking a model button: focuses it (shows its prompt). Clicking the already-focused
+  // model deselects it. Clicking an unselected model selects + focuses it.
+  const handleModelClick = useCallback((m: OutfitModelKey) => {
     setSelectedModels((prev) => {
+      const effectiveFocus = previewModel && prev.has(previewModel) ? previewModel : [...prev][0] ?? null;
+      if (prev.has(m)) {
+        if (effectiveFocus === m) {
+          const next = new Set(prev);
+          next.delete(m);
+          return next;
+        }
+        return prev;
+      }
       const next = new Set(prev);
-      if (next.has(m)) next.delete(m); else next.add(m);
+      next.add(m);
       return next;
     });
-  }, []);
+    setPreviewModel(m);
+  }, [previewModel]);
+
+  const modelsForPreview = useMemo(() => [...selectedModels], [selectedModels]);
+  const { prompts: previewPrompts, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
+    callTool,
+    callState,
+    models: modelsForPreview,
+    provider: selectedProvider,
+    hasBackdrop: !!backdrop,
+    platform: selectedPlatform,
+  });
+
+  // The prompt panel shows exactly one model at a time. Keep the user's tab choice
+  // when it's still valid; otherwise fall back to the first selected model.
+  const activePreviewModel: OutfitModelKey | null = useMemo(() => {
+    if (previewModel && selectedModels.has(previewModel)) return previewModel;
+    return modelsForPreview[0] ?? null;
+  }, [previewModel, selectedModels, modelsForPreview]);
+  const activePreviewEntry = useMemo(
+    () => (activePreviewModel ? previewPrompts.find((p) => p.model === activePreviewModel) ?? null : null),
+    [previewPrompts, activePreviewModel],
+  );
 
   const canSubmit = !submitting
     && !!projectSlug
@@ -215,14 +255,13 @@ export function OutfitDialog({
       provider: selectedProvider,
       aspectRatio,
       platform: selectedPlatform ?? undefined,
-      customPrompt: customPrompt.trim() || undefined,
     });
     if (res) {
       onOpenChange(false);
       return true;
     }
     return false;
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, customPrompt, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, onOpenChange]);
 
   const handleOutfitSend = useCallback(async (message: string): Promise<boolean> => {
     const trimmed = message.trim();
@@ -392,7 +431,10 @@ export function OutfitDialog({
                 No images in this project yet.
               </div>
             ) : (
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div
+                className="flex flex-wrap gap-2 overflow-y-auto pb-1"
+                style={{ maxHeight: 'calc(2 * 7rem + 0.5rem)' }}
+              >
                 {choices.map((c) => {
                   const badges = badgesForAsset(c.assetId);
                   const inActive = slotValues[activeSlot]?.assetId === c.assetId;
@@ -441,6 +483,69 @@ export function OutfitDialog({
                     </button>
                   );
                 })}
+              </div>
+            )}
+          </section>
+
+          {/* Final Prompt (read-only) */}
+          {/* Models — also the selector for which prompt is shown below */}
+          <section>
+            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
+              Image Models
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {OUTFIT_MODEL_OPTIONS.map((m) => {
+                const isSelected = selectedModels.has(m.key);
+                const isFocused = activePreviewModel === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => handleModelClick(m.key)}
+                    disabled={submitting}
+                    title={isSelected ? (isFocused ? 'Click again to deselect' : 'Click to preview') : 'Click to select'}
+                    className={cn(
+                      'h-7 px-3 rounded border transition-colors duration-150',
+                      'text-[11px] font-mono font-bold tracking-wider',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      isSelected
+                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                      isFocused && 'ring-2 ring-purple-400/70 ring-offset-1 ring-offset-zinc-950',
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Final Prompt (read-only) — shows the prompt for the focused model above */}
+          <section>
+            <div className="flex items-baseline justify-between mb-2">
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70">
+                Final Prompt (read-only)
+              </h3>
+              {previewLoading && (
+                <span className="flex items-center gap-1 text-[10px] font-mono text-purple-400/60">
+                  <Loader2 className="w-3 h-3 animate-spin" /> computing…
+                </span>
+              )}
+            </div>
+            {selectedModels.size === 0 ? (
+              <div className="text-[11px] font-mono text-purple-500/50 italic px-2 py-3 rounded border border-dashed border-purple-500/20">
+                Select at least one model above.
+              </div>
+            ) : previewError ? (
+              <div className="text-[11px] font-mono text-red-300/80 px-2 py-2 rounded border border-red-500/30 bg-red-500/5">
+                {previewError}
+              </div>
+            ) : activePreviewEntry ? (
+              <PromptPreviewBlock entry={activePreviewEntry} />
+            ) : (
+              <div className="text-[11px] font-mono text-purple-500/50 italic px-2 py-3 rounded border border-dashed border-purple-500/20">
+                {previewLoading ? 'computing…' : 'Waiting for preview…'}
               </div>
             )}
           </section>
@@ -550,60 +655,6 @@ export function OutfitDialog({
             </div>
           </section>
 
-          {/* Models */}
-          <section>
-            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
-              Image Models
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {OUTFIT_MODEL_OPTIONS.map((m) => {
-                const isSelected = selectedModels.has(m.key);
-                return (
-                  <button
-                    key={m.key}
-                    type="button"
-                    onClick={() => toggleGenModel(m.key)}
-                    disabled={submitting}
-                    className={cn(
-                      'h-7 px-3 rounded border transition-colors duration-150',
-                      'text-[11px] font-mono font-bold tracking-wider',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      isSelected
-                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
-                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Custom Prompt */}
-          <section>
-            <div className="flex items-baseline justify-between mb-2">
-              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70">
-                Additional Instruction
-              </h3>
-              <span className="text-[10px] font-mono text-purple-500/50 tabular-nums">
-                {customPrompt.length} / {OUTFIT_CUSTOM_PROMPT_MAX}
-              </span>
-            </div>
-            <textarea
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value.slice(0, OUTFIT_CUSTOM_PROMPT_MAX))}
-              disabled={submitting}
-              placeholder="e.g. outdoor setting, soft evening light, keep the headscarf"
-              rows={2}
-              className={cn(
-                'w-full px-2 py-1.5 rounded border border-purple-500/30 bg-black/60 text-purple-200',
-                'text-[11px] font-mono placeholder:text-purple-500/40',
-                'focus:outline-none focus:border-purple-400 resize-none',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-            />
-          </section>
         </div>
 
         {/* Footer */}
@@ -656,5 +707,53 @@ export function OutfitDialog({
         </div>
       </div>
     </>
+  );
+}
+
+interface PromptPreviewBlockProps {
+  entry: {
+    model: OutfitModelKey;
+    prompt: string;
+    image_count: number;
+    backdrop_mentioned?: boolean;
+  };
+}
+
+function PromptPreviewBlock({ entry }: PromptPreviewBlockProps) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(entry.prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }, [entry.prompt]);
+
+  return (
+    <div className="rounded border border-purple-500/20 bg-black/40 overflow-hidden">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-mono text-purple-200">
+        <span className="font-bold tracking-wider">{MODEL_LABELS[entry.model]}</span>
+        <span className="text-[9px] font-mono text-purple-400/70 tabular-nums border border-purple-500/30 rounded px-1.5 py-[1px]">
+          {entry.image_count} img{entry.image_count === 1 ? '' : 's'}
+        </span>
+        {entry.backdrop_mentioned && (
+          <span className="text-[9px] font-mono text-amber-300/80 border border-amber-500/40 rounded px-1.5 py-[1px]" title="Backdrop image is dropped; referenced in text only">
+            backdrop in text
+          </span>
+        )}
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-purple-400/70 hover:text-purple-200"
+          title="Copy prompt to clipboard"
+        >
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          {copied ? 'copied' : 'copy'}
+        </button>
+      </div>
+      <pre className="px-2 py-2 text-[11px] font-mono text-purple-100/90 whitespace-pre-wrap break-words border-t border-purple-500/20 bg-black/30">
+{entry.prompt}
+      </pre>
+    </div>
   );
 }
