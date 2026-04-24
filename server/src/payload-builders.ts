@@ -253,8 +253,8 @@ function buildSeedreamTextImagePayload(
     input: {
       prompt: args.prompt,
       nsfw_checker: args.nsfw_checker ?? false,
+      quality: args.quality ?? "basic",
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.quality !== undefined ? { quality: args.quality } : {}),
     },
   };
 }
@@ -269,8 +269,8 @@ function buildSeedreamImageEditPayload(
       prompt: args.prompt,
       image_urls: imageUrls,
       nsfw_checker: args.nsfw_checker ?? false,
+      quality: args.quality ?? "basic",
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.quality !== undefined ? { quality: args.quality } : {}),
     },
   };
 }

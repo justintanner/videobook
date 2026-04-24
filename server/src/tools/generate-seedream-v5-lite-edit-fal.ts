@@ -9,7 +9,19 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Edit instruction"),
   image_slugs: z.array(z.string()).min(1).describe("1 or more @img-* slugs for reference images"),
-  image_size: z.enum(["auto_2K", "auto_4K"]).optional().describe("Output size"),
+  image_size: z
+    .enum([
+      "square_hd",
+      "square",
+      "portrait_4_3",
+      "portrait_16_9",
+      "landscape_4_3",
+      "landscape_16_9",
+      "auto_2K",
+      "auto_3K",
+    ])
+    .optional()
+    .describe("Output size preset"),
   num_images: z.number().int().optional().describe("Number of images to generate"),
   max_images: z.number().int().optional().describe("Max images returned"),
   seed: z.number().optional().describe("Seed for deterministic output"),

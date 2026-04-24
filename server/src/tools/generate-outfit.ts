@@ -4,10 +4,12 @@ import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
+import { generateSeedreamV5LiteEditFalDef } from "./generate-seedream-v5-lite-edit-fal.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
+import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import { uploadBytesToFal } from "../jobs/_fal-upload.js";
 import { uploadBytesToKie } from "../jobs/_kie-upload.js";
@@ -36,6 +38,7 @@ export const SUPPORTED_OUTFIT_MODELS = [
   "qwen_image_edit",
   "gpt_image_2",
   "wan27_pro",
+  "seedream_v5_lite",
 ] as const;
 export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
 
@@ -61,6 +64,7 @@ function resolveSizeArgs(
   if (model === "qwen_image_edit") return { image_size: ratio };
   if (provider === "fal" && model === "nano_banana_pro") return { aspect_ratio: ratio };
   if (provider === "fal" && model === "wan27_pro") return { image_size: IMAGE_SIZE_MAP[ratio] };
+  if (provider === "fal" && model === "seedream_v5_lite") return { image_size: IMAGE_SIZE_MAP[ratio] };
   return {};
 }
 
@@ -120,11 +124,13 @@ const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFac
     qwen_image_edit: generateQwen2ImageEditDef,
     gpt_image_2: generateGptImageDef,
     wan27_pro: generateWan27ImageProDef,
+    seedream_v5_lite: generateSeedreamImageDef,
   },
   fal: {
     nano_banana_pro: generateNanoBananaProEditFalDef,
     qwen_image_edit: generateQwenImageEditFalDef,
     wan27_pro: generateWan27ProEditFalDef,
+    seedream_v5_lite: generateSeedreamV5LiteEditFalDef,
   },
 };
 
@@ -236,6 +242,22 @@ function promptForGptImage2(hasBackdrop: boolean, platform: Platform | undefined
   return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
 }
 
+// Seedream 5 Lite — narrative "Using images 1..N" phrasing. Accepts up to 14
+// references on kie / 10 on fal, so it always gets the full 3–4 image slots.
+function promptForSeedreamV5Lite(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
+  const header = hasBackdrop
+    ? "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference. Image 4: the backdrop/scene."
+    : "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
+  const task = hasBackdrop
+    ? "Compose the person from Image 1 wearing the garment from Image 2, posed exactly as shown in Image 3, placed into the scene from Image 4."
+    : "Compose the person from Image 1 wearing the garment from Image 2, posed exactly as shown in Image 3, against a tasteful photorealistic background.";
+  const rules =
+    "Preserve the face, hair and skin from Image 1. Match the cut, colour, pattern and silhouette of the garment in Image 2 exactly. " +
+    "Align limb angles, torso rotation and head tilt precisely to the pose in Image 3. Render a photorealistic result with natural lighting.";
+  const base = `${header} ${task} ${rules}`;
+  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
+}
+
 // Wan 2.7 — "Change / Keep" two-part framing; images addressed by role.
 function promptForWan27Pro(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
   const changeBackdrop = hasBackdrop
@@ -264,6 +286,8 @@ function buildPromptForModel(
       return promptForGptImage2(hasBackdrop, platform, custom);
     case "wan27_pro":
       return promptForWan27Pro(hasBackdrop, platform, custom);
+    case "seedream_v5_lite":
+      return promptForSeedreamV5Lite(hasBackdrop, platform, custom);
   }
 }
 
@@ -508,12 +532,17 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         // Everyone else already has the avoid clause baked into `prompt`.
         const nativeNegative =
           provider === "fal" && (model === "qwen_image_edit" || model === "wan27_pro");
+        // Seedream 5 Lite on Kie requires `quality` at the API level — pin
+        // to "high" (4K) for outfit since try-on benefits from detail.
+        const seedreamKieQuality =
+          provider === "kie" && model === "seedream_v5_lite";
         const res = await def.handler({
           project_slug: a.project_slug,
           prompt,
           image_slugs,
           ...resolveSizeArgs(provider, model, a.aspect_ratio),
           ...(nativeNegative ? { negative_prompt: OUTFIT_NEGATIVE_PROMPT } : {}),
+          ...(seedreamKieQuality ? { quality: "high" } : {}),
         } as unknown as Record<string, unknown>);
         const r = extractEnqueueResult(res);
         if (r.error) outcome.error = r.error;

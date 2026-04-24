@@ -22,7 +22,7 @@ const generateSeedreamTextImageSchema = {
   prompt: z.string().describe("Text description of the image to generate (3-3000 chars)"),
   project_slug: z.string().describe("Project slug"),
   aspect_ratio: z.enum(seedreamInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (default 1:1)"),
-  quality: z.enum(seedreamInputSchema.quality.unwrap().options).optional().describe("Output quality (basic=2K, high=4K, default basic)"),
+  quality: z.enum(seedreamInputSchema.quality.options).optional().describe("Output quality (basic=2K, high=4K). Defaults to basic."),
   nsfw_checker: z.boolean().optional().describe("Content safety filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'fal')"),
 } satisfies ZodRawShape;
