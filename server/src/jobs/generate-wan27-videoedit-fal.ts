@@ -2,8 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { registerJobHandler } from "../queue.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
-
-type RefInput = { assetId: string; filename: string };
+import type { ImageInput } from "../tools/_image-inputs.js";
 
 type Payload = {
   type: "generate_wan27_videoedit_fal";
@@ -11,8 +10,8 @@ type Payload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt: string;
-  sourceVideo: RefInput;
-  refImage?: RefInput;
+  sourceVideo: { assetId: string; filename: string };
+  refImage?: ImageInput;
   sourceImageIds?: string[];
   sourceVideoIds: string[];
   aspect_ratio?: string;
@@ -30,7 +29,9 @@ export function registerGenerateWan27VideoeditFalJob(fs: ClipfirstFs): void {
 
     const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.projectSlug);
     const reference_image_url = p.refImage
-      ? await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug)
+      ? "url" in p.refImage
+        ? p.refImage.url
+        : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug)
       : undefined;
 
     const input: Record<string, unknown> = {

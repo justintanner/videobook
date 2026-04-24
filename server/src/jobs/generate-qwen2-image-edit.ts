@@ -4,11 +4,12 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildQwen2ImageEditPayload } from "../payload-builders.js";
+import type { ImageInput } from "../tools/_image-inputs.js";
 
 type GenerateQwen2ImageEditPayload = {
   type: "generate_qwen2_image_edit";
   prompt: string;
-  imageFilenames: string[];
+  imageInputs: ImageInput[];
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
@@ -21,7 +22,7 @@ type GenerateQwen2ImageEditPayload = {
 export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_qwen2_image_edit", async (payload) => {
     const {
-      prompt, imageFilenames, imgAssetId, imgAssetDir,
+      prompt, imageInputs, imgAssetId, imgAssetDir,
       sourceImageIds, projectSlug, imageSize, outputFormat, seed,
     } = payload as GenerateQwen2ImageEditPayload;
 
@@ -31,11 +32,12 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const uploadedUrls: string[] = [];
-    for (let i = 0; i < sourceImageIds.length; i++) {
-      const sourceImageId = sourceImageIds[i]!;
-      const imageFilename = imageFilenames[i]!;
-      const uploadedUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
-      uploadedUrls.push(uploadedUrl);
+    for (const input of imageInputs) {
+      uploadedUrls.push(
+        "url" in input
+          ? input.url
+          : await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug),
+      );
     }
 
     const request = buildQwen2ImageEditPayload(

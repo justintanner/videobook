@@ -11,6 +11,8 @@ import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
+import { uploadBytesToFal } from "../jobs/_fal-upload.js";
+import { uploadBytesToKie } from "../jobs/_kie-upload.js";
 
 const CUSTOM_PROMPT_MAX = 500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
@@ -53,7 +55,21 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   model_image_slug: z.string().describe("@img-* slug of the person/model photo (Image 1)"),
   garment_image_slug: z.string().describe("@img-* slug of the garment/clothing (Image 2)"),
-  pose_image_slug: z.string().describe("@img-* slug of the pose reference (Image 3)"),
+  pose_image_slug: z
+    .string()
+    .optional()
+    .describe("@img-* slug of the pose reference (Image 3). Provide this OR pose_image_data."),
+  pose_image_data: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded bytes of the pose skeleton PNG. Ephemeral — uploaded once to the provider " +
+      "and discarded, never persisted as a project asset. Provide this OR pose_image_slug.",
+    ),
+  pose_filename: z
+    .string()
+    .optional()
+    .describe("Filename for the ephemeral pose bytes (extension determines content type). Required with pose_image_data."),
   backdrop_image_slug: z
     .string()
     .optional()
@@ -127,6 +143,7 @@ function extractEnqueueResult(res: ToolResult): { assetId?: string; jobId?: stri
 }
 
 function withAt(slug: string): string {
+  if (slug.startsWith("http://") || slug.startsWith("https://")) return slug;
   return slug.startsWith("@") ? slug : `@${slug}`;
 }
 
@@ -368,10 +385,50 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      const hasPoseSlug = !!a.pose_image_slug;
+      const hasPoseData = !!a.pose_image_data;
+      if (hasPoseSlug === hasPoseData) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: "Provide exactly one of pose_image_slug or pose_image_data",
+          }],
+        };
+      }
+      if (hasPoseData && !a.pose_filename) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: "pose_filename is required when providing pose_image_data",
+          }],
+        };
+      }
+
+      let poseRef: string;
+      if (hasPoseSlug) {
+        poseRef = withAt(a.pose_image_slug!);
+      } else {
+        const bytes = Buffer.from(a.pose_image_data!, "base64");
+        const filename = a.pose_filename!;
+        try {
+          poseRef = provider === "kie"
+            ? await uploadBytesToKie(bytes, filename)
+            : await uploadBytesToFal(bytes, filename);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Ephemeral pose upload failed: ${msg}` }],
+          };
+        }
+      }
+
       const slugs: SlugInputs = {
         model: withAt(a.model_image_slug),
         garment: withAt(a.garment_image_slug),
-        pose: withAt(a.pose_image_slug),
+        pose: poseRef,
         ...(a.backdrop_image_slug ? { backdrop: withAt(a.backdrop_image_slug) } : {}),
       };
       const hasBackdrop = !!slugs.backdrop;

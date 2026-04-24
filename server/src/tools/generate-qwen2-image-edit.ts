@@ -1,22 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
-import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
+import { resolveImageSlugs } from "./_image-inputs.js";
 
 function deriveImageName(imageAssetId: string): string {
   const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
@@ -52,7 +42,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
+      const rawSlugs = image_slugs ?? [];
 
       // Apicity Qwen2ImageEditRequestSchema enforces image_url .min(1).max(3)
       // and prompt .min(1). Slugs stand in for URLs here — they are non-empty
@@ -62,7 +52,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
         model: "qwen2/image-edit",
         input: {
           prompt,
-          image_url: ids,
+          image_url: rawSlugs.map((s) => s.replace(/^@/, "")),
           ...(image_size !== undefined ? { image_size } : {}),
           ...(output_format !== undefined ? { output_format } : {}),
           ...(seed !== undefined ? { seed } : {}),
@@ -70,42 +60,14 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const invalidIds = ids.filter((id) => !id.startsWith("img-"));
-      if (invalidIds.length > 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${invalidIds.join(", ")}` }],
-        };
+      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      if (!resolved.ok) {
+        return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
+      const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const sourceImageIds: string[] = [];
-      const imagePaths: string[] = [];
-      const imageFilenames: string[] = [];
-
-      for (const sourceImageId of ids) {
-        const manifestResult = await fs.getManifest(sourceImageId, project_slug);
-        if (!manifestResult.ok) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: manifestResult.error.message }],
-          };
-        }
-
-        const manifest = manifestResult.value;
-        const imageFile = findImageFile(manifest.files);
-        if (!imageFile) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: `No image file found in asset ${sourceImageId}` }],
-          };
-        }
-
-        sourceImageIds.push(sourceImageId);
-        imagePaths.push(join(manifest.path, imageFile.name));
-        imageFilenames.push(imageFile.name);
-      }
-
-      const imgName = deriveImageName(sourceImageIds[0]!);
+      const nameSeed = sourceImageIds[0] ?? `ephemeral-${Date.now()}`;
+      const imgName = deriveImageName(nameSeed);
       const assetResult = await fs.createAsset("img", imgName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -137,8 +99,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       await queue.enqueue(jobId, {
         type: "generate_qwen2_image_edit",
         prompt,
-        imagePaths,
-        imageFilenames,
+        imageInputs,
         imgAssetId,
         imgAssetDir,
         sourceImageIds,

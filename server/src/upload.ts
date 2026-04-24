@@ -99,6 +99,24 @@ export async function uploadBytesToFreeHost(
 // provider's native endpoint first.
 export const uploadBytes = uploadBytesToFreeHost;
 
+// Re-encode bytes (if applicable), upscale small images, and hash the final
+// bytes for a collision-free remote filename. Shared preamble for both asset
+// and raw-bytes provider upload wrappers.
+export async function prepareBytesForUpload(
+  bytes: Uint8Array | Buffer,
+  filename: string,
+): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
+  const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const reencoded = await maybeReencodeImage(raw, filename);
+  const { data, filename: outName } = await maybeUpscaleSmallImage(reencoded.data, reencoded.filename);
+
+  const ext = outName.split(".").pop() ?? "bin";
+  const hashedFilename = `${contentHash(data)}.${ext}`;
+  const contentType = inferMimeType(outName);
+
+  return { data, hashedFilename, contentType };
+}
+
 // Read an asset, optionally re-encode it, and hash its final bytes for use as
 // a collision-free remote filename. Shared preamble for every provider-native
 // upload wrapper.
@@ -110,15 +128,7 @@ export async function prepareAssetForUpload(
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
   const readResult = await fs.readFile(assetId, filename, projectSlug);
   if (!readResult.ok) throw new Error(readResult.error.message);
-  const raw = new Uint8Array(readResult.value);
-  const reencoded = await maybeReencodeImage(raw, filename);
-  const { data, filename: outName } = await maybeUpscaleSmallImage(reencoded.data, reencoded.filename);
-
-  const ext = outName.split(".").pop() ?? "bin";
-  const hashedFilename = `${contentHash(data)}.${ext}`;
-  const contentType = inferMimeType(outName);
-
-  return { data, hashedFilename, contentType };
+  return prepareBytesForUpload(new Uint8Array(readResult.value), filename);
 }
 
 // Upload an asset file via the free-host rotation. Kept for

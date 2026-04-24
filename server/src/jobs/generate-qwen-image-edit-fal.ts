@@ -2,8 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { registerJobHandler } from "../queue.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
-
-type ImageInput = { assetId: string; filename: string };
+import type { ImageInput } from "../tools/_image-inputs.js";
 
 type Payload = {
   type: "generate_qwen_image_edit_fal";
@@ -28,7 +27,9 @@ export function registerGenerateQwenImageEditFalJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_qwen_image_edit_fal", async (payload) => {
     const p = payload as Payload;
 
-    const image_url = await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug);
+    const image_url = "url" in p.refImage
+      ? p.refImage.url
+      : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug);
 
     const input: Record<string, unknown> = {
       prompt: p.prompt,

@@ -4,11 +4,12 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { writePendingTask } from "./pending-task.js";
 import { buildWan27ImageProPayload } from "../payload-builders.js";
+import type { ImageInput } from "../tools/_image-inputs.js";
 
 type GenerateWan27ImageProPayload = {
   type: "generate_wan27_image_pro";
   prompt: string;
-  imageInputs: Array<{ assetId: string; filename: string }>;
+  imageInputs: ImageInput[];
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
@@ -32,8 +33,12 @@ export function registerGenerateWan27ImageProJob(fs: ClipfirstFs): void {
     const provider = kie({ apiKey, timeout: 60_000 });
 
     const uploadedUrls: string[] = [];
-    for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, projectSlug));
+    for (const input of imageInputs) {
+      uploadedUrls.push(
+        "url" in input
+          ? input.url
+          : await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug),
+      );
     }
 
     const request = buildWan27ImageProPayload(

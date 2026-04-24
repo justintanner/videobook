@@ -1,22 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
-import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
+import { resolveImageSlugs } from "./_image-inputs.js";
 
 function slugify(text: string): string {
   return text
@@ -48,7 +38,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, aspect_ratio, nsfw_checker } = args as Args;
 
-      const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
+      const rawSlugs = image_slugs ?? [];
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -62,44 +52,18 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         model: "gpt-image-2-image-to-image",
         input: {
           prompt,
-          input_urls: ids,
+          input_urls: rawSlugs.map((s) => s.replace(/^@/, "")),
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
           ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         },
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const imageInputs: Array<{ assetId: string; filename: string }> = [];
-      const sourceImageIds: string[] = [];
-
-      for (const id of ids) {
-        if (!id.startsWith("img-")) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
-          };
-        }
-
-        const manifestResult = await fs.getManifest(id, project_slug);
-        if (!manifestResult.ok) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: manifestResult.error.message }],
-          };
-        }
-
-        const manifest = manifestResult.value;
-        const imageFile = findImageFile(manifest.files);
-        if (!imageFile) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: `No image file found in asset ${id}` }],
-          };
-        }
-
-        imageInputs.push({ assetId: id, filename: imageFile.name });
-        sourceImageIds.push(id);
+      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      if (!resolved.ok) {
+        return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
+      const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = slugify(prompt);
       const assetResult = await fs.createAsset("img", assetName, project_slug);

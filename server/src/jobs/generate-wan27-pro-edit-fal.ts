@@ -2,8 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { registerJobHandler } from "../queue.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
-
-type ImageInput = { assetId: string; filename: string };
+import type { ImageInput } from "../tools/_image-inputs.js";
 
 type Payload = {
   type: "generate_wan27_pro_edit_fal";
@@ -24,7 +23,9 @@ export function registerGenerateWan27ProEditFalJob(fs: ClipfirstFs): void {
     const p = payload as Payload;
 
     const image_urls = await Promise.all(
-      p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug)),
+      p.imageInputs.map((i) =>
+        "url" in i ? i.url : uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug),
+      ),
     );
 
     const input: Record<string, unknown> = {

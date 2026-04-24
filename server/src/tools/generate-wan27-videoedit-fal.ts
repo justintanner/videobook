@@ -6,6 +6,7 @@ import { findVideoFile } from "../media-files.js";
 import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import type { ImageInput } from "./_image-inputs.js";
 
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
 const aspectRatioOptions = editBase.aspect_ratio.unwrap().options as readonly [string, ...string[]];
@@ -54,11 +55,13 @@ export function generateWan27VideoeditFalDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      let refImage: { assetId: string; filename: string } | undefined;
+      let refImage: ImageInput | undefined;
+      let refImageAssetId: string | undefined;
       if (image_slug) {
         const resolved = await resolveImageSlugs(fs, [image_slug], project_slug);
         if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
         refImage = resolved.inputs[0];
+        refImageAssetId = resolved.sourceImageIds[0];
       }
 
       const assetResult = await fs.createAsset("vid", `wan27-edit-${slugify(prompt) || String(Date.now())}`, project_slug);
@@ -77,7 +80,7 @@ export function generateWan27VideoeditFalDef(fs: ClipfirstFs): ToolDef {
           prompt,
           mode: "videoedit",
           sourceVideoIds: [sourceVideoAssetId],
-          ...(refImage ? { sourceImageIds: [refImage.assetId] } : {}),
+          ...(refImageAssetId ? { sourceImageIds: [refImageAssetId] } : {}),
         },
       });
 
@@ -91,7 +94,7 @@ export function generateWan27VideoeditFalDef(fs: ClipfirstFs): ToolDef {
         sourceVideo: { assetId: sourceVideoAssetId, filename: sourceVideoFile.name },
         ...(refImage ? { refImage } : {}),
         sourceVideoIds: [sourceVideoAssetId],
-        ...(refImage ? { sourceImageIds: [refImage.assetId] } : {}),
+        ...(refImageAssetId ? { sourceImageIds: [refImageAssetId] } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),

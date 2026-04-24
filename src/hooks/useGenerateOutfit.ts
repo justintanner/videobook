@@ -73,30 +73,17 @@ export function useGenerateOutfit(callTool: UseMcpResult["callTool"]): UseGenera
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      // 1. Upload the skeleton PNG as a new img-* asset.
-      const base64 = await blobToBase64(args.poseSkeletonBlob);
-      const uploadRes = await callToolRef.current("upload_file", {
-        project_slug: args.projectSlug,
-        filename: args.poseSkeletonFilename,
-        data: base64,
-      });
-      if (uploadRes.isError) {
-        const content = uploadRes.content as Array<{ type: string; text: string }> | undefined;
-        const msg = content?.[0]?.text ?? "upload_file failed";
-        toast({ title: "Outfit upload failed", description: msg, duration: 4000 });
-        return null;
-      }
-      const uploadContent = uploadRes.content as Array<{ type: string; text: string }>;
-      const uploaded = JSON.parse(uploadContent[0].text) as { assetId: string };
-      const poseImageSlug = uploaded.assetId;
+      // Pose skeleton is ephemeral: pass bytes inline so generate_outfit can
+      // upload directly to the provider without persisting an img-* asset.
+      const poseBase64 = await blobToBase64(args.poseSkeletonBlob);
 
-      // 2. Call generate_outfit with the three slugs.
       const trimmedCustom = args.customPrompt?.trim();
       const toolArgs: Record<string, unknown> = {
         project_slug: args.projectSlug,
         model_image_slug: args.modelImageSlug,
         garment_image_slug: args.garmentImageSlug,
-        pose_image_slug: poseImageSlug,
+        pose_image_data: poseBase64,
+        pose_filename: args.poseSkeletonFilename,
         models: args.models,
         provider: args.provider,
         aspect_ratio: args.aspectRatio,

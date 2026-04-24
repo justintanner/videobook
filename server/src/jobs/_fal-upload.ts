@@ -1,24 +1,19 @@
 import { fal } from "@apicity/fal";
 import type { ClipfirstFs } from "clipfirst-fs";
-import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
+import {
+  prepareAssetForUpload,
+  prepareBytesForUpload,
+  uploadBytesToFreeHost,
+} from "../upload.js";
 
-// Upload an asset file to fal's official CDN via storage.upload.initiate.
-// Returns a stable https://v3.fal.media/... URL that fal's own model endpoints
-// can fetch directly — no third-party free-host dependency. Falls back to the
-// free-host rotation if the native CDN path fails.
-export async function uploadAssetToFal(
-  fs: ClipfirstFs,
-  assetId: string,
-  filename: string,
-  projectSlug: string,
+// Upload prepared bytes to fal's native CDN via storage.upload.initiate.
+// Returns a stable https://v3.fal.media/... URL. Falls back to the free-host
+// rotation on any native failure (missing key, network, non-2xx, etc.).
+async function uploadPreparedToFal(
+  data: Uint8Array,
+  hashedFilename: string,
+  contentType: string,
 ): Promise<string> {
-  const { data, hashedFilename, contentType } = await prepareAssetForUpload(
-    fs,
-    assetId,
-    filename,
-    projectSlug,
-  );
-
   const apiKey = process.env.FAL_API_KEY;
   if (apiKey) {
     try {
@@ -46,4 +41,32 @@ export async function uploadAssetToFal(
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);
+}
+
+// Upload an asset file to fal's official CDN via storage.upload.initiate.
+// Returns a stable https://v3.fal.media/... URL that fal's own model endpoints
+// can fetch directly — no third-party free-host dependency.
+export async function uploadAssetToFal(
+  fs: ClipfirstFs,
+  assetId: string,
+  filename: string,
+  projectSlug: string,
+): Promise<string> {
+  const { data, hashedFilename, contentType } = await prepareAssetForUpload(
+    fs,
+    assetId,
+    filename,
+    projectSlug,
+  );
+  return uploadPreparedToFal(data, hashedFilename, contentType);
+}
+
+// Upload raw bytes (not a persisted asset) to fal's CDN — used for ephemeral
+// inputs like outfit pose skeletons that never become project assets.
+export async function uploadBytesToFal(
+  bytes: Uint8Array | Buffer,
+  filename: string,
+): Promise<string> {
+  const { data, hashedFilename, contentType } = await prepareBytesForUpload(bytes, filename);
+  return uploadPreparedToFal(data, hashedFilename, contentType);
 }
