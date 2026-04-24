@@ -312,7 +312,7 @@ interface PreviewEntry {
   backdrop_mentioned?: boolean;
 }
 
-export function previewOutfitPromptsDef(_fs: ClipfirstFs): ToolDef {
+export function previewOutfitPromptsDef(): ToolDef {
   return {
     name: "preview_outfit_prompts",
     description:

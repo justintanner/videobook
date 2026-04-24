@@ -521,6 +521,111 @@ export function OutfitDialog({
             </div>
           </section>
 
+          {/* Platform / Aspect / Provider — horizontal row above the prompt preview */}
+          <section className="flex flex-wrap gap-x-6 gap-y-3">
+            <div className="min-w-0">
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
+                Platform Aesthetic
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlatform(null)}
+                  disabled={submitting}
+                  className={cn(
+                    'h-7 px-3 rounded border transition-colors duration-150',
+                    'text-[11px] font-mono font-bold uppercase tracking-wider',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    selectedPlatform === null
+                      ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                      : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                  )}
+                >
+                  None
+                </button>
+                {OUTFIT_PLATFORMS.map((p) => {
+                  const isSelected = selectedPlatform === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSelectedPlatform(p)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 px-3 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        isSelected
+                          ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                          : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                      )}
+                    >
+                      {PLATFORM_LABELS[p]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
+                Aspect Ratio
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {OUTFIT_ASPECT_RATIOS.map((r) => {
+                  const isSelected = aspectRatio === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setAspectRatio(r)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 px-3 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        isSelected
+                          ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                          : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                      )}
+                    >
+                      {r}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
+                Provider
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {OUTFIT_PROVIDERS.map((p) => {
+                  const isSelected = selectedProvider === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setSelectedProvider(p.key)}
+                      disabled={submitting}
+                      className={cn(
+                        'h-7 px-3 rounded border transition-colors duration-150',
+                        'text-[11px] font-mono font-bold uppercase tracking-wider',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                        isSelected
+                          ? 'bg-purple-500/20 border-purple-400 text-purple-100'
+                          : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
           {/* Final Prompt (read-only) — shows the prompt for the focused model above */}
           <section>
             <div className="flex items-baseline justify-between mb-2">
@@ -548,111 +653,6 @@ export function OutfitDialog({
                 {previewLoading ? 'computing…' : 'Waiting for preview…'}
               </div>
             )}
-          </section>
-
-          {/* Platform aesthetic */}
-          <section>
-            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
-              Platform Aesthetic
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedPlatform(null)}
-                disabled={submitting}
-                className={cn(
-                  'h-7 px-3 rounded border transition-colors duration-150',
-                  'text-[11px] font-mono font-bold uppercase tracking-wider',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  selectedPlatform === null
-                    ? 'bg-purple-500/20 border-purple-400 text-purple-100'
-                    : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
-                )}
-              >
-                None
-              </button>
-              {OUTFIT_PLATFORMS.map((p) => {
-                const isSelected = selectedPlatform === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setSelectedPlatform(p)}
-                    disabled={submitting}
-                    className={cn(
-                      'h-7 px-3 rounded border transition-colors duration-150',
-                      'text-[11px] font-mono font-bold uppercase tracking-wider',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      isSelected
-                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
-                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
-                    )}
-                  >
-                    {PLATFORM_LABELS[p]}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Aspect Ratio */}
-          <section>
-            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
-              Aspect Ratio
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {OUTFIT_ASPECT_RATIOS.map((r) => {
-                const isSelected = aspectRatio === r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setAspectRatio(r)}
-                    disabled={submitting}
-                    className={cn(
-                      'h-7 px-3 rounded border transition-colors duration-150',
-                      'text-[11px] font-mono font-bold uppercase tracking-wider',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      isSelected
-                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
-                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
-                    )}
-                  >
-                    {r}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Provider */}
-          <section>
-            <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400/70 mb-2">
-              Provider
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {OUTFIT_PROVIDERS.map((p) => {
-                const isSelected = selectedProvider === p.key;
-                return (
-                  <button
-                    key={p.key}
-                    type="button"
-                    onClick={() => setSelectedProvider(p.key)}
-                    disabled={submitting}
-                    className={cn(
-                      'h-7 px-3 rounded border transition-colors duration-150',
-                      'text-[11px] font-mono font-bold uppercase tracking-wider',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      isSelected
-                        ? 'bg-purple-500/20 border-purple-400 text-purple-100'
-                        : 'bg-transparent border-purple-500/30 text-purple-300/70 hover:border-purple-400/60 hover:text-purple-200',
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
           </section>
 
         </div>
