@@ -44,8 +44,8 @@ const SLOT_LABELS: Record<SlotKind, string> = { model: 'Model', garment: 'Garmen
 const SLOT_BADGES: Record<SlotKind, string> = { model: 'M', garment: 'G', pose: 'P', backdrop: 'B' };
 const SLOT_ICONS: Record<SlotKind, typeof User> = { model: User, garment: GarmentIcon, pose: Move, backdrop: ImageIcon };
 const SLOT_OPTIONAL: Record<SlotKind, boolean> = { model: false, garment: false, pose: false, backdrop: true };
-const MODELS_WITHOUT_BACKDROP_IMAGE: OutfitModelKey[] = ['qwen_image_edit', 'grok_imagine'];
-const DEFAULT_MODELS: OutfitModelKey[] = ['qwen_image_edit'];
+const MODELS_WITHOUT_BACKDROP_IMAGE: OutfitModelKey[] = ['qwen_image_edit'];
+const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
 
 interface ImageChoice {
   assetId: string;
@@ -212,7 +212,7 @@ export function OutfitDialog({
   }, [previewModel]);
 
   const modelsForPreview = useMemo(() => [...selectedModels], [selectedModels]);
-  const { prompts: previewPrompts, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
+  const { prompts: previewPrompts, negativePrompt, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
     callTool,
     callState,
     models: modelsForPreview,
@@ -411,7 +411,7 @@ export function OutfitDialog({
           {backdrop && MODELS_WITHOUT_BACKDROP_IMAGE.some((m) => selectedModels.has(m)) && (
             <div className="text-[10px] font-mono text-purple-400/60 italic flex items-start gap-1.5">
               <AlertTriangle className="w-3 h-3 mt-[1px] shrink-0" />
-              Qwen Image Edit and Grok Imagine cap input images at 3 — for those models the backdrop
+              Qwen Image Edit caps input images at 3 — the backdrop
               will be referenced in the prompt only, not passed as an image.
             </div>
           )}
@@ -625,6 +625,20 @@ export function OutfitDialog({
               </div>
             </div>
           </section>
+
+          {/* Avoid list — applied to every outfit generation as an "Avoid:" clause
+              appended to the prompt, and (where supported) passed as the provider
+              negative_prompt field. */}
+          {negativePrompt && (
+            <section>
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400/70 mb-2">
+                Avoid (applied to all models)
+              </h3>
+              <div className="rounded border border-amber-500/25 bg-amber-500/5 px-2 py-2 text-[11px] font-mono text-amber-100/90 whitespace-pre-wrap break-words">
+                {negativePrompt}
+              </div>
+            </section>
+          )}
 
           {/* Final Prompt (read-only) — shows the prompt for the focused model above */}
           <section>

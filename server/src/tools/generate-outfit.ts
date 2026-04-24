@@ -4,12 +4,10 @@ import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
-import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
-import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import { uploadBytesToFal } from "../jobs/_fal-upload.js";
 import { uploadBytesToKie } from "../jobs/_kie-upload.js";
@@ -19,12 +17,25 @@ import { findImageFile } from "./_image-inputs.js";
 const CUSTOM_PROMPT_MAX = 500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
+// Negative-prompt blacklist applied to every outfit generation. Derived from
+// the canonical Wan 2.7 / SDXL anatomy/quality negatives, trimmed to the
+// anatomy traps that matter for virtual try-on (hands, fingers, face, arms).
+// Under Wan's 500-char cap so it can be passed as-is to provider
+// `negative_prompt` fields where supported. For models without a native
+// negative field (nano-banana-pro, gpt-image-2, qwen2/image-edit on kie,
+// wan-2-7-image-pro on kie) the same text is appended to the main prompt as
+// an "Avoid:" clause.
+export const OUTFIT_NEGATIVE_PROMPT =
+  "deformed hands, malformed fingers, extra or missing fingers, fused fingers, crossed fingers, " +
+  "unnatural hand pose, awkward gestures, distorted face, asymmetrical features, uncanny eyes, " +
+  "extra limbs, missing limbs, unnatural arm angles, twisted joints, bad anatomy, " +
+  "low quality, blurry, jpeg artifacts, watermark, text";
+
 export const SUPPORTED_OUTFIT_MODELS = [
   "nano_banana_pro",
   "qwen_image_edit",
   "gpt_image_2",
   "wan27_pro",
-  "grok_imagine",
 ] as const;
 export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
 
@@ -109,13 +120,11 @@ const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFac
     qwen_image_edit: generateQwen2ImageEditDef,
     gpt_image_2: generateGptImageDef,
     wan27_pro: generateWan27ImageProDef,
-    grok_imagine: generateGrokImagineImageDef,
   },
   fal: {
     nano_banana_pro: generateNanoBananaProEditFalDef,
     qwen_image_edit: generateQwenImageEditFalDef,
     wan27_pro: generateWan27ProEditFalDef,
-    grok_imagine: generateGrokImagineImageEditFalDef,
   },
 };
 
@@ -160,6 +169,11 @@ function customSection(custom: string | undefined): string {
   return t ? ` ${t}` : "";
 }
 
+// "Avoid: …" clause appended at the end of each outfit prompt. The list
+// mirrors OUTFIT_NEGATIVE_PROMPT so models without a native negative_prompt
+// field still receive the blacklist.
+const avoidClause = ` Avoid: ${OUTFIT_NEGATIVE_PROMPT}.`;
+
 /**
  * Per-model prompt builders. Each model has its own preferred multi-image
  * reference convention — passing the right one measurably improves adherence.
@@ -179,7 +193,7 @@ function promptForNanoBananaPro(hasBackdrop: boolean, platform: Platform | undef
     "Match the cut, colour, pattern and silhouette of the garment in Image 2. " +
     "Align limb angles, torso rotation and head tilt precisely to the pose in Image 3." +
     backdropClause;
-  return `${base}${platformSection(platform)}${customSection(custom)}`;
+  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
 }
 
 // Qwen Image Edit — lowercase "image 1 / image 2 / image 3", hard cap 3.
@@ -204,7 +218,7 @@ function promptForQwenImageEdit(
     "Align limb angles, torso rotation and head tilt precisely to the pose in image 3. " +
     "Render a photorealistic result with natural lighting." +
     backdropClause;
-  return `${base}${platformSection(platform)}${customSection(custom)}`;
+  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
 }
 
 // GPT Image 2 — labeled "Image N: <role>" prefix format.
@@ -219,7 +233,7 @@ function promptForGptImage2(hasBackdrop: boolean, platform: Platform | undefined
     "Preserve face and identity from Image 1. Match garment cut, colour and pattern from Image 2 precisely. " +
     "Align limbs, torso and head to the pose in Image 3.";
   const base = `${header} ${task} ${rules}`;
-  return `${base}${platformSection(platform)}${customSection(custom)}`;
+  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
 }
 
 // Wan 2.7 — "Change / Keep" two-part framing; images addressed by role.
@@ -231,31 +245,7 @@ function promptForWan27Pro(hasBackdrop: boolean, platform: Platform | undefined,
     "Change: dress the person (Image 1) in the garment (Image 2) and pose them to match the pose (Image 3). " +
     "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
     changeBackdrop;
-  return `${base}${platformSection(platform)}${customSection(custom)}`;
-}
-
-// Grok Imagine — single-image focused, plain-language narrative.
-// Even when up to 3 slugs are passed (fal), treat the prompt as describing the
-// transformation. Grok never receives the backdrop as an image slot, so when
-// supplied the caller pre-analyzes it with vision and passes the text.
-function promptForGrokImagine(
-  hasBackdrop: boolean,
-  platform: Platform | undefined,
-  custom: string | undefined,
-  backdropDescription: string | undefined,
-): string {
-  const backdropClause = backdropDescription
-    ? ` Place the subject in this backdrop scene: ${backdropDescription} Match its lighting, depth and colour cast.`
-    : hasBackdrop
-    ? " Place the subject in the backdrop scene provided; match its lighting, depth and colour cast."
-    : " Render a tasteful photorealistic background.";
-  const base =
-    "Edit this photo so the person wears the supplied garment and adopts the supplied pose. " +
-    "Keep the person's identity, face, hair and skin unchanged. " +
-    "Match the garment's cut, colour, pattern and silhouette. " +
-    "Align limbs, torso and head precisely to the supplied pose reference." +
-    backdropClause;
-  return `${base}${platformSection(platform)}${customSection(custom)}`;
+  return `${base}${avoidClause}${platformSection(platform)}${customSection(custom)}`;
 }
 
 function buildPromptForModel(
@@ -274,8 +264,6 @@ function buildPromptForModel(
       return promptForGptImage2(hasBackdrop, platform, custom);
     case "wan27_pro":
       return promptForWan27Pro(hasBackdrop, platform, custom);
-    case "grok_imagine":
-      return promptForGrokImagine(hasBackdrop, platform, custom, backdropDescription);
   }
 }
 
@@ -288,29 +276,19 @@ interface SlugInputs {
 
 /**
  * Build the image_slugs array for a given model, respecting its cap:
- * - qwen_image_edit: 3 images (drops backdrop)
- * - grok_imagine on kie: effectively 1 image (only first is consumed downstream)
- * - grok_imagine on fal: 3 images (drops backdrop)
+ * - qwen_image_edit: 3 images (drops backdrop; backdrop described in text)
  * - nano_banana_pro / gpt_image_2 / wan27_pro: 4 images when backdrop supplied
  */
 function buildImageSlugs(
   model: OutfitModelKey,
-  provider: OutfitProvider,
+  _provider: OutfitProvider,
   slugs: SlugInputs,
 ): { image_slugs: string[]; backdropMentioned: boolean } {
   const hasBackdrop = !!slugs.backdrop;
-  const four = hasBackdrop
-    ? [slugs.model, slugs.garment, slugs.pose, slugs.backdrop!]
-    : [slugs.model, slugs.garment, slugs.pose];
   const three = [slugs.model, slugs.garment, slugs.pose];
+  const four = hasBackdrop ? [...three, slugs.backdrop!] : three;
 
   if (model === "qwen_image_edit") {
-    return { image_slugs: three, backdropMentioned: hasBackdrop };
-  }
-  if (model === "grok_imagine" && provider === "kie") {
-    return { image_slugs: [slugs.model], backdropMentioned: hasBackdrop };
-  }
-  if (model === "grok_imagine" && provider === "fal") {
     return { image_slugs: three, backdropMentioned: hasBackdrop };
   }
   return { image_slugs: four, backdropMentioned: false };
@@ -381,7 +359,10 @@ export function previewOutfitPromptsDef(): ToolDef {
         return entry;
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify({ prompts }) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ prompts, negative_prompt: OUTFIT_NEGATIVE_PROMPT }),
+        }],
       };
     },
   };
@@ -523,11 +504,16 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           continue;
         }
         const def = factory(fs);
+        // Models with a native negative_prompt field — fal qwen/wan27 only.
+        // Everyone else already has the avoid clause baked into `prompt`.
+        const nativeNegative =
+          provider === "fal" && (model === "qwen_image_edit" || model === "wan27_pro");
         const res = await def.handler({
           project_slug: a.project_slug,
           prompt,
           image_slugs,
           ...resolveSizeArgs(provider, model, a.aspect_ratio),
+          ...(nativeNegative ? { negative_prompt: OUTFIT_NEGATIVE_PROMPT } : {}),
         } as unknown as Record<string, unknown>);
         const r = extractEnqueueResult(res);
         if (r.error) outcome.error = r.error;

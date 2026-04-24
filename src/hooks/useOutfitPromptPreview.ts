@@ -21,6 +21,7 @@ export interface UseOutfitPromptPreviewArgs {
 
 export interface UseOutfitPromptPreviewResult {
   prompts: OutfitPromptPreviewEntry[];
+  negativePrompt: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -36,6 +37,7 @@ export function useOutfitPromptPreview({
   platform,
 }: UseOutfitPromptPreviewArgs): UseOutfitPromptPreviewResult {
   const [prompts, setPrompts] = useState<OutfitPromptPreviewEntry[]>([]);
+  const [negativePrompt, setNegativePrompt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const callToolRef = useRef(callTool);
@@ -72,8 +74,12 @@ export function useOutfitPromptPreview({
           }
           const content = result.content as Array<{ type: string; text: string }>;
           try {
-            const parsed = JSON.parse(content[0].text) as { prompts: OutfitPromptPreviewEntry[] };
+            const parsed = JSON.parse(content[0].text) as {
+              prompts: OutfitPromptPreviewEntry[];
+              negative_prompt?: string;
+            };
             setPrompts(parsed.prompts);
+            setNegativePrompt(parsed.negative_prompt ?? null);
             setError(null);
           } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -91,5 +97,5 @@ export function useOutfitPromptPreview({
     return () => clearTimeout(timer);
   }, [callState, modelsKey, provider, hasBackdrop, platform, models]);
 
-  return { prompts, loading, error };
+  return { prompts, negativePrompt, loading, error };
 }

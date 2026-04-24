@@ -12,7 +12,6 @@ export const OUTFIT_MODEL_OPTIONS = [
   { key: "qwen_image_edit", label: "Qwen Image Edit" },
   { key: "gpt_image_2", label: "GPT Image 2.0" },
   { key: "wan27_pro", label: "Wan 2.7 Pro" },
-  { key: "grok_imagine", label: "Grok Imagine" },
 ] as const;
 export type OutfitModelKey = typeof OUTFIT_MODEL_OPTIONS[number]["key"];
 
