@@ -80,6 +80,47 @@ export function formatMarkdown(r: DescribeImageResult): string {
   return lines.join("\n");
 }
 
+export function mimeForImageFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
+  return mimeForFilename(filename);
+}
+
+export async function describeImageBytes(
+  bytes: Buffer,
+  mime: "image/jpeg" | "image/png" | "image/webp",
+  chat?: VisionChatFn,
+): Promise<DescribeImageResult> {
+  const visionChat = chat ?? buildVisionChat(process.env.OPENAI_API_KEY, process.env.KIE_API_KEY);
+  const systemPrompt = buildSystemPrompt(await readFile(GUIDE_PATH, "utf-8"));
+  const userContent = [
+    textPart("Analyze this image and produce the reproduction prompt as specified."),
+    imageBase64Part(bytes.toString("base64"), mime, "high"),
+  ];
+  const response = await visionChat({
+    model: VISION_MODEL,
+    stream: false,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.4,
+    max_completion_tokens: 2048,
+  });
+  const content = firstContent(response);
+  if (!content) {
+    throw new Error(`Vision provider returned no content (keys: ${Object.keys(response ?? {}).join(",")})`);
+  }
+  const parsed = JSON.parse(content) as DescribeImageResult;
+  if (!parsed.prompt || typeof parsed.prompt !== "string") {
+    throw new Error(`Vision model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
+  }
+  if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
+    console.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
+    parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
+  }
+  return parsed;
+}
+
 export function buildVisionChat(openaiKey: string | undefined, kieKey: string | undefined): VisionChatFn {
   const providers: VisionChatFn[] = [];
   if (openaiKey) {
@@ -118,38 +159,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     const buffer = Buffer.from(readResult.value);
     const mime = mimeForFilename(sourceImageFilename);
 
-    const systemPrompt = buildSystemPrompt(await readFile(GUIDE_PATH, "utf-8"));
-    const userContent = [
-      textPart("Analyze this image and produce the reproduction prompt as specified."),
-      imageBase64Part(buffer.toString("base64"), mime, "high"),
-    ];
-
-    const response = await chat({
-      model: VISION_MODEL,
-      stream: false,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.4,
-      max_completion_tokens: 2048,
-    });
-
-    const content = firstContent(response);
-    if (!content) {
-      throw new Error(`Vision provider returned no content (keys: ${Object.keys(response ?? {}).join(",")})`);
-    }
-
-    const parsed = JSON.parse(content) as DescribeImageResult;
-    if (!parsed.prompt || typeof parsed.prompt !== "string") {
-      throw new Error(`Vision model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
-    }
-
-    if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
-      console.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
-      parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
-    }
+    const parsed = await describeImageBytes(buffer, mime, chat);
 
     const markdown = formatMarkdown(parsed);
     const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);

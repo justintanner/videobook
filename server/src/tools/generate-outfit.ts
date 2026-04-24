@@ -13,6 +13,8 @@ import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import { uploadBytesToFal } from "../jobs/_fal-upload.js";
 import { uploadBytesToKie } from "../jobs/_kie-upload.js";
+import { describeImageBytes, mimeForImageFilename } from "../jobs/describe-image.js";
+import { findImageFile } from "./_image-inputs.js";
 
 const CUSTOM_PROMPT_MAX = 500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
@@ -181,9 +183,18 @@ function promptForNanoBananaPro(hasBackdrop: boolean, platform: Platform | undef
 }
 
 // Qwen Image Edit — lowercase "image 1 / image 2 / image 3", hard cap 3.
-// Never receives the backdrop as an image; describes it in text only.
-function promptForQwenImageEdit(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const backdropClause = hasBackdrop
+// Never receives the backdrop as an image; describes it in text only. When a
+// backdrop slug is supplied, the caller pre-analyzes the image with vision and
+// passes the resulting description in `backdropDescription`.
+function promptForQwenImageEdit(
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+): string {
+  const backdropClause = backdropDescription
+    ? ` For the background, compose this scene: ${backdropDescription} Keep lighting and colour cast consistent with that setting.`
+    : hasBackdrop
     ? " For the background, compose a scene that matches the user's backdrop description; keep lighting and colour cast consistent with that setting."
     : " Use a tasteful, photorealistic background.";
   const base =
@@ -224,9 +235,18 @@ function promptForWan27Pro(hasBackdrop: boolean, platform: Platform | undefined,
 }
 
 // Grok Imagine — single-image focused, plain-language narrative.
-// Even when up to 3 slugs are passed (fal), treat the prompt as describing the transformation.
-function promptForGrokImagine(hasBackdrop: boolean, platform: Platform | undefined, custom: string | undefined): string {
-  const backdropClause = hasBackdrop
+// Even when up to 3 slugs are passed (fal), treat the prompt as describing the
+// transformation. Grok never receives the backdrop as an image slot, so when
+// supplied the caller pre-analyzes it with vision and passes the text.
+function promptForGrokImagine(
+  hasBackdrop: boolean,
+  platform: Platform | undefined,
+  custom: string | undefined,
+  backdropDescription: string | undefined,
+): string {
+  const backdropClause = backdropDescription
+    ? ` Place the subject in this backdrop scene: ${backdropDescription} Match its lighting, depth and colour cast.`
+    : hasBackdrop
     ? " Place the subject in the backdrop scene provided; match its lighting, depth and colour cast."
     : " Render a tasteful photorealistic background.";
   const base =
@@ -243,18 +263,19 @@ function buildPromptForModel(
   hasBackdrop: boolean,
   platform: Platform | undefined,
   custom: string | undefined,
+  backdropDescription: string | undefined,
 ): string {
   switch (model) {
     case "nano_banana_pro":
       return promptForNanoBananaPro(hasBackdrop, platform, custom);
     case "qwen_image_edit":
-      return promptForQwenImageEdit(hasBackdrop, platform, custom);
+      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription);
     case "gpt_image_2":
       return promptForGptImage2(hasBackdrop, platform, custom);
     case "wan27_pro":
       return promptForWan27Pro(hasBackdrop, platform, custom);
     case "grok_imagine":
-      return promptForGrokImagine(hasBackdrop, platform, custom);
+      return promptForGrokImagine(hasBackdrop, platform, custom, backdropDescription);
   }
 }
 
@@ -349,7 +370,7 @@ export function previewOutfitPromptsDef(): ToolDef {
       };
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
-        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt);
+        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt, undefined);
         const entry: PreviewEntry = {
           model,
           provider,
@@ -364,6 +385,39 @@ export function previewOutfitPromptsDef(): ToolDef {
       };
     },
   };
+}
+
+/**
+ * Resolve a backdrop slug to its image bytes and run the vision describer.
+ * Returns the reproduction-ready `prompt` field from describe-image, which
+ * we inject into prompts for models that cannot accept the backdrop as an
+ * image slot (qwen, grok). Returns undefined on failure — callers fall back
+ * to the generic "user's backdrop description" placeholder clause.
+ */
+async function describeBackdropImage(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  rawSlug: string,
+): Promise<string | undefined> {
+  if (rawSlug.startsWith("http://") || rawSlug.startsWith("https://")) return undefined;
+  const assetId = rawSlug.replace(/^@/, "");
+  if (!assetId.startsWith("img-")) return undefined;
+  const manifest = await fs.getManifest(assetId, projectSlug);
+  if (!manifest.ok) return undefined;
+  const imageFile = findImageFile(manifest.value.files);
+  if (!imageFile) return undefined;
+  const read = await fs.readFile(assetId, imageFile.name, projectSlug);
+  if (!read.ok) return undefined;
+  try {
+    const result = await describeImageBytes(
+      Buffer.from(read.value),
+      mimeForImageFilename(imageFile.name),
+    );
+    return result.prompt.trim();
+  } catch (err) {
+    console.warn(`[generate_outfit] backdrop describe failed for ${assetId}: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
 }
 
 export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
@@ -433,11 +487,29 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
       };
       const hasBackdrop = !!slugs.backdrop;
 
+      // If any selected model/provider combo cannot accept the backdrop as an
+      // image slot (qwen, grok), describe the backdrop image once via vision
+      // and inject the text into those prompts. One vision call per call,
+      // shared across models. No-op when no backdrop is supplied or when all
+      // selected models carry the backdrop as image 4.
+      const needsBackdropText =
+        hasBackdrop &&
+        a.models.some((m) => buildImageSlugs(m, provider, slugs).backdropMentioned);
+      const backdropDescription = needsBackdropText
+        ? await describeBackdropImage(fs, a.project_slug, a.backdrop_image_slug!)
+        : undefined;
+
       const outcomes: EnqueueOutcome[] = [];
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
-        const prompt = buildPromptForModel(model, hasBackdrop, a.platform, a.custom_prompt);
+        const prompt = buildPromptForModel(
+          model,
+          hasBackdrop,
+          a.platform,
+          a.custom_prompt,
+          backdropMentioned ? backdropDescription : undefined,
+        );
         const outcome: EnqueueOutcome = {
           model,
           provider,
