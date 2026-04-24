@@ -8,6 +8,7 @@ import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
+import { stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { CommandButton } from './CommandButton';
@@ -281,6 +282,48 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const selectedOption: ModelOption | undefined = preview?.model_options.find(
     (o) => o.key === selectedModelKey,
   );
+
+  // Drop slug values that can't be resolved against the current preview's
+  // resolved_assets (or local droppedAssets). Stale slugs — restored from
+  // localStorage or leftover from a prior preview — otherwise render as
+  // placeholder-labeled slots with no thumb.
+  useEffect(() => {
+    if (!preview || !selectedOption) return;
+    const resolved = preview.resolved_assets ?? [];
+    const canResolve = (slug: string): boolean => {
+      if (!slug) return false;
+      if (droppedAssets.has(slug)) return true;
+      const clean = stripSlugPrefix(slug);
+      return resolved.some((a) => {
+        const aClean = a.slug ? stripSlugPrefix(a.slug) : a.slug;
+        return a.slug === slug || a.slug === clean || aClean === clean;
+      });
+    };
+    const isSlugField = (name: string): boolean =>
+      isAssetField(name) || /^element\d+_slugs$/.test(name);
+
+    setFormValues((prev) => {
+      let changed = false;
+      const next: Record<string, unknown> = { ...prev };
+      for (const name of Object.keys(prev)) {
+        if (!isSlugField(name)) continue;
+        const v = prev[name];
+        if (typeof v === 'string' && v && !canResolve(v)) {
+          next[name] = '';
+          changed = true;
+        } else if (Array.isArray(v)) {
+          const filtered = (v as unknown[]).filter(
+            (s): s is string => typeof s === 'string' && canResolve(s),
+          );
+          if (filtered.length !== v.length) {
+            next[name] = filtered;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [preview, droppedAssets, selectedOption]);
 
   // Global provider list (union across all models) and models filtered by selected provider
   const allProviderLabels = useMemo(() => {
@@ -585,9 +628,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                 ...(selectedOption?.validation.warnings ?? []),
                 ...liveWarnings,
               ];
-              if (liveMissingRequired.length > 0) {
+              const missingToDisplay = liveMissingRequired.filter((n) => n !== 'prompt');
+              if (missingToDisplay.length > 0) {
                 allWarnings.unshift(
-                  `Missing required field${liveMissingRequired.length === 1 ? '' : 's'}: ${liveMissingRequired.map(missingRequiredLabel).join(', ')}`,
+                  `Missing required field${missingToDisplay.length === 1 ? '' : 's'}: ${missingToDisplay.map(missingRequiredLabel).join(', ')}`,
                 );
               }
               return allWarnings.length > 0 && (
