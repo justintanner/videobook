@@ -144,14 +144,23 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setSelectedModelKey(data.selected_model);
       const option = data.model_options.find((o) => o.key === data.selected_model);
       setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
-      const currentPrompt = isRefresh ? formValuesRef.current.prompt : undefined;
+      const currentValues = formValuesRef.current;
+      const currentPrompt = isRefresh ? currentValues.prompt : undefined;
       const prefilled = option?.prefilled_values ?? {};
       const seededPrompt = currentPrompt
         ?? (prefilled as { prompt?: unknown }).prompt
         ?? prompt
         ?? '';
-      setFormValues({ ...prefilled, prompt: seededPrompt });
-      setDroppedAssets(new Map());
+      const preservedSlugFields: Record<string, unknown> = {};
+      if (isRefresh) {
+        for (const [k, v] of Object.entries(currentValues)) {
+          if (isAssetField(k) || /^element\d+_slugs$/.test(k)) {
+            preservedSlugFields[k] = v;
+          }
+        }
+      }
+      setFormValues({ ...prefilled, ...preservedSlugFields, prompt: seededPrompt });
+      if (!isRefresh) setDroppedAssets(new Map());
     } catch (e) {
       if (thisRequest !== refreshIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Preview failed');
