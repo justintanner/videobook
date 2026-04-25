@@ -27,26 +27,13 @@ const POSE_DESCRIPTION_MAX = 1500;
 const POSE_SHOT_MAX = 80;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
-// Negative-prompt fragments, scoped so each model picks what's applicable.
-// Wan 2.7 Pro and Qwen Image Edit (on fal) expose a native `negative_prompt`
-// field; on kie they bake the combined string into the main prompt via
-// `avoidClause()`. Nano Banana Pro and Seedream V5 Lite get NO negative text
-// (Nano Banana's L2 safety filter trips on "Avoid:"-style clauses; Seedream's
-// official guide says *don't* use preemptive negatives). GPT Image 2 embeds
-// exclusions inline in the Task clause rather than as a separate "Avoid:".
-const ANATOMY_NEGATIVE =
-  "deformed hands, malformed fingers, extra or missing fingers, fused fingers, " +
-  "unnatural hand pose, extra limbs, missing limbs, unnatural arm angles, " +
-  "twisted joints, bad anatomy, bad proportions, contorted pose";
-const SKIN_NEGATIVE =
-  "smooth plastic skin, airbrushed, doll-like, waxy, over-retouched";
-const QUALITY_NEGATIVE =
-  "low quality, blurry, jpeg artifacts, watermark, text, distorted face, uncanny eyes";
-
-// Combined negative used for Wan + Qwen. Kept under Wan's 500-char cap so it
-// can be passed as-is to the fal `negative_prompt` field.
+// Negative prompt for Wan + Qwen — short and readable. Wan/Qwen on fal pass
+// it via the native `negative_prompt` field; on kie it's baked into the main
+// prompt as an Avoid clause. Nano Banana Pro and Seedream get nothing
+// (Nano's L2 filter trips on negatives; Seedream's guide warns against them).
+// GPT Image 2 embeds short inline exclusions instead.
 export const WAN_QWEN_NEGATIVE =
-  `${ANATOMY_NEGATIVE}, ${SKIN_NEGATIVE}, ${QUALITY_NEGATIVE}`;
+  "deformed hands, extra fingers, contorted pose, plastic skin, watermark, text";
 
 export const SUPPORTED_OUTFIT_MODELS = [
   "nano_banana_pro",
