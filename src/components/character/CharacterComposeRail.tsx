@@ -227,11 +227,11 @@ export function CharacterComposeRail({
               <AlertTriangle className="w-3 h-3" /> {poseError}
             </div>
           ) : poseResult ? (
-            <div className="rounded border border-violet-500/20 bg-black/60 overflow-hidden">
+            <div className="rounded border border-violet-500/20 bg-black/60 overflow-hidden flex items-center justify-center h-32">
               <img
                 src={poseResult.skeleton.dataUrl}
                 alt="extracted pose skeleton"
-                className="w-full block"
+                className="max-h-full max-w-full object-contain"
                 draggable={false}
               />
             </div>
