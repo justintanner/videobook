@@ -170,21 +170,76 @@ function imageDimensions(image: HTMLImageElement | HTMLCanvasElement): { w: numb
   return { w: image.naturalWidth, h: image.naturalHeight };
 }
 
+// Average per-pixel chroma below this is treated as grayscale. Sum of
+// |R-G| + |G-B| + |R-B| per pixel; pure B&W returns ~0, JPEG-encoded B&W
+// with chroma noise lands ~40, even desaturated color shots clear 70+.
+const GRAYSCALE_CHROMA_THRESHOLD = 60;
+
+export function isLikelyGrayscale(image: HTMLImageElement | HTMLCanvasElement): boolean {
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 32;
+  const ctx = c.getContext("2d");
+  if (!ctx) return false;
+  ctx.drawImage(image, 0, 0, 32, 32);
+  const px = ctx.getImageData(0, 0, 32, 32).data;
+  let total = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    total += Math.abs(px[i] - px[i + 1]) + Math.abs(px[i + 1] - px[i + 2]) + Math.abs(px[i] - px[i + 2]);
+  }
+  return total / (32 * 32) < GRAYSCALE_CHROMA_THRESHOLD;
+}
+
+// MediaPipe Pose / Face / Hand models are trained on color RGB photos and
+// return zero landmarks on monochrome imagery — verified empirically on
+// img-play (full B&W → no detection at all; same image with this curve
+// applied → all 33 pose + 478 face landmarks). Lifts shadows (gamma 0.55)
+// then maps luminance into a warm skin-tone palette so the detector sees
+// chroma in the range it was trained on. The colorization is for detection
+// only; landmarks are normalized coords that still apply to the original.
+export function colorizeForPose(image: HTMLImageElement | HTMLCanvasElement): HTMLCanvasElement {
+  const { w, h } = imageDimensions(image);
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("could not acquire 2d context for colorize");
+  ctx.drawImage(image, 0, 0);
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    // Rec. 601 luminance — handles both true grayscale and accidentally-routed
+    // low-chroma color images without collapsing to one channel's bias.
+    const y = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+    const lifted = Math.pow(y, 0.55);
+    px[i]     = Math.min(255, Math.round(255 * Math.pow(lifted, 0.85) * 1.05));
+    px[i + 1] = Math.min(255, Math.round(255 * Math.pow(lifted, 0.95) * 0.92));
+    px[i + 2] = Math.min(255, Math.round(255 * Math.pow(lifted, 1.10) * 0.78));
+  }
+  ctx.putImageData(data, 0, 0);
+  return c;
+}
+
 export async function detectHolistic(image: HTMLImageElement | HTMLCanvasElement): Promise<HolisticResult> {
   const { pose, face, hand } = await getDetectors();
-  const { w: imgW, h: imgH } = imageDimensions(image);
+  // Colorize before detection if the source is monochrome; landmarks are
+  // normalized so they still map to the original image downstream.
+  const detectionImage: HTMLImageElement | HTMLCanvasElement = isLikelyGrayscale(image)
+    ? colorizeForPose(image)
+    : image;
+  const { w: imgW, h: imgH } = imageDimensions(detectionImage);
 
-  const poseRes = pose.detect(image);
+  const poseRes = pose.detect(detectionImage);
   const poseLandmarks = poseRes.landmarks[0] ?? null;
 
   let faceLandmarks: NormalizedLandmark[] | null = null;
-  const fullFrameFace = face.detect(image);
+  const fullFrameFace = face.detect(detectionImage);
   if (fullFrameFace.faceLandmarks[0]) {
     faceLandmarks = fullFrameFace.faceLandmarks[0];
   } else if (poseLandmarks) {
     const roi = computeSquareRoi(poseLandmarks, HEAD_POSE_INDICES, HEAD_VISIBILITY_THRESHOLD, FACE_CROP_PADDING, imgW, imgH, 3);
     if (roi) {
-      const cropped = cropToCanvas(image, roi, FACE_CROP_SIZE);
+      const cropped = cropToCanvas(detectionImage, roi, FACE_CROP_SIZE);
       const cropFace = face.detect(cropped);
       if (cropFace.faceLandmarks[0]) {
         faceLandmarks = remapRoiLandmarks(cropFace.faceLandmarks[0], roi, imgW, imgH);
@@ -206,7 +261,7 @@ export async function detectHolistic(image: HTMLImageElement | HTMLCanvasElement
     for (const { indices, defaultHandedness } of sides) {
       const roi = computeSquareRoi(poseLandmarks, indices, HAND_VISIBILITY_THRESHOLD, HAND_CROP_PADDING, imgW, imgH, 2);
       if (!roi) continue;
-      const cropped = cropToCanvas(image, roi, HAND_CROP_SIZE);
+      const cropped = cropToCanvas(detectionImage, roi, HAND_CROP_SIZE);
       const cropHand = hand.detect(cropped);
       if (!cropHand.landmarks[0]) continue;
       const remapped = remapRoiLandmarks(cropHand.landmarks[0], roi, imgW, imgH);
@@ -218,7 +273,7 @@ export async function detectHolistic(image: HTMLImageElement | HTMLCanvasElement
     }
   }
   if (hands.length === 0) {
-    const handRes = hand.detect(image);
+    const handRes = hand.detect(detectionImage);
     for (let i = 0; i < handRes.landmarks.length; i++) {
       hands.push({
         landmarks: handRes.landmarks[i],
