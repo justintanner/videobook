@@ -23,6 +23,7 @@ import { findImageFile } from "./_image-inputs.js";
 
 const CUSTOM_PROMPT_MAX = 500;
 const POSE_DESCRIPTION_MAX = 1500;
+const POSE_SHOT_MAX = 80;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
 // Negative-prompt fragments, scoped so each model picks what's applicable.
@@ -124,6 +125,16 @@ const schema = {
       "positions). Injected as the 'intended pose depicts' clause in each model's prompt so the " +
       "image model gets pose semantics the skeleton landmarks alone can't convey. Callers should " +
       "source this from the pose-source image's `.original.analysis.json` `pose` field.",
+    ),
+  pose_shot: z
+    .string()
+    .max(POSE_SHOT_MAX)
+    .optional()
+    .describe(
+      "Shot size + camera angle of the pose source image in standard cinematography terms " +
+      "(e.g. 'medium close-up, eye-level'). Sourced from the pose-source image's " +
+      "`.original.analysis.json` `shot` field. Injected as the framing directive in each " +
+      "model's prompt so output framing matches the pose reference.",
     ),
   backdrop_image_slug: z
     .string()
@@ -246,6 +257,22 @@ function poseDescriptionSentence(description: string | undefined): string {
   return ` The intended pose depicts: ${description}`;
 }
 
+// Output framing directive — comes from the pose source's vision-extracted
+// `shot` field (size + angle in cinematography terms, e.g. "medium close-up,
+// eye-level"). Empty when no shot is available; placed at the end of each
+// model's prompt in its own voice so it overrides the model's default
+// editorial-fashion framing instead of competing with it.
+function shotForModel(shot: string | undefined, model: OutfitModelKey): string {
+  if (!shot) return "";
+  switch (model) {
+    case "nano_banana_pro": return ` Frame as a ${shot} shot.`;
+    case "qwen_image_edit": return ` Frame the result as ${shot}.`;
+    case "gpt_image_2":     return ` Framing: ${shot}.`;
+    case "seedream_v5_lite": return ` Framed as ${shot}.`;
+    case "wan27_pro":       return ` Framing: ${shot}.`;
+  }
+}
+
 // Per-model pose clause, keyed by coverage + the label the model uses for
 // the pose slot. Each model's surrounding prose is different enough that
 // sharing full sentences would read stilted — we keep the builder-local
@@ -344,6 +371,7 @@ function promptForNanoBananaPro(
   backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   const backdropClause = backdropDescription
     ? `Place the subject in this location: ${backdropDescription} Match the lighting, depth and colour cast of that scene.`
@@ -357,7 +385,8 @@ function promptForNanoBananaPro(
     `${nbProPoseClause(coverage)}${poseDescriptionSentence(poseDescription)} ` +
     `${backdropClause} ` +
     `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR} ` +
-    "85mm lens, soft natural lighting, fashion magazine style.";
+    "85mm lens, soft natural lighting, fashion magazine style." +
+    shotForModel(shot, "nano_banana_pro");
   return `${base}${platformSection(platform)}${customSection(custom)}`;
 }
 
@@ -375,6 +404,7 @@ function promptForQwenImageEdit(
   poseDescription: string | undefined,
   provider: OutfitProvider,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   const backdropClause = backdropDescription
     ? ` For the background, compose this scene: ${backdropDescription} Keep lighting and colour cast consistent with that setting.`
@@ -387,7 +417,8 @@ function promptForQwenImageEdit(
     qwenPoseAlignLine(coverage) +
     poseDescriptionSentence(poseDescription) +
     backdropClause +
-    ` ${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR}`;
+    ` ${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR}` +
+    shotForModel(shot, "qwen_image_edit");
   const tail = provider === "kie" ? kieAvoidClause() : "";
   return `${base}${tail}${platformSection(platform)}${customSection(custom)}`;
 }
@@ -403,6 +434,7 @@ function promptForGptImage2(
   backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   const header = "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
   const sceneClause = backdropDescription
@@ -415,7 +447,8 @@ function promptForGptImage2(
     "Preserve identity, geometry, and body proportions from Image 1. Match garment cut, colour and pattern from Image 2 precisely. " +
     `${gptPoseAlignLine(coverage)}${poseDescriptionSentence(poseDescription)} ` +
     `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ` +
-    "Constraints: no watermark, no extra text, no logos, no logo drift, no extra limbs, no deformed hands.";
+    "Constraints: no watermark, no extra text, no logos, no logo drift, no extra limbs, no deformed hands." +
+    shotForModel(shot, "gpt_image_2");
   const base = `${header} ${task} ${rules}`;
   return `${base}${platformSection(platform)}${customSection(custom)}`;
 }
@@ -434,6 +467,7 @@ function promptForSeedreamV5Lite(
   backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   const backdropClause = backdropDescription
     ? `, in this location: ${backdropDescription}`
@@ -446,7 +480,8 @@ function promptForSeedreamV5Lite(
     `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ` +
     "Preserve the subject's face, hairstyle and body proportions from the first reference exactly. " +
     "Preserve the cut, colour and pattern of the outfit from the second reference exactly. " +
-    "Render a single photograph of one person, not a multi-view turnaround or figure study.";
+    "Render a single photograph of one person, not a multi-view turnaround or figure study." +
+    shotForModel(shot, "seedream_v5_lite");
   return `${base}${platformSection(platform)}${customSection(custom)}`;
 }
 
@@ -463,6 +498,7 @@ function promptForWan27Pro(
   poseDescription: string | undefined,
   provider: OutfitProvider,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   const changeBackdrop = backdropDescription
     ? ` Change the background to: ${backdropDescription} Match lighting and colour cast to that scene.`
@@ -474,7 +510,8 @@ function promptForWan27Pro(
     "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
     changeBackdrop +
     ` ${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ${IDENTITY_ANCHOR} ` +
-    "Editorial fashion photography, 85mm, f/2.8.";
+    "Editorial fashion photography, 85mm, f/2.8." +
+    shotForModel(shot, "wan27_pro");
   const tail = provider === "kie" ? kieAvoidClause() : "";
   return `${base}${tail}${platformSection(platform)}${customSection(custom)}`;
 }
@@ -488,18 +525,19 @@ function buildPromptForModel(
   backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
+  shot: string | undefined,
 ): string {
   switch (model) {
     case "nano_banana_pro":
-      return promptForNanoBananaPro(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage);
+      return promptForNanoBananaPro(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
     case "qwen_image_edit":
-      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage);
+      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot);
     case "gpt_image_2":
-      return promptForGptImage2(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage);
+      return promptForGptImage2(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
     case "wan27_pro":
-      return promptForWan27Pro(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage);
+      return promptForWan27Pro(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot);
     case "seedream_v5_lite":
-      return promptForSeedreamV5Lite(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage);
+      return promptForSeedreamV5Lite(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
   }
 }
 
@@ -559,6 +597,14 @@ const previewSchema = {
       "into the preview prompt so the user can read what will actually be sent at generation " +
       "time. Omit when no pose source is selected.",
     ),
+  pose_shot: z
+    .string()
+    .max(POSE_SHOT_MAX)
+    .optional()
+    .describe(
+      "Pose-source shot size + camera angle (same shape passed to generate_outfit). " +
+      "Injected as the framing directive in each model's preview prompt.",
+    ),
   custom_prompt: z
     .string()
     .max(CUSTOM_PROMPT_MAX)
@@ -607,6 +653,7 @@ export function previewOutfitPromptsDef(): ToolDef {
       // source's cached `.original.analysis.json`) so the preview shows
       // exactly what generation will inject — no placeholder, no vision call.
       const previewPoseDescription = a.pose_description?.trim() || undefined;
+      const previewShot = a.pose_shot?.trim() || undefined;
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
         const prompt = buildPromptForModel(
@@ -618,6 +665,7 @@ export function previewOutfitPromptsDef(): ToolDef {
           undefined,
           previewPoseDescription,
           coverage,
+          previewShot,
         );
         const entry: PreviewEntry = {
           model,
@@ -784,6 +832,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         ? await describeBackdropAsset(fs, a.project_slug, a.backdrop_image_slug!)
         : undefined;
       const poseDescription = a.pose_description?.trim() || undefined;
+      const shot = a.pose_shot?.trim() || undefined;
 
       const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
       const outcomes: EnqueueOutcome[] = [];
@@ -799,6 +848,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           backdropDescription,
           poseDescription,
           coverage,
+          shot,
         );
         const outcome: EnqueueOutcome = {
           model,

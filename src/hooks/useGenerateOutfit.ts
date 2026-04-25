@@ -36,6 +36,7 @@ export interface GenerateOutfitArgs {
   poseSkeletonFilename: string;
   poseCoverage: OutfitPoseCoverage;
   poseDescription?: string;
+  shot?: string;
   backdropImageSlug?: string;
   models: OutfitModelKey[];
   provider: OutfitProvider;
@@ -98,6 +99,7 @@ export function useGenerateOutfit(callTool: UseMcpResult["callTool"]): UseGenera
       if (args.platform) toolArgs.platform = args.platform;
       if (args.backdropImageSlug) toolArgs.backdrop_image_slug = args.backdropImageSlug;
       if (args.poseDescription) toolArgs.pose_description = args.poseDescription;
+      if (args.shot) toolArgs.pose_shot = args.shot;
       const result = await callToolRef.current("generate_outfit", toolArgs);
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;

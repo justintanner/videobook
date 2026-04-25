@@ -17,6 +17,7 @@ export interface UseOutfitPromptPreviewArgs {
   provider: OutfitProvider;
   hasBackdrop: boolean;
   poseDescription: string | null;
+  shot: string | null;
   platform: OutfitPlatform | null;
   poseCoverage: OutfitPoseCoverage | null;
 }
@@ -37,6 +38,7 @@ export function useOutfitPromptPreview({
   provider,
   hasBackdrop,
   poseDescription,
+  shot,
   platform,
   poseCoverage,
 }: UseOutfitPromptPreviewArgs): UseOutfitPromptPreviewResult {
@@ -67,6 +69,7 @@ export function useOutfitPromptPreview({
         has_backdrop: hasBackdrop,
       };
       if (poseDescription) args.pose_description = poseDescription;
+      if (shot) args.pose_shot = shot;
       if (platform) args.platform = platform;
       if (poseCoverage) args.pose_coverage = poseCoverage;
       callToolRef.current("preview_outfit_prompts", args).then(
@@ -101,7 +104,7 @@ export function useOutfitPromptPreview({
       );
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [callState, modelsKey, provider, hasBackdrop, poseDescription, platform, poseCoverage, models]);
+  }, [callState, modelsKey, provider, hasBackdrop, poseDescription, shot, platform, poseCoverage, models]);
 
   return { prompts, negativePrompt, loading, error };
 }

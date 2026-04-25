@@ -216,7 +216,7 @@ export function OutfitDialog({
     setPreviewModel(m);
   }, [previewModel]);
 
-  const { poseDescription } = usePoseDescription({
+  const { poseDescription, shot } = usePoseDescription({
     callTool,
     callState,
     projectSlug,
@@ -231,6 +231,7 @@ export function OutfitDialog({
     provider: selectedProvider,
     hasBackdrop: !!backdrop,
     poseDescription,
+    shot,
     platform: selectedPlatform,
     poseCoverage: poseResult?.coverage ?? null,
   });
@@ -266,6 +267,7 @@ export function OutfitDialog({
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
       poseCoverage: poseResult.coverage,
       poseDescription: poseDescription ?? undefined,
+      shot: shot ?? undefined,
       backdropImageSlug: backdrop?.assetId,
       models: [...selectedModels],
       provider: selectedProvider,
@@ -277,7 +279,7 @@ export function OutfitDialog({
       return true;
     }
     return false;
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, poseDescription, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, poseDescription, shot, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, onOpenChange]);
 
   const handleOutfitSend = useCallback(async (message: string): Promise<boolean> => {
     const trimmed = message.trim();
