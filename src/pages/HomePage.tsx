@@ -770,10 +770,6 @@ export function HomePage() {
                     callState={state}
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
-                    onSelectAsset={(assetId) => {
-                      const found = mediaItems.find((m) => m.id === assetId);
-                      if (found) setSelectedItem(found);
-                    }}
                     onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
                   />
                 ) : timelineSlotIndex != null ? (

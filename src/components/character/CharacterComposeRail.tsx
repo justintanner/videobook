@@ -19,12 +19,10 @@ const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
 interface CharacterComposeRailProps {
   characterId: string;
   projectSlug: string | undefined;
-  outfits: MediaItem[];
   wardrobe: MediaItem[];
   poses: MediaItem[];
   backdrop: MediaItem[];
-  onSelectAsset: (assetId: string) => void;
-  onUnpin: (slot: 'wardrobe' | 'poses' | 'backdrop' | 'outfits', assetId: string) => void;
+  onUnpin: (slot: 'wardrobe' | 'poses' | 'backdrop', assetId: string) => void;
   onPickWardrobe: () => void;
   onPickPose: () => void;
   onPickBackdrop: () => void;
@@ -37,11 +35,9 @@ interface CharacterComposeRailProps {
 export function CharacterComposeRail({
   characterId,
   projectSlug,
-  outfits,
   wardrobe,
   poses,
   backdrop,
-  onSelectAsset,
   onUnpin,
   onPickWardrobe,
   onPickPose,
@@ -163,28 +159,7 @@ export function CharacterComposeRail({
 
   return (
     <aside className="w-80 shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
-      {outfits.length > 0 ? (
-        <div className="border-b border-violet-500/20 px-3 py-2">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70">
-              Outfits
-            </span>
-            <span className="text-[9px] font-mono text-violet-400/40">{outfits.length}</span>
-          </div>
-          <div className="flex gap-1.5 overflow-x-auto items-stretch">
-            {outfits.map((it) => (
-              <Thumb
-                key={it.id}
-                item={it}
-                onSelect={onSelectAsset}
-                onUnpin={(id) => onUnpin('outfits', id)}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="border-t border-zinc-700/40 px-3 py-2 grid grid-cols-3 gap-2">
+      <div className="px-3 py-2 grid grid-cols-3 gap-2">
         <SingleSlot
           label="Wardrobe"
           item={garment}
@@ -428,51 +403,6 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin, skeletonOverlay 
           </span>
         </button>
       )}
-    </div>
-  );
-}
-
-function Thumb({
-  item,
-  onSelect,
-  onUnpin,
-}: {
-  item: MediaItem;
-  onSelect: (assetId: string) => void;
-  onUnpin: (assetId: string) => void;
-}) {
-  const thumb = item.thumbnailSrc || item.filePath;
-  return (
-    <div className="group relative shrink-0 w-16 h-16">
-      <button
-        type="button"
-        onClick={() => onSelect(item.id)}
-        title={item.slug}
-        className="w-full h-full rounded border border-violet-500/20 hover:border-violet-300 overflow-hidden bg-black transition-colors"
-      >
-        {thumb ? (
-          <img src={thumb} alt={item.title} className="w-full h-full object-cover" draggable={false} />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-violet-400/60 px-1 text-center">
-            {item.slug}
-          </div>
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onUnpin(item.id);
-        }}
-        aria-label={`Unpin ${item.slug}`}
-        className={cn(
-          'absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200',
-          'opacity-0 group-hover:opacity-100 hover:bg-red-500/40 hover:border-red-400 transition-opacity',
-          'flex items-center justify-center',
-        )}
-      >
-        <X className="w-2.5 h-2.5" />
-      </button>
     </div>
   );
 }

@@ -34,7 +34,6 @@ export interface CharacterViewerProps {
   callState: UseMcpResult['state'];
   onClose: () => void;
   imageAssets: MediaItem[];
-  onSelectAsset: (assetId: string) => void;
   onEditProfile: (charAssetId: string, profile: CharacterProfile) => void;
 }
 
@@ -51,7 +50,6 @@ export function CharacterViewer({
   callState,
   onClose,
   imageAssets,
-  onSelectAsset,
   onEditProfile,
 }: CharacterViewerProps) {
   useMountKey('character-viewer');
@@ -92,10 +90,6 @@ export function CharacterViewer({
   const backdropItems = useMemo(
     () => slots.backdrop.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
     [slots.backdrop, assetById],
-  );
-  const outfitItems = useMemo(
-    () => slots.outfits.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
-    [slots.outfits, assetById],
   );
 
   const pickerAssets = useMemo(() => {
@@ -195,11 +189,9 @@ export function CharacterViewer({
               <CharacterComposeRail
                 characterId={item.id}
                 projectSlug={projectSlug}
-                outfits={outfitItems}
                 wardrobe={wardrobeItems}
                 poses={poseItems}
                 backdrop={backdropItems}
-                onSelectAsset={onSelectAsset}
                 onUnpin={handleUnpin}
                 onPickWardrobe={() => setPickerSlot('wardrobe')}
                 onPickPose={() => setPickerSlot('poses')}

@@ -17,7 +17,7 @@ export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBa
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onSelectAsset, onEditCharacterProfile }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onEditCharacterProfile }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -36,7 +36,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   callState: UseMcpResult['state'];
   onClose: () => void;
   imageAssets: MediaItem[];
-  onSelectAsset: (assetId: string) => void;
   onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
@@ -99,7 +98,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         callState={callState}
         onClose={onClose}
         imageAssets={imageAssets}
-        onSelectAsset={onSelectAsset}
         onEditProfile={onEditCharacterProfile}
       />
     );
