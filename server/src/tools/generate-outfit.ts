@@ -568,7 +568,52 @@ async function readCachedAnalysis(
  * Returns the full reproduction `prompt` field (scene, light, palette).
  * Pose descriptions are no longer derived here — callers pass the resolved
  * `pose_description` text directly so it's visible at the tool call site.
+ *
+ * Fallback chain on vision failure (e.g. XAI 400 from oversized originals):
+ *   1. Retry on the cropped `square.jpg` variant (1080² is well within limits).
+ *   2. Fall back to a slug-derived hint so Qwen still references the backdrop.
  */
+async function tryDescribe(
+  fs: ClipfirstFs,
+  assetId: string,
+  filename: string,
+  projectSlug: string,
+): Promise<string | undefined> {
+  const read = await fs.readFile(assetId, filename, projectSlug);
+  if (!read.ok) return undefined;
+  try {
+    const result = await describeImageBytes(
+      Buffer.from(read.value),
+      mimeForImageFilename(filename),
+    );
+    const writeResult = await fs.writeFile(
+      assetId,
+      ANALYSIS_FILENAME,
+      JSON.stringify(result, null, 2),
+      projectSlug,
+    );
+    if (!writeResult.ok) {
+      console.warn(
+        `[generate_outfit] backdrop cache write failed for ${assetId}: ${writeResult.error.message}`,
+      );
+    }
+    return result.prompt?.trim() || undefined;
+  } catch (err) {
+    console.warn(
+      `[generate_outfit] backdrop describe failed for ${assetId} via ${filename}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
+}
+
+function slugFallbackHint(assetId: string): string {
+  const stem = assetId.replace(/^img-/, "").replace(/-\d+$/, "");
+  const words = stem.replace(/-/g, " ").trim();
+  return words
+    ? `the supplied backdrop reference (${words}) — match its mood and lighting`
+    : "the supplied backdrop reference — match its mood and lighting";
+}
+
 async function describeBackdropAsset(
   fs: ClipfirstFs,
   projectSlug: string,
@@ -585,29 +630,19 @@ async function describeBackdropAsset(
   if (!manifest.ok) return undefined;
   const imageFile = findImageFile(manifest.value.files);
   if (!imageFile) return undefined;
-  const read = await fs.readFile(assetId, imageFile.name, projectSlug);
-  if (!read.ok) return undefined;
-  try {
-    const result = await describeImageBytes(
-      Buffer.from(read.value),
-      mimeForImageFilename(imageFile.name),
-    );
-    const writeResult = await fs.writeFile(
-      assetId,
-      ANALYSIS_FILENAME,
-      JSON.stringify(result, null, 2),
-      projectSlug,
-    );
-    if (!writeResult.ok) {
-      console.warn(
-        `[generate_outfit] backdrop cache write failed for ${assetId}: ${writeResult.error.message}`,
-      );
-    }
-    return result.prompt?.trim() || undefined;
-  } catch (err) {
-    console.warn(`[generate_outfit] backdrop describe failed for ${assetId}: ${err instanceof Error ? err.message : String(err)}`);
-    return undefined;
+
+  const primary = await tryDescribe(fs, assetId, imageFile.name, projectSlug);
+  if (primary) return primary;
+
+  const cropped = manifest.value.files.find((f) => f.name === "square.jpg");
+  if (cropped && cropped.name !== imageFile.name) {
+    const secondary = await tryDescribe(fs, assetId, cropped.name, projectSlug);
+    if (secondary) return secondary;
   }
+
+  const hint = slugFallbackHint(assetId);
+  console.warn(`[generate_outfit] backdrop describe falling back to slug hint for ${assetId}: "${hint}"`);
+  return hint;
 }
 
 export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
