@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useGenerateOutfit';
 import { useOutfitPromptPreview } from '@/hooks/useOutfitPromptPreview';
 import { usePoseExtract } from '@/hooks/usePoseExtract';
+import { usePoseDescription } from '@/hooks/usePoseDescription';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { CommandDescriptor } from '@/lib/command-registry';
@@ -215,6 +216,13 @@ export function OutfitDialog({
     setPreviewModel(m);
   }, [previewModel]);
 
+  const { poseDescription } = usePoseDescription({
+    callTool,
+    callState,
+    projectSlug,
+    poseSlug: pose?.assetId ?? null,
+  });
+
   const modelsForPreview = useMemo(() => [...selectedModels], [selectedModels]);
   const { prompts: previewPrompts, negativePrompt, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
     callTool,
@@ -222,7 +230,7 @@ export function OutfitDialog({
     models: modelsForPreview,
     provider: selectedProvider,
     hasBackdrop: !!backdrop,
-    hasPoseDescription: !!pose,
+    poseDescription,
     platform: selectedPlatform,
     poseCoverage: poseResult?.coverage ?? null,
   });
@@ -257,7 +265,7 @@ export function OutfitDialog({
       poseSkeletonBlob: poseResult.skeleton.blob,
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
       poseCoverage: poseResult.coverage,
-      poseSourceSlug: pose.assetId,
+      poseDescription: poseDescription ?? undefined,
       backdropImageSlug: backdrop?.assetId,
       models: [...selectedModels],
       provider: selectedProvider,
@@ -269,7 +277,7 @@ export function OutfitDialog({
       return true;
     }
     return false;
-  }, [canSubmit, projectSlug, model, garment, pose, poseResult, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, onOpenChange]);
+  }, [canSubmit, projectSlug, model, garment, pose, poseResult, poseDescription, backdrop, generate, selectedModels, selectedProvider, selectedPlatform, aspectRatio, onOpenChange]);
 
   const handleOutfitSend = useCallback(async (message: string): Promise<boolean> => {
     const trimmed = message.trim();

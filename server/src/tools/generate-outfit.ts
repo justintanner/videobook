@@ -13,10 +13,16 @@ import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import { uploadBytesToFal } from "../jobs/_fal-upload.js";
 import { uploadBytesToKie } from "../jobs/_kie-upload.js";
-import { describeImageBytes, mimeForImageFilename } from "../jobs/describe-image.js";
+import {
+  describeImageBytes,
+  mimeForImageFilename,
+  ANALYSIS_FILENAME,
+  type DescribeImageResult,
+} from "../jobs/describe-image.js";
 import { findImageFile } from "./_image-inputs.js";
 
 const CUSTOM_PROMPT_MAX = 500;
+const POSE_DESCRIPTION_MAX = 1500;
 const PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 
 // Negative-prompt fragments, scoped so each model picks what's applicable.
@@ -109,13 +115,15 @@ const schema = {
     .string()
     .optional()
     .describe("Filename for the ephemeral pose bytes (extension determines content type). Required with pose_image_data."),
-  pose_source_slug: z
+  pose_description: z
     .string()
+    .max(POSE_DESCRIPTION_MAX)
     .optional()
     .describe(
-      "@img-* slug of the ORIGINAL pose photo (the asset the pose skeleton was extracted from). " +
-      "Used only to generate a vision description that is injected into every model's prompt — " +
-      "the image itself is never passed to the image model. Optional.",
+      "Body-geometry pose description (weight, stance, hip/torso/shoulder/head rotation, limb " +
+      "positions). Injected as the 'intended pose depicts' clause in each model's prompt so the " +
+      "image model gets pose semantics the skeleton landmarks alone can't convey. Callers should " +
+      "source this from the pose-source image's `.original.analysis.json` `pose` field.",
     ),
   backdrop_image_slug: z
     .string()
@@ -542,12 +550,14 @@ const previewSchema = {
     .boolean()
     .optional()
     .describe("Whether a backdrop/scene image is supplied."),
-  has_pose_description: z
-    .boolean()
+  pose_description: z
+    .string()
+    .max(POSE_DESCRIPTION_MAX)
     .optional()
     .describe(
-      "Whether the pose slot has a source image whose vision description will be injected. " +
-      "Preview uses a placeholder; real generation runs vision on pose_source_slug.",
+      "Pose-source body-geometry text (same shape passed to generate_outfit). Inlined verbatim " +
+      "into the preview prompt so the user can read what will actually be sent at generation " +
+      "time. Omit when no pose source is selected.",
     ),
   custom_prompt: z
     .string()
@@ -593,13 +603,10 @@ export function previewOutfitPromptsDef(): ToolDef {
         ...(hasBackdrop ? { backdrop: "@img-preview-backdrop" } : {}),
       };
       const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
-      // Real generation runs vision on the pose source image. Preview can't
-      // afford a vision call per keystroke, so we inject a stable placeholder
-      // so the user can see in the read-only prompt that the description
-      // will be there at generation time.
-      const previewPoseDescription = a.has_pose_description
-        ? "(vision-generated description of the pose reference image)"
-        : undefined;
+      // The frontend passes the resolved pose text (read from the pose
+      // source's cached `.original.analysis.json`) so the preview shows
+      // exactly what generation will inject — no placeholder, no vision call.
+      const previewPoseDescription = a.pose_description?.trim() || undefined;
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
         const prompt = buildPromptForModel(
@@ -631,23 +638,45 @@ export function previewOutfitPromptsDef(): ToolDef {
   };
 }
 
+async function readCachedAnalysis(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<DescribeImageResult | undefined> {
+  const read = await fs.readFile(assetId, ANALYSIS_FILENAME, projectSlug);
+  if (!read.ok) return undefined;
+  const text = typeof read.value === "string"
+    ? read.value
+    : new TextDecoder().decode(read.value);
+  try {
+    const parsed = JSON.parse(text) as DescribeImageResult;
+    if (typeof parsed?.prompt === "string") return parsed;
+  } catch {
+    // fall through and recompute
+  }
+  return undefined;
+}
+
 /**
- * Resolve an @img-* slug to its image bytes and run the vision describer.
- * Returns the reproduction-ready `prompt` field from describe-image, which
- * we inject into prompts for slots that are not passed as image inputs
- * (backdrop for every model; pose as an enrichment alongside the skeleton).
- * Returns undefined on failure — callers fall back to the generic
- * placeholder clause. `label` is only used in the warning log.
+ * Resolve an @img-* backdrop slug to a vision description. Reads the cached
+ * `.original.analysis.json` written by describe_image when available;
+ * otherwise runs vision on the bytes and writes the cache for next time.
+ * Returns the full reproduction `prompt` field (scene, light, palette).
+ * Pose descriptions are no longer derived here — callers pass the resolved
+ * `pose_description` text directly so it's visible at the tool call site.
  */
-async function describeAssetImage(
+async function describeBackdropAsset(
   fs: ClipfirstFs,
   projectSlug: string,
   rawSlug: string,
-  label: string,
 ): Promise<string | undefined> {
   if (rawSlug.startsWith("http://") || rawSlug.startsWith("https://")) return undefined;
   const assetId = rawSlug.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return undefined;
+
+  const cached = await readCachedAnalysis(fs, assetId, projectSlug);
+  if (cached) return cached.prompt?.trim() || undefined;
+
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return undefined;
   const imageFile = findImageFile(manifest.value.files);
@@ -659,9 +688,20 @@ async function describeAssetImage(
       Buffer.from(read.value),
       mimeForImageFilename(imageFile.name),
     );
-    return result.prompt.trim();
+    const writeResult = await fs.writeFile(
+      assetId,
+      ANALYSIS_FILENAME,
+      JSON.stringify(result, null, 2),
+      projectSlug,
+    );
+    if (!writeResult.ok) {
+      console.warn(
+        `[generate_outfit] backdrop cache write failed for ${assetId}: ${writeResult.error.message}`,
+      );
+    }
+    return result.prompt?.trim() || undefined;
   } catch (err) {
-    console.warn(`[generate_outfit] ${label} describe failed for ${assetId}: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(`[generate_outfit] backdrop describe failed for ${assetId}: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;
   }
 }
@@ -736,19 +776,14 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
       // Backdrop is never passed as an image slot — all models share a
       // 3-image layout [model, garment, pose skeleton]. When a backdrop is
       // supplied, describe it once via vision and inject the text.
-      // Pose is different: the skeleton IS passed as image 3, but the
-      // skeleton loses the pose's semantic intent (gesture, gaze, weight
-      // shift). When pose_source_slug is provided, describe the original
-      // photo and append that description to each model's pose clause.
-      // One vision call per input, run in parallel, shared across models.
-      const [backdropDescription, poseDescription] = await Promise.all([
-        hasBackdrop
-          ? describeAssetImage(fs, a.project_slug, a.backdrop_image_slug!, "backdrop")
-          : Promise.resolve(undefined),
-        a.pose_source_slug
-          ? describeAssetImage(fs, a.project_slug, a.pose_source_slug, "pose")
-          : Promise.resolve(undefined),
-      ]);
+      // Pose semantics arrive pre-resolved as `pose_description`: the caller
+      // (frontend or chat agent) reads the pose source's analysis JSON and
+      // passes the body-geometry text directly, so the prompt is auditable
+      // at the call site and the server makes no extra vision call.
+      const backdropDescription = hasBackdrop
+        ? await describeBackdropAsset(fs, a.project_slug, a.backdrop_image_slug!)
+        : undefined;
+      const poseDescription = a.pose_description?.trim() || undefined;
 
       const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
       const outcomes: EnqueueOutcome[] = [];
