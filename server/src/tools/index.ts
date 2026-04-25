@@ -250,7 +250,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
     generateOutfitDef(fs),
-    previewOutfitPromptsDef(),
+    previewOutfitPromptsDef(fs),
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
     pinCharacterSlotDef(fs),

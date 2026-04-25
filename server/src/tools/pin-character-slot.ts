@@ -53,8 +53,9 @@ export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "pin_character_slot",
     description:
-      "Append an asset reference to one of a char-*'s slot arrays in .character.json " +
-      "(wardrobe | poses | outfits). No-op if the asset is already pinned.",
+      "Pin an asset reference into one of a char-*'s slot arrays in .character.json. " +
+      "wardrobe and poses are SINGLE-SLOT (replacing any existing pin); outfits accumulates. " +
+      "No-op if the asset is already pinned.",
     schema: pinSchema,
     handler: async (args): Promise<ToolResult> => {
       const { project_slug, char_asset_id, slot, asset_id } = args as {
@@ -80,7 +81,7 @@ export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
         };
       }
       const current = getSlotArray(read.value, slot);
-      if (current.includes(pinId)) {
+      if (current.includes(pinId) && (slot === "outfits" || current.length === 1)) {
         return {
           content: [{
             type: "text" as const,
@@ -88,7 +89,7 @@ export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
           }],
         };
       }
-      const next = [...current, pinId];
+      const next = slot === "outfits" ? [...current, pinId] : [pinId];
       const write = await writeCharacter(fs, charId, project_slug, setSlotArray(read.value, slot, next));
       if (!write.ok) {
         return {

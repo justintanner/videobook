@@ -196,8 +196,8 @@ export function CharacterViewer({
                 poses={poseItems}
                 onSelectAsset={onSelectAsset}
                 onUnpin={handleUnpin}
-                onAddWardrobe={() => setPickerSlot('wardrobe')}
-                onAddPose={() => setPickerSlot('poses')}
+                onPickWardrobe={() => setPickerSlot('wardrobe')}
+                onPickPose={() => setPickerSlot('poses')}
                 generate={generateOutfit}
                 submitting={outfitSubmitting}
                 callTool={callTool}

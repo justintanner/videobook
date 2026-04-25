@@ -258,6 +258,48 @@ function poseDescriptionSentence(description: string | undefined): string {
   return ` The intended pose depicts: ${description}`;
 }
 
+// Image-role legend prepended to every per-model prompt so the model knows
+// up-front what each input image represents. The user explicitly asked for
+// this — "we have multiple images so prompts should start with what image
+// means whats". Per-model prompts may reuse the same labels in their
+// instructions; the leading legend is the single source of truth.
+const IMAGE_LEGEND =
+  "Image 1: the subject (model). Image 2: the outfit. Image 3: the pose reference.";
+
+// Compress the character profile into a single dense sentence the image
+// model can ingest. Identity, body geometry and surface descriptors are the
+// fields that materially change re-rendered outputs — name and source image
+// id are not in the prompt. Returns "" if the input is undefined so callers
+// can splice unconditionally.
+function compressCharacterProfile(c: Character | undefined): string {
+  if (!c) return "";
+  const parts: string[] = [];
+  const identity = [c.age, c.gender_presentation, c.ethnicity].filter(Boolean).join(" ");
+  if (identity) parts.push(identity);
+  const body = [c.height, c.build && `${c.build} build`].filter(Boolean).join(", ");
+  if (body) parts.push(body);
+  const measurements = [
+    c.bust && `bust ${c.bust}`,
+    c.waist && `waist ${c.waist}`,
+    c.hips && `hips ${c.hips}`,
+    c.glutes && `glutes ${c.glutes}`,
+  ].filter(Boolean).join(", ");
+  if (measurements) parts.push(measurements);
+  if (c.face) parts.push(`face ${c.face}`);
+  if (c.hair) parts.push(`hair ${c.hair}`);
+  if (c.eyes) parts.push(`eyes ${c.eyes}`);
+  if (c.skin) parts.push(`skin ${c.skin}`);
+  if (c.distinguishing_features) parts.push(`features ${c.distinguishing_features}`);
+  return parts.join("; ");
+}
+
+// Trailing-space clause that prepends the per-model prompt. Empty when no
+// character profile is available so legacy chars/raw img-* models don't break.
+function identityClause(character: Character | undefined): string {
+  const compressed = compressCharacterProfile(character);
+  return compressed ? `Subject identity: ${compressed}. ` : "";
+}
+
 // Output framing directive — comes from the pose source's vision-extracted
 // `shot` field (size + angle in cinematography terms, e.g. "medium close-up,
 // eye-level"). Empty when no shot is available; placed at the end of each
@@ -373,6 +415,7 @@ function promptForNanoBananaPro(
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  identity: string,
 ): string {
   const backdropClause = backdropDescription
     ? `Place the subject in this location: ${backdropDescription} Match the lighting, depth and colour cast of that scene.`
@@ -380,6 +423,8 @@ function promptForNanoBananaPro(
     ? "Place the subject in the location described by the user's backdrop reference, matching its lighting, depth and colour cast."
     : "Use a tasteful background that suits the subject, rendered with natural lighting.";
   const base =
+    `${IMAGE_LEGEND} ` +
+    `${identity}` +
     "Professional fashion photography. " +
     "Reference Image 1 establishes the model's appearance, hair and skin. " +
     "Reference Image 2 is the outfit — match its cut, colour, pattern and silhouette. " +
@@ -406,6 +451,7 @@ function promptForQwenImageEdit(
   provider: OutfitProvider,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  identity: string,
 ): string {
   const backdropClause = backdropDescription
     ? ` For the background, compose this scene: ${backdropDescription} Keep lighting and colour cast consistent with that setting.`
@@ -413,6 +459,8 @@ function promptForQwenImageEdit(
     ? " For the background, compose a scene that matches the user's backdrop description; keep lighting and colour cast consistent with that setting."
     : " Use a tasteful, editorial background with natural lighting.";
   const base =
+    `${IMAGE_LEGEND} ` +
+    `${identity}` +
     `The person in image 1 wears the garment from image 2 and ${qwenPoseClause(coverage)}. ` +
     "Match the cut, colour, pattern and silhouette of the garment in image 2. " +
     qwenPoseAlignLine(coverage) +
@@ -436,8 +484,9 @@ function promptForGptImage2(
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  identity: string,
 ): string {
-  const header = "Image 1: the person/model. Image 2: the garment. Image 3: the pose reference.";
+  const header = `${IMAGE_LEGEND} ${identity}`.trim();
   const sceneClause = backdropDescription
     ? `against this scene: ${backdropDescription} keep lighting and colour cast consistent with that setting`
     : hasBackdrop
@@ -469,6 +518,7 @@ function promptForSeedreamV5Lite(
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  identity: string,
 ): string {
   const backdropClause = backdropDescription
     ? `, in this location: ${backdropDescription}`
@@ -476,6 +526,8 @@ function promptForSeedreamV5Lite(
     ? ", in the location described by the user's backdrop reference"
     : ", against a tasteful background with natural lighting";
   const base =
+    `${IMAGE_LEGEND} ` +
+    `${identity}` +
     "Editorial fashion photograph composed from the reference inputs. " +
     `The subject shown in the first reference is wearing the outfit shown in the second reference, ${seedreamPoseClause(coverage)}${backdropClause}.${poseDescriptionSentence(poseDescription)} ` +
     `${ANATOMY_ANCHOR} ${SKIN_ANCHOR} ` +
@@ -500,6 +552,7 @@ function promptForWan27Pro(
   provider: OutfitProvider,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  identity: string,
 ): string {
   const changeBackdrop = backdropDescription
     ? ` Change the background to: ${backdropDescription} Match lighting and colour cast to that scene.`
@@ -507,6 +560,8 @@ function promptForWan27Pro(
     ? " Change the background to match the scene described by the user's backdrop reference."
     : " Change the background to an editorial fashion-photography setting with natural lighting.";
   const base =
+    `${IMAGE_LEGEND} ` +
+    `${identity}` +
     `Change: dress the person (Image 1) in the garment (Image 2) and ${wanPoseClause(coverage)}.${poseDescriptionSentence(poseDescription)} ` +
     "Keep: the face, hair and skin of the person from Image 1; the cut, colour and pattern of the garment from Image 2." +
     changeBackdrop +
@@ -527,18 +582,20 @@ function buildPromptForModel(
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
+  character: Character | undefined,
 ): string {
+  const identity = identityClause(character);
   switch (model) {
     case "nano_banana_pro":
-      return promptForNanoBananaPro(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
+      return promptForNanoBananaPro(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot, identity);
     case "qwen_image_edit":
-      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot);
+      return promptForQwenImageEdit(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot, identity);
     case "gpt_image_2":
-      return promptForGptImage2(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
+      return promptForGptImage2(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot, identity);
     case "wan27_pro":
-      return promptForWan27Pro(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot);
+      return promptForWan27Pro(hasBackdrop, platform, custom, backdropDescription, poseDescription, provider, coverage, shot, identity);
     case "seedream_v5_lite":
-      return promptForSeedreamV5Lite(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot);
+      return promptForSeedreamV5Lite(hasBackdrop, platform, custom, backdropDescription, poseDescription, coverage, shot, identity);
   }
 }
 
@@ -577,6 +634,18 @@ function previewNegativePromptFor(models: readonly OutfitModelKey[]): string | n
 }
 
 const previewSchema = {
+  project_slug: z
+    .string()
+    .optional()
+    .describe("Project slug. Required when model_image_slug points at a char-* so the server can load .character.json."),
+  model_image_slug: z
+    .string()
+    .optional()
+    .describe(
+      "@img-* or char-* slug of the subject. When a char-* is provided the server loads " +
+      ".character.json and prepends a compressed identity sentence to the preview prompts so " +
+      "what the user sees matches what generate_outfit will send.",
+    ),
   models: z
     .array(z.enum(SUPPORTED_OUTFIT_MODELS))
     .min(1)
@@ -631,12 +700,25 @@ interface PreviewEntry {
   backdrop_mentioned?: boolean;
 }
 
-export function previewOutfitPromptsDef(): ToolDef {
+async function loadCharacterIfChar(
+  fs: ClipfirstFs,
+  projectSlug: string | undefined,
+  modelImageSlug: string | undefined,
+): Promise<Character | undefined> {
+  if (!projectSlug || !modelImageSlug) return undefined;
+  const stripped = modelImageSlug.replace(/^@/, "");
+  if (!stripped.startsWith("char-")) return undefined;
+  const read = await fs.readMetadata<Character>(stripped, CHARACTER_METADATA_KEY, projectSlug);
+  return read.ok ? read.value : undefined;
+}
+
+export function previewOutfitPromptsDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "preview_outfit_prompts",
     description:
       "Preview the per-model prompts that would be sent by generate_outfit, without enqueueing any " +
-      "jobs. Pure function over the inputs — no file I/O, no API calls.",
+      "jobs. When model_image_slug points at a char-*, loads .character.json so the preview " +
+      "includes the same compressed identity sentence the real call would send.",
     schema: previewSchema,
     handler: async (args) => {
       const a = args as PreviewArgs;
@@ -655,6 +737,7 @@ export function previewOutfitPromptsDef(): ToolDef {
       // exactly what generation will inject — no placeholder, no vision call.
       const previewPoseDescription = a.pose_description?.trim() || undefined;
       const previewShot = a.pose_shot?.trim() || undefined;
+      const character = await loadCharacterIfChar(fs, a.project_slug, a.model_image_slug);
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropMentioned } = buildImageSlugs(model, provider, slugs);
         const prompt = buildPromptForModel(
@@ -667,6 +750,7 @@ export function previewOutfitPromptsDef(): ToolDef {
           previewPoseDescription,
           coverage,
           previewShot,
+          character,
         );
         const entry: PreviewEntry = {
           model,
@@ -836,6 +920,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
       const shot = a.pose_shot?.trim() || undefined;
 
       const coverage: OutfitPoseCoverage = a.pose_coverage ?? "full";
+      const character = await loadCharacterIfChar(fs, a.project_slug, a.model_image_slug);
       const outcomes: EnqueueOutcome[] = [];
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
@@ -850,6 +935,7 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
           poseDescription,
           coverage,
           shot,
+          character,
         );
         const outcome: EnqueueOutcome = {
           model,

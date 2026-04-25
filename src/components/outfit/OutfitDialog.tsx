@@ -227,6 +227,8 @@ export function OutfitDialog({
   const { prompts: previewPrompts, negativePrompt, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
     callTool,
     callState,
+    projectSlug: projectSlug ?? null,
+    modelImageSlug: model?.assetId ?? null,
     models: modelsForPreview,
     provider: selectedProvider,
     hasBackdrop: !!backdrop,

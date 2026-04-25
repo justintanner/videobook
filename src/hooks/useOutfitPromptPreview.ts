@@ -13,6 +13,8 @@ export interface OutfitPromptPreviewEntry {
 export interface UseOutfitPromptPreviewArgs {
   callTool: UseMcpResult["callTool"];
   callState: UseMcpResult["state"];
+  projectSlug: string | null;
+  modelImageSlug: string | null;
   models: OutfitModelKey[];
   provider: OutfitProvider;
   hasBackdrop: boolean;
@@ -34,6 +36,8 @@ const DEBOUNCE_MS = 250;
 export function useOutfitPromptPreview({
   callTool,
   callState,
+  projectSlug,
+  modelImageSlug,
   models,
   provider,
   hasBackdrop,
@@ -68,6 +72,8 @@ export function useOutfitPromptPreview({
         provider,
         has_backdrop: hasBackdrop,
       };
+      if (projectSlug) args.project_slug = projectSlug;
+      if (modelImageSlug) args.model_image_slug = modelImageSlug;
       if (poseDescription) args.pose_description = poseDescription;
       if (shot) args.pose_shot = shot;
       if (platform) args.platform = platform;
@@ -104,7 +110,7 @@ export function useOutfitPromptPreview({
       );
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [callState, modelsKey, provider, hasBackdrop, poseDescription, shot, platform, poseCoverage, models]);
+  }, [callState, projectSlug, modelImageSlug, modelsKey, provider, hasBackdrop, poseDescription, shot, platform, poseCoverage, models]);
 
   return { prompts, negativePrompt, loading, error };
 }
