@@ -15,6 +15,8 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
 - ✅ "shoulder-length wavy chestnut hair, side-parted, slight frizz at the temples"
 - ❌ "messy brown hair"
 
+**Body measurements (`bust`, `waist`, `hips`, `glutes`) are the primary signal for re-rendering body shape consistently.** Estimate them from the photograph using concrete shape descriptors — exact numeric measurements aren't usually possible, but cup size, waist taper, hip width, and glute shape almost always are. Numbers are fine when clearly inferable from a tight or fitted garment; otherwise prefer descriptors that anchor body geometry. Face / hair / eyes / skin remain useful but are **secondary** to body measurements.
+
 ## Schema
 
 ```json
@@ -25,21 +27,21 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
   "ethnicity": "string — e.g. 'East Asian', 'Black / West African heritage', 'Latina', 'White / Northern European'. Use respectful, specific descriptors that help the model render features consistently.",
   "height": "string — 'tall', 'average', 'petite', or actual figure if knowable",
   "build": "string — slim / athletic / curvy / stocky / muscular / lean. Combine if useful: 'lean athletic'.",
-  "measurements": "string (optional) — leave blank, user fills this in (e.g. 'bust 34 / waist 26 / hips 36, US size 4'). Do NOT guess numeric measurements from a photograph.",
+  "bust": "string — chest size + shape. Cup size estimate ('small B-cup', 'full C-cup', '32B') + distribution ('even', 'wide-set', 'high-set'). Numbers if a fitted garment makes them clearly inferable, descriptors otherwise.",
+  "waist": "string — waist circumference and taper. e.g. 'narrow ~26\" with sharp taper', 'soft 28\" with gentle taper', 'thick natural waist'. Numbers if inferable, descriptor otherwise.",
+  "hips": "string — hip width relative to waist + shape. e.g. 'rounded ~36\" with curved outer thigh', 'narrow boyish hips', 'full and wide-set'.",
+  "glutes": "string — shape and projection. e.g. 'round and full with strong projection', 'athletic and high', 'flat with minimal projection', 'soft heart-shaped'.",
   "face": "string — face shape (oval, heart, square, round, long) + prominent structural features (cheekbones, jawline, brow, nose shape, lip shape). 1-2 sentences.",
   "hair": "string — color, length, texture, style, hairline. 1 sentence.",
   "eyes": "string — color, shape, lash density, brow shape. 1 sentence.",
   "skin": "string — tone, texture (pores, freckles, weathering, glow). 1 sentence.",
-  "distinguishing_features": "string — tattoos, piercings, scars, glasses, facial hair, moles, jewelry that's part of identity. If none visible, write 'none visible'.",
-  "wardrobe_style": "string (optional) — default aesthetic / signature look if inferable",
-  "vibe": "string (optional) — short phrase capturing demeanor, e.g. 'quiet confidence' or 'playful warmth'",
-  "backstory": "string (optional) — leave blank, user fills this in"
+  "distinguishing_features": "string — tattoos, piercings, scars, glasses, facial hair, moles, jewelry that's part of identity. If none visible, write 'none visible'."
 }
 ```
 
 ## Constraints
 
 - Each descriptive field is at most 2 short sentences.
-- Total JSON must be under 1500 characters.
-- Do NOT include a `name`, `measurements`, or `backstory` value — leave them empty strings or omit the keys. Those are user-owned.
+- Total JSON must be under 2000 characters.
+- Do NOT include a `name` value — leave it empty or omit the key. The name is user-owned.
 - Do NOT speculate about profession, mood beyond the photo, or relationships.

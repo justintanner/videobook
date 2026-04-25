@@ -20,15 +20,15 @@ type ProfileFieldKey =
   | 'ethnicity'
   | 'height'
   | 'build'
-  | 'measurements'
+  | 'bust'
+  | 'waist'
+  | 'hips'
+  | 'glutes'
   | 'face'
   | 'hair'
   | 'eyes'
   | 'skin'
-  | 'distinguishing_features'
-  | 'wardrobe_style'
-  | 'vibe'
-  | 'backstory';
+  | 'distinguishing_features';
 
 interface FieldDef {
   key: ProfileFieldKey;
@@ -45,15 +45,15 @@ const FIELDS: FieldDef[] = [
   { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
   { key: 'height', label: 'Height', required: true, placeholder: 'average' },
   { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
-  { key: 'measurements', label: 'Measurements', required: false, placeholder: 'bust 34 / waist 26 / hips 36, US 4' },
+  { key: 'bust', label: 'Bust', required: true, placeholder: 'small B-cup, even distribution' },
+  { key: 'waist', label: 'Waist', required: true, placeholder: 'narrow ~26", sharp taper' },
+  { key: 'hips', label: 'Hips', required: true, placeholder: 'rounded ~36", curved outer thigh' },
+  { key: 'glutes', label: 'Glutes', required: true, placeholder: 'round and full, strong projection' },
   { key: 'face', label: 'Face', required: true, multiline: true },
   { key: 'hair', label: 'Hair', required: true, multiline: true },
   { key: 'eyes', label: 'Eyes', required: true, multiline: true },
   { key: 'skin', label: 'Skin', required: true, multiline: true },
   { key: 'distinguishing_features', label: 'Features', required: true, multiline: true },
-  { key: 'wardrobe_style', label: 'Wardrobe', required: false, multiline: true },
-  { key: 'vibe', label: 'Vibe', required: false, placeholder: 'quiet confidence' },
-  { key: 'backstory', label: 'Backstory', required: false, multiline: true },
 ];
 
 const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
@@ -84,6 +84,10 @@ function emptyProfile(sourceAssetId: string): CharacterProfile {
     ethnicity: '',
     height: '',
     build: '',
+    bust: '',
+    waist: '',
+    hips: '',
+    glutes: '',
     face: '',
     hair: '',
     eyes: '',

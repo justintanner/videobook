@@ -27,14 +27,15 @@ const CHARACTER_PROFILE_SCHEMA = z.object({
   ethnicity: z.string(),
   height: z.string(),
   build: z.string(),
+  bust: z.string(),
+  waist: z.string(),
+  hips: z.string(),
+  glutes: z.string(),
   face: z.string(),
   hair: z.string(),
   eyes: z.string(),
   skin: z.string(),
   distinguishing_features: z.string(),
-  wardrobe_style: z.string().optional(),
-  vibe: z.string().optional(),
-  backstory: z.string().optional(),
   source_image_asset_id: z.string(),
 });
 
@@ -100,12 +101,14 @@ function profileSubjectSentence(p: CharacterProfile): string {
 
 function profileDetailLines(p: CharacterProfile): string {
   const lines: string[] = [];
+  lines.push(
+    `Body: bust ${p.bust}; waist ${p.waist}; hips ${p.hips}; glutes ${p.glutes}`,
+  );
   lines.push(`Face: ${p.face}`);
   lines.push(`Hair: ${p.hair}`);
   lines.push(`Eyes: ${p.eyes}`);
   lines.push(`Skin: ${p.skin}`);
   lines.push(`Distinguishing features: ${p.distinguishing_features}`);
-  if (p.wardrobe_style?.trim()) lines.push(`Wardrobe: ${p.wardrobe_style.trim()}`);
   return lines.join(". ") + ".";
 }
 

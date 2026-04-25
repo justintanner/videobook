@@ -9,23 +9,36 @@ interface CharacterProfilePanelProps {
   error: string | null;
 }
 
-const FIELD_ORDER: Array<{ key: keyof CharacterProfile; label: string }> = [
+type ProfileKey = keyof CharacterProfile;
+
+const SHORT_FIELDS: Array<{ key: ProfileKey; label: string }> = [
   { key: "name", label: "Name" },
   { key: "age", label: "Age" },
   { key: "gender_presentation", label: "Presentation" },
   { key: "ethnicity", label: "Background" },
   { key: "height", label: "Height" },
   { key: "build", label: "Build" },
-  { key: "measurements", label: "Measurements" },
+];
+
+const MEASUREMENT_FIELDS: Array<{ key: ProfileKey; label: string }> = [
+  { key: "bust", label: "Bust" },
+  { key: "waist", label: "Waist" },
+  { key: "hips", label: "Hips" },
+  { key: "glutes", label: "Glutes" },
+];
+
+const LONG_FIELDS: Array<{ key: ProfileKey; label: string }> = [
   { key: "face", label: "Face" },
   { key: "hair", label: "Hair" },
   { key: "eyes", label: "Eyes" },
   { key: "skin", label: "Skin" },
   { key: "distinguishing_features", label: "Features" },
-  { key: "wardrobe_style", label: "Style" },
-  { key: "vibe", label: "Vibe" },
-  { key: "backstory", label: "Backstory" },
 ];
+
+function getStr(profile: CharacterProfile, key: ProfileKey): string {
+  const v = profile[key];
+  return typeof v === "string" ? v : "";
+}
 
 export function CharacterProfilePanel({ profile, loading, error }: CharacterProfilePanelProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -33,9 +46,7 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
   if (!profile && !loading && !error) return null;
 
   return (
-    <div className={cn(
-      "w-full bg-transparent text-xs font-mono text-violet-100",
-    )}>
+    <div className="w-full bg-transparent text-xs font-mono text-violet-100">
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
@@ -47,25 +58,55 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
         {loading && <Loader2 className="w-3 h-3 animate-spin ml-auto text-violet-300" />}
       </button>
       {!collapsed && (
-        <div className="p-2 space-y-1.5">
-          {error && (
-            <div className="text-red-300/80 text-[10px]">{error}</div>
-          )}
+        <div className="p-2 space-y-2.5">
+          {error && <div className="text-red-300/80 text-[10px]">{error}</div>}
           {loading && !profile && !error && (
             <div className="text-violet-300/60 text-[10px]">Extracting profile…</div>
           )}
-          {profile && FIELD_ORDER.map(({ key, label }) => {
-            const value = profile[key];
-            if (!value || typeof value !== "string" || !value.trim()) return null;
-            return (
-              <div key={key} className="leading-tight">
-                <div className="text-[9px] uppercase tracking-wider text-violet-400/70">{label}</div>
-                <div className="text-violet-100 text-[11px]">{value}</div>
+
+          {profile && (
+            <>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                {SHORT_FIELDS.map(({ key, label }) => {
+                  const value = getStr(profile, key);
+                  if (!value.trim()) return null;
+                  return <Field key={key} label={label} value={value} />;
+                })}
               </div>
-            );
-          })}
+
+              <div className="border-t border-violet-500/20 pt-2">
+                <div className="text-[9px] uppercase tracking-wider text-violet-300/80 mb-1.5">
+                  Measurements
+                </div>
+                <div className="grid grid-cols-4 gap-x-2 gap-y-1.5">
+                  {MEASUREMENT_FIELDS.map(({ key, label }) => (
+                    <Field key={key} label={label} value={getStr(profile, key) || "—"} compact />
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-violet-500/20 pt-2 space-y-1.5">
+                {LONG_FIELDS.map(({ key, label }) => {
+                  const value = getStr(profile, key);
+                  if (!value.trim()) return null;
+                  return <Field key={key} label={label} value={value} />;
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function Field({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
+  return (
+    <div className={cn("leading-tight", compact && "min-w-0")}>
+      <div className="text-[9px] uppercase tracking-wider text-violet-400/70">{label}</div>
+      <div className={cn("text-violet-100", compact ? "text-[10px] truncate" : "text-[11px]")}>
+        {value}
+      </div>
     </div>
   );
 }

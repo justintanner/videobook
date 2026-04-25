@@ -16,9 +16,9 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
     name: "analyze_character_image",
     description:
       "Run vision on an image asset and return a structured Character profile (age, gender " +
-      "presentation, ethnicity, height, build, face, hair, eyes, skin, distinguishing features, " +
-      "optional wardrobe / vibe / backstory). Synchronous — no jobs, no assets created. Used by " +
-      "the /character flow to seed the editable form before generating a character sheet.",
+      "presentation, ethnicity, height, build, body measurements [bust/waist/hips/glutes], " +
+      "face, hair, eyes, skin, distinguishing features). Synchronous — no jobs, no assets created. " +
+      "Used by the /character flow to seed the editable form before generating a character sheet.",
     schema,
     handler: async (args) => {
       if (!process.env.XAI_API_KEY) {

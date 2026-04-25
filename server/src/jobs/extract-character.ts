@@ -18,15 +18,15 @@ export type Character = {
   ethnicity: string;
   height: string;
   build: string;
-  measurements?: string;
+  bust: string;
+  waist: string;
+  hips: string;
+  glutes: string;
   face: string;
   hair: string;
   eyes: string;
   skin: string;
   distinguishing_features: string;
-  wardrobe_style?: string;
-  vibe?: string;
-  backstory?: string;
   source_image_asset_id: string;
   wardrobe?: string[];
   poses?: string[];
@@ -39,6 +39,10 @@ const REQUIRED_FIELDS: Array<keyof Character> = [
   "ethnicity",
   "height",
   "build",
+  "bust",
+  "waist",
+  "hips",
+  "glutes",
   "face",
   "hair",
   "eyes",
@@ -85,6 +89,10 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
     ethnicity: String(obj.ethnicity),
     height: String(obj.height),
     build: String(obj.build),
+    bust: String(obj.bust),
+    waist: String(obj.waist),
+    hips: String(obj.hips),
+    glutes: String(obj.glutes),
     face: String(obj.face),
     hair: String(obj.hair),
     eyes: String(obj.eyes),
@@ -93,16 +101,6 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
     source_image_asset_id: sourceAssetId,
   };
   if (typeof obj.name === "string" && obj.name.trim()) character.name = obj.name.trim();
-  if (typeof obj.measurements === "string" && obj.measurements.trim()) {
-    character.measurements = obj.measurements.trim();
-  }
-  if (typeof obj.wardrobe_style === "string" && obj.wardrobe_style.trim()) {
-    character.wardrobe_style = obj.wardrobe_style.trim();
-  }
-  if (typeof obj.vibe === "string" && obj.vibe.trim()) character.vibe = obj.vibe.trim();
-  if (typeof obj.backstory === "string" && obj.backstory.trim()) {
-    character.backstory = obj.backstory.trim();
-  }
   return character;
 }
 
