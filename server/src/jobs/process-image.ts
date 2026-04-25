@@ -1,5 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { probeImage, cropToFill } from "../image.js";
 
 const SKIP_CROP_EXTENSIONS = new Set([".svg", ".gif"]);
@@ -38,6 +38,21 @@ export function registerProcessImageJob(fs: ClipfirstFs): void {
         fs.writeFile(assetId, "portrait.jpg", portrait, projectSlug),
         fs.writeFile(assetId, "square.jpg", square, projectSlug),
       ]);
+    }
+
+    // Auto-enqueue analysis-only describe_image so the asset has
+    // `.original.analysis.json` cached for downstream pose/backdrop reads.
+    // The compose rail's `usePoseDescription` reads this file directly, and
+    // missing it forces the outfit prompt to fall back to skeleton-only.
+    // Skipped for SVG/GIF — vision is unreliable on vector/animated formats.
+    if (process.env.XAI_API_KEY && !SKIP_CROP_EXTENSIONS.has(extension)) {
+      const jobId = `describe-image-auto-${assetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "describe_image",
+        sourceAssetId: assetId,
+        sourceImageFilename: `original${extension}`,
+        projectSlug,
+      } as unknown as Record<string, unknown>);
     }
 
     return { success: true, width, height };

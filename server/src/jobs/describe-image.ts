@@ -11,7 +11,11 @@ type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
   sourceImageFilename: string;
-  assetId: string;
+  // When omitted, the job runs in **analysis-only** mode: vision is run and
+  // `.original.analysis.json` is cached on the source, but no script-* asset
+  // is written. Used by the auto-on-upload flow (`process_image`), which only
+  // needs the cached JSON, not a user-visible script asset.
+  assetId?: string;
   projectSlug: string;
 };
 
@@ -142,9 +146,8 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       projectSlug,
     } = payload as DescribeImagePayload;
 
-    console.log(
-      `[describe_image] START source=${sourceAssetId} script=${scriptAssetId} project=${projectSlug}`,
-    );
+    const mode = scriptAssetId ? `script=${scriptAssetId}` : "analysis-only";
+    console.log(`[describe_image] START source=${sourceAssetId} ${mode} project=${projectSlug}`);
 
     const responses = buildResponses(process.env.XAI_API_KEY);
 
@@ -157,12 +160,6 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
 
     const parsed = await describeImageBytes(buffer, mime, responses);
 
-    const markdown = formatMarkdown(parsed);
-    const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
-    if (!writeResult.ok) {
-      throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
-    }
-
     const analysisJson = JSON.stringify(parsed, null, 2);
     const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
     if (!cacheResult.ok) {
@@ -171,22 +168,32 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       );
     }
 
-    await fs.writeMetadata(
-      scriptAssetId,
-      "original",
-      {
-        origin: "describe_image",
-        sourceAssetId,
-        model: VISION_MODEL,
-        processed_at: new Date().toISOString(),
-        variant: "full",
-      },
-      projectSlug,
+    if (scriptAssetId) {
+      const markdown = formatMarkdown(parsed);
+      const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+      if (!writeResult.ok) {
+        throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
+      }
+
+      await fs.writeMetadata(
+        scriptAssetId,
+        "original",
+        {
+          origin: "describe_image",
+          sourceAssetId,
+          model: VISION_MODEL,
+          processed_at: new Date().toISOString(),
+          variant: "full",
+        },
+        projectSlug,
+      );
+
+      await deletePendingTask(fs, scriptAssetId, projectSlug);
+    }
+
+    console.log(
+      `[describe_image] DONE source=${sourceAssetId} ${mode} (${parsed.prompt.length} chars)`,
     );
-
-    await deletePendingTask(fs, scriptAssetId, projectSlug);
-
-    console.log(`[describe_image] DONE source=${sourceAssetId} → ${scriptAssetId} (${parsed.prompt.length} chars)`);
     return { success: true, sourceAssetId, scriptAssetId, prompt: parsed.prompt };
   });
 }
