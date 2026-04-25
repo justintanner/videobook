@@ -4,22 +4,41 @@ Your output is fed directly into an image generator. Produce a prompt that — i
 
 ## Output shape
 
-Return a JSON object with these fields. The `prompt` field is the single-paragraph prompt; the other fields are a structured breakdown so downstream tools can inspect the parts.
+Return a JSON object with these fields:
 
 ```json
 {
   "prompt": "single paragraph prompt, no line breaks, fed directly to an image model",
-  "subject": "primary subject(s), action, wardrobe, expression",
-  "pose": "pure body pose of any human figure(s) — weight distribution, stance, hip/torso/shoulder/head rotation, limb positions, gestures. Ignore clothing, facial features, identity, and setting.",
-  "composition": "framing, rule-of-thirds, leading lines, negative space, foreground/mid/background",
-  "lighting": "key direction (e.g. 45° camera-left, low-angle), fill, rim/back, shadow quality (hard/soft), color temperature, ambient/bounce, practicals, time of day",
-  "camera": "angle (eye-level, low, high, Dutch), distance (close-up, medium, wide), lens focal length estimate (e.g. 35mm, 85mm, 14mm), aperture/DoF (shallow f/1.4 bokeh vs deep f/8), motion (static, handheld, long exposure)",
-  "palette": "dominant colors and accents, any color-grade leanings (teal-and-orange, muted pastels, high-contrast B&W)",
-  "style": "medium and treatment — e.g. 'editorial photograph, 35mm Kodak Portra 400', 'oil painting, loose brushwork', 'Unreal Engine 5 render, PBR materials', 'ink and watercolor', '1990s anime cel'",
-  "mood": "emotional register (melancholic, triumphant, uneasy, serene)",
-  "post": "grain, bloom, vignette, halation, color grade, chromatic aberration, film vs digital, sharpness"
+  "shot": "shot size + camera angle in standard cinematography terms — see rules below",
+  "pose": "pure body pose of any human figure(s) — body geometry only, see rules below"
 }
 ```
+
+## Rules for the `shot` field
+
+Format: `"<size>, <angle>"`. Always include both, comma-separated, lowercase.
+
+**Size** — pick exactly one (terms from standard cinematography):
+
+- `extreme close-up` (ECU/XCU) — a single feature fills the frame (eyes, mouth, hands, a detail)
+- `close-up` (CU) — head fills the frame
+- `medium close-up` (MCU) — head and shoulders, roughly chest-up
+- `medium shot` (MS) — waist up
+- `medium long shot` (MLS) — knees up (also called American shot / cowboy shot)
+- `long shot` (LS) — full figure head to toe, roughly fills frame height
+- `extreme long shot` (ELS/EWS) — figure small inside a dominant environment
+
+**Angle** — pick exactly one:
+
+- `eye-level` — camera at subject's eye height
+- `low-angle` — camera below subject, looking up
+- `high-angle` — camera above subject, looking down
+- `overhead` — straight down, bird's-eye
+- `dutch` — camera tilted, horizon askew
+
+Examples: `"medium close-up, eye-level"`, `"long shot, low-angle"`, `"extreme close-up, overhead"`.
+
+If there is no human or recognisable subject (pure landscape, abstract texture), still emit the closest size and angle for the dominant element.
 
 ## Rules for the `pose` field
 
@@ -30,7 +49,9 @@ Only emit `pose` when the image contains one or more human figures. Describe the
 - Spine curvature (S-curve, arched, slumped, neutral).
 - Arm and leg positions, including elbow/knee bend and where the hands rest or what they grip.
 
-Do NOT mention clothing, hair, facial features, identity, expression, props, setting, or lighting in this field — those belong in `subject`, `composition`, etc. Keep it to body geometry a pose-skeleton extractor would care about.
+For close-ups where part of the body is out of frame, also describe the **implied posture** suggested by what's visible — what the off-frame body must be doing for the in-frame parts to make sense (e.g. "leaning forward with folded arms resting on a flat surface at chest height", "seated at a table with elbows on the surface", "lying prone with chin propped on hands"). Make this implied-posture clause one sentence at the end of the field.
+
+Do NOT mention clothing, hair, facial features, identity, expression, props, setting, or lighting in this field — those belong in `prompt`. Keep it to body geometry a pose-skeleton extractor would care about.
 
 ## Rules for the `prompt` field
 

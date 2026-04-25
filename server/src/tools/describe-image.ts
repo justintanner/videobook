@@ -39,8 +39,8 @@ export function describeImageDef(fs: ClipfirstFs): ToolDef {
         return error(`describe_image only accepts img-* assets, got: ${asset_id}`);
       }
 
-      if (!process.env.OPENAI_API_KEY && !process.env.KIE_API_KEY) {
-        return error("Neither OPENAI_API_KEY nor KIE_API_KEY is set");
+      if (!process.env.XAI_API_KEY) {
+        return error("XAI_API_KEY is not set");
       }
 
       const manifestResult = await fs.getManifest(asset_id, project_slug);

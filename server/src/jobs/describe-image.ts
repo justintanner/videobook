@@ -2,9 +2,8 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
-import { kie } from "@apicity/kie";
+import { xai, withRetry } from "@apicity/xai";
+import type { XaiResponseRequest, XaiResponseResponse } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { deletePendingTask } from "./pending-task.js";
 
@@ -18,25 +17,18 @@ type DescribeImagePayload = {
 
 export type DescribeImageResult = {
   prompt: string;
-  subject?: string;
+  shot?: string;
   pose?: string;
-  composition?: string;
-  lighting?: string;
-  camera?: string;
-  palette?: string;
-  style?: string;
-  mood?: string;
-  post?: string;
 };
 
-export type VisionChatFn = (req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>;
+export type ResponsesFn = (req: XaiResponseRequest, signal?: AbortSignal) => Promise<XaiResponseResponse>;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
 export const ANALYSIS_FILENAME = ".original.analysis.json";
-export const VISION_MODEL = "gpt-5.2";
+export const VISION_MODEL = "grok-4.20-reasoning";
 export const PROMPT_CHAR_LIMIT = 1900;
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
@@ -64,15 +56,8 @@ export function formatMarkdown(r: DescribeImageResult): string {
   const lines: string[] = [];
   lines.push(r.prompt.trim(), "");
   const rows: Array<[string, string | undefined]> = [
-    ["Subject", r.subject],
+    ["Shot", r.shot],
     ["Pose", r.pose],
-    ["Composition", r.composition],
-    ["Lighting", r.lighting],
-    ["Camera", r.camera],
-    ["Palette", r.palette],
-    ["Style", r.style],
-    ["Mood", r.mood],
-    ["Post", r.post],
   ];
   for (const [label, value] of rows) {
     if (value && value.trim()) {
@@ -87,31 +72,55 @@ export function mimeForImageFilename(filename: string): "image/jpeg" | "image/pn
   return mimeForFilename(filename);
 }
 
+export function buildResponses(apiKey: string | undefined): ResponsesFn {
+  if (!apiKey) {
+    throw new Error("XAI_API_KEY is not set");
+  }
+  const client = xai({ apiKey, timeout: 180_000 });
+  return withRetry(client.post.v1.responses, { retries: 2, baseMs: 500 });
+}
+
+// Concatenates all assistant output_text segments. Throws if the model
+// produced a refusal — Grok rarely does this on the kinds of images
+// describe_image runs against, but we surface it explicitly rather than
+// silently returning an empty string.
+export function firstResponseText(response: XaiResponseResponse): string {
+  const texts: string[] = [];
+  for (const item of response.output) {
+    if (item.type !== "message") continue;
+    for (const c of item.content) {
+      if (c.type === "output_text") texts.push(c.text);
+      else if (c.type === "refusal") throw new Error(`Vision provider refused: ${c.refusal}`);
+    }
+  }
+  return texts.join("").trim();
+}
+
 export async function describeImageBytes(
   bytes: Buffer,
   mime: "image/jpeg" | "image/png" | "image/webp",
-  chat?: VisionChatFn,
+  responses?: ResponsesFn,
 ): Promise<DescribeImageResult> {
-  const visionChat = chat ?? buildVisionChat(process.env.OPENAI_API_KEY, process.env.KIE_API_KEY);
-  const systemPrompt = buildSystemPrompt(await readFile(GUIDE_PATH, "utf-8"));
-  const userContent = [
-    textPart("Analyze this image and produce the reproduction prompt as specified."),
-    imageBase64Part(bytes.toString("base64"), mime, "high"),
-  ];
-  const response = await visionChat({
+  const fn = responses ?? buildResponses(process.env.XAI_API_KEY);
+  const guide = await readFile(GUIDE_PATH, "utf-8");
+  const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+  const response = await fn({
     model: VISION_MODEL,
-    stream: false,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ],
-    response_format: { type: "json_object" },
+    instructions: buildSystemPrompt(guide),
+    input: [{
+      role: "user",
+      content: [
+        { type: "input_image", image_url: dataUrl, detail: "high" },
+        { type: "input_text", text: "Analyze this image and produce the reproduction prompt as specified." },
+      ],
+    }],
+    text: { format: { type: "json_object" } },
     temperature: 0.4,
-    max_completion_tokens: 2048,
+    max_output_tokens: 2048,
   });
-  const content = firstContent(response);
+  const content = firstResponseText(response);
   if (!content) {
-    throw new Error(`Vision provider returned no content (keys: ${Object.keys(response ?? {}).join(",")})`);
+    throw new Error(`Vision provider returned no content (status=${response.status})`);
   }
   const parsed = JSON.parse(content) as DescribeImageResult;
   if (!parsed.prompt || typeof parsed.prompt !== "string") {
@@ -122,22 +131,6 @@ export async function describeImageBytes(
     parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
   }
   return parsed;
-}
-
-export function buildVisionChat(openaiKey: string | undefined, kieKey: string | undefined): VisionChatFn {
-  const providers: VisionChatFn[] = [];
-  if (openaiKey) {
-    const p = openai({ apiKey: openaiKey, timeout: 120_000 });
-    providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
-  }
-  if (kieKey) {
-    const p = kie({ apiKey: kieKey, timeout: 120_000 });
-    providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
-  }
-  if (providers.length === 0) {
-    throw new Error("Neither OPENAI_API_KEY nor KIE_API_KEY is set");
-  }
-  return providers.length > 1 ? withFallback(providers) : providers[0];
 }
 
 export function registerDescribeImageJob(fs: ClipfirstFs): void {
@@ -153,7 +146,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       `[describe_image] START source=${sourceAssetId} script=${scriptAssetId} project=${projectSlug}`,
     );
 
-    const chat = buildVisionChat(process.env.OPENAI_API_KEY, process.env.KIE_API_KEY);
+    const responses = buildResponses(process.env.XAI_API_KEY);
 
     const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
     if (!readResult.ok) {
@@ -162,7 +155,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     const buffer = Buffer.from(readResult.value);
     const mime = mimeForFilename(sourceImageFilename);
 
-    const parsed = await describeImageBytes(buffer, mime, chat);
+    const parsed = await describeImageBytes(buffer, mime, responses);
 
     const markdown = formatMarkdown(parsed);
     const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);

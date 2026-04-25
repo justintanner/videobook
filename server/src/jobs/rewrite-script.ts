@@ -1,15 +1,15 @@
 import type { ClipfirstFs } from "clipfirst-fs";
-import { firstContent } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { deletePendingTask } from "./pending-task.js";
 import {
-  buildVisionChat,
+  buildResponses,
+  firstResponseText,
   formatMarkdown,
   PROMPT_CHAR_LIMIT,
   SCRIPT_FILENAME,
   VISION_MODEL,
   type DescribeImageResult,
-  type VisionChatFn,
+  type ResponsesFn,
 } from "./describe-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 
@@ -24,15 +24,8 @@ type RewriteScriptPayload = {
 };
 
 const FIELD_LABEL_TO_KEY: Record<string, Exclude<keyof DescribeImageResult, "prompt">> = {
-  Subject: "subject",
+  Shot: "shot",
   Pose: "pose",
-  Composition: "composition",
-  Lighting: "lighting",
-  Camera: "camera",
-  Palette: "palette",
-  Style: "style",
-  Mood: "mood",
-  Post: "post",
 };
 
 function parseMarkdownToResult(md: string): DescribeImageResult {
@@ -59,18 +52,19 @@ function buildFullSystemPrompt(platform: Platform | null): string {
   const platformBlock = platform ? `\n\n--- PLATFORM ---\n${platformGuidance(platform)}\n--- END PLATFORM ---` : "";
   return (
     "You rewrite image-reproduction prompt documents. The input describes one scene, split into a prose " +
-    "prompt paragraph and labeled breakdown fields (Subject, Pose, Composition, Lighting, Camera, Palette, " +
-    "Style, Mood, Post). You apply a user transformation and emit a rewritten document in the same JSON " +
-    "shape.\n\n" +
-    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), and any of subject, pose, composition, " +
-    "lighting, camera, palette, style, mood, post (strings, optional — include the same fields that appear " +
-    "in the input). The pose field describes body geometry only (weight, stance, rotation, limb positions); " +
-    "it must not mention clothing, hair, face, or setting. No prose outside the JSON. No markdown fences.\n\n" +
+    "prompt paragraph and two labeled breakdown fields (Shot, Pose). You apply a user transformation and " +
+    "emit a rewritten document in the same JSON shape.\n\n" +
+    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), shot (string, optional), pose (string, " +
+    "optional — include the same fields that appear in the input). The shot field is shot size + camera " +
+    "angle in standard cinematography terms (e.g. 'medium close-up, eye-level'). The pose field describes " +
+    "body geometry only (weight, stance, rotation, limb positions); for close-ups, also describe implied " +
+    "off-frame posture in one trailing sentence. The pose field must not mention clothing, hair, face, or " +
+    "setting. No prose outside the JSON. No markdown fences.\n\n" +
     `HARD LIMIT: the "prompt" field MUST be ${PROMPT_CHAR_LIMIT} characters or fewer.\n\n` +
     "When a transformation instruction is provided, apply it rigorously: any subject being replaced must " +
     "be ABSENT from every field of the output. Rewrite every field end-to-end so it describes the scene " +
-    "AFTER the transformation. Adapt palette, mood, subject, and composition naturally to the new content; " +
-    "do NOT simply string-replace nouns.\n\n" +
+    "AFTER the transformation. Adapt subject, setting, and mood naturally to the new content; do NOT " +
+    "simply string-replace nouns.\n\n" +
     "Preserve from the original: framing/angle/shot type, camera distance, lighting direction and time of " +
     "day, overall capture register (authentic phone snapshot vs editorial), and aspect ratio cues." +
     platformBlock
@@ -117,28 +111,25 @@ function buildUserMessage(current: DescribeImageResult, customPrompt: string | n
 }
 
 async function rewriteText(
-  chat: VisionChatFn,
+  responses: ResponsesFn,
   current: DescribeImageResult,
   opts: { tldr: boolean; platform: Platform | null; customPrompt: string | null },
 ): Promise<DescribeImageResult> {
   const system = opts.tldr ? buildTldrSystemPrompt(opts.platform) : buildFullSystemPrompt(opts.platform);
   const user = buildUserMessage(current, opts.customPrompt);
 
-  const response = await chat({
+  const response = await responses({
     model: VISION_MODEL,
-    stream: false,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    response_format: { type: "json_object" },
+    instructions: system,
+    input: [{ role: "user", content: user }],
+    text: { format: { type: "json_object" } },
     temperature: 0.4,
-    max_completion_tokens: 2048,
+    max_output_tokens: 2048,
   });
 
-  const content = firstContent(response);
+  const content = firstResponseText(response);
   if (!content) {
-    throw new Error(`Rewrite provider returned no content (keys: ${Object.keys(response ?? {}).join(",")})`);
+    throw new Error(`Rewrite provider returned no content (status=${response.status})`);
   }
   const parsed = JSON.parse(content) as DescribeImageResult;
   if (!parsed.prompt || typeof parsed.prompt !== "string") {
@@ -171,7 +162,7 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
       `customPrompt=${customPrompt ? `"${customPrompt.slice(0, 40)}..."` : "none"}`,
     );
 
-    const chat = buildVisionChat(process.env.OPENAI_API_KEY, process.env.KIE_API_KEY);
+    const responses = buildResponses(process.env.XAI_API_KEY);
 
     const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
     if (!readResult.ok) {
@@ -183,7 +174,7 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
       throw new Error(`Script ${scriptAssetId} has no parseable prompt in ${SCRIPT_FILENAME}`);
     }
 
-    const rewritten = await rewriteText(chat, current, {
+    const rewritten = await rewriteText(responses, current, {
       tldr: tldr === true,
       platform: platform ?? null,
       customPrompt: customPrompt ?? null,
