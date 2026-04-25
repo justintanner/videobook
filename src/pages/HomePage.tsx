@@ -774,7 +774,6 @@ export function HomePage() {
                       const found = mediaItems.find((m) => m.id === assetId);
                       if (found) setSelectedItem(found);
                     }}
-                    onOpenOutfit={(slug) => setOutfitDialog({ initialSlug: slug })}
                     onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
                   />
                 ) : timelineSlotIndex != null ? (

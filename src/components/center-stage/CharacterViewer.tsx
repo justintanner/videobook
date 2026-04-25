@@ -5,9 +5,11 @@ import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { useCharacterSlots, type SlotKind, type CharacterProfile } from '@/hooks/useCharacterSlots';
 import { useCharacterPin } from '@/hooks/useCharacterPin';
+import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { CharacterProfilePanel } from '@/components/character/CharacterProfilePanel';
 import { SlotRow } from '@/components/character/SlotRow';
 import { AssetPickerModal } from '@/components/character/AssetPickerModal';
+import { SimpleOutfitDialog } from '@/components/outfit/SimpleOutfitDialog';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { BackTab } from './viewer-types';
 import {
@@ -34,7 +36,6 @@ export interface CharacterViewerProps {
   onClose: () => void;
   imageAssets: MediaItem[];
   onSelectAsset: (assetId: string) => void;
-  onOpenOutfit: (charSlug: string) => void;
   onEditProfile: (charAssetId: string, profile: CharacterProfile) => void;
 }
 
@@ -52,15 +53,16 @@ export function CharacterViewer({
   onClose,
   imageAssets,
   onSelectAsset,
-  onOpenOutfit,
   onEditProfile,
 }: CharacterViewerProps) {
   useMountKey('character-viewer');
 
   const slots = useCharacterSlots(callTool, callState, item.id, projectSlug);
   const pin = useCharacterPin(callTool, projectSlug, item.id, slots.refresh);
+  const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
 
   const [pickerSlot, setPickerSlot] = useState<SlotKind | null>(null);
+  const [outfitOpen, setOutfitOpen] = useState(false);
 
   const bf = useViewerBackFace({
     projectSlug,
@@ -114,8 +116,8 @@ export function CharacterViewer({
   }, [slots.profile, onEditProfile, item.id]);
 
   const handleAddOutfit = useCallback(() => {
-    onOpenOutfit(`@${item.id}`);
-  }, [onOpenOutfit, item.id]);
+    setOutfitOpen(true);
+  }, []);
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -273,6 +275,19 @@ export function CharacterViewer({
         excludeIds={pickerSlot === 'wardrobe' ? slots.wardrobe : pickerSlot === 'poses' ? slots.poses : []}
         onPick={handlePick}
         onClose={() => setPickerSlot(null)}
+      />
+
+      <SimpleOutfitDialog
+        open={outfitOpen}
+        onOpenChange={setOutfitOpen}
+        character={{ id: item.id, slug: item.slug }}
+        wardrobe={wardrobeItems}
+        poses={poseItems}
+        projectSlug={projectSlug}
+        generate={generateOutfit}
+        submitting={outfitSubmitting}
+        callTool={callTool}
+        callState={callState}
       />
     </div>
   );
