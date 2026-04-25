@@ -116,10 +116,15 @@ const SHEET_LAYOUT =
   "A 2x2 character reference sheet on a clean white seamless studio background with even soft natural lighting. " +
   "Top-left quadrant: tight head-and-neck profile portrait, the subject's face in clean side view looking to the right; " +
   "tightly cropped just below the chin/neck so NO clothing, NO bra straps, NO necklines and NO shoulder garments are visible — only face, hair, ears and bare neck. " +
+  "HAIR DOWN in this quadrant: hair worn loose, falling naturally past the shoulders so its length, texture and natural fall are visible. " +
   "Top-right quadrant: tight head-and-neck front portrait, the subject's face directly to camera; " +
   "same tight head-and-neck crop — NO clothing, NO bra straps, NO necklines and NO shoulder garments visible, only face, hair, ears and bare neck. " +
+  "HAIR UP in this quadrant: hair pulled back into a clean low tie that fully exposes the ears, jawline and hairline so face structure reads cleanly. " +
   "Bottom-left quadrant: full-body 3/4 front angle, the subject standing, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette so the 3D form of the body reads. " +
-  "Bottom-right quadrant: full-body 3/4 back angle, the subject standing with their back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette so the 3D form reads.";
+  "HAIR DOWN in this quadrant: hair worn loose over the shoulders. " +
+  "Bottom-right quadrant: full-body 3/4 back angle, the subject standing with their back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette so the 3D form reads. " +
+  "HAIR UP in this quadrant: hair pulled back into a clean tie that exposes the nape and the line of the neck and shoulders. " +
+  "The four quadrants must show the same person with the same hair color/length/texture; only the styling (down vs. tied back) differs across quadrants — half of the sheet shows the hair down, half shows it up.";
 
 const STYLE_TAIL =
   "Photographic, editorial fashion-documentation style. " +

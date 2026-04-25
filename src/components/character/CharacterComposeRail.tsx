@@ -158,8 +158,8 @@ export function CharacterComposeRail({
     : null;
 
   return (
-    <aside className="w-80 shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
-      <div className="px-3 py-2 grid grid-cols-3 gap-2">
+    <aside className="w-[26rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
+      <div className="px-3 py-2 grid grid-cols-4 gap-2">
         <SingleSlot
           label="Wardrobe"
           item={garment}
@@ -173,7 +173,6 @@ export function CharacterComposeRail({
           emptyLabel="Pick pose"
           onPick={onPickPose}
           onUnpin={(id) => onUnpin('poses', id)}
-          skeletonOverlay={poseResult?.skeleton.dataUrl ?? null}
         />
         <SingleSlot
           label="Backdrop"
@@ -182,39 +181,14 @@ export function CharacterComposeRail({
           onPick={onPickBackdrop}
           onUnpin={(id) => onUnpin('backdrop', id)}
         />
+        <SkeletonSlot
+          hasPose={!!pose}
+          loading={poseLoading}
+          error={poseError}
+          dataUrl={poseResult?.skeleton.dataUrl ?? null}
+          coverage={poseResult?.coverage ?? null}
+        />
       </div>
-      {pose && (poseResult || poseLoading || poseError) ? (
-        <div className="border-t border-violet-500/20 px-3 py-2">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70">
-              Pose skeleton
-            </span>
-            {poseLoading ? (
-              <Loader2 className="w-3 h-3 animate-spin text-violet-300/60" />
-            ) : poseResult ? (
-              <span className="text-[9px] font-mono text-emerald-300/70 uppercase tracking-wider">
-                {poseResult.coverage}
-              </span>
-            ) : null}
-          </div>
-          {poseError ? (
-            <div className="flex items-center gap-1.5 text-[9px] font-mono text-red-300/80">
-              <AlertTriangle className="w-3 h-3" /> {poseError}
-            </div>
-          ) : poseResult ? (
-            <div className="rounded border border-violet-500/20 bg-black/60 overflow-hidden flex items-center justify-center h-32">
-              <img
-                src={poseResult.skeleton.dataUrl}
-                alt="extracted pose skeleton"
-                className="max-h-full max-w-full object-contain"
-                draggable={false}
-              />
-            </div>
-          ) : (
-            <div className="text-[9px] font-mono text-violet-400/50">extracting…</div>
-          )}
-        </div>
-      ) : null}
 
       <div className="border-t border-violet-500/20 px-3 py-2">
         <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
@@ -341,10 +315,9 @@ interface SingleSlotProps {
   emptyLabel: string;
   onPick: () => void;
   onUnpin: (assetId: string) => void;
-  skeletonOverlay?: string | null;
 }
 
-function SingleSlot({ label, item, emptyLabel, onPick, onUnpin, skeletonOverlay }: SingleSlotProps) {
+function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProps) {
   return (
     <div className="min-w-0">
       <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1">
@@ -371,11 +344,6 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin, skeletonOverlay 
               </div>
             )}
           </button>
-          {skeletonOverlay ? (
-            <div className="pointer-events-none absolute bottom-1 right-1 w-8 h-8 rounded border border-emerald-400/60 bg-black/80 overflow-hidden">
-              <img src={skeletonOverlay} alt="pose skeleton" className="w-full h-full object-contain" draggable={false} />
-            </div>
-          ) : null}
           <button
             type="button"
             onClick={(e) => {
@@ -403,6 +371,57 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin, skeletonOverlay 
           </span>
         </button>
       )}
+    </div>
+  );
+}
+
+interface SkeletonSlotProps {
+  hasPose: boolean;
+  loading: boolean;
+  error: string | null;
+  dataUrl: string | null;
+  coverage: 'face' | 'upper' | 'full' | null;
+}
+
+function SkeletonSlot({ hasPose, loading, error, dataUrl, coverage }: SkeletonSlotProps) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1">
+        Skeleton
+      </div>
+      <div
+        className="relative w-full aspect-square rounded border border-violet-500/20 bg-black/60 overflow-hidden flex items-center justify-center"
+        title={coverage ? `coverage: ${coverage}` : undefined}
+      >
+        {!hasPose ? (
+          <span className="text-[8px] font-mono text-violet-400/50 px-1 text-center leading-tight">
+            Pin a pose
+          </span>
+        ) : loading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-violet-300/60" />
+        ) : error ? (
+          <div className="flex flex-col items-center gap-1 text-red-300/80 px-1">
+            <AlertTriangle className="w-3 h-3" />
+            <span className="text-[8px] font-mono text-center leading-tight">extract failed</span>
+          </div>
+        ) : dataUrl ? (
+          <>
+            <img
+              src={dataUrl}
+              alt="extracted pose skeleton"
+              className="w-full h-full object-contain"
+              draggable={false}
+            />
+            {coverage ? (
+              <span className="absolute bottom-1 right-1 text-[8px] font-mono uppercase tracking-wider text-emerald-300/90 bg-black/70 rounded px-1">
+                {coverage}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-[8px] font-mono text-violet-400/50">extracting…</span>
+        )}
+      </div>
     </div>
   );
 }

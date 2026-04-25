@@ -922,7 +922,6 @@ export function HomePage() {
         submitting={characterSubmitting}
         callTool={callTool}
         callState={state}
-        onOpenOutfit={(slug) => setOutfitDialog({ initialSlug: slug })}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>

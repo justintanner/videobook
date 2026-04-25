@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trimToHeadClause } from "@/lib/character";
 import type { CharacterProfile } from "@/hooks/useCharacterSlots";
 
 interface CharacterProfilePanelProps {
@@ -89,7 +90,14 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
                 {LONG_FIELDS.map(({ key, label }) => {
                   const value = getStr(profile, key);
                   if (!value.trim()) return null;
-                  return <Field key={key} label={label} value={value} />;
+                  return (
+                    <Field
+                      key={key}
+                      label={label}
+                      value={trimToHeadClause(value)}
+                      title={value}
+                    />
+                  );
                 })}
               </div>
             </>
@@ -100,9 +108,19 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
   );
 }
 
-function Field({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
+function Field({
+  label,
+  value,
+  compact,
+  title,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+  title?: string;
+}) {
   return (
-    <div className={cn("leading-tight", compact && "min-w-0")}>
+    <div className={cn("leading-tight", compact && "min-w-0")} title={title}>
       <div className="text-[9px] uppercase tracking-wider text-violet-400/70">{label}</div>
       <div className={cn("text-violet-100", compact ? "text-[10px] truncate" : "text-[11px]")}>
         {value}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Zap, X, User, Shirt as OutfitIcon, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, Zap, X, User, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -108,7 +108,6 @@ interface CharacterDialogProps {
   submitting: boolean;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
-  onOpenOutfit: (characterSlug: string) => void;
 }
 
 export function CharacterDialog({
@@ -122,7 +121,6 @@ export function CharacterDialog({
   submitting,
   callTool,
   callState,
-  onOpenOutfit,
 }: CharacterDialogProps) {
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -217,12 +215,6 @@ export function CharacterDialog({
     if (!previewCharSlug) return null;
     return imageAssets.find((m) => m.id === previewCharSlug) ?? null;
   }, [previewCharSlug, imageAssets]);
-
-  const handleOpenOutfit = useCallback(() => {
-    if (!previewCharSlug) return;
-    onOpenChange(false);
-    onOpenOutfit(`@${previewCharSlug}`);
-  }, [previewCharSlug, onOpenChange, onOpenOutfit]);
 
   const toggleModel = useCallback((m: OutfitModelKey) => {
     setSelectedModels((prev) => {
@@ -346,13 +338,21 @@ export function CharacterDialog({
             )}
           </div>
 
-          {/* Per-model outcome strip */}
-          {successOutcomes.length > 1 && (
-            <div className="border-t border-border/50 px-4 py-2 flex gap-2 overflow-x-auto bg-black/20">
-              {successOutcomes.map((o) => {
+          {/* Per-model outcome strip — only shown once at least one image
+              has actually rendered (thumbnail/filePath present). While
+              everything is still queued, the empty placeholder tiles are
+              noise so we hide the strip entirely. */}
+          {(() => {
+            const ready = successOutcomes
+              .map((o) => {
                 const item = imageAssets.find((m) => m.id === o.char_asset_id);
-                if (!item) return null;
-                return (
+                return item && (item.thumbnailSrc || item.filePath) ? { o, item } : null;
+              })
+              .filter((x): x is { o: CharacterOutcome; item: MediaItem } => !!x);
+            if (ready.length < 2) return null;
+            return (
+              <div className="border-t border-border/50 px-4 py-2 flex gap-2 overflow-x-auto bg-black/20">
+                {ready.map(({ o, item }) => (
                   <button
                     key={o.char_asset_id}
                     type="button"
@@ -368,18 +368,12 @@ export function CharacterDialog({
                       return reordered;
                     })}
                   >
-                    {item.thumbnailSrc || item.filePath ? (
-                      <img src={item.thumbnailSrc ?? item.filePath} alt={item.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[9px] font-mono text-violet-400/50">
-                        {MODEL_LABELS[o.model].split(' ')[0]}
-                      </div>
-                    )}
+                    <img src={item.thumbnailSrc ?? item.filePath} alt={item.title} className="w-full h-full object-cover" />
                   </button>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Controls */}
           <div className="border-t border-border/50 px-4 py-3 space-y-3 bg-black/40">
@@ -483,13 +477,13 @@ export function CharacterDialog({
               </div>
             </section>
 
-            <div className="flex gap-2 pt-1">
+            <div className="pt-1">
               <button
                 type="button"
                 onClick={handleGenerate}
                 disabled={!canSubmit}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
+                  'w-full flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
                   canSubmit
                     ? 'bg-violet-500/20 border border-violet-300 text-violet-100 hover:bg-violet-500/30'
                     : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
@@ -503,21 +497,6 @@ export function CharacterDialog({
                   <Zap className="w-3.5 h-3.5" />
                 )}
                 {lastOutcomes.length > 0 ? 'Regenerate' : 'Generate'}
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenOutfit}
-                disabled={!previewCharSlug}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
-                  previewCharSlug
-                    ? 'bg-purple-500/20 border border-purple-300 text-purple-100 hover:bg-purple-500/30'
-                    : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
-                )}
-                title={previewCharSlug ? 'Open the outfit composer with this character pre-filled' : 'Generate a character first'}
-              >
-                <OutfitIcon className="w-3.5 h-3.5" />
-                Open Outfit
               </button>
             </div>
           </div>
