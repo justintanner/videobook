@@ -22,10 +22,12 @@ interface CharacterComposeRailProps {
   outfits: MediaItem[];
   wardrobe: MediaItem[];
   poses: MediaItem[];
+  backdrop: MediaItem[];
   onSelectAsset: (assetId: string) => void;
-  onUnpin: (slot: 'wardrobe' | 'poses' | 'outfits', assetId: string) => void;
+  onUnpin: (slot: 'wardrobe' | 'poses' | 'backdrop' | 'outfits', assetId: string) => void;
   onPickWardrobe: () => void;
   onPickPose: () => void;
+  onPickBackdrop: () => void;
   generate: UseGenerateOutfitResult['generate'];
   submitting: boolean;
   callTool: UseMcpResult['callTool'];
@@ -38,10 +40,12 @@ export function CharacterComposeRail({
   outfits,
   wardrobe,
   poses,
+  backdrop,
   onSelectAsset,
   onUnpin,
   onPickWardrobe,
   onPickPose,
+  onPickBackdrop,
   generate,
   submitting,
   callTool,
@@ -54,6 +58,7 @@ export function CharacterComposeRail({
 
   const garment = wardrobe[0] ?? null;
   const pose = poses[0] ?? null;
+  const backdropItem = backdrop[0] ?? null;
 
   const aspectRatioNum = useMemo(() => {
     const [w, h] = aspectRatio.split(':').map(Number);
@@ -94,7 +99,7 @@ export function CharacterComposeRail({
     modelImageSlug: characterId,
     models: modelsArray,
     provider: 'kie',
-    hasBackdrop: false,
+    hasBackdrop: !!backdropItem,
     poseDescription,
     shot,
     platform: null,
@@ -126,6 +131,7 @@ export function CharacterComposeRail({
       projectSlug,
       modelImageSlug: characterId,
       garmentImageSlug: garment.id,
+      backdropImageSlug: backdropItem?.id,
       poseSkeletonBlob: poseResult.skeleton.blob,
       poseSkeletonFilename: `pose-skeleton-${pose.id}.png`,
       poseCoverage: poseResult.coverage,
@@ -141,6 +147,7 @@ export function CharacterComposeRail({
     characterId,
     garment,
     pose,
+    backdropItem,
     poseResult,
     poseDescription,
     shot,
@@ -177,7 +184,7 @@ export function CharacterComposeRail({
         </div>
       ) : null}
 
-      <div className="border-t border-zinc-700/40 px-3 py-2 grid grid-cols-2 gap-3">
+      <div className="border-t border-zinc-700/40 px-3 py-2 grid grid-cols-3 gap-2">
         <SingleSlot
           label="Wardrobe"
           item={garment}
@@ -191,8 +198,48 @@ export function CharacterComposeRail({
           emptyLabel="Pick pose"
           onPick={onPickPose}
           onUnpin={(id) => onUnpin('poses', id)}
+          skeletonOverlay={poseResult?.skeleton.dataUrl ?? null}
+        />
+        <SingleSlot
+          label="Backdrop"
+          item={backdropItem}
+          emptyLabel="Add backdrop"
+          onPick={onPickBackdrop}
+          onUnpin={(id) => onUnpin('backdrop', id)}
         />
       </div>
+      {pose && (poseResult || poseLoading || poseError) ? (
+        <div className="border-t border-violet-500/20 px-3 py-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70">
+              Pose skeleton
+            </span>
+            {poseLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin text-violet-300/60" />
+            ) : poseResult ? (
+              <span className="text-[9px] font-mono text-emerald-300/70 uppercase tracking-wider">
+                {poseResult.coverage}
+              </span>
+            ) : null}
+          </div>
+          {poseError ? (
+            <div className="flex items-center gap-1.5 text-[9px] font-mono text-red-300/80">
+              <AlertTriangle className="w-3 h-3" /> {poseError}
+            </div>
+          ) : poseResult ? (
+            <div className="rounded border border-violet-500/20 bg-black/60 overflow-hidden">
+              <img
+                src={poseResult.skeleton.dataUrl}
+                alt="extracted pose skeleton"
+                className="w-full block"
+                draggable={false}
+              />
+            </div>
+          ) : (
+            <div className="text-[9px] font-mono text-violet-400/50">extracting…</div>
+          )}
+        </div>
+      ) : null}
 
       <div className="border-t border-violet-500/20 px-3 py-2">
         <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
@@ -319,61 +366,62 @@ interface SingleSlotProps {
   emptyLabel: string;
   onPick: () => void;
   onUnpin: (assetId: string) => void;
+  skeletonOverlay?: string | null;
 }
 
-function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProps) {
+function SingleSlot({ label, item, emptyLabel, onPick, onUnpin, skeletonOverlay }: SingleSlotProps) {
   return (
     <div className="min-w-0">
       <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1">
         {label}
       </div>
       {item ? (
-        <div className="flex flex-col gap-1">
-          <div className="group relative w-16 h-16">
-            <button
-              type="button"
-              onClick={onPick}
-              title={`Replace ${label.toLowerCase()}`}
-              className="w-full h-full rounded border border-violet-500/20 hover:border-violet-300 overflow-hidden bg-black transition-colors"
-            >
-              {item.thumbnailSrc || item.filePath ? (
-                <img
-                  src={item.thumbnailSrc || item.filePath}
-                  alt={item.title}
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-violet-400/60 px-1 text-center">
-                  {item.slug}
-                </div>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onUnpin(item.id);
-              }}
-              aria-label={`Clear ${label.toLowerCase()}`}
-              className={cn(
-                'absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200',
-                'opacity-0 group-hover:opacity-100 hover:bg-red-500/40 hover:border-red-400 transition-opacity',
-                'flex items-center justify-center',
-              )}
-            >
-              <X className="w-2.5 h-2.5" />
-            </button>
-          </div>
-          <div className="text-[9px] font-mono text-violet-200/80 truncate" title={item.slug}>
-            {item.slug}
-          </div>
+        <div className="group relative w-full aspect-square">
+          <button
+            type="button"
+            onClick={onPick}
+            title={item.slug}
+            className="w-full h-full rounded border border-violet-500/20 hover:border-violet-300 overflow-hidden bg-black transition-colors"
+          >
+            {item.thumbnailSrc || item.filePath ? (
+              <img
+                src={item.thumbnailSrc || item.filePath}
+                alt={item.title}
+                className="w-full h-full object-cover"
+                draggable={false}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-violet-400/60 px-1 text-center">
+                {item.slug}
+              </div>
+            )}
+          </button>
+          {skeletonOverlay ? (
+            <div className="pointer-events-none absolute bottom-1 right-1 w-8 h-8 rounded border border-emerald-400/60 bg-black/80 overflow-hidden">
+              <img src={skeletonOverlay} alt="pose skeleton" className="w-full h-full object-contain" draggable={false} />
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnpin(item.id);
+            }}
+            aria-label={`Clear ${label.toLowerCase()}`}
+            className={cn(
+              'absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200',
+              'opacity-0 group-hover:opacity-100 hover:bg-red-500/40 hover:border-red-400 transition-opacity',
+              'flex items-center justify-center',
+            )}
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
         </div>
       ) : (
         <button
           type="button"
           onClick={onPick}
-          className="w-16 h-16 rounded border border-dashed border-violet-400/60 bg-violet-500/10 text-violet-100 hover:bg-violet-500/25 hover:border-violet-300 flex items-center justify-center gap-1.5 transition-colors"
+          className="w-full aspect-square rounded border border-dashed border-violet-400/60 bg-violet-500/10 text-violet-100 hover:bg-violet-500/25 hover:border-violet-300 flex items-center justify-center gap-1.5 transition-colors"
         >
           <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1 text-center leading-tight">
             {emptyLabel}

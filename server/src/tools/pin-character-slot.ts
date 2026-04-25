@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
 
-const SLOT_KINDS = ["wardrobe", "poses", "outfits"] as const;
+const SLOT_KINDS = ["wardrobe", "poses", "backdrop", "outfits"] as const;
 type SlotKind = (typeof SLOT_KINDS)[number];
 
 function stripAt(slug: string): string {
@@ -54,7 +54,7 @@ export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
     name: "pin_character_slot",
     description:
       "Pin an asset reference into one of a char-*'s slot arrays in .character.json. " +
-      "wardrobe and poses are SINGLE-SLOT (replacing any existing pin); outfits accumulates. " +
+      "wardrobe, poses, and backdrop are SINGLE-SLOT (replacing any existing pin); outfits accumulates. " +
       "No-op if the asset is already pinned.",
     schema: pinSchema,
     handler: async (args): Promise<ToolResult> => {
@@ -112,7 +112,7 @@ export function unpinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
     name: "unpin_character_slot",
     description:
       "Remove an asset reference from one of a char-*'s slot arrays in .character.json " +
-      "(wardrobe | poses | outfits). No-op if the asset is not currently pinned.",
+      "(wardrobe | poses | backdrop | outfits). No-op if the asset is not currently pinned.",
     schema: unpinSchema,
     handler: async (args): Promise<ToolResult> => {
       const { project_slug, char_asset_id, slot, asset_id } = args as {

@@ -89,6 +89,10 @@ export function CharacterViewer({
     () => slots.poses.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
     [slots.poses, assetById],
   );
+  const backdropItems = useMemo(
+    () => slots.backdrop.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
+    [slots.backdrop, assetById],
+  );
   const outfitItems = useMemo(
     () => slots.outfits.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
     [slots.outfits, assetById],
@@ -194,10 +198,12 @@ export function CharacterViewer({
                 outfits={outfitItems}
                 wardrobe={wardrobeItems}
                 poses={poseItems}
+                backdrop={backdropItems}
                 onSelectAsset={onSelectAsset}
                 onUnpin={handleUnpin}
                 onPickWardrobe={() => setPickerSlot('wardrobe')}
                 onPickPose={() => setPickerSlot('poses')}
+                onPickBackdrop={() => setPickerSlot('backdrop')}
                 generate={generateOutfit}
                 submitting={outfitSubmitting}
                 callTool={callTool}
@@ -248,9 +254,25 @@ export function CharacterViewer({
 
       <AssetPickerModal
         open={pickerSlot !== null}
-        title={pickerSlot === 'wardrobe' ? 'Pin garment to wardrobe' : pickerSlot === 'poses' ? 'Pin pose reference' : 'Pin asset'}
+        title={
+          pickerSlot === 'wardrobe'
+            ? 'Pin garment to wardrobe'
+            : pickerSlot === 'poses'
+            ? 'Pin pose reference'
+            : pickerSlot === 'backdrop'
+            ? 'Pin backdrop reference'
+            : 'Pin asset'
+        }
         assets={pickerAssets}
-        excludeIds={pickerSlot === 'wardrobe' ? slots.wardrobe : pickerSlot === 'poses' ? slots.poses : []}
+        excludeIds={
+          pickerSlot === 'wardrobe'
+            ? slots.wardrobe
+            : pickerSlot === 'poses'
+            ? slots.poses
+            : pickerSlot === 'backdrop'
+            ? slots.backdrop
+            : []
+        }
         onPick={handlePick}
         onClose={() => setPickerSlot(null)}
       />

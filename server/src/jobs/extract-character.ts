@@ -30,6 +30,7 @@ export type Character = {
   source_image_asset_id: string;
   wardrobe?: string[];
   poses?: string[];
+  backdrop?: string[];
   outfits?: string[];
 };
 

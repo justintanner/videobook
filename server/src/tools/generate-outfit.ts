@@ -271,6 +271,15 @@ const IMAGE_LEGEND =
 // fields that materially change re-rendered outputs — name and source image
 // id are not in the prompt. Returns "" if the input is undefined so callers
 // can splice unconditionally.
+// Trim a long descriptor to its essential first phrase. Vision-extracted
+// fields like `bust` or `face` often arrive as full sentences ("oval face
+// with high cheekbones, defined jawline, straight nose, and full lips.") —
+// keep the head clause so the prompt stays dense without dropping coverage.
+function trimDescriptor(value: string): string {
+  const head = value.split(/[,;.]/)[0] ?? value;
+  return head.trim().replace(/\s+/g, " ");
+}
+
 function compressCharacterProfile(c: Character | undefined): string {
   if (!c) return "";
   const parts: string[] = [];
@@ -279,17 +288,17 @@ function compressCharacterProfile(c: Character | undefined): string {
   const body = [c.height, c.build && `${c.build} build`].filter(Boolean).join(", ");
   if (body) parts.push(body);
   const measurements = [
-    c.bust && `bust ${c.bust}`,
-    c.waist && `waist ${c.waist}`,
-    c.hips && `hips ${c.hips}`,
-    c.glutes && `glutes ${c.glutes}`,
+    c.bust && `bust ${trimDescriptor(c.bust)}`,
+    c.waist && `waist ${trimDescriptor(c.waist)}`,
+    c.hips && `hips ${trimDescriptor(c.hips)}`,
+    c.glutes && `glutes ${trimDescriptor(c.glutes)}`,
   ].filter(Boolean).join(", ");
   if (measurements) parts.push(measurements);
-  if (c.face) parts.push(`face ${c.face}`);
-  if (c.hair) parts.push(`hair ${c.hair}`);
-  if (c.eyes) parts.push(`eyes ${c.eyes}`);
-  if (c.skin) parts.push(`skin ${c.skin}`);
-  if (c.distinguishing_features) parts.push(`features ${c.distinguishing_features}`);
+  if (c.face) parts.push(`face ${trimDescriptor(c.face)}`);
+  if (c.hair) parts.push(`hair ${trimDescriptor(c.hair)}`);
+  if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
+  if (c.skin) parts.push(`skin ${trimDescriptor(c.skin)}`);
+  if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
   return parts.join("; ");
 }
 

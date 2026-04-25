@@ -20,10 +20,11 @@ export interface CharacterProfile {
   source_image_asset_id: string;
   wardrobe?: string[];
   poses?: string[];
+  backdrop?: string[];
   outfits?: string[];
 }
 
-export type SlotKind = "wardrobe" | "poses" | "outfits";
+export type SlotKind = "wardrobe" | "poses" | "backdrop" | "outfits";
 
 interface SlotState {
   assetId: string | null;
@@ -36,6 +37,7 @@ export interface UseCharacterSlotsResult {
   profile: CharacterProfile | null;
   wardrobe: string[];
   poses: string[];
+  backdrop: string[];
   outfits: string[];
   loading: boolean;
   error: string | null;
@@ -125,6 +127,7 @@ export function useCharacterSlots(
       profile: null,
       wardrobe: [],
       poses: [],
+      backdrop: [],
       outfits: [],
       loading: !!assetId && assetId.startsWith("char-"),
       error: null,
@@ -135,6 +138,7 @@ export function useCharacterSlots(
     profile: state.profile,
     wardrobe: state.profile?.wardrobe ?? [],
     poses: state.profile?.poses ?? [],
+    backdrop: state.profile?.backdrop ?? [],
     outfits: state.profile?.outfits ?? [],
     loading: state.loading,
     error: state.error,
