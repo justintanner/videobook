@@ -19,6 +19,7 @@ type DescribeImagePayload = {
 export type DescribeImageResult = {
   prompt: string;
   subject?: string;
+  pose?: string;
   composition?: string;
   lighting?: string;
   camera?: string;
@@ -34,6 +35,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
+export const ANALYSIS_FILENAME = ".original.analysis.json";
 export const VISION_MODEL = "gpt-5.2";
 export const PROMPT_CHAR_LIMIT = 1900;
 
@@ -63,6 +65,7 @@ export function formatMarkdown(r: DescribeImageResult): string {
   lines.push(r.prompt.trim(), "");
   const rows: Array<[string, string | undefined]> = [
     ["Subject", r.subject],
+    ["Pose", r.pose],
     ["Composition", r.composition],
     ["Lighting", r.lighting],
     ["Camera", r.camera],
@@ -165,6 +168,14 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
     if (!writeResult.ok) {
       throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
+    }
+
+    const analysisJson = JSON.stringify(parsed, null, 2);
+    const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
+    if (!cacheResult.ok) {
+      console.warn(
+        `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
+      );
     }
 
     await fs.writeMetadata(

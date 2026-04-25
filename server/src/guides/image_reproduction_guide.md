@@ -9,7 +9,8 @@ Return a JSON object with these fields. The `prompt` field is the single-paragra
 ```json
 {
   "prompt": "single paragraph prompt, no line breaks, fed directly to an image model",
-  "subject": "primary subject(s), pose, action, wardrobe, expression",
+  "subject": "primary subject(s), action, wardrobe, expression",
+  "pose": "pure body pose of any human figure(s) — weight distribution, stance, hip/torso/shoulder/head rotation, limb positions, gestures. Ignore clothing, facial features, identity, and setting.",
   "composition": "framing, rule-of-thirds, leading lines, negative space, foreground/mid/background",
   "lighting": "key direction (e.g. 45° camera-left, low-angle), fill, rim/back, shadow quality (hard/soft), color temperature, ambient/bounce, practicals, time of day",
   "camera": "angle (eye-level, low, high, Dutch), distance (close-up, medium, wide), lens focal length estimate (e.g. 35mm, 85mm, 14mm), aperture/DoF (shallow f/1.4 bokeh vs deep f/8), motion (static, handheld, long exposure)",
@@ -19,6 +20,17 @@ Return a JSON object with these fields. The `prompt` field is the single-paragra
   "post": "grain, bloom, vignette, halation, color grade, chromatic aberration, film vs digital, sharpness"
 }
 ```
+
+## Rules for the `pose` field
+
+Only emit `pose` when the image contains one or more human figures. Describe the body's geometry only:
+
+- Weight distribution and stance (e.g. weight on right leg, left foot crossed in front on the ball, contrapposto, kneeling, seated cross-legged, walking mid-stride).
+- Rotation of hips, torso, shoulders, and head relative to camera (e.g. hips three-quarters away, torso twisted back over right shoulder, head turned further than shoulders into three-quarter view).
+- Spine curvature (S-curve, arched, slumped, neutral).
+- Arm and leg positions, including elbow/knee bend and where the hands rest or what they grip.
+
+Do NOT mention clothing, hair, facial features, identity, expression, props, setting, or lighting in this field — those belong in `subject`, `composition`, etc. Keep it to body geometry a pose-skeleton extractor would care about.
 
 ## Rules for the `prompt` field
 

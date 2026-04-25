@@ -25,6 +25,7 @@ type RewriteScriptPayload = {
 
 const FIELD_LABEL_TO_KEY: Record<string, Exclude<keyof DescribeImageResult, "prompt">> = {
   Subject: "subject",
+  Pose: "pose",
   Composition: "composition",
   Lighting: "lighting",
   Camera: "camera",
@@ -58,11 +59,13 @@ function buildFullSystemPrompt(platform: Platform | null): string {
   const platformBlock = platform ? `\n\n--- PLATFORM ---\n${platformGuidance(platform)}\n--- END PLATFORM ---` : "";
   return (
     "You rewrite image-reproduction prompt documents. The input describes one scene, split into a prose " +
-    "prompt paragraph and labeled breakdown fields (Subject, Composition, Lighting, Camera, Palette, Style, " +
-    "Mood, Post). You apply a user transformation and emit a rewritten document in the same JSON shape.\n\n" +
-    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), and any of subject, composition, " +
+    "prompt paragraph and labeled breakdown fields (Subject, Pose, Composition, Lighting, Camera, Palette, " +
+    "Style, Mood, Post). You apply a user transformation and emit a rewritten document in the same JSON " +
+    "shape.\n\n" +
+    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), and any of subject, pose, composition, " +
     "lighting, camera, palette, style, mood, post (strings, optional — include the same fields that appear " +
-    "in the input). No prose outside the JSON. No markdown fences.\n\n" +
+    "in the input). The pose field describes body geometry only (weight, stance, rotation, limb positions); " +
+    "it must not mention clothing, hair, face, or setting. No prose outside the JSON. No markdown fences.\n\n" +
     `HARD LIMIT: the "prompt" field MUST be ${PROMPT_CHAR_LIMIT} characters or fewer.\n\n` +
     "When a transformation instruction is provided, apply it rigorously: any subject being replaced must " +
     "be ABSENT from every field of the output. Rewrite every field end-to-end so it describes the scene " +
