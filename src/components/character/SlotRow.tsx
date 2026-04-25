@@ -8,12 +8,15 @@ export interface SlotRowProps {
   emptyHint?: string;
   /** When set, the add tile renders as a wider labeled button instead of a plain "+". */
   addLabel?: string;
-  onAdd: () => void;
+  /** When omitted, no "+" tile is rendered (read-only / generated rows). */
+  onAdd?: () => void;
   onSelect: (assetId: string) => void;
   onUnpin: (assetId: string) => void;
+  /** When set, the tile whose id matches gets a "selected" highlight. */
+  selectedId?: string | null;
 }
 
-export function SlotRow({ label, items, emptyHint, addLabel, onAdd, onSelect, onUnpin }: SlotRowProps) {
+export function SlotRow({ label, items, emptyHint, addLabel, onAdd, onSelect, onUnpin, selectedId }: SlotRowProps) {
   return (
     <div className="border-t border-zinc-700/40 px-3 py-2">
       <div className="flex items-center gap-2 mb-1.5">
@@ -22,9 +25,15 @@ export function SlotRow({ label, items, emptyHint, addLabel, onAdd, onSelect, on
       </div>
       <div className="flex gap-1.5 overflow-x-auto items-stretch">
         {items.map((it) => (
-          <SlotTile key={it.id} item={it} onSelect={onSelect} onUnpin={onUnpin} />
+          <SlotTile
+            key={it.id}
+            item={it}
+            onSelect={onSelect}
+            onUnpin={onUnpin}
+            selected={selectedId === it.id}
+          />
         ))}
-        {addLabel ? (
+        {onAdd && addLabel ? (
           <button
             type="button"
             onClick={onAdd}
@@ -39,7 +48,7 @@ export function SlotRow({ label, items, emptyHint, addLabel, onAdd, onSelect, on
               {addLabel}
             </span>
           </button>
-        ) : (
+        ) : onAdd ? (
           <button
             type="button"
             onClick={onAdd}
@@ -54,7 +63,7 @@ export function SlotRow({ label, items, emptyHint, addLabel, onAdd, onSelect, on
               <span className="text-[8px] font-mono uppercase tracking-wider">{emptyHint}</span>
             ) : null}
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -64,10 +73,12 @@ function SlotTile({
   item,
   onSelect,
   onUnpin,
+  selected,
 }: {
   item: MediaItem;
   onSelect: (assetId: string) => void;
   onUnpin: (assetId: string) => void;
+  selected?: boolean;
 }) {
   const thumb = item.thumbnailSrc || item.filePath;
   return (
@@ -77,8 +88,10 @@ function SlotTile({
         onClick={() => onSelect(item.id)}
         title={item.slug}
         className={cn(
-          "w-full h-full rounded border border-violet-500/20 overflow-hidden bg-black",
-          "hover:border-violet-300 transition-colors",
+          "w-full h-full rounded border overflow-hidden bg-black transition-colors",
+          selected
+            ? "border-violet-300 ring-2 ring-violet-300/60"
+            : "border-violet-500/20 hover:border-violet-300",
         )}
       >
         {thumb ? (

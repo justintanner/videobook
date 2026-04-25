@@ -118,8 +118,8 @@ const SHEET_LAYOUT =
   "tightly cropped just below the chin/neck so NO clothing, NO bra straps, NO necklines and NO shoulder garments are visible — only face, hair, ears and bare neck. " +
   "Top-right quadrant: tight head-and-neck front portrait, the subject's face directly to camera; " +
   "same tight head-and-neck crop — NO clothing, NO bra straps, NO necklines and NO shoulder garments visible, only face, hair, ears and bare neck. " +
-  "Bottom-left quadrant: 3/4 front angle of the head, torso and hips, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette of the upper body. CROP TIGHTLY: the bottom edge of the frame must end just above where the hands hang at the sides (around the upper hip / belt line), so NO hands, NO wrists and NO thighs are visible. " +
-  "Bottom-right quadrant: 3/4 back angle of the head, torso and hips, the subject's back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette of the upper body. CROP TIGHTLY: the bottom edge of the frame must end just above where the hands hang at the sides (around the upper hip / belt line), so NO hands, NO wrists and NO thighs are visible.";
+  "Bottom-left quadrant: full-body 3/4 front angle, the subject standing, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette so the 3D form of the body reads. " +
+  "Bottom-right quadrant: full-body 3/4 back angle, the subject standing with their back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette so the 3D form reads.";
 
 const STYLE_TAIL =
   "Photographic, editorial fashion-documentation style. " +

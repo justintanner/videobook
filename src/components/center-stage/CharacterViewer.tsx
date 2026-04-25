@@ -7,9 +7,8 @@ import { useCharacterSlots, type SlotKind, type CharacterProfile } from '@/hooks
 import { useCharacterPin } from '@/hooks/useCharacterPin';
 import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { CharacterProfilePanel } from '@/components/character/CharacterProfilePanel';
-import { SlotRow } from '@/components/character/SlotRow';
+import { CharacterComposeRail } from '@/components/character/CharacterComposeRail';
 import { AssetPickerModal } from '@/components/character/AssetPickerModal';
-import { SimpleOutfitDialog } from '@/components/outfit/SimpleOutfitDialog';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { BackTab } from './viewer-types';
 import {
@@ -62,7 +61,6 @@ export function CharacterViewer({
   const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
 
   const [pickerSlot, setPickerSlot] = useState<SlotKind | null>(null);
-  const [outfitOpen, setOutfitOpen] = useState(false);
 
   const bf = useViewerBackFace({
     projectSlug,
@@ -115,9 +113,12 @@ export function CharacterViewer({
     onEditProfile(item.id, slots.profile);
   }, [slots.profile, onEditProfile, item.id]);
 
-  const handleAddOutfit = useCallback(() => {
-    setOutfitOpen(true);
-  }, []);
+  const handleUnpin = useCallback(
+    (slot: SlotKind, assetId: string) => {
+      void pin.unpin(slot, assetId);
+    },
+    [pin],
+  );
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
@@ -187,33 +188,21 @@ export function CharacterViewer({
                   <div className="text-violet-300/50 text-xs font-mono">No sheet image yet</div>
                 )}
               </div>
-              <aside className="w-80 shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40">
-                <SlotRow
-                  label="Outfits"
-                  items={outfitItems}
-                  emptyHint="render"
-                  addLabel="Compose outfit"
-                  onAdd={handleAddOutfit}
-                  onSelect={onSelectAsset}
-                  onUnpin={(assetId) => void pin.unpin('outfits', assetId)}
-                />
-                <SlotRow
-                  label="Wardrobe"
-                  items={wardrobeItems}
-                  emptyHint="garment"
-                  onAdd={() => setPickerSlot('wardrobe')}
-                  onSelect={onSelectAsset}
-                  onUnpin={(assetId) => void pin.unpin('wardrobe', assetId)}
-                />
-                <SlotRow
-                  label="Poses"
-                  items={poseItems}
-                  emptyHint="pose ref"
-                  onAdd={() => setPickerSlot('poses')}
-                  onSelect={onSelectAsset}
-                  onUnpin={(assetId) => void pin.unpin('poses', assetId)}
-                />
-              </aside>
+              <CharacterComposeRail
+                characterId={item.id}
+                projectSlug={projectSlug}
+                outfits={outfitItems}
+                wardrobe={wardrobeItems}
+                poses={poseItems}
+                onSelectAsset={onSelectAsset}
+                onUnpin={handleUnpin}
+                onAddWardrobe={() => setPickerSlot('wardrobe')}
+                onAddPose={() => setPickerSlot('poses')}
+                generate={generateOutfit}
+                submitting={outfitSubmitting}
+                callTool={callTool}
+                callState={callState}
+              />
             </div>
           </div>
 
@@ -264,19 +253,6 @@ export function CharacterViewer({
         excludeIds={pickerSlot === 'wardrobe' ? slots.wardrobe : pickerSlot === 'poses' ? slots.poses : []}
         onPick={handlePick}
         onClose={() => setPickerSlot(null)}
-      />
-
-      <SimpleOutfitDialog
-        open={outfitOpen}
-        onOpenChange={setOutfitOpen}
-        character={{ id: item.id, slug: item.slug }}
-        wardrobe={wardrobeItems}
-        poses={poseItems}
-        projectSlug={projectSlug}
-        generate={generateOutfit}
-        submitting={outfitSubmitting}
-        callTool={callTool}
-        callState={callState}
       />
     </div>
   );
