@@ -15,6 +15,7 @@ const schema = {
   image_size: z.enum(WAN27_IMAGE_SIZES).optional().describe("Output size preset"),
   num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
   seed: z.number().int().optional().describe("Seed for deterministic output"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -25,7 +26,8 @@ export function generateWan27ProEditFalDef(fs: ClipfirstFs): ToolDef {
     description: "Edit images via fal.ai using Wan 2.7 Pro edit (higher quality image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, negative_prompt, image_size, num_images, seed } = args as Args;
+      const { project_slug, prompt, image_slugs, negative_prompt, image_size, num_images, seed, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
@@ -34,7 +36,7 @@ export function generateWan27ProEditFalDef(fs: ClipfirstFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `wan27pro-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset(prefix, `wan27pro-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;

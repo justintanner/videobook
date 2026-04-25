@@ -112,7 +112,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
   const isError = status === 'error' && item.type !== 'script';
   const isGold = isFinal && (isReady || isRenderingState(status));
 
-  const generatingClass = status === 'generating' && item.type === 'image'
+  const generatingClass = status === 'generating' && (item.type === 'image' || item.type === 'character')
     ? 'clip-state-generating-image cursor-wait'
     : stateClassMap[status];
 

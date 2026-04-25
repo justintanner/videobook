@@ -8,12 +8,13 @@ const typeFallbackLabels: Record<string, string> = {
   script: 'SCRIPT',
   plan: 'PLAN',
   final: 'VIDEO',
+  character: 'CHAR',
 };
 
 export function GeneratingOverlay({ item }: OverlayProps) {
   const fallbackLabel = typeFallbackLabels[item.type] ?? 'ASSET';
 
-  const primaryColor = item.type === 'image' ? '#3b82f6' : '#22c55e';
+  const primaryColor = item.type === 'image' || item.type === 'character' ? '#3b82f6' : '#22c55e';
   const glowStyle = `0 0 8px ${primaryColor}`;
 
   const hexToRgb = (hex: string) => {

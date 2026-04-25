@@ -7,6 +7,8 @@ import { VideoViewer } from './VideoViewer';
 import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
+import { CharacterViewer } from './CharacterViewer';
+import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 
 // Re-export shared types and components so existing imports keep working
@@ -15,7 +17,7 @@ export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBa
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, onClose }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onSelectAsset, onOpenOutfit, onEditCharacterProfile }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -31,11 +33,17 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
   callTool: UseMcpResult['callTool'];
+  callState: UseMcpResult['state'];
   onClose: () => void;
+  imageAssets: MediaItem[];
+  onSelectAsset: (assetId: string) => void;
+  onOpenOutfit: (charSlug: string) => void;
+  onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isText = item.type === 'script' || item.type === 'plan';
   const isAudio = item.type === 'audio';
+  const isCharacter = item.type === 'character';
 
   if (isClip) {
     return (
@@ -73,6 +81,28 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onClearPendingBackTab={onClearPendingBackTab}
         callTool={callTool}
         onClose={onClose}
+      />
+    );
+  }
+
+  if (isCharacter) {
+    return (
+      <CharacterViewer
+        item={item}
+        projectSlug={projectSlug}
+        flipped={flipped}
+        onFlippedChange={onFlippedChange}
+        pendingFilePosition={pendingFilePosition}
+        onClearPendingFilePosition={onClearPendingFilePosition}
+        pendingBackTab={pendingBackTab}
+        onClearPendingBackTab={onClearPendingBackTab}
+        callTool={callTool}
+        callState={callState}
+        onClose={onClose}
+        imageAssets={imageAssets}
+        onSelectAsset={onSelectAsset}
+        onOpenOutfit={onOpenOutfit}
+        onEditProfile={onEditCharacterProfile}
       />
     );
   }

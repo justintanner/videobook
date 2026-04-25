@@ -1,4 +1,4 @@
-export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'plan' | 'final';
+export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'plan' | 'final' | 'character';
 
 export type PendingState = 'queued' | 'processing' | 'success' | 'fail' | 'expired';
 

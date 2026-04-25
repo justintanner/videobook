@@ -1,4 +1,4 @@
-import { AudioLines, Compass, FileText, Film, ImageIcon } from 'lucide-react';
+import { AudioLines, Compass, FileText, Film, ImageIcon, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { MediaItem, ClipState } from './types';
@@ -50,6 +50,8 @@ function ThumbIcon({ type }: { type: MediaItem['type'] }) {
       return <Film className="w-3.5 h-3.5 text-primary/50" />;
     case 'image':
       return <ImageIcon className="w-3.5 h-3.5 text-primary/50" />;
+    case 'character':
+      return <User className="w-3.5 h-3.5 text-violet-400/60" />;
     case 'final':
       return <Film className="w-3.5 h-3.5 text-amber-400/50" />;
   }
@@ -57,7 +59,7 @@ function ThumbIcon({ type }: { type: MediaItem['type'] }) {
 
 export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumbProps) {
   const src = item.thumbnailSrc ?? (item.filePath || null);
-  const hasImage = !!src && (item.type === 'image' || item.type === 'video' || item.type === 'final');
+  const hasImage = !!src && (item.type === 'image' || item.type === 'character' || item.type === 'video' || item.type === 'final');
   const dot = getStatusDot(item.status);
   const isGold = item.type === 'final';
 

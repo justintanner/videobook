@@ -57,6 +57,7 @@ const schema = {
   acceleration: z.enum(accelerationOptions).optional().describe("Acceleration level"),
   enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
   seed: z.number().int().optional().describe("Seed for deterministic output"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -67,7 +68,8 @@ export function generateQwenImageEditFalDef(fs: ClipfirstFs): ToolDef {
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed } = args as Args;
+      const { project_slug, prompt, image_slugs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
@@ -80,7 +82,7 @@ export function generateQwenImageEditFalDef(fs: ClipfirstFs): ToolDef {
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.createAsset("img", `qwen-image-edit-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset(prefix, `qwen-image-edit-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;

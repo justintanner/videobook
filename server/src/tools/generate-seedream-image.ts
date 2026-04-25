@@ -26,6 +26,7 @@ const generateSeedreamImageSchema = {
   aspect_ratio: z.enum(seedreamInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (default 1:1)"),
   quality: z.enum(seedreamInputSchema.quality.options).optional().describe("Output quality (basic=2K, high=4K). Defaults to basic."),
   nsfw_checker: z.boolean().optional().describe("Content safety filter"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'fal')"),
 } satisfies ZodRawShape;
 
@@ -37,7 +38,8 @@ export function generateSeedreamImageDef(fs: ClipfirstFs): ToolDef {
     description: "Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema: generateSeedreamImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, quality, nsfw_checker } = args as Args;
+      const { prompt, project_slug, image_slugs, aspect_ratio, quality, nsfw_checker, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -69,7 +71,7 @@ export function generateSeedreamImageDef(fs: ClipfirstFs): ToolDef {
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = `seedream-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,

@@ -21,6 +21,7 @@ const schema = {
   output_format: z.enum(outputFormatOptions).optional().describe("Output image format"),
   seed: z.number().optional().describe("Seed for deterministic output"),
   enable_web_search: z.boolean().optional().describe("Enable web search grounding"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -31,7 +32,8 @@ export function generateNanoBananaProEditFalDef(fs: ClipfirstFs): ToolDef {
     description: "Edit or compose images via fal.ai using Google Nano Banana Pro with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, num_images, aspect_ratio, resolution, output_format, seed, enable_web_search } = args as Args;
+      const { project_slug, prompt, image_slugs, num_images, aspect_ratio, resolution, output_format, seed, enable_web_search, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
@@ -40,7 +42,7 @@ export function generateNanoBananaProEditFalDef(fs: ClipfirstFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `nano-banana-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset(prefix, `nano-banana-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;

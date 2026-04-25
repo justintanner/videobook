@@ -118,6 +118,9 @@ import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-vi
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js";
+import { generateCharacterDef } from "./generate-character.js";
+import { analyzeCharacterImageDef } from "./analyze-character-image.js";
+import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -248,5 +251,9 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     genImagesAllDef(fs),
     generateOutfitDef(fs),
     previewOutfitPromptsDef(),
+    generateCharacterDef(fs),
+    analyzeCharacterImageDef(fs),
+    pinCharacterSlotDef(fs),
+    unpinCharacterSlotDef(fs),
   ];
 }

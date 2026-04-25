@@ -53,6 +53,20 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_gen_image",
   },
   {
+    command: "/character",
+    description: "Create a reusable character: extract a structured profile from a portrait, edit fields, generate a 4-up reference sheet (face profile + face front + body front + body back). The character can then be sent to /outfit.",
+    example: "/character @img-some-portrait",
+    category: "action",
+    icon: "User",
+    size: "default",
+    variant: "blue",
+    chevron: "down",
+    params: [
+      { name: "source_slug", type: "string", required: false, description: "Source portrait @img-* to extract a profile from" },
+    ],
+    uiAction: "open_character_dialog",
+  },
+  {
     command: "/outfit",
     description: "Put a garment on a model in a chosen pose (MediaPipe Holistic skeleton)",
     example: "/outfit @img-exactly-girl",
@@ -62,7 +76,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "blue",
     chevron: "down",
     params: [
-      { name: "model_slug", type: "string", required: false, description: "Optional model @img-* to preselect" },
+      { name: "model_slug", type: "string", required: false, description: "Optional model @img-* or @char-* to preselect" },
     ],
     uiAction: "open_outfit_dialog",
   },

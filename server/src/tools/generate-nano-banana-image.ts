@@ -26,6 +26,7 @@ const generateNanoBananaImageSchema = {
   aspect_ratio: z.enum(nanoBananaProInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
   resolution: z.enum(NanoBananaResolutionSchema.options).optional().describe("Output resolution"),
   output_format: z.enum(NanoBananaOutputFormatSchema.options).optional().describe("Output image format"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -37,7 +38,8 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
     schema: generateNanoBananaImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as Args;
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       const rawSlugs = image_slugs ?? [];
 
@@ -68,7 +70,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = slugify(prompt);
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,

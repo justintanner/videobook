@@ -20,6 +20,7 @@ import {
   type DescribeImageResult,
 } from "../jobs/describe-image.js";
 import { findImageFile } from "./_image-inputs.js";
+import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
 
 const CUSTOM_PROMPT_MAX = 500;
 const POSE_DESCRIPTION_MAX = 1500;
@@ -885,6 +886,45 @@ export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
         if (r.assetId) outcome.img_asset_id = r.assetId;
         if (r.jobId) outcome.job_id = r.jobId;
         outcomes.push(outcome);
+      }
+
+      // Auto-pin generated outfits to the source character's outfits[] when
+      // the model image is a char-*. The asset IDs are known here even though
+      // the image jobs are still running — failed renders surface as "failed"
+      // status on the asset and the client can render them as such.
+      const modelSlugStripped = a.model_image_slug.replace(/^@/, "");
+      if (modelSlugStripped.startsWith("char-")) {
+        const newAssetIds = outcomes
+          .filter((o) => !!o.img_asset_id && !o.error)
+          .map((o) => o.img_asset_id!);
+        if (newAssetIds.length > 0) {
+          const read = await fs.readMetadata<Character>(
+            modelSlugStripped,
+            CHARACTER_METADATA_KEY,
+            a.project_slug,
+          );
+          if (read.ok) {
+            const current = read.value.outfits ?? [];
+            const merged = [...current];
+            for (const id of newAssetIds) if (!merged.includes(id)) merged.push(id);
+            const next: Character = { ...read.value, outfits: merged };
+            const write = await fs.writeMetadata(
+              modelSlugStripped,
+              CHARACTER_METADATA_KEY,
+              next,
+              a.project_slug,
+            );
+            if (!write.ok) {
+              console.warn(
+                `[generate_outfit] auto-pin to ${modelSlugStripped} failed: ${write.error.message}`,
+              );
+            }
+          } else {
+            console.warn(
+              `[generate_outfit] auto-pin skipped: could not read .character.json for ${modelSlugStripped}: ${read.error.message}`,
+            );
+          }
+        }
       }
 
       const enqueued = outcomes.filter((o) => !o.error).length;

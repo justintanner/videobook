@@ -22,6 +22,7 @@ const generateQwen2ImageEditSchema = {
   image_size: z.enum(qwen2ImageEditInputSchema.image_size.removeDefault().options).optional().describe("Output aspect ratio (default 16:9)"),
   output_format: z.enum(qwen2ImageEditInputSchema.output_format.removeDefault().options).optional().describe("Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
+  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -33,7 +34,8 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
     description: "Edit images using Qwen2 image-edit on Kie. Requires 1-3 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as Args;
+      const { prompt, project_slug, image_slugs, image_size, output_format, seed, output_prefix } = args as Args;
+      const prefix = output_prefix ?? "img";
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -68,7 +70,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
 
       const nameSeed = sourceImageIds[0] ?? `ephemeral-${Date.now()}`;
       const imgName = deriveImageName(nameSeed);
-      const assetResult = await fs.createAsset("img", imgName, project_slug);
+      const assetResult = await fs.createAsset(prefix, imgName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,

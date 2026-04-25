@@ -25,8 +25,11 @@ import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
 import { OutfitDialog } from '@/components/outfit/OutfitDialog';
+import { CharacterDialog } from '@/components/character/CharacterDialog';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
+import { useGenerateCharacter } from '@/hooks/useGenerateCharacter';
+import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
@@ -47,7 +50,7 @@ import type { MediaItem, AssetType, ClipState, PendingState } from '@/components
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
-const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan']);
+const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
 const SIDEBAR_HIDDEN_STATUSES = new Set<string>(['unreviewed', 'generating', 'downloading', 'error', 'loading', 'corrupt']);
 const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'error']);
@@ -85,6 +88,7 @@ export function HomePage() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const [outfitDialog, setOutfitDialog] = useState<{ initialSlug: string | null } | null>(null);
+  const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +104,7 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
+  const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
   const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
@@ -606,6 +611,10 @@ export function HomePage() {
       const cleaned = initialSlug.trim();
       setOutfitDialog({ initialSlug: cleaned ? cleaned : null });
     },
+    open_character_dialog: (initialSlug: string) => {
+      const cleaned = initialSlug.trim();
+      setCharacterDialog({ initialSlug: cleaned ? cleaned : null });
+    },
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
 
   return (
@@ -699,7 +708,7 @@ export function HomePage() {
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                   {assets.map((item) => {
-                    const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
+                    const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
                     const itemFilePath = item.filePath;
                     const menu = (
                       <AssetMenu
@@ -716,7 +725,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                         {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                         {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                         {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
@@ -742,7 +751,32 @@ export function HomePage() {
                     projectSlug={projectSlug}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer item={activeSelection} projectSlug={projectSlug ?? ''} size={viewerSize} onSizeChange={handleViewerSizeChange} flipped={viewerFlipped} onFlippedChange={setViewerFlipped} renderOrientation={settingsOrientation} onRender={handleRender} pendingFilePosition={pendingFilePosition} onClearPendingFilePosition={() => setPendingFilePosition(null)} pendingBackTab={pendingBackTab} onClearPendingBackTab={() => setPendingBackTab(null)} settings={renderSettings} onSettingsChange={setRenderSettings} callTool={callTool} onClose={() => setSelectedItem(null)} />
+                  <AssetViewer
+                    item={activeSelection}
+                    projectSlug={projectSlug ?? ''}
+                    size={viewerSize}
+                    onSizeChange={handleViewerSizeChange}
+                    flipped={viewerFlipped}
+                    onFlippedChange={setViewerFlipped}
+                    renderOrientation={settingsOrientation}
+                    onRender={handleRender}
+                    pendingFilePosition={pendingFilePosition}
+                    onClearPendingFilePosition={() => setPendingFilePosition(null)}
+                    pendingBackTab={pendingBackTab}
+                    onClearPendingBackTab={() => setPendingBackTab(null)}
+                    settings={renderSettings}
+                    onSettingsChange={setRenderSettings}
+                    callTool={callTool}
+                    callState={state}
+                    onClose={() => setSelectedItem(null)}
+                    imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
+                    onSelectAsset={(assetId) => {
+                      const found = mediaItems.find((m) => m.id === assetId);
+                      if (found) setSelectedItem(found);
+                    }}
+                    onOpenOutfit={(slug) => setOutfitDialog({ initialSlug: slug })}
+                    onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
+                  />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer
                     previewData={previewData}
@@ -874,13 +908,26 @@ export function HomePage() {
       <OutfitDialog
         open={!!outfitDialog}
         onOpenChange={(next) => { if (!next) setOutfitDialog(null); }}
-        imageAssets={mediaItems.filter((m) => m.type === 'image')}
+        imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
         projectSlug={projectSlug}
         initialSlug={outfitDialog?.initialSlug ?? null}
         generate={generateOutfit}
         submitting={outfitSubmitting}
         callTool={callTool}
         callState={state}
+      />
+      <CharacterDialog
+        open={!!characterDialog}
+        onOpenChange={(next) => { if (!next) setCharacterDialog(null); }}
+        imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
+        projectSlug={projectSlug}
+        initialSlug={characterDialog?.initialSlug ?? null}
+        initialProfile={characterDialog?.initialProfile ?? null}
+        generate={generateCharacter}
+        submitting={characterSubmitting}
+        callTool={callTool}
+        callState={state}
+        onOpenOutfit={(slug) => setOutfitDialog({ initialSlug: slug })}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>
