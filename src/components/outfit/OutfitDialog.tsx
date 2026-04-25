@@ -222,6 +222,7 @@ export function OutfitDialog({
     models: modelsForPreview,
     provider: selectedProvider,
     hasBackdrop: !!backdrop,
+    hasPoseDescription: !!pose,
     platform: selectedPlatform,
     poseCoverage: poseResult?.coverage ?? null,
   });
@@ -256,6 +257,7 @@ export function OutfitDialog({
       poseSkeletonBlob: poseResult.skeleton.blob,
       poseSkeletonFilename: `pose-skeleton-${pose.assetId}.png`,
       poseCoverage: poseResult.coverage,
+      poseSourceSlug: pose.assetId,
       backdropImageSlug: backdrop?.assetId,
       models: [...selectedModels],
       provider: selectedProvider,
