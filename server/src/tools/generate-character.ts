@@ -56,7 +56,7 @@ const schema = {
   outfit_text: z
     .string()
     .optional()
-    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). When unset, the model picks neutral form-fitting clothing."),
+    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). When unset, the body shots default to skin-tone nude undergarments so the silhouette reads cleanly."),
   outfit_image_slug: z
     .string()
     .optional()
@@ -118,8 +118,8 @@ const SHEET_LAYOUT =
   "tightly cropped just below the chin/neck so NO clothing, NO bra straps, NO necklines and NO shoulder garments are visible — only face, hair, ears and bare neck. " +
   "Top-right quadrant: tight head-and-neck front portrait, the subject's face directly to camera; " +
   "same tight head-and-neck crop — NO clothing, NO bra straps, NO necklines and NO shoulder garments visible, only face, hair, ears and bare neck. " +
-  "Bottom-left quadrant: full-body 3/4 front angle, the subject standing, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette so the 3D form of the body reads. " +
-  "Bottom-right quadrant: full-body 3/4 back angle, the subject standing with their back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette so the 3D form reads.";
+  "Bottom-left quadrant: 3/4 front angle of the head, torso and hips, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette of the upper body. CROP TIGHTLY: the bottom edge of the frame must end just above where the hands hang at the sides (around the upper hip / belt line), so NO hands, NO wrists and NO thighs are visible. " +
+  "Bottom-right quadrant: 3/4 back angle of the head, torso and hips, the subject's back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette of the upper body. CROP TIGHTLY: the bottom edge of the frame must end just above where the hands hang at the sides (around the upper hip / belt line), so NO hands, NO wrists and NO thighs are visible.";
 
 const STYLE_TAIL =
   "Photographic, editorial fashion-documentation style. " +
@@ -146,7 +146,8 @@ function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean)
     );
   }
   return (
-    "Wardrobe for the body shots (bottom quadrants only): neutral form-fitting plain clothing — simple short-sleeve top and dark trousers. " +
+    "Wardrobe for the body shots (bottom quadrants only): a smooth skin-tone nude undergarment set — a plain nude bra top with thick straps and matching nude high-waist briefs, " +
+    "color closely matched to the subject's own skin tone, no patterns, no logos, no lace. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
     "Top quadrants stay tightly cropped to bare head and neck."
   );
 }

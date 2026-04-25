@@ -7,7 +7,6 @@ import { useCharacterSlots, type SlotKind, type CharacterProfile } from '@/hooks
 import { useCharacterPin } from '@/hooks/useCharacterPin';
 import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { CharacterProfilePanel } from '@/components/character/CharacterProfilePanel';
-import { RerollSheetPanel } from '@/components/character/RerollSheetPanel';
 import { SlotRow } from '@/components/character/SlotRow';
 import { AssetPickerModal } from '@/components/character/AssetPickerModal';
 import { SimpleOutfitDialog } from '@/components/outfit/SimpleOutfitDialog';
@@ -96,12 +95,6 @@ export function CharacterViewer({
     () => slots.outfits.map((id) => assetById.get(id)).filter((x): x is MediaItem => !!x),
     [slots.outfits, assetById],
   );
-
-  const sourceImage = useMemo<MediaItem | null>(() => {
-    const id = slots.profile?.source_image_asset_id;
-    if (!id) return null;
-    return assetById.get(id) ?? null;
-  }, [slots.profile, assetById]);
 
   const pickerAssets = useMemo(() => {
     // For wardrobe/poses we only pick from img-* assets (not other char-*'s).
@@ -194,43 +187,33 @@ export function CharacterViewer({
                   <div className="text-violet-300/50 text-xs font-mono">No sheet image yet</div>
                 )}
               </div>
-              <RerollSheetPanel
-                profile={slots.profile}
-                projectSlug={projectSlug}
-                sourceImage={sourceImage}
-                wardrobe={wardrobeItems}
-                callTool={callTool}
-                callState={callState}
-              />
-            </div>
-
-            {/* Bottom: slot rows — Outfits first since it's the primary output */}
-            <div className="shrink-0 bg-black/50 max-h-[40%] overflow-y-auto">
-              <SlotRow
-                label="Outfits"
-                items={outfitItems}
-                emptyHint="render"
-                addLabel="Compose outfit"
-                onAdd={handleAddOutfit}
-                onSelect={onSelectAsset}
-                onUnpin={(assetId) => void pin.unpin('outfits', assetId)}
-              />
-              <SlotRow
-                label="Wardrobe"
-                items={wardrobeItems}
-                emptyHint="garment"
-                onAdd={() => setPickerSlot('wardrobe')}
-                onSelect={onSelectAsset}
-                onUnpin={(assetId) => void pin.unpin('wardrobe', assetId)}
-              />
-              <SlotRow
-                label="Poses"
-                items={poseItems}
-                emptyHint="pose ref"
-                onAdd={() => setPickerSlot('poses')}
-                onSelect={onSelectAsset}
-                onUnpin={(assetId) => void pin.unpin('poses', assetId)}
-              />
+              <aside className="w-80 shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40">
+                <SlotRow
+                  label="Outfits"
+                  items={outfitItems}
+                  emptyHint="render"
+                  addLabel="Compose outfit"
+                  onAdd={handleAddOutfit}
+                  onSelect={onSelectAsset}
+                  onUnpin={(assetId) => void pin.unpin('outfits', assetId)}
+                />
+                <SlotRow
+                  label="Wardrobe"
+                  items={wardrobeItems}
+                  emptyHint="garment"
+                  onAdd={() => setPickerSlot('wardrobe')}
+                  onSelect={onSelectAsset}
+                  onUnpin={(assetId) => void pin.unpin('wardrobe', assetId)}
+                />
+                <SlotRow
+                  label="Poses"
+                  items={poseItems}
+                  emptyHint="pose ref"
+                  onAdd={() => setPickerSlot('poses')}
+                  onSelect={onSelectAsset}
+                  onUnpin={(assetId) => void pin.unpin('poses', assetId)}
+                />
+              </aside>
             </div>
           </div>
 
