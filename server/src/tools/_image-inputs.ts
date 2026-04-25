@@ -40,8 +40,8 @@ export async function resolveImageSlugs(
       continue;
     }
     const assetId = raw.replace(/^@/, "");
-    if (!assetId.startsWith("img-")) {
-      return { ok: false, error: `image_slugs entries must be img-* assets or http(s) URLs, got: ${assetId}` };
+    if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
+      return { ok: false, error: `image_slugs entries must be img-* or char-* assets or http(s) URLs, got: ${assetId}` };
     }
     const manifestResult = await fs.getManifest(assetId, projectSlug);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
