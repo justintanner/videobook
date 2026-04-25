@@ -20,6 +20,7 @@ type ProfileFieldKey =
   | 'ethnicity'
   | 'height'
   | 'build'
+  | 'measurements'
   | 'face'
   | 'hair'
   | 'eyes'
@@ -44,6 +45,7 @@ const FIELDS: FieldDef[] = [
   { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
   { key: 'height', label: 'Height', required: true, placeholder: 'average' },
   { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
+  { key: 'measurements', label: 'Measurements', required: false, placeholder: 'bust 34 / waist 26 / hips 36, US 4' },
   { key: 'face', label: 'Face', required: true, multiline: true },
   { key: 'hair', label: 'Hair', required: true, multiline: true },
   { key: 'eyes', label: 'Eyes', required: true, multiline: true },

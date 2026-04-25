@@ -16,6 +16,7 @@ const FIELD_ORDER: Array<{ key: keyof CharacterProfile; label: string }> = [
   { key: "ethnicity", label: "Background" },
   { key: "height", label: "Height" },
   { key: "build", label: "Build" },
+  { key: "measurements", label: "Measurements" },
   { key: "face", label: "Face" },
   { key: "hair", label: "Hair" },
   { key: "eyes", label: "Eyes" },

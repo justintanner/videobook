@@ -18,6 +18,7 @@ export type Character = {
   ethnicity: string;
   height: string;
   build: string;
+  measurements?: string;
   face: string;
   hair: string;
   eyes: string;
@@ -92,6 +93,9 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
     source_image_asset_id: sourceAssetId,
   };
   if (typeof obj.name === "string" && obj.name.trim()) character.name = obj.name.trim();
+  if (typeof obj.measurements === "string" && obj.measurements.trim()) {
+    character.measurements = obj.measurements.trim();
+  }
   if (typeof obj.wardrobe_style === "string" && obj.wardrobe_style.trim()) {
     character.wardrobe_style = obj.wardrobe_style.trim();
   }

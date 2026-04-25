@@ -25,6 +25,7 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
   "ethnicity": "string — e.g. 'East Asian', 'Black / West African heritage', 'Latina', 'White / Northern European'. Use respectful, specific descriptors that help the model render features consistently.",
   "height": "string — 'tall', 'average', 'petite', or actual figure if knowable",
   "build": "string — slim / athletic / curvy / stocky / muscular / lean. Combine if useful: 'lean athletic'.",
+  "measurements": "string (optional) — leave blank, user fills this in (e.g. 'bust 34 / waist 26 / hips 36, US size 4'). Do NOT guess numeric measurements from a photograph.",
   "face": "string — face shape (oval, heart, square, round, long) + prominent structural features (cheekbones, jawline, brow, nose shape, lip shape). 1-2 sentences.",
   "hair": "string — color, length, texture, style, hairline. 1 sentence.",
   "eyes": "string — color, shape, lash density, brow shape. 1 sentence.",
@@ -40,5 +41,5 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
 
 - Each descriptive field is at most 2 short sentences.
 - Total JSON must be under 1500 characters.
-- Do NOT include a `name` or `backstory` value — leave them empty strings or omit the keys. Those are user-owned.
+- Do NOT include a `name`, `measurements`, or `backstory` value — leave them empty strings or omit the keys. Those are user-owned.
 - Do NOT speculate about profession, mood beyond the photo, or relationships.

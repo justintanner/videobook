@@ -91,7 +91,7 @@ describe("generate_nano_banana_image tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("image_slugs entries must be img-* assets");
+    expect(content[0].text).toContain("image_slugs entries must be img-* or char-* assets");
   });
 
   it("returns error for nonexistent reference image asset", async () => {

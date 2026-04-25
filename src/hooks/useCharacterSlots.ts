@@ -8,6 +8,7 @@ export interface CharacterProfile {
   ethnicity: string;
   height: string;
   build: string;
+  measurements?: string;
   face: string;
   hair: string;
   eyes: string;

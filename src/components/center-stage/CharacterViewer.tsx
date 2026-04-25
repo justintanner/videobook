@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Settings, X, Pencil, Shirt as OutfitIcon } from 'lucide-react';
+import { Settings, X, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -189,8 +189,17 @@ export function CharacterViewer({
               </div>
             </div>
 
-            {/* Bottom: slot rows */}
+            {/* Bottom: slot rows — Outfits first since it's the primary output */}
             <div className="shrink-0 bg-black/50 max-h-[40%] overflow-y-auto">
+              <SlotRow
+                label="Outfits"
+                items={outfitItems}
+                emptyHint="render"
+                addLabel="Compose outfit"
+                onAdd={handleAddOutfit}
+                onSelect={onSelectAsset}
+                onUnpin={(assetId) => void pin.unpin('outfits', assetId)}
+              />
               <SlotRow
                 label="Wardrobe"
                 items={wardrobeItems}
@@ -207,24 +216,6 @@ export function CharacterViewer({
                 onSelect={onSelectAsset}
                 onUnpin={(assetId) => void pin.unpin('poses', assetId)}
               />
-              <SlotRow
-                label="Outfits"
-                items={outfitItems}
-                emptyHint="render"
-                onAdd={handleAddOutfit}
-                onSelect={onSelectAsset}
-                onUnpin={(assetId) => void pin.unpin('outfits', assetId)}
-              />
-              <div className="px-3 pb-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleAddOutfit}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-purple-400/40 text-[10px] font-mono uppercase tracking-wider text-purple-200 hover:bg-purple-500/20 transition-colors"
-                >
-                  <OutfitIcon className="w-3 h-3" />
-                  Compose outfit
-                </button>
-              </div>
             </div>
           </div>
 
