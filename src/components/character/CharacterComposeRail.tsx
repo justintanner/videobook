@@ -50,6 +50,7 @@ export function CharacterComposeRail({
   const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(
     () => new Set(DEFAULT_MODELS),
   );
+  const [previewModel, setPreviewModel] = useState<OutfitModelKey>(DEFAULT_MODELS[0]);
   const [aspectRatio, setAspectRatio] = useState<OutfitAspectRatio>('9:16');
 
   const garment = wardrobe[0] ?? null;
@@ -88,12 +89,19 @@ export function CharacterComposeRail({
 
   const modelsArray = useMemo(() => [...selectedModels], [selectedModels]);
 
+  // Always include the previewed model in the prompt fetch — even if it's
+  // unchecked for generation, the user still wants to read its prompt.
+  const previewModelsArray = useMemo(() => {
+    if (selectedModels.has(previewModel)) return modelsArray;
+    return [...modelsArray, previewModel];
+  }, [modelsArray, selectedModels, previewModel]);
+
   const { prompts: previewPrompts, loading: previewLoading, error: previewError } = useOutfitPromptPreview({
     callTool,
     callState,
     projectSlug: projectSlug ?? null,
     modelImageSlug: characterId,
-    models: modelsArray,
+    models: previewModelsArray,
     provider: 'kie',
     hasBackdrop: !!backdropItem,
     poseDescription,
@@ -152,14 +160,11 @@ export function CharacterComposeRail({
     aspectRatio,
   ]);
 
-  const activePreviewModel: OutfitModelKey | null = modelsArray[0] ?? null;
-  const activePreviewEntry = activePreviewModel
-    ? previewPrompts.find((p) => p.model === activePreviewModel) ?? null
-    : null;
+  const activePreviewEntry = previewPrompts.find((p) => p.model === previewModel) ?? null;
 
   return (
     <aside className="w-[26rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
-      <div className="px-3 py-2 grid grid-cols-4 gap-2">
+      <div className="px-4 py-3 grid grid-cols-4 gap-2.5">
         <SingleSlot
           label="Wardrobe"
           item={garment}
@@ -190,7 +195,7 @@ export function CharacterComposeRail({
         />
       </div>
 
-      <div className="border-t border-violet-500/20 px-3 py-2">
+      <div className="border-t border-violet-500/20 px-4 py-3">
         <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
           Aspect ratio
         </div>
@@ -216,7 +221,7 @@ export function CharacterComposeRail({
         </div>
       </div>
 
-      <div className="border-t border-violet-500/20 px-3 py-2">
+      <div className="border-t border-violet-500/20 px-4 py-3">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70">
             Prompt
@@ -228,31 +233,57 @@ export function CharacterComposeRail({
         <div className="flex flex-wrap gap-1 mb-1.5">
           {OUTFIT_MODEL_OPTIONS.map((m) => {
             const active = selectedModels.has(m.key);
-            const isPreviewing = m.key === activePreviewModel;
+            const isPreviewing = m.key === previewModel;
             return (
-              <button
+              <div
                 key={m.key}
-                type="button"
-                onClick={() => toggleModel(m.key)}
                 className={cn(
-                  'flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider transition-colors',
-                  active
-                    ? isPreviewing
-                      ? 'border-violet-200 bg-violet-500/30 text-violet-50'
-                      : 'border-violet-300 bg-violet-500/15 text-violet-100'
-                    : 'border-violet-500/20 text-violet-300/50 hover:border-violet-400/50',
+                  'flex items-stretch rounded border text-[9px] font-mono uppercase tracking-wider transition-colors overflow-hidden',
+                  isPreviewing
+                    ? 'border-violet-200 bg-violet-500/30'
+                    : active
+                      ? 'border-violet-300 bg-violet-500/15'
+                      : 'border-violet-500/20',
                 )}
               >
-                <span
+                <button
+                  type="button"
+                  onClick={() => toggleModel(m.key)}
+                  title={active ? `Disable ${m.label} for generation` : `Enable ${m.label} for generation`}
                   className={cn(
-                    'w-3 h-3 rounded-sm border flex items-center justify-center shrink-0',
-                    active ? 'border-violet-200 bg-violet-400/30' : 'border-violet-500/40',
+                    'flex items-center justify-center px-1 border-r',
+                    isPreviewing
+                      ? 'border-violet-200/50 hover:bg-violet-500/40'
+                      : active
+                        ? 'border-violet-300/40 hover:bg-violet-500/25'
+                        : 'border-violet-500/20 hover:bg-violet-500/10',
                   )}
                 >
-                  {active ? <Check className="w-2 h-2" strokeWidth={3} /> : null}
-                </span>
-                {m.label}
-              </button>
+                  <span
+                    className={cn(
+                      'w-3 h-3 rounded-sm border flex items-center justify-center shrink-0',
+                      active ? 'border-violet-200 bg-violet-400/30' : 'border-violet-500/40',
+                    )}
+                  >
+                    {active ? <Check className="w-2 h-2" strokeWidth={3} /> : null}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewModel(m.key)}
+                  title={`Show ${m.label} prompt`}
+                  className={cn(
+                    'px-1.5 py-0.5',
+                    isPreviewing
+                      ? 'text-violet-50'
+                      : active
+                        ? 'text-violet-100 hover:bg-violet-500/20'
+                        : 'text-violet-300/50 hover:bg-violet-500/10',
+                  )}
+                >
+                  {m.label}
+                </button>
+              </div>
             );
           })}
         </div>
@@ -276,7 +307,7 @@ export function CharacterComposeRail({
         )}
       </div>
 
-      <div className="border-t border-violet-500/30 px-3 py-3 mt-auto bg-violet-500/5">
+      <div className="border-t border-violet-500/30 px-4 py-3 mt-auto bg-violet-500/5">
         <div className="mb-2 px-1">
           <PoseStatus
             loading={poseLoading}

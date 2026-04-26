@@ -67,7 +67,7 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
 
           {profile && (
             <>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <div className="space-y-1.5">
                 {SHORT_FIELDS.map(({ key, label }) => {
                   const value = getStr(profile, key);
                   if (!value.trim()) return null;
@@ -79,7 +79,7 @@ export function CharacterProfilePanel({ profile, loading, error }: CharacterProf
                 <div className="text-[9px] uppercase tracking-wider text-violet-300/80 mb-1.5">
                   Measurements
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <div className="space-y-1.5">
                   {MEASUREMENT_FIELDS.map(({ key, label }) => (
                     <Field key={key} label={label} value={getStr(profile, key) || "—"} />
                   ))}

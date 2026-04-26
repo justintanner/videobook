@@ -167,7 +167,7 @@ export function CharacterViewer({
 
             {/* Top: profile panel + sheet image */}
             <div className="flex-1 min-h-0 flex bg-black/30 overflow-hidden">
-              <aside className="w-96 shrink-0 border-r border-violet-500/20 overflow-y-auto bg-black/40">
+              <aside className="w-60 shrink-0 border-r border-violet-500/20 overflow-y-auto bg-black/40">
                 <CharacterProfilePanel
                   profile={slots.profile}
                   loading={slots.loading}
