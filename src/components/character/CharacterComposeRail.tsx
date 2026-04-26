@@ -230,7 +230,7 @@ export function CharacterComposeRail({
             <Loader2 className="w-3 h-3 animate-spin text-violet-300/60" />
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-1 mb-1.5">
+        <div className="flex flex-wrap gap-2 mb-2">
           {OUTFIT_MODEL_OPTIONS.map((m) => {
             const active = selectedModels.has(m.key);
             const isPreviewing = m.key === previewModel;
@@ -251,7 +251,7 @@ export function CharacterComposeRail({
                   onClick={() => toggleModel(m.key)}
                   title={active ? `Disable ${m.label} for generation` : `Enable ${m.label} for generation`}
                   className={cn(
-                    'flex items-center justify-center px-1 border-r',
+                    'flex items-center justify-center px-2 border-r',
                     isPreviewing
                       ? 'border-violet-200/50 hover:bg-violet-500/40'
                       : active
@@ -273,7 +273,7 @@ export function CharacterComposeRail({
                   onClick={() => setPreviewModel(m.key)}
                   title={`Show ${m.label} prompt`}
                   className={cn(
-                    'px-1.5 py-0.5',
+                    'px-3 py-1.5',
                     isPreviewing
                       ? 'text-violet-50'
                       : active
@@ -298,7 +298,7 @@ export function CharacterComposeRail({
         ) : (
           <div
             className={cn(
-              'rounded border border-violet-500/20 bg-black/40 p-2 text-[10px] font-mono text-violet-200/80 whitespace-pre-wrap break-words max-h-72 overflow-y-auto',
+              'rounded border border-violet-500/20 bg-black/40 p-2 text-[12px] leading-snug font-mono text-violet-200/80 whitespace-pre-wrap break-words max-h-44 overflow-y-auto',
               previewLoading && 'opacity-60',
             )}
           >
@@ -307,17 +307,7 @@ export function CharacterComposeRail({
         )}
       </div>
 
-      <div className="border-t border-violet-500/30 px-4 py-3 mt-auto bg-violet-500/5">
-        <div className="mb-2 px-1">
-          <PoseStatus
-            loading={poseLoading}
-            error={poseError}
-            ready={!!poseResult}
-            hasPose={!!pose}
-            modelCount={selectedModels.size}
-            aspectRatio={aspectRatio}
-          />
-        </div>
+      <div className="sticky bottom-0 border-t border-violet-500/30 px-4 py-3 mt-auto bg-violet-500/5 backdrop-blur">
         <button
           type="button"
           onClick={handleGenerate}
@@ -457,45 +447,3 @@ function SkeletonSlot({ hasPose, loading, error, dataUrl, coverage }: SkeletonSl
   );
 }
 
-function PoseStatus({
-  loading,
-  error,
-  ready,
-  hasPose,
-  modelCount,
-  aspectRatio,
-}: {
-  loading: boolean;
-  error: string | null;
-  ready: boolean;
-  hasPose: boolean;
-  modelCount: number;
-  aspectRatio: OutfitAspectRatio;
-}) {
-  const tail = ` · ${modelCount} image${modelCount === 1 ? '' : 's'} via Kie · ${aspectRatio}`;
-  if (!hasPose) {
-    return (
-      <div className="text-[9px] font-mono text-violet-400/50">Pin a pose to enable generate.</div>
-    );
-  }
-  if (loading) {
-    return (
-      <div className="flex items-center gap-1.5 text-[9px] font-mono text-violet-300/70">
-        <Loader2 className="w-3 h-3 animate-spin" /> extracting pose skeleton…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="flex items-center gap-1.5 text-[9px] font-mono text-red-300/80">
-        <AlertTriangle className="w-3 h-3" /> {error}
-      </div>
-    );
-  }
-  if (ready) {
-    return (
-      <div className="text-[9px] font-mono text-emerald-300/70">skeleton ready{tail}</div>
-    );
-  }
-  return null;
-}
