@@ -226,7 +226,7 @@ function trimDescriptor(value: string): string {
   return head.trim().replace(/\s+/g, " ");
 }
 
-function compressCharacterProfile(c: Character | undefined, includeFace = true): string {
+function compressCharacterProfile(c: Character | undefined): string {
   if (!c) return "";
   const parts: string[] = [];
   const identity = [c.age, c.gender_presentation, c.ethnicity].filter(Boolean).join(" ");
@@ -240,26 +240,23 @@ function compressCharacterProfile(c: Character | undefined, includeFace = true):
     c.glutes && `glutes ${trimDescriptor(c.glutes)}`,
   ].filter(Boolean).join(", ");
   if (measurements) parts.push(measurements);
-  if (includeFace) {
-    if (c.face) parts.push(`face ${trimDescriptor(c.face)}`);
-    if (c.hair) parts.push(`hair ${trimDescriptor(c.hair)}`);
-    if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
-    if (c.skin) parts.push(`skin ${trimDescriptor(c.skin)}`);
-    if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
-  }
+  if (c.face) parts.push(`face ${trimDescriptor(c.face)}`);
+  if (c.hair) parts.push(`hair ${trimDescriptor(c.hair)}`);
+  if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
+  if (c.skin) parts.push(`skin ${trimDescriptor(c.skin)}`);
+  if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
   return parts.join("; ");
 }
 
 // Provider-specific image-reference jargon. Numbered models use "Image N";
 // Qwen uses lowercase "image N" (and never receives Image 4 — its hard 3-image
-// cap means the backdrop is always text-described). Seedream uses positional
-// "the Nth reference" because the numbered "Figure N" form caused multi-figure
-// turnarounds.
+// cap means the backdrop is always text-described). Seedream uses native
+// "Figure N" — that's the syntax the official Wavespeed/fal docs prescribe.
+// (An earlier multi-figure turnaround bug came from the colon-prefixed legend
+// "Figure 1: subject; Figure 2: outfit", not the Figure-N syntax itself.)
 function refFor(model: OutfitModelKey, n: 1 | 2 | 3 | 4): string {
   if (model === "qwen_image_edit") return `image ${n}`;
-  if (model === "seedream_v5_lite") {
-    return `the ${["", "first", "second", "third", "fourth"][n]} reference`;
-  }
+  if (model === "seedream_v5_lite") return `Figure ${n}`;
   return `Image ${n}`;
 }
 
@@ -302,8 +299,18 @@ function buildPromptCompact(
   platform: Platform | undefined,
   custom: string | undefined,
 ): string {
+  if (model === "seedream_v5_lite") {
+    return buildPromptSeedream(
+      hasBackdropImage,
+      backdropDescription,
+      poseDescription,
+      coverage,
+      platform,
+      custom,
+    );
+  }
+
   const ref = (n: 1 | 2 | 3 | 4) => refFor(model, n);
-  const isSeedream = model === "seedream_v5_lite";
   const lines: string[] = [];
 
   // Image legend — declare what each input is in the model's preferred jargon.
@@ -314,16 +321,6 @@ function buildPromptCompact(
   ];
   if (hasBackdropImage) legend.push(`${ref(4)}: backdrop`);
   lines.push(legend.join("; ") + ".");
-
-  // Seedream identity guard — leads the prompt because Seedream is heavily
-  // text-driven and will otherwise rebuild the face from the descriptors in
-  // the Subject block. Mentioning "do not redraw" up front locks it to the
-  // pixel data of the first reference.
-  if (isSeedream) {
-    lines.push(
-      `Identity: copy the exact face, hair, skin, and features from ${ref(1)} pixel-for-pixel — do not redraw, do not stylize, do not interpret.`,
-    );
-  }
 
   // Outfit directive.
   lines.push(`Outfit: dress the subject in ${ref(2)} — match cut, colour, pattern, silhouette.`);
@@ -354,11 +351,7 @@ function buildPromptCompact(
   }
 
   // Subject identity — last, because it's the constant Image 1 already encodes.
-  // Seedream gets only body proportions (no face/hair/eyes/skin) because it
-  // reads textual face descriptors as generation instructions and produces a
-  // distorted face. Other models bind reference 1 strongly to identity, so the
-  // descriptors act as reinforcement.
-  const compressed = compressCharacterProfile(character, !isSeedream);
+  const compressed = compressCharacterProfile(character);
   const subject = compressed
     ? `Subject (from ${ref(1)}): ${compressed}.`
     : `Subject: preserve identity from ${ref(1)}.`;
@@ -368,9 +361,6 @@ function buildPromptCompact(
   if (shot) lines.push(`Framing: ${shot}.`);
 
   // Per-model anti-failure tails.
-  if (model === "seedream_v5_lite") {
-    lines.push("Render a single photograph of one person, not a multi-view turnaround.");
-  }
   if (model === "gpt_image_2") {
     lines.push("Constraints: no watermark, no text, no logos, no extra limbs, no deformed hands.");
   }
@@ -379,6 +369,63 @@ function buildPromptCompact(
   }
 
   let prompt = lines.join(" ");
+  prompt += platformSection(platform);
+  prompt += customSection(custom);
+  return prompt;
+}
+
+/**
+ * Seedream 5 Lite gets a different builder because the official Wavespeed/fal
+ * docs prescribe a specific shape: the **Edit Preservation Template** —
+ * "Replace [X] with [Y], while keeping [Z] unchanged" — using native "Figure N"
+ * refs. End-state phrasing only (the docs warn against procedural verbs like
+ * "do not redraw" or "remove gradually"). No legend block, no body-measurement
+ * descriptors (Seedream sees the body in Figure 1 and reads the text as a
+ * generation cue, which is what produced the alien-face outputs).
+ */
+function buildPromptSeedream(
+  hasBackdropImage: boolean,
+  backdropDescription: string | undefined,
+  poseDescription: string | undefined,
+  coverage: OutfitPoseCoverage,
+  platform: Platform | undefined,
+  custom: string | undefined,
+): string {
+  const ref = (n: 1 | 2 | 3 | 4) => refFor("seedream_v5_lite", n);
+  const sentences: string[] = [];
+
+  sentences.push(
+    `Replace the outfit on the person in ${ref(1)} with the outfit shown in ${ref(2)} — match its cut, colour, pattern, and silhouette.`,
+  );
+
+  if (poseDescription) {
+    const tail = coverageTail(coverage);
+    const tailPart = tail ? ` ${tail}` : "";
+    sentences.push(`Pose the body to match ${ref(3)}: ${poseDescription}.${tailPart}`);
+  } else {
+    const tail = coverageTail(coverage);
+    const tailPart = tail ? ` ${tail}` : "";
+    sentences.push(`Pose the body to match ${ref(3)}.${tailPart}`);
+  }
+
+  if (hasBackdropImage) {
+    sentences.push(
+      `Place the subject in the location shown in ${ref(4)} — match its lighting, colour cast, and depth of field.`,
+    );
+  } else if (backdropDescription) {
+    sentences.push(`Place the subject in this setting: ${backdropDescription}`);
+  }
+
+  // Single end-state preservation clause — the official template form.
+  sentences.push(
+    `Keep ${ref(1)}'s face, hair, skin tone, body proportions, and identity exactly the same.`,
+  );
+
+  // The single safety guard the multi-figure bug taught us — phrased as
+  // end-state, not as a procedural "do not".
+  sentences.push("Output: a single photograph of one person.");
+
+  let prompt = sentences.join(" ");
   prompt += platformSection(platform);
   prompt += customSection(custom);
   return prompt;
