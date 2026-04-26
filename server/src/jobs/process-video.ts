@@ -70,7 +70,10 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     // alongside metadata.sqlite + the per-asset canonical export).
     const waveform = await extractWaveform(videoPath);
     if (waveform.length > 0) {
-      await fs.writeAudioWaveform(assetId, waveform, projectSlug);
+      const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
+      if (!wavResult.ok) {
+        throw new Error(`writeAudioWaveform failed for ${assetId}: ${wavResult.error.message}`);
+      }
     }
 
     // Create original.jpg from first frame if not already set (e.g., from OG image)

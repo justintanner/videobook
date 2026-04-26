@@ -8,16 +8,15 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 
-async function uploadPng(client: Client, projectSlug: string, filename: string): Promise<string> {
-  const data = Buffer.from("fake-png-data").toString("base64");
-  const result = await client.callTool({
-    name: "upload_file",
-    arguments: { project_slug: projectSlug, filename, data },
-  });
-  const parsed = JSON.parse(
-    (result.content as Array<{ type: string; text: string }>)[0].text,
-  ) as { assetId: string };
-  return parsed.assetId;
+async function createImageAsset(fs: ClipfirstFs, projectSlug: string, name: string): Promise<string> {
+  // Create the asset directly via fs.createAsset rather than upload_file so
+  // we don't enqueue a process_image job. The async job would race with the
+  // test's failPendingTask + clear_failed_tasks calls and pollute results
+  // (process_image fails on synthetic image bytes and would write its own
+  // generation-error.json, getting swept up by clear_failed_tasks).
+  const result = await fs.createAsset("img", name, projectSlug);
+  if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
+  return result.value.assetId;
 }
 
 describe("clear_failed_tasks tool", () => {
@@ -41,9 +40,9 @@ describe("clear_failed_tasks tool", () => {
   });
 
   it("deletes assets that have a generation-error.json and leaves healthy ones alone", async () => {
-    const failedOne = await uploadPng(client, "test-proj", "bad-one.png");
-    const failedTwo = await uploadPng(client, "test-proj", "bad-two.png");
-    const healthy = await uploadPng(client, "test-proj", "good.png");
+    const failedOne = await createImageAsset(fs, "test-proj", "bad one");
+    const failedTwo = await createImageAsset(fs, "test-proj", "bad two");
+    const healthy = await createImageAsset(fs, "test-proj", "good");
 
     await failPendingTask(fs, failedOne, "test-proj", { message: "boom" });
     await failPendingTask(fs, failedTwo, "test-proj", { message: "kaboom" });
@@ -75,7 +74,7 @@ describe("clear_failed_tasks tool", () => {
   });
 
   it("returns empty lists when there are no failed assets", async () => {
-    await uploadPng(client, "test-proj", "only-good.png");
+    await createImageAsset(fs, "test-proj", "only good");
 
     const res = await client.callTool({
       name: "clear_failed_tasks",

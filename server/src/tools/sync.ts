@@ -140,7 +140,12 @@ async function readOrExtractWaveform(
   try {
     const peaks = await extractWaveform(join(assetDir, videoFilename));
     if (peaks.length === 0) return null;
-    await fs.writeAudioWaveform(assetId, peaks, projectSlug);
+    const wavResult = await fs.writeAudioWaveform(assetId, peaks, projectSlug);
+    if (!wavResult.ok) {
+      // Persist failed but the in-memory peaks are still valid for this sync
+      // response. Log so the next sync retries lazy regeneration cleanly.
+      console.error(`[sync] writeAudioWaveform failed for ${assetId}: ${wavResult.error.message}`);
+    }
     return peaks;
   } catch {
     return null;

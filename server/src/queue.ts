@@ -110,15 +110,26 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
         // sidecar and write .generation-error.json so /inbox doesn't show
         // "generating" forever. The fs.queue layer separately marks the SQLite
         // job row as failed via the runner's own catch.
+        //
+        // Fire-and-forget: the runner shouldn't block on this best-effort
+        // sidecar cleanup. If the project dir was torn down (test cleanup,
+        // shutdown), proper-lockfile may retry for many seconds while
+        // mkdir(.project.lock) hits ENOENT, holding the runner from draining.
+        // We capture fsRef.current at throw time so the cleanup targets the
+        // active projectsDir, not stale defaultFs.
         const assetId = extractAssetId(job.payload);
         const projectSlug = extractProjectSlug(job.payload);
         if (assetId && projectSlug) {
-          await failPendingTask(defaultFs, assetId, projectSlug, {
+          const fsForCleanup = fsRef.current;
+          void failPendingTask(fsForCleanup, assetId, projectSlug, {
             message: error instanceof Error ? error.message : String(error),
-          }).catch(() => {});
-          console.error(
-            `[queue] cleared pending task for ${assetId} in ${projectSlug}`,
-          );
+          })
+            .then(() => {
+              console.error(
+                `[queue] cleared pending task for ${assetId} in ${projectSlug}`,
+              );
+            })
+            .catch(() => {});
         }
         throw error;
       }
@@ -142,10 +153,10 @@ function ensureRunner(slug: string): RunnerInfo {
 }
 
 export async function reconcileQueueOnStartup(): Promise<void> {
-  const projects = await defaultFs.listProjects();
+  const projects = await fsRef.current.listProjects();
   for (const project of projects) {
     const dir = projectDirFor(project.slug);
-    await defaultFs.ensureClipfirstSetup(project.slug);
+    await fsRef.current.ensureClipfirstSetup(project.slug);
     queueApi.reapOnStartup(dir);
     await queueApi.reconcileFromSidecars(dir).catch((e) => {
       console.error(`[queue] reconcile failed for ${project.slug}:`, e);
