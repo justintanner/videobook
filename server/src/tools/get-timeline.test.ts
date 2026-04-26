@@ -55,8 +55,16 @@ describe("get_timeline tool", () => {
     expect(data.render).toBe("portrait");
   });
 
-  it("wraps old array format with default render orientation", async () => {
-    // Simulate legacy data: timeline stored as a plain array of slots
+  it("wraps old array format with default render orientation (legacy projects)", async () => {
+    // Legacy semantics now require SQLite to be empty for the sidecar to
+    // win. create_project initializes an empty SQLite timeline, so to
+    // exercise the legacy fallback we drop .clipfirst/ first and then
+    // write the legacy plain-array sidecar.
+    const { rm: rmRecursive } = await import("node:fs/promises");
+    await rmRecursive(join(tempDir, "test-proj", ".clipfirst"), {
+      recursive: true,
+      force: true,
+    });
     const oldData = [{ slug: "vid-legacy" }, { slug: "vid-old" }];
     await writeFile(
       join(tempDir, "test-proj", ".timeline.json"),
