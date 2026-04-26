@@ -226,7 +226,7 @@ function trimDescriptor(value: string): string {
   return head.trim().replace(/\s+/g, " ");
 }
 
-function compressCharacterProfile(c: Character | undefined): string {
+function compressCharacterProfile(c: Character | undefined, includeFace = true): string {
   if (!c) return "";
   const parts: string[] = [];
   const identity = [c.age, c.gender_presentation, c.ethnicity].filter(Boolean).join(" ");
@@ -240,11 +240,13 @@ function compressCharacterProfile(c: Character | undefined): string {
     c.glutes && `glutes ${trimDescriptor(c.glutes)}`,
   ].filter(Boolean).join(", ");
   if (measurements) parts.push(measurements);
-  if (c.face) parts.push(`face ${trimDescriptor(c.face)}`);
-  if (c.hair) parts.push(`hair ${trimDescriptor(c.hair)}`);
-  if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
-  if (c.skin) parts.push(`skin ${trimDescriptor(c.skin)}`);
-  if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
+  if (includeFace) {
+    if (c.face) parts.push(`face ${trimDescriptor(c.face)}`);
+    if (c.hair) parts.push(`hair ${trimDescriptor(c.hair)}`);
+    if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
+    if (c.skin) parts.push(`skin ${trimDescriptor(c.skin)}`);
+    if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
+  }
   return parts.join("; ");
 }
 
@@ -301,6 +303,7 @@ function buildPromptCompact(
   custom: string | undefined,
 ): string {
   const ref = (n: 1 | 2 | 3 | 4) => refFor(model, n);
+  const isSeedream = model === "seedream_v5_lite";
   const lines: string[] = [];
 
   // Image legend — declare what each input is in the model's preferred jargon.
@@ -311,6 +314,16 @@ function buildPromptCompact(
   ];
   if (hasBackdropImage) legend.push(`${ref(4)}: backdrop`);
   lines.push(legend.join("; ") + ".");
+
+  // Seedream identity guard — leads the prompt because Seedream is heavily
+  // text-driven and will otherwise rebuild the face from the descriptors in
+  // the Subject block. Mentioning "do not redraw" up front locks it to the
+  // pixel data of the first reference.
+  if (isSeedream) {
+    lines.push(
+      `Identity: copy the exact face, hair, skin, and features from ${ref(1)} pixel-for-pixel — do not redraw, do not stylize, do not interpret.`,
+    );
+  }
 
   // Outfit directive.
   lines.push(`Outfit: dress the subject in ${ref(2)} — match cut, colour, pattern, silhouette.`);
@@ -341,7 +354,11 @@ function buildPromptCompact(
   }
 
   // Subject identity — last, because it's the constant Image 1 already encodes.
-  const compressed = compressCharacterProfile(character);
+  // Seedream gets only body proportions (no face/hair/eyes/skin) because it
+  // reads textual face descriptors as generation instructions and produces a
+  // distorted face. Other models bind reference 1 strongly to identity, so the
+  // descriptors act as reinforcement.
+  const compressed = compressCharacterProfile(character, !isSeedream);
   const subject = compressed
     ? `Subject (from ${ref(1)}): ${compressed}.`
     : `Subject: preserve identity from ${ref(1)}.`;
