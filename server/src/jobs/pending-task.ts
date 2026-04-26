@@ -20,7 +20,17 @@ export type PendingKieTask = {
 export async function writePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string, task: PendingKieTask): Promise<void> {
   // Clear any previous generation error so a retry doesn't show a stale failure
   await fs.deleteFile(assetId, ".generation-error.json", projectSlug).catch(() => {});
-  await fs.writeMetadata(assetId, "kie-task", task, projectSlug);
+  const result = await fs.writeMetadata(assetId, "kie-task", task, projectSlug);
+  if (!result.ok) {
+    // Loud failure: callers (tool handlers + job handlers) propagate so the
+    // queue's wrapped resolver records a failed job + writes
+    // .generation-error.json for the UI. Silently ignoring this leaves the
+    // asset orphaned — the upstream Kie/Fal task is submitted but no sidecar
+    // exists for sync to poll, so the tile never resolves.
+    throw new Error(
+      `Failed to write pending-task sidecar for ${assetId}: ${result.error.message}`,
+    );
+  }
 }
 
 export async function readPendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<PendingKieTask | null> {

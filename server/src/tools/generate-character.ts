@@ -247,15 +247,25 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
           provider === "fal" && (model === "qwen_image_edit" || model === "wan27_pro");
         const seedreamKieQuality =
           provider === "kie" && model === "seedream_v5_lite";
-        const res = await def.handler({
-          project_slug: a.project_slug,
-          prompt,
-          image_slugs: imageRefs,
-          output_prefix: "char",
-          ...aspectRatioArgs(provider, model),
-          ...(nativeNegative ? { negative_prompt: WAN_QWEN_NEGATIVE } : {}),
-          ...(seedreamKieQuality ? { quality: "high" } : {}),
-        } as unknown as Record<string, unknown>);
+        let res: ToolResult;
+        try {
+          res = await def.handler({
+            project_slug: a.project_slug,
+            prompt,
+            image_slugs: imageRefs,
+            output_prefix: "char",
+            ...aspectRatioArgs(provider, model),
+            ...(nativeNegative ? { negative_prompt: WAN_QWEN_NEGATIVE } : {}),
+            ...(seedreamKieQuality ? { quality: "high" } : {}),
+          } as unknown as Record<string, unknown>);
+        } catch (error: unknown) {
+          // writePendingTask now throws on metadata-write failure (e.g. SQLite
+          // readonly). Catch per-model so one failed slot doesn't kill the
+          // whole sheet, and surface the message in the response.
+          outcome.error = error instanceof Error ? error.message : String(error);
+          outcomes.push(outcome);
+          continue;
+        }
         const r = extractEnqueueResult(res);
         if (r.error) {
           outcome.error = r.error;
@@ -280,9 +290,7 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
             a.project_slug,
           );
           if (!writeRes.ok) {
-            console.warn(
-              `[generate_character] Failed to write profile to ${r.assetId}: ${writeRes.error.message}`,
-            );
+            outcome.error = `Failed to write character profile for ${r.assetId}: ${writeRes.error.message}`;
           }
         }
         if (r.jobId) outcome.job_id = r.jobId;
