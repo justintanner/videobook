@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Settings, X, Pencil } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -125,23 +125,7 @@ export function CharacterViewer({
           {/* FRONT FACE */}
           <div className="flip-card-face absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
             <ViewerToolbar
-              left={
-                <button
-                  type="button"
-                  onClick={handleEditProfile}
-                  disabled={!slots.profile}
-                  title="Edit profile and regenerate sheet"
-                  className={cn(
-                    'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors',
-                    slots.profile
-                      ? 'text-violet-200 hover:bg-violet-500/20'
-                      : 'text-zinc-600 cursor-not-allowed',
-                  )}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Edit
-                </button>
-              }
+              left={null}
               slug={item.slug}
               right={
                 <div className="flex items-center gap-1">
@@ -172,6 +156,7 @@ export function CharacterViewer({
                   profile={slots.profile}
                   loading={slots.loading}
                   error={slots.error}
+                  onEdit={handleEditProfile}
                 />
               </aside>
               <div className="flex-1 min-w-0 flex items-center justify-center p-4">

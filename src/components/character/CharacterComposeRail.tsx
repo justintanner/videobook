@@ -163,7 +163,7 @@ export function CharacterComposeRail({
   const activePreviewEntry = previewPrompts.find((p) => p.model === previewModel) ?? null;
 
   return (
-    <aside className="w-[26rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
+    <aside className="w-[34rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
       <div className="px-4 py-3 grid grid-cols-4 gap-2.5">
         <SingleSlot
           label="Wardrobe"
