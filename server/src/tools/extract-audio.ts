@@ -1,27 +1,18 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { join, extname } from "node:path";
+import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue } from "../queue.js";
+import { findVideoFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
 const require = createRequire(import.meta.url);
 const FFPROBE: string = require("ffprobe-static").path;
-
-const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
-
-function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const videos = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return VIDEO_EXTENSIONS.has(ext);
-  });
-  return videos.find((f) => f.name.startsWith("original")) ?? videos[0] ?? null;
-}
 
 async function hasAudioStream(filePath: string): Promise<boolean> {
   const { stdout } = await execFileAsync(FFPROBE, [

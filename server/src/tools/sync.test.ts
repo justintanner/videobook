@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
-import { queue } from "../queue.js";
+import { queue, setProjectsDir } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 
@@ -124,6 +124,7 @@ describe("buildAssetList", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
   });
 
@@ -345,6 +346,7 @@ describe("performSync", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-sync-test-"));
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
   });
 
@@ -394,6 +396,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc3-test-"));
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
   });
 
@@ -478,6 +481,7 @@ describe("performSync — auto-render with transcription gate", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc2-test-"));
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
     savedKieKey = process.env.KIE_API_KEY;
     delete process.env.KIE_API_KEY;
@@ -629,6 +633,7 @@ describe("performSync — auto-transcribe", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-autotranscribe-test-"));
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
     savedKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";

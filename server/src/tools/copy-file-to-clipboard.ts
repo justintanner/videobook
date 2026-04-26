@@ -1,8 +1,8 @@
 import { exec } from "node:child_process";
-import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
+import { findPrimaryMediaFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function copyFileToClipboardDef(fs: ClipfirstFs): ToolDef {
@@ -16,34 +16,24 @@ export function copyFileToClipboardDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
 
-      const dirResult = await fs.resolveAssetDir(asset_id, project_slug);
-      if (!dirResult.ok) {
+      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      if (!manifestResult.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: dirResult.error.message }],
+          content: [{ type: "text" as const, text: manifestResult.error.message }],
         };
       }
-
-      const assetDir = dirResult.value;
-      let fileName: string | undefined;
-      try {
-        const files = await readdir(assetDir);
-        fileName = files.find((f) => /^original\.(mp4|mov|png|jpe?g|webp|mp3|wav)$/i.test(f));
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to read asset folder: ${(err as Error).message}` }],
-        };
-      }
-
-      if (!fileName) {
+      const manifest = manifestResult.value;
+      const file = findPrimaryMediaFile(manifest.files, asset_id);
+      if (!file) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "No original media file found for asset" }],
         };
       }
 
-      const absPath = join(assetDir, fileName);
+      const absPath = join(manifest.path, file.name);
+      const fileName = file.name;
       const escaped = absPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       const script = `set the clipboard to POSIX file "${escaped}"`;
 

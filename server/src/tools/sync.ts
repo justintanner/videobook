@@ -1,20 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
+import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
-import { readdir, readFile, access, stat } from "node:fs/promises";
 import { kie, KieError } from "@apicity/kie";
 import type { KieTaskInfo } from "@apicity/kie";
 import { xai, XaiError } from "@apicity/xai";
 import { alibaba, AlibabaError } from "@apicity/alibaba";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "../media-files.js";
+import {
+  findVideoFile,
+  findAudioFile,
+  findPrimaryMediaFile,
+  RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
+} from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { findPendingTasks, findFailedAssets, readPendingTask, failPendingTask, markTaskCompleting, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
-import { writeFile } from "node:fs/promises";
 import type { ToolDef } from "./tool-def.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
@@ -105,108 +108,49 @@ async function fetchFalResult(responseUrl: string, apiKey: string): Promise<Reco
   return await res.json() as Record<string, unknown>;
 }
 
-async function findPrimaryMediaFile(assetId: string, assetDir: string): Promise<string | null> {
+function buildFrameDirs(
+  directories: Record<string, string[]> | undefined,
+  projectSlug: string,
+  assetId: string,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!directories) return out;
+  for (const [dir, fileList] of Object.entries(directories)) {
+    if (!dir.endsWith("_frames")) continue;
+    out[dir] = fileList
+      .filter((f) => f.endsWith(".jpg"))
+      .sort()
+      .map((f) => `/files/${projectSlug}/${assetId}/${dir}/${f}`);
+  }
+  return out;
+}
+
+async function readOrExtractWaveform(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  assetDir: string,
+  videoFilename: string | null,
+): Promise<number[] | null> {
+  const existing = await fs.readAudioWaveform(assetId, projectSlug);
+  if (existing.ok) return existing.value.peaks;
+  if (!videoFilename || !/^original\.(mp4|mov)$/i.test(videoFilename)) {
+    return null;
+  }
   try {
-    const files = await readdir(assetDir);
-    if (assetId === "final") {
-      // The final singleton's primary media is the timeline concat output.
-      // Prefer landscape, then portrait, then square — this is just the
-      // fallback order if multiple orientations happen to coexist on disk.
-      for (const orient of RENDER_ORIENTATIONS) {
-        const match = files.find((f) => f.toLowerCase() === `timeline_${orient}.mp4`);
-        if (match) return match;
-      }
-      return null;
-    }
-    const video = files.find((f) => /^original\.(mp4|mov)$/i.test(f));
-    if (video) return video;
-    const image = files.find((f) => /^original\.(png|jpe?g|webp)$/i.test(f));
-    if (image) return image;
-    const audio = files.find((f) => /^original\.(mp3|wav)$/i.test(f));
-    if (audio) return audio;
-    return files.find((f) => /^original\.md$/i.test(f)) ?? null;
+    const peaks = await extractWaveform(join(assetDir, videoFilename));
+    if (peaks.length === 0) return null;
+    await fs.writeAudioWaveform(assetId, peaks, projectSlug);
+    return peaks;
   } catch {
     return null;
   }
 }
 
-async function hasPartialDownload(assetDir: string): Promise<boolean> {
-  try {
-    const files = await readdir(assetDir);
-    return files.some((f) => /\.(mp4|mov)\.part$/i.test(f));
-  } catch {
-    return false;
-  }
-}
+const RENDER_METADATA_RE = /^\.(portrait|landscape|square)\.render\.json$/;
+const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
 
-async function findThumbnailFile(assetDir: string): Promise<boolean> {
-  try {
-    await access(join(assetDir, "original.jpg"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isWhitelisted(assetDir: string): Promise<boolean> {
-  try {
-    await access(join(assetDir, ".whitelisted_at"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readOrExtractWaveform(assetDir: string): Promise<number[] | null> {
-  try {
-    const data = await readFile(join(assetDir, "waveform.json"), "utf-8");
-    return JSON.parse(data) as number[];
-  } catch {
-    // Backfill: extract waveform from original video if waveform.json doesn't exist
-    try {
-      const files = await readdir(assetDir);
-      const video = files.find((f) => /^original\.(mp4|mov)$/i.test(f));
-      if (!video) return null;
-      const waveform = await extractWaveform(join(assetDir, video));
-      if (waveform.length > 0) {
-        await writeFile(join(assetDir, "waveform.json"), JSON.stringify(waveform));
-        return waveform;
-      }
-    } catch { /* non-fatal */ }
-    return null;
-  }
-}
-
-async function findFrameDirectories(assetDir: string, projectSlug: string, assetId: string): Promise<Record<string, string[]>> {
-  const result: Record<string, string[]> = {};
-  try {
-    const entries = await readdir(assetDir);
-    const frameDirs = entries.filter((e) => e.endsWith("_frames"));
-    for (const dir of frameDirs) {
-      try {
-        const files = await readdir(join(assetDir, dir));
-        const jpgs = files.filter((f) => f.endsWith(".jpg")).sort();
-        result[dir] = jpgs.map((f) => `/files/${projectSlug}/${assetId}/${dir}/${f}`);
-      } catch {
-        // skip unreadable dirs
-      }
-    }
-  } catch {
-    // no frame dirs
-  }
-  return result;
-}
-
-async function hasRenderMetadata(assetDir: string): Promise<boolean> {
-  try {
-    const files = await readdir(assetDir);
-    return files.some((f) => /^\.(portrait|landscape|square)\.render\.json$/.test(f));
-  } catch {
-    return false;
-  }
-}
-
-export const RENDER_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
+export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
 export async function readRenderSettings(
   fs: ClipfirstFs, assetId: string, projectSlug: string, orientations: string[],
@@ -307,44 +251,54 @@ export async function readAnalysisRecommendations(
   }
 }
 
-async function findRenderedOrientations(assetId: string, assetDir: string): Promise<string[]> {
-  try {
-    const files = await readdir(assetDir);
-    const fileSet = new Set(files);
-    if (assetId === "final") {
-      return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`timeline_${o}.mp4`));
-    }
-    return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
-  } catch {
-    return [];
+function renderedOrientationsFor(
+  files: AssetManifestFile[],
+  assetId: string,
+): string[] {
+  const fileSet = new Set(files.map((f) => f.name));
+  if (assetId === "final") {
+    return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`timeline_${o}.mp4`));
   }
+  return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
 }
 
 export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [mediaFile, hasThumbnail, lockData, pendingTask, whitelisted, rendered, metadata, renders, waveform, frameDirs, hasPartFile] = await Promise.all([
-        findPrimaryMediaFile(a.id, a.path),
-        findThumbnailFile(a.path),
+      const [manifestResult, lockData, pendingTask, metadata] = await Promise.all([
+        fs.getManifest(a.id, project_slug, { includeDotfiles: true }),
         fs.getLockData(a.path),
         readPendingTask(fs, a.id, project_slug),
-        isWhitelisted(a.path),
-        hasRenderMetadata(a.path),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
-        findRenderedOrientations(a.id, a.path),
-        readOrExtractWaveform(a.path),
-        findFrameDirectories(a.path, project_slug, a.id),
-        hasPartialDownload(a.path),
       ]);
+
+      // If the asset directory disappeared between listAssets and getManifest,
+      // surface an empty-but-error placeholder rather than throwing.
+      const files: AssetManifestFile[] = manifestResult.ok ? manifestResult.value.files : [];
+      const directories = manifestResult.ok ? manifestResult.value.directories : undefined;
+
+      const mediaFile = findPrimaryMediaFile(files, a.id);
+      const fileNames = new Set(files.map((f) => f.name));
+      const hasThumbnail = fileNames.has("original.jpg");
+      const whitelisted = fileNames.has(".whitelisted_at");
+      const rendered = files.some((f) => RENDER_METADATA_RE.test(f.name));
+      const renders = renderedOrientationsFor(files, a.id);
+      const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
+      const frameDirs = buildFrameDirs(directories, project_slug, a.id);
+      const waveform = await readOrExtractWaveform(
+        fs,
+        a.id,
+        project_slug,
+        a.path,
+        mediaFile?.name ?? null,
+      );
+
       // Cache-bust media URLs with file mtime so browsers refetch after trim/re-encode
-      let mediaMtime = 0;
-      if (mediaFile) {
-        try { mediaMtime = (await stat(join(a.path, mediaFile))).mtimeMs; } catch { /* non-fatal */ }
-      }
+      const mediaMtime = mediaFile?.mtimeMs ?? 0;
       const cacheBust = mediaMtime ? `?v=${Math.floor(mediaMtime)}` : '';
       const media_url = mediaFile
-        ? `/files/${project_slug}/${a.id}/${mediaFile}${cacheBust}`
+        ? `/files/${project_slug}/${a.id}/${mediaFile.name}${cacheBust}`
         : null;
       const isImage = a.type === "image";
       const thumbnail_url = hasThumbnail
@@ -361,7 +315,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
           : pendingTask.taskType === "isolate_vocals"
             ? "isolating"
             : "generating";
-      } else if (hasPartFile && a.id.startsWith("vid-") && (!mediaFile || /\.(jpe?g|png|webp)$/i.test(mediaFile))) {
+      } else if (hasPartFile && a.id.startsWith("vid-") && (!mediaFile || /\.(jpe?g|png|webp)$/i.test(mediaFile.name))) {
         // Video asset with a .part file but no actual video = failed download
         // (original.jpg thumbnail may exist from OG image, but that's not a real media file for a video)
         status = "error";
@@ -399,9 +353,9 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
 
       // Backfill duration if missing from metadata
       let duration = (meta?.duration as number) ?? null;
-      if (duration === null && mediaFile && /\.(mp4|mov)$/i.test(mediaFile)) {
+      if (duration === null && mediaFile && /\.(mp4|mov)$/i.test(mediaFile.name)) {
         try {
-          const probe = await probeVideo(join(a.path, mediaFile));
+          const probe = await probeVideo(join(a.path, mediaFile.name));
           duration = probe.duration;
           // Persist so we don't re-probe next time
           if (metadata.ok) {
@@ -413,7 +367,8 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       // Read script content from original.md for script assets
       let prompt = (meta?.prompt as string) ?? null;
       if (!prompt && a.type === "script") {
-        try { prompt = await readFile(join(a.path, "original.md"), "utf-8"); } catch { /* non-fatal */ }
+        const md = await fs.readFile(a.id, "original.md", project_slug);
+        if (md.ok) prompt = md.value.toString();
       }
 
       return {

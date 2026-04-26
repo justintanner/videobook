@@ -3,7 +3,7 @@ import type { AssetManifestFile } from "clipfirst-fs";
 import { findAudioFile, findVideoFile } from "./media-files.js";
 
 function makeFile(name: string, ext: string | null = null): AssetManifestFile {
-  return { name, size_bytes: 1024, extension: ext };
+  return { name, size_bytes: 1024, extension: ext, mtimeMs: 0 };
 }
 
 describe("findAudioFile", () => {

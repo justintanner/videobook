@@ -62,6 +62,10 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     );
     const metadata = metaResult.ok ? metaResult.value : null;
 
+    // TODO(boundary): use fs.readAssetSubpath when added — see
+    // /Users/jwt/.claude/plans/drifting-orbiting-bird.md ("OUT" section).
+    // Frames live in original_frames/ which clipfirst-fs doesn't yet expose
+    // a typed read path for; raw node:fs access is the documented escape hatch.
     const framesDir = join(assetDir, "original_frames");
     let frameFiles: string[] = [];
     try {

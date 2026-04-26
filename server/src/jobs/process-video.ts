@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { mkdir, writeFile, readFile as fsReadFile, rm } from "node:fs/promises";
+import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
@@ -32,7 +32,6 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
 
     if (force) {
       await rm(join(assetDir, "original_frames"), { recursive: true, force: true });
-      await rm(join(assetDir, "waveform.json"), { force: true }).catch(() => {});
       await rm(join(assetDir, "original.jpg"), { force: true }).catch(() => {});
       // Renders are derived from the old source video — drop them so the UI
       // falls back to original.mp4 and prompts a re-render.
@@ -67,10 +66,11 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       }
     }
 
-    // Extract waveform data
+    // Extract waveform and persist via the typed primitive (committed to git
+    // alongside metadata.sqlite + the per-asset canonical export).
     const waveform = await extractWaveform(videoPath);
     if (waveform.length > 0) {
-      await writeFile(join(assetDir, "waveform.json"), JSON.stringify(waveform));
+      await fs.writeAudioWaveform(assetId, waveform, projectSlug);
     }
 
     // Create original.jpg from first frame if not already set (e.g., from OG image)

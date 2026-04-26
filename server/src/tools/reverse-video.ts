@@ -1,21 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
-import { join, extname } from "node:path";
+import { join } from "node:path";
 import { queue } from "../queue.js";
 import { getFFmpeggy } from "../ffmpeg.js";
+import { findVideoFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
 
-const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "avi", "mkv"]);
 const MAX_DURATION_SECONDS = 300;
-
-function findVideoFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const videos = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return VIDEO_EXTENSIONS.has(ext);
-  });
-  return videos.find((f) => f.name.startsWith("original")) ?? videos[0] ?? null;
-}
 
 async function hasAudioStream(filePath: string): Promise<boolean> {
   const FFmpeggy = await getFFmpeggy();

@@ -19,18 +19,31 @@
  */
 
 import * as path from "node:path";
+import * as fsp from "node:fs/promises";
 
 import {
+  type ClipfirstFs,
   type Job,
   type JobHandler,
   type JobState,
   QueueRunner,
+  createFs,
+  isValidProjectSlug,
   queueApi,
   closeStateDb,
 } from "clipfirst-fs";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
 import { failPendingTask } from "./jobs/pending-task.js";
+
+async function projectExists(dir: string): Promise<boolean> {
+  try {
+    await fsp.access(path.join(dir, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 type JobPayload = Record<string, unknown>;
 
@@ -69,6 +82,7 @@ function extractType(payload: Record<string, unknown>): string {
 }
 
 let activeProjectsDir: string = PROJECTS_DIR;
+const fsRef: { current: ClipfirstFs } = { current: defaultFs };
 
 interface RunnerInfo {
   projectsDir: string;
@@ -78,6 +92,9 @@ interface RunnerInfo {
 const runnerByProject = new Map<string, RunnerInfo>();
 
 function projectDirFor(slug: string): string {
+  if (!isValidProjectSlug(slug)) {
+    throw new Error(`Invalid project slug: ${slug}`);
+  }
   return path.join(activeProjectsDir, slug);
 }
 
@@ -197,9 +214,18 @@ export const queue: QueueShim = {
         `queue.enqueue requires payload.projectSlug or project_slug; got jobId=${jobId} type=${String(payload.type)}`,
       );
     }
+    // Validate slug shape, then verify the project actually exists before
+    // touching SQLite — queueApi opens .clipfirst/ as a side-effect, which
+    // would silently spawn a phantom project directory for typos. Check
+    // against `dir` directly (not via fsRef) so direct-fs tests that don't
+    // call setProjectsDir still resolve correctly.
     const dir = projectDirFor(projectSlug);
-    // Lazy bootstrap of .clipfirst/state.sqlite for projects created since boot.
-    queueApi.list(dir, { limit: 0 }); // touch to open + migrate
+    if (!(await projectExists(dir))) {
+      throw new Error(
+        `queue.enqueue: project not found: ${projectSlug} (jobId=${jobId})`,
+      );
+    }
+    await fsRef.current.ensureClipfirstSetup(projectSlug);
     ensureRunner(projectSlug);
     const enriched = { ...payload, __jobId: jobId };
     const result = queueApi.enqueue(dir, {
@@ -299,7 +325,10 @@ export async function setProjectsDir(dir: string): Promise<void> {
   for (const info of stale) {
     closeStateDb(path.join(info.projectsDir, info.slug));
   }
+  const prior = fsRef.current;
+  if (prior !== defaultFs) prior.close();
   activeProjectsDir = dir;
+  fsRef.current = createFs({ projectsDir: dir });
 }
 
 export function getProjectsDir(): string {
