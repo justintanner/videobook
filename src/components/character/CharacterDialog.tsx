@@ -10,13 +10,13 @@ import {
 } from '@/hooks/useGenerateOutfit';
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
-import type { CharacterProfile } from '@/hooks/useCharacterSlots';
+import { normalizeCharacterProfile, type CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { UseMcpResult } from 'use-mcp/react';
 
 type ProfileFieldKey =
   | 'name'
   | 'age'
-  | 'gender_presentation'
+  | 'sex'
   | 'ethnicity'
   | 'height'
   | 'build'
@@ -41,11 +41,11 @@ interface FieldDef {
 const FIELDS: FieldDef[] = [
   { key: 'name', label: 'Name', required: false, placeholder: 'optional handle' },
   { key: 'age', label: 'Age', required: true, placeholder: 'mid-30s' },
-  { key: 'gender_presentation', label: 'Presentation', required: true, placeholder: 'feminine' },
+  { key: 'sex', label: 'Sex', required: true, placeholder: 'male or female' },
   { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
   { key: 'height', label: 'Height', required: true, placeholder: 'average' },
   { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
-  { key: 'bust', label: 'Bust', required: true, placeholder: 'small B-cup, even distribution' },
+  { key: 'bust', label: 'Chest', required: true, placeholder: 'broad chest or small B-cup' },
   { key: 'waist', label: 'Waist', required: true, placeholder: 'narrow ~26", sharp taper' },
   { key: 'hips', label: 'Hips', required: true, placeholder: 'rounded ~36", curved outer thigh' },
   { key: 'glutes', label: 'Glutes', required: true, placeholder: 'round and full, strong projection' },
@@ -80,7 +80,7 @@ function mediaItemToChoice(item: MediaItem): ImageChoice {
 function emptyProfile(sourceAssetId: string): CharacterProfile {
   return {
     age: '',
-    gender_presentation: '',
+    sex: '',
     ethnicity: '',
     height: '',
     build: '',
@@ -161,7 +161,7 @@ export function CharacterDialog({
       setAnalyzeError(null);
       setLastOutcomes([]);
       if (initialProfile) {
-        setProfile(initialProfile);
+        setProfile(normalizeCharacterProfile(initialProfile));
         return;
       }
       const extracted = await analyze(projectSlug, source.assetId);

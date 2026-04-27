@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
-import type { CharacterProfile } from "@/hooks/useCharacterSlots";
+import { normalizeCharacterProfile, type CharacterProfile, type LegacyCharacterProfile } from "@/hooks/useCharacterSlots";
 import { toast } from "@/hooks/useToast";
 
 export interface UseAnalyzeCharacterImageResult {
@@ -31,8 +31,8 @@ export function useAnalyzeCharacterImage(callTool: UseMcpResult["callTool"]): Us
         return null;
       }
       const content = res.content as Array<{ type: string; text: string }>;
-      const parsed = JSON.parse(content[0].text) as { profile: CharacterProfile };
-      return parsed.profile;
+      const parsed = JSON.parse(content[0].text) as { profile: LegacyCharacterProfile };
+      return normalizeCharacterProfile(parsed.profile);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);

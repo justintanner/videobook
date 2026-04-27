@@ -15,8 +15,8 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "analyze_character_image",
     description:
-      "Run vision on an image asset and return a structured Character profile (age, gender " +
-      "presentation, ethnicity, height, build, body measurements [bust/waist/hips/glutes], " +
+      "Run vision on an image asset and return a structured Character profile (age, sex, " +
+      "ethnicity, height, build, body measurements [chest/waist/hips/glutes], " +
       "face, hair, eyes, skin, distinguishing features). Synchronous — no jobs, no assets created. " +
       "Used by the /character flow to seed the editable form before generating a character sheet.",
     schema,

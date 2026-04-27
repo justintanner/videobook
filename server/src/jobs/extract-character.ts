@@ -14,7 +14,8 @@ import { findImageFile } from "../tools/_image-inputs.js";
 export type Character = {
   name?: string;
   age: string;
-  gender_presentation: string;
+  sex: string;
+  gender_presentation?: string;
   ethnicity: string;
   height: string;
   build: string;
@@ -36,7 +37,7 @@ export type Character = {
 
 const REQUIRED_FIELDS: Array<keyof Character> = [
   "age",
-  "gender_presentation",
+  "sex",
   "ethnicity",
   "height",
   "build",
@@ -65,6 +66,22 @@ const GUIDE_PATH = join(__dirname, "../guides/character_schema_guide.md");
 export const CHARACTER_METADATA_KEY = "character";
 export const VISION_MODEL = "grok-4.20-reasoning";
 
+export function normalizeCharacterSex(value: string): string {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (["masculine", "man", "male-presenting", "male presenting"].includes(lower)) return "male";
+  if (["feminine", "woman", "female-presenting", "female presenting"].includes(lower)) return "female";
+  return trimmed;
+}
+
+export function isMaleCharacterSex(value: string): boolean {
+  return normalizeCharacterSex(value).toLowerCase() === "male";
+}
+
+export function isFemaleCharacterSex(value: string): boolean {
+  return normalizeCharacterSex(value).toLowerCase() === "female";
+}
+
 function buildSystemPrompt(guide: string): string {
   return (
     "You are an expert visual analyst extracting a structured character profile from a photograph. " +
@@ -78,7 +95,19 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
     throw new Error("Vision model did not return a JSON object");
   }
   const obj = parsed as Record<string, unknown>;
+  const rawSex =
+    typeof obj.sex === "string" && obj.sex.trim()
+      ? obj.sex
+      : typeof obj.gender_presentation === "string"
+        ? obj.gender_presentation
+        : "";
   for (const field of REQUIRED_FIELDS) {
+    if (field === "sex") {
+      if (!rawSex.trim()) {
+        throw new Error("Vision model returned missing/empty required field: sex");
+      }
+      continue;
+    }
     const value = obj[field];
     if (typeof value !== "string" || value.trim().length === 0) {
       throw new Error(`Vision model returned missing/empty required field: ${field}`);
@@ -86,7 +115,7 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
   }
   const character: Character = {
     age: String(obj.age),
-    gender_presentation: String(obj.gender_presentation),
+    sex: normalizeCharacterSex(rawSex),
     ethnicity: String(obj.ethnicity),
     height: String(obj.height),
     build: String(obj.build),

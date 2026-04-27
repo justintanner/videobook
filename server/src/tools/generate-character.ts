@@ -18,12 +18,17 @@ import {
   type OutfitModelKey,
   type OutfitProvider,
 } from "./generate-outfit.js";
-import { CHARACTER_METADATA_KEY } from "../jobs/extract-character.js";
+import {
+  CHARACTER_METADATA_KEY,
+  isFemaleCharacterSex,
+  isMaleCharacterSex,
+  normalizeCharacterSex,
+} from "../jobs/extract-character.js";
 
 const CHARACTER_PROFILE_SCHEMA = z.object({
   name: z.string().optional(),
   age: z.string(),
-  gender_presentation: z.string(),
+  sex: z.string().optional(),
   ethnicity: z.string(),
   height: z.string(),
   build: z.string(),
@@ -37,9 +42,10 @@ const CHARACTER_PROFILE_SCHEMA = z.object({
   skin: z.string(),
   distinguishing_features: z.string(),
   source_image_asset_id: z.string(),
-});
+}).passthrough();
 
-type CharacterProfile = z.infer<typeof CHARACTER_PROFILE_SCHEMA>;
+type CharacterProfileInput = z.infer<typeof CHARACTER_PROFILE_SCHEMA> & { gender_presentation?: string };
+type CharacterProfile = CharacterProfileInput & { sex: string };
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -56,7 +62,7 @@ const schema = {
   outfit_text: z
     .string()
     .optional()
-    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). When unset, the body shots default to skin-tone nude undergarments so the silhouette reads cleanly."),
+    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). When unset, the body shots default to a sex-appropriate skin-tone baseline garment so the silhouette reads cleanly."),
   outfit_image_slug: z
     .string()
     .optional()
@@ -97,17 +103,32 @@ interface CharacterOutcome {
   profile_error?: string;
 }
 
+function normalizeProfile(p: CharacterProfileInput): CharacterProfile {
+  const legacySex = typeof p.gender_presentation === "string" ? p.gender_presentation : "";
+  const rawSex = p.sex?.trim() ? p.sex : legacySex;
+  if (!rawSex.trim()) {
+    throw new Error("profile.sex is required");
+  }
+  const normalized = {
+    ...p,
+    sex: normalizeCharacterSex(rawSex),
+  };
+  delete normalized.gender_presentation;
+  return normalized;
+}
+
 function profileSubjectSentence(p: CharacterProfile): string {
   const bits: string[] = [];
-  bits.push(`${p.age} ${p.gender_presentation} of ${p.ethnicity} heritage`);
+  bits.push(`${p.age} ${normalizeCharacterSex(p.sex)} of ${p.ethnicity} heritage`);
   bits.push(`${p.height}, ${p.build} build`);
   return bits.join(", ") + ".";
 }
 
 function profileDetailLines(p: CharacterProfile): string {
   const lines: string[] = [];
+  const chestLabel = isMaleCharacterSex(p.sex) ? "chest" : isFemaleCharacterSex(p.sex) ? "bust" : "chest/bust";
   lines.push(
-    `Body: bust ${p.bust}; waist ${p.waist}; hips ${p.hips}; glutes ${p.glutes}`,
+    `Body: ${chestLabel} ${p.bust}; waist ${p.waist}; hips ${p.hips}; glutes ${p.glutes}`,
   );
   lines.push(`Face: ${p.face}`);
   lines.push(`Hair: ${p.hair}`);
@@ -136,7 +157,29 @@ const STYLE_TAIL =
   "Preserve the subject's identity from Reference Image 1 — face structure, hair texture, skin tone — exactly. " +
   "Render as one cohesive 1:1 square image with the four quadrants clearly separated by thin gutters of white background.";
 
-function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean): string {
+export function defaultCharacterWardrobeClause(sex: string): string {
+  if (isMaleCharacterSex(sex)) {
+    return (
+      "Wardrobe for the body shots (bottom quadrants only): smooth skin-tone fitted boxer briefs or athletic trunks, color closely matched to the subject's own skin tone, no patterns, no logos. " +
+      "The upper torso is bare natural skin with visible chest and shoulders; no bra, no chest binder, no camisole, no crop top, no straps and no breast-covering garment. " +
+      "The garments should read as a clean baseline so the body's silhouette is the dominant signal. Top quadrants stay tightly cropped to bare head and neck."
+    );
+  }
+  if (isFemaleCharacterSex(sex)) {
+    return (
+      "Wardrobe for the body shots (bottom quadrants only): a smooth skin-tone undergarment set — a plain bra top with thick straps and matching high-waist briefs, " +
+      "color closely matched to the subject's own skin tone, no patterns, no logos, no lace. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
+      "Top quadrants stay tightly cropped to bare head and neck."
+    );
+  }
+  return (
+    "Wardrobe for the body shots (bottom quadrants only): smooth skin-tone minimal baseline garments appropriate to the subject's body, color closely matched to the subject's own skin tone, no patterns, no logos, no lace. " +
+    "Do not add a bra, chest binder, camisole, crop top, straps or breast-covering garment to male bodies. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
+    "Top quadrants stay tightly cropped to bare head and neck."
+  );
+}
+
+function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean, sex: string): string {
   if (hasOutfitImage && outfitText?.trim()) {
     return (
       `Wardrobe for the body shots (bottom quadrants only): dress the subject in the clothing shown in Reference Image 2 (${outfitText.trim()}). ` +
@@ -155,11 +198,7 @@ function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean)
       "Top quadrants stay tightly cropped to bare head and neck."
     );
   }
-  return (
-    "Wardrobe for the body shots (bottom quadrants only): a smooth skin-tone nude undergarment set — a plain nude bra top with thick straps and matching nude high-waist briefs, " +
-    "color closely matched to the subject's own skin tone, no patterns, no logos, no lace. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
-    "Top quadrants stay tightly cropped to bare head and neck."
-  );
+  return defaultCharacterWardrobeClause(sex);
 }
 
 function buildPrompt(
@@ -171,7 +210,7 @@ function buildPrompt(
 ): string {
   const subject = profileSubjectSentence(p);
   const details = profileDetailLines(p);
-  const wardrobe = wardrobeClause(outfitText, hasOutfitImage);
+  const wardrobe = wardrobeClause(outfitText, hasOutfitImage, p.sex);
   const base =
     `${SHEET_LAYOUT}\n\n` +
     `Subject: ${subject} ${details}\n\n` +
@@ -224,6 +263,15 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
     schema,
     handler: async (args) => {
       const a = args as Args;
+      let profile: CharacterProfile;
+      try {
+        profile = normalizeProfile(a.profile);
+      } catch (error) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+        };
+      }
       const provider: OutfitProvider = a.provider ?? "kie";
       const providerEnvKey = provider === "kie" ? "KIE_API_KEY" : "FAL_API_KEY";
       if (!process.env[providerEnvKey]) {
@@ -240,7 +288,7 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
 
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
-        const prompt = buildPrompt(a.profile, model, provider, a.outfit_text, !!outfitRef);
+        const prompt = buildPrompt(profile, model, provider, a.outfit_text, !!outfitRef);
         const outcome: CharacterOutcome = { model, provider, prompt };
         if (!factory) {
           outcome.error = `model ${model} is not available via provider ${provider}`;
@@ -283,7 +331,7 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
           // self-describing. The CharacterDialog reads this back via
           // read_asset_metadata to seed the editable form on next open.
           const profileWithSlots = {
-            ...a.profile,
+            ...profile,
             wardrobe: [],
             poses: [],
             outfits: [],

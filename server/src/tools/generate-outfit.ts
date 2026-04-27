@@ -20,7 +20,12 @@ import {
   type DescribeImageResult,
 } from "../jobs/describe-image.js";
 import { findImageFile } from "./_image-inputs.js";
-import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
+import {
+  CHARACTER_METADATA_KEY,
+  isMaleCharacterSex,
+  normalizeCharacterSex,
+  type Character,
+} from "../jobs/extract-character.js";
 
 const CUSTOM_PROMPT_MAX = 500;
 const POSE_DESCRIPTION_MAX = 1500;
@@ -229,12 +234,14 @@ function trimDescriptor(value: string): string {
 function compressCharacterProfile(c: Character | undefined): string {
   if (!c) return "";
   const parts: string[] = [];
-  const identity = [c.age, c.gender_presentation, c.ethnicity].filter(Boolean).join(" ");
+  const sex = normalizeCharacterSex(c.sex || c.gender_presentation || "");
+  const identity = [c.age, sex, c.ethnicity].filter(Boolean).join(" ");
   if (identity) parts.push(identity);
   const body = [c.height, c.build && `${c.build} build`].filter(Boolean).join(", ");
   if (body) parts.push(body);
+  const chestLabel = isMaleCharacterSex(sex) ? "chest" : "bust";
   const measurements = [
-    c.bust && `bust ${trimDescriptor(c.bust)}`,
+    c.bust && `${chestLabel} ${trimDescriptor(c.bust)}`,
     c.waist && `waist ${trimDescriptor(c.waist)}`,
     c.hips && `hips ${trimDescriptor(c.hips)}`,
     c.glutes && `glutes ${trimDescriptor(c.glutes)}`,

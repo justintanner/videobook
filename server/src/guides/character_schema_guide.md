@@ -15,7 +15,7 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
 - ✅ "shoulder-length wavy chestnut hair, side-parted, slight frizz at the temples"
 - ❌ "messy brown hair"
 
-**Body measurements (`bust`, `waist`, `hips`, `glutes`) are the primary signal for re-rendering body shape consistently.** Estimate them from the photograph using concrete shape descriptors — exact numeric measurements aren't usually possible, but cup size, waist taper, hip width, and glute shape almost always are. Numbers are fine when clearly inferable from a tight or fitted garment; otherwise prefer descriptors that anchor body geometry. Face / hair / eyes / skin remain useful but are **secondary** to body measurements.
+**Body measurements (`bust`, `waist`, `hips`, `glutes`) are the primary signal for re-rendering body shape consistently.** The `bust` field is the chest/bust geometry field: for male subjects describe chest width, pectoral shape, and ribcage taper; for female subjects describe bust size, cup estimate, distribution, and placement. Estimate concrete shape descriptors from the photograph — exact numeric measurements aren't usually possible, but chest width, cup size, waist taper, hip width, and glute shape almost always are. Numbers are fine when clearly inferable from a tight or fitted garment; otherwise prefer descriptors that anchor body geometry. Face / hair / eyes / skin remain useful but are **secondary** to body measurements.
 
 ## Schema
 
@@ -23,11 +23,11 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
 {
   "name": "string (optional, leave blank — user fills this in)",
   "age": "string — e.g. 'early 20s', 'mid-30s', '47'",
-  "gender_presentation": "string — 'feminine', 'masculine', 'androgynous', etc.",
+  "sex": "string — 'male' or 'female' based on visible physical body characteristics; if ambiguous, use a concise descriptor such as 'androgynous'.",
   "ethnicity": "string — e.g. 'East Asian', 'Black / West African heritage', 'Latina', 'White / Northern European'. Use respectful, specific descriptors that help the model render features consistently.",
   "height": "string — REQUIRED to include a numeric estimate. Format: 'descriptor, ~Xft Yin / Zcm', e.g. 'tall, ~5'10\" / 178cm', 'average, ~5'5\" / 165cm', 'petite, ~5'1\" / 155cm'. Estimate from visible body proportions and any contextual cues (door frames, furniture, surrounding people).",
   "build": "string — slim / athletic / curvy / stocky / muscular / lean. Combine if useful: 'lean athletic'.",
-  "bust": "string — chest size + shape. Cup size estimate ('small B-cup', 'full C-cup', '32B') + distribution ('even', 'wide-set', 'high-set'). Numbers if a fitted garment makes them clearly inferable, descriptors otherwise.",
+  "bust": "string — chest/bust size + shape. For male subjects: chest width, pectoral fullness, ribcage taper, e.g. 'broad athletic chest with defined pectorals'. For female subjects: cup size estimate ('small B-cup', 'full C-cup', '32B') + distribution ('even', 'wide-set', 'high-set'). Numbers if a fitted garment makes them clearly inferable, descriptors otherwise.",
   "waist": "string — waist circumference and taper. e.g. 'narrow ~26\" with sharp taper', 'soft 28\" with gentle taper', 'thick natural waist'. Numbers if inferable, descriptor otherwise.",
   "hips": "string — hip width relative to waist + shape. e.g. 'rounded ~36\" with curved outer thigh', 'narrow boyish hips', 'full and wide-set'.",
   "glutes": "string — shape and projection. e.g. 'round and full with strong projection', 'athletic and high', 'flat with minimal projection', 'soft heart-shaped'.",

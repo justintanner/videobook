@@ -15,14 +15,14 @@ type ProfileKey = keyof CharacterProfile;
 const SHORT_FIELDS: Array<{ key: ProfileKey; label: string }> = [
   { key: "name", label: "Name" },
   { key: "age", label: "Age" },
-  { key: "gender_presentation", label: "Presentation" },
+  { key: "sex", label: "Sex" },
   { key: "ethnicity", label: "Background" },
   { key: "height", label: "Height" },
   { key: "build", label: "Build" },
 ];
 
 const MEASUREMENT_FIELDS: Array<{ key: ProfileKey; label: string }> = [
-  { key: "bust", label: "Bust" },
+  { key: "bust", label: "Chest" },
   { key: "waist", label: "Waist" },
   { key: "hips", label: "Hips" },
   { key: "glutes", label: "Glutes" },

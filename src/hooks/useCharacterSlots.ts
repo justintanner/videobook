@@ -4,7 +4,8 @@ import type { UseMcpResult } from "use-mcp/react";
 export interface CharacterProfile {
   name?: string;
   age: string;
-  gender_presentation: string;
+  sex: string;
+  gender_presentation?: string;
   ethnicity: string;
   height: string;
   build: string;
@@ -22,6 +23,45 @@ export interface CharacterProfile {
   poses?: string[];
   backdrop?: string[];
   outfits?: string[];
+}
+
+export type LegacyCharacterProfile = Omit<CharacterProfile, "sex"> & {
+  sex?: string;
+  gender_presentation?: string;
+};
+
+function normalizeSexValue(value: string): string {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (["masculine", "man", "male-presenting", "male presenting"].includes(lower)) return "male";
+  if (["feminine", "woman", "female-presenting", "female presenting"].includes(lower)) return "female";
+  return trimmed;
+}
+
+export function normalizeCharacterProfile(profile: LegacyCharacterProfile): CharacterProfile {
+  const rawSex = profile.sex?.trim() ? profile.sex : profile.gender_presentation ?? "";
+  return {
+    name: profile.name,
+    age: profile.age,
+    sex: normalizeSexValue(rawSex),
+    ethnicity: profile.ethnicity,
+    height: profile.height,
+    build: profile.build,
+    bust: profile.bust,
+    waist: profile.waist,
+    hips: profile.hips,
+    glutes: profile.glutes,
+    face: profile.face,
+    hair: profile.hair,
+    eyes: profile.eyes,
+    skin: profile.skin,
+    distinguishing_features: profile.distinguishing_features,
+    source_image_asset_id: profile.source_image_asset_id,
+    wardrobe: profile.wardrobe,
+    poses: profile.poses,
+    backdrop: profile.backdrop,
+    outfits: profile.outfits,
+  };
 }
 
 export type SlotKind = "wardrobe" | "poses" | "backdrop" | "outfits";
@@ -95,8 +135,8 @@ export function useCharacterSlots(
           return;
         }
         const content = res.content as Array<{ type: string; text: string }>;
-        const parsed = JSON.parse(content[0].text) as CharacterProfile;
-        setState({ assetId, profile: parsed, loading: false, error: null });
+        const parsed = JSON.parse(content[0].text) as LegacyCharacterProfile;
+        setState({ assetId, profile: normalizeCharacterProfile(parsed), loading: false, error: null });
       } catch (e) {
         if (cancelled) return;
         if (attempts >= MAX_POLLS) {
