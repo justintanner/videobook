@@ -380,6 +380,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "extract_last_frame", autoInject: ["project_slug"] },
   },
   {
+    command: "/extract-audio",
+    description: "Extract audio track from video as audio asset (MP3)",
+    example: "/extract-audio @vid-clip",
+    category: "context_menu",
+    icon: "Music",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
+    ],
+    mcpTool: { tool: "extract_audio", autoInject: ["project_slug"] },
+  },
+  {
     command: "/assign",
     description: "Assign asset to timeline slot",
     example: "/assign @vid-clip @s02",

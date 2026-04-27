@@ -204,6 +204,15 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={() => onAnimateCommand?.(`/extract-last-frame ${slug}`)}
             MenuItem={MenuItem}
           />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/extract-audio ${slug}`}
+            title="Extract Audio"
+            titleClassName="text-emerald-400"
+            accentColor="border-l-emerald-500/50 focus:border-l-emerald-500/80"
+            onSelect={() => onAnimateCommand?.(`/extract-audio ${slug}`)}
+            MenuItem={MenuItem}
+          />
         </>
       )}
       <div className="-mx-1 my-1 h-px bg-border" />
