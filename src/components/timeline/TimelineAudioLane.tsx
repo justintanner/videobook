@@ -126,7 +126,9 @@ export function TimelineAudioLane({
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      // Match the source's effectAllowed: chip drags use 'move', sidebar uses
+      // 'copy'. Mismatched dropEffect makes the browser reject the drop.
+      e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === 'move' ? 'move' : 'copy';
       const next = computePreview(e);
       if (next) setPreview(next);
     },
