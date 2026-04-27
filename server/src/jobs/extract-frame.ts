@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
+import { stat } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
 
 const execFileAsync = promisify(execFile);
@@ -54,6 +55,17 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         "-q:v", "2",
         outputPath,
       ]);
+
+      // ffmpeg-static (v6.0) exits 0 even when "Output file is empty, nothing
+      // was encoded" — e.g. seeking past the last decodable video frame.
+      // Verify the output exists and is non-empty so the failure surfaces here
+      // instead of in the downstream process_image job.
+      const outStat = await stat(outputPath).catch(() => null);
+      if (!outStat || outStat.size === 0) {
+        throw new Error(
+          `ffmpeg produced no output for ${inputPath} at t=${timestamp}s (mode=${mode})`,
+        );
+      }
 
       const origin = {
         origin: `${mode}_frame`,

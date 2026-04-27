@@ -26,6 +26,21 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
+// Video stream is 2.0s (20 frames @ 10fps); audio is 2.5s. The container
+// duration reports 2.5s, so naive `format.duration - 0.1` would seek past
+// the last decodable video frame and ffmpeg-static silently exits 0 with
+// no output. Used to regression-test the stream-duration probe.
+async function generateAudioLongerThanVideo(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=10",
+    "-f", "lavfi", "-i", "sine=frequency=440:duration=2.5",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    outputPath,
+  ]);
+}
+
 async function uploadVideo(
   client: Client,
   projectSlug: string,
@@ -160,6 +175,33 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("No video file");
+  });
+
+  it("extracts last frame when audio stream is longer than video stream", async () => {
+    const skewedPath = join(tempDir, "audio-longer.mp4");
+    await generateAudioLongerThanVideo(skewedPath);
+    const uploaded = await uploadVideo(client, "frame-proj", skewedPath);
+
+    const result = await client.callTool({
+      name: "extract_last_frame",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "frame-proj",
+      },
+    });
+
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    await waitForJob(parsed.job_id);
+
+    const manifest = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },
+    });
+    const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
+    const jpgFile = manifestData.files.find((f: { name: string }) => f.name === "original.jpg");
+    expect(jpgFile).toBeDefined();
+    const jpgStat = await stat(join(manifestData.path, "original.jpg"));
+    expect(jpgStat.size).toBeGreaterThan(0);
   });
 
   it("writes .original.json with correct metadata", async () => {

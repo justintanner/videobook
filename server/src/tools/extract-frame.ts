@@ -34,7 +34,12 @@ async function probeVideo(filePath: string): Promise<ProbeResult> {
   );
   const width = Number(videoStream?.width ?? 0);
   const height = Number(videoStream?.height ?? 0);
-  const duration = Number(data.format?.duration ?? 0);
+  // Use the video stream's own duration so "last frame" never seeks past the
+  // last decodable video PTS — the format/container duration can include a
+  // longer audio tail and produce an empty output.
+  const streamDuration = Number(videoStream?.duration ?? 0);
+  const formatDuration = Number(data.format?.duration ?? 0);
+  const duration = streamDuration > 0 ? streamDuration : formatDuration;
   return { width, height, duration };
 }
 
