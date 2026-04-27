@@ -213,6 +213,15 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={() => onAnimateCommand?.(`/extract-audio ${slug}`)}
             MenuItem={MenuItem}
           />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/splice ${slug} ...`}
+            title="Splice with..."
+            titleClassName="text-amber-400"
+            accentColor="border-l-amber-500/50 focus:border-l-amber-500/80"
+            onSelect={() => onAnimateEdit?.(`/splice ${slug} `)}
+            MenuItem={MenuItem}
+          />
         </>
       )}
       <div className="-mx-1 my-1 h-px bg-border" />

@@ -27,6 +27,7 @@ import { changeVideoSpeedDef } from "./change-video-speed.js";
 import { reverseVideoDef } from "./reverse-video.js";
 import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
+import { spliceVideoDef } from "./splice-video.js";
 import { transcribeDef } from "./transcribe.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
@@ -158,6 +159,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     reverseVideoDef(fs),
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
+    spliceVideoDef(fs),
     transcribeDef(fs),
     generateGrokImagineVideoDef(fs),
     generateGrokImagineRefVideoDef(fs),

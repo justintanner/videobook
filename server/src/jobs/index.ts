@@ -6,6 +6,7 @@ import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
+import { registerSpliceVideoJob } from "./splice-video.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
 import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
 import { registerExtendGrokImagineVideoJob } from "./extend-grok-imagine-video.js";
@@ -85,6 +86,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);
+  registerSpliceVideoJob(fs);
   registerGenerateGrokImagineVideoJob(fs);
   registerGenerateGrokImagineRefVideoJob(fs);
   registerExtendGrokImagineVideoJob(fs);
