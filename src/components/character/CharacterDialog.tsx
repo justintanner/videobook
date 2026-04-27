@@ -202,8 +202,11 @@ export function CharacterDialog({
       outfitText: outfitText.trim() ? outfitText.trim() : undefined,
       outfitImageSlug: outfitImageSlug ?? undefined,
     });
-    if (res) setLastOutcomes(res.outcomes);
-  }, [canSubmit, projectSlug, source, profile, selectedModels, selectedProvider, generate, outfitText, outfitImageSlug]);
+    if (res) {
+      setLastOutcomes(res.outcomes);
+      if (res.enqueued > 0) onOpenChange(false);
+    }
+  }, [canSubmit, projectSlug, source, profile, selectedModels, selectedProvider, generate, outfitText, outfitImageSlug, onOpenChange]);
 
   const successOutcomes = useMemo(
     () => lastOutcomes.filter((o) => !!o.char_asset_id && !o.error),
