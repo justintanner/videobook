@@ -1,17 +1,21 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { ClipfirstFs } from "clipfirst-fs";
 
 describe("duplicate_asset tool", () => {
   let client: Client;
   let tempDir: string;
+  let fs: ClipfirstFs;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     client = await createTestClient(tempDir);
+    fs = createFsForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
@@ -88,4 +92,61 @@ describe("duplicate_asset tool", () => {
     });
     expect(result.isError).toBe(true);
   });
+
+  it("video duplicate inherits whitelist marker from source", async () => {
+    const created = await fs.createAsset("vid", "wl-source", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const sourceId = created.value.assetId;
+    await fs.writeFile(sourceId, "original.mp4", "fake", "test-proj");
+    await fs.writeFile(sourceId, ".whitelisted_at", "1700000000", "test-proj");
+
+    const result = await client.callTool({
+      name: "duplicate_asset",
+      arguments: { asset_id: sourceId, project_slug: "test-proj" },
+    });
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text,
+    );
+    const newId = parsed.new_asset_id as string;
+    await access(join(tempDir, "test-proj", newId, ".whitelisted_at"));
+  });
+
+  it("video duplicate is whitelisted even when source is not", async () => {
+    const created = await fs.createAsset("vid", "no-wl-source", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const sourceId = created.value.assetId;
+    await fs.writeFile(sourceId, "original.mp4", "fake", "test-proj");
+
+    const result = await client.callTool({
+      name: "duplicate_asset",
+      arguments: { asset_id: sourceId, project_slug: "test-proj" },
+    });
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text,
+    );
+    const newId = parsed.new_asset_id as string;
+    await access(join(tempDir, "test-proj", newId, ".whitelisted_at"));
+  });
+
+  it("video duplicate skips in-flight job markers", async () => {
+    const created = await fs.createAsset("vid", "in-flight-source", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const sourceId = created.value.assetId;
+    await fs.writeFile(sourceId, "original.mp4", "fake", "test-proj");
+    await fs.writeFile(sourceId, ".kie-task.json", "{}", "test-proj");
+    await fs.writeFile(sourceId, ".generation-error.json", "{}", "test-proj");
+
+    const result = await client.callTool({
+      name: "duplicate_asset",
+      arguments: { asset_id: sourceId, project_slug: "test-proj" },
+    });
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text,
+    );
+    const newId = parsed.new_asset_id as string;
+    const newDir = join(tempDir, "test-proj", newId);
+    await expect(access(join(newDir, ".kie-task.json"))).rejects.toThrow();
+    await expect(access(join(newDir, ".generation-error.json"))).rejects.toThrow();
+  });
 });
+

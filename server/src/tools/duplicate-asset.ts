@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
+import { WHITELISTED_AT_FILE } from "./whitelist-asset.js";
 
 export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -14,7 +15,7 @@ export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, project_slug, new_name } = args as { asset_id: string; project_slug: string; new_name?: string };
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -36,7 +37,10 @@ export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
 
       const newAssetId = createResult.value.assetId;
 
+      const SKIP_FILES = new Set([".kie-task.json", ".generation-error.json"]);
+
       for (const file of manifestResult.value.files) {
+        if (SKIP_FILES.has(file.name)) continue;
         const readResult = await fs.readFile(asset_id, file.name, project_slug);
         if (!readResult.ok) {
           return {
@@ -50,6 +54,13 @@ export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
             isError: true as const,
             content: [{ type: "text" as const, text: writeResult.error.message }],
           };
+        }
+      }
+
+      if (newAssetId.startsWith("vid-")) {
+        const alreadyWhitelisted = manifestResult.value.files.some((f) => f.name === WHITELISTED_AT_FILE);
+        if (!alreadyWhitelisted) {
+          await fs.writeFile(newAssetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), project_slug);
         }
       }
 
