@@ -4,6 +4,11 @@ import { cn } from '@/lib/utils';
 import { stripSlugPrefix } from '@/lib/slugs';
 import { slugFieldAssetType } from './ui/fieldHelpers';
 
+type SlotAcceptType = 'image' | 'video' | 'audio' | 'character';
+
+const acceptsForImageType = (t: 'image' | 'video' | 'audio'): SlotAcceptType[] =>
+  t === 'image' ? ['image', 'character'] : [t];
+
 interface AssetFieldInfo {
   name: string;
   schema: JSONSchemaProperty;
@@ -124,7 +129,7 @@ function NamedSlotList({
                   }
                 }}
                 disabled={disabled}
-                acceptTypes={[acceptType]}
+                acceptTypes={acceptsForImageType(acceptType)}
               />
             </div>
           </div>
@@ -165,7 +170,7 @@ function ArraySlotSection({
 
   const handleSlotChange = (
     index: number,
-    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' } | null,
+    asset: { slug: string; src: string; type: SlotAcceptType } | null,
     droppedAsset?: ResolvedAsset,
   ) => {
     const newValues = [...currentSlugs];
@@ -226,7 +231,7 @@ function ArraySlotSection({
                   }
                 }}
                 disabled={disabled}
-                acceptTypes={[fieldAssetType]}
+                acceptTypes={acceptsForImageType(fieldAssetType)}
               />
               {required && !slug && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
@@ -339,7 +344,7 @@ export function ImageParamSlots({
 
   const handleSlotChange = (
     index: number,
-    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' } | null,
+    asset: { slug: string; src: string; type: SlotAcceptType } | null,
     droppedAsset?: ResolvedAsset
   ) => {
     if (primaryField.schema.type === 'array') {
@@ -414,7 +419,7 @@ export function ImageParamSlots({
                   }
                 }}
                 disabled={disabled}
-                acceptTypes={[assetType]}
+                acceptTypes={acceptsForImageType(assetType)}
               />
               {required && !slug && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />

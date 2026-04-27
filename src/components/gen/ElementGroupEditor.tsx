@@ -129,7 +129,7 @@ export function ElementGroupEditor({
   const handleSlotChange = (
     groupIdx: number,
     slotIndex: number,
-    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' } | null,
+    asset: { slug: string; src: string; type: 'image' | 'video' | 'audio' | 'character' } | null,
     droppedAsset?: ResolvedAsset
   ) => {
     const slugsKey = `element${groupIdx}_slugs`;

@@ -63,7 +63,7 @@ export interface ResolvedAsset {
   slug: string;
   src: string;
   thumbnailSrc?: string | null;
-  type: 'image' | 'video' | 'audio';
+  type: 'image' | 'video' | 'audio' | 'character';
 }
 
 // Element group field pattern: element1_slugs, element2_name, element3_desc, etc.

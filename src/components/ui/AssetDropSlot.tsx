@@ -7,7 +7,7 @@ interface ResolvedAsset {
   slug: string;
   src: string;
   thumbnailSrc?: string | null;
-  type: 'image' | 'video' | 'audio';
+  type: 'image' | 'video' | 'audio' | 'character';
 }
 
 interface AssetDropSlotProps {
@@ -16,7 +16,7 @@ interface AssetDropSlotProps {
   label?: string;
   required?: boolean;
   disabled?: boolean;
-  acceptTypes?: ('image' | 'video' | 'audio')[];
+  acceptTypes?: ('image' | 'video' | 'audio' | 'character')[];
   emptyIcon?: React.ReactNode;
   compact?: boolean;
   variant?: 'default' | 'violet';

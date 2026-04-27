@@ -58,7 +58,7 @@ interface SavedGenSettings {
   model: string;
   provider: string;
   fields: Record<string, unknown>;
-  droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' }>;
+  droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' | 'character' }>;
 }
 
 function genSettingsKey(category: string, projectSlug?: string): string {
