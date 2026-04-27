@@ -299,9 +299,16 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   useEffect(() => {
     if (!preview || !selectedOption) return;
     const resolved = preview.resolved_assets ?? [];
+    // The savedRef fallback covers the initial-mount race: when this filter's
+    // queued setFormValues callback runs during state-queue processing, the
+    // droppedAssets closure is still the pre-restore empty Map. Consulting the
+    // immutable savedRef directly ensures we never strip slugs the user
+    // explicitly dropped before the panel was last closed.
+    const savedDroppedSlugs = new Set((savedRef.current?.droppedAssets ?? []).map((a) => a.slug));
     const canResolve = (slug: string): boolean => {
       if (!slug) return false;
       if (droppedAssets.has(slug)) return true;
+      if (savedDroppedSlugs.has(slug)) return true;
       const clean = stripSlugPrefix(slug);
       return resolved.some((a) => {
         const aClean = a.slug ? stripSlugPrefix(a.slug) : a.slug;
