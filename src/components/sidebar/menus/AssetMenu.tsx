@@ -75,15 +75,6 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={() => onAnimateCommand?.(`/character ${slug}`)}
             MenuItem={MenuItem}
           />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/outfit ${slug}`}
-            title="Outfit"
-            titleClassName="text-violet-400"
-            accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
-            onSelect={() => onAnimateCommand?.(`/outfit ${slug}`)}
-            MenuItem={MenuItem}
-          />
           {onExtractSkeleton && (
             <>
               <div className="-mx-1 my-1 h-px bg-border" />

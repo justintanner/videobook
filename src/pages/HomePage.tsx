@@ -24,10 +24,8 @@ import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/commands/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/commands/GenPreviewPanel';
-import { OutfitDialog } from '@/components/outfit/OutfitDialog';
 import { CharacterDialog } from '@/components/character/CharacterDialog';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
-import { useGenerateOutfit } from '@/hooks/useGenerateOutfit';
 import { useGenerateCharacter } from '@/hooks/useGenerateCharacter';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
@@ -87,7 +85,6 @@ export function HomePage() {
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
-  const [outfitDialog, setOutfitDialog] = useState<{ initialSlug: string | null } | null>(null);
   const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
@@ -103,7 +100,6 @@ export function HomePage() {
   const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
-  const { generate: generateOutfit, submitting: outfitSubmitting } = useGenerateOutfit(callTool);
   const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
   const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
@@ -607,10 +603,6 @@ export function HomePage() {
     gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
     gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
     gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
-    open_outfit_dialog: (initialSlug: string) => {
-      const cleaned = initialSlug.trim();
-      setOutfitDialog({ initialSlug: cleaned ? cleaned : null });
-    },
     open_character_dialog: (initialSlug: string) => {
       const cleaned = initialSlug.trim();
       setCharacterDialog({ initialSlug: cleaned ? cleaned : null });
@@ -900,17 +892,6 @@ export function HomePage() {
           </div>
         </div>
       </div>
-      <OutfitDialog
-        open={!!outfitDialog}
-        onOpenChange={(next) => { if (!next) setOutfitDialog(null); }}
-        imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
-        projectSlug={projectSlug}
-        initialSlug={outfitDialog?.initialSlug ?? null}
-        generate={generateOutfit}
-        submitting={outfitSubmitting}
-        callTool={callTool}
-        callState={state}
-      />
       <CharacterDialog
         open={!!characterDialog}
         onOpenChange={(next) => { if (!next) setCharacterDialog(null); }}
