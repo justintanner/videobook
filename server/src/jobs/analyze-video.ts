@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-fs";
 import { join } from "node:path";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { kie } from "@apicity/kie";
@@ -62,20 +62,15 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     );
     const metadata = metaResult.ok ? metaResult.value : null;
 
-    // TODO(boundary): use fs.readAssetSubpath when added — see
-    // /Users/jwt/.claude/plans/drifting-orbiting-bird.md ("OUT" section).
-    // Frames live in original_frames/ which clipfirst-fs doesn't yet expose
-    // a typed read path for; raw node:fs access is the documented escape hatch.
+    const listResult = await fs.listAssetSubdir(assetId, "original_frames", projectSlug);
+    const frameFiles = listResult.ok
+      ? listResult.value
+          .filter((f) => f.endsWith(".jpg"))
+          .sort((a, b) => parseFloat(a) - parseFloat(b))
+      : [];
+    // clipfirst-fs doesn't yet expose a typed read for asset subdir files,
+    // so frame bytes are read via node:fs below.
     const framesDir = join(assetDir, "original_frames");
-    let frameFiles: string[] = [];
-    try {
-      const entries = await readdir(framesDir);
-      frameFiles = entries
-        .filter((f) => f.endsWith(".jpg"))
-        .sort((a, b) => parseFloat(a) - parseFloat(b));
-    } catch {
-      // no frames directory
-    }
 
     const sampled = sampleFrames(frameFiles);
     const frameParts = [];

@@ -23,7 +23,6 @@ import * as fsp from "node:fs/promises";
 
 import {
   type ClipfirstFs,
-  type Job,
   type JobHandler,
   type JobState,
   QueueRunner,
@@ -90,6 +89,11 @@ interface RunnerInfo {
   runner: QueueRunner;
 }
 const runnerByProject = new Map<string, RunnerInfo>();
+
+// Maps the user-facing jobId (string) → the project + internal numeric row id
+// so getStatus/waitForJob can locate a job in O(1) without scanning every
+// project. Populated on enqueue + enqueueAndWait; cleared on stop/setProjectsDir.
+const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
 
 function projectDirFor(slug: string): string {
   if (!isValidProjectSlug(slug)) {
@@ -203,50 +207,51 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
   }
 }
 
-function findByJobIdSync(
+async function ensureProjectReady(
   jobId: string,
-): { slug: string; job: Job } | null {
-  for (const info of runnerByProject.values()) {
-    const jobs = queueApi.list(projectDirFor(info.slug), { limit: 10_000 });
-    for (const j of jobs) {
-      if ((j.payload as { __jobId?: string }).__jobId === jobId) {
-        return { slug: info.slug, job: j };
-      }
-    }
+  payload: JobPayload,
+): Promise<{ slug: string; dir: string }> {
+  const slug = extractProjectSlug(payload);
+  if (!slug) {
+    throw new Error(
+      `queue.enqueue requires payload.projectSlug or project_slug; got jobId=${jobId} type=${String(payload.type)}`,
+    );
   }
-  return null;
+  // Validate slug shape, then verify the project actually exists before
+  // touching SQLite — queueApi opens .clipfirst/ as a side-effect, which
+  // would silently spawn a phantom project directory for typos.
+  const dir = projectDirFor(slug);
+  if (!(await projectExists(dir))) {
+    throw new Error(
+      `queue.enqueue: project not found: ${slug} (jobId=${jobId})`,
+    );
+  }
+  await fsRef.current.ensureClipfirstSetup(slug);
+  ensureRunner(slug);
+  return { slug, dir };
+}
+
+function buildEnqueueOptions(jobId: string, payload: JobPayload) {
+  // Don't pass externalTaskId here: clipfirst-fs reserves that field for jobs
+  // that track an already-submitted external task, and starts those rows in
+  // "running" state — which means the runner skips them. clipfirst's jobId is
+  // just a client-side dedupe key, so dedupeKey + jobIdIndex (in-memory) is
+  // the right pairing.
+  return {
+    type: extractType(payload),
+    assetId: extractAssetId(payload),
+    payload,
+    dedupeKey: jobId,
+    maxAttempts: 1,
+  };
 }
 
 export const queue: QueueShim = {
   enqueue: async (jobId, payload) => {
-    const projectSlug = extractProjectSlug(payload);
-    if (!projectSlug) {
-      throw new Error(
-        `queue.enqueue requires payload.projectSlug or project_slug; got jobId=${jobId} type=${String(payload.type)}`,
-      );
-    }
-    // Validate slug shape, then verify the project actually exists before
-    // touching SQLite — queueApi opens .clipfirst/ as a side-effect, which
-    // would silently spawn a phantom project directory for typos. Check
-    // against `dir` directly (not via fsRef) so direct-fs tests that don't
-    // call setProjectsDir still resolve correctly.
-    const dir = projectDirFor(projectSlug);
-    if (!(await projectExists(dir))) {
-      throw new Error(
-        `queue.enqueue: project not found: ${projectSlug} (jobId=${jobId})`,
-      );
-    }
-    await fsRef.current.ensureClipfirstSetup(projectSlug);
-    ensureRunner(projectSlug);
-    const enriched = { ...payload, __jobId: jobId };
-    const result = queueApi.enqueue(dir, {
-      type: extractType(payload),
-      assetId: extractAssetId(payload),
-      payload: enriched,
-      dedupeKey: jobId,
-      maxAttempts: 1,
-    });
-    return { jobId, internalId: result.job.id, projectSlug };
+    const { slug, dir } = await ensureProjectReady(jobId, payload);
+    const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
+    jobIdIndex.set(jobId, { slug, internalId: result.job.id });
+    return { jobId, internalId: result.job.id, projectSlug: slug };
   },
 
   enqueueAndWait: async <T = unknown>(
@@ -254,31 +259,22 @@ export const queue: QueueShim = {
     payload: JobPayload,
     timeoutMs = 300_000,
   ): Promise<T> => {
-    const enq = await queue.enqueue(jobId, payload);
-    const dir = projectDirFor(enq.projectSlug);
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      const job = queueApi.getJob(dir, enq.internalId);
-      if (!job) throw new Error(`Job ${jobId} disappeared`);
-      if (job.state === "done") return job.result as T;
-      if (job.state === "failed" || job.state === "aborted") {
-        throw new Error(
-          `Job ${jobId} ${job.state}: ${job.error?.message ?? "unknown"}`,
-        );
-      }
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
+    const { slug } = await ensureProjectReady(jobId, payload);
+    return fsRef.current.queue.enqueueAndWait<T>(
+      slug,
+      buildEnqueueOptions(jobId, payload),
+      timeoutMs,
+    );
   },
 
   getStatus: async (jobId) => {
-    const found = findByJobIdSync(jobId);
-    if (!found) return null;
+    const ix = jobIdIndex.get(jobId);
+    if (!ix) return null;
+    const job = await fsRef.current.queue.getJob(ix.slug, ix.internalId);
+    if (!job) return null;
     return {
-      state: mapState(found.job.state),
-      ...(found.job.error
-        ? { error: { message: found.job.error.message } }
-        : {}),
+      state: mapState(job.state),
+      ...(job.error ? { error: { message: job.error.message } } : {}),
     };
   },
 
@@ -291,6 +287,7 @@ export const queue: QueueShim = {
   stop: async () => {
     const infos = Array.from(runnerByProject.values());
     runnerByProject.clear();
+    jobIdIndex.clear();
     await Promise.all(infos.map((info) => info.runner.stop()));
     for (const info of infos) {
       closeStateDb(projectDirFor(info.slug));
@@ -332,6 +329,7 @@ export async function setProjectsDir(dir: string): Promise<void> {
   if (dir === activeProjectsDir) return;
   const stale = Array.from(runnerByProject.values());
   runnerByProject.clear();
+  jobIdIndex.clear();
   await Promise.all(stale.map((info) => info.runner.stop().catch(() => {})));
   for (const info of stale) {
     closeStateDb(path.join(info.projectsDir, info.slug));

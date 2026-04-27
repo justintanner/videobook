@@ -59,23 +59,7 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
     const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug, uploadModel) : undefined;
     const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug, uploadModel) : undefined;
 
-    // DashScope requires `X-DashScope-OssResourceResolve: enable` to resolve
-    // `oss://` URIs produced by our native upload path. The SDK only sets
-    // `X-DashScope-Async`, so we wrap fetch to add the extra header on
-    // requests to the video-synthesis endpoint.
-    const provider = alibaba({
-      apiKey,
-      timeout: 120_000,
-      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : (input instanceof URL ? input.href : input.url);
-        if (url.includes("/services/aigc/video-generation/video-synthesis")) {
-          const headers = new Headers(init?.headers);
-          headers.set("X-DashScope-OssResourceResolve", "enable");
-          return fetch(input, { ...init, headers });
-        }
-        return fetch(input, init);
-      },
-    });
+    const provider = alibaba({ apiKey, timeout: 120_000 });
 
     const request = buildAlibabaVideoPayload(
       {

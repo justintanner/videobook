@@ -6,6 +6,7 @@ import type { GrokImageToImageRequest } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
+import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineImagePayload, buildXaiGrokImagineImagePayload } from "../payload-builders.js";
 
 type GenerateGrokImagineImagePayload = {
@@ -49,11 +50,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
       const resultImageUrl = result.data[0]?.url;
       if (!resultImageUrl) throw new Error("xAI returned no image URL");
 
-      // Download the result image
-      const resp = await fetch(resultImageUrl);
-      if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
-      const resultBuffer = Buffer.from(await resp.arrayBuffer());
-      await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
+      await downloadUrlIntoAsset(fs, resultImageUrl, imgAssetId, "original.png", projectSlug, { kind: "result image" });
 
       // Enqueue post-processing so .original.json and derived crops are created
       const provenance = {

@@ -4,6 +4,7 @@ import { xai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { writePendingTask, deletePendingTask } from "./pending-task.js";
+import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineTextImagePayload = {
@@ -43,10 +44,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
 
-      const resp = await fetch(imageUrl);
-      if (!resp.ok) throw new Error(`Failed to download result image: ${resp.status}`);
-      const resultBuffer = Buffer.from(await resp.arrayBuffer());
-      await fs.writeFile(imgAssetId, "original.png", resultBuffer, projectSlug);
+      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", projectSlug, { kind: "result image" });
 
       // Enqueue post-processing so .original.json and derived crops are created
       const provenance = {

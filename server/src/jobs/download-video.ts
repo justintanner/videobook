@@ -5,6 +5,7 @@ import { YtDlp } from "ytdlp-nodejs";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 600_000;
@@ -139,12 +140,10 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
           const ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
           const imageUrl = extractOgImageUrl(ogData.ogImage);
           if (imageUrl) {
-            const imgResponse = await fetch(imageUrl, {
-              signal: AbortSignal.timeout(15_000),
-              redirect: "follow",
+            await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.jpg", projectSlug ?? "", {
+              kind: "OG image",
+              fetchInit: { signal: AbortSignal.timeout(15_000), redirect: "follow" },
             });
-            const buffer = Buffer.from(await imgResponse.arrayBuffer());
-            await fs.writeFile(assetId, "original.jpg", buffer, projectSlug ?? "");
           }
         }
       } catch {
@@ -300,13 +299,10 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
         if (!imageUrl) throw new Error("No image URL found in content info");
 
         const ext = imageExtension(itemInfo);
-        const imgResponse = await fetch(imageUrl, {
-          signal: AbortSignal.timeout(30_000),
-          redirect: "follow",
+        await downloadUrlIntoAsset(fs, imageUrl, effectiveAssetId, `original${ext}`, slug, {
+          kind: "image",
+          fetchInit: { signal: AbortSignal.timeout(30_000), redirect: "follow" },
         });
-        if (!imgResponse.ok) throw new Error(`Image download failed: ${imgResponse.status}`);
-        const buffer = Buffer.from(await imgResponse.arrayBuffer());
-        await fs.writeFile(effectiveAssetId, `original${ext}`, buffer, slug);
 
         // Build provenance
         const provenance = {

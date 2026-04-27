@@ -6,6 +6,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
+import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { deletePendingTask } from "./pending-task.js";
 import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
 
@@ -156,11 +157,7 @@ async function completeSeedreamImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -196,11 +193,7 @@ async function completeSeedreamV5LiteImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -232,12 +225,8 @@ async function completeNanoBananaImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -271,11 +260,7 @@ async function completeWan27Image(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -308,12 +293,8 @@ async function completeQwen2ImageEdit(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -347,11 +328,7 @@ async function completeKling30Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
   const provenance = {
     source_assets: meta.sourceImageIds,
@@ -391,11 +368,7 @@ async function completeSeedance2Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
   // Optionally save the returned last frame as a secondary image file
   if (meta.return_last_frame === true && resultUrls[1]) {
@@ -448,11 +421,7 @@ async function completeWan27Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -495,11 +464,7 @@ async function completeGrokImagineVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
   const provenance = {
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
@@ -541,11 +506,7 @@ async function completeGrokImagineImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
 
   const origin = {
     source_asset: meta.sourceImageId,
@@ -576,11 +537,7 @@ async function completeGptImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.png", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -766,11 +723,7 @@ async function completeAlibabaVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in Alibaba result");
 
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, "original.mp4", buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
   const modelName = (await readPayloadModel(fs, assetId, projectSlug)) ?? "alibaba/wan2.7-video";
 
@@ -812,12 +765,8 @@ async function completeAlibabaQwenImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in Alibaba Qwen result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
   const ext = extensionFromUrl(imageUrl, "png");
-  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
   const fallbackModel = taskType === "alibaba_qwen_image_edit"
     ? "alibaba/qwen-image-edit-plus"
@@ -861,12 +810,8 @@ async function completeAlibabaImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in Alibaba result");
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-
-  const buffer = Buffer.from(await response.arrayBuffer());
   const ext = extensionFromUrl(imageUrl, "png");
-  await fs.writeFile(assetId, `original.${ext}`, buffer, projectSlug);
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
   const modelName = (await readPayloadModel(fs, assetId, projectSlug))
     ?? (taskType === "alibaba_image_pro" ? "alibaba/wan2.7-image-pro" : "alibaba/wan2.7-image");
