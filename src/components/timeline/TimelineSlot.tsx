@@ -8,62 +8,11 @@ import {
   ContextMenuContent,
   ContextMenuItem,
 } from '@/components/ui/context-menu';
+import { Waveform } from './Waveform';
 
 function parseTimestamp(url: string): number {
   const match = url.match(/(\d+\.\d+)\.jpg$/);
   return match ? parseFloat(match[1]) : 0;
-}
-
-function Waveform({ data, className }: { data: number[]; className?: string }) {
-  const w = 100 / data.length;
-  return (
-    <div className={cn('relative', className)}>
-      {/* Glow layer */}
-      <svg
-        viewBox="0 0 100 40"
-        preserveAspectRatio="none"
-        className="absolute inset-0 w-full h-full opacity-40 blur-[2px]"
-      >
-        {data.map((h, i) => {
-          const barH = Math.max(2, h * 38);
-          return (
-            <rect
-              key={i}
-              x={i * w}
-              y={40 - barH}
-              width={w * 0.7}
-              height={barH}
-              rx={0.5}
-              fill="currentColor"
-            />
-          );
-        })}
-      </svg>
-      {/* Sharp layer */}
-      <svg
-        viewBox="0 0 100 40"
-        preserveAspectRatio="none"
-        className="relative w-full h-full"
-      >
-        {data.map((h, i) => {
-          const barH = Math.max(2, h * 38);
-          const opacity = 0.3 + h * 0.7;
-          return (
-            <rect
-              key={i}
-              x={i * w}
-              y={40 - barH}
-              width={w * 0.7}
-              height={barH}
-              rx={0.5}
-              fill="currentColor"
-              opacity={opacity}
-            />
-          );
-        })}
-      </svg>
-    </div>
-  );
 }
 
 function MicroThumb({ url, pct }: { url: string; pct: number }) {

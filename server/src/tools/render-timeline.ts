@@ -2,10 +2,12 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findAudioFile, findVideoFile } from "../media-files.js";
 import { readStoredRenderDefaults } from "./sync.js";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
+
+const TIMELINE_FPS = 30;
 
 type TimelineSlot = {
   slug: string;
@@ -14,12 +16,33 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type TimelineAudioClip = {
+  id: string;
+  slug: string;
+  startFrame: number;
+  durationFrames: number;
+  volume?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+};
+
 type ResolvedSlot = {
   slug: string;
   volume: number;
   fadeIn: number;
   fadeOut: number;
   assetDir: string;
+};
+
+type ResolvedAudioOverlay = {
+  id: string;
+  slug: string;
+  audioPath: string;
+  startMs: number;
+  durationMs: number;
+  volume: number;
+  fadeInMs: number;
+  fadeOutMs: number;
 };
 
 type MissingSlot = {
@@ -50,7 +73,7 @@ export async function runRenderTimeline(
   projectSlug: string,
 ): Promise<RenderTimelineOutcome> {
   const timelineResult = await fs.readProjectMeta<
-    { slots: TimelineSlot[]; render?: string } | TimelineSlot[]
+    { slots: TimelineSlot[]; audio?: TimelineAudioClip[]; render?: string } | TimelineSlot[]
   >("timeline", projectSlug);
   if (!timelineResult.ok) {
     if (timelineResult.error.code === "NOT_FOUND") {
@@ -64,6 +87,7 @@ export async function runRenderTimeline(
 
   const raw = timelineResult.value;
   const slots = (Array.isArray(raw) ? raw : raw.slots).filter((s) => s.slug);
+  const audioClips: TimelineAudioClip[] = Array.isArray(raw) ? [] : (raw.audio ?? []);
   const orientation = (Array.isArray(raw) ? "landscape" : (raw.render ?? "landscape")) as Orientation;
   if (slots.length === 0) {
     return { status: "empty", message: "Timeline has no slots with assets assigned." };
@@ -153,6 +177,35 @@ export async function runRenderTimeline(
     return { status: "prerender_started", orientation, prerenderJobs };
   }
 
+  const resolvedAudio: ResolvedAudioOverlay[] = [];
+  for (const clip of audioClips) {
+    const manifestResult = await fs.getManifest(clip.slug, projectSlug);
+    if (!manifestResult.ok) {
+      return {
+        status: "error",
+        message: `Audio asset ${clip.slug} not found: ${manifestResult.error.message}`,
+      };
+    }
+    const manifest = manifestResult.value;
+    const audioFile = findAudioFile(manifest.files, clip.slug);
+    if (!audioFile) {
+      return {
+        status: "error",
+        message: `Audio asset ${clip.slug} has no audio file.`,
+      };
+    }
+    resolvedAudio.push({
+      id: clip.id,
+      slug: clip.slug,
+      audioPath: join(manifest.path, audioFile.name),
+      startMs: Math.round((clip.startFrame / TIMELINE_FPS) * 1000),
+      durationMs: Math.round((clip.durationFrames / TIMELINE_FPS) * 1000),
+      volume: (clip.volume ?? 100) / 100,
+      fadeInMs: clip.fadeIn ?? 0,
+      fadeOutMs: clip.fadeOut ?? 0,
+    });
+  }
+
   const jobId = `render-timeline-${projectSlug}-${Date.now()}`;
 
   await queue.enqueue(jobId, {
@@ -160,6 +213,7 @@ export async function runRenderTimeline(
     projectSlug: projectSlug,
     orientation,
     resolvedSlots,
+    resolvedAudio,
   });
 
   return { status: "enqueued", jobId, slotCount: resolvedSlots.length, orientation };

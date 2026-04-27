@@ -10,10 +10,21 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type TimelineAudioClip = {
+  id: string;
+  slug: string;
+  startFrame: number;
+  durationFrames: number;
+  volume?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+};
+
 type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 type TimelineConfig = {
   slots: TimelineSlot[];
+  audio?: TimelineAudioClip[];
   render: Orientation;
   currentOrientation?: ViewerSize;
 };
@@ -30,6 +41,15 @@ export function editTimelineDef(fs: ClipfirstFs): ToolDef {
         audioFadeIn: z.number().optional(),
         audioFadeOut: z.number().optional(),
       })).describe("Timeline slots"),
+      audio: z.array(z.object({
+        id: z.string(),
+        slug: z.string(),
+        startFrame: z.number(),
+        durationFrames: z.number(),
+        volume: z.number().optional(),
+        fadeIn: z.number().optional(),
+        fadeOut: z.number().optional(),
+      })).optional().describe("Overlay audio clips on the timeline"),
       render: z.enum(["landscape", "portrait", "square"])
         .optional()
         .describe("Orientation to render (default: \"landscape\")"),
@@ -38,14 +58,20 @@ export function editTimelineDef(fs: ClipfirstFs): ToolDef {
         .describe("Last-used viewer orientation for clips"),
     },
     handler: async (args) => {
-      const { project_slug, slots, render = "landscape", currentOrientation } = args as {
+      const { project_slug, slots, audio, render = "landscape", currentOrientation } = args as {
         project_slug: string;
         slots: TimelineSlot[];
+        audio?: TimelineAudioClip[];
         render?: Orientation;
         currentOrientation?: ViewerSize;
       };
 
-      const config: TimelineConfig = { slots, render, ...(currentOrientation !== undefined && { currentOrientation }) };
+      const config: TimelineConfig = {
+        slots,
+        render,
+        ...(audio !== undefined && { audio }),
+        ...(currentOrientation !== undefined && { currentOrientation }),
+      };
       const result = await fs.writeProjectMeta("timeline", config, project_slug);
       if (result.ok) {
         return {

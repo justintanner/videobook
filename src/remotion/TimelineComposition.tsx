@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Series, Video, useVideoConfig } from 'remotion';
+import { Audio, Sequence, Series, Video, useVideoConfig } from 'remotion';
 
 export interface TimelineSlotData {
   src: string;
@@ -9,8 +9,19 @@ export interface TimelineSlotData {
   fadeOut: number;       // ms
 }
 
+export interface TimelineAudioOverlayData {
+  id: string;
+  src: string;
+  startFrame: number;
+  durationFrames: number;
+  volume: number;        // 0-100
+  fadeIn: number;        // ms
+  fadeOut: number;       // ms
+}
+
 interface TimelineCompositionProps {
   slots: TimelineSlotData[];
+  audioClips?: TimelineAudioOverlayData[];
 }
 
 function SlotVideo({ slot }: { slot: TimelineSlotData }) {
@@ -44,14 +55,50 @@ function SlotVideo({ slot }: { slot: TimelineSlotData }) {
   );
 }
 
-export const TimelineComposition: React.FC<TimelineCompositionProps> = ({ slots }) => {
+function OverlayAudio({ overlay }: { overlay: TimelineAudioOverlayData }) {
+  const { fps } = useVideoConfig();
+  const { volume, fadeIn, fadeOut, durationFrames } = overlay;
+
+  const fadeInFrames = Math.round((fadeIn / 1000) * fps);
+  const fadeOutFrames = Math.round((fadeOut / 1000) * fps);
+
+  const volumeCallback = useCallback(
+    (frame: number) => {
+      const baseVolume = volume / 100;
+      if (fadeInFrames > 0 && frame < fadeInFrames) {
+        return baseVolume * (frame / fadeInFrames);
+      }
+      const framesFromEnd = durationFrames - frame;
+      if (fadeOutFrames > 0 && framesFromEnd < fadeOutFrames) {
+        return baseVolume * Math.max(0, framesFromEnd / fadeOutFrames);
+      }
+      return baseVolume;
+    },
+    [volume, fadeInFrames, fadeOutFrames, durationFrames],
+  );
+
+  return <Audio src={overlay.src} volume={volumeCallback} />;
+}
+
+export const TimelineComposition: React.FC<TimelineCompositionProps> = ({ slots, audioClips }) => {
   return (
-    <Series>
-      {slots.map((slot, i) => (
-        <Series.Sequence key={i} durationInFrames={slot.durationInFrames}>
-          <SlotVideo slot={slot} />
-        </Series.Sequence>
+    <>
+      <Series>
+        {slots.map((slot, i) => (
+          <Series.Sequence key={i} durationInFrames={slot.durationInFrames}>
+            <SlotVideo slot={slot} />
+          </Series.Sequence>
+        ))}
+      </Series>
+      {(audioClips ?? []).map((overlay) => (
+        <Sequence
+          key={overlay.id}
+          from={overlay.startFrame}
+          durationInFrames={overlay.durationFrames}
+        >
+          <OverlayAudio overlay={overlay} />
+        </Sequence>
       ))}
-    </Series>
+    </>
   );
 };

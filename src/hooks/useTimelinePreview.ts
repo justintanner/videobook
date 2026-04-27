@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { TimelineConfig, Orientation } from '@/hooks/useTimeline';
 import type { MediaItem } from '@/components/sidebar/types';
-import type { TimelineSlotData } from '@/remotion/TimelineComposition';
+import type { TimelineSlotData, TimelineAudioOverlayData } from '@/remotion/TimelineComposition';
 import {
   LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT,
   PORTRAIT_WIDTH, PORTRAIT_HEIGHT,
@@ -12,6 +12,7 @@ const FPS = 30;
 
 interface TimelinePreviewData {
   slots: TimelineSlotData[];
+  audioClips: TimelineAudioOverlayData[];
   totalDurationInFrames: number;
   fps: number;
   compositionWidth: number;
@@ -39,6 +40,7 @@ export function useTimelinePreview(
   return useMemo(() => {
     const empty: TimelinePreviewData = {
       slots: [],
+      audioClips: [],
       totalDurationInFrames: 1,
       fps: FPS,
       compositionWidth: LANDSCAPE_WIDTH,
@@ -94,8 +96,25 @@ export function useTimelinePreview(
     const totalDurationInFrames = Math.max(1, cumulativeFrames);
     const ready = slots.length > 0;
 
+    const audioClips: TimelineAudioOverlayData[] = [];
+    for (const clip of timeline.audio ?? []) {
+      const item = mediaItems.find((m) => m.id === clip.slug);
+      if (!item) continue;
+      const src = item.filePath || `/files/${projectSlug}/${item.id}/original.mp3`;
+      audioClips.push({
+        id: clip.id,
+        src,
+        startFrame: clip.startFrame,
+        durationFrames: clip.durationFrames,
+        volume: clip.volume ?? 100,
+        fadeIn: clip.fadeIn ?? 0,
+        fadeOut: clip.fadeOut ?? 0,
+      });
+    }
+
     return {
       slots,
+      audioClips,
       totalDurationInFrames,
       fps: FPS,
       compositionWidth: width,

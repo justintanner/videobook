@@ -22,11 +22,23 @@ type ResolvedSlot = {
   assetDir: string;
 };
 
+type ResolvedAudioOverlay = {
+  id: string;
+  slug: string;
+  audioPath: string;
+  startMs: number;
+  durationMs: number;
+  volume: number;
+  fadeInMs: number;
+  fadeOutMs: number;
+};
+
 type RenderTimelinePayload = {
   type: "render_timeline";
   projectSlug: string;
   orientation: "landscape" | "portrait" | "square";
   resolvedSlots: ResolvedSlot[];
+  resolvedAudio?: ResolvedAudioOverlay[];
 };
 
 function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): string {
@@ -47,12 +59,37 @@ function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): 
   return `[${index}:a:0]${filters.join(",")}[a${index}]`;
 }
 
+function buildOverlayAudioFilter(inputIndex: number, overlay: ResolvedAudioOverlay, label: string): string {
+  const filters: string[] = ["aresample=48000", "aformat=sample_fmts=fltp:channel_layouts=stereo"];
+  const durationSec = overlay.durationMs / 1000;
+  if (durationSec > 0) {
+    filters.push(`atrim=0:${durationSec}`);
+  }
+  if (overlay.startMs > 0) {
+    filters.push(`adelay=${overlay.startMs}|${overlay.startMs}`);
+  }
+  if (overlay.volume !== 1) {
+    filters.push(`volume=${overlay.volume}`);
+  }
+  const fadeInSec = overlay.fadeInMs / 1000;
+  if (fadeInSec > 0) {
+    filters.push(`afade=t=in:st=${overlay.startMs / 1000}:d=${fadeInSec}`);
+  }
+  const fadeOutSec = overlay.fadeOutMs / 1000;
+  if (fadeOutSec > 0) {
+    const fadeOutStart = Math.max(0, (overlay.startMs + overlay.durationMs) / 1000 - fadeOutSec);
+    filters.push(`afade=t=out:st=${fadeOutStart}:d=${fadeOutSec}`);
+  }
+  return `[${inputIndex}:a:0]${filters.join(",")}[${label}]`;
+}
+
 export function registerRenderTimelineJob(fs: ClipfirstFs): void {
   registerJobHandler("render_timeline", async (payload) => {
     const {
       projectSlug,
       orientation,
       resolvedSlots,
+      resolvedAudio = [],
     } = payload as RenderTimelinePayload;
 
     const projectResult = await fs.getProject(projectSlug);
@@ -85,10 +122,13 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
       // All per-slot renders come from the same Remotion pipeline, so codec,
       // resolution, fps, and pixel format already match. Use the concat
       // demuxer to stream-copy video (no re-encode). Audio still needs
-      // per-slot volume/fade filtering when any slot deviates from defaults.
-      const needsAudioFilter = resolvedSlots.some(
+      // filtering when any slot deviates from defaults OR when overlay
+      // audio clips are present (must be mixed via amix).
+      const needsSlotAudioFilter = resolvedSlots.some(
         (s) => s.volume !== 100 || s.fadeIn > 0 || s.fadeOut > 0,
       );
+      const hasOverlays = resolvedAudio.length > 0;
+      const needsAudioFilter = needsSlotAudioFilter || hasOverlays;
 
       const concatListDir = await mkdtemp(join(tmpdir(), "clipfirst-concat-"));
       const concatListPath = join(concatListDir, "list.txt");
@@ -109,6 +149,9 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
           for (const p of inputPaths) {
             ffmpegArgs.push("-i", p);
           }
+          for (const overlay of resolvedAudio) {
+            ffmpegArgs.push("-i", overlay.audioPath);
+          }
 
           const filterParts: string[] = [];
           for (let i = 0; i < n; i++) {
@@ -116,7 +159,23 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
             filterParts.push(buildAudioFilter(i + 1, resolvedSlots[i], durations[i]));
           }
           const concatInputs = Array.from({ length: n }, (_, i) => `[a${i + 1}]`).join("");
-          filterParts.push(`${concatInputs}concat=n=${n}:v=0:a=1[outa]`);
+          const concatLabel = hasOverlays ? "[concatA]" : "[outa]";
+          filterParts.push(`${concatInputs}concat=n=${n}:v=0:a=1${concatLabel}`);
+
+          if (hasOverlays) {
+            const overlayBaseIndex = 1 + n;
+            const overlayLabels: string[] = [];
+            resolvedAudio.forEach((overlay, k) => {
+              const label = `ov${k}`;
+              overlayLabels.push(`[${label}]`);
+              filterParts.push(buildOverlayAudioFilter(overlayBaseIndex + k, overlay, label));
+            });
+            const mixInputs = `[concatA]${overlayLabels.join("")}`;
+            const mixCount = 1 + overlayLabels.length;
+            filterParts.push(
+              `${mixInputs}amix=inputs=${mixCount}:duration=first:dropout_transition=0:normalize=0,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[outa]`,
+            );
+          }
 
           ffmpegArgs.push(
             "-filter_complex", filterParts.join(";"),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { TimelineComposition } from '@/remotion/TimelineComposition';
-import type { TimelineSlotData } from '@/remotion/TimelineComposition';
+import type { TimelineSlotData, TimelineAudioOverlayData } from '@/remotion/TimelineComposition';
 import { Film } from 'lucide-react';
 import type { Orientation } from '@/hooks/useTimeline';
 import type { ViewerSize } from '@/components/center-stage/viewer-types';
@@ -9,6 +9,7 @@ import { RatioToggle } from '@/components/center-stage/viewer-shared';
 
 export interface TimelinePreviewData {
   slots: TimelineSlotData[];
+  audioClips: TimelineAudioOverlayData[];
   totalDurationInFrames: number;
   fps: number;
   compositionWidth: number;
@@ -99,7 +100,10 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate, o
     return () => player.removeEventListener('frameupdate', handler);
   }, [onFrameUpdate]);
 
-  const inputProps = useMemo(() => ({ slots: previewData.slots }), [previewData.slots]);
+  const inputProps = useMemo(
+    () => ({ slots: previewData.slots, audioClips: previewData.audioClips }),
+    [previewData.slots, previewData.audioClips],
+  );
 
   if (!previewData.ready) {
     return (

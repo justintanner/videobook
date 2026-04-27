@@ -29,6 +29,7 @@ import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { useGenerateCharacter } from '@/hooks/useGenerateCharacter';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
+import { TimelineAudioLane } from '@/components/timeline/TimelineAudioLane';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
 import { useMcpConnection } from '@/hooks/useMcpConnection';
 import { useUploadFile } from '@/hooks/useUploadFile';
@@ -98,7 +99,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setCurrentOrientation } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
   const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
@@ -432,7 +433,13 @@ export function HomePage() {
 
   const slotRefs = useMemo(() => {
     const slots = timeline?.slots;
-    const count = Math.max(slots?.length ?? 0, 5);
+    let lastFilled = -1;
+    if (slots) {
+      for (let i = slots.length - 1; i >= 0; i--) {
+        if (slots[i]?.slug) { lastFilled = i; break; }
+      }
+    }
+    const count = Math.max(lastFilled + 2, 5);
     return Array.from({ length: count }, (_, i) => ({
       ref: `@s${String(i + 1).padStart(2, '0')}`,
       assetSlug: slots?.[i]?.slug || '',
@@ -863,6 +870,17 @@ export function HomePage() {
                 );
               })}
             </div>
+            {projectSlug && previewData.ready && (
+              <TimelineAudioLane
+                audioClips={timeline?.audio ?? []}
+                mediaItems={mediaItems}
+                slotOffsets={previewData.slotOffsets}
+                totalDurationInFrames={previewData.totalDurationInFrames}
+                onAdd={(assetId, startFrame, durationFrames) => { addAudio(projectSlug, assetId, startFrame, durationFrames); }}
+                onMove={(audioId, startFrame) => { moveAudio(projectSlug, audioId, startFrame); }}
+                onRemove={(audioId) => { removeAudio(projectSlug, audioId); }}
+              />
+            )}
             <div className="relative h-12 border-t border-border/30 bg-card/20 flex items-center px-3 gap-3">
               {timelineSlotIndex != null && previewData.ready && (
                 <>

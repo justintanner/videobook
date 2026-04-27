@@ -11,10 +11,21 @@ type TimelineSlot = {
   audioFadeOut?: number;
 };
 
+type TimelineAudioClip = {
+  id: string;
+  slug: string;
+  startFrame: number;
+  durationFrames: number;
+  volume?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+};
+
 type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
 
 type TimelineConfig = {
   slots: TimelineSlot[];
+  audio?: TimelineAudioClip[];
   render: Orientation;
   currentOrientation?: ViewerSize;
 };
