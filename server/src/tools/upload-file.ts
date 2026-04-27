@@ -4,6 +4,7 @@ import { z } from "zod";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
+import { WHITELISTED_AT_FILE } from "./whitelist-asset.js";
 
 const extensionToPrefix: Record<string, string> = {
   ".mp4": "vid",
@@ -72,6 +73,7 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
       const provenance = { origin: "upload", processed_at: new Date().toISOString() };
       if (assetId.startsWith("vid-")) {
         const videoPath = path.join(assetPath, writtenFilename);
+        await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), project_slug);
         const jobId = `process-video-${assetId}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "process_video",

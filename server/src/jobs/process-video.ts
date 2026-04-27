@@ -4,7 +4,6 @@ import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 type ProcessVideoPayload = {
   type: "process_video";
@@ -94,10 +93,6 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
         const midFrameBuf = await fsReadFile(join(framesDir, `${formatTimestamp(midTs)}.jpg`));
         await fs.writeFile(assetId, "original.jpg", midFrameBuf, projectSlug ?? "");
       } catch { /* mid-frame not available */ }
-    }
-
-    if (assetId.startsWith("vid-")) {
-      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
     }
 
     await fs.commitOperation("process_video", assetId, {
