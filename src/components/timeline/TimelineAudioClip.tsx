@@ -30,7 +30,10 @@ interface TimelineAudioClipProps {
   onUpdate: (fields: { volume?: number; fadeIn?: number; fadeOut?: number }) => void;
 }
 
-function stopAll(e: React.SyntheticEvent) {
+function suppressChipDrag(e: React.MouseEvent) {
+  // Block the native drag of the chip ancestor while clicking a control,
+  // and stop React bubbling so the chip's handlers don't react either.
+  e.preventDefault();
   e.stopPropagation();
 }
 
@@ -128,27 +131,23 @@ export function TimelineAudioClip({
               @{slug}
             </span>
           </div>
-          <div
-            className="absolute top-0.5 right-0.5 z-20 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-            onPointerDown={stopAll}
-            onMouseDown={stopAll}
-          >
+          <div className="absolute top-0.5 right-0.5 z-20 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             <Popover>
               <PopoverTrigger asChild>
                 <button
                   type="button"
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
-                  className="w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-black/60 hover:text-white"
+                  onMouseDown={suppressChipDrag}
+                  className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-black/60 hover:text-white"
                   aria-label="Audio settings"
                 >
                   <Volume2 className="w-3 h-3" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-64 p-3 bg-card/95 border-cyan-500/30 backdrop-blur-md"
-                onPointerDown={stopAll}
-                onMouseDown={stopAll}
+                className="w-64 p-3 bg-card/95 border-cyan-500/30 backdrop-blur-md pointer-events-auto"
+                onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="flex flex-col gap-3">
                   <SliderRow
@@ -185,8 +184,9 @@ export function TimelineAudioClip({
               type="button"
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
+              onMouseDown={suppressChipDrag}
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-red-500/80 hover:text-white"
+              className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-red-500/80 hover:text-white"
               aria-label="Remove audio"
             >
               <X className="w-3 h-3" />
