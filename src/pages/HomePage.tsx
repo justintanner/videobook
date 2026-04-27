@@ -99,7 +99,7 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
-  const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio } = useTimeline(callTool);
+  const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
   const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
@@ -445,6 +445,21 @@ export function HomePage() {
       assetSlug: slots?.[i]?.slug || '',
     }));
   }, [timeline]);
+
+  const slotBoundaries = useMemo(() => {
+    const n = slotRefs.length;
+    if (n === 0) return [];
+    const total = previewData.totalDurationInFrames;
+    const out: Array<{ leftPct: number; frame: number }> = [];
+    for (let i = 0; i <= n; i++) {
+      const leftPct = (i / n) * 100;
+      const frame = i < previewData.slotOffsets.length
+        ? previewData.slotOffsets[i]
+        : total;
+      out.push({ leftPct, frame });
+    }
+    return out;
+  }, [slotRefs.length, previewData.slotOffsets, previewData.totalDurationInFrames]);
 
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
@@ -874,11 +889,12 @@ export function HomePage() {
               <TimelineAudioLane
                 audioClips={timeline?.audio ?? []}
                 mediaItems={mediaItems}
-                slotOffsets={previewData.slotOffsets}
+                slotBoundaries={slotBoundaries}
                 totalDurationInFrames={previewData.totalDurationInFrames}
                 onAdd={(assetId, startFrame, durationFrames) => { addAudio(projectSlug, assetId, startFrame, durationFrames); }}
                 onMove={(audioId, startFrame) => { moveAudio(projectSlug, audioId, startFrame); }}
                 onRemove={(audioId) => { removeAudio(projectSlug, audioId); }}
+                onUpdate={(audioId, fields) => { updateAudio(projectSlug, audioId, fields); }}
               />
             )}
             <div className="relative h-12 border-t border-border/30 bg-card/20 flex items-center px-3 gap-3">

@@ -31,6 +31,11 @@ interface UseTimelineResult {
   addAudio: (projectSlug: string, assetId: string, startFrame: number, durationFrames?: number) => Promise<boolean>;
   moveAudio: (projectSlug: string, audioId: string, startFrame: number) => Promise<boolean>;
   removeAudio: (projectSlug: string, audioId: string) => Promise<boolean>;
+  updateAudio: (
+    projectSlug: string,
+    audioId: string,
+    fields: { volume?: number; fadeIn?: number; fadeOut?: number },
+  ) => Promise<boolean>;
 }
 
 export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResult {
@@ -177,5 +182,28 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot, clearSlot, addAudio, moveAudio, removeAudio };
+  const updateAudio = useCallback(async (
+    projectSlug: string,
+    audioId: string,
+    fields: { volume?: number; fadeIn?: number; fadeOut?: number },
+  ): Promise<boolean> => {
+    try {
+      const args: Record<string, unknown> = {
+        project_slug: projectSlug,
+        audio_id: audioId,
+      };
+      if (fields.volume !== undefined) args.volume = fields.volume;
+      if (fields.fadeIn !== undefined) args.fade_in = fields.fadeIn;
+      if (fields.fadeOut !== undefined) args.fade_out = fields.fadeOut;
+      const result = await callToolRef.current("update_timeline_audio", args);
+      if (result.isError) return false;
+      await fetchTimeline(projectSlug);
+      return true;
+    } catch (e: unknown) {
+      console.error("[update_timeline_audio] exception:", e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [fetchTimeline]);
+
+  return { timeline, fetchTimeline, setRenderOrientation, setCurrentOrientation, assignSlot, clearSlot, addAudio, moveAudio, removeAudio, updateAudio };
 }

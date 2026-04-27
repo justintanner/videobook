@@ -142,6 +142,56 @@ describe("timeline audio tools", () => {
     expect(after.audio).toHaveLength(0);
   });
 
+  it("update_timeline_audio persists volume and fades", async () => {
+    const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
+    const addResult = await client.callTool({
+      name: "add_timeline_audio",
+      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+    });
+    const added = JSON.parse((addResult.content as TextContent)[0].text);
+
+    const updateResult = await client.callTool({
+      name: "update_timeline_audio",
+      arguments: {
+        project_slug: "audio-proj",
+        audio_id: added.clip.id,
+        volume: 50,
+        fade_in: 500,
+        fade_out: 250,
+      },
+    });
+    expect(updateResult.isError).toBeFalsy();
+    const updated = JSON.parse((updateResult.content as TextContent)[0].text);
+    expect(updated.clip.volume).toBe(50);
+    expect(updated.clip.fadeIn).toBe(500);
+    expect(updated.clip.fadeOut).toBe(250);
+
+    // Confirm round-trip via get_timeline
+    const getResult = await client.callTool({
+      name: "get_timeline",
+      arguments: { project_slug: "audio-proj" },
+    });
+    const config = JSON.parse((getResult.content as TextContent)[0].text);
+    expect(config.audio[0].volume).toBe(50);
+    expect(config.audio[0].fadeIn).toBe(500);
+    expect(config.audio[0].fadeOut).toBe(250);
+  });
+
+  it("update_timeline_audio rejects when nothing to update", async () => {
+    const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
+    const addResult = await client.callTool({
+      name: "add_timeline_audio",
+      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+    });
+    const added = JSON.parse((addResult.content as TextContent)[0].text);
+
+    const result = await client.callTool({
+      name: "update_timeline_audio",
+      arguments: { project_slug: "audio-proj", audio_id: added.clip.id },
+    });
+    expect(result.isError).toBe(true);
+  });
+
   it("get_timeline returns the audio array after additions", async () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     await client.callTool({

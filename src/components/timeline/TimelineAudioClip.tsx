@@ -1,11 +1,13 @@
 import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { Volume2, X } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
 } from '@/components/ui/context-menu';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Waveform } from './Waveform';
 
 export interface TimelineAudioClipDragData {
@@ -21,7 +23,45 @@ interface TimelineAudioClipProps {
   durationFrames: number;
   totalDurationInFrames: number;
   waveform?: number[] | null;
+  volume: number;
+  fadeIn: number;
+  fadeOut: number;
   onRemove: () => void;
+  onUpdate: (fields: { volume?: number; fadeIn?: number; fadeOut?: number }) => void;
+}
+
+function stopAll(e: React.SyntheticEvent) {
+  e.stopPropagation();
+}
+
+interface SliderRowProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (v: number) => void;
+}
+
+function SliderRow({ label, value, min, max, step, unit, onChange }: SliderRowProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-muted-foreground/70">
+        <span>{label}</span>
+        <span className="tabular-nums text-cyan-200/90">{value}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-cyan-400"
+      />
+    </div>
+  );
 }
 
 export function TimelineAudioClip({
@@ -31,7 +71,11 @@ export function TimelineAudioClip({
   durationFrames,
   totalDurationInFrames,
   waveform,
+  volume,
+  fadeIn,
+  fadeOut,
   onRemove,
+  onUpdate,
 }: TimelineAudioClipProps) {
   const leftPct = (startFrame / Math.max(1, totalDurationInFrames)) * 100;
   const widthPct = Math.max(
@@ -83,6 +127,70 @@ export function TimelineAudioClip({
             <span className="text-[9px] font-mono font-bold text-cyan-100/90 truncate block leading-tight drop-shadow-sm">
               @{slug}
             </span>
+          </div>
+          <div
+            className="absolute top-0.5 right-0.5 z-20 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            onPointerDown={stopAll}
+            onMouseDown={stopAll}
+          >
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  className="w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-black/60 hover:text-white"
+                  aria-label="Audio settings"
+                >
+                  <Volume2 className="w-3 h-3" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-64 p-3 bg-card/95 border-cyan-500/30 backdrop-blur-md"
+                onPointerDown={stopAll}
+                onMouseDown={stopAll}
+              >
+                <div className="flex flex-col gap-3">
+                  <SliderRow
+                    label="Volume"
+                    value={volume}
+                    min={0}
+                    max={100}
+                    step={5}
+                    unit="%"
+                    onChange={(v) => onUpdate({ volume: v })}
+                  />
+                  <SliderRow
+                    label="Fade in"
+                    value={fadeIn}
+                    min={0}
+                    max={2000}
+                    step={50}
+                    unit="ms"
+                    onChange={(v) => onUpdate({ fadeIn: v })}
+                  />
+                  <SliderRow
+                    label="Fade out"
+                    value={fadeOut}
+                    min={0}
+                    max={2000}
+                    step={50}
+                    unit="ms"
+                    onChange={(v) => onUpdate({ fadeOut: v })}
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+            <button
+              type="button"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-red-500/80 hover:text-white"
+              aria-label="Remove audio"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </ContextMenuTrigger>

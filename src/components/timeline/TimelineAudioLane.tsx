@@ -7,19 +7,26 @@ import { TimelineAudioClip, type TimelineAudioClipDragData } from './TimelineAud
 const FPS = 30;
 const SNAP_THRESHOLD_PX = 30;
 
+export interface SlotBoundary {
+  leftPct: number;
+  frame: number;
+}
+
 interface DropPreview {
   startFrame: number;
+  leftPct: number;
   snapped: boolean;
 }
 
 interface TimelineAudioLaneProps {
   audioClips: TimelineAudioClipModel[];
   mediaItems: MediaItem[];
-  slotOffsets: number[];
+  slotBoundaries: SlotBoundary[];
   totalDurationInFrames: number;
   onAdd: (assetId: string, startFrame: number, durationFrames?: number) => void;
   onMove: (audioId: string, startFrame: number) => void;
   onRemove: (audioId: string) => void;
+  onUpdate: (audioId: string, fields: { volume?: number; fadeIn?: number; fadeOut?: number }) => void;
 }
 
 interface IncomingAssetDrag {
@@ -35,39 +42,47 @@ function isMoveDrag(data: unknown): data is TimelineAudioClipDragData {
   );
 }
 
-function snapFrame(
-  frame: number,
-  snapPoints: number[],
-  pxPerFrame: number,
+function resolveDrop(
+  xPct: number,
+  laneWidthPx: number,
+  totalDurationInFrames: number,
+  boundaries: SlotBoundary[],
   bypass: boolean,
-): { startFrame: number; snapped: boolean } {
-  if (bypass || pxPerFrame <= 0) {
-    return { startFrame: Math.max(0, Math.round(frame)), snapped: false };
+): { startFrame: number; leftPct: number; snapped: boolean } {
+  const clampPct = Math.max(0, Math.min(100, xPct));
+  if (bypass || laneWidthPx <= 0 || boundaries.length === 0) {
+    const startFrame = Math.max(
+      0,
+      Math.round((clampPct / 100) * totalDurationInFrames),
+    );
+    return { startFrame, leftPct: clampPct, snapped: false };
   }
-  const thresholdFrames = SNAP_THRESHOLD_PX / pxPerFrame;
-  let best = snapPoints[0];
-  let bestDist = Math.abs(frame - best);
-  for (const point of snapPoints) {
-    const dist = Math.abs(frame - point);
-    if (dist < bestDist) {
-      best = point;
-      bestDist = dist;
-    }
+  const thresholdPct = (SNAP_THRESHOLD_PX / laneWidthPx) * 100;
+  let best = boundaries[0];
+  let bestDist = Math.abs(clampPct - best.leftPct);
+  for (const b of boundaries) {
+    const d = Math.abs(clampPct - b.leftPct);
+    if (d < bestDist) { best = b; bestDist = d; }
   }
-  if (bestDist <= thresholdFrames) {
-    return { startFrame: Math.max(0, Math.round(best)), snapped: true };
+  if (bestDist <= thresholdPct) {
+    return { startFrame: Math.max(0, Math.round(best.frame)), leftPct: best.leftPct, snapped: true };
   }
-  return { startFrame: Math.max(0, Math.round(frame)), snapped: false };
+  const startFrame = Math.max(
+    0,
+    Math.round((clampPct / 100) * totalDurationInFrames),
+  );
+  return { startFrame, leftPct: clampPct, snapped: false };
 }
 
 export function TimelineAudioLane({
   audioClips,
   mediaItems,
-  slotOffsets,
+  slotBoundaries,
   totalDurationInFrames,
   onAdd,
   onMove,
   onRemove,
+  onUpdate,
 }: TimelineAudioLaneProps) {
   const laneRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<DropPreview | null>(null);
@@ -79,33 +94,33 @@ export function TimelineAudioLane({
       const rect = lane.getBoundingClientRect();
       if (rect.width <= 0) return null;
       const x = e.clientX - rect.left;
-      const pxPerFrame = rect.width / Math.max(1, totalDurationInFrames);
-      const rawFrame = (x / rect.width) * totalDurationInFrames;
       const bypass = e.altKey || e.shiftKey;
 
-      let pointerOffsetFrames = 0;
+      let pointerOffsetPx = 0;
       try {
         const raw = e.dataTransfer.getData('application/json');
         if (raw) {
           const parsed = JSON.parse(raw);
           if (isMoveDrag(parsed)) {
-            pointerOffsetFrames = parsed.pointerOffsetFrames;
+            // pointerOffsetFrames was recorded as frames-from-clip-left at drag start
+            pointerOffsetPx = (parsed.pointerOffsetFrames / Math.max(1, totalDurationInFrames)) * rect.width;
           }
         }
       } catch {
         // ignore — Firefox blocks getData on dragOver; fall through to no offset
       }
 
-      const snapPoints = [0, ...slotOffsets, totalDurationInFrames];
-      const { startFrame, snapped } = snapFrame(
-        rawFrame - pointerOffsetFrames,
-        snapPoints,
-        pxPerFrame,
+      const cursorPct = ((x - pointerOffsetPx) / rect.width) * 100;
+      const { startFrame, leftPct, snapped } = resolveDrop(
+        cursorPct,
+        rect.width,
+        totalDurationInFrames,
+        slotBoundaries,
         bypass,
       );
-      return { startFrame, snapped };
+      return { startFrame, leftPct, snapped };
     },
-    [slotOffsets, totalDurationInFrames],
+    [slotBoundaries, totalDurationInFrames],
   );
 
   const handleDragOver = useCallback(
@@ -139,19 +154,13 @@ export function TimelineAudioLane({
       if (!lane) return;
       const rect = lane.getBoundingClientRect();
       if (rect.width <= 0) return;
-      const pxPerFrame = rect.width / Math.max(1, totalDurationInFrames);
       const x = e.clientX - rect.left;
-      const rawFrame = (x / rect.width) * totalDurationInFrames;
       const bypass = e.altKey || e.shiftKey;
-      const snapPoints = [0, ...slotOffsets, totalDurationInFrames];
 
       if (isMoveDrag(parsed)) {
-        const { startFrame } = snapFrame(
-          rawFrame - parsed.pointerOffsetFrames,
-          snapPoints,
-          pxPerFrame,
-          bypass,
-        );
+        const offsetPx = (parsed.pointerOffsetFrames / Math.max(1, totalDurationInFrames)) * rect.width;
+        const cursorPct = ((x - offsetPx) / rect.width) * 100;
+        const { startFrame } = resolveDrop(cursorPct, rect.width, totalDurationInFrames, slotBoundaries, bypass);
         onMove(parsed.audioId, startFrame);
         return;
       }
@@ -161,16 +170,14 @@ export function TimelineAudioLane({
       const item = mediaItems.find((m) => m.id === dragged.id);
       const seconds = item?.duration ?? item?.durationSeconds ?? 0;
       const durationFrames = seconds > 0 ? Math.max(1, Math.round(seconds * FPS)) : undefined;
-      const { startFrame } = snapFrame(rawFrame, snapPoints, pxPerFrame, bypass);
+      const cursorPct = (x / rect.width) * 100;
+      const { startFrame } = resolveDrop(cursorPct, rect.width, totalDurationInFrames, slotBoundaries, bypass);
       onAdd(dragged.id, startFrame, durationFrames);
     },
-    [mediaItems, onAdd, onMove, slotOffsets, totalDurationInFrames],
+    [mediaItems, onAdd, onMove, slotBoundaries, totalDurationInFrames],
   );
 
-  const indicatorLeftPct =
-    preview != null
-      ? (preview.startFrame / Math.max(1, totalDurationInFrames)) * 100
-      : null;
+  const indicatorLeftPct = preview?.leftPct ?? null;
 
   return (
     <div className="relative h-12 border-t border-border/30 bg-card/10 mx-1">
@@ -200,7 +207,11 @@ export function TimelineAudioLane({
               durationFrames={clip.durationFrames}
               totalDurationInFrames={totalDurationInFrames}
               waveform={item?.waveform ?? null}
+              volume={clip.volume ?? 100}
+              fadeIn={clip.fadeIn ?? 0}
+              fadeOut={clip.fadeOut ?? 0}
               onRemove={() => onRemove(clip.id)}
+              onUpdate={(fields) => onUpdate(clip.id, fields)}
             />
           );
         })}

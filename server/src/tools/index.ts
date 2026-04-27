@@ -82,6 +82,7 @@ import { clearSlotDef } from "./clear-slot.js";
 import { addTimelineAudioDef } from "./add-timeline-audio.js";
 import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
 import { moveTimelineAudioDef } from "./move-timeline-audio.js";
+import { updateTimelineAudioDef } from "./update-timeline-audio.js";
 import { commandsDef } from "./commands.js";
 import { renderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
@@ -218,6 +219,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     addTimelineAudioDef(fs),
     removeTimelineAudioDef(fs),
     moveTimelineAudioDef(fs),
+    updateTimelineAudioDef(fs),
     commandsDef(fs),
     renderSettingsDef(fs),
     translatePayloadDef(),
