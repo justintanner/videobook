@@ -28,7 +28,7 @@ interface UseTimelineResult {
   setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
   assignSlot: (projectSlug: string, assetId: string, slotIndex: number) => Promise<boolean>;
   clearSlot: (projectSlug: string, slotIndex: number) => Promise<boolean>;
-  addAudio: (projectSlug: string, assetId: string, startFrame: number, durationFrames: number) => Promise<boolean>;
+  addAudio: (projectSlug: string, assetId: string, startFrame: number, durationFrames?: number) => Promise<boolean>;
   moveAudio: (projectSlug: string, audioId: string, startFrame: number) => Promise<boolean>;
   removeAudio: (projectSlug: string, audioId: string) => Promise<boolean>;
 }
@@ -126,14 +126,17 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  const addAudio = useCallback(async (projectSlug: string, assetId: string, startFrame: number, durationFrames: number): Promise<boolean> => {
+  const addAudio = useCallback(async (projectSlug: string, assetId: string, startFrame: number, durationFrames?: number): Promise<boolean> => {
     try {
-      const result = await callToolRef.current("add_timeline_audio", {
+      const args: Record<string, unknown> = {
         project_slug: projectSlug,
         asset_id: assetId,
         start_frame: startFrame,
-        duration_frames: durationFrames,
-      });
+      };
+      if (typeof durationFrames === "number" && durationFrames > 0) {
+        args.duration_frames = durationFrames;
+      }
+      const result = await callToolRef.current("add_timeline_audio", args);
       if (result.isError) return false;
       await fetchTimeline(projectSlug);
       return true;

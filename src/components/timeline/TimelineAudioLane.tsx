@@ -17,7 +17,7 @@ interface TimelineAudioLaneProps {
   mediaItems: MediaItem[];
   slotOffsets: number[];
   totalDurationInFrames: number;
-  onAdd: (assetId: string, startFrame: number, durationFrames: number) => void;
+  onAdd: (assetId: string, startFrame: number, durationFrames?: number) => void;
   onMove: (audioId: string, startFrame: number) => void;
   onRemove: (audioId: string) => void;
 }
@@ -159,10 +159,8 @@ export function TimelineAudioLane({
       const dragged = parsed as IncomingAssetDrag;
       if (!dragged.id || dragged.type !== 'audio') return;
       const item = mediaItems.find((m) => m.id === dragged.id);
-      if (!item) return;
-      const seconds = item.duration ?? item.durationSeconds ?? 0;
-      if (!seconds || seconds <= 0) return;
-      const durationFrames = Math.max(1, Math.round(seconds * FPS));
+      const seconds = item?.duration ?? item?.durationSeconds ?? 0;
+      const durationFrames = seconds > 0 ? Math.max(1, Math.round(seconds * FPS)) : undefined;
       const { startFrame } = snapFrame(rawFrame, snapPoints, pxPerFrame, bypass);
       onAdd(dragged.id, startFrame, durationFrames);
     },
