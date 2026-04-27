@@ -13,7 +13,7 @@ import type { Orientation } from '@/hooks/useTimeline';
 import { CommandButton } from '@/components/commands';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
-import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './GitHistoryPanel';
+import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './HistoryPanel';
 import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
 import { JsonNode } from '@/components/ui/JsonNode';
 import ReactMarkdown from 'react-markdown';

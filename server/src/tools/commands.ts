@@ -54,8 +54,8 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/character",
-    description: "Create a reusable character: extract a structured profile from a portrait, edit fields, and generate a 4-up reference sheet. Use the character viewer to generate outfits from wardrobe and pose pins.",
-    example: "/character @img-some-portrait",
+    description: "Create a reusable human or animal character: extract a structured profile from a source image, edit fields, and generate a 4-up reference sheet. Use the character viewer to generate outfits from wardrobe and pose pins.",
+    example: "/character @img-some-source",
     category: "action",
     icon: "User",
     size: "default",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Zap, X, User, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, Zap, X, User, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -10,7 +10,7 @@ import {
 } from '@/hooks/useGenerateOutfit';
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
-import { normalizeCharacterProfile, type CharacterProfile } from '@/hooks/useCharacterSlots';
+import { normalizeCharacterProfile, type CharacterProfile, type CharacterSubjectKind } from '@/hooks/useCharacterSlots';
 import type { UseMcpResult } from 'use-mcp/react';
 
 type ProfileFieldKey =
@@ -38,28 +38,56 @@ interface FieldDef {
   placeholder?: string;
 }
 
-const FIELDS: FieldDef[] = [
-  { key: 'name', label: 'Name', required: false, placeholder: 'optional handle' },
-  { key: 'age', label: 'Age', required: true, placeholder: 'mid-30s' },
-  { key: 'sex', label: 'Sex', required: true, placeholder: 'male or female' },
-  { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
-  { key: 'height', label: 'Height', required: true, placeholder: 'average' },
-  { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
-  { key: 'bust', label: 'Chest', required: true, placeholder: 'broad chest or small B-cup' },
-  { key: 'waist', label: 'Waist', required: true, placeholder: 'narrow ~26", sharp taper' },
-  { key: 'hips', label: 'Hips', required: true, placeholder: 'rounded ~36", curved outer thigh' },
-  { key: 'glutes', label: 'Glutes', required: true, placeholder: 'round and full, strong projection' },
-  { key: 'face', label: 'Face', required: true, multiline: true },
-  { key: 'hair', label: 'Hair', required: true, multiline: true },
-  { key: 'eyes', label: 'Eyes', required: true, multiline: true },
-  { key: 'skin', label: 'Skin', required: true, multiline: true },
-  { key: 'distinguishing_features', label: 'Features', required: true, multiline: true },
+interface FieldGroup {
+  title: string;
+  fields: ProfileFieldKey[];
+}
+
+const HUMAN_GROUPS: FieldGroup[] = [
+  { title: 'Identity', fields: ['name', 'age', 'ethnicity'] },
+  { title: 'Body', fields: ['height', 'build', 'bust', 'waist', 'hips', 'glutes'] },
+  { title: 'Face + Surface', fields: ['face', 'hair', 'eyes', 'skin', 'distinguishing_features'] },
 ];
 
+const ANIMAL_GROUPS: FieldGroup[] = [
+  { title: 'Identity', fields: ['name', 'age', 'ethnicity'] },
+  { title: 'Body', fields: ['height', 'build', 'bust', 'waist', 'hips', 'glutes'] },
+  { title: 'Head + Coat', fields: ['face', 'hair', 'eyes', 'skin', 'distinguishing_features'] },
+];
+
+const HUMAN_FIELDS: Record<ProfileFieldKey, FieldDef> = {
+  name: { key: 'name', label: 'Name', required: false, placeholder: 'optional handle' },
+  age: { key: 'age', label: 'Age', required: true, placeholder: 'mid-30s' },
+  sex: { key: 'sex', label: 'Sex', required: true, placeholder: 'male or female' },
+  ethnicity: { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
+  height: { key: 'height', label: 'Height', required: true, placeholder: 'average' },
+  build: { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
+  bust: { key: 'bust', label: 'Chest', required: true, placeholder: 'broad chest or small B-cup' },
+  waist: { key: 'waist', label: 'Waist', required: true, placeholder: 'narrow ~26", sharp taper' },
+  hips: { key: 'hips', label: 'Hips', required: true, placeholder: 'rounded ~36", curved outer thigh' },
+  glutes: { key: 'glutes', label: 'Glutes', required: true, placeholder: 'round and full, strong projection' },
+  face: { key: 'face', label: 'Face', required: true, multiline: true },
+  hair: { key: 'hair', label: 'Hair', required: true, multiline: true },
+  eyes: { key: 'eyes', label: 'Eyes', required: true, multiline: true },
+  skin: { key: 'skin', label: 'Skin', required: true, multiline: true },
+  distinguishing_features: { key: 'distinguishing_features', label: 'Features', required: true, multiline: true },
+};
+
+const ANIMAL_FIELD_OVERRIDES: Partial<Record<ProfileFieldKey, Partial<FieldDef>>> = {
+  ethnicity: { label: 'Species / breed', placeholder: 'white domestic longhair cat' },
+  height: { label: 'Size', placeholder: 'small, ~1ft / 30cm' },
+  bust: { label: 'Chest / torso', placeholder: 'narrow chest with fluffy fur coverage' },
+  waist: { label: 'Midsection', placeholder: 'slim tapered midsection' },
+  hips: { label: 'Hindquarters', placeholder: 'rounded hindquarters' },
+  glutes: { label: 'Rear / tail base', placeholder: 'soft tail base with minimal projection' },
+  face: { label: 'Head / face' },
+  hair: { label: 'Coat / fur' },
+  skin: { label: 'Coat / skin' },
+  distinguishing_features: { label: 'Markings / features' },
+};
+
 const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
-const MODEL_LABELS: Record<OutfitModelKey, string> = Object.fromEntries(
-  OUTFIT_MODEL_OPTIONS.map((m) => [m.key, m.label]),
-) as Record<OutfitModelKey, string>;
+const MAX_ADDITIONAL_REFERENCES = 2;
 
 interface ImageChoice {
   assetId: string;
@@ -77,8 +105,27 @@ function mediaItemToChoice(item: MediaItem): ImageChoice {
   };
 }
 
+function fieldGroups(subjectKind: CharacterSubjectKind): FieldGroup[] {
+  return subjectKind === 'animal' ? ANIMAL_GROUPS : HUMAN_GROUPS;
+}
+
+function fieldDef(key: ProfileFieldKey, subjectKind: CharacterSubjectKind): FieldDef {
+  return {
+    ...HUMAN_FIELDS[key],
+    ...(subjectKind === 'animal' ? ANIMAL_FIELD_OVERRIDES[key] ?? {} : {}),
+  };
+}
+
+function requiredFields(subjectKind: CharacterSubjectKind): ProfileFieldKey[] {
+  const fields = fieldGroups(subjectKind)
+    .flatMap((group) => group.fields)
+    .filter((key) => fieldDef(key, subjectKind).required);
+  return subjectKind === 'human' ? ['sex', ...fields] : fields;
+}
+
 function emptyProfile(sourceAssetId: string): CharacterProfile {
   return {
+    subject_kind: 'human',
     age: '',
     sex: '',
     ethnicity: '',
@@ -136,17 +183,28 @@ export function CharacterDialog({
   const [selectedModels, setSelectedModels] = useState<Set<OutfitModelKey>>(new Set(DEFAULT_MODELS));
   const [selectedProvider, setSelectedProvider] = useState<OutfitProvider>('kie');
   const [lastOutcomes, setLastOutcomes] = useState<CharacterOutcome[]>([]);
+  const [additionalReferenceSlugs, setAdditionalReferenceSlugs] = useState<string[]>([]);
   const [outfitText, setOutfitText] = useState<string>('');
   const [outfitImageSlug, setOutfitImageSlug] = useState<string | null>(null);
 
-  const garmentChoices = useMemo<ImageChoice[]>(
+  const imageChoices = useMemo<ImageChoice[]>(
     () => imageAssets.filter((m) => m.type === 'image').map(mediaItemToChoice),
     [imageAssets],
+  );
+  const additionalReferenceChoices = useMemo<ImageChoice[]>(
+    () => imageChoices.filter((c) => c.assetId !== source?.assetId && c.assetId !== outfitImageSlug),
+    [imageChoices, source, outfitImageSlug],
+  );
+  const garmentChoices = useMemo<ImageChoice[]>(
+    () => imageChoices.filter((c) => c.assetId !== source?.assetId && !additionalReferenceSlugs.includes(c.assetId)),
+    [imageChoices, source, additionalReferenceSlugs],
   );
   const outfitImage = useMemo<ImageChoice | null>(() => {
     if (!outfitImageSlug) return null;
     return garmentChoices.find((c) => c.assetId === outfitImageSlug) ?? null;
   }, [outfitImageSlug, garmentChoices]);
+  const subjectKind = profile?.subject_kind ?? 'human';
+  const activeFieldGroups = useMemo(() => fieldGroups(subjectKind), [subjectKind]);
 
   const { analyze, loading: analyzing } = useAnalyzeCharacterImage(callTool);
   const lastAnalyzedRef = useRef<string | null>(null);
@@ -160,6 +218,8 @@ export function CharacterDialog({
     void (async () => {
       setAnalyzeError(null);
       setLastOutcomes([]);
+      setAdditionalReferenceSlugs([]);
+      setOutfitImageSlug(null);
       if (initialProfile) {
         setProfile(normalizeCharacterProfile(initialProfile));
         return;
@@ -181,10 +241,32 @@ export function CharacterDialog({
     });
   }, [source]);
 
+  const setSubjectKind = useCallback((kind: CharacterSubjectKind) => {
+    setProfile((prev) => {
+      const base = prev ?? emptyProfile(source?.assetId ?? '');
+      return { ...base, subject_kind: kind, sex: kind === 'animal' ? '' : base.sex };
+    });
+  }, [source]);
+
+  const setHumanSex = useCallback((sex: 'male' | 'female') => {
+    setProfile((prev) => {
+      const base = prev ?? emptyProfile(source?.assetId ?? '');
+      return { ...base, sex, subject_kind: 'human' };
+    });
+  }, [source]);
+
+  const toggleAdditionalReference = useCallback((assetId: string) => {
+    setAdditionalReferenceSlugs((prev) => {
+      if (prev.includes(assetId)) return prev.filter((id) => id !== assetId);
+      if (prev.length >= MAX_ADDITIONAL_REFERENCES) return prev;
+      return [...prev, assetId];
+    });
+  }, []);
+
   const profileComplete = useMemo(() => {
     if (!profile) return false;
-    return FIELDS.filter((f) => f.required).every((f) => {
-      const v = profile[f.key];
+    return requiredFields(profile.subject_kind).every((key) => {
+      const v = profile[key];
       return typeof v === 'string' && v.trim().length > 0;
     });
   }, [profile]);
@@ -196,6 +278,7 @@ export function CharacterDialog({
     const res = await generate({
       projectSlug,
       sourceImageSlug: source.assetId,
+      additionalReferenceImageSlugs: additionalReferenceSlugs,
       profile,
       models: [...selectedModels],
       provider: selectedProvider,
@@ -206,18 +289,12 @@ export function CharacterDialog({
       setLastOutcomes(res.outcomes);
       if (res.enqueued > 0) onOpenChange(false);
     }
-  }, [canSubmit, projectSlug, source, profile, selectedModels, selectedProvider, generate, outfitText, outfitImageSlug, onOpenChange]);
+  }, [canSubmit, projectSlug, source, additionalReferenceSlugs, profile, selectedModels, selectedProvider, generate, outfitText, outfitImageSlug, onOpenChange]);
 
-  const successOutcomes = useMemo(
-    () => lastOutcomes.filter((o) => !!o.char_asset_id && !o.error),
+  const failedOutcomes = useMemo(
+    () => lastOutcomes.filter((o) => !!o.error),
     [lastOutcomes],
   );
-
-  const previewCharSlug = successOutcomes[0]?.char_asset_id ?? null;
-  const previewItem = useMemo(() => {
-    if (!previewCharSlug) return null;
-    return imageAssets.find((m) => m.id === previewCharSlug) ?? null;
-  }, [previewCharSlug, imageAssets]);
 
   const toggleModel = useCallback((m: OutfitModelKey) => {
     setSelectedModels((prev) => {
@@ -254,15 +331,13 @@ export function CharacterDialog({
         </button>
       </div>
 
-      {/* Body — two columns */}
       <div className="flex-1 min-h-0 overflow-hidden flex">
-        {/* Left: source + form */}
-        <div className="w-[420px] shrink-0 border-r border-border/50 overflow-y-auto px-4 py-4 space-y-4">
+        <aside className="w-[340px] shrink-0 border-r border-border/50 overflow-y-auto px-4 py-4 space-y-4 bg-black/25">
           <section>
             <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Source</div>
             {source ? (
-              <div className="flex gap-2 items-center">
-                <div className="w-24 h-24 rounded border border-violet-500/30 overflow-hidden bg-black shrink-0">
+              <div className="flex gap-3 items-center">
+                <div className="w-28 h-28 rounded border border-violet-500/30 overflow-hidden bg-black shrink-0">
                   <img src={source.thumbUrl} alt={source.slug} className="w-full h-full object-cover" />
                 </div>
                 <div className="text-[11px] font-mono text-violet-100 truncate" title={source.slug}>
@@ -274,236 +349,259 @@ export function CharacterDialog({
             )}
           </section>
 
-          <section>
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Profile</div>
-              {analyzing && <Loader2 className="w-3 h-3 animate-spin text-violet-300" />}
-            </div>
-            {analyzeError && (
-              <div className="text-[10px] font-mono text-amber-400/80 mb-2">{analyzeError}</div>
-            )}
-            <div className="space-y-2">
-              {FIELDS.map((f) => {
-                const value = profile?.[f.key] ?? '';
-                const Tag = f.multiline ? 'textarea' : 'input';
-                return (
-                  <label key={f.key} className="block">
-                    <div className="text-[9px] font-mono uppercase tracking-wider text-violet-400/60 mb-0.5">
-                      {f.label}{f.required ? ' *' : ''}
-                    </div>
-                    <Tag
-                      value={typeof value === 'string' ? value : ''}
-                      placeholder={f.placeholder ?? ''}
-                      disabled={analyzing}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-                        setProfileField(f.key, e.target.value)
-                      }
+          {source && (
+            <section>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Extra references</div>
+                <div className="text-[9px] font-mono text-violet-400/50">
+                  {additionalReferenceSlugs.length + 1}/3
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                {additionalReferenceChoices.slice(0, 24).map((g) => {
+                  const active = additionalReferenceSlugs.includes(g.assetId);
+                  const disabled = !active && additionalReferenceSlugs.length >= MAX_ADDITIONAL_REFERENCES;
+                  return (
+                    <button
+                      key={g.assetId}
+                      type="button"
+                      onClick={() => toggleAdditionalReference(g.assetId)}
+                      disabled={disabled}
+                      title={g.slug}
                       className={cn(
-                        'w-full bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
-                        'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
-                        f.multiline ? 'min-h-[44px] resize-y' : '',
+                        'shrink-0 w-9 h-9 rounded border overflow-hidden bg-black transition-colors',
+                        active
+                          ? 'border-violet-300'
+                          : disabled
+                          ? 'border-violet-500/10 opacity-30 cursor-not-allowed'
+                          : 'border-violet-500/20 hover:border-violet-400/60',
                       )}
-                      rows={f.multiline ? 2 : undefined}
-                    />
-                  </label>
+                    >
+                      <img src={g.thumbUrl} alt={g.slug} className="w-full h-full object-cover" />
+                    </button>
+                  );
+                })}
+                {additionalReferenceChoices.length === 0 && (
+                  <div className="text-[9px] font-mono text-violet-400/50">No other image assets available.</div>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Subject</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(['human', 'animal'] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setSubjectKind(kind)}
+                  className={cn(
+                    'px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
+                    subjectKind === kind
+                      ? 'border-violet-300 bg-violet-500/15 text-violet-100'
+                      : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                  )}
+                >
+                  {kind}
+                </button>
+              ))}
+            </div>
+            {subjectKind === 'human' && (
+              <div className="grid grid-cols-2 gap-1.5 mt-2">
+                {(['male', 'female'] as const).map((sex) => (
+                  <button
+                    key={sex}
+                    type="button"
+                    onClick={() => setHumanSex(sex)}
+                    className={cn(
+                      'px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
+                      profile?.sex === sex
+                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
+                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                    )}
+                  >
+                    {sex}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
+              {subjectKind === 'animal' ? 'Sheet accessory / costume' : 'Sheet outfit'}
+            </div>
+            <div className="flex gap-2 items-start">
+              <input
+                type="text"
+                value={outfitText}
+                placeholder={subjectKind === 'animal' ? 'e.g. red collar or tiny cape' : 'e.g. plain white t-shirt and dark jeans'}
+                onChange={(e) => setOutfitText(e.target.value)}
+                className={cn(
+                  'flex-1 bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
+                  'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
+                )}
+              />
+              {outfitImage ? (
+                <div className="relative w-12 h-12 rounded border border-violet-500/40 overflow-hidden bg-black shrink-0">
+                  <img src={outfitImage.thumbUrl} alt={outfitImage.slug} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setOutfitImageSlug(null)}
+                    aria-label="Remove garment reference"
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200 hover:bg-red-500/40 hover:border-red-400 flex items-center justify-center"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-1 mt-1.5 max-h-20 overflow-y-auto">
+              {garmentChoices.slice(0, 24).map((g) => (
+                <button
+                  key={g.assetId}
+                  type="button"
+                  onClick={() => setOutfitImageSlug(g.assetId === outfitImageSlug ? null : g.assetId)}
+                  title={g.slug}
+                  className={cn(
+                    'shrink-0 w-9 h-9 rounded border overflow-hidden bg-black transition-colors',
+                    g.assetId === outfitImageSlug
+                      ? 'border-violet-300'
+                      : 'border-violet-500/20 hover:border-violet-400/60',
+                  )}
+                >
+                  <img src={g.thumbUrl} alt={g.slug} className="w-full h-full object-cover" />
+                </button>
+              ))}
+              {garmentChoices.length === 0 && (
+                <div className="text-[9px] font-mono text-violet-400/50">No image assets in this project yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Models</div>
+            <div className="flex flex-wrap gap-1.5">
+              {OUTFIT_MODEL_OPTIONS.map((m) => {
+                const active = selectedModels.has(m.key);
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggleModel(m.key)}
+                    className={cn(
+                      'px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
+                      active
+                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
+                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                    )}
+                  >
+                    {m.label}
+                  </button>
                 );
               })}
             </div>
           </section>
-        </div>
 
-        {/* Right: preview + controls */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center bg-black/30 p-6">
-            {previewItem?.filePath ? (
-              <img
-                src={previewItem.filePath}
-                alt={previewItem.title}
-                className="max-w-full max-h-full object-contain"
-                draggable={false}
-              />
-            ) : submitting ? (
-              <div className="flex flex-col items-center gap-2 text-violet-300/70 text-xs font-mono">
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Generating character sheet…
-              </div>
-            ) : lastOutcomes.length > 0 ? (
-              <div className="flex flex-col items-center gap-1 text-violet-300/70 text-xs font-mono">
-                <Sparkles className="w-5 h-5" />
-                Sheet enqueued — waiting for first model to finish
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground text-xs font-mono text-center max-w-md">
-                <Sparkles className="w-6 h-6 opacity-60" />
-                Edit the profile on the left, pick one or more models below, then click Generate.
-                <div className="text-[10px] opacity-70">Output: 2x2 reference sheet — face profile, face front, body front, body back.</div>
-              </div>
-            )}
-          </div>
-
-          {/* Per-model outcome strip — only shown once at least one image
-              has actually rendered (thumbnail/filePath present). While
-              everything is still queued, the empty placeholder tiles are
-              noise so we hide the strip entirely. */}
-          {(() => {
-            const ready = successOutcomes
-              .map((o) => {
-                const item = imageAssets.find((m) => m.id === o.char_asset_id);
-                return item && (item.thumbnailSrc || item.filePath) ? { o, item } : null;
-              })
-              .filter((x): x is { o: CharacterOutcome; item: MediaItem } => !!x);
-            if (ready.length < 2) return null;
-            return (
-              <div className="border-t border-border/50 px-4 py-2 flex gap-2 overflow-x-auto bg-black/20">
-                {ready.map(({ o, item }) => (
+          <section>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Provider</div>
+            <div className="flex gap-1.5">
+              {OUTFIT_PROVIDERS.map((p) => {
+                const active = selectedProvider === p.key;
+                return (
                   <button
-                    key={o.char_asset_id}
+                    key={p.key}
                     type="button"
-                    title={`${MODEL_LABELS[o.model]} — ${o.char_asset_id}`}
+                    onClick={() => setSelectedProvider(p.key)}
                     className={cn(
-                      'shrink-0 w-16 h-16 rounded border overflow-hidden bg-black',
-                      o.char_asset_id === previewCharSlug ? 'border-violet-300' : 'border-violet-500/20 hover:border-violet-400/50',
-                    )}
-                    onClick={() => setLastOutcomes((prev) => {
-                      const idx = prev.findIndex((p) => p.char_asset_id === o.char_asset_id);
-                      if (idx <= 0) return prev;
-                      const reordered = [prev[idx], ...prev.filter((_, i) => i !== idx)];
-                      return reordered;
-                    })}
-                  >
-                    <img src={item.thumbnailSrc ?? item.filePath} alt={item.title} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Controls */}
-          <div className="border-t border-border/50 px-4 py-3 space-y-3 bg-black/40">
-            <section>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
-                Sheet outfit (optional override)
-              </div>
-              <div className="flex gap-2 items-start">
-                <input
-                  type="text"
-                  value={outfitText}
-                  placeholder="e.g. plain white t-shirt and dark jeans"
-                  onChange={(e) => setOutfitText(e.target.value)}
-                  className={cn(
-                    'flex-1 bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
-                    'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
-                  )}
-                />
-                {outfitImage ? (
-                  <div className="relative w-12 h-12 rounded border border-violet-500/40 overflow-hidden bg-black shrink-0">
-                    <img src={outfitImage.thumbUrl} alt={outfitImage.slug} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setOutfitImageSlug(null)}
-                      aria-label="Remove garment reference"
-                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200 hover:bg-red-500/40 hover:border-red-400 flex items-center justify-center"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1 mt-1.5 max-h-20 overflow-y-auto">
-                {garmentChoices.slice(0, 24).map((g) => (
-                  <button
-                    key={g.assetId}
-                    type="button"
-                    onClick={() => setOutfitImageSlug(g.assetId === outfitImageSlug ? null : g.assetId)}
-                    title={g.slug}
-                    className={cn(
-                      'shrink-0 w-9 h-9 rounded border overflow-hidden bg-black transition-colors',
-                      g.assetId === outfitImageSlug
-                        ? 'border-violet-300'
-                        : 'border-violet-500/20 hover:border-violet-400/60',
+                      'px-3 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
+                      active
+                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
+                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
                     )}
                   >
-                    <img src={g.thumbUrl} alt={g.slug} className="w-full h-full object-cover" />
+                    {p.label}
                   </button>
-                ))}
-                {garmentChoices.length === 0 && (
-                  <div className="text-[9px] font-mono text-violet-400/50">No image assets in this project yet.</div>
-                )}
-              </div>
-            </section>
-
-            <section>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Models</div>
-              <div className="flex flex-wrap gap-1.5">
-                {OUTFIT_MODEL_OPTIONS.map((m) => {
-                  const active = selectedModels.has(m.key);
-                  return (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => toggleModel(m.key)}
-                      className={cn(
-                        'px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
-                        active
-                          ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                          : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
-                      )}
-                    >
-                      {m.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Provider</div>
-              <div className="flex gap-1.5">
-                {OUTFIT_PROVIDERS.map((p) => {
-                  const active = selectedProvider === p.key;
-                  return (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() => setSelectedProvider(p.key)}
-                      className={cn(
-                        'px-3 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
-                        active
-                          ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                          : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
-                      )}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={!canSubmit}
-                className={cn(
-                  'w-full flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
-                  canSubmit
-                    ? 'bg-violet-500/20 border border-violet-300 text-violet-100 hover:bg-violet-500/30'
-                    : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
-                )}
-              >
-                {submitting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : lastOutcomes.length > 0 ? (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                ) : (
-                  <Zap className="w-3.5 h-3.5" />
-                )}
-                {lastOutcomes.length > 0 ? 'Regenerate' : 'Generate'}
-              </button>
+                );
+              })}
             </div>
+          </section>
+
+          {failedOutcomes.length > 0 && (
+            <div className="space-y-1 text-[10px] font-mono text-red-300/80">
+              {failedOutcomes.map((o) => (
+                <div key={`${o.provider}-${o.model}`}>{o.model}: {o.error}</div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canSubmit}
+            className={cn(
+              'w-full flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
+              canSubmit
+                ? 'bg-violet-500/20 border border-violet-300 text-violet-100 hover:bg-violet-500/30'
+                : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
+            )}
+          >
+            {submitting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : lastOutcomes.length > 0 ? (
+              <RefreshCw className="w-3.5 h-3.5" />
+            ) : (
+              <Zap className="w-3.5 h-3.5" />
+            )}
+            {lastOutcomes.length > 0 ? 'Regenerate' : 'Generate'}
+          </button>
+        </aside>
+
+        <main className="flex-1 min-w-0 overflow-y-auto px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Profile</div>
+            {analyzing && <Loader2 className="w-3 h-3 animate-spin text-violet-300" />}
           </div>
-        </div>
+          {analyzeError && (
+            <div className="text-[10px] font-mono text-amber-400/80 mb-3">{analyzeError}</div>
+          )}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {activeFieldGroups.map((group) => (
+              <section key={group.title} className="min-w-0">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">{group.title}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.fields.map((key) => {
+                    const f = fieldDef(key, subjectKind);
+                    const value = profile?.[f.key] ?? '';
+                    const Tag = f.multiline ? 'textarea' : 'input';
+                    return (
+                      <label key={f.key} className={cn('block min-w-0', f.multiline && 'col-span-2')}>
+                        <div className="text-[9px] font-mono uppercase tracking-wider text-violet-400/60 mb-0.5">
+                          {f.label}{f.required ? ' *' : ''}
+                        </div>
+                        <Tag
+                          value={typeof value === 'string' ? value : ''}
+                          placeholder={f.placeholder ?? ''}
+                          disabled={analyzing}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+                            setProfileField(f.key, e.target.value)
+                          }
+                          className={cn(
+                            'w-full bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
+                            'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
+                            f.multiline ? 'min-h-[64px] resize-y' : '',
+                          )}
+                          rows={f.multiline ? 3 : undefined}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -20,13 +20,17 @@ import {
 } from "./generate-outfit.js";
 import {
   CHARACTER_METADATA_KEY,
+  isAnimalCharacterSubjectKind,
   isFemaleCharacterSex,
   isMaleCharacterSex,
+  normalizeCharacterSubjectKind,
   normalizeCharacterSex,
+  type CharacterSubjectKind,
 } from "../jobs/extract-character.js";
 
 const CHARACTER_PROFILE_SCHEMA = z.object({
   name: z.string().optional(),
+  subject_kind: z.enum(["human", "animal"]).optional(),
   age: z.string(),
   sex: z.string().optional(),
   ethnicity: z.string(),
@@ -44,12 +48,17 @@ const CHARACTER_PROFILE_SCHEMA = z.object({
   source_image_asset_id: z.string(),
 }).passthrough();
 
-type CharacterProfileInput = z.infer<typeof CHARACTER_PROFILE_SCHEMA> & { gender_presentation?: string };
-type CharacterProfile = CharacterProfileInput & { sex: string };
+export type CharacterPromptProfile = z.infer<typeof CHARACTER_PROFILE_SCHEMA> & { gender_presentation?: string; subject_kind?: string };
+type CharacterProfile = CharacterPromptProfile & { subject_kind: CharacterSubjectKind; sex: string };
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   source_image_slug: z.string().describe("@img-* slug of the identity reference photo (used as the visual anchor for the generated character sheet)"),
+  additional_reference_image_slugs: z
+    .array(z.string())
+    .max(2)
+    .optional()
+    .describe("Optional additional @img-* identity/reference images. Up to 2 extra images are accepted, for 3 total identity references including source_image_slug."),
   profile: CHARACTER_PROFILE_SCHEMA.describe("Structured Character profile. Drives the generation prompt; user-edited values override what vision extracted."),
   models: z
     .array(z.enum(SUPPORTED_OUTFIT_MODELS))
@@ -62,11 +71,11 @@ const schema = {
   outfit_text: z
     .string()
     .optional()
-    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). When unset, the body shots default to a sex-appropriate skin-tone baseline garment so the silhouette reads cleanly."),
+    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). For animals, use only explicit accessories/costumes. When unset, humans default to a sex-appropriate skin-tone baseline garment and animals render natural."),
   outfit_image_slug: z
     .string()
     .optional()
-    .describe("Optional @img-* slug of a garment reference. When supplied, the body shots in the sheet will dress the subject in this clothing. Passed as a second reference image."),
+    .describe("Optional @img-* slug of a garment/accessory reference. When supplied, the body shots in the sheet will dress the subject in this clothing or adapt the accessory/costume for animals."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -103,21 +112,26 @@ interface CharacterOutcome {
   profile_error?: string;
 }
 
-function normalizeProfile(p: CharacterProfileInput): CharacterProfile {
+function normalizeProfile(p: CharacterPromptProfile): CharacterProfile {
+  const subjectKind = normalizeCharacterSubjectKind(p.subject_kind);
   const legacySex = typeof p.gender_presentation === "string" ? p.gender_presentation : "";
   const rawSex = p.sex?.trim() ? p.sex : legacySex;
-  if (!rawSex.trim()) {
-    throw new Error("profile.sex is required");
+  if (subjectKind === "human" && !rawSex.trim()) {
+    throw new Error("profile.sex is required for human profiles");
   }
   const normalized = {
     ...p,
-    sex: normalizeCharacterSex(rawSex),
+    subject_kind: subjectKind,
+    sex: rawSex.trim() ? normalizeCharacterSex(rawSex) : "",
   };
   delete normalized.gender_presentation;
   return normalized;
 }
 
 function profileSubjectSentence(p: CharacterProfile): string {
+  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
+    return `${p.age} animal, ${p.ethnicity}, ${p.height}, ${p.build} build.`;
+  }
   const bits: string[] = [];
   bits.push(`${p.age} ${normalizeCharacterSex(p.sex)} of ${p.ethnicity} heritage`);
   bits.push(`${p.height}, ${p.build} build`);
@@ -126,6 +140,15 @@ function profileSubjectSentence(p: CharacterProfile): string {
 
 function profileDetailLines(p: CharacterProfile): string {
   const lines: string[] = [];
+  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
+    lines.push(`Body: chest/torso ${p.bust}; midsection ${p.waist}; hindquarters ${p.hips}; rear/tail base ${p.glutes}`);
+    lines.push(`Head/face: ${p.face}`);
+    lines.push(`Coat/fur: ${p.hair}`);
+    lines.push(`Eyes: ${p.eyes}`);
+    lines.push(`Coat/skin texture: ${p.skin}`);
+    lines.push(`Distinguishing features: ${p.distinguishing_features}`);
+    return lines.join(". ") + ".";
+  }
   const chestLabel = isMaleCharacterSex(p.sex) ? "chest" : isFemaleCharacterSex(p.sex) ? "bust" : "chest/bust";
   lines.push(
     `Body: ${chestLabel} ${p.bust}; waist ${p.waist}; hips ${p.hips}; glutes ${p.glutes}`,
@@ -138,7 +161,7 @@ function profileDetailLines(p: CharacterProfile): string {
   return lines.join(". ") + ".";
 }
 
-const SHEET_LAYOUT =
+const HUMAN_FEMALE_SHEET_LAYOUT =
   "A 2x2 character reference sheet on a clean white seamless studio background with even soft natural lighting. " +
   "Top-left quadrant: tight head-and-neck profile portrait, the subject's face in clean side view looking to the right; " +
   "tightly cropped just below the chin/neck so NO clothing, NO bra straps, NO necklines and NO shoulder garments are visible — only face, hair, ears and bare neck. " +
@@ -152,10 +175,52 @@ const SHEET_LAYOUT =
   "HAIR UP in this quadrant: hair pulled back into a clean tie that exposes the nape and the line of the neck and shoulders. " +
   "The four quadrants must show the same person with the same hair color/length/texture; only the styling (down vs. tied back) differs across quadrants — half of the sheet shows the hair down, half shows it up.";
 
-const STYLE_TAIL =
+const HUMAN_MALE_SHEET_LAYOUT =
+  "A 2x2 character reference sheet on a clean white seamless studio background with even soft natural lighting. " +
+  "Top-left quadrant: tight head-and-neck profile portrait, the subject's face in clean side view looking to the right; tightly cropped just below the chin/neck so NO clothing, NO straps, NO necklines and NO shoulder garments are visible — only face, ears, bare neck, facial hair if present, and the exact hairstyle from Reference Image 1. " +
+  "Top-right quadrant: tight head-and-neck front portrait, the subject's face directly to camera with the exact same hairstyle, hairline, length, volume, part, facial hair, and grooming from Reference Image 1. " +
+  "Bottom-left quadrant: full-body 3/4 front angle, the subject standing, body rotated about 30 degrees to the camera's right while the face turns slightly back toward camera, arms relaxed at the sides — clearly showing the front-and-side silhouette so the 3D form of the body reads. " +
+  "Bottom-right quadrant: full-body 3/4 back angle, the subject standing with their back largely toward camera but the body rotated about 30 degrees so the camera sees one side and the back together, arms relaxed at the sides, head looking away — clearly showing the back-and-side silhouette so the 3D form reads. " +
+  "All four quadrants must keep the same hairstyle from Reference Image 1 exactly; do not tie back, restyle, lengthen, shorten, add bangs, remove bangs, change the part, or change facial hair.";
+
+const ANIMAL_SHEET_LAYOUT =
+  "A 2x2 animal character reference sheet on a clean white seamless studio background with even soft natural lighting. " +
+  "Top-left quadrant: tight side head profile, the animal's head in clean side view looking to the right, showing muzzle or beak shape, ears, whisker pads if present, and coat/fur markings. " +
+  "Top-right quadrant: tight front head portrait, the animal facing directly toward camera, showing eyes, ears, muzzle, facial markings, and head symmetry. " +
+  "Bottom-left quadrant: full-body 3/4 front view in a natural standing pose appropriate to the species, showing chest/torso, legs, paws or hooves if present, tail if visible, and front-and-side body silhouette. " +
+  "Bottom-right quadrant: full-body 3/4 rear view in a natural standing pose appropriate to the species, showing back, hindquarters, tail or tail base, coat/fur markings, and rear-and-side body silhouette. " +
+  "The four quadrants must show the same animal with the same coat/fur color, markings, length, texture, eye color, ear shape, tail shape, and body proportions. Use natural species-appropriate posture in every quadrant.";
+
+const HUMAN_STYLE_TAIL =
   "Photographic, editorial fashion-documentation style. " +
   "Preserve the subject's identity from Reference Image 1 — face structure, hair texture, skin tone — exactly. " +
   "Render as one cohesive 1:1 square image with the four quadrants clearly separated by thin gutters of white background.";
+
+const ANIMAL_STYLE_TAIL =
+  "Photographic, natural-history reference style. " +
+  "Preserve the animal's identity from Reference Image 1 — head shape, coat/fur texture, markings, eye color, ear shape, tail shape, and body proportions — exactly. " +
+  "Render as one cohesive 1:1 square image with the four quadrants clearly separated by thin gutters of white background.";
+
+function identityReferenceClause(identityRefCount: number): string {
+  if (identityRefCount <= 1) {
+    return "Reference Image 1 is the primary identity reference.";
+  }
+  return (
+    `Reference Images 1-${identityRefCount} are identity references for the same subject. ` +
+    "Use them together for face/head structure, body proportions, surface texture, markings and identity consistency. " +
+    "Reference Image 1 remains the primary reference for hairstyle or coat/fur appearance when references conflict."
+  );
+}
+
+function sheetLayout(p: CharacterProfile): string {
+  if (isAnimalCharacterSubjectKind(p.subject_kind)) return ANIMAL_SHEET_LAYOUT;
+  if (isFemaleCharacterSex(p.sex)) return HUMAN_FEMALE_SHEET_LAYOUT;
+  return HUMAN_MALE_SHEET_LAYOUT;
+}
+
+function styleTail(p: CharacterProfile): string {
+  return isAnimalCharacterSubjectKind(p.subject_kind) ? ANIMAL_STYLE_TAIL : HUMAN_STYLE_TAIL;
+}
 
 export function defaultCharacterWardrobeClause(sex: string): string {
   if (isMaleCharacterSex(sex)) {
@@ -179,16 +244,43 @@ export function defaultCharacterWardrobeClause(sex: string): string {
   );
 }
 
-function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean, sex: string): string {
-  if (hasOutfitImage && outfitText?.trim()) {
+function animalWardrobeClause(outfitText: string | undefined, outfitRefIndex: number | null): string {
+  const outfitRef = outfitRefIndex ? `Reference Image ${outfitRefIndex}` : "the accessory/costume reference";
+  if (outfitRefIndex && outfitText?.trim()) {
     return (
-      `Wardrobe for the body shots (bottom quadrants only): dress the subject in the clothing shown in Reference Image 2 (${outfitText.trim()}). ` +
+      `Optional animal accessory or costume for the body shots only: adapt the item shown in ${outfitRef} (${outfitText.trim()}) to the animal's body only if it can fit naturally. ` +
+      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+    );
+  }
+  if (outfitRefIndex) {
+    return (
+      `Optional animal accessory or costume for the body shots only: adapt the item shown in ${outfitRef} to the animal's body only if it can fit naturally. ` +
+      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+    );
+  }
+  if (outfitText?.trim()) {
+    return (
+      `Optional animal accessory or costume for the body shots only: ${outfitText.trim()}. ` +
+      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+    );
+  }
+  return "No wardrobe: render the animal natural with no clothing or accessories.";
+}
+
+function wardrobeClause(outfitText: string | undefined, outfitRefIndex: number | null, p: CharacterProfile): string {
+  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
+    return animalWardrobeClause(outfitText, outfitRefIndex);
+  }
+  const outfitRef = outfitRefIndex ? `Reference Image ${outfitRefIndex}` : "the clothing reference";
+  if (outfitRefIndex && outfitText?.trim()) {
+    return (
+      `Wardrobe for the body shots (bottom quadrants only): dress the subject in the clothing shown in ${outfitRef} (${outfitText.trim()}). ` +
       "Match the garment exactly — color, cut, fabric, prints. Top quadrants stay tightly cropped to bare head and neck."
     );
   }
-  if (hasOutfitImage) {
+  if (outfitRefIndex) {
     return (
-      "Wardrobe for the body shots (bottom quadrants only): dress the subject in the clothing shown in Reference Image 2. " +
+      `Wardrobe for the body shots (bottom quadrants only): dress the subject in the clothing shown in ${outfitRef}. ` +
       "Match the garment exactly — color, cut, fabric, prints. Top quadrants stay tightly cropped to bare head and neck."
     );
   }
@@ -198,7 +290,7 @@ function wardrobeClause(outfitText: string | undefined, hasOutfitImage: boolean,
       "Top quadrants stay tightly cropped to bare head and neck."
     );
   }
-  return defaultCharacterWardrobeClause(sex);
+  return defaultCharacterWardrobeClause(p.sex);
 }
 
 function buildPrompt(
@@ -206,26 +298,69 @@ function buildPrompt(
   model: OutfitModelKey,
   provider: OutfitProvider,
   outfitText: string | undefined,
-  hasOutfitImage: boolean,
+  identityRefCount: number,
+  outfitRefIndex: number | null,
 ): string {
   const subject = profileSubjectSentence(p);
   const details = profileDetailLines(p);
-  const wardrobe = wardrobeClause(outfitText, hasOutfitImage, p.sex);
+  const wardrobe = wardrobeClause(outfitText, outfitRefIndex, p);
   const base =
-    `${SHEET_LAYOUT}\n\n` +
+    `${sheetLayout(p)}\n\n` +
+    `${identityReferenceClause(identityRefCount)}\n\n` +
     `Subject: ${subject} ${details}\n\n` +
     `${wardrobe}\n\n` +
-    `${STYLE_TAIL}`;
-  // Wan/Qwen on kie need the avoid clause baked in.
+    `${styleTail(p)}`;
   if (provider === "kie" && (model === "wan27_pro" || model === "qwen_image_edit")) {
     return `${base} Avoid: ${WAN_QWEN_NEGATIVE}.`;
   }
   return base;
 }
 
+export function buildCharacterPrompt(
+  p: CharacterPromptProfile,
+  model: OutfitModelKey,
+  provider: OutfitProvider,
+  outfitText: string | undefined,
+  identityRefCount = 1,
+  outfitRefIndex: number | null = null,
+): string {
+  return buildPrompt(normalizeProfile(p), model, provider, outfitText, identityRefCount, outfitRefIndex);
+}
+
 function withAt(slug: string): string {
   if (slug.startsWith("http://") || slug.startsWith("https://")) return slug;
   return slug.startsWith("@") ? slug : `@${slug}`;
+}
+
+function slugKey(slug: string): string {
+  return slug.replace(/^@/, "");
+}
+
+function uniqueAdditionalRefs(sourceRef: string, refs: string[] | undefined): string[] {
+  const seen = new Set([slugKey(sourceRef)]);
+  const unique: string[] = [];
+  for (const ref of refs ?? []) {
+    const normalized = withAt(ref);
+    const key = slugKey(normalized);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(normalized);
+    if (unique.length >= 2) break;
+  }
+  return unique;
+}
+
+function imageRefLimitError(provider: OutfitProvider, model: OutfitModelKey, imageRefCount: number): string | null {
+  if (provider === "kie" && model === "qwen_image_edit" && imageRefCount > 3) {
+    return "Kie Qwen Image Edit supports at most 3 total input images. Remove an extra identity reference or the outfit image, or choose another model.";
+  }
+  if (provider === "fal" && model === "qwen_image_edit" && imageRefCount > 1) {
+    return "Fal Qwen Image Edit uses only one input image. Remove extra references/outfit images or choose another model.";
+  }
+  if (provider === "fal" && model === "wan27_pro" && imageRefCount > 4) {
+    return "Fal Wan 2.7 Pro supports at most 4 total input images.";
+  }
+  return null;
 }
 
 function extractEnqueueResult(res: ToolResult): { assetId?: string; jobId?: string; error?: string } {
@@ -256,10 +391,10 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_character",
     description:
-      "Generate a 4-up character reference sheet (face profile, face front, body front, body back) " +
-      "from a structured Character profile and a source identity image. Creates one new char-* asset " +
+      "Generate a 4-up human or animal character reference sheet from a structured Character profile " +
+      "and one to three identity reference images. Creates one new char-* asset " +
       "per selected model and writes the profile to that asset's .character.json metadata. The " +
-      "source image is passed as the identity reference. Aspect ratio is fixed at 1:1.",
+      "source image is passed as the primary identity reference. Aspect ratio is fixed at 1:1.",
     schema,
     handler: async (args) => {
       const a = args as Args;
@@ -282,16 +417,29 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
       }
 
       const sourceRef = withAt(a.source_image_slug);
-      const outfitRef = a.outfit_image_slug ? withAt(a.outfit_image_slug) : null;
-      const imageRefs = outfitRef ? [sourceRef, outfitRef] : [sourceRef];
+      const additionalRefs = uniqueAdditionalRefs(sourceRef, a.additional_reference_image_slugs);
+      const identityRefs = [sourceRef, ...additionalRefs];
+      const identityRefKeys = new Set(identityRefs.map(slugKey));
+      const requestedOutfitRef = a.outfit_image_slug ? withAt(a.outfit_image_slug) : null;
+      const outfitRef = requestedOutfitRef && !identityRefKeys.has(slugKey(requestedOutfitRef))
+        ? requestedOutfitRef
+        : null;
+      const outfitRefIndex = outfitRef ? identityRefs.length + 1 : null;
+      const imageRefs = outfitRef ? [...identityRefs, outfitRef] : identityRefs;
       const outcomes: CharacterOutcome[] = [];
 
       for (const model of a.models) {
         const factory = DISPATCH[provider][model];
-        const prompt = buildPrompt(profile, model, provider, a.outfit_text, !!outfitRef);
+        const prompt = buildPrompt(profile, model, provider, a.outfit_text, identityRefs.length, outfitRefIndex);
         const outcome: CharacterOutcome = { model, provider, prompt };
         if (!factory) {
           outcome.error = `model ${model} is not available via provider ${provider}`;
+          outcomes.push(outcome);
+          continue;
+        }
+        const limitError = imageRefLimitError(provider, model, imageRefs.length);
+        if (limitError) {
+          outcome.error = limitError;
           outcomes.push(outcome);
           continue;
         }

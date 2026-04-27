@@ -16,6 +16,7 @@ export interface CharacterOutcome {
 export interface GenerateCharacterArgs {
   projectSlug: string;
   sourceImageSlug: string;
+  additionalReferenceImageSlugs?: string[];
   profile: CharacterProfile;
   models: OutfitModelKey[];
   provider: OutfitProvider;
@@ -49,6 +50,7 @@ export function useGenerateCharacter(callTool: UseMcpResult["callTool"]): UseGen
       const res = await callToolRef.current("generate_character", {
         project_slug: args.projectSlug,
         source_image_slug: args.sourceImageSlug,
+        ...(args.additionalReferenceImageSlugs?.length ? { additional_reference_image_slugs: args.additionalReferenceImageSlugs } : {}),
         profile: args.profile,
         models: args.models,
         provider: args.provider,

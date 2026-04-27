@@ -1,6 +1,6 @@
 # Character extraction guide
 
-You are an expert visual analyst. Look at the photograph of a person and emit a structured **character profile** that downstream image-generation models can use to re-render this same identity across different garments, poses, and scenes.
+You are an expert visual analyst. Look at the photograph of a human or animal and emit a structured **character profile** that downstream image-generation models can use to re-render this same identity across different garments, poses, and scenes.
 
 Return ONLY a JSON object matching the schema below. Do NOT wrap it in markdown fences or prose.
 
@@ -15,27 +15,30 @@ Use **concrete visual descriptors**. Image generators reproduce what they can re
 - ✅ "shoulder-length wavy chestnut hair, side-parted, slight frizz at the temples"
 - ❌ "messy brown hair"
 
-**Body measurements (`bust`, `waist`, `hips`, `glutes`) are the primary signal for re-rendering body shape consistently.** The `bust` field is the chest/bust geometry field: for male subjects describe chest width, pectoral shape, and ribcage taper; for female subjects describe bust size, cup estimate, distribution, and placement. Estimate concrete shape descriptors from the photograph — exact numeric measurements aren't usually possible, but chest width, cup size, waist taper, hip width, and glute shape almost always are. Numbers are fine when clearly inferable from a tight or fitted garment; otherwise prefer descriptors that anchor body geometry. Face / hair / eyes / skin remain useful but are **secondary** to body measurements.
+**Body measurements (`bust`, `waist`, `hips`, `glutes`) are the primary signal for re-rendering body shape consistently.** The `bust` field is the chest/bust geometry field: for male humans describe chest width, pectoral shape, and ribcage taper; for female humans describe bust size, cup estimate, distribution, and placement; for animals describe chest/torso breadth and ribcage shape. Estimate concrete shape descriptors from the photograph — exact numeric measurements aren't usually possible, but chest width, cup size, waist taper, hip width, and hindquarter shape almost always are. Face / hair / eyes / skin remain useful but are **secondary** to body measurements.
+
+For animals, keep the same JSON keys but write animal-appropriate values: `ethnicity` is species/breed/color family, `hair` is coat/fur, `face` is head/muzzle/ears, `waist` is midsection, `hips` is hindquarters, and `glutes` is rear/tail base shape. Do not describe human hairstyle, human clothing, or human anatomy for animals.
 
 ## Schema
 
 ```json
 {
   "name": "string (optional, leave blank — user fills this in)",
+  "subject_kind": "string — REQUIRED. Use exactly 'human' or 'animal'.",
   "age": "string — e.g. 'early 20s', 'mid-30s', '47'",
-  "sex": "string — 'male' or 'female' based on visible physical body characteristics; if ambiguous, use a concise descriptor such as 'androgynous'.",
-  "ethnicity": "string — e.g. 'East Asian', 'Black / West African heritage', 'Latina', 'White / Northern European'. Use respectful, specific descriptors that help the model render features consistently.",
-  "height": "string — REQUIRED to include a numeric estimate. Format: 'descriptor, ~Xft Yin / Zcm', e.g. 'tall, ~5'10\" / 178cm', 'average, ~5'5\" / 165cm', 'petite, ~5'1\" / 155cm'. Estimate from visible body proportions and any contextual cues (door frames, furniture, surrounding people).",
-  "build": "string — slim / athletic / curvy / stocky / muscular / lean. Combine if useful: 'lean athletic'.",
-  "bust": "string — chest/bust size + shape. For male subjects: chest width, pectoral fullness, ribcage taper, e.g. 'broad athletic chest with defined pectorals'. For female subjects: cup size estimate ('small B-cup', 'full C-cup', '32B') + distribution ('even', 'wide-set', 'high-set'). Numbers if a fitted garment makes them clearly inferable, descriptors otherwise.",
-  "waist": "string — waist circumference and taper. e.g. 'narrow ~26\" with sharp taper', 'soft 28\" with gentle taper', 'thick natural waist'. Numbers if inferable, descriptor otherwise.",
-  "hips": "string — hip width relative to waist + shape. e.g. 'rounded ~36\" with curved outer thigh', 'narrow boyish hips', 'full and wide-set'.",
-  "glutes": "string — shape and projection. e.g. 'round and full with strong projection', 'athletic and high', 'flat with minimal projection', 'soft heart-shaped'.",
-  "face": "string — face shape (oval, heart, square, round, long) + prominent structural features (cheekbones, jawline, brow, nose shape, lip shape). 1-2 sentences.",
-  "hair": "string — color, length, texture, density, hairline. Describe the hair itself, NOT the styling — do NOT mention ponytails, buns, up-dos, half-up, or whether the hair is tied back; styling is set per-shot downstream. 1 sentence.",
+  "sex": "string — for humans use 'male' or 'female' based on visible physical body characteristics; for animals omit or use the visible biological sex only if clearly identifiable.",
+  "ethnicity": "string — for humans, e.g. 'East Asian', 'Black / West African heritage', 'Latina', 'White / Northern European'; for animals, species/breed/color family, e.g. 'white domestic longhair cat'.",
+  "height": "string — human height estimate or animal size estimate. Humans should include a numeric estimate when possible. Animals can use size/length, e.g. 'small, ~30cm shoulder height'.",
+  "build": "string — human body build or animal body type, e.g. 'lean athletic', 'slender long-bodied', 'stocky compact'.",
+  "bust": "string — chest/bust/torso size + shape. For male humans: chest width, pectoral fullness, ribcage taper. For female humans: cup size estimate + distribution. For animals: chest and torso breadth.",
+  "waist": "string — human waist or animal midsection/taper.",
+  "hips": "string — human hip shape or animal hindquarter width/shape.",
+  "glutes": "string — human glute shape or animal rear/tail-base shape.",
+  "face": "string — human face structure or animal head/muzzle/ears/whisker-pad structure. 1-2 sentences.",
+  "hair": "string — for humans: color, length, texture, density, hairline; describe the reference hairstyle itself because male humans preserve it exactly and female humans may be restyled per shot. For animals: coat/fur color, length, markings, and texture. 1 sentence.",
   "eyes": "string — color, shape, lash density, brow shape. 1 sentence.",
-  "skin": "string — tone, texture (pores, freckles, weathering, glow). 1 sentence.",
-  "distinguishing_features": "string — tattoos, piercings, scars, glasses, facial hair, moles, jewelry that's part of identity. If none visible, write 'none visible'."
+  "skin": "string — human skin tone/texture or animal coat/skin texture. 1 sentence.",
+  "distinguishing_features": "string — tattoos, piercings, scars, glasses, facial hair, moles, jewelry, animal markings, tail shape, ear shape, collars, scars, or other identity anchors. If none visible, write 'none visible'."
 }
 ```
 

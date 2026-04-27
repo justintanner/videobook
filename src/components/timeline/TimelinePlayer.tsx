@@ -4,8 +4,8 @@ import { TimelineComposition } from '@/remotion/TimelineComposition';
 import type { TimelineSlotData } from '@/remotion/TimelineComposition';
 import { Film } from 'lucide-react';
 import type { Orientation } from '@/hooks/useTimeline';
-import type { ViewerSize } from './viewer-types';
-import { RatioToggle } from './viewer-shared';
+import type { ViewerSize } from '@/components/center-stage/viewer-types';
+import { RatioToggle } from '@/components/center-stage/viewer-shared';
 
 export interface TimelinePreviewData {
   slots: TimelineSlotData[];

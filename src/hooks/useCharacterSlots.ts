@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
+export type CharacterSubjectKind = "human" | "animal";
+
 export interface CharacterProfile {
   name?: string;
+  subject_kind: CharacterSubjectKind;
   age: string;
   sex: string;
   gender_presentation?: string;
@@ -25,10 +28,15 @@ export interface CharacterProfile {
   outfits?: string[];
 }
 
-export type LegacyCharacterProfile = Omit<CharacterProfile, "sex"> & {
+export type LegacyCharacterProfile = Omit<CharacterProfile, "subject_kind" | "sex"> & {
+  subject_kind?: string;
   sex?: string;
   gender_presentation?: string;
 };
+
+function normalizeSubjectKindValue(value: string | undefined): CharacterSubjectKind {
+  return value?.trim().toLowerCase() === "animal" ? "animal" : "human";
+}
 
 function normalizeSexValue(value: string): string {
   const trimmed = value.trim();
@@ -39,9 +47,11 @@ function normalizeSexValue(value: string): string {
 }
 
 export function normalizeCharacterProfile(profile: LegacyCharacterProfile): CharacterProfile {
+  const subjectKind = normalizeSubjectKindValue(profile.subject_kind);
   const rawSex = profile.sex?.trim() ? profile.sex : profile.gender_presentation ?? "";
   return {
     name: profile.name,
+    subject_kind: subjectKind,
     age: profile.age,
     sex: normalizeSexValue(rawSex),
     ethnicity: profile.ethnicity,

@@ -22,7 +22,9 @@ import {
 import { findImageFile } from "./_image-inputs.js";
 import {
   CHARACTER_METADATA_KEY,
+  isAnimalCharacterSubjectKind,
   isMaleCharacterSex,
+  normalizeCharacterSubjectKind,
   normalizeCharacterSex,
   type Character,
 } from "../jobs/extract-character.js";
@@ -234,6 +236,25 @@ function trimDescriptor(value: string): string {
 function compressCharacterProfile(c: Character | undefined): string {
   if (!c) return "";
   const parts: string[] = [];
+  const subjectKind = normalizeCharacterSubjectKind(c.subject_kind);
+  if (isAnimalCharacterSubjectKind(subjectKind)) {
+    parts.push(["animal", c.age, c.ethnicity].filter(Boolean).join(" "));
+    const body = [c.height, c.build && `${c.build} build`].filter(Boolean).join(", ");
+    if (body) parts.push(body);
+    const measurements = [
+      c.bust && `chest/torso ${trimDescriptor(c.bust)}`,
+      c.waist && `midsection ${trimDescriptor(c.waist)}`,
+      c.hips && `hindquarters ${trimDescriptor(c.hips)}`,
+      c.glutes && `rear/tail base ${trimDescriptor(c.glutes)}`,
+    ].filter(Boolean).join(", ");
+    if (measurements) parts.push(measurements);
+    if (c.face) parts.push(`head ${trimDescriptor(c.face)}`);
+    if (c.hair) parts.push(`coat/fur ${trimDescriptor(c.hair)}`);
+    if (c.eyes) parts.push(`eyes ${trimDescriptor(c.eyes)}`);
+    if (c.skin) parts.push(`coat texture ${trimDescriptor(c.skin)}`);
+    if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
+    return parts.join("; ");
+  }
   const sex = normalizeCharacterSex(c.sex || c.gender_presentation || "");
   const identity = [c.age, sex, c.ethnicity].filter(Boolean).join(" ");
   if (identity) parts.push(identity);

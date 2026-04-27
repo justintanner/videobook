@@ -11,10 +11,10 @@ import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fi
 import { stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
-import { CommandButton } from './CommandButton';
+import { CommandButton } from '@/components/commands';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
-import type { ExecuteButtonState } from './types';
+import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePopover';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
