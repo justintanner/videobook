@@ -205,7 +205,7 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
                 outputLocation: outputPath,
                 inputProps: inputProps as unknown as Record<string, unknown>,
                 videoBitrate: "8M",
-                concurrency: 2,
+                concurrency: 1,
                 hardwareAcceleration: "if-possible",
               });
 
