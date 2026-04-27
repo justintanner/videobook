@@ -10,6 +10,11 @@ import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 600_000;
 
+// Hidden filename so a failed video download doesn't leave behind an
+// `original.jpg` that sync's `findUnprocessedUploads` would pick up and
+// process as if the asset were a successful image upload (origin "external").
+const OG_IMAGE_FILENAME = ".opengraph.jpg";
+
 export async function validateDownloadOutput(outputPath: string): Promise<void> {
   const partPath = outputPath + ".part";
 
@@ -133,14 +138,16 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
-      // (a) Download OG image as original.jpg
+      // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
+      // returns "no video") promotes this to original.jpg on a fresh img-
+      // asset; a successful video download promotes it after step (d).
       try {
         const ogFileResult = await fs.readFile(assetId, ".opengraph.json", projectSlug ?? "");
         if (ogFileResult.ok) {
           const ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
           const imageUrl = extractOgImageUrl(ogData.ogImage);
           if (imageUrl) {
-            await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.jpg", projectSlug ?? "", {
+            await downloadUrlIntoAsset(fs, imageUrl, assetId, OG_IMAGE_FILENAME, projectSlug ?? "", {
               kind: "OG image",
               fetchInit: { signal: AbortSignal.timeout(15_000), redirect: "follow" },
             });
@@ -159,7 +166,7 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
         // (b2) yt-dlp found no video — fall back to OG image as an image asset
         if (/no video/i.test(msg)) {
-          const ogImageResult = await fs.readFile(assetId, "original.jpg", projectSlug ?? "");
+          const ogImageResult = await fs.readFile(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
           if (!ogImageResult.ok) throw new Error(`No video found and no OG image available: ${msg}`);
 
           const slug = projectSlug ?? "";
@@ -350,6 +357,17 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
 
       // (d2) Validate download output
       await validateDownloadOutput(outputPath);
+
+      // (d3) Promote staged OG image to original.jpg so process_video uses
+      // the curated platform thumbnail (e.g. YouTube maxres) rather than a
+      // first-frame extraction. Best-effort — process_video falls back to a
+      // first-frame thumbnail when original.jpg is absent.
+      try {
+        const ogImageResult = await fs.readFile(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
+        if (ogImageResult.ok) {
+          await fs.writeFile(assetId, "original.jpg", ogImageResult.value, projectSlug ?? "");
+        }
+      } catch { /* non-fatal */ }
 
       // (e) Optional exports
       const exports: string[] = [];
