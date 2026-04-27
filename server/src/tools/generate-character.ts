@@ -89,7 +89,12 @@ interface CharacterOutcome {
   prompt: string;
   char_asset_id?: string;
   job_id?: string;
+  /** Hard failure — no job was enqueued for this slot. */
   error?: string;
+  /** Soft failure — the job is running, but the embedded character profile
+   *  sidecar wasn't written. CharacterDialog will fall back to re-extracting
+   *  on next open instead of seeding from cached metadata. */
+  profile_error?: string;
 }
 
 function profileSubjectSentence(p: CharacterProfile): string {
@@ -290,7 +295,11 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
             a.project_slug,
           );
           if (!writeRes.ok) {
-            outcome.error = `Failed to write character profile for ${r.assetId}: ${writeRes.error.message}`;
+            // Job is already enqueued at this point — don't flip the slot to
+            // "failed" (which would mask a running generation). Surface the
+            // profile-write failure separately so the caller can warn without
+            // losing track of the in-flight job.
+            outcome.profile_error = `Failed to write character profile for ${r.assetId}: ${writeRes.error.message}`;
           }
         }
         if (r.jobId) outcome.job_id = r.jobId;
