@@ -35,6 +35,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       projectSlug,
     );
 
+    let frameCount = 0;
     try {
 
     await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
@@ -55,7 +56,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     }
 
     const timestamps = generateTimestamps(duration);
-    const frameCount = timestamps.length;
+    frameCount = timestamps.length;
 
     const framesDir = join(assetDir, "original_frames");
     await mkdir(framesDir, { recursive: true });
