@@ -964,6 +964,11 @@ async function findAutoSpeechToTextActions(
       const meta = await fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug);
       if (!meta.ok || !meta.value.hasAudio) return null;
 
+      // Skip if process_video hasn't yet written original.mp3 — analyze_video can
+      // write .original.analysis.json from frames alone, so the analysis sidecar
+      // doesn't imply mp3 extraction is finished.
+      if (!fileNames.has("original.mp3")) return null;
+
       // Must have a video file (needed to extract audio)
       const videoFile = findVideoFile(files);
       if (!videoFile) return null;
