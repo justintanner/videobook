@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "clipfirst-fs";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { kie, KieError } from "@apicity/kie";
 import type { KieTaskInfo } from "@apicity/kie";
@@ -210,6 +211,26 @@ export async function readAnalysisRecommendations(
   }
 }
 
+// Content fingerprint covering every file in the asset directory. Changes
+// whenever any file is added, removed, resized, or rewritten, so every URL
+// derived from an asset's filePath (including alternate-orientation renders
+// like portrait.mp4 / landscape.mp4) invalidates together. Cheap: no file
+// reads — just hashes (name, size, mtime) tuples.
+function computeAssetFingerprint(files: AssetManifestFile[]): string {
+  if (files.length === 0) return "";
+  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
+  const hash = createHash("sha1");
+  for (const f of sorted) {
+    hash.update(f.name);
+    hash.update("\0");
+    hash.update(String(f.size_bytes ?? 0));
+    hash.update("\0");
+    hash.update(String(f.mtimeMs ?? 0));
+    hash.update("\0");
+  }
+  return hash.digest("hex").slice(0, 12);
+}
+
 function renderedOrientationsFor(
   files: AssetManifestFile[],
   assetId: string,
@@ -253,9 +274,20 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         mediaFile?.name ?? null,
       );
 
-      // Cache-bust media URLs with file mtime so browsers refetch after trim/re-encode
-      const mediaMtime = mediaFile?.mtimeMs ?? 0;
-      const cacheBust = mediaMtime ? `?v=${Math.floor(mediaMtime)}` : '';
+      // Cache-bust media URLs so browsers refetch after trim / re-encode / re-render.
+      // For vid- and img- assets, use a content fingerprint covering the whole
+      // asset directory: orientation re-renders (portrait/landscape/square.mp4)
+      // touch alternate files but not original.mp4, so a primary-mtime cache
+      // key would leave alternate-orientation URLs cached and stale.
+      const useFingerprint = a.id.startsWith("vid-") || a.id.startsWith("img-");
+      let cacheBust = '';
+      if (useFingerprint) {
+        const fp = computeAssetFingerprint(files);
+        if (fp) cacheBust = `?v=${fp}`;
+      } else {
+        const mediaMtime = mediaFile?.mtimeMs ?? 0;
+        if (mediaMtime) cacheBust = `?v=${Math.floor(mediaMtime)}`;
+      }
       const media_url = mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile.name}${cacheBust}`
         : null;
