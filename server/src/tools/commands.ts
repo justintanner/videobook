@@ -220,6 +220,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "describe_image", autoInject: ["project_slug"] },
   },
   {
+    command: "/suggest-edits",
+    description: "Suggest trim cuts and SFX placements for a video",
+    example: "/suggest-edits @vid-full",
+    category: "context_menu",
+    icon: "Scissors",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
+    ],
+    mcpTool: { tool: "suggest_edits", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite",
     description: "Rewrite a script asset in place with the full describe model",
     example: "/rewrite @script-desc-product-shot",

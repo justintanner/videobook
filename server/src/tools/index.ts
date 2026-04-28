@@ -126,6 +126,7 @@ import { genImagesAllDef } from "./gen-images-all.js";
 import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js";
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
+import { suggestEditsDef } from "./suggest-edits.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
 import { withLogging } from "./log-wrapper.js";
 
@@ -265,6 +266,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     previewOutfitPromptsDef(fs),
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
+    suggestEditsDef(fs),
     pinCharacterSlotDef(fs),
     unpinCharacterSlotDef(fs),
   ];
