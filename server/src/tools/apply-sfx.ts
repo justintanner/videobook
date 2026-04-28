@@ -17,9 +17,16 @@ type SfxInput = {
   type: string;
   description: string;
   duration_seconds?: number;
+  prompt?: string;
 };
 
-type SfxResolved = Required<SfxInput>;
+type SfxResolved = {
+  timestamp: number;
+  type: string;
+  description: string;
+  duration_seconds: number;
+  prompt: string | null;
+};
 
 function clampDuration(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) return DEFAULT_DURATION_S;
@@ -51,6 +58,7 @@ function validateSfx(
       type: entry.type,
       description: entry.description,
       duration_seconds: clampDuration(entry.duration_seconds),
+      prompt: typeof entry.prompt === "string" && entry.prompt.length > 0 ? entry.prompt : null,
     });
   }
   return { resolved, dropped };
@@ -60,8 +68,8 @@ export function applySfxDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "apply_sfx",
     description:
-      "Generate sound effects via Suno (instrumental) and mix them onto a video asset's audio track in-place. "
-      + "Each entry yields one Suno track that is trimmed to `duration_seconds` (faded out) and mixed at the given timestamp. "
+      "Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. "
+      + "Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. "
       + "Re-runs process_video downstream. Pair with /suggest-sfx to source entries.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
@@ -73,6 +81,7 @@ export function applySfxDef(fs: ClipfirstFs): ToolDef {
             type: z.string().describe("Short slug like 'whoosh', 'impact', 'ding'"),
             description: z.string().describe("One-sentence description for the generator"),
             duration_seconds: z.number().optional().describe(`SFX clip length (clamped to [${MIN_DURATION_S}, ${MAX_DURATION_S}], default ${DEFAULT_DURATION_S})`),
+            prompt: z.string().optional().describe("Optional override sent to ElevenLabs verbatim. When set, overrides the auto-built `${type}: ${description}` prompt."),
           }),
         )
         .min(1)
@@ -80,11 +89,11 @@ export function applySfxDef(fs: ClipfirstFs): ToolDef {
         .describe(`SFX placements. Up to ${MAX_SFX}.`),
     },
     handler: async (args) => {
-      const apiKey = process.env.KIE_API_KEY;
+      const apiKey = process.env.ELEVENLABS_API_KEY;
       if (!apiKey) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "ELEVENLABS_API_KEY environment variable is not set" }],
         };
       }
 

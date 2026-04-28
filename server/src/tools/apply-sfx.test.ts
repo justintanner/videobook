@@ -44,7 +44,7 @@ describe("apply_sfx tool", () => {
   let tempDir: string;
   let fixtureDir: string;
   let videoPath: string;
-  const originalKey = process.env.KIE_API_KEY;
+  const originalKey = process.env.ELEVENLABS_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -59,7 +59,7 @@ describe("apply_sfx tool", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    delete process.env.KIE_API_KEY;
+    delete process.env.ELEVENLABS_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-apply-sfx-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -70,15 +70,15 @@ describe("apply_sfx tool", () => {
 
   afterEach(async () => {
     if (originalKey) {
-      process.env.KIE_API_KEY = originalKey;
+      process.env.ELEVENLABS_API_KEY = originalKey;
     } else {
-      delete process.env.KIE_API_KEY;
+      delete process.env.ELEVENLABS_API_KEY;
     }
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when KIE_API_KEY is not set", async () => {
+  it("returns error when ELEVENLABS_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "apply_sfx",
       arguments: {
@@ -90,11 +90,11 @@ describe("apply_sfx tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("KIE_API_KEY");
+    expect(content[0].text).toContain("ELEVENLABS_API_KEY");
   });
 
   it("returns error for nonexistent asset", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const result = await client.callTool({
       name: "apply_sfx",
@@ -109,7 +109,7 @@ describe("apply_sfx tool", () => {
   });
 
   it("returns error when asset has no video", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const { createFs } = await import("clipfirst-fs");
     const fs = createFs({ projectsDir: tempDir });
@@ -132,7 +132,7 @@ describe("apply_sfx tool", () => {
   });
 
   it("returns error when all entries are past duration", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
     const uploaded = await uploadVideo(client, "sfx-proj", videoPath);
 
     const { createFs } = await import("clipfirst-fs");
@@ -159,7 +159,7 @@ describe("apply_sfx tool", () => {
   }, 60_000);
 
   it("rejects schema with more than 8 entries", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const sfx = Array.from({ length: 9 }, (_, i) => ({
       timestamp: i * 0.1,
@@ -180,7 +180,7 @@ describe("apply_sfx tool", () => {
   });
 
   it("rejects schema with empty sfx array", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const result = await client.callTool({
       name: "apply_sfx",
