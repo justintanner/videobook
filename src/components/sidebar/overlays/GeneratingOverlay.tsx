@@ -11,8 +11,14 @@ const typeFallbackLabels: Record<string, string> = {
   character: 'CHAR',
 };
 
-export function GeneratingOverlay({ item }: OverlayProps) {
+interface GeneratingOverlayProps extends OverlayProps {
+  /** Override the default "GENERATING <TYPE>" label (e.g. "PROCESSING", "ANALYZING", "TRIMMING"). */
+  label?: string;
+}
+
+export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
   const fallbackLabel = typeFallbackLabels[item.type] ?? 'ASSET';
+  const displayLabel = label ?? `GENERATING ${fallbackLabel}`;
 
   const primaryColor = item.type === 'image' || item.type === 'character' ? '#3b82f6' : '#22c55e';
   const glowStyle = `0 0 8px ${primaryColor}`;
@@ -112,7 +118,7 @@ export function GeneratingOverlay({ item }: OverlayProps) {
             textShadow: `0 0 8px ${primaryColor}`,
           }}
         >
-          <span>GENERATING {fallbackLabel}</span>
+          <span>{displayLabel}</span>
           <span className="generating-cursor" style={{ position: 'relative', top: '-1px' }}>
             █
           </span>

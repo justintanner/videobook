@@ -485,24 +485,6 @@ describe("MCP tools e2e", () => {
     expect(parsed.asset_id).toBe(vidAssetId);
   });
 
-  it("whitelists a video asset", async () => {
-    const result = await client.callTool({
-      name: "whitelist",
-      arguments: {
-        asset_id: vidAssetId,
-        project_slug: PROJECT,
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = parse(result);
-    expect(parsed.asset_id).toBe(vidAssetId);
-    expect(["whitelisted", "already_whitelisted"]).toContain(parsed.status);
-    expect(parsed.whitelisted_at).toBeTruthy();
-    expect(await fileExists(join(tempDir, PROJECT, vidAssetId, ".whitelisted_at"))).toBe(true);
-    const wlContent = await readFile(join(tempDir, PROJECT, vidAssetId, ".whitelisted_at"), "utf-8");
-    expect(Number(wlContent)).toBeGreaterThan(0);
-  });
-
   it("trims video", async () => {
     const result = await client.callTool({
       name: "trim_video",

@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -34,7 +33,7 @@ export function registerReverseVideoJob(fs: ClipfirstFs): void {
       assetId, assetDir, projectSlug,
     } = payload as ReverseVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "reversing" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
@@ -54,9 +53,6 @@ export function registerReverseVideoJob(fs: ClipfirstFs): void {
       const outputFilename = basename(outputPath);
       await fs.deleteFile(assetId, inputFilename, projectSlug);
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
-
-      // Re-arm whitelist so transcription pipeline picks up the changed video
-      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
       const videoPath = join(assetDir, inputFilename);
       await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {

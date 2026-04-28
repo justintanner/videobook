@@ -3,7 +3,6 @@ import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 300_000;
 const CROSSFADE_SECS = 0.03;
@@ -91,7 +90,7 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
       assetId, assetDir, projectSlug,
     } = payload as TrimVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "trimming" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
@@ -105,9 +104,6 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
       const outputFilename = basename(outputPath);
       await fs.deleteFile(assetId, inputFilename, projectSlug);
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
-
-      // Re-arm whitelist so transcription pipeline picks up the changed video
-      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
       // Clear stale analysis from pre-trim content so the full pipeline re-runs
       // against the new trimmed file. NOT_FOUND is expected for files that weren't

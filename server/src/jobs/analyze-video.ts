@@ -4,7 +4,11 @@ import { readFile } from "node:fs/promises";
 import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { kie } from "@apicity/kie";
-import { registerJobHandler } from "../queue.js";
+import { registerJobHandler, queue } from "../queue.js";
+import { findAudioFile } from "../media-files.js";
+import { readAndAssessDialog } from "../dialog-quality.js";
+
+const ANALYZING_MARKER = ".analyzing.json";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -56,6 +60,15 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     } = payload as AnalyzeVideoPayload;
 
     console.log(`[analyze_video] START ${assetId} assetDir=${assetDir} projectSlug=${projectSlug}`);
+
+    await fs.writeFile(
+      assetId,
+      ANALYZING_MARKER,
+      JSON.stringify({ startedAt: new Date().toISOString() }),
+      projectSlug,
+    );
+
+    try {
 
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
       assetId, "original", projectSlug
@@ -152,7 +165,53 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     const jsonString = JSON.stringify(analysis, null, 2);
     await fs.writeFile(assetId, ".original.analysis.json", jsonString, projectSlug);
 
+    // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
+    // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
+    // prior failure or in-progress task, and we haven't already transcribed.
+    await maybeEnqueueAutoTranscribe(fs, assetId, assetDir, projectSlug);
+
     console.log(`[analyze_video] DONE ${assetId}`);
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
+
+    } finally {
+      await fs.deleteFile(assetId, ANALYZING_MARKER, projectSlug).catch(() => {});
+    }
   });
+}
+
+async function maybeEnqueueAutoTranscribe(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+): Promise<void> {
+  if (!process.env.KIE_API_KEY) return;
+
+  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if (!manifestResult.ok) return;
+  const manifest = manifestResult.value;
+  const fileNames = new Set(manifest.files.map((f) => f.name));
+
+  if (fileNames.has(".kie-task.json")) return;
+  if (fileNames.has(".generation-error.json")) return;
+  if (fileNames.has("elevenlabs.json")) return;
+
+  const dialog = await readAndAssessDialog(fs, assetId, projectSlug);
+  if (!dialog.hasDialog) return;
+
+  const audioFile = findAudioFile(manifest.files, assetId);
+  if (!audioFile) return;
+
+  const jobId = `auto-transcribe-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "transcribe",
+    audioPath: join(manifest.path, audioFile.name),
+    audioFilename: audioFile.name,
+    tagAudioEvents: true,
+    diarize: true,
+    assetId,
+    assetDir,
+    projectSlug,
+    autoRender: true,
+  } as unknown as Record<string, unknown>);
 }

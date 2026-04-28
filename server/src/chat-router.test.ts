@@ -100,7 +100,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(15);
+    expect(ROUTABLE_TOOLS.length).toBe(14);
   });
 
   it("contains both action and generation categories", () => {

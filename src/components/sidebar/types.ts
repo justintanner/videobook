@@ -6,6 +6,14 @@ export type ClipState =
   | 'uploading'
   | 'loading'
   | 'generating'
+  | 'processing'
+  | 'analyzing'
+  | 'trimming'
+  | 'splicing'
+  | 'reversing'
+  | 'changing-speed'
+  | 'replacing-audio'
+  | 'isolating'
   | 'rendering'
   | 'rendering-landscape'
   | 'rendering-portrait'
@@ -20,9 +28,7 @@ export type ClipState =
   | 'corrupt'
   | 'error'
   | 'deleting'
-  | 'ready'
-  | 'approved'
-  | 'unreviewed';
+  | 'ready';
 
 export interface MediaItem {
   id: string;

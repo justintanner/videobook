@@ -19,7 +19,7 @@ import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
-import { InboxDrawer, ActivityLogDrawer } from '@/components/commands';
+import { ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
@@ -51,8 +51,6 @@ import type { RenderSettings } from '@/components/center-stage/render-settings-t
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
-const SIDEBAR_HIDDEN_STATUSES = new Set<string>(['unreviewed', 'generating', 'downloading', 'error', 'loading', 'corrupt']);
-const GENERATING_STATUSES = new Set<string>(['generating', 'downloading', 'loading', 'error']);
 
 function humanizeId(id: string): string {
   const rawName = id.replace(/^[a-z]+-/, '');
@@ -72,7 +70,6 @@ export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -90,7 +87,6 @@ export function HomePage() {
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const prevInboxOpenRef = useRef(false);
   const prevStatusOpenRef = useRef(false);
 
   const { callTool, state } = useMcpConnection();
@@ -120,14 +116,6 @@ export function HomePage() {
     }
   }, [syncCount, statusOpen, projectSlug, fetchActivity]);
 
-  // Refocus ChatInput after InboxDrawer closes
-  useEffect(() => {
-    if (prevInboxOpenRef.current && !inboxOpen) {
-      chatInputRef.current?.focus();
-    }
-    prevInboxOpenRef.current = inboxOpen;
-  }, [inboxOpen]);
-
   // Refocus ChatInput after StatusDrawer closes
   useEffect(() => {
     if (prevStatusOpenRef.current && !statusOpen) {
@@ -140,7 +128,7 @@ export function HomePage() {
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (inboxOpen || statusOpen || genPanel != null) return;
+    if (statusOpen || genPanel != null) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -165,7 +153,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [inboxOpen, statusOpen, genPanel]);
+  }, [statusOpen, genPanel]);
 
   // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
@@ -236,29 +224,12 @@ export function HomePage() {
   [mediaItems]);
 
   const clips = useMemo(() =>
-    mediaItems.filter((m) => CLIP_TYPES.has(m.type) && !SIDEBAR_HIDDEN_STATUSES.has(m.status ?? '')),
-  [mediaItems]);
-
-  const allClipItems = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
 
   const trimItem = useMemo(() =>
     trimAssetId ? mediaItems.find(m => m.id === trimAssetId) ?? null : null,
   [mediaItems, trimAssetId]);
-
-  const unreviewedClips = useMemo(() =>
-    allClipItems.filter(c => c.status === 'unreviewed'),
-  [allClipItems]);
-
-  const pendingClips = useMemo(() =>
-    allClipItems.filter(c => GENERATING_STATUSES.has(c.status ?? '')),
-  [allClipItems]);
-
-  const inboxState: 'inactive' | 'generating' | 'ready' =
-    unreviewedClips.length > 0 ? 'ready'
-    : pendingClips.length > 0 ? 'generating'
-    : 'inactive';
 
   // Derive the active selection — clear if item was removed from list
   const activeSelection = useMemo(() => {
@@ -355,31 +326,11 @@ export function HomePage() {
     });
   }, [projectSlug, upload, sync, listAssets, sortOrder]);
 
-  const handleApprove = useCallback(async (video: MediaItem) => {
+  const handleDeleteClip = useCallback((video: MediaItem) => {
     if (!projectSlug) return;
-    await callTool('whitelist', { asset_id: video.id, project_slug: projectSlug });
-    await listAssets(projectSlug, sortOrder);
-    sync(projectSlug);
-  }, [callTool, projectSlug, listAssets, sortOrder, sync]);
-
-  const handleReject = useCallback((video: MediaItem) => {
-    if (!projectSlug) return;
+    setDeletingIds((prev) => new Set(prev).add(video.id));
     callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
   }, [callTool, projectSlug]);
-
-  const handleClearFailed = useCallback(async () => {
-    if (!projectSlug) return;
-    const failedIds = pendingClips.filter((c) => c.status === 'error').map((c) => c.id);
-    if (failedIds.length === 0) return;
-    const label = failedIds.length === 1 ? 'task' : 'tasks';
-    if (!window.confirm(`Delete ${failedIds.length} failed ${label}? This cannot be undone.`)) return;
-    const res = await callTool('clear_failed_tasks', { project_slug: projectSlug });
-    if (res.isError) return;
-    const content = res.content as Array<{ type: string; text: string }>;
-    const parsed = JSON.parse(content[0].text) as { cleared: string[] };
-    for (const id of parsed.cleared) removeAsset(id);
-    sync(projectSlug);
-  }, [projectSlug, pendingClips, callTool, removeAsset, sync]);
 
   const handleProjectChange = useCallback(async (slug: string) => {
     clearAssets();
@@ -553,8 +504,7 @@ export function HomePage() {
 
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
-    open_inbox: () => { setStatusOpen(false); setInboxOpen(true); },
-    open_status: () => { setInboxOpen(false); setStatusOpen(true); },
+    open_status: () => setStatusOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
     open_gen: (type: string, prompt: string) => {
       setSelectedItem(null);
@@ -649,18 +599,6 @@ export function HomePage() {
           }}
         />
         <DropzoneOverlay isDragging={isDragging} />
-        <InboxDrawer
-          open={inboxOpen}
-          onClose={() => setInboxOpen(false)}
-          videos={unreviewedClips}
-          pendingVideos={pendingClips}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onClearFailed={handleClearFailed}
-          assetSlugs={assetSlugs}
-          callTool={callTool}
-          projectSlug={projectSlug}
-        />
         <ActivityLogDrawer
           open={statusOpen}
           onClose={() => setStatusOpen(false)}
@@ -685,10 +623,6 @@ export function HomePage() {
             projectSlug={projectSlug}
             callTool={callTool}
             onProjectChange={handleProjectChange}
-            inboxState={inboxState}
-            generatingCount={pendingClips.length}
-            readyCount={unreviewedClips.length}
-            onInboxClick={() => setInboxOpen(true)}
             onStatusClick={() => setStatusOpen(true)}
             onAnimateCommand={handleAnimateCommand}
           />
@@ -848,7 +782,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onDelete={handleDeleteClip} />}
                         {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
                       </div>
                     );

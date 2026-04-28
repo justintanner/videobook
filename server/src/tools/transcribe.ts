@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";
-import { WHITELISTED_AT_FILE } from "./whitelist-asset.js";
 
 export function transcribeDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -43,21 +42,6 @@ export function transcribeDef(fs: ClipfirstFs): ToolDef {
       }
 
       const manifest = manifestResult.value;
-
-      if (asset_id.startsWith("vid-")) {
-        const isWhitelisted = manifest.files.some(
-          (f) => f.name === WHITELISTED_AT_FILE,
-        );
-        if (!isWhitelisted) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `Asset ${asset_id} must be whitelisted before transcription. Use whitelist to mark it as ready.`,
-            }],
-          };
-        }
-      }
 
       const audioFile = findAudioFile(manifest.files, asset_id);
       if (!audioFile) {

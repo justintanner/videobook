@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
@@ -21,9 +22,10 @@ interface VideoCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onDelete?: (item: MediaItem) => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onDelete }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
@@ -66,6 +68,21 @@ export function VideoCard({ item, contextMenuContent, selected, onClick }: Video
       {/* Slug badge */}
       {!hasOpaqueOverlay && (
         <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} isProcessing={isProcessing} />
+      )}
+
+      {/* Delete button — visible on hover for error-state cards */}
+      {isError && onDelete && (
+        <button
+          type="button"
+          onClick={(e: ReactMouseEvent) => {
+            e.stopPropagation();
+            onDelete(item);
+          }}
+          aria-label={`Delete ${item.slug}`}
+          className="absolute top-1 right-1 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+        >
+          <X className="w-3 h-3" />
+        </button>
       )}
     </CardShell>
   );

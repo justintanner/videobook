@@ -5,6 +5,8 @@ import { registerJobHandler, queue } from "../queue.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
+const PROCESSING_MARKER = ".processing.json";
+
 type ProcessVideoPayload = {
   type: "process_video";
   videoPath: string;
@@ -25,6 +27,15 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
 
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
+
+    await fs.writeFile(
+      assetId,
+      PROCESSING_MARKER,
+      JSON.stringify({ startedAt: new Date().toISOString() }),
+      projectSlug,
+    );
+
+    try {
 
     await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
 
@@ -114,6 +125,10 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     await fs.commitOperation("process_video", assetId, {
       width, height, duration, frame_count: frameCount,
     }, projectSlug);
+
+    } finally {
+      await fs.deleteFile(assetId, PROCESSING_MARKER, projectSlug).catch(() => {});
+    }
 
     // Enqueue transcription and analysis for fresh assets (skip for re-processing)
     if (!skipDownstreamJobs) {

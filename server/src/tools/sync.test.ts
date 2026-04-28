@@ -233,9 +233,9 @@ describe("buildAssetList", () => {
     expect(assets[0].thumbnail_url).toBeNull();
   });
 
-  it("shows status unreviewed for video without whitelist", async () => {
+  it("shows status processing for fresh video without .original.json", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.createAsset("vid", "unreviewd-test", "test-proj");
+    const createResult = await fs.createAsset("vid", "fresh-test", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -243,31 +243,47 @@ describe("buildAssetList", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].status).toBe("unreviewed");
+    expect(assets[0].status).toBe("processing");
   });
 
-  it("shows status approved for whitelisted video without render metadata", async () => {
+  it("shows status analyzing for processed video without analysis", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.createAsset("vid", "approved-test", "test-proj");
+    const createResult = await fs.createAsset("vid", "analyzing-test", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.json"), JSON.stringify({ width: 1, height: 1, duration: 1 }));
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].status).toBe("approved");
+    expect(assets[0].status).toBe("analyzing");
   });
 
-  it("shows status ready for whitelisted video with render metadata", async () => {
+  it("shows status ready for fully analyzed video", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "ready-analyzed-test", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+
+    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
+    await writeFile(join(assetDir, ".original.json"), JSON.stringify({ width: 1, height: 1, duration: 1 }));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
+    expect(assets[0].status).toBe("ready");
+  });
+
+  it("shows status ready for video with render metadata", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "ready-test", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
+    await writeFile(join(assetDir, ".original.json"), JSON.stringify({ width: 1, height: 1, duration: 1 }));
+    await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
     await writeFile(join(assetDir, ".landscape.render.json"), JSON.stringify({ done: true }));
 
     const assets = await buildAssetList(fs, "test-proj");
@@ -275,43 +291,25 @@ describe("buildAssetList", () => {
     expect(assets[0].status).toBe("ready");
   });
 
-  it("clamps non-whitelisted video with lock (no state) to 'generating'", async () => {
+  it("surfaces lock state for video with active lock (no clamp)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "locked-no-state", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    // Acquire lock without state — simulates complete_kie_task before fix
+    // Lock without explicit state defaults to "loading" in the derivation rule.
+    // Whitelist clamp is gone — the lock state passes through unchanged.
     await fs.acquireLock(assetDir, { durationMs: 60_000 });
 
     const assets = await buildAssetList(fs, "test-proj");
     const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    // Pre-whitelist clamp: "loading" → "generating"
-    expect(asset.status).toBe("generating");
-
-    await fs.releaseLock(assetDir);
-  });
-
-  it("does not clamp whitelisted video with lock (no state)", async () => {
-    const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.createAsset("vid", "wl-locked", "test-proj");
-    if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetDir = createResult.value.path;
-
-    await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
-    await fs.acquireLock(assetDir, { durationMs: 60_000 });
-
-    const assets = await buildAssetList(fs, "test-proj");
-    const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    // Whitelisted — clamp does not apply, lock fallback "loading" passes through
     expect(asset.status).toBe("loading");
 
     await fs.releaseLock(assetDir);
   });
 
-  it("surfaces 'error' for non-whitelisted video with no media/lock/task (orphaned)", async () => {
+  it("surfaces 'error' for video with no media/lock/task (orphaned)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "empty-vid", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -404,7 +402,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("surfaces 'error' for non-whitelisted video with .part file (failed download)", async () => {
+  it("surfaces 'error' for video with .part file (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-download", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -420,7 +418,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     expect(assets[0].status).toBe("error");
   });
 
-  it("surfaces 'error' for non-whitelisted video with .part + thumbnail (failed download)", async () => {
+  it("surfaces 'error' for video with .part + thumbnail (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "broken-with-thumb", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -435,19 +433,6 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     expect(assets[0].status).toBe("error");
   });
 
-  it("shows 'error' for whitelisted video with .part file (clamp does not apply)", async () => {
-    const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.createAsset("vid", "whitelisted-broken", "test-proj");
-    if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetDir = createResult.value.path;
-
-    await writeFile(join(assetDir, "original.mp4.part"), "");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
-
-    const assets = await buildAssetList(fs, "test-proj");
-    expect(assets.length).toBe(1);
-    expect(assets[0].status).toBe("error");
-  });
 
   it("does not show status 'error' when original.mp4 exists alongside .part file", async () => {
     const { buildAssetList } = await import("./sync.js");
@@ -506,7 +491,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking about economics",
     }));
@@ -525,7 +509,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking about economics",
     }));
@@ -553,8 +536,7 @@ describe("performSync — never auto-renders from sync", () => {
       // and analyze_video has written .original.analysis.json from frames
       // alone — but original.mp3 hasn't landed yet.
       await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-      await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
-      await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
+        await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
       await fs.writeMetadata(assetId, "original", { hasAudio: true }, "test-proj");
 
       const result = await performSync(fs, "test-proj");
@@ -578,8 +560,7 @@ describe("performSync — never auto-renders from sync", () => {
 
       await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
       await writeFile(join(assetDir, "original.mp3"), "fake-audio-data");
-      await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
-      await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
+        await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
       await fs.writeMetadata(assetId, "original", { hasAudio: true }, "test-proj");
 
       const result = await performSync(fs, "test-proj");
@@ -598,7 +579,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Video with audio",
     }));
@@ -616,7 +596,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Silent AI-generated clip",
     }));
@@ -633,7 +612,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking",
     }));
@@ -655,7 +633,6 @@ describe("performSync — never auto-renders from sync", () => {
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Scenic landscape with background music",
     }));
@@ -699,7 +676,7 @@ describe("performSync — auto-transcribe", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("auto-transcribes whitelisted+analyzed video with dialog and audio", async () => {
+  it("auto-transcribes analyzed video with dialog and audio", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "transcribe-candidate", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -708,7 +685,6 @@ describe("performSync — auto-transcribe", () => {
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking about economics",
     }));
@@ -729,7 +705,6 @@ describe("performSync — auto-transcribe", () => {
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking",
     }));
@@ -750,7 +725,6 @@ describe("performSync — auto-transcribe", () => {
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "A person speaking about economics",
     }));
@@ -775,7 +749,6 @@ describe("performSync — auto-transcribe", () => {
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
     await writeFile(join(assetDir, "audio_original.mp3"), "fake-audio-data");
-    await writeFile(join(assetDir, ".whitelisted_at"), String(Date.now() / 1000));
     await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Scenic landscape footage",
     }));

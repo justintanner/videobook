@@ -69,13 +69,6 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
-    name: "whitelist",
-    actualTool: "whitelist",
-    description: "Whitelist a video asset for transcription pipeline",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
     name: "asset_manifest",
     actualTool: "asset_manifest",
     description: "Show all files and details of a specific asset",

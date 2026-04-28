@@ -1,7 +1,6 @@
 import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
 import * as path from "node:path";
 import { queue } from "../queue.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mp4", ".mov", ".webm", ".avi", ".mkv",
@@ -93,7 +92,6 @@ export async function processExternalUpload(
   const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {
     const videoPath = path.join(upload.assetDir, targetFilename);
-    await fs.writeFile(upload.assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
     const jobId = `process-video-${upload.assetId}-${Date.now()}`;
     await queue.enqueue(jobId, {
       type: "process_video",

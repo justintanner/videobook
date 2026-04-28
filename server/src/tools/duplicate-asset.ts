@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { WHITELISTED_AT_FILE } from "./whitelist-asset.js";
 
 export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -54,13 +53,6 @@ export function duplicateAssetDef(fs: ClipfirstFs): ToolDef {
             isError: true as const,
             content: [{ type: "text" as const, text: writeResult.error.message }],
           };
-        }
-      }
-
-      if (newAssetId.startsWith("vid-")) {
-        const alreadyWhitelisted = manifestResult.value.files.some((f) => f.name === WHITELISTED_AT_FILE);
-        if (!alreadyWhitelisted) {
-          await fs.writeFile(newAssetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), project_slug);
         }
       }
 

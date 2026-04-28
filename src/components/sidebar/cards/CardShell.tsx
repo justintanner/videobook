@@ -48,6 +48,19 @@ function isRenderingState(status: string): boolean {
     status === 'render-queued-square';
 }
 
+// Pipeline states that all reuse GeneratingOverlay with a custom label.
+// First pass at distinct overlays — visual differentiation can iterate.
+const PIPELINE_STATE_LABELS: Partial<Record<ClipState, string>> = {
+  processing: 'PROCESSING',
+  analyzing: 'ANALYZING',
+  trimming: 'TRIMMING',
+  splicing: 'SPLICING',
+  reversing: 'REVERSING',
+  'changing-speed': 'CHANGING SPEED',
+  'replacing-audio': 'REPLACING AUDIO',
+  isolating: 'ISOLATING VOCALS',
+};
+
 function StateOverlay({ item }: { item: MediaItem }) {
   const status = item.status;
   const type = item.type;
@@ -62,6 +75,8 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'error' && type !== 'script') return <FailedOverlay item={item} />;
   if (status === 'loading') return <LoadingOverlay item={item} />;
   if (status === 'deleting') return <DeletingOverlay item={item} />;
+  const pipelineLabel = PIPELINE_STATE_LABELS[status];
+  if (pipelineLabel && type !== 'final') return <GeneratingOverlay item={item} label={pipelineLabel} />;
 
   return null;
 }
@@ -69,6 +84,16 @@ function StateOverlay({ item }: { item: MediaItem }) {
 const stateClassMap: Partial<Record<ClipState, string>> = {
   uploading: 'clip-state-uploading cursor-wait',
   generating: 'clip-state-generating cursor-wait',  // video default; overridden for images below
+  // Pipeline / transformation states reuse the generating animation so the
+  // sidebar shows a consistent "in progress" look across the lifecycle.
+  processing: 'clip-state-generating cursor-wait',
+  analyzing: 'clip-state-generating cursor-wait',
+  trimming: 'clip-state-generating cursor-wait',
+  splicing: 'clip-state-generating cursor-wait',
+  reversing: 'clip-state-generating cursor-wait',
+  'changing-speed': 'clip-state-generating cursor-wait',
+  'replacing-audio': 'clip-state-generating cursor-wait',
+  isolating: 'clip-state-generating cursor-wait',
   rendering: 'clip-state-rendering cursor-wait',
   'rendering-landscape': 'clip-state-rendering cursor-wait',
   'rendering-portrait': 'clip-state-rendering cursor-wait',

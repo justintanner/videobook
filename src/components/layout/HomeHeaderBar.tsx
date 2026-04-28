@@ -1,5 +1,5 @@
 import { Clapperboard, Film, ImageIcon, Settings, History } from 'lucide-react';
-import { CommandButton, InboxButton } from '@/components/commands';
+import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import type { UseMcpResult } from 'use-mcp/react';
 
@@ -8,15 +8,11 @@ interface HomeHeaderBarProps {
   projectSlug: string | undefined;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
-  inboxState: 'inactive' | 'generating' | 'ready';
-  generatingCount: number;
-  readyCount: number;
-  onInboxClick: () => void;
   onStatusClick: () => void;
   onAnimateCommand: (text: string) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, inboxState, generatingCount, readyCount, onInboxClick, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -45,8 +41,6 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
       {/* Right side */}
       <div className="flex items-center gap-1">
         <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="zinc" onClick={onStatusClick} />
-
-        <InboxButton state={inboxState} generatingCount={generatingCount} readyCount={readyCount} flashKey={readyCount} onClick={onInboxClick} />
 
         <button className="flex items-center justify-center w-8 h-8 rounded text-muted-foreground/60 hover:text-muted-foreground transition-colors">
           <Settings className="w-4 h-4" />

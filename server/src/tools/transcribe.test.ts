@@ -70,28 +70,6 @@ describe("transcribe tool", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("returns error when vid- asset is not whitelisted", async () => {
-    process.env.KIE_API_KEY = "test-key";
-
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "unreviewed", "test-proj");
-    if (!asset.ok) throw new Error("Failed to create asset");
-
-    await fs.writeFile(asset.value.assetId, "audio_original.mp3", Buffer.from("fake-mp3"), "test-proj");
-
-    const result = await client.callTool({
-      name: "transcribe",
-      arguments: {
-        asset_id: asset.value.assetId,
-        project_slug: "test-proj",
-      },
-    });
-
-    expect(result.isError).toBe(true);
-    const content = result.content as TextContent;
-    expect(content[0].text).toContain("must be whitelisted");
-  });
-
   it("returns error when aud- asset has no audio file", async () => {
     process.env.KIE_API_KEY = "test-key";
 

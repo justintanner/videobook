@@ -161,10 +161,6 @@ describe("trim video in place and re-render e2e", () => {
     expect(duration).toBeLessThanOrEqual(2.5);
   });
 
-  it("whitelist file was re-armed", async () => {
-    expect(await fileExists(join(assetDir, ".whitelisted_at"))).toBe(true);
-  });
-
   it("renders the trimmed video", async () => {
     const result = await client.callTool({
       name: "render",

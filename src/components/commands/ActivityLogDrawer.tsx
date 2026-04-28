@@ -51,7 +51,7 @@ function categorize(action: string, payload: string | Record<string, unknown>): 
   if (action.includes('transcribe') || action.includes('isolate')) return 'transcribe';
   if (action.includes('sync')) return 'sync';
   if (action.includes('trim')) return 'trim';
-  if (action.includes('edit') || action.includes('assign') || action.includes('clear') || action.includes('whitelist') || action.includes('speed') || action.includes('reverse')) return 'edit';
+  if (action.includes('edit') || action.includes('assign') || action.includes('clear') || action.includes('speed') || action.includes('reverse')) return 'edit';
   if (action.includes('create')) return 'create';
   if (action.includes('delete')) return 'delete';
   return 'other';

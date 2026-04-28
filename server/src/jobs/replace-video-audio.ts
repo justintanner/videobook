@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -31,7 +30,7 @@ export function registerReplaceVideoAudioJob(fs: ClipfirstFs): void {
       assetId, assetDir, audioAssetId, projectSlug,
     } = payload as ReplaceVideoAudioPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "replacing-audio" } });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
     try {
@@ -52,8 +51,6 @@ export function registerReplaceVideoAudioJob(fs: ClipfirstFs): void {
       const outputFilename = basename(outputPath);
       await fs.deleteFile(assetId, inputFilename, projectSlug);
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
-
-      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
       for (const stale of STALE_ANALYSIS_FILES) {
         await fs.deleteFile(assetId, stale, projectSlug);

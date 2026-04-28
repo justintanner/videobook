@@ -3,7 +3,6 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
-import { WHITELISTED_AT_FILE } from "../tools/whitelist-asset.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -170,7 +169,7 @@ export function registerSpliceVideoJob(fs: ClipfirstFs): void {
 
     const lockResult = await fs.acquireLock(assetDir, {
       durationMs: LOCK_DURATION_MS,
-      data: { state: "generating" },
+      data: { state: "splicing" },
     });
     if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
@@ -194,7 +193,6 @@ export function registerSpliceVideoJob(fs: ClipfirstFs): void {
         spliced_at: new Date().toISOString(),
       };
       await fs.writeMetadata(assetId, "original", provenance, projectSlug);
-      await fs.writeFile(assetId, WHITELISTED_AT_FILE, String(Date.now() / 1000), projectSlug);
 
       const processJobId = `process-video-${assetId}-${Date.now()}`;
       await queue.enqueue(processJobId, {
