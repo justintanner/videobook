@@ -43,20 +43,23 @@ async function uploadVideo(
 describe("trim_video tool", () => {
   let client: Client;
   let tempDir: string;
+  let fixtureDir: string;
   let videoPath: string;
 
   beforeAll(async () => {
     await queue.start();
-  });
+    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-trim-fixture-"));
+    videoPath = join(fixtureDir, "test-source.mp4");
+    await generateTestVideo(videoPath);
+  }, 60_000);
 
   afterAll(async () => {
     await queue.stop();
+    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
   }, 30_000);
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-trim-test-"));
-    videoPath = join(tempDir, "test-source.mp4");
-    await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -121,7 +124,7 @@ describe("trim_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("completed");
-  });
+  }, 60_000);
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
