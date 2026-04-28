@@ -394,6 +394,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "extract_audio", autoInject: ["project_slug"] },
   },
   {
+    command: "/replace-audio",
+    description: "Replace the audio track of a video asset with an aud- asset's audio",
+    example: "/replace-audio @vid-clip @aud-voice",
+    category: "context_menu",
+    icon: "Music",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset whose audio is being replaced" },
+      { name: "audio_asset_id", type: "string", required: true, description: "Audio asset providing the new audio track" },
+    ],
+    mcpTool: { tool: "replace_video_audio", autoInject: ["project_slug"] },
+  },
+  {
     command: "/splice",
     description: "Splice two videos: find the frame in the first video that matches the first frame of the second, then concat at that point",
     example: "/splice @vid-first @vid-second",
