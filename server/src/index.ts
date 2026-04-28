@@ -16,7 +16,7 @@ import {
 const app = express();
 app.use(cors());
 app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "500mb" }));
 
 app.get("/api/manifest/:projectSlug/:assetId", async (req, res) => {
   const { projectSlug, assetId } = req.params;
