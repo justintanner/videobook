@@ -39,7 +39,12 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     }
     const assetDir = assetDirResult.value;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "generating" } });
+    const lockState = (taskType === "transcribe" || taskType === "fal_transcribe")
+      ? "transcribing"
+      : taskType === "isolate_vocals"
+        ? "isolating"
+        : "generating";
+    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
     if (!lockResult.ok) {
       // LOCKED means another completion job for this same asset is already
       // running (sync can enqueue duplicates between polls because

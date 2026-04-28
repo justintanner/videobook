@@ -298,12 +298,13 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       }
 
       // Guarantee: non-whitelisted video assets only surface sidebar-hidden statuses.
-      // Any unexpected status (loading, transcribing, etc.) is clamped to "generating"
-      // so the clip stays hidden from the sidebar and shows as pending in the inbox.
-      // "error" is allowed through so failed generations surface in the inbox instead
-      // of appearing stuck in "generating" forever.
+      // Unexpected statuses are clamped to "generating" so the clip stays hidden
+      // from the sidebar and shows as pending in the inbox. "error" is allowed
+      // through so failed generations surface in the inbox. "transcribing" is
+      // allowed because transcription is gated on whitelisting — if we see it,
+      // the asset has already passed review and the user should see the state.
       if (a.type === "video" && !whitelisted) {
-        if (status !== "unreviewed" && status !== "generating" && status !== "downloading" && status !== "error") {
+        if (status !== "unreviewed" && status !== "generating" && status !== "downloading" && status !== "error" && status !== "transcribing") {
           status = "generating";
         }
       }
