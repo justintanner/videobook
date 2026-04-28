@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
@@ -28,20 +29,20 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: 
   const isError = status === 'error';
   const showElfOverlay = isRenderingState(status);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
+  const [erroredSrc, setErroredSrc] = useState<string | null>(null);
+  const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
-      {thumbSrc && (
+      {showThumb && (
         <img
           src={thumbSrc}
           alt={item.title}
           loading="lazy"
           draggable={false}
           className="w-full h-full object-cover transition-opacity"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
+          onError={() => setErroredSrc(thumbSrc)}
         />
       )}
 

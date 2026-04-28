@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
@@ -38,19 +39,24 @@ export function VideoCard({ item, contextMenuContent, selected, onClick }: Video
   const duration = formatDuration(item.durationSeconds);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
+  // Track which src value failed to load. Reset implicitly when thumbSrc
+  // changes (e.g., upload completes and a real thumbnail_url replaces the
+  // bare-fallback URL that 404'd) — without this, an imperative display:none
+  // would persist across re-renders and leave the tile black forever.
+  const [erroredSrc, setErroredSrc] = useState<string | null>(null);
+  const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
+
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
-      {thumbSrc && (
+      {showThumb && (
         <img
           src={thumbSrc}
           alt={item.title}
           loading="lazy"
           draggable={false}
           className={cn('w-full h-full object-cover transition-opacity', isProcessing && 'opacity-80')}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
+          onError={() => setErroredSrc(thumbSrc)}
         />
       )}
 

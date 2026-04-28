@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AudioLines, Compass, FileText, Film, ImageIcon, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -59,7 +60,8 @@ function ThumbIcon({ type }: { type: MediaItem['type'] }) {
 
 export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumbProps) {
   const src = item.thumbnailSrc ?? (item.filePath || null);
-  const hasImage = !!src && (item.type === 'image' || item.type === 'character' || item.type === 'video' || item.type === 'final');
+  const [erroredSrc, setErroredSrc] = useState<string | null>(null);
+  const hasImage = !!src && erroredSrc !== src && (item.type === 'image' || item.type === 'character' || item.type === 'video' || item.type === 'final');
   const dot = getStatusDot(item.status);
   const isGold = item.type === 'final';
 
@@ -84,7 +86,7 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
               loading="lazy"
               draggable={false}
               className="w-full h-full object-cover"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              onError={() => setErroredSrc(src)}
             />
           ) : (
             <span className="flex items-center justify-center w-full h-full">
