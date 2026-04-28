@@ -576,6 +576,13 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   if (process.env.FAL_API_KEY && falTasks.length > 0) {
     const provider = fal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000 });
 
+    // FAL's queue status/result endpoints live under the app namespace
+    // (first 2 path segments). Hitting them with the full nested endpoint id
+    // — e.g. `fal-ai/elevenlabs/speech-to-text/scribe-v2` — 405s. Strip back
+    // to `fal-ai/elevenlabs` for polling.
+    const falNamespace = (endpointId: string): string =>
+      endpointId.split("/").slice(0, 2).join("/");
+
     await Promise.all(falTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
       const endpointId = typeof task.meta?.falEndpointId === "string" ? task.meta.falEndpointId : null;
@@ -585,8 +592,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
         return;
       }
+      const statusEndpointId = falNamespace(endpointId);
       try {
-        const status = await provider.v1.queue.status({ endpoint_id: endpointId, request_id: task.taskId });
+        const status = await provider.v1.queue.status({ endpoint_id: statusEndpointId, request_id: task.taskId });
         if (status.status === "COMPLETED") {
           if (status.error) {
             const failMsg = status.error;
@@ -599,7 +607,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
-          const resultObject = await provider.v1.queue.result({ endpoint_id: endpointId, request_id: task.taskId });
+          const resultObject = await provider.v1.queue.result({ endpoint_id: statusEndpointId, request_id: task.taskId });
           // Mark the pending task as completing BEFORE enqueueing so any
           // overlapping sync poll skips it instead of enqueueing a duplicate.
           await markTaskCompleting(fs, task.assetId, project_slug, task);
