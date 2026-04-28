@@ -589,8 +589,15 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   }, [commits, selectedCommitHash]);
 
   const handleRestore = async (hash: string) => {
+    const short = hash.slice(0, 7);
+    toast({ title: `Restoring ${short}...`, duration: 2000 });
     const ok = await restoreVersion(itemId, hash, projectSlug);
-    if (ok) fetchHistory(itemId, projectSlug);
+    if (ok) {
+      toast({ title: 'Restored', description: short, duration: 2000 });
+      fetchHistory(itemId, projectSlug);
+    } else {
+      toast({ title: 'Restore failed', description: short, variant: 'destructive', duration: 4000 });
+    }
   };
 
   // Apply pending focus once manifest loads

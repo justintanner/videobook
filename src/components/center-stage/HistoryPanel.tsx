@@ -232,11 +232,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: 
         <CommandButton
           command={`/restore ${commit.hash.slice(0, 7)}`}
           icon={<History className="w-4 h-4" />}
-          onClick={() => {
-            if (window.confirm(`Restore to ${commit.hash.slice(0, 7)}? This will revert to this version.`)) {
-              onRestore(commit.hash);
-            }
-          }}
+          onClick={() => onRestore(commit.hash)}
         />
       )}
     </div>
