@@ -222,9 +222,9 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "describe_image", autoInject: ["project_slug"] },
   },
   {
-    command: "/suggest-edits",
-    description: "Suggest trim cuts and SFX placements for a video",
-    example: "/suggest-edits @vid-full",
+    command: "/suggest-cuts",
+    description: "Suggest trim cuts for a video (dead air, fillers, awkward sections)",
+    example: "/suggest-cuts @vid-full",
     category: "context_menu",
     icon: "Scissors",
     size: "default",
@@ -233,7 +233,21 @@ const HARDCODED_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
     ],
-    mcpTool: { tool: "suggest_edits", autoInject: ["project_slug"] },
+    mcpTool: { tool: "suggest_cuts", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/suggest-sfx",
+    description: "Suggest sound-effect placements for a video",
+    example: "/suggest-sfx @vid-full",
+    category: "context_menu",
+    icon: "Volume2",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
+    ],
+    mcpTool: { tool: "suggest_sfx", autoInject: ["project_slug"] },
   },
   {
     command: "/grok-upscale",
