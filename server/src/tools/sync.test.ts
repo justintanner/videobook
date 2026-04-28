@@ -465,7 +465,10 @@ describe("buildAssetList — failed download detection (RC3)", () => {
   });
 });
 
-describe("performSync — auto-render with transcription gate", () => {
+// performSync no longer enqueues render_project jobs. These tests now lock in
+// the invariant that auto_render is always empty from sync, regardless of
+// whether the asset would otherwise have qualified.
+describe("performSync — never auto-renders from sync", () => {
   let fs: ClipfirstFs;
   let tempDir: string;
   let savedKieKey: string | undefined;
@@ -515,11 +518,10 @@ describe("performSync — auto-render with transcription gate", () => {
     expect(result.auto_render.length).toBe(0);
   });
 
-  it("auto-renders dialog video when elevenlabs.json exists", async () => {
+  it("does not auto-render dialog video even when elevenlabs.json exists", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "dialog-with-elevenlabs", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.assetId;
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
@@ -533,8 +535,7 @@ describe("performSync — auto-render with transcription gate", () => {
     await writeFile(join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
 
     const result = await performSync(fs, "test-proj");
-    expect(result.auto_render.length).toBe(1);
-    expect(result.auto_render[0].assetId).toBe(assetId);
+    expect(result.auto_render.length).toBe(0);
   });
 
   it("skips auto-render when gpt4otrans is missing for audio video", async () => {
@@ -554,7 +555,7 @@ describe("performSync — auto-render with transcription gate", () => {
     expect(result.auto_render.length).toBe(0);
   });
 
-  it("auto-renders no-audio video without gpt4otrans", async () => {
+  it("does not auto-render no-audio video without gpt4otrans", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "silent-clip", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -569,8 +570,7 @@ describe("performSync — auto-render with transcription gate", () => {
     await fs.writeMetadata(assetId, "original", { hasAudio: false }, "test-proj");
 
     const result = await performSync(fs, "test-proj");
-    expect(result.auto_render.length).toBe(1);
-    expect(result.auto_render[0].assetId).toBe(assetId);
+    expect(result.auto_render.length).toBe(0);
   });
 
   it("skips auto-render when kie-task.json exists", async () => {
@@ -595,11 +595,10 @@ describe("performSync — auto-render with transcription gate", () => {
     expect(result.auto_render.length).toBe(0);
   });
 
-  it("auto-renders non-dialog video without elevenlabs.json", async () => {
+  it("does not auto-render non-dialog video without elevenlabs.json", async () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "music-video", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.assetId;
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
@@ -612,8 +611,7 @@ describe("performSync — auto-render with transcription gate", () => {
     }));
 
     const result = await performSync(fs, "test-proj");
-    expect(result.auto_render.length).toBe(1);
-    expect(result.auto_render[0].assetId).toBe(assetId);
+    expect(result.auto_render.length).toBe(0);
   });
 });
 

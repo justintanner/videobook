@@ -6,7 +6,6 @@ import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { findAudioFile } from "../media-files.js";
 import { probeVideo } from "../ffmpeg.js";
-import { scheduleTimelineRender } from "./schedule-timeline-render.js";
 
 const TIMELINE_FPS = 30;
 
@@ -130,8 +129,6 @@ export function addTimelineAudioDef(fs: ClipfirstFs): ToolDef {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);
       }
-
-      scheduleTimelineRender(fs, project_slug);
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ clip, audio: config.audio }) }],

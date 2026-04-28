@@ -120,7 +120,7 @@ describe("render_timeline tool", () => {
     expect(content[0].text).toContain("not found");
   });
 
-  it("enqueues per-slot prerender when slot asset is missing rendered file", async () => {
+  it("returns missing_renders when slot asset is missing rendered file", async () => {
     // Upload a video to create a real asset (it won't have the rendered mp4)
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
@@ -138,13 +138,12 @@ describe("render_timeline tool", () => {
       },
     });
 
-    expect(result.isError).toBeFalsy();
+    expect(result.isError).toBe(true);
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.status).toBe("prerender_started");
+    expect(parsed.status).toBe("missing_renders");
     expect(parsed.orientation).toBe("landscape");
-    expect(parsed.prerender_jobs).toHaveLength(1);
-    expect(parsed.prerender_jobs[0].slug).toBe(uploaded.assetId);
-    expect(parsed.prerender_jobs[0].job_id).toMatch(/^final-prerender-/);
+    expect(parsed.missing_slugs).toEqual([uploaded.assetId]);
+    expect(parsed.message).toContain(uploaded.assetId);
   });
 
   it("enqueues job when rendered files exist", async () => {

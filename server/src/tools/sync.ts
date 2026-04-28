@@ -357,17 +357,10 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // Single listAssets call, shared by all consumers
   const assets = await fs.listAssets(project_slug);
 
-  // Read orientation from timeline config (needed by findAutoRenderActions)
-  const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", project_slug);
-  const orientation = timelineResult.ok
-    ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
-    : "landscape";
-
   // Run all discovery steps in parallel
-  const [uploads, tasks, renderActions, transcribeActions, sttActions, analyzeActions, persistedFailures] = await Promise.all([
+  const [uploads, tasks, transcribeActions, sttActions, analyzeActions, persistedFailures] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     findPendingTasks(fs, project_slug, assets),
-    findAutoRenderActions(fs, project_slug, assets, orientation),
     findAutoTranscribeActions(fs, project_slug, assets),
     findAutoSpeechToTextActions(fs, project_slug, assets),
     findAutoAnalyzeActions(fs, project_slug, assets),
@@ -656,36 +649,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     }
   }
 
-  // Auto-pipeline: advance whitelisted videos through render
-  for (const action of renderActions) {
-    const stored = await readStoredRenderDefaults(fs, action.assetId, project_slug, orientation);
-    const jobId = `auto-render-${action.assetId}-${Date.now()}`;
-    await queue.enqueue(jobId, {
-      type: "render_project",
-      projectSlug: project_slug,
-      orientation,
-      assets: [{
-        assetId: action.assetId,
-        assetDir: action.assetDir,
-        videoPath: action.videoPath,
-        videoFilename: action.videoFilename,
-        hasElevenlabs: action.hasElevenlabs,
-      }],
-      subtitlesEnabled: action.hasElevenlabs ? (stored.subtitlesEnabled as boolean) : false,
-      highlightStyle: stored.highlightStyle as string,
-      position: stored.position as string,
-      fontSize: stored.fontSize as string,
-      textColor: stored.textColor as string,
-      highlightColor: stored.highlightColor as string,
-      audioFadeIn: stored.audioFadeIn as number,
-      audioFadeOut: stored.audioFadeOut as number,
-      audioVolume: stored.audioVolume as number,
-      osgImagePath: (stored.osgImagePath as string | null) ?? null,
-      osgPosition: stored.osgPosition as string,
-      backgroundMode: stored.backgroundMode as string,
-    });
-    result.auto_render.push({ assetId: action.assetId, jobId });
-  }
+  // Auto-render is intentionally NOT performed here. Renders only fire from
+  // explicit /render, assign_slot, or post-transcribe completion (see
+  // jobs/complete-kie-task.ts). Sync should never enqueue render_project.
 
   // Auto-pipeline: retry missing speech-to-text (gpt4otrans) for whitelisted videos with audio
   for (const action of sttActions) {

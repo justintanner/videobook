@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { scheduleTimelineRender } from "./schedule-timeline-render.js";
 
 type TimelineSlot = {
   slug: string;
@@ -93,8 +92,6 @@ export function updateTimelineAudioDef(fs: ClipfirstFs): ToolDef {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);
       }
-
-      scheduleTimelineRender(fs, project_slug);
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ clip: next, audio }) }],

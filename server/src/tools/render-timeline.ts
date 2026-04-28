@@ -2,8 +2,7 @@ import type { ClipfirstFs } from "clipfirst-fs";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "../media-files.js";
-import { readStoredRenderDefaults } from "./sync.js";
+import { findAudioFile } from "../media-files.js";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -45,21 +44,9 @@ type ResolvedAudioOverlay = {
   fadeOutMs: number;
 };
 
-type MissingSlot = {
-  slug: string;
-  assetDir: string;
-  videoPath: string;
-  videoFilename: string;
-  hasElevenlabs: boolean;
-};
-
 export type RenderTimelineOutcome =
   | { status: "enqueued"; jobId: string; slotCount: number; orientation: Orientation }
-  | {
-      status: "prerender_started";
-      orientation: Orientation;
-      prerenderJobs: Array<{ slug: string; jobId: string }>;
-    }
+  | { status: "missing_renders"; orientation: Orientation; missingSlugs: string[]; message: string }
   | { status: "empty"; message: string }
   | { status: "no_timeline"; message: string }
   | { status: "error"; message: string };
@@ -97,7 +84,7 @@ export async function runRenderTimeline(
     orientation === "portrait" ? PORTRAIT_RENDER : orientation === "square" ? SQUARE_RENDER : LANDSCAPE_RENDER;
 
   const resolvedSlots: ResolvedSlot[] = [];
-  const missingSlots: MissingSlot[] = [];
+  const missingSlugs: string[] = [];
 
   for (const slot of slots) {
     const manifestResult = await fs.getManifest(slot.slug, projectSlug, { includeDotfiles: true });
@@ -122,59 +109,18 @@ export async function runRenderTimeline(
       continue;
     }
 
-    const videoFile = findVideoFile(files);
-    if (!videoFile) {
-      return {
-        status: "error",
-        message: `Asset ${slot.slug} has no source video file — cannot prerender ${renderFilename}.`,
-      };
-    }
-
-    missingSlots.push({
-      slug: slot.slug,
-      assetDir: manifest.path,
-      videoPath: join(manifest.path, videoFile.name),
-      videoFilename: videoFile.name,
-      hasElevenlabs: files.some((f) => f.name === "elevenlabs.json"),
-    });
+    missingSlugs.push(slot.slug);
   }
 
-  if (missingSlots.length > 0) {
-    const prerenderJobs: Array<{ slug: string; jobId: string }> = [];
-    for (const slot of missingSlots) {
-      const stored = await readStoredRenderDefaults(fs, slot.slug, projectSlug, orientation);
-      const jobId = `final-prerender-${slot.slug}-${orientation}-${Date.now()}`;
-      await queue.enqueue(jobId, {
-        type: "render_project",
-        projectSlug: projectSlug,
-        orientation,
-        assets: [
-          {
-            assetId: slot.slug,
-            assetDir: slot.assetDir,
-            videoPath: slot.videoPath,
-            videoFilename: slot.videoFilename,
-            hasElevenlabs: slot.hasElevenlabs,
-          },
-        ],
-        subtitlesEnabled: slot.hasElevenlabs ? (stored.subtitlesEnabled as boolean) : false,
-        highlightStyle: stored.highlightStyle as string,
-        position: stored.position as string,
-        fontSize: stored.fontSize as string,
-        textColor: stored.textColor as string,
-        highlightColor: stored.highlightColor as string,
-        audioFadeIn: stored.audioFadeIn as number,
-        audioFadeOut: stored.audioFadeOut as number,
-        audioVolume: stored.audioVolume as number,
-        osgImagePath: (stored.osgImagePath as string | null) ?? null,
-        osgAssetId: (stored.osgAssetId as string | null) ?? null,
-        osgPosition: stored.osgPosition as string,
-        backgroundMode: stored.backgroundMode as string,
-      });
-      prerenderJobs.push({ slug: slot.slug, jobId });
-    }
-
-    return { status: "prerender_started", orientation, prerenderJobs };
+  if (missingSlugs.length > 0) {
+    return {
+      status: "missing_renders",
+      orientation,
+      missingSlugs,
+      message:
+        `Cannot render timeline: ${missingSlugs.length} slot(s) missing ${renderFilename} — ` +
+        `${missingSlugs.join(", ")}. Run /render on each before /final.`,
+    };
   }
 
   const resolvedAudio: ResolvedAudioOverlay[] = [];
@@ -223,7 +169,7 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_timeline",
     description:
-      "Concatenate rendered video clips in timeline order into a single final output. If any slot is missing its per-orientation render, this tool enqueues the per-slot renders first and returns status 'prerender_started' — re-invoke render_timeline once they finish. Writes the concat output to the 'final' singleton asset.",
+      "Concatenate rendered video clips in timeline order into a single final output. Requires every slot to already have its per-orientation render — if any are missing, returns status 'missing_renders' listing the slugs that need /render first. Writes the concat output to the 'final' singleton asset.",
     schema: {
       project_slug: z.string().describe("Project slug"),
     },
@@ -243,19 +189,17 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
             isError: true as const,
             content: [{ type: "text" as const, text: outcome.message }],
           };
-        case "prerender_started":
+        case "missing_renders":
           return {
+            isError: true as const,
             content: [
               {
                 type: "text" as const,
                 text: JSON.stringify({
-                  status: "prerender_started",
+                  status: "missing_renders",
                   orientation: outcome.orientation,
-                  prerender_jobs: outcome.prerenderJobs.map((j) => ({
-                    slug: j.slug,
-                    job_id: j.jobId,
-                  })),
-                  message: `Started ${outcome.prerenderJobs.length} per-slot render(s). Call render_timeline again once they finish.`,
+                  missing_slugs: outcome.missingSlugs,
+                  message: outcome.message,
                 }),
               },
             ],

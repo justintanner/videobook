@@ -4,13 +4,12 @@ import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
-import { scheduleTimelineRender } from "./schedule-timeline-render.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function replaceVideoAudioDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "replace_video_audio",
-    description: "Replace the audio track of a video asset in-place with audio from an aud- asset. Operates on the vid- asset's original.mp4 with git versioning, then schedules a timeline re-render.",
+    description: "Replace the audio track of a video asset in-place with audio from an aud- asset. Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
     schema: {
       asset_id: z.string().describe("Video asset whose audio is being replaced (vid-*)"),
       audio_asset_id: z.string().describe("Audio asset providing the new audio track (aud-*)"),
@@ -90,8 +89,6 @@ export function replaceVideoAudioDef(fs: ClipfirstFs): ToolDef {
           content: [{ type: "text" as const, text: `Replace audio failed: ${msg}` }],
         };
       }
-
-      scheduleTimelineRender(fs, project_slug);
 
       return {
         content: [{

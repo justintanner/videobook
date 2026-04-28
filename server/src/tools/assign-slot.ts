@@ -4,7 +4,6 @@ import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
 import { findAutoRenderActions, readStoredRenderDefaults } from "./sync.js";
-import { scheduleTimelineRender } from "./schedule-timeline-render.js";
 
 type TimelineSlot = {
   slug: string;
@@ -104,8 +103,6 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
       // Write back
       const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
       if (writeResult.ok) {
-        scheduleTimelineRender(fs, project_slug);
-
         // Auto-render eligible videos after assignment
         let autoRenderJobId: string | undefined;
         if (asset_id.startsWith("vid-")) {
