@@ -66,6 +66,22 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       }
     }
 
+    // Extract original.mp3 from the video (kept in sync with original.mp4 so
+    // standalone audio reads — timeline, transcription — match the source).
+    if (probe.hasAudio) {
+      const mp3TempPath = join(assetDir, "original.mp3.tmp");
+      await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", mp3TempPath]);
+      try {
+        const mp3Buf = await fsReadFile(mp3TempPath);
+        const mp3Result = await fs.writeFile(assetId, "original.mp3", mp3Buf, projectSlug);
+        if (!mp3Result.ok) {
+          throw new Error(`writeFile original.mp3 failed for ${assetId}: ${mp3Result.error.message}`);
+        }
+      } finally {
+        await rm(mp3TempPath, { force: true });
+      }
+    }
+
     // Extract waveform and persist via the typed primitive (committed to git
     // alongside metadata.sqlite + the per-asset canonical export).
     const waveform = await extractWaveform(videoPath);
