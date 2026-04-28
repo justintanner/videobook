@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Scissors, Eraser, Magnet } from 'lucide-react';
+import { Check, Eraser, Magnet, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { CommandButton } from './CommandButton';
@@ -21,6 +21,8 @@ interface TrimRange {
   startPct: number;
   endPct: number;
 }
+
+type TrimMode = 'keep' | 'remove';
 
 // ── Helpers ──
 
@@ -182,6 +184,7 @@ export function TrimEditor({
 
   // Selection state
   const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
+  const [trimMode, setTrimMode] = useState<TrimMode>('keep');
   const [trimState, setTrimState] = useState<ExecuteButtonState | undefined>(undefined);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [markers, setMarkers] = useState<SnapMarker[]>([]);
@@ -385,7 +388,7 @@ export function TrimEditor({
 
   const [trimError, setTrimError] = useState<string | null>(null);
 
-  const handleTrim = useCallback(async (startSec: number, endSec: number) => {
+  const handleTrim = useCallback(async (mode: TrimMode, startSec: number, endSec: number) => {
     if (!assetId || !projectSlug) return;
     setTrimError(null);
     setTrimState('charging');
@@ -395,8 +398,9 @@ export function TrimEditor({
       const result = await callTool('trim_video', {
         asset_id: assetId,
         project_slug: projectSlug,
-        trim_start: startSec,
-        trim_end: endSec,
+        ...(mode === 'keep'
+          ? { trim_start: startSec, trim_end: endSec }
+          : { cut_start: startSec, cut_end: endSec }),
       });
       if (result && 'isError' in result && result.isError) {
         const msg = Array.isArray(result.content) && result.content[0]?.text
@@ -446,10 +450,16 @@ export function TrimEditor({
       }
       return true;
     }
-    if (cmd.startsWith('/trim') && trimRange && duration > 0) {
+    if ((cmd.startsWith('/keep') || cmd.startsWith('/trim')) && trimRange && duration > 0) {
       const startSec = (trimRange.startPct / 100) * duration;
       const endSec = (trimRange.endPct / 100) * duration;
-      handleTrim(startSec, endSec);
+      handleTrim('keep', startSec, endSec);
+      return true;
+    }
+    if ((cmd.startsWith('/remove') || cmd.startsWith('/cut')) && trimRange && duration > 0) {
+      const startSec = (trimRange.startPct / 100) * duration;
+      const endSec = (trimRange.endPct / 100) * duration;
+      handleTrim('remove', startSec, endSec);
       return true;
     }
     return contextDispatch(message);
@@ -461,6 +471,26 @@ export function TrimEditor({
   const videoSrc = item?.filePath ?? '';
   const posterSrc = item?.thumbnailSrc ?? '';
   const frameBadges = buildFrameBadges(item);
+  const selectedStartSec = trimRange && duration > 0 ? (trimRange.startPct / 100) * duration : 0;
+  const selectedEndSec = trimRange && duration > 0 ? (trimRange.endPct / 100) * duration : 0;
+  const selectedDurationSec = Math.max(0, selectedEndSec - selectedStartSec);
+  const resultDurationSec = trimMode === 'keep' ? selectedDurationSec : Math.max(0, duration - selectedDurationSec);
+  const modeClasses = trimMode === 'keep'
+    ? {
+        tint: 'bg-emerald-500/24',
+        line: 'bg-emerald-400',
+        text: 'text-emerald-300',
+        border: 'border-emerald-400/60',
+        soft: 'bg-emerald-500/10',
+      }
+    : {
+        tint: 'bg-red-500/24',
+        line: 'bg-red-400',
+        text: 'text-red-300',
+        border: 'border-red-400/60',
+        soft: 'bg-red-500/10',
+      };
+  const actionCommand = trimMode === 'keep' ? '/keep selection' : '/remove selection';
 
   return (
     <>
@@ -549,39 +579,89 @@ export function TrimEditor({
           </div>
         </div>
 
-        {/* Tool bar + Waveform */}
         <div className="shrink-0 px-6 py-3 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <CommandButton command="/select" icon={<Scissors className="w-4 h-4" />} size="default" variant="violet" />
-            <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" onClick={handleClear} />
-            <CommandButton
-              command={snapEnabled ? '/snap off' : '/snap on'}
-              icon={<Magnet className="w-4 h-4" />}
-              size="default"
-              variant={snapEnabled ? 'violet' : 'default'}
-              onClick={() => setSnapEnabled((prev) => !prev)}
-              state={duration <= 0 ? 'disabled' : undefined}
-              disabledReason="No video loaded"
-            />
-            <div className="flex-1" />
-            {trimError && (
-              <span className="text-[11px] font-mono text-red-400 truncate max-w-[300px]">{trimError}</span>
-            )}
-            <CommandButton
-              command="/trim"
-              icon={<Scissors className="w-4 h-4" />}
-              size="default"
-              state={trimState ?? (trimRange ? undefined : 'disabled')}
-              disabledReason="Drag on the waveform to select a trim range"
-              onClick={() => {
-                if (trimRange && duration > 0 && !trimState) {
-                  setTrimError(null);
-                  const startSec = (trimRange.startPct / 100) * duration;
-                  const endSec = (trimRange.endPct / 100) * duration;
-                  handleTrim(startSec, endSec);
-                }
-              }}
-            />
+          <div className="grid grid-cols-[auto_1fr_auto] items-stretch gap-3">
+            <div className="flex rounded border border-zinc-700/70 bg-black/40 overflow-hidden">
+              <button
+                type="button"
+                className={cn(
+                  'h-10 px-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider transition-colors',
+                  trimMode === 'keep'
+                    ? 'bg-emerald-500/18 text-emerald-300'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900',
+                )}
+                onClick={() => setTrimMode('keep')}
+              >
+                <Check className="w-4 h-4" />
+                Keep Selection
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'h-10 px-3 flex items-center gap-2 border-l border-zinc-700/70 font-mono text-[11px] uppercase tracking-wider transition-colors',
+                  trimMode === 'remove'
+                    ? 'bg-red-500/18 text-red-300'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900',
+                )}
+                onClick={() => setTrimMode('remove')}
+              >
+                <Trash2 className="w-4 h-4" />
+                Remove Selection
+              </button>
+            </div>
+
+            <div className={cn('min-w-0 rounded border px-3 py-2 font-mono', modeClasses.border, modeClasses.soft)}>
+              {trimRange && duration > 0 ? (
+                <div className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 text-[11px]">
+                  <span className={cn('uppercase tracking-widest', modeClasses.text)}>
+                    {trimMode === 'keep' ? 'Keeping selected range' : 'Removing selected range'}
+                  </span>
+                  <span className="text-zinc-500">
+                    {formatDuration(selectedStartSec)} to {formatDuration(selectedEndSec)}
+                  </span>
+                  <span className="text-zinc-600 truncate">
+                    selected {formatDuration(selectedDurationSec)}
+                  </span>
+                  <span className="text-zinc-400">
+                    result {formatDuration(resultDurationSec)}
+                  </span>
+                </div>
+              ) : (
+                <div className="text-[11px] uppercase tracking-widest text-zinc-500">Drag across the waveform to select a range</div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" onClick={handleClear} />
+              <CommandButton
+                command={snapEnabled ? '/snap off' : '/snap on'}
+                icon={<Magnet className="w-4 h-4" />}
+                size="default"
+                variant={snapEnabled ? 'violet' : 'default'}
+                onClick={() => setSnapEnabled((prev) => !prev)}
+                state={duration <= 0 ? 'disabled' : undefined}
+                disabledReason="No video loaded"
+              />
+              {trimError && (
+                <span className="text-[11px] font-mono text-red-400 truncate max-w-[300px]">{trimError}</span>
+              )}
+              <CommandButton
+                command={actionCommand}
+                icon={trimMode === 'keep' ? <Check className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                size="default"
+                variant={trimMode === 'keep' ? 'emerald' : 'fuchsia'}
+                state={trimState ?? (trimRange ? undefined : 'disabled')}
+                disabledReason="Drag on the waveform to select a trim range"
+                onClick={() => {
+                  if (trimRange && duration > 0 && !trimState) {
+                    setTrimError(null);
+                    const startSec = (trimRange.startPct / 100) * duration;
+                    const endSec = (trimRange.endPct / 100) * duration;
+                    handleTrim(trimMode, startSec, endSec);
+                  }
+                }}
+              />
+            </div>
           </div>
 
           <div className="relative overflow-visible" style={{ height: 96 }}>
@@ -597,17 +677,39 @@ export function TrimEditor({
               {/* Trim selection overlay */}
               {trimRange && (
                 <>
+                  {trimMode === 'keep' && (
+                    <>
+                      <div
+                        className="absolute top-0 bottom-0 left-0 bg-black/55 pointer-events-none z-10"
+                        style={{ width: `${trimRange.startPct}%` }}
+                      />
+                      <div
+                        className="absolute top-0 bottom-0 right-0 bg-black/55 pointer-events-none z-10"
+                        style={{ width: `${100 - trimRange.endPct}%` }}
+                      />
+                    </>
+                  )}
                   <div
-                    className="absolute top-0 bottom-0 bg-violet-500/20 pointer-events-none z-10"
+                    className={cn('absolute top-0 bottom-0 pointer-events-none z-10', modeClasses.tint)}
                     style={{ left: `${trimRange.startPct}%`, width: `${trimRange.endPct - trimRange.startPct}%` }}
                   />
+                  <div
+                    className={cn(
+                      'absolute top-7 z-30 -translate-x-1/2 rounded border bg-zinc-950/90 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest pointer-events-none',
+                      modeClasses.text,
+                      modeClasses.border,
+                    )}
+                    style={{ left: `${(trimRange.startPct + trimRange.endPct) / 2}%` }}
+                  >
+                    {trimMode === 'keep' ? 'Keep' : 'Remove'}
+                  </div>
                   {/* Start handle — visible line + wide grab zone */}
                   <div
                     className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
                     style={{ left: `${trimRange.startPct}%`, transform: 'translateX(-50%)', width: 12 }}
                     onMouseDown={(e) => { e.stopPropagation(); draggingRef.current = 'start'; }}
                   >
-                    <div className="w-0.5 bg-violet-400 mx-auto" />
+                    <div className={cn('w-0.5 mx-auto', modeClasses.line)} />
                   </div>
                   {/* End handle — visible line + wide grab zone */}
                   <div
@@ -615,18 +717,18 @@ export function TrimEditor({
                     style={{ left: `${trimRange.endPct}%`, transform: 'translateX(-50%)', width: 12 }}
                     onMouseDown={(e) => { e.stopPropagation(); draggingRef.current = 'end'; }}
                   >
-                    <div className="w-0.5 bg-violet-400 mx-auto" />
+                    <div className={cn('w-0.5 mx-auto', modeClasses.line)} />
                   </div>
                   {duration > 0 && (
                     <>
                       <span
-                        className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+                        className={cn('absolute top-0.5 text-[9px] font-mono pointer-events-none z-30 -translate-x-1/2', modeClasses.text)}
                         style={{ left: `${trimRange.startPct}%` }}
                       >
                         {formatDuration((trimRange.startPct / 100) * duration)}
                       </span>
                       <span
-                        className="absolute top-0.5 text-[9px] font-mono text-violet-300 pointer-events-none z-30 -translate-x-1/2"
+                        className={cn('absolute top-0.5 text-[9px] font-mono pointer-events-none z-30 -translate-x-1/2', modeClasses.text)}
                         style={{ left: `${trimRange.endPct}%` }}
                       >
                         {formatDuration((trimRange.endPct / 100) * duration)}
@@ -752,7 +854,7 @@ export function TrimEditor({
             onSend={handleSend}
             callTool={callTool}
             projectSlug={projectSlug}
-            placeholder="type /trim @slug 0:05 0:12..."
+            placeholder="type /select 0:05 0:12, /keep, or /remove..."
           />
         </div>
       </div>
