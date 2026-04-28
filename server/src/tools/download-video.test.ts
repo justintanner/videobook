@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -23,6 +23,12 @@ describe("download_video tool", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-download-video-test-"));
     client = await createTestClient(tempDir);
+    // Stub the real handler: these tests cover the tool's enqueue-time
+    // validation, not the download. The real handler shells out to yt-dlp,
+    // which won't return for a fake URL — and runner.stop() in the next
+    // test's setProjectsDir blocks until in-flight jobs drain, blowing the
+    // beforeEach hook timeout.
+    registerJobHandler("download_video", async () => ({ stubbed: true }));
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
