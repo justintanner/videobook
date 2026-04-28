@@ -74,11 +74,14 @@ async function generateSfxClip(
   while (Date.now() - start < POLL_TIMEOUT_MS) {
     const info = await provider.suno.get.api.v1.generate.recordInfo(taskId);
     const status = info.data?.status;
-    const tracks = info.data?.response?.sunoData;
-    if (status === "SUCCESS" || status === "FIRST_SUCCESS") {
-      const url = tracks?.[0]?.audioUrl;
-      if (!url) throw new Error(`SFX ${index}: Suno ${status} but no audioUrl on first track`);
-      return url;
+    const tracks = info.data?.response?.sunoData ?? [];
+    // FIRST_SUCCESS often arrives before any track has an audioUrl populated
+    // — kie writes URLs as each track finishes. Take the first track that has
+    // a non-empty audioUrl regardless of status; otherwise keep polling.
+    const usable = tracks.find((t: { audioUrl?: string }) => typeof t?.audioUrl === "string" && t.audioUrl.length > 0);
+    if (usable) return usable.audioUrl;
+    if (status === "SUCCESS") {
+      throw new Error(`SFX ${index}: Suno SUCCESS but no track had an audioUrl`);
     }
     if (status && SUNO_TERMINAL_FAILURES.has(status)) {
       throw new Error(
