@@ -234,6 +234,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "suggest_edits", autoInject: ["project_slug"] },
   },
   {
+    command: "/grok-upscale",
+    description: "Upscale a Grok-Imagine video via Kie",
+    example: "/grok-upscale @vid-clip",
+    category: "context_menu",
+    icon: "Zap",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Grok-Imagine video asset to upscale" },
+    ],
+    mcpTool: { tool: "upscale_grok_imagine_video", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite",
     description: "Rewrite a script asset in place with the full describe model",
     example: "/rewrite @script-desc-product-shot",

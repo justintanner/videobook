@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
+import * as fsp from "node:fs/promises";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,13 +21,28 @@ export interface ProbeResult {
 }
 
 export async function probeVideo(filePath: string): Promise<ProbeResult> {
-  const { stdout } = await execFileAsync(FFPROBE, [
-    "-v", "quiet",
-    "-print_format", "json",
-    "-show_streams",
-    "-show_format",
-    filePath,
-  ]);
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(FFPROBE, [
+      "-v", "error",
+      "-print_format", "json",
+      "-show_streams",
+      "-show_format",
+      filePath,
+    ]));
+  } catch (error) {
+    const e = error as Error & { code?: number | string; stderr?: string | Buffer };
+    const stderr = typeof e.stderr === "string" ? e.stderr : e.stderr?.toString() ?? "";
+    const exit = e.code !== undefined ? String(e.code) : "?";
+    let size = "missing";
+    try {
+      const { size: bytes } = await fsp.stat(filePath);
+      size = `${bytes} bytes`;
+    } catch { /* file gone */ }
+    throw new Error(
+      `ffprobe failed for ${filePath} (exit ${exit}, ${size}): ${stderr.trim() || e.message}`,
+    );
+  }
   const data = JSON.parse(stdout);
   const videoStream = (data.streams as Array<Record<string, unknown>>)?.find(
     (s) => s.codec_type === "video",

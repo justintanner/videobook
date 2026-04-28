@@ -47,6 +47,12 @@ export async function findUnprocessedUploads(
       const originResult = await fs.readMetadata(asset.id, "original", projectSlug);
       if (originResult.ok) return null;
 
+      // Skip assets currently held by another job (splice/trim/render mid-write).
+      // Otherwise the sweep races the in-flight ffmpeg writing original.mp4 and
+      // hands a half-written file to process_video, producing a spurious
+      // .generation-error.json before the real owner finishes.
+      if (await fs.isLocked(asset.path)) return null;
+
       const mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
         return SUPPORTED_EXTENSIONS.has(ext);
@@ -79,6 +85,10 @@ export async function processExternalUpload(
   if (upload.mediaFilename !== targetFilename) {
     await fs.renameFile(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
   }
+
+  // Drop any prior failure sidecar so a successful retry dismisses the
+  // /inbox FAILED tile (mirrors writePendingTask in pending-task.ts).
+  await fs.deleteFile(upload.assetId, ".generation-error.json", projectSlug).catch(() => {});
 
   const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {

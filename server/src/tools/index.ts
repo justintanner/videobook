@@ -33,6 +33,7 @@ import { transcribeDef } from "./transcribe.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
 import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
+import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js";
 import { generateSeedance2I2vVideoDef } from "./generate-seedance2-i2v-video.js";
@@ -171,6 +172,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateGrokImagineVideoDef(fs),
     generateGrokImagineRefVideoDef(fs),
     extendGrokImagineVideoDef(fs),
+    upscaleGrokImagineVideoDef(fs),
     generateKling30VideoDef(fs),
     generateSeedance2T2vVideoDef(fs),
     generateSeedance2I2vVideoDef(fs),
