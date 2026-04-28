@@ -121,15 +121,19 @@ async function spliceConcat(
   outputPath: string,
   width: number,
   height: number,
+  fps: number,
   withAudio: boolean,
 ): Promise<void> {
   // Cut first video at splicePoint (exclusive); second video plays from start.
   // Both streams are scaled+padded to the first video's dimensions and SAR
   // normalized so concat=n=2 doesn't error on aspect-ratio or dimension mismatch.
+  // The `fps` filter normalizes frame rate across inputs — without it, mismatched
+  // input rates produce a degenerate output timebase that makes libx264 attempt
+  // to encode at billions of frames per second.
   const scalePad = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
   const filterParts: string[] = [
-    `[0:v]trim=end=${splicePoint},setpts=PTS-STARTPTS,${scalePad}[v0]`,
-    `[1:v]${scalePad},setpts=PTS-STARTPTS[v1]`,
+    `[0:v]trim=end=${splicePoint},fps=${fps},${scalePad},setpts=PTS-STARTPTS[v0]`,
+    `[1:v]fps=${fps},${scalePad},setpts=PTS-STARTPTS[v1]`,
   ];
 
   if (withAudio) {
@@ -177,7 +181,7 @@ export function registerSpliceVideoJob(fs: ClipfirstFs): void {
       const withAudio = firstHasAudio && secondHasAudio;
       await spliceConcat(
         firstPath, secondPath, match.timestamp,
-        outputPath, targetWidth, targetHeight, withAudio,
+        outputPath, targetWidth, targetHeight, firstFps, withAudio,
       );
 
       const provenance = {
