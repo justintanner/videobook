@@ -6,6 +6,7 @@ import { kie, KieError } from "@apicity/kie";
 import type { KieTaskInfo } from "@apicity/kie";
 import { xai, XaiError } from "@apicity/xai";
 import { alibaba, AlibabaError } from "@apicity/alibaba";
+import { fal, FalError } from "@apicity/fal";
 import { queue } from "../queue.js";
 import {
   findVideoFile,
@@ -59,53 +60,6 @@ function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
   if (!meta) return null;
   const p = meta.prompt;
   return typeof p === "string" ? p : null;
-}
-
-type FalStatus = { status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED"; error?: string };
-
-async function fetchFalStatus(statusUrl: string, apiKey: string): Promise<FalStatus> {
-  const res = await fetch(statusUrl, { headers: { Authorization: `Key ${apiKey}` } });
-  if (!res.ok) throw new Error(`FAL status fetch failed: ${res.status} ${res.statusText}`);
-  return await res.json() as FalStatus;
-}
-
-class FalResultError extends Error {
-  constructor(public readonly status: number, message: string) {
-    super(message);
-    this.name = "FalResultError";
-  }
-}
-
-type FalErrorDetailItem = { msg?: unknown; type?: unknown };
-type FalErrorBody = { detail?: string | FalErrorDetailItem[] };
-
-function extractFalDetail(body: unknown): string | null {
-  if (!body || typeof body !== "object") return null;
-  const detail = (body as FalErrorBody).detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0];
-    const msg = typeof first?.msg === "string" ? first.msg : null;
-    const type = typeof first?.type === "string" ? first.type : null;
-    if (msg && type) return `${msg} (${type})`;
-    return msg;
-  }
-  return null;
-}
-
-async function fetchFalResult(responseUrl: string, apiKey: string): Promise<Record<string, unknown>> {
-  const res = await fetch(responseUrl, { headers: { Authorization: `Key ${apiKey}` } });
-  if (!res.ok) {
-    let detail: string | null = null;
-    try {
-      detail = extractFalDetail(await res.json());
-    } catch {
-      // Response body wasn't JSON; fall back to statusText.
-    }
-    const suffix = detail ? `: ${detail}` : ` ${res.statusText}`;
-    throw new FalResultError(res.status, `FAL result fetch failed: ${res.status}${suffix}`);
-  }
-  return await res.json() as Record<string, unknown>;
 }
 
 function buildFrameDirs(
@@ -620,20 +574,19 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // Poll FAL tasks (only if API key is set)
   const falTasks = pollableTasks.filter((t) => t.taskType.startsWith("fal_"));
   if (process.env.FAL_API_KEY && falTasks.length > 0) {
-    const apiKey = process.env.FAL_API_KEY;
+    const provider = fal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000 });
 
     await Promise.all(falTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
-      const statusUrl = typeof task.meta?.falStatusUrl === "string" ? task.meta.falStatusUrl : null;
-      const responseUrl = typeof task.meta?.falResponseUrl === "string" ? task.meta.falResponseUrl : null;
-      if (!statusUrl || !responseUrl) {
-        const failMsg = `FAL task missing statusUrl/responseUrl in meta`;
+      const endpointId = typeof task.meta?.falEndpointId === "string" ? task.meta.falEndpointId : null;
+      if (!endpointId) {
+        const failMsg = `FAL task missing falEndpointId in meta`;
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
         return;
       }
       try {
-        const status = await fetchFalStatus(statusUrl, apiKey);
+        const status = await provider.queue.status({ endpoint_id: endpointId, request_id: task.taskId });
         if (status.status === "COMPLETED") {
           if (status.error) {
             const failMsg = status.error;
@@ -646,7 +599,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
-          const resultObject = await fetchFalResult(responseUrl, apiKey);
+          const resultObject = await provider.queue.result({ endpoint_id: endpointId, request_id: task.taskId });
           // Mark the pending task as completing BEFORE enqueueing so any
           // overlapping sync poll skips it instead of enqueueing a duplicate.
           await markTaskCompleting(fs, task.assetId, project_slug, task);
@@ -675,8 +628,11 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        if (e instanceof FalResultError && e.status >= 400 && e.status < 500) {
-          await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+        if (e instanceof FalError) {
+          const falErr = e as FalError;
+          if (falErr.status >= 400 && falErr.status < 500) {
+            await failPendingTask(fs, task.assetId, project_slug, { message: failMsg, prompt });
+          }
         }
       }
     }));

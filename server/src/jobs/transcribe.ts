@@ -26,7 +26,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
 
     const downloadUrl = await uploadAssetFile(fs, assetId, audioFilename, projectSlug);
 
-    const { provider, taskId, taskType, statusUrl, responseUrl } = await submitTranscribe({
+    const { provider, taskId, taskType, endpointId } = await submitTranscribe({
       audioUrl: downloadUrl,
       tagAudioEvents,
       diarize,
@@ -43,8 +43,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       meta: {
         ...(languageCode ? { languageCode } : {}),
         ...(autoRender ? { autoRender } : {}),
-        ...(statusUrl ? { falStatusUrl: statusUrl } : {}),
-        ...(responseUrl ? { falResponseUrl: responseUrl } : {}),
+        ...(endpointId ? { falEndpointId: endpointId } : {}),
       },
     });
 

@@ -42,8 +42,7 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
     createdAt: new Date().toISOString(),
     meta: {
       ...args.meta,
-      falStatusUrl: submit.status_url,
-      falResponseUrl: submit.response_url,
+      falEndpointId: args.endpointId,
     },
   });
 

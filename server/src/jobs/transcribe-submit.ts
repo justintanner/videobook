@@ -12,8 +12,7 @@ export type TranscribeSubmitResult = {
   provider: "fal" | "kie";
   taskId: string;
   taskType: "fal_transcribe" | "transcribe";
-  statusUrl?: string;
-  responseUrl?: string;
+  endpointId?: string;
 };
 
 export const FAL_TRANSCRIBE_ENDPOINT_ID = "fal-ai/elevenlabs/speech-to-text/scribe-v2";
@@ -37,8 +36,7 @@ async function submitFal(args: TranscribeSubmitArgs): Promise<TranscribeSubmitRe
     provider: "fal",
     taskId: submitResult.request_id,
     taskType: "fal_transcribe",
-    statusUrl: submitResult.status_url,
-    responseUrl: submitResult.response_url,
+    endpointId: FAL_TRANSCRIBE_ENDPOINT_ID,
   };
 }
 
