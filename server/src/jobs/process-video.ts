@@ -70,7 +70,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     // standalone audio reads — timeline, transcription — match the source).
     if (probe.hasAudio) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
-      await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", mp3TempPath]);
+      await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath]);
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
         const mp3Result = await fs.writeFile(assetId, "original.mp3", mp3Buf, projectSlug);
