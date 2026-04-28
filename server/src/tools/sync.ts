@@ -586,7 +586,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         return;
       }
       try {
-        const status = await provider.queue.status({ endpoint_id: endpointId, request_id: task.taskId });
+        const status = await provider.v1.queue.status({ endpoint_id: endpointId, request_id: task.taskId });
         if (status.status === "COMPLETED") {
           if (status.error) {
             const failMsg = status.error;
@@ -599,7 +599,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             await failPendingTask(fs, task.assetId, project_slug, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
-          const resultObject = await provider.queue.result({ endpoint_id: endpointId, request_id: task.taskId });
+          const resultObject = await provider.v1.queue.result({ endpoint_id: endpointId, request_id: task.taskId });
           // Mark the pending task as completing BEFORE enqueueing so any
           // overlapping sync poll skips it instead of enqueueing a duplicate.
           await markTaskCompleting(fs, task.assetId, project_slug, task);
