@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, X } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
@@ -504,7 +504,13 @@ export function RenderSettingsPanel({
   backgroundMode, onBackgroundChange,
   onApply, applyState, disabled,
 }: RenderSettingsPanelProps) {
-  const [armed, setArmed] = useState(false);
+  const lastClickRef = useRef(0);
+  const handleRenderClick = () => {
+    const now = Date.now();
+    if (now - lastClickRef.current < 1000) return;
+    lastClickRef.current = now;
+    onApply?.();
+  };
   const cyan = sectionThemes.cyan;
   const violet = sectionThemes.violet;
   const amber = sectionThemes.amber;
@@ -605,11 +611,11 @@ export function RenderSettingsPanel({
       {/* Action bar */}
       <div className="shrink-0 flex items-center justify-end px-4 py-2.5 border-t border-zinc-800/60">
         <CommandButton
-          command={armed ? 'confirm /render' : '/render'}
+          command="/render"
           icon={<Zap className="w-5 h-5" />}
           size="lg"
           state={applyState}
-          onClick={() => { if (armed) { setArmed(false); onApply?.(); } else { setArmed(true); } }}
+          onClick={handleRenderClick}
         />
       </div>
     </div>

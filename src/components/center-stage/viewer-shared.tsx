@@ -97,17 +97,15 @@ export function RenderPrompt({ item, orientation, onRender }: {
   orientation: Orientation;
   onRender?: () => void;
 }) {
-  const [armed, setArmed] = useState(false);
   const isFinal = item.type === 'final';
   const primaryColor = isFinal ? '#fbbf24' : 'var(--color-primary)';
 
+  const lastClickRef = useRef(0);
   const handleClick = () => {
-    if (armed) {
-      onRender?.();
-      setArmed(false);
-    } else {
-      setArmed(true);
-    }
+    const now = Date.now();
+    if (now - lastClickRef.current < 1000) return;
+    lastClickRef.current = now;
+    onRender?.();
   };
 
   return (
@@ -130,10 +128,9 @@ export function RenderPrompt({ item, orientation, onRender }: {
 
         {/* CommandButton */}
         <CommandButton
-          command={armed ? '/yes' : `/render ${orientation}`}
+          command={`/render ${orientation}`}
           icon={<Zap className="w-5 h-5" />}
           size="lg"
-          state={armed ? 'ready' : undefined}
           className={isFinal
             ? 'border-amber-400 bg-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
             : undefined}
