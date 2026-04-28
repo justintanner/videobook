@@ -146,6 +146,69 @@ describe("render_timeline tool", () => {
     expect(parsed.message).toContain(uploaded.assetId);
   });
 
+  it("uses explicit orientation arg over timeline fields", async () => {
+    const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
+    await copyFile(videoPath, join(uploaded.path, "portrait.mp4"));
+
+    const fs = createFsForTest(tempDir);
+    await fs.writeProjectMeta(
+      "timeline",
+      { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "square" },
+      "timeline-proj",
+    );
+
+    const result = await client.callTool({
+      name: "render_timeline",
+      arguments: { project_slug: "timeline-proj", orientation: "portrait" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.orientation).toBe("portrait");
+  });
+
+  it("falls back to currentOrientation when no orientation arg given", async () => {
+    const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
+    await copyFile(videoPath, join(uploaded.path, "portrait.mp4"));
+
+    const fs = createFsForTest(tempDir);
+    await fs.writeProjectMeta(
+      "timeline",
+      { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "portrait" },
+      "timeline-proj",
+    );
+
+    const result = await client.callTool({
+      name: "render_timeline",
+      arguments: { project_slug: "timeline-proj" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.orientation).toBe("portrait");
+  });
+
+  it("falls back to render field when currentOrientation is unset or 'original'", async () => {
+    const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
+    await copyFile(videoPath, join(uploaded.path, "square.mp4"));
+
+    const fs = createFsForTest(tempDir);
+    await fs.writeProjectMeta(
+      "timeline",
+      { slots: [{ slug: uploaded.assetId }], render: "square", currentOrientation: "original" },
+      "timeline-proj",
+    );
+
+    const result = await client.callTool({
+      name: "render_timeline",
+      arguments: { project_slug: "timeline-proj" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.orientation).toBe("square");
+  });
+
   it("enqueues job when rendered files exist", async () => {
     // Upload a video to create a real asset
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);

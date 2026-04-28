@@ -58,9 +58,15 @@ const SQUARE_RENDER = "square.mp4";
 export async function runRenderTimeline(
   fs: ClipfirstFs,
   projectSlug: string,
+  orientationOverride?: Orientation,
 ): Promise<RenderTimelineOutcome> {
   const timelineResult = await fs.readProjectMeta<
-    { slots: TimelineSlot[]; audio?: TimelineAudioClip[]; render?: string } | TimelineSlot[]
+    {
+      slots: TimelineSlot[];
+      audio?: TimelineAudioClip[];
+      render?: string;
+      currentOrientation?: string;
+    } | TimelineSlot[]
   >("timeline", projectSlug);
   if (!timelineResult.ok) {
     if (timelineResult.error.code === "NOT_FOUND") {
@@ -75,7 +81,14 @@ export async function runRenderTimeline(
   const raw = timelineResult.value;
   const slots = (Array.isArray(raw) ? raw : raw.slots).filter((s) => s.slug);
   const audioClips: TimelineAudioClip[] = Array.isArray(raw) ? [] : (raw.audio ?? []);
-  const orientation = (Array.isArray(raw) ? "landscape" : (raw.render ?? "landscape")) as Orientation;
+  const currentTab = !Array.isArray(raw) && raw.currentOrientation;
+  const tabOrientation: Orientation | undefined =
+    currentTab === "portrait" || currentTab === "square" || currentTab === "landscape"
+      ? currentTab
+      : undefined;
+  const renderField = !Array.isArray(raw) ? (raw.render as Orientation | undefined) : undefined;
+  const orientation: Orientation =
+    orientationOverride ?? tabOrientation ?? renderField ?? "landscape";
   if (slots.length === 0) {
     return { status: "empty", message: "Timeline has no slots with assets assigned." };
   }
@@ -169,13 +182,20 @@ export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "render_timeline",
     description:
-      "Concatenate rendered video clips in timeline order into a single final output. Requires every slot to already have its per-orientation render — if any are missing, returns status 'missing_renders' listing the slugs that need /render first. Writes the concat output to the 'final' singleton asset.",
+      "Concatenate rendered video clips in timeline order into a single final output. Requires every slot to already have its per-orientation render — if any are missing, returns status 'missing_renders' listing the slugs that need /render first. Writes the concat output to the 'final' singleton asset. Orientation precedence: explicit arg → timeline.currentOrientation (active tab) → timeline.render → landscape.",
     schema: {
       project_slug: z.string().describe("Project slug"),
+      orientation: z
+        .enum(["landscape", "portrait", "square"])
+        .optional()
+        .describe("Override the orientation to render"),
     },
     handler: async (args) => {
-      const { project_slug } = args as { project_slug: string };
-      const outcome = await runRenderTimeline(fs, project_slug);
+      const { project_slug, orientation } = args as {
+        project_slug: string;
+        orientation?: Orientation;
+      };
+      const outcome = await runRenderTimeline(fs, project_slug, orientation);
 
       switch (outcome.status) {
         case "no_timeline":

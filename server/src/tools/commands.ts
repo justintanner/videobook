@@ -115,13 +115,15 @@ const HARDCODED_COMMANDS: Command[] = [
   {
     command: "/final",
     description: "Finalize and export",
-    example: "/final",
+    example: "/final portrait",
     category: "action",
     icon: "Clapperboard",
     size: "default",
     variant: "default",
     chevron: "right",
-    params: [],
+    params: [
+      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: active tab)" },
+    ],
     mcpTool: { tool: "render_timeline", autoInject: ["project_slug"] },
   },
   {
