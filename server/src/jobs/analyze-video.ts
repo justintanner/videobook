@@ -111,7 +111,8 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
 
     const contextParts: string[] = [];
     if (metadata) {
-      contextParts.push(`Video metadata: ${metadata.width}x${metadata.height}, duration ${metadata.duration.toFixed(1)}s`);
+      const durationStr = typeof metadata.duration === "number" ? `${metadata.duration.toFixed(1)}s` : "unknown";
+      contextParts.push(`Video metadata: ${metadata.width}x${metadata.height}, duration ${durationStr}`);
     }
     if (transcriptionText) {
       contextParts.push(`Transcription:\n${transcriptionText}`);
