@@ -30,13 +30,14 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onDelet
   const isError = status === 'error';
   const isCorrupt = status === 'corrupt';
   const isUploading = status === 'uploading';
+  const isDownloading = status === 'downloading';
   const isGenerating = status === 'generating';
   const isLoading = status === 'loading';
   const isTranscribing = status === 'transcribing';
   const isUntranscribed = status === 'untranscribed';
   const isRendering = status.startsWith('render');
   const isProcessing = isTranscribing || isUntranscribed || isRendering;
-  const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
+  const hasOpaqueOverlay = isUploading || isDownloading || isGenerating || isLoading || isCorrupt;
 
   const duration = formatDuration(item.durationSeconds);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);

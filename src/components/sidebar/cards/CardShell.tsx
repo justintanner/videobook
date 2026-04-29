@@ -17,6 +17,7 @@ import {
   FailedOverlay,
   LoadingOverlay,
   DeletingOverlay,
+  DownloadingOverlay,
 } from '../overlays';
 
 export interface DragData {
@@ -67,6 +68,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (!status) return null;
 
   if (status === 'uploading' && type !== 'final') return <UploadingOverlay item={item} />;
+  if (status === 'downloading' && type !== 'final') return <DownloadingOverlay item={item} />;
   if (status === 'generating' && type !== 'final') return <GeneratingOverlay item={item} />;
   if (isRenderingState(status)) return type === 'final' ? <ElfBuildingOverlay item={item} /> : <RenderingOverlay item={item} />;
   if (status === 'transcribing' && (type === 'video' || type === 'audio')) return <TranscribingOverlay item={item} />;
@@ -83,6 +85,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
 
 const stateClassMap: Partial<Record<ClipState, string>> = {
   uploading: 'clip-state-uploading cursor-wait',
+  downloading: 'clip-state-downloading cursor-wait',
   generating: 'clip-state-generating cursor-wait',  // video default; overridden for images below
   // Pipeline / transformation states reuse the generating animation so the
   // sidebar shows a consistent "in progress" look across the lifecycle.
@@ -119,6 +122,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
 
   const stateColors: Partial<Record<ClipState, string>> = {
     uploading: 'rgba(0, 255, 255, 0.7)',
+    downloading: 'rgba(34, 197, 94, 0.7)',
     generating: 'rgba(34, 197, 94, 0.7)',
     rendering: 'rgba(0, 255, 255, 0.7)',
     untranscribed: 'rgba(0, 255, 255, 0.4)',

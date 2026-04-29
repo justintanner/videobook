@@ -8,4 +8,5 @@ export { CorruptOverlay } from './CorruptOverlay';
 export { FailedOverlay } from './FailedOverlay';
 export { LoadingOverlay } from './LoadingOverlay';
 export { DeletingOverlay } from './DeletingOverlay';
+export { DownloadingOverlay } from './DownloadingOverlay';
 export type { OverlayProps } from './types';

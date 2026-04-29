@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
+import { DownloadingReadout } from './DownloadingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
 import type { RenderSettings } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -45,6 +46,10 @@ function ClipContent({ item, size, onRender, callTool, projectSlug }: {
       timestamp: video.currentTime,
     });
   }, [callTool, item.id, projectSlug]);
+
+  if (item.status === 'downloading') {
+    return <DownloadingReadout asset={item} />;
+  }
 
   if (!item.filePath) return null;
 
