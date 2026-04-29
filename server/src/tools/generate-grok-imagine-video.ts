@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -102,15 +102,16 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "grok_imagine_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { sourceImageId: asset_id, ...(prompt !== undefined ? { prompt } : {}) },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "grok_imagine_video",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: { sourceImageId: asset_id, ...(prompt !== undefined ? { prompt } : {}) },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `grok-imagine-video-${vidAssetId}-${Date.now()}`;
 

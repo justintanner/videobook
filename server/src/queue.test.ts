@@ -3,7 +3,7 @@ import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import { createFs } from "clipfirst-fs";
+import { createFs } from "clipfirst-engine";
 
 describe("server queue (sqlite-backed)", () => {
   let projectsDir: string;

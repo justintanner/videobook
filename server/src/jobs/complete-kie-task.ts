@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
@@ -7,7 +7,6 @@ import { findVideoFile } from "../media-files.js";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
-import { deletePendingTask } from "./pending-task.js";
 import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -34,7 +33,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     // Resolve the asset directory at runtime so renames don't break completion.
     const assetDirResult = await fs.resolveAssetDir(assetId, projectSlug);
     if (!assetDirResult.ok) {
-      await deletePendingTask(fs, assetId, projectSlug);
+      await fs.pendingTasks.delete(projectSlug, assetId);
       return { success: true, skipped: true };
     }
     const assetDir = assetDirResult.value;
@@ -119,7 +118,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         }
       }
 
-      await deletePendingTask(fs, assetId, projectSlug);
+      await fs.pendingTasks.delete(projectSlug, assetId);
       return { success: true };
     } finally {
       await fs.releaseLock(assetDir);

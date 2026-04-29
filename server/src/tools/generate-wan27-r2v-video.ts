@@ -1,10 +1,10 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "../media-files.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -153,21 +153,22 @@ export function generateWan27R2vVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = voiceRef ? [voiceRef.assetId] : [];
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "wan27_r2v_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          prompt,
-          mode: "reference",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "wan27_r2v_video",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: {
+            prompt,
+            mode: "reference",
+            sourceImageIds,
+            sourceVideoIds,
+            sourceAudioIds,
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `wan27-r2v-${vidAssetId}-${Date.now()}`;
 

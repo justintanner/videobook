@@ -1,8 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildAlibabaVideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
@@ -78,20 +77,21 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.videoGeneration.videoSynthesis(request);
     const taskId = submitResult.output.task_id;
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "alibaba_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        prompt,
-        sourceImageIds,
-        sourceVideoIds,
-        sourceAudioIds,
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "alibaba_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          prompt,
+          sourceImageIds,
+          sourceVideoIds,
+          sourceAudioIds,
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

@@ -1,8 +1,7 @@
 import { fal } from "@apicity/fal";
-import type { ClipfirstFs } from "clipfirst-fs";
-import { writePendingTask, type PendingKieTask } from "./pending-task.js";
-
-export type FalTaskType = Extract<PendingKieTask["taskType"], `fal_${string}`>;
+import type { ClipfirstFs } from "clipfirst-engine";
+import { type PendingTask } from "clipfirst-engine";
+export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
 
 export type FalSubmitArgs = {
   fs: ClipfirstFs;
@@ -33,18 +32,19 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
     input: args.input,
   });
 
-  await writePendingTask(args.fs, args.assetId, args.projectSlug, {
+  const ptResult = await args.fs.pendingTasks.write(args.projectSlug, {
     taskId: submit.request_id,
     taskType: args.taskType,
     assetId: args.assetId,
     assetDir: args.assetDir,
-    projectSlug: args.projectSlug,
-    createdAt: new Date().toISOString(),
     meta: {
       ...args.meta,
       falEndpointId: args.endpointId,
     },
   });
+  if (!ptResult.ok) {
+    throw new Error(`Failed to write pending-task for ${args.assetId}: ${ptResult.error.message}`);
+  }
 
   return submit.request_id;
 }

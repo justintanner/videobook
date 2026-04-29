@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -60,15 +60,16 @@ export function describeImageDef(fs: ClipfirstFs): ToolDef {
       }
       const { assetId: scriptAssetId, path: scriptAssetDir } = createResult.value;
 
-      await writePendingTask(fs, scriptAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "describe_image",
-        assetId: scriptAssetId,
-        assetDir: scriptAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { sourceAssetId: asset_id },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "describe_image",
+          assetId: scriptAssetId,
+          assetDir: scriptAssetDir,
+          meta: { sourceAssetId: asset_id },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${scriptAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `describe-image-${asset_id}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -1,13 +1,13 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID, type PendingKieTask } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID, type PendingTask } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
 type ModelSpec = {
   toolType: string;
-  taskType: PendingKieTask["taskType"];
+  taskType: PendingTask["taskType"];
   slugPrefix: string;
   jobPrefix: string;
 };
@@ -69,19 +69,20 @@ async function enqueueModel(
   }
   const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-  await writePendingTask(fs, imgAssetId, projectSlug, {
-    taskId: QUEUED_TASK_ID,
-    taskType: spec.taskType,
-    assetId: imgAssetId,
-    assetDir: imgAssetDir,
-    projectSlug,
-    createdAt: new Date().toISOString(),
-    meta: {
-      prompt,
-      sourceImageIds: [],
-      ...(sourceScriptId ? { sourceScriptId } : {}),
-    },
+  {
+    const _ptResult = await fs.pendingTasks.write(projectSlug, {
+      taskId: QUEUED_TASK_ID,
+      taskType: spec.taskType,
+      assetId: imgAssetId,
+      assetDir: imgAssetDir,
+      meta: {
+        prompt,
+        sourceImageIds: [],
+        ...(sourceScriptId ? { sourceScriptId } : {}),
+      },
   });
+    if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+  }
 
   const jobId = `${spec.jobPrefix}-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {

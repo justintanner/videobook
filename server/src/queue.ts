@@ -30,10 +30,9 @@ import {
   isValidProjectSlug,
   queueApi,
   closeStateDb,
-} from "clipfirst-fs";
+} from "clipfirst-engine";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
-import { failPendingTask } from "./jobs/pending-task.js";
 
 async function projectExists(dir: string): Promise<boolean> {
   try {
@@ -125,9 +124,15 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
         const projectSlug = extractProjectSlug(job.payload);
         if (assetId && projectSlug) {
           const fsForCleanup = fsRef.current;
-          void failPendingTask(fsForCleanup, assetId, projectSlug, {
-            message: error instanceof Error ? error.message : String(error),
-          })
+          const message = error instanceof Error ? error.message : String(error);
+          void fsForCleanup.pendingTasks
+            .fail(projectSlug, assetId, { message })
+            .then((r) => {
+              if (!r.ok) return;
+              return fsForCleanup
+                .logAction("job-error", { assetId, error: message }, projectSlug)
+                .catch(() => {});
+            })
             .then(() => {
               console.error(
                 `[queue] cleared pending task for ${assetId} in ${projectSlug}`,
@@ -160,7 +165,7 @@ export async function reconcileQueueOnStartup(): Promise<void> {
   const projects = await fsRef.current.listProjects();
   for (const project of projects) {
     const dir = projectDirFor(project.slug);
-    await fsRef.current.ensureClipfirstSetup(project.slug);
+    await fsRef.current.ensureProjectInitialized(project.slug);
     queueApi.reapOnStartup(dir);
     await queueApi.reconcileFromSidecars(dir).catch((e) => {
       console.error(`[queue] reconcile failed for ${project.slug}:`, e);
@@ -226,13 +231,13 @@ async function ensureProjectReady(
       `queue.enqueue: project not found: ${slug} (jobId=${jobId})`,
     );
   }
-  await fsRef.current.ensureClipfirstSetup(slug);
+  await fsRef.current.ensureProjectInitialized(slug);
   ensureRunner(slug);
   return { slug, dir };
 }
 
 function buildEnqueueOptions(jobId: string, payload: JobPayload) {
-  // Don't pass externalTaskId here: clipfirst-fs reserves that field for jobs
+  // Don't pass externalTaskId here: clipfirst-engine reserves that field for jobs
   // that track an already-submitted external task, and starts those rows in
   // "running" state — which means the runner skips them. clipfirst's jobId is
   // just a client-side dedupe key, so dedupeKey + jobIdIndex (in-memory) is

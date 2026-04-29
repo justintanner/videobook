@@ -1,6 +1,5 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
-import { deletePendingTask } from "./pending-task.js";
 import {
   buildResponses,
   firstResponseText,
@@ -201,7 +200,7 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
       projectSlug,
     );
 
-    await deletePendingTask(fs, scriptAssetId, projectSlug);
+    await fs.pendingTasks.delete(projectSlug, scriptAssetId);
 
     console.log(`[rewrite_script] DONE ${scriptAssetId} (${rewritten.prompt.length} chars)`);
     return { success: true, scriptAssetId, prompt: rewritten.prompt };

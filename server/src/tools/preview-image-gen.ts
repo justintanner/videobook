@@ -6,7 +6,7 @@
  * models via the dropdown in the UI.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
 import {

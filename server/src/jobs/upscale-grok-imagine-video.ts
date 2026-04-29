@@ -1,8 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
-
 type UpscaleGrokImagineVideoPayload = {
   type: "upscale_grok_imagine_video";
   sourceVideoId: string;
@@ -38,18 +36,19 @@ export function registerUpscaleGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "grok_imagine_upscale_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceVideoId,
-        upscale: true,
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "grok_imagine_upscale_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          sourceVideoId,
+          upscale: true,
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

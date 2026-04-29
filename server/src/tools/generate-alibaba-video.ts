@@ -1,10 +1,10 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "../media-files.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -156,20 +156,21 @@ export function generateAlibabaVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoIds = [firstClip?.assetId, videoRef?.assetId].filter((v): v is string => v !== undefined);
       const sourceAudioIds = drivingAudio ? [drivingAudio.assetId] : [];
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "alibaba_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          prompt,
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "alibaba_video",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: {
+            prompt,
+            sourceImageIds,
+            sourceVideoIds,
+            sourceAudioIds,
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `alibaba-video-${vidAssetId}-${Date.now()}`;
 

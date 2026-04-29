@@ -1,9 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import type { PendingKieTask } from "../jobs/pending-task.js";
 
-type GenerationError = {
+type GenerationErrorOut = {
   message: string;
   failedAt?: string;
   failCode?: string;
@@ -13,7 +12,7 @@ type GenerationError = {
 type GenerationPayloadResponse = {
   payload: unknown | null;
   meta: Record<string, unknown> | null;
-  error: GenerationError | null;
+  error: GenerationErrorOut | null;
   taskType: string | null;
 };
 
@@ -30,15 +29,26 @@ export function generationPayloadDef(fs: ClipfirstFs): ToolDef {
 
       const [payloadRes, taskRes, errorRes] = await Promise.all([
         fs.readMetadata<unknown>(asset_id, "generation-payload", project_slug),
-        fs.readMetadata<PendingKieTask>(asset_id, "kie-task", project_slug),
-        fs.readMetadata<GenerationError>(asset_id, "generation-error", project_slug),
+        fs.pendingTasks.read(project_slug, asset_id),
+        fs.generationErrors.read(project_slug, asset_id),
       ]);
+
+      const task = taskRes.ok ? taskRes.value : null;
+      const errorRecord = errorRes.ok ? errorRes.value : null;
+      const error: GenerationErrorOut | null = errorRecord
+        ? {
+            message: errorRecord.message,
+            failedAt: new Date(errorRecord.failedAt * 1000).toISOString(),
+            ...(errorRecord.failCode !== undefined ? { failCode: errorRecord.failCode } : {}),
+            ...(errorRecord.prompt !== undefined && errorRecord.prompt !== null ? { prompt: errorRecord.prompt } : {}),
+          }
+        : null;
 
       const response: GenerationPayloadResponse = {
         payload: payloadRes.ok ? payloadRes.value : null,
-        meta: taskRes.ok ? taskRes.value.meta : null,
-        error: errorRes.ok ? errorRes.value : null,
-        taskType: taskRes.ok ? taskRes.value.taskType : null,
+        meta: task ? task.meta : null,
+        error,
+        taskType: task ? task.taskType : null,
       };
 
       return {

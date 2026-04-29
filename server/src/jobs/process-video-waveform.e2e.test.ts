@@ -46,7 +46,7 @@ async function pollForFile(filePath: string, timeoutMs = 60_000): Promise<void> 
   throw new Error(`${filePath} not found after ${timeoutMs}ms`);
 }
 
-describe("process_video persists audio waveform via clipfirst-fs primitive", () => {
+describe("process_video persists audio waveform via clipfirst-engine primitive", () => {
   let client: Client;
   let tempDir: string;
   let assetId: string;

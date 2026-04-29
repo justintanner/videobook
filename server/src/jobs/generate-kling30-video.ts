@@ -1,9 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import type { KlingElement, MultiShotPrompt } from "@apicity/kie";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildKling30VideoPayload } from "../payload-builders.js";
 
 type ImageInput = { assetId: string; filename: string };
@@ -80,23 +79,24 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "kling30_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageIds,
-        ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
-        ...(duration !== undefined ? { duration } : {}),
-        ...(sound !== undefined ? { sound } : {}),
-        ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-        ...(multi_shots !== undefined ? { multi_shots } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "kling30_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          sourceImageIds,
+          ...(prompt !== undefined ? { prompt } : {}),
+          ...(mode !== undefined ? { mode } : {}),
+          ...(duration !== undefined ? { duration } : {}),
+          ...(sound !== undefined ? { sound } : {}),
+          ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(multi_shots !== undefined ? { multi_shots } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

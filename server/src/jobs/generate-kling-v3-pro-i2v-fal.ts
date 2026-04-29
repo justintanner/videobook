@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { submitFalJob } from "./_fal-shared.js";

@@ -11,7 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "clipfirst-fs";
+import { createFs } from "clipfirst-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { parseCommandArgs, filterCommandsByMountKeys } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
@@ -2984,30 +2984,6 @@ describe("slash commands e2e", () => {
       expect(slots[0].slug).toBe(assetId);
     });
 
-    it("handles legacy array-format timeline config", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const data = Buffer.from("fake-png-data").toString("base64");
-      const upload = await client.callTool({
-        name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "photo.png", data },
-      });
-      const assetId = parseResult(upload).assetId as string;
-
-      // Write timeline as raw array (legacy format)
-      await fs.writeProjectMeta("timeline", [
-        { slug: "" },
-      ], "test-proj");
-
-      const result = await client.callTool({
-        name: "assign_slot",
-        arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
-      });
-      expect(result.isError).toBeFalsy();
-      const parsed = parseResult(result);
-      expect(parsed.render).toBe("landscape"); // default from normalizeConfig
-      expect((parsed.slots as Array<{ slug: string }>)[0].slug).toBe(assetId);
-    });
-
     it("errors for nonexistent project", async () => {
       const result = await client.callTool({
         name: "assign_slot",
@@ -3022,32 +2998,9 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 44. /unassign — normalizeConfig and nonexistent project
+  // 44. /unassign — nonexistent project
   // -----------------------------------------------------------------------
-  describe("/unassign with legacy config", () => {
-    it("handles legacy array-format timeline config", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const data = Buffer.from("fake-png-data").toString("base64");
-      const upload = await client.callTool({
-        name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "photo.png", data },
-      });
-      const assetId = parseResult(upload).assetId as string;
-
-      // Write timeline as raw array (legacy format)
-      await fs.writeProjectMeta("timeline", [
-        { slug: assetId },
-      ], "test-proj");
-
-      const result = await client.callTool({
-        name: "unassign_slot",
-        arguments: { project_slug: "test-proj", slot: "s01" },
-      });
-      expect(result.isError).toBeFalsy();
-      const parsed = parseResult(result);
-      expect(parsed.render).toBe("landscape"); // normalized default
-    });
-
+  describe("/unassign", () => {
     it("errors for nonexistent project (no timeline)", async () => {
       const result = await client.callTool({
         name: "unassign_slot",

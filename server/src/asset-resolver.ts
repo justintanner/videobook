@@ -1,7 +1,7 @@
 /**
  * Reusable @tag parsing & resolution for asset references in prompts.
  */
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 
 type ResolvedAsset = {
   tag: string;         // "@img-sunset"

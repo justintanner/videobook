@@ -1,8 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildAlibabaImagePayload } from "../payload-builders.js";
 
 type GenerateAlibabaImagePayload = {
@@ -45,23 +44,24 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
-    await writePendingTask(fs, imgAssetId, projectSlug, {
-      taskId,
-      taskType: "alibaba_image",
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageIds,
-        prompt,
-        ...(size !== undefined ? { size } : {}),
-        ...(n !== undefined ? { n } : {}),
-        ...(watermark !== undefined ? { watermark } : {}),
-        ...(thinkingMode !== undefined ? { thinkingMode } : {}),
-        ...(seed !== undefined ? { seed } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "alibaba_image",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        meta: {
+          sourceImageIds,
+          prompt,
+          ...(size !== undefined ? { size } : {}),
+          ...(n !== undefined ? { n } : {}),
+          ...(watermark !== undefined ? { watermark } : {}),
+          ...(thinkingMode !== undefined ? { thinkingMode } : {}),
+          ...(seed !== undefined ? { seed } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });
@@ -91,23 +91,24 @@ export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
-    await writePendingTask(fs, imgAssetId, projectSlug, {
-      taskId,
-      taskType: "alibaba_image_pro",
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageIds,
-        prompt,
-        ...(size !== undefined ? { size } : {}),
-        ...(n !== undefined ? { n } : {}),
-        ...(watermark !== undefined ? { watermark } : {}),
-        ...(thinkingMode !== undefined ? { thinkingMode } : {}),
-        ...(seed !== undefined ? { seed } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "alibaba_image_pro",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        meta: {
+          sourceImageIds,
+          prompt,
+          ...(size !== undefined ? { size } : {}),
+          ...(n !== undefined ? { n } : {}),
+          ...(watermark !== undefined ? { watermark } : {}),
+          ...(thinkingMode !== undefined ? { thinkingMode } : {}),
+          ...(seed !== undefined ? { seed } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

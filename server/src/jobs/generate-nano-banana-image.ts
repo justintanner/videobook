@@ -1,8 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildNanoBananaImagePayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 
@@ -46,21 +45,22 @@ export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, imgAssetId, projectSlug, {
-      taskId,
-      taskType: "nano_banana_image",
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageIds,
-        prompt,
-        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-        ...(outputFormat !== undefined ? { outputFormat } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "nano_banana_image",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        meta: {
+          sourceImageIds,
+          prompt,
+          ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
+          ...(outputFormat !== undefined ? { outputFormat } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

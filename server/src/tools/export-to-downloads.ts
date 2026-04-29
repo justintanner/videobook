@@ -2,7 +2,7 @@ import { copyFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";

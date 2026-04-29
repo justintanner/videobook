@@ -1,7 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { submitTranscribe } from "./transcribe-submit.js";
 
 type TranscribePayload = {
@@ -33,19 +32,20 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       ...(languageCode ? { languageCode } : {}),
     });
 
-    await writePendingTask(fs, assetId, projectSlug, {
-      taskId,
-      taskType,
-      assetId,
-      assetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        ...(languageCode ? { languageCode } : {}),
-        ...(autoRender ? { autoRender } : {}),
-        ...(endpointId ? { falEndpointId: endpointId } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType,
+        assetId,
+        assetDir,
+        meta: {
+          ...(languageCode ? { languageCode } : {}),
+          ...(autoRender ? { autoRender } : {}),
+          ...(endpointId ? { falEndpointId: endpointId } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId, provider };
   });

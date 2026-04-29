@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createFs } from "clipfirst-fs";
-import type { ClipfirstFs } from "clipfirst-fs";
+import { createFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "clipfirst-engine";
 import {
   formatHistoryForPrompt,
   getRecentHistory,

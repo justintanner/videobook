@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {
@@ -54,15 +54,16 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, imgAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "grok_imagine_text",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { prompt },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "grok_imagine_text",
+          assetId: imgAssetId,
+          assetDir: imgAssetDir,
+          meta: { prompt },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `grok-imagine-text-${imgAssetId}-${Date.now()}`;
 

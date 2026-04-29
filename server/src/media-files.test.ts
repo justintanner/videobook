@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { AssetManifestFile } from "clipfirst-fs";
+import type { AssetManifestFile } from "clipfirst-engine";
 import { findAudioFile, findVideoFile } from "./media-files.js";
 
 function makeFile(name: string, ext: string | null = null): AssetManifestFile {

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, GitCommit } from "clipfirst-fs";
+import type { ClipfirstFs, GitCommit } from "clipfirst-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 

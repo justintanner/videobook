@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { buildAssetList } from "./sync.js";

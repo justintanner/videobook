@@ -1,7 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { findFailedAssets } from "../jobs/pending-task.js";
 
 export function clearFailedTasksDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -13,8 +12,8 @@ export function clearFailedTasksDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
 
-      const assets = await fs.listAssets(project_slug);
-      const failures = await findFailedAssets(fs, project_slug, assets);
+      const failuresRes = await fs.generationErrors.findAll(project_slug);
+      const failures = failuresRes.ok ? failuresRes.value : [];
 
       const cleared: string[] = [];
       const errors: Array<{ assetId: string; message: string }> = [];

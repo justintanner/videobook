@@ -1,9 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { alibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { queue, registerJobHandler } from "../queue.js";
-import { markTaskCompleting, readPendingTask } from "./pending-task.js";
 import { buildAlibabaQwenImagePayload } from "../payload-builders.js";
 
 type GenerateAlibabaQwenImagePayload = {
@@ -64,9 +63,10 @@ async function runQwenImageJob(
   }
   if (resultUrls.length === 0) throw new Error("Alibaba Qwen response contained no image URLs");
 
-  const existingTask = await readPendingTask(fs, imgAssetId, projectSlug);
+  const existingTaskRes = await fs.pendingTasks.read(projectSlug, imgAssetId);
+  const existingTask = existingTaskRes.ok ? existingTaskRes.value : null;
   if (existingTask) {
-    await markTaskCompleting(fs, imgAssetId, projectSlug, existingTask);
+    await fs.pendingTasks.markCompleting(projectSlug, imgAssetId);
   }
 
   const jobId = `complete-alibaba-qwen-${imgAssetId}-${Date.now()}`;

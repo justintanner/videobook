@@ -1,8 +1,8 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-fs";
+import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -107,15 +107,16 @@ export function generateAlibabaImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, imgAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "alibaba_image",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { sourceImageIds, prompt },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "alibaba_image",
+          assetId: imgAssetId,
+          assetDir: imgAssetDir,
+          meta: { sourceImageIds, prompt },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `alibaba-image-${imgAssetId}-${Date.now()}`;
 

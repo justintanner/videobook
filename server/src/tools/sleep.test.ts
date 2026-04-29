@@ -5,9 +5,8 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { sleepDef } from "./sleep.js";
-import { writePendingTask } from "../jobs/pending-task.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 
 describe("sleep tool", () => {
   let client: Client;
@@ -86,15 +85,16 @@ describe("sleepDef handler", () => {
     const assetId = assetResult.value.assetId;
 
     // Write a pending task so sleep never resolves to ready
-    await writePendingTask(fs, assetId, "test-proj", {
-      taskId: "task-will-timeout",
-      taskType: "transcribe",
-      assetId,
-      assetDir: assetResult.value.path,
-      projectSlug: "test-proj",
-      createdAt: new Date().toISOString(),
-      meta: {},
+    {
+      const _ptResult = await fs.pendingTasks.write("test-proj", {
+        taskId: "task-will-timeout",
+        taskType: "transcribe",
+        assetId,
+        assetDir: assetResult.value.path,
+        meta: {},
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
+    }
 
     // No KIE_API_KEY so task polling is skipped, pending task stays
     const savedKey = process.env.KIE_API_KEY;

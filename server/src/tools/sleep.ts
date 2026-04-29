@@ -1,6 +1,5 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
-import { readPendingTask } from "../jobs/pending-task.js";
 import { syncDef } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -95,7 +94,8 @@ export function sleepDef(fs: ClipfirstFs): ToolDef {
         }
 
         // Check done: no pending task and not locked
-        const pendingTask = await readPendingTask(fs, asset_id, project_slug);
+        const ptRead = await fs.pendingTasks.read(project_slug, asset_id);
+        const pendingTask = ptRead.ok ? ptRead.value : null;
         const locked = await fs.isLocked(assetDir);
 
         if (pendingTask === null && !locked) {

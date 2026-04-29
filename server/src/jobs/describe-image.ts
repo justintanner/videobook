@@ -1,12 +1,10 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { xai, withRetry } from "@apicity/xai";
 import type { XaiResponseRequest, XaiResponseResponse } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
-import { deletePendingTask } from "./pending-task.js";
-
 type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
@@ -188,7 +186,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
         projectSlug,
       );
 
-      await deletePendingTask(fs, scriptAssetId, projectSlug);
+      await fs.pendingTasks.delete(projectSlug, scriptAssetId);
     }
 
     console.log(

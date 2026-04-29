@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {
@@ -87,21 +87,22 @@ export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds: string[] = [];
       const sourceAudioIds: string[] = [];
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "wan27_extend_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          prompt,
-          mode: "extend",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "wan27_extend_video",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: {
+            prompt,
+            mode: "extend",
+            sourceImageIds,
+            sourceVideoIds,
+            sourceAudioIds,
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `wan27-extend-${vidAssetId}-${Date.now()}`;
 

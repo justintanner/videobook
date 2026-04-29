@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import type { ImageInput } from "./_image-inputs.js";
@@ -69,20 +69,21 @@ export function generateWan27VideoeditFalDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "fal_wan27_videoedit",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          prompt,
-          mode: "videoedit",
-          sourceVideoIds: [sourceVideoAssetId],
-          ...(refImageAssetId ? { sourceImageIds: [refImageAssetId] } : {}),
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "fal_wan27_videoedit",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: {
+            prompt,
+            mode: "videoedit",
+            sourceVideoIds: [sourceVideoAssetId],
+            ...(refImageAssetId ? { sourceImageIds: [refImageAssetId] } : {}),
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `fal-wan27-videoedit-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

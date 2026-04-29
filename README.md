@@ -13,7 +13,7 @@ npm run dev        # Start frontend + MCP server
 
 - **Frontend** (`src/`): React SPA connecting to MCP server via `use-mcp` hook
 - **MCP Server** (`server/src/`): Express app exposing tools at `POST /mcp` (port 3001)
-- **Filesystem** (`clipfirst-fs`): Local dependency providing project/asset management with git versioning
+- **Filesystem** (`clipfirst-engine`): Local dependency providing project/asset management with git versioning
 
 ## Commands
 

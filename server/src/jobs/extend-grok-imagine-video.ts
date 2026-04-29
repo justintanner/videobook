@@ -1,8 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
-
 type ExtendGrokImagineVideoPayload = {
   type: "extend_grok_imagine_video";
   sourceVideoId: string;
@@ -45,20 +43,21 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "grok_imagine_extend_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceVideoId,
-        prompt,
-        ...(extend_at !== undefined ? { extend_at } : {}),
-        ...(extend_times !== undefined ? { extend_times } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "grok_imagine_extend_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          sourceVideoId,
+          prompt,
+          ...(extend_at !== undefined ? { extend_at } : {}),
+          ...(extend_times !== undefined ? { extend_times } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

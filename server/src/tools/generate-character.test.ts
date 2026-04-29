@@ -59,7 +59,7 @@ describe("character sheet prompt defaults", () => {
     expect(clause).toContain("high-waist briefs");
   });
 
-  it("maps legacy presentation values to sex values", () => {
+  it("maps alternate presentation spellings to canonical sex values", () => {
     expect(normalizeCharacterSex("masculine")).toBe("male");
     expect(normalizeCharacterSex("feminine")).toBe("female");
   });
@@ -69,9 +69,9 @@ describe("character sheet prompt defaults", () => {
     expect(normalizeCharacterSubjectKind("animal")).toBe("animal");
   });
 
-  it("generates legacy profiles without subject kind as human sheets", () => {
-    const { subject_kind, ...legacyProfile } = humanProfile;
-    const prompt = buildCharacterPrompt(legacyProfile, "nano_banana_pro", "kie", undefined).toLowerCase();
+  it("defaults profiles missing subject_kind to human sheets", () => {
+    const { subject_kind, ...profileWithoutKind } = humanProfile;
+    const prompt = buildCharacterPrompt(profileWithoutKind, "nano_banana_pro", "kie", undefined).toLowerCase();
 
     expect(subject_kind).toBe("human");
     expect(prompt).toContain("character reference sheet");

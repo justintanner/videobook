@@ -1,8 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { uploadAssetFile } from "../upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
 
 type RefImageInput = {
@@ -47,21 +46,22 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const { request_id } = await provider.post.v1.videos.generations(request);
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId: request_id,
-      taskType: "xai_grok_imagine_ref_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        prompt,
-        refCount: refImages.length,
-        ...(duration !== undefined ? { duration } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId: request_id,
+        taskType: "xai_grok_imagine_ref_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          prompt,
+          refCount: refImages.length,
+          ...(duration !== undefined ? { duration } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
+          ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, requestId: request_id, provider: "xai" };
   });

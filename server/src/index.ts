@@ -11,7 +11,7 @@ import {
   cleanOrphanedQueuedTasks,
   cleanStaleLockRaceErrors,
   resetStaleCompletingTasks,
-} from "./jobs/pending-task.js";
+} from "./jobs/startup-cleanup.js";
 
 const app = express();
 app.use(cors());
@@ -75,15 +75,6 @@ async function start(): Promise<void> {
     if (aborted > 0) {
       console.log(
         `[startup] aborted ${aborted} orphan operation(s) in ${project.slug}`,
-      );
-    }
-    const backfill = await fs.backfillPendingTaskSidecars(project.slug);
-    if (
-      backfill.pendingTasksMigrated > 0 ||
-      backfill.generationErrorsMigrated > 0
-    ) {
-      console.log(
-        `[startup] backfilled ${project.slug}: pending_tasks=${backfill.pendingTasksMigrated} generation_errors=${backfill.generationErrorsMigrated}`,
       );
     }
   }

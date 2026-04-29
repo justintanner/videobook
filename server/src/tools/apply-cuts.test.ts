@@ -152,7 +152,7 @@ describe("apply_cuts tool", () => {
   it("returns error for cut_end past duration", async () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
-    const { createFs } = await import("clipfirst-fs");
+    const { createFs } = await import("clipfirst-engine");
     const fs = createFs({ projectsDir: tempDir });
     await fs.writeMetadata(
       uploaded.assetId,
@@ -206,7 +206,7 @@ describe("apply_cuts tool", () => {
   });
 
   it("returns error when asset has no video", async () => {
-    const { createFs } = await import("clipfirst-fs");
+    const { createFs } = await import("clipfirst-engine");
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "no-video", "cuts-proj");
     if (!asset.ok) throw new Error("Failed to create asset");

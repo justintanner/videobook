@@ -1,7 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildSeedreamTextImagePayload } from "../payload-builders.js";
 
 type GenerateSeedreamTextImagePayload = {
@@ -35,21 +34,22 @@ export function registerGenerateSeedreamTextImageJob(fs: ClipfirstFs): void {
     });
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, imgAssetId, projectSlug, {
-      taskId,
-      taskType: "seedream_text_image",
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageIds: [],
-        prompt,
-        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-        ...(quality !== undefined ? { quality } : {}),
-        ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "seedream_text_image",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        meta: {
+          sourceImageIds: [],
+          prompt,
+          ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+          ...(quality !== undefined ? { quality } : {}),
+          ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

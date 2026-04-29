@@ -6,7 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 
 type TextContent = Array<{ type: string; text: string }>;
 type ManifestFile = { name: string; size_bytes: number };

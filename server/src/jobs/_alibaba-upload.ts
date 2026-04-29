@@ -1,5 +1,5 @@
 import { alibaba, uploadFile } from "@apicity/alibaba";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 
 // Upload an asset to DashScope's OSS bucket via @apicity/alibaba's uploadFile

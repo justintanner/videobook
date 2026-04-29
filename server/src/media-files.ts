@@ -1,4 +1,4 @@
-import type { AssetManifestFile } from "clipfirst-fs";
+import type { AssetManifestFile } from "clipfirst-engine";
 import { extname } from "node:path";
 
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a"]);

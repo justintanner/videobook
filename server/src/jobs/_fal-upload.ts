@@ -1,5 +1,5 @@
 import { fal } from "@apicity/fal";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,

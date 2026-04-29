@@ -2,7 +2,7 @@
  * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
  * prompting guides via GPT-5.2.
  */
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";

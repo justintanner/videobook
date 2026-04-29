@@ -1,10 +1,9 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineVideoPayload = {
@@ -48,20 +47,21 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       const { request_id } = await provider.post.v1.videos.generations(request);
 
-      await writePendingTask(fs, vidAssetId, projectSlug, {
-        taskId: request_id,
-        taskType: "xai_grok_imagine_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          sourceImageId,
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(duration !== undefined ? { duration } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(projectSlug, {
+          taskId: request_id,
+          taskType: "xai_grok_imagine_video",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: {
+            sourceImageId,
+            ...(prompt !== undefined ? { prompt } : {}),
+            ...(duration !== undefined ? { duration } : {}),
+            ...(resolution !== undefined ? { resolution } : {}),
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       return { success: true, requestId: request_id, provider: "xai" };
     }
@@ -81,21 +81,22 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
     await fs.writeMetadata(vidAssetId, "kie-task-id", { taskId }, projectSlug);
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "grok_imagine_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        sourceImageId,
-        ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
-        ...(duration !== undefined ? { duration } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "grok_imagine_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          sourceImageId,
+          ...(prompt !== undefined ? { prompt } : {}),
+          ...(mode !== undefined ? { mode } : {}),
+          ...(duration !== undefined ? { duration } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

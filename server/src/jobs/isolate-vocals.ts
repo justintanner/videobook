@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
@@ -6,8 +6,6 @@ import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadBytes, contentHash } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
-import { writePendingTask } from "./pending-task.js";
-
 const MIN_ISOLATION_DURATION = 4.6;
 const PAD_TARGET_DURATION = 5.0;
 
@@ -79,18 +77,19 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
     const taskId = await submitMediaJob(provider, request);
 
     // Write pending task
-    await writePendingTask(fs, assetId, projectSlug, {
-      taskId,
-      taskType: "isolate_vocals",
-      assetId,
-      assetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        isAudioAsset,
-        ...(originalDuration !== undefined ? { originalDuration } : {}),
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "isolate_vocals",
+        assetId,
+        assetDir,
+        meta: {
+          isAudioAsset,
+          ...(originalDuration !== undefined ? { originalDuration } : {}),
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

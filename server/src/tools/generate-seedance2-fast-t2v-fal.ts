@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
@@ -40,15 +40,16 @@ export function generateSeedance2FastT2vFalDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "fal_seedance2_fast_t2v",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { prompt, mode: "t2v", sourceImageIds: [] },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "fal_seedance2_fast_t2v",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: { prompt, mode: "t2v", sourceImageIds: [] },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `fal-seedance2-fast-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

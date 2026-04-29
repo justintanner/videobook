@@ -1,9 +1,8 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
-import { writePendingTask, deletePendingTask } from "./pending-task.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
 
@@ -61,7 +60,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
         provenance,
       } as unknown as Record<string, unknown>);
 
-      await deletePendingTask(fs, imgAssetId, projectSlug);
+      await fs.pendingTasks.delete(projectSlug, imgAssetId);
 
       return { success: true, provider: "xai" };
     }
@@ -75,15 +74,16 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
     const request = buildGrokImagineTextPayload({ prompt, aspect_ratio: aspectRatio });
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, imgAssetId, projectSlug, {
-      taskId,
-      taskType: "grok_imagine_text",
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "grok_imagine_text",
+        assetId: imgAssetId,
+        assetDir: imgAssetDir,
+        meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

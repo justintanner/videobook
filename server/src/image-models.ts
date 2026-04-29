@@ -34,7 +34,7 @@ const QWEN_GENERATION_MODEL_VALUES = ["qwen-image-2.0-pro", "qwen-image-2.0"] as
 const QWEN_EDIT_MODEL_VALUES = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
 
 // ---------------------------------------------------------------------------
-// Provider route (unchanged type for backward compat)
+// Provider route shape consumed by the model-listing tool.
 // ---------------------------------------------------------------------------
 
 type ProviderRoute = {
@@ -247,7 +247,7 @@ async function initImageModels(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Schema types (unchanged for backward compat)
+// Schema types describing each tool's input parameters.
 // ---------------------------------------------------------------------------
 
 type ParamSchema = {
@@ -388,7 +388,8 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
 }
 
 // ---------------------------------------------------------------------------
-// Build ImageModelInfo from config + provider schemas (backward-compat shape)
+// Public ImageModelInfo shape: built from config + provider schemas, returned
+// by list_image_models for the FE generation panel.
 // ---------------------------------------------------------------------------
 
 type ImageModelInfo = {

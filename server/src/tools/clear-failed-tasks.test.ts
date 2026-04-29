@@ -3,10 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
-import { failPendingTask } from "../jobs/pending-task.js";
+import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 
 async function createImageAsset(fs: ClipfirstFs, projectSlug: string, name: string): Promise<string> {
   // Create the asset directly via fs.createAsset rather than upload_file so
@@ -44,8 +44,8 @@ describe("clear_failed_tasks tool", () => {
     const failedTwo = await createImageAsset(fs, "test-proj", "bad two");
     const healthy = await createImageAsset(fs, "test-proj", "good");
 
-    await failPendingTask(fs, failedOne, "test-proj", { message: "boom" });
-    await failPendingTask(fs, failedTwo, "test-proj", { message: "kaboom" });
+    await failPendingTaskAndLog(fs, "test-proj", failedOne, { message: "boom" });
+    await failPendingTaskAndLog(fs, "test-proj", failedTwo, { message: "kaboom" });
 
     const res = await client.callTool({
       name: "clear_failed_tasks",

@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoEditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "../media-files.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
@@ -45,15 +45,16 @@ export function generateGrokImagineVideoEditFalDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      await writePendingTask(fs, vidAssetId, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "fal_grok_imagine_video_edit",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: { prompt, mode: "videoedit", sourceVideoIds: [sourceVideoAssetId] },
-      });
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "fal_grok_imagine_video_edit",
+          assetId: vidAssetId,
+          assetDir: vidAssetDir,
+          meta: { prompt, mode: "videoedit", sourceVideoIds: [sourceVideoAssetId] },
+        });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `fal-grok-imagine-video-edit-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

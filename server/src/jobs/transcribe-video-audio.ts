@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { openai } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 

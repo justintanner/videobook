@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
@@ -114,18 +114,15 @@ interface CharacterOutcome {
 
 function normalizeProfile(p: CharacterPromptProfile): CharacterProfile {
   const subjectKind = normalizeCharacterSubjectKind(p.subject_kind);
-  const legacySex = typeof p.gender_presentation === "string" ? p.gender_presentation : "";
-  const rawSex = p.sex?.trim() ? p.sex : legacySex;
+  const rawSex = p.sex ?? "";
   if (subjectKind === "human" && !rawSex.trim()) {
     throw new Error("profile.sex is required for human profiles");
   }
-  const normalized = {
+  return {
     ...p,
     subject_kind: subjectKind,
     sex: rawSex.trim() ? normalizeCharacterSex(rawSex) : "",
   };
-  delete normalized.gender_presentation;
-  return normalized;
 }
 
 function profileSubjectSentence(p: CharacterProfile): string {

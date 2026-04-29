@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import type { ToolDef } from "./tool-def.js";
 
 interface CommandParam {

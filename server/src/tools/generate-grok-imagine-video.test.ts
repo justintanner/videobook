@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "clipfirst-fs";
+import { createFs } from "clipfirst-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 

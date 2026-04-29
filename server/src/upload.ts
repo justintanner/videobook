@@ -1,6 +1,6 @@
 import { free } from "@apicity/free";
 import { createHash } from "node:crypto";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {

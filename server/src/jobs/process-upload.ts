@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
+import type { ClipfirstFs, AssetEntry } from "clipfirst-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 

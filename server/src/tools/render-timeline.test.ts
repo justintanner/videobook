@@ -85,7 +85,7 @@ describe("render_timeline tool", () => {
   it("returns error when timeline has no slots with assets", async () => {
     const fs = createFsForTest(tempDir);
     // Write an empty slots array as timeline data (render_timeline expects an array)
-    await fs.writeProjectMeta("timeline", [{ slug: "" }, { slug: "" }], "timeline-proj");
+    await fs.writeProjectMeta("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" }, "timeline-proj");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -103,7 +103,7 @@ describe("render_timeline tool", () => {
     const fs = createFsForTest(tempDir);
     await fs.writeProjectMeta(
       "timeline",
-      [{ slug: "vid-nonexistent" }],
+      { slots: [{ slug: "vid-nonexistent" }], render: "landscape" },
       "timeline-proj",
     );
 
@@ -127,7 +127,7 @@ describe("render_timeline tool", () => {
     const fs = createFsForTest(tempDir);
     await fs.writeProjectMeta(
       "timeline",
-      [{ slug: uploaded.assetId }],
+      { slots: [{ slug: uploaded.assetId }], render: "landscape" },
       "timeline-proj",
     );
 
@@ -220,7 +220,7 @@ describe("render_timeline tool", () => {
     const fs = createFsForTest(tempDir);
     await fs.writeProjectMeta(
       "timeline",
-      [{ slug: uploaded.assetId }],
+      { slots: [{ slug: uploaded.assetId }], render: "landscape" },
       "timeline-proj",
     );
 

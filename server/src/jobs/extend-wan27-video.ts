@@ -1,8 +1,7 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
-import { writePendingTask } from "./pending-task.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
@@ -47,21 +46,22 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
-    await writePendingTask(fs, vidAssetId, projectSlug, {
-      taskId,
-      taskType: "wan27_extend_video",
-      assetId: vidAssetId,
-      assetDir: vidAssetDir,
-      projectSlug,
-      createdAt: new Date().toISOString(),
-      meta: {
-        prompt,
-        mode: "extend",
-        sourceImageIds,
-        sourceVideoIds,
-        sourceAudioIds,
-      },
+    {
+      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        taskId,
+        taskType: "wan27_extend_video",
+        assetId: vidAssetId,
+        assetDir: vidAssetDir,
+        meta: {
+          prompt,
+          mode: "extend",
+          sourceImageIds,
+          sourceVideoIds,
+          sourceAudioIds,
+        },
     });
+      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+    }
 
     return { success: true, taskId };
   });

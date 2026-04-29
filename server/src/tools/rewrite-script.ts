@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
-import { writePendingTask, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 type RewriteVariant = "full" | "tldr";
@@ -27,7 +27,7 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
       "Variants: \"full\" (full reproduction prompt + breakdown) or \"tldr\" (1–2 sentence summary). " +
       "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that feed. " +
       "Optional custom_prompt applies a transformation instruction (e.g. \"replace the pig with a man in a blue suit\"). " +
-      "Previous versions are preserved in git history via clipfirst-fs. " +
+      "Previous versions are preserved in git history via clipfirst-engine. " +
       "Returns immediately; sync reports status=\"generating\" until the new markdown is written.",
     schema: {
       asset_id: z.string().describe("Script asset ID (script-*)"),
@@ -72,20 +72,21 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
       }
       const scriptAssetDir = scriptManifest.value.path;
 
-      await writePendingTask(fs, asset_id, project_slug, {
-        taskId: QUEUED_TASK_ID,
-        taskType: "rewrite_script",
-        assetId: asset_id,
-        assetDir: scriptAssetDir,
-        projectSlug: project_slug,
-        createdAt: new Date().toISOString(),
-        meta: {
-          sourceAssetId,
-          variant,
-          ...(platform ? { platform } : {}),
-          ...(custom_prompt ? { customPrompt: custom_prompt } : {}),
-        },
+      {
+        const _ptResult = await fs.pendingTasks.write(project_slug, {
+          taskId: QUEUED_TASK_ID,
+          taskType: "rewrite_script",
+          assetId: asset_id,
+          assetDir: scriptAssetDir,
+          meta: {
+            sourceAssetId,
+            variant,
+            ...(platform ? { platform } : {}),
+            ...(custom_prompt ? { customPrompt: custom_prompt } : {}),
+          },
       });
+        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${asset_id}: ${_ptResult.error.message}`);
+      }
 
       const jobId = `rewrite-script-${variant}-${asset_id}-${Date.now()}`;
       await queue.enqueue(jobId, {

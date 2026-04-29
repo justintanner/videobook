@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "../media-files.js";
 import type { ToolDef } from "./tool-def.js";

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-fs";
+import type { ClipfirstFs } from "clipfirst-engine";
 import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
