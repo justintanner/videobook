@@ -1,57 +1,34 @@
-import type { ClipfirstFs, AssetEntry } from "clipfirst-fs";
+/**
+ * Thin shim over `clipfirst-fs`'s sqlite-backed `pendingTasks` /
+ * `generationErrors` API. Pending-task lifecycle moved into the engine in the
+ * Phase-1 refactor; this file preserves the legacy `(fs, assetId, projectSlug,
+ * task)` call shape so the ~80 existing call sites can migrate gradually.
+ *
+ * Translations performed here:
+ *  - Legacy `PendingKieTask.createdAt` is an ISO string; the engine stores
+ *    epoch seconds. Shim converts in both directions.
+ *  - Legacy `failPendingTask` also wrote a "job-error" action to the action
+ *    log; the engine's atomic `fail()` does not, so the shim logs after the tx.
+ *  - Legacy `findPendingTasks` / `findFailedAssets` accepted an `assets` array
+ *    and walked sidecars per-asset; the engine version returns every row in
+ *    one query, so the `assets` argument is now ignored (kept for compat).
+ */
 
-/** Sentinel taskId written by tool handlers before the real task is created. */
-export const QUEUED_TASK_ID = "queued";
+import type { ClipfirstFs, AssetEntry, PendingTask, TaskType } from "clipfirst-fs";
+import { QUEUED_TASK_ID as ENGINE_QUEUED_TASK_ID } from "clipfirst-fs";
+
+export const QUEUED_TASK_ID = ENGINE_QUEUED_TASK_ID;
 
 export type PendingKieTask = {
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "seedance2_video" | "wan27_image" | "wan27_image_pro" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_video" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_t2v" | "fal_kling_v3_standard_i2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit" | "describe_image" | "rewrite_script";
+  taskType: TaskType;
   assetId: string;
   assetDir: string;
   projectSlug: string;
   createdAt: string;
   meta: Record<string, unknown>;
-  /** Set when sync has enqueued a complete_kie_task job for this task.
-   *  Subsequent sync polls skip this task so duplicate completion jobs
-   *  don't race on the asset-directory lock. */
   completing?: boolean;
 };
-
-export async function writePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string, task: PendingKieTask): Promise<void> {
-  // Clear any previous generation error so a retry doesn't show a stale failure
-  await fs.deleteFile(assetId, ".generation-error.json", projectSlug).catch(() => {});
-  const result = await fs.writeMetadata(assetId, "kie-task", task, projectSlug);
-  if (!result.ok) {
-    // Loud failure: callers (tool handlers + job handlers) propagate so the
-    // queue's wrapped resolver records a failed job + writes
-    // .generation-error.json for the UI. Silently ignoring this leaves the
-    // asset orphaned — the upstream Kie/Fal task is submitted but no sidecar
-    // exists for sync to poll, so the tile never resolves.
-    throw new Error(
-      `Failed to write pending-task sidecar for ${assetId}: ${result.error.message}`,
-    );
-  }
-}
-
-export async function readPendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<PendingKieTask | null> {
-  const result = await fs.readMetadata<PendingKieTask>(assetId, "kie-task", projectSlug);
-  if (!result.ok) return null;
-  return result.value;
-}
-
-export async function deletePendingTask(fs: ClipfirstFs, assetId: string, projectSlug: string): Promise<void> {
-  await fs.deleteFile(assetId, ".kie-task.json", projectSlug).catch(() => {});
-}
-
-/** Stamp a pending task as "completing" so later sync polls skip it. */
-export async function markTaskCompleting(
-  fs: ClipfirstFs,
-  assetId: string,
-  projectSlug: string,
-  task: PendingKieTask,
-): Promise<void> {
-  await fs.writeMetadata(assetId, "kie-task", { ...task, completing: true }, projectSlug);
-}
 
 export type FailureInfo = {
   message: string;
@@ -59,133 +36,190 @@ export type FailureInfo = {
   prompt?: string | null;
 };
 
-/**
- * Persist a generation failure to disk and clear the pending task.
- *
- * Writes `.generation-error.json` first, then deletes `.kie-task.json`. The
- * order matters: if the metadata write fails the pending task is preserved so
- * the next sync/poll can retry instead of silently dropping the task.
- */
+function epochToIso(epochSeconds: number): string {
+  return new Date(epochSeconds * 1000).toISOString();
+}
+
+function pendingTaskToLegacy(
+  task: PendingTask,
+  projectSlug: string,
+): PendingKieTask {
+  return {
+    taskId: task.taskId,
+    taskType: task.taskType,
+    assetId: task.assetId,
+    assetDir: task.assetDir,
+    projectSlug,
+    createdAt: epochToIso(task.createdAt),
+    meta: task.meta,
+    completing: task.completing,
+  };
+}
+
+export async function writePendingTask(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  task: PendingKieTask,
+): Promise<void> {
+  const result = await fs.pendingTasks.write(projectSlug, {
+    assetId,
+    taskId: task.taskId,
+    taskType: task.taskType,
+    assetDir: task.assetDir,
+    meta: task.meta,
+    ...(task.completing !== undefined ? { completing: task.completing } : {}),
+  });
+  if (!result.ok) {
+    throw new Error(
+      `Failed to write pending-task for ${assetId}: ${result.error.message}`,
+    );
+  }
+}
+
+export async function readPendingTask(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<PendingKieTask | null> {
+  const result = await fs.pendingTasks.read(projectSlug, assetId);
+  if (!result.ok) return null;
+  return result.value ? pendingTaskToLegacy(result.value, projectSlug) : null;
+}
+
+export async function deletePendingTask(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<void> {
+  await fs.pendingTasks.delete(projectSlug, assetId);
+}
+
+export async function markTaskCompleting(
+  fs: ClipfirstFs,
+  assetId: string,
+  projectSlug: string,
+  // task is unused now (flag flips by asset_id) but every caller passes the
+  // task they just read; preserve the signature so they don't all need edits.
+  _task?: PendingKieTask,
+): Promise<void> {
+  void _task;
+  await fs.pendingTasks.markCompleting(projectSlug, assetId);
+}
+
 export async function failPendingTask(
   fs: ClipfirstFs,
   assetId: string,
   projectSlug: string,
   info: FailureInfo,
 ): Promise<void> {
-  await fs.writeMetadata(
-    assetId,
-    "generation-error",
-    {
-      message: info.message,
-      ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
-      ...(info.prompt != null ? { prompt: info.prompt } : {}),
-      failedAt: new Date().toISOString(),
-    },
-    projectSlug,
-  ).catch(() => {});
-  await deletePendingTask(fs, assetId, projectSlug);
-  await fs.logAction(
-    "job-error",
-    {
-      assetId,
-      error: info.message,
-      ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
-    },
-    projectSlug,
-  ).catch(() => {});
+  const result = await fs.pendingTasks.fail(projectSlug, assetId, info);
+  if (!result.ok) return;
+  await fs
+    .logAction(
+      "job-error",
+      {
+        assetId,
+        error: info.message,
+        ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
+      },
+      projectSlug,
+    )
+    .catch(() => {});
+}
+
+export async function findPendingTasks(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  // Kept for compat; no longer needed since the query returns all rows.
+  _assets?: AssetEntry[],
+): Promise<PendingKieTask[]> {
+  void _assets;
+  const result = await fs.pendingTasks.findAll(projectSlug);
+  if (!result.ok) return [];
+  return result.value.map((t) => pendingTaskToLegacy(t, projectSlug));
 }
 
 export async function findFailedAssets(
-  fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[],
-): Promise<Array<{ assetId: string; failMsg: string; failedAt: string; prompt: string | null }>> {
-  const results = await Promise.all(
-    assets.map(async (asset) => {
-      const result = await fs.readMetadata<{ message: string; failedAt?: string; prompt?: string }>(asset.id, "generation-error", projectSlug);
-      if (!result.ok) return null;
-      return {
-        assetId: asset.id,
-        failMsg: result.value.message,
-        failedAt: result.value.failedAt ?? new Date().toISOString(),
-        prompt: typeof result.value.prompt === "string" ? result.value.prompt : null,
-      };
-    })
-  );
-  return results.filter((r): r is { assetId: string; failMsg: string; failedAt: string; prompt: string | null } => r !== null);
+  fs: ClipfirstFs,
+  projectSlug: string,
+  _assets?: AssetEntry[],
+): Promise<
+  Array<{
+    assetId: string;
+    failMsg: string;
+    failedAt: string;
+    prompt: string | null;
+  }>
+> {
+  void _assets;
+  const result = await fs.generationErrors.findAll(projectSlug);
+  if (!result.ok) return [];
+  return result.value.map((e) => ({
+    assetId: e.assetId,
+    failMsg: e.message,
+    failedAt: epochToIso(e.failedAt),
+    prompt: e.prompt ?? null,
+  }));
 }
 
-export async function findPendingTasks(fs: ClipfirstFs, projectSlug: string, assets: AssetEntry[]): Promise<PendingKieTask[]> {
-  const results = await Promise.all(
-    assets.map((asset) => readPendingTask(fs, asset.id, projectSlug))
-  );
-  return results.filter((t): t is PendingKieTask => t !== null);
-}
-
-export async function cleanOrphanedQueuedTasks(fs: ClipfirstFs): Promise<number> {
+export async function cleanOrphanedQueuedTasks(
+  fs: ClipfirstFs,
+): Promise<number> {
   const projects = await fs.listProjects();
-  let cleanedCount = 0;
-
+  let cleaned = 0;
   for (const project of projects) {
-    const assets = await fs.listAssets(project.slug);
-    const pendingTasks = await findPendingTasks(fs, project.slug, assets);
-    const orphanedTasks = pendingTasks.filter((task) => task.taskId === QUEUED_TASK_ID);
-
-    for (const task of orphanedTasks) {
-      await deletePendingTask(fs, task.assetId, task.projectSlug);
-      console.log(`[startup] cleaned orphaned queued task: ${task.assetId} in project ${task.projectSlug}`);
-      cleanedCount++;
+    const all = await fs.pendingTasks.findAll(project.slug);
+    if (!all.ok) continue;
+    for (const task of all.value) {
+      if (task.taskId !== QUEUED_TASK_ID) continue;
+      await fs.pendingTasks.delete(project.slug, task.assetId);
+      console.log(
+        `[startup] cleaned orphaned queued task: ${task.assetId} in project ${project.slug}`,
+      );
+      cleaned++;
     }
   }
-
-  return cleanedCount;
+  return cleaned;
 }
 
-/**
- * On startup, any pending task still stamped `completing: true` belongs to
- * a completion job that did not survive the restart. Clear the flag so the
- * next sync poll re-detects success and re-enqueues the completion job.
- */
-export async function resetStaleCompletingTasks(fs: ClipfirstFs): Promise<number> {
+export async function resetStaleCompletingTasks(
+  fs: ClipfirstFs,
+): Promise<number> {
   const projects = await fs.listProjects();
-  let resetCount = 0;
-
+  let reset = 0;
   for (const project of projects) {
-    const assets = await fs.listAssets(project.slug);
-    const pendingTasks = await findPendingTasks(fs, project.slug, assets);
-    const stale = pendingTasks.filter((t) => t.completing === true);
-
-    for (const task of stale) {
-      const { completing: _dropped, ...rest } = task;
-      void _dropped;
-      await fs.writeMetadata(task.assetId, "kie-task", rest, task.projectSlug);
-      console.log(`[startup] reset stale completing flag: ${task.assetId} in project ${task.projectSlug}`);
-      resetCount++;
+    const all = await fs.pendingTasks.findAll(project.slug);
+    if (!all.ok) continue;
+    for (const task of all.value) {
+      if (!task.completing) continue;
+      await fs.pendingTasks.clearCompleting(project.slug, task.assetId);
+      console.log(
+        `[startup] reset stale completing flag: ${task.assetId} in project ${project.slug}`,
+      );
+      reset++;
     }
   }
-
-  return resetCount;
+  return reset;
 }
 
-/**
- * Sweep `.generation-error.json` files whose message is the spurious
- * "Asset is locked: Lock already held" race artifact from duplicate
- * completion-job dispatch. These assets completed successfully; only the
- * stale error file remains and makes the tile show as failed in /inbox.
- */
-export async function cleanStaleLockRaceErrors(fs: ClipfirstFs): Promise<number> {
+export async function cleanStaleLockRaceErrors(
+  fs: ClipfirstFs,
+): Promise<number> {
   const LOCK_RACE_MARKER = "Lock already held";
   const projects = await fs.listProjects();
-  let cleanedCount = 0;
-
+  let cleaned = 0;
   for (const project of projects) {
-    const assets = await fs.listAssets(project.slug);
-    const failures = await findFailedAssets(fs, project.slug, assets);
-    for (const failure of failures) {
-      if (!failure.failMsg.includes(LOCK_RACE_MARKER)) continue;
-      await fs.deleteFile(failure.assetId, ".generation-error.json", project.slug).catch(() => {});
-      console.log(`[startup] cleared stale lock-race error: ${failure.assetId} in project ${project.slug}`);
-      cleanedCount++;
+    const all = await fs.generationErrors.findAll(project.slug);
+    if (!all.ok) continue;
+    for (const e of all.value) {
+      if (!e.message.includes(LOCK_RACE_MARKER)) continue;
+      await fs.generationErrors.clear(project.slug, e.assetId);
+      console.log(
+        `[startup] cleared stale lock-race error: ${e.assetId} in project ${project.slug}`,
+      );
+      cleaned++;
     }
   }
-
-  return cleanedCount;
+  return cleaned;
 }

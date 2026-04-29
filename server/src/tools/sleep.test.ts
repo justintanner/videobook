@@ -43,20 +43,17 @@ describe("sleep tool", () => {
   });
 
   it("returns ready immediately for asset with no pending task and not locked", async () => {
-    // Upload a file to create an asset
-    const imgData = Buffer.from("fake-png-data").toString("base64");
-    const uploadResult = await client.callTool({
-      name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data: imgData },
-    });
-    const uploaded = JSON.parse(
-      (uploadResult.content as Array<{ type: string; text: string }>)[0].text
-    );
+    // Create the asset directly so no process_image job is enqueued. The job
+    // fails on synthetic bytes and writes a generation_errors row, which sync
+    // surfaces as a failure — same race the clear_failed_tasks test avoids.
+    const fs = createFsForTest(tempDir);
+    const created = await fs.createAsset("img", "photo", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
 
     const result = await client.callTool({
       name: "sleep",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: created.value.assetId,
         project_slug: "test-proj",
         timeout_seconds: 1,
       },
@@ -65,7 +62,7 @@ describe("sleep tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.status).toBe("ready");
-    expect(data.asset_id).toBe(uploaded.assetId);
+    expect(data.asset_id).toBe(created.value.assetId);
   });
 });
 

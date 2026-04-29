@@ -77,6 +77,15 @@ async function start(): Promise<void> {
         `[startup] aborted ${aborted} orphan operation(s) in ${project.slug}`,
       );
     }
+    const backfill = await fs.backfillPendingTaskSidecars(project.slug);
+    if (
+      backfill.pendingTasksMigrated > 0 ||
+      backfill.generationErrorsMigrated > 0
+    ) {
+      console.log(
+        `[startup] backfilled ${project.slug}: pending_tasks=${backfill.pendingTasksMigrated} generation_errors=${backfill.generationErrorsMigrated}`,
+      );
+    }
   }
   const orphanedQueued = await cleanOrphanedQueuedTasks(fs);
   const staleCompleting = await resetStaleCompletingTasks(fs);

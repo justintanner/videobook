@@ -77,7 +77,7 @@ describe("pending-task", () => {
     expect(result).toBeNull();
   });
 
-  it("failPendingTask writes error file and deletes pending task", async () => {
+  it("failPendingTask records the error and deletes the pending task", async () => {
     await fs.createProject("test");
     const { assetId, path: assetDir } = await createAssetOk(fs, "vid", "sample-clip", "test");
     const task = makeTask(assetId, assetDir, "test");
@@ -91,16 +91,14 @@ describe("pending-task", () => {
     const pending = await readPendingTask(fs, assetId, "test");
     expect(pending).toBeNull();
 
-    const errResult = await fs.readMetadata<{ message: string; failCode: string; failedAt: string }>(
-      assetId,
-      "generation-error",
-      "test",
-    );
+    const errResult = await fs.generationErrors.read("test", assetId);
     expect(errResult.ok).toBe(true);
-    if (errResult.ok) {
+    if (errResult.ok && errResult.value) {
       expect(errResult.value.message).toBe("Kie content policy rejection");
       expect(errResult.value.failCode).toBe("430");
-      expect(typeof errResult.value.failedAt).toBe("string");
+      expect(typeof errResult.value.failedAt).toBe("number");
+    } else {
+      throw new Error("expected generation error row");
     }
   });
 
@@ -112,15 +110,13 @@ describe("pending-task", () => {
     await writePendingTask(fs, assetId, "test", task);
     await failPendingTask(fs, assetId, "test", { message: "Poll timeout" });
 
-    const errResult = await fs.readMetadata<{ message: string; failCode?: string }>(
-      assetId,
-      "generation-error",
-      "test",
-    );
+    const errResult = await fs.generationErrors.read("test", assetId);
     expect(errResult.ok).toBe(true);
-    if (errResult.ok) {
+    if (errResult.ok && errResult.value) {
       expect(errResult.value.message).toBe("Poll timeout");
       expect(errResult.value.failCode).toBeUndefined();
+    } else {
+      throw new Error("expected generation error row");
     }
   });
 

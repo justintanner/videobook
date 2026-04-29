@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "clipfirst-fs";
+import { computeAssetStatus } from "clipfirst-fs";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -16,7 +17,7 @@ import {
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
 } from "../media-files.js";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { findPendingTasks, findFailedAssets, readPendingTask, failPendingTask, markTaskCompleting, QUEUED_TASK_ID } from "../jobs/pending-task.js";
+import { findPendingTasks, findFailedAssets, failPendingTask, markTaskCompleting, QUEUED_TASK_ID } from "../jobs/pending-task.js";
 import type { PendingKieTask } from "../jobs/pending-task.js";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
@@ -107,7 +108,6 @@ async function readOrExtractWaveform(
   }
 }
 
-const RENDER_METADATA_RE = /^\.(portrait|landscape|square)\.render\.json$/;
 const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
 
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
@@ -246,10 +246,11 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [manifestResult, lockData, pendingTask, metadata] = await Promise.all([
+      const [manifestResult, lockData, pendingTask, generationError, metadata] = await Promise.all([
         fs.getManifest(a.id, project_slug, { includeDotfiles: true }),
         fs.getLockData(a.path),
-        readPendingTask(fs, a.id, project_slug),
+        fs.pendingTasks.read(project_slug, a.id),
+        fs.generationErrors.read(project_slug, a.id),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
       ]);
 
@@ -261,7 +262,6 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
       const mediaFile = findPrimaryMediaFile(files, a.id);
       const fileNames = new Set(files.map((f) => f.name));
       const hasThumbnail = fileNames.has("original.jpg");
-      const rendered = files.some((f) => RENDER_METADATA_RE.test(f.name));
       const renders = renderedOrientationsFor(files, a.id);
       const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
       const frameDirs = buildFrameDirs(directories, project_slug, a.id);
@@ -295,60 +295,18 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         ? `/files/${project_slug}/${a.id}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
-      // First matching rule wins. Derives the user-visible state from the
-      // single source of truth on disk: lock state for transformation jobs,
-      // .kie-task.json for external tasks, sidecar markers for the gpt-4o
-      // pipeline (processing/analyzing), and pure file presence for the
-      // terminal states (ready/error). No whitelist gate — every vid- shows
-      // its full lifecycle in the sidebar from the moment it's created.
-      const hasGenerationError = fileNames.has(".generation-error.json");
-      const hasOriginalJson = files.some((f) => f.name === ".original.json");
-      const hasAnalysisJson = files.some((f) => f.name === ".original.analysis.json");
-      const hasProcessingMarker = fileNames.has(".processing.json");
-      const hasAnalyzingMarker = fileNames.has(".analyzing.json");
-
-      let status: string;
-      const isLockActive = lockData && (Date.now() / 1000) < lockData.timeout_at;
-      if (isLockActive) {
-        status = (lockData.state as string) ?? "loading";
-      } else if (pendingTask) {
-        status = pendingTask.taskType === "transcribe"
-          ? "transcribing"
-          : pendingTask.taskType === "isolate_vocals"
-            ? "isolating"
-            : "generating";
-      } else if (hasProcessingMarker) {
-        status = "processing";
-      } else if (hasAnalyzingMarker) {
-        status = "analyzing";
-      } else if (hasPartFile && a.id.startsWith("vid-") && (!mediaFile || /\.(jpe?g|png|webp)$/i.test(mediaFile.name))) {
-        // Video asset with a .part file but no actual video = failed download
-        // (original.jpg thumbnail may exist from OG image, but that's not a real media file for a video)
-        status = "error";
-      } else if (mediaFile) {
-        if (hasGenerationError) {
-          status = "error";
-        } else if (a.id === "final") {
-          status = "ready";
-        } else if (a.id.startsWith("vid-") && !hasOriginalJson) {
-          // Pipeline owes work — process_video hasn't written .original.json
-          // yet (sidecar marker may not have appeared yet either, e.g. just
-          // after upload before the runner picked up the job).
-          status = "processing";
-        } else if (a.id.startsWith("vid-") && !hasAnalysisJson) {
-          // .original.json exists but analyze_video hasn't run.
-          status = "analyzing";
-        } else if (rendered) {
-          status = "ready";
-        } else {
-          status = "ready";
-        }
-      } else if (hasPartFile) {
-        status = "error";
-      } else {
-        // No media file and no pending task — orphaned asset from a failed generation
-        status = "error";
-      }
+      // Status derivation lives in clipfirst-fs (`computeAssetStatus`). We pass
+      // the asset-type-aware primary media name we already computed so the
+      // engine doesn't have to redo media-type heuristics.
+      const status = computeAssetStatus({
+        assetId: a.id,
+        fileNames,
+        primaryMediaName: mediaFile?.name ?? null,
+        hasPartFile,
+        lockData,
+        pendingTask: pendingTask.ok ? pendingTask.value : null,
+        generationError: generationError.ok ? generationError.value : null,
+      });
 
       const meta = metadata.ok ? metadata.value : null;
 
