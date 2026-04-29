@@ -1,4 +1,4 @@
-import { fal } from "@apicity/fal";
+import { fal, uploadFile } from "@apicity/fal";
 import type { ClipfirstFs } from "clipfirst-engine";
 import {
   prepareAssetForUpload,
@@ -6,9 +6,9 @@ import {
   uploadBytesToFreeHost,
 } from "../upload.js";
 
-// Upload prepared bytes to fal's native CDN via storage.upload.initiate.
-// Returns a stable https://v3.fal.media/... URL. Falls back to the free-host
-// rotation on any native failure (missing key, network, non-2xx, etc.).
+// Upload prepared bytes to fal's native CDN via @apicity/fal's uploadFile
+// helper. Returns a stable https://v3.fal.media/... URL. Falls back to the
+// free-host rotation on any native failure (missing key, network, non-2xx).
 async function uploadPreparedToFal(
   data: Uint8Array,
   hashedFilename: string,
@@ -18,20 +18,11 @@ async function uploadPreparedToFal(
   if (apiKey) {
     try {
       const provider = fal({ apiKey, timeout: 60_000 });
-      const { file_url, upload_url } = await provider.storage.upload.initiate({
-        file_name: hashedFilename,
-        content_type: contentType,
+      return await uploadFile(provider, {
+        data,
+        filename: hashedFilename,
+        contentType,
       });
-
-      const put = await fetch(upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: new Blob([new Uint8Array(data)], { type: contentType }),
-      });
-      if (!put.ok) {
-        throw new Error(`fal storage PUT failed: ${put.status} ${put.statusText}`);
-      }
-      return file_url;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[fal-upload] native failed, falling back to free host: ${msg}`);
