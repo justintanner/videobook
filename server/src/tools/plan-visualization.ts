@@ -14,7 +14,8 @@ import {
 } from "./_suggest-shared.js";
 
 const DEFAULT_MAX_SCENE_S = 15;
-const COVERAGE_TOLERANCE_S = 0.05;
+const CAP_TOLERANCE_S = 0.05;
+const MAX_INTER_SCENE_GAP_S = 3.0;
 
 type CharacterContext = {
   asset_id: string;
@@ -73,11 +74,14 @@ INPUTS YOU RECEIVE:
 
 RULES:
 1. Coverage: scenes must cover the entire transcript end-to-end. First scene starts at the first word's start; last scene ends at the last word's end. Adjacent scenes touch (scenes[i].end === scenes[i+1].start). No gaps. No overlaps.
-2. Cap: each scene is <= ${maxSceneSeconds}s. Hard cap.
-3. Cut on natural beats: sentence ends, pauses >= 0.4s, or topic shifts. Prefer the longest pause inside the window when forced to split.
-4. Use the exact word timestamps. Never invent times.
+2. Cap: each scene's duration (end - start) MUST be <= ${maxSceneSeconds}s. This is a HARD cap and is auto-validated; outputs that exceed it are rejected entirely. Internal target is ${(maxSceneSeconds - 1).toFixed(0)}s to leave margin.
+3. Picking each scene's end:
+   a. Look at all words whose \`end\` is within [scene_start, scene_start + ${maxSceneSeconds}s].
+   b. Among those, prefer ending at a sentence boundary (after .!?) or after a pause >= 0.4s to the next word.
+   c. If no such break exists in the window, end at the LAST word whose \`end\` <= scene_start + ${(maxSceneSeconds - 0.5).toFixed(1)}s. Splitting mid-sentence is acceptable when needed to honor the cap.
+4. Every scene's \`start\` and \`end\` MUST equal a value taken directly from the input word list. Never round to whole numbers. Never invent times. Never extend past the last word's \`end\`.
 5. The "visual" field is the WHOLE point. Each is a single rich paragraph (40-90 words) that describes — at high fidelity — a CINEMATIC SHOT of WHAT the speech is referring to in that window. Not the speaker talking unless the speech is explicitly self-referential.
-6. Reference characters by NAME (not asset_id) when they belong in the shot.
+6. Reference characters by their @asset_id token (e.g. \`@char-foo-bar\`) — verbatim, including the leading @, exactly as listed in the Characters block. Do NOT use the human-readable name in the visual text. Downstream tools resolve @asset_id to the actual character likeness.
 7. Every visual MUST include: subject + action, environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Use stylized only if the speech demands it (e.g. "imagine a cartoon...").
 8. Concrete > abstract. If the speech says "AI is taking off," show what that LOOKS like — e.g., a glowing neural lattice rising from a black ocean at dawn — not a vague metaphor.
 
@@ -92,7 +96,7 @@ function buildUserContext(
 ): string {
   const charBlock = characters.length === 0
     ? "Characters: none"
-    : "Characters:\n" + characters.map((c) => `  - ${c.name} — ${c.description || "(no description)"}`).join("\n");
+    : "Characters (use the @asset_id token verbatim in visuals):\n" + characters.map((c) => `  - @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`).join("\n");
 
   const wordLines = words
     .filter((w) => w.type === "word")
@@ -166,34 +170,56 @@ function validatePlan(
   const lastWordEnd = wordsOnly[wordsOnly.length - 1].end;
 
   const sorted = [...plan.scenes].sort((a, b) => a.start - b.start);
+
+  // Reject overlaps and large skipped regions; small inter-word gaps get snapped below.
   for (let i = 0; i < sorted.length; i++) {
     const s = sorted[i];
     if (s.end <= s.start) {
       return { ok: false, error: `Scene at ${s.start}: end (${s.end}) must be > start` };
     }
-    if (s.end - s.start > maxSceneSeconds + COVERAGE_TOLERANCE_S) {
-      return {
-        ok: false,
-        error: `Scene at ${s.start}: duration ${(s.end - s.start).toFixed(2)}s exceeds cap ${maxSceneSeconds}s`,
-      };
-    }
     if (i > 0) {
       const prev = sorted[i - 1];
-      if (Math.abs(s.start - prev.end) > COVERAGE_TOLERANCE_S) {
-        return { ok: false, error: `Non-contiguous scenes near ${prev.end} -> ${s.start}` };
+      const gap = s.start - prev.end;
+      if (gap < -CAP_TOLERANCE_S) {
+        return { ok: false, error: `Overlapping scenes near ${prev.end} -> ${s.start}` };
+      }
+      if (gap > MAX_INTER_SCENE_GAP_S) {
+        return { ok: false, error: `Scenes skip ${gap.toFixed(2)}s of audio near ${prev.end} -> ${s.start}` };
       }
     }
   }
 
-  if (sorted[0].start - firstWordStart > COVERAGE_TOLERANCE_S) {
+  if (sorted[0].start - firstWordStart > MAX_INTER_SCENE_GAP_S) {
     return { ok: false, error: `First scene starts at ${sorted[0].start}, after first word ${firstWordStart}` };
   }
   const lastSceneEnd = sorted[sorted.length - 1].end;
-  if (lastWordEnd - lastSceneEnd > COVERAGE_TOLERANCE_S) {
+  if (lastWordEnd - lastSceneEnd > MAX_INTER_SCENE_GAP_S) {
     return { ok: false, error: `Last scene ends at ${lastSceneEnd}, before last word ${lastWordEnd}` };
   }
 
-  return { ok: true, value: { scenes: sorted } };
+  // Auto-split any scene that exceeds the cap into N equal-duration chunks sharing the visual.
+  // This absorbs the model's occasional cap overshoot on long monologue stretches without losing content.
+  const split: Scene[] = [];
+  for (const s of sorted) {
+    const duration = s.end - s.start;
+    const chunks = Math.max(1, Math.ceil(duration / maxSceneSeconds));
+    if (chunks === 1) {
+      split.push(s);
+      continue;
+    }
+    const chunkDuration = duration / chunks;
+    for (let k = 0; k < chunks; k++) {
+      split.push({
+        start: s.start + k * chunkDuration,
+        end: k === chunks - 1 ? s.end : s.start + (k + 1) * chunkDuration,
+        visual: s.visual,
+      });
+    }
+  }
+
+  // Snap adjacent scenes so they touch exactly (absorb natural inter-word silence).
+  const snapped = split.map((s, i) => i === 0 ? s : { ...s, start: split[i - 1].end });
+  return { ok: true, value: { scenes: snapped } };
 }
 
 function renderMarkdown(
