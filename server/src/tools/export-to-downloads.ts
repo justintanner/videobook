@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { extname, join } from "node:path";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
-import { findPrimaryMediaFile } from "../media-files.js";
+import { findPrimaryMediaFile } from "clipfirst-engine";
 import type { ToolDef } from "./tool-def.js";
 
 async function resolveDestination(baseName: string, ext: string): Promise<string> {

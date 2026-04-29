@@ -3,7 +3,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const upscaleGrokImagineVideoSchema = {

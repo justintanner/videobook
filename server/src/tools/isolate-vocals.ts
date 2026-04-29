@@ -6,7 +6,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile } from "../media-files.js";
+import { findAudioFile } from "clipfirst-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function isolateVocalsDef(fs: ClipfirstFs): ToolDef {

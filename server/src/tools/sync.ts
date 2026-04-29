@@ -15,7 +15,7 @@ import {
   findAudioFile,
   findPrimaryMediaFile,
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
-} from "../media-files.js";
+} from "clipfirst-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";

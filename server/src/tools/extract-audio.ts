@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);

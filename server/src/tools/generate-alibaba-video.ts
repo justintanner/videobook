@@ -3,7 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "../media-files.js";
+import { findVideoFile, findAudioFile } from "clipfirst-engine";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 

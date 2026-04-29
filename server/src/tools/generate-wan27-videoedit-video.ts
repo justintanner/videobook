@@ -3,7 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 

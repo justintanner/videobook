@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openai, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
+import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 

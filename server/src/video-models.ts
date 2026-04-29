@@ -1,7 +1,7 @@
 /**
  * Video model registry, schemas, validation, and routing prompt.
  */
-import type { ResolvedAsset } from "./asset-resolver.js";
+import type { ResolvedAsset } from "clipfirst-engine";
 import {
   GrokImageToVideoRequestSchema,
   GrokImagineDurationSchema,

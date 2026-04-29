@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 
 export const MODEL = "gpt-5.4";
 export const MAX_FRAMES = 15;

@@ -4,7 +4,7 @@ import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const extendGrokImagineVideoSchema = {

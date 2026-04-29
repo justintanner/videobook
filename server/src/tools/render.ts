@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";

@@ -2,7 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "../media-files.js";
+import { findAudioFile, findVideoFile } from "clipfirst-engine";
 import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";

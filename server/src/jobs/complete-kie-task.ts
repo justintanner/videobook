@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
-import { findVideoFile } from "../media-files.js";
+import { findVideoFile } from "clipfirst-engine";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";

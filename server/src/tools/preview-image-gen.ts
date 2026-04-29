@@ -8,7 +8,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
-import { resolveAllAssets, expandSlotRefs } from "../asset-resolver.js";
+import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
 import {
   getImageModels,
   buildImageModelOption,

@@ -5,7 +5,7 @@ import { openai, withRetry, withFallback, textPart, imageBase64Part, firstConten
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { kie } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
-import { findAudioFile } from "../media-files.js";
+import { findAudioFile } from "clipfirst-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 
 const ANALYZING_MARKER = ".analyzing.json";
