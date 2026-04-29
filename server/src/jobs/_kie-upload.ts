@@ -1,4 +1,4 @@
-import { kie } from "@apicity/kie";
+import { kie, uploadFile } from "@apicity/kie";
 import type { ClipfirstFs } from "clipfirst-engine";
 import {
   prepareAssetForUpload,
@@ -21,14 +21,7 @@ async function uploadPreparedToKie(
     try {
       const provider = kie({ apiKey, timeout: 120_000 });
       const blob = new Blob([new Uint8Array(data)], { type: contentType });
-      const res = await provider.post.api.fileStreamUpload({
-        file: blob,
-        filename: hashedFilename,
-        uploadPath: "uploads",
-      });
-      const url = res.data?.downloadUrl;
-      if (!url) throw new Error("kie upload returned no downloadUrl");
-      return url;
+      return await uploadFile(provider, blob, hashedFilename);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[kie-upload] native failed, falling back to free host: ${msg}`);
