@@ -126,6 +126,7 @@ import { genImagesAllDef } from "./gen-images-all.js";
 import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js";
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
+import { generatePlanDef } from "./generate-plan.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { applyCutsDef } from "./apply-cuts.js";
@@ -269,6 +270,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     previewOutfitPromptsDef(fs),
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
+    generatePlanDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
     applyCutsDef(fs),
