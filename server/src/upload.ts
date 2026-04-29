@@ -1,4 +1,4 @@
-import { free } from "@apicity/free";
+import { free, uploadToAnyHost } from "@apicity/free";
 import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
@@ -32,20 +32,9 @@ export function inferMimeType(filename: string): string {
   return (ext && MIME_TYPES[ext]) ?? "application/octet-stream";
 }
 
-type UploadAttempt = { host: string; upload: () => Promise<string> };
-
-function shuffle<T>(arr: T[]): T[] {
-  const copy = arr.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 // Upload bytes to a free file host and return a publicly accessible download
-// URL. Rotation picks a random order across litterbox/uguu/tflink on each call
-// and returns the first success.
+// URL. Delegates rotation to @apicity/free's `uploadToAnyHost` across
+// litterbox/uguu/tflink.
 //
 // Host selection matters: Alibaba/Kie workers run in China and synchronously
 // fetch the URL server-side during data inspection. Several otherwise-fine
@@ -61,43 +50,13 @@ export async function uploadBytesToFreeHost(
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
 
-  const f = free();
-  const attempts: UploadAttempt[] = [
-    { host: "litterbox", upload: () => f.litterbox.upload({ file, filename, time: "1h" }) },
-    {
-      host: "uguu",
-      upload: async () => {
-        const res = await f.uguu.upload({ file, filename });
-        const url = res.files[0]?.url;
-        if (!url) throw new Error("uguu upload returned no URL");
-        return url;
-      },
-    },
-    {
-      host: "tflink",
-      upload: async () => {
-        const res = await f.tflink.upload({ file, filename });
-        return res.downloadLink;
-      },
-    },
-  ];
-
-  const failures: string[] = [];
-  for (const { host, upload } of shuffle(attempts)) {
-    try {
-      return await upload();
-    } catch (err) {
-      failures.push(`${host}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-  throw new Error(`All upload hosts failed — ${failures.join(" | ")}`);
+  return uploadToAnyHost(free(), {
+    file,
+    filename,
+    hosts: ["litterbox", "uguu", "tflink"],
+    time: "1h",
+  });
 }
-
-// Back-compat alias for callers that still reach into the free-host path
-// directly (e.g. provider-agnostic helpers). New code should prefer the
-// provider-specific `uploadAssetTo{Fal,Kie,Alibaba}` wrappers which try the
-// provider's native endpoint first.
-export const uploadBytes = uploadBytesToFreeHost;
 
 // Re-encode bytes (if applicable), upscale small images, and hash the final
 // bytes for a collision-free remote filename. Shared preamble for both asset

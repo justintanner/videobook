@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
 import { kie, submitMediaJob } from "@apicity/kie";
-import { uploadBytes, contentHash } from "../upload.js";
+import { uploadBytesToFreeHost, contentHash } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 const MIN_ISOLATION_DURATION = 4.6;
@@ -65,7 +65,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
     // other assets that share the same local filename (e.g. `original.mp3`).
     const ext = audioFilename.split(".").pop() ?? "bin";
     const hashedName = `${contentHash(uploadBuffer)}.${ext}`;
-    const downloadUrl = await uploadBytes(uploadBuffer, hashedName);
+    const downloadUrl = await uploadBytesToFreeHost(uploadBuffer, hashedName);
 
     // Create isolation task
     const request = {
