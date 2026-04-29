@@ -23,74 +23,63 @@ type CharacterContext = {
 };
 
 type Scene = {
-  index: number;
   start: number;
   end: number;
-  title: string;
-  transcript: string;
-  speaker: string | null;
   visual: string;
 };
 
-type PlanResult = {
+type Plan = {
   scenes: Scene[];
-  summary: string;
 };
 
 const SceneSchema = z.object({
-  index: z.number().int().positive(),
   start: z.number().min(0),
   end: z.number().min(0),
-  title: z.string().min(1),
-  transcript: z.string(),
-  speaker: z.string().nullable(),
-  visual: z.string().min(1),
+  visual: z.string().min(20),
 });
 
 const PlanSchema = z.object({
   scenes: z.array(SceneSchema).min(1),
-  summary: z.string().min(1),
 });
 
 const PLAN_JSON_SCHEMA = {
   type: "object",
-  required: ["scenes", "summary"],
+  required: ["scenes"],
   additionalProperties: false,
   properties: {
     scenes: {
       type: "array",
       items: {
         type: "object",
-        required: ["index", "start", "end", "title", "transcript", "speaker", "visual"],
+        required: ["start", "end", "visual"],
         additionalProperties: false,
         properties: {
-          index: { type: "integer" },
           start: { type: "number" },
           end: { type: "number" },
-          title: { type: "string" },
-          transcript: { type: "string" },
-          speaker: { type: ["string", "null"] },
           visual: { type: "string" },
         },
       },
     },
-    summary: { type: "string" },
   },
 } as const;
 
 function buildSystemPrompt(maxSceneSeconds: number): string {
-  return `You are segmenting a transcribed video into a scene plan. You receive characters (up to 5), total duration in seconds, and a list of words with timestamps. Produce scenes that:
+  return `You produce a sequence of high-fidelity visual prompts that illustrate what is being DISCUSSED in a transcribed video. Your output drives image and video generation, so the prompts must be vivid, cinematic, and production-grade.
+
+INPUTS YOU RECEIVE:
+- Up to 5 characters with names and short descriptions.
+- Total duration in seconds.
+- A list of words with start/end timestamps.
 
 RULES:
-1. Cover the entire transcript end-to-end with no gaps and no overlaps.
-2. Each scene MUST be <= ${maxSceneSeconds}s (end - start). Hard cap; never exceed.
-3. Break on natural speech boundaries: sentence ends, pauses >= 0.4s between words, or clear topic shifts. Prefer breaking on the longest pause within the window when forced to split.
-4. Use the exact word start/end timestamps you are given. Do not invent times.
-5. Adjacent scenes must touch: scenes[i].end === scenes[i+1].start.
-6. The first scene's start equals the first word's start. The last scene's end equals the last word's end.
-7. Reference characters by name in the "visual" field when the speech implies them. Use speaker_id from the words to set the "speaker" field for the dominant speaker in each scene; if undiarized or mixed, use null.
-8. "title" is a short scannable label (3-7 words). "visual" is one sentence proposing a shot/visual concept for that scene.
-9. "transcript" must be the exact words spoken within [start, end], joined with spaces.
+1. Coverage: scenes must cover the entire transcript end-to-end. First scene starts at the first word's start; last scene ends at the last word's end. Adjacent scenes touch (scenes[i].end === scenes[i+1].start). No gaps. No overlaps.
+2. Cap: each scene is <= ${maxSceneSeconds}s. Hard cap.
+3. Cut on natural beats: sentence ends, pauses >= 0.4s, or topic shifts. Prefer the longest pause inside the window when forced to split.
+4. Use the exact word timestamps. Never invent times.
+5. The "visual" field is the WHOLE point. Each is a single rich paragraph (40-90 words) that describes — at high fidelity — a CINEMATIC SHOT of WHAT the speech is referring to in that window. Not the speaker talking unless the speech is explicitly self-referential.
+6. Reference characters by NAME (not asset_id) when they belong in the shot.
+7. Every visual MUST include: subject + action, environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Use stylized only if the speech demands it (e.g. "imagine a cartoon...").
+8. Concrete > abstract. If the speech says "AI is taking off," show what that LOOKS like — e.g., a glowing neural lattice rising from a black ocean at dawn — not a vague metaphor.
 
 Output JSON only, matching the provided schema.`;
 }
@@ -103,14 +92,11 @@ function buildUserContext(
 ): string {
   const charBlock = characters.length === 0
     ? "Characters: none"
-    : "Characters:\n" + characters.map((c) => `  - ${c.asset_id} | name: ${c.name} | ${c.description}`).join("\n");
+    : "Characters:\n" + characters.map((c) => `  - ${c.name} — ${c.description || "(no description)"}`).join("\n");
 
   const wordLines = words
     .filter((w) => w.type === "word")
-    .map((w) => {
-      const speaker = w.speaker_id ?? "";
-      return `${w.start.toFixed(2)}|${w.end.toFixed(2)}|${w.text}|${speaker}`;
-    })
+    .map((w) => `${w.start.toFixed(2)}|${w.end.toFixed(2)}|${w.text}`)
     .join("\n");
 
   return [
@@ -118,7 +104,7 @@ function buildUserContext(
     `Max scene length: ${maxSceneSeconds}s`,
     charBlock,
     "",
-    "Words (start|end|text|speaker_id):",
+    "Words (start|end|text):",
     wordLines,
   ].join("\n");
 }
@@ -169,38 +155,32 @@ async function loadCharacter(
   return { asset_id: cleanId, name, description };
 }
 
-function validateAndNormalize(
-  parsed: PlanResult,
+function validatePlan(
+  plan: Plan,
   words: ElevenLabsWord[],
   maxSceneSeconds: number,
-): { ok: true; value: PlanResult } | { ok: false; error: string } {
-  const scenes = parsed.scenes;
-  if (scenes.length === 0) return { ok: false, error: "Model returned zero scenes" };
-
+): { ok: true; value: Plan } | { ok: false; error: string } {
   const wordsOnly = words.filter((w) => w.type === "word");
   if (wordsOnly.length === 0) return { ok: false, error: "Transcript has no word entries" };
   const firstWordStart = wordsOnly[0].start;
   const lastWordEnd = wordsOnly[wordsOnly.length - 1].end;
 
-  const sorted = [...scenes].sort((a, b) => a.start - b.start);
+  const sorted = [...plan.scenes].sort((a, b) => a.start - b.start);
   for (let i = 0; i < sorted.length; i++) {
     const s = sorted[i];
     if (s.end <= s.start) {
-      return { ok: false, error: `Scene ${s.index}: end (${s.end}) must be > start (${s.start})` };
+      return { ok: false, error: `Scene at ${s.start}: end (${s.end}) must be > start` };
     }
     if (s.end - s.start > maxSceneSeconds + COVERAGE_TOLERANCE_S) {
       return {
         ok: false,
-        error: `Scene ${s.index}: duration ${(s.end - s.start).toFixed(2)}s exceeds cap ${maxSceneSeconds}s`,
+        error: `Scene at ${s.start}: duration ${(s.end - s.start).toFixed(2)}s exceeds cap ${maxSceneSeconds}s`,
       };
     }
     if (i > 0) {
       const prev = sorted[i - 1];
       if (Math.abs(s.start - prev.end) > COVERAGE_TOLERANCE_S) {
-        return {
-          ok: false,
-          error: `Scenes ${prev.index} and ${s.index} not contiguous: ${prev.end} -> ${s.start}`,
-        };
+        return { ok: false, error: `Non-contiguous scenes near ${prev.end} -> ${s.start}` };
       }
     }
   }
@@ -213,8 +193,7 @@ function validateAndNormalize(
     return { ok: false, error: `Last scene ends at ${lastSceneEnd}, before last word ${lastWordEnd}` };
   }
 
-  const renumbered = sorted.map((s, i) => ({ ...s, index: i + 1 }));
-  return { ok: true, value: { scenes: renumbered, summary: parsed.summary } };
+  return { ok: true, value: { scenes: sorted } };
 }
 
 function renderMarkdown(
@@ -223,51 +202,46 @@ function renderMarkdown(
   maxSceneSeconds: number,
   characters: CharacterContext[],
   model: string,
-  plan: PlanResult,
+  plan: Plan,
 ): string {
   const charLine = characters.length === 0
     ? "none"
     : characters.map((c) => c.name).join(", ");
 
   const header = [
-    "# Plan",
+    "# Plan: visualization",
     "",
     `**Source:** ${sourceAssetId}`,
-    `**Total duration:** ${totalDuration.toFixed(2)}s`,
+    `**Duration:** ${totalDuration.toFixed(2)}s`,
     `**Scenes:** ${plan.scenes.length} (≤${maxSceneSeconds}s each)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
-    "",
-    `> ${plan.summary}`,
     "",
     "---",
     "",
   ].join("\n");
 
-  const sceneBlocks = plan.scenes.map((s) => {
+  const blocks = plan.scenes.map((s) => {
     const duration = (s.end - s.start).toFixed(2);
-    const speakerLine = s.speaker ?? "—";
     return [
-      `## Scene ${s.index} — ${s.title}`,
+      `## ${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s (${duration}s)`,
       "",
-      `- **Time:** ${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s (${duration}s)`,
-      `- **Speaker:** ${speakerLine}`,
-      `- **Transcript:** ${s.transcript}`,
-      `- **Visual:** ${s.visual}`,
+      s.visual,
       "",
     ].join("\n");
   });
 
-  return header + sceneBlocks.join("\n");
+  return header + blocks.join("\n");
 }
 
-export function generatePlanDef(fs: ClipfirstFs): ToolDef {
+export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
   return {
-    name: "generate_plan",
+    name: "plan_visualization",
     description:
-      "Generate a per-project scene plan from a video/audio asset's elevenlabs.json. " +
-      "Each scene is capped at 15s (configurable). Optionally accepts up to 5 character assets for cast context. " +
-      "Writes plan/index.md (human-readable) and plan/.plan.json (structured) into the project's singleton plan asset, overwriting any prior plan.",
+      "Generate a per-project visualization plan from a video/audio asset's elevenlabs.json. " +
+      "Each scene is a high-fidelity cinematic prompt describing what is being discussed, capped at 15s. " +
+      "Optionally accepts up to 5 character assets — characters appear in visuals by name. " +
+      "Writes plan/index.md (human-readable) and plan/.plan.json (structured) into the singleton plan asset, overwriting prior.",
     schema: {
       source_asset_id: z.string().describe("Asset ID with elevenlabs.json (vid-* or aud-*)"),
       project_slug: z.string().describe("Project slug"),
@@ -275,7 +249,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
         .array(z.string())
         .max(5)
         .optional()
-        .describe("Up to 5 char-* assets to inform scene casting"),
+        .describe("Up to 5 char-* assets — visuals reference them by name"),
       max_scene_seconds: z
         .number()
         .positive()
@@ -388,12 +362,12 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
           response_format: {
             type: "json_schema",
             json_schema: {
-              name: "generate_plan_result",
+              name: "plan_visualization_result",
               schema: PLAN_JSON_SCHEMA as unknown as Record<string, unknown>,
               strict: true,
             },
           },
-          temperature: 0.3,
+          temperature: 0.5,
           max_completion_tokens: 8192,
         });
         outputText = firstContent(result);
@@ -405,7 +379,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      let parsed: PlanResult;
+      let parsed: Plan;
       try {
         const raw = JSON.parse(outputText);
         parsed = PlanSchema.parse(raw);
@@ -417,7 +391,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const validated = validateAndNormalize(parsed, transcript.words, maxSceneSeconds);
+      const validated = validatePlan(parsed, transcript.words, maxSceneSeconds);
       if (!validated.ok) {
         return {
           isError: true as const,
@@ -425,7 +399,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const finalPlan: PlanResult & { source_asset_id: string; total_duration_s: number; max_scene_seconds: number; characters: CharacterContext[]; model: string } = {
+      const sidecar = {
         ...validated.value,
         source_asset_id: sourceAssetId,
         total_duration_s: totalDuration,
@@ -457,7 +431,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
       const writeJson = await fs.writeFile(
         "plan",
         ".plan.json",
-        JSON.stringify(finalPlan, null, 2),
+        JSON.stringify(sidecar, null, 2),
         project_slug,
       );
       if (!writeJson.ok) {
@@ -483,7 +457,7 @@ export function generatePlanDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGeneratePlanTool(server: McpServer, fs: ClipfirstFs): void {
-  const def = generatePlanDef(fs);
+export function registerPlanVisualizationTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = planVisualizationDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }
