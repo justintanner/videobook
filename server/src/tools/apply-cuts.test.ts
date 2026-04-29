@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -27,17 +28,29 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
-async function uploadVideo(
-  client: Client,
+// Drop the video into the asset dir directly via the fs API instead of
+// upload_file — that path enqueues process_video, which kicks off ffmpeg in
+// the background. If the next test's beforeEach fires before that work
+// finishes, setProjectsDir has to drain the runner past the 30s hookTimeout
+// on slower machines, producing a misleading "beforeEach hook timed out" on
+// whichever test happens to be next.
+async function placeVideo(
+  projectsDir: string,
   projectSlug: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
-  const data = (await readFile(videoPath)).toString("base64");
-  const result = await client.callTool({
-    name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
-  });
-  return JSON.parse((result.content as TextContent)[0].text);
+  const fs = createFsForTest(projectsDir);
+  const asset = await fs.createAsset("vid", "test-source", projectSlug);
+  if (!asset.ok) throw new Error(`createAsset failed: ${asset.error.message}`);
+  const bytes = await readFile(videoPath);
+  const written = await fs.writeFile(
+    asset.value.assetId,
+    "original.mp4",
+    bytes,
+    projectSlug,
+  );
+  if (!written.ok) throw new Error(`writeFile failed: ${written.error.message}`);
+  return { assetId: asset.value.assetId, path: asset.value.path };
 }
 
 describe("apply_cuts tool", () => {
@@ -73,7 +86,7 @@ describe("apply_cuts tool", () => {
   });
 
   it("splices a single middle cut", async () => {
-    const uploaded = await uploadVideo(client, "cuts-proj", videoPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
     const result = await client.callTool({
       name: "apply_cuts",
@@ -95,7 +108,7 @@ describe("apply_cuts tool", () => {
   }, 60_000);
 
   it("splices two non-overlapping cuts", async () => {
-    const uploaded = await uploadVideo(client, "cuts-proj", videoPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
     const result = await client.callTool({
       name: "apply_cuts",
@@ -117,7 +130,7 @@ describe("apply_cuts tool", () => {
   }, 60_000);
 
   it("returns error for overlapping cuts", async () => {
-    const uploaded = await uploadVideo(client, "cuts-proj", videoPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
     const result = await client.callTool({
       name: "apply_cuts",
@@ -137,7 +150,7 @@ describe("apply_cuts tool", () => {
   });
 
   it("returns error for cut_end past duration", async () => {
-    const uploaded = await uploadVideo(client, "cuts-proj", videoPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
     const { createFs } = await import("clipfirst-fs");
     const fs = createFs({ projectsDir: tempDir });
@@ -163,7 +176,7 @@ describe("apply_cuts tool", () => {
   });
 
   it("returns error for cut_start >= cut_end", async () => {
-    const uploaded = await uploadVideo(client, "cuts-proj", videoPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
 
     const result = await client.callTool({
       name: "apply_cuts",
