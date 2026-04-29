@@ -161,6 +161,16 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     const analysisJson = JSON.stringify(parsed, null, 2);
     const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
     if (!cacheResult.ok) {
+      // Source can disappear mid-flight (user deletes the asset while the
+      // vision call is in progress). Treat that as a clean exit instead of
+      // an error: the analysis has nowhere to land and downstream work is
+      // moot. Other failure modes still warn.
+      if (cacheResult.error.code === "NOT_FOUND") {
+        console.log(
+          `[describe_image] source ${sourceAssetId} deleted during vision call — discarding analysis`,
+        );
+        return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
+      }
       console.warn(
         `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
       );
