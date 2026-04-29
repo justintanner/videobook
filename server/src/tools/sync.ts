@@ -168,10 +168,7 @@ export async function readStoredRenderDefaults(
   for (const orient of tryOrder) {
     const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
     if (meta.ok) {
-      const merged = { ...defaults, ...meta.value };
-      // Migrate old "tikdance" → "impact"
-      if (merged.highlightStyle === "tikdance") merged.highlightStyle = "impact";
-      return merged;
+      return { ...defaults, ...meta.value };
     }
   }
   const recs = await readAnalysisRecommendations(fs, assetId, projectSlug);

@@ -1,16 +1,5 @@
 /**
- * SQLite-backed persistent queue, drop-in replacement for the old in-memory
- * `@platformatic/job-queue` queue.
- *
- * Public API preserved (so the ~90 enqueue call sites and ~80 handlers stay
- * untouched):
- *   queue.enqueue(jobId: string, payload: { type, projectSlug, ... })
- *   queue.enqueueAndWait(jobId, payload, timeoutMs?)
- *   queue.getStatus(jobId)
- *   queue.start() / queue.stop()
- *   queue.execute(handler)            — no-op shim (handler dispatch goes through registerJobHandler)
- *   waitForJob(jobId, timeoutMs?)
- *   registerJobHandler(type, handler)
+ * SQLite-backed persistent queue.
  *
  * Storage is per-project: each project's `.clipfirst/state.sqlite` holds its
  * own pending_jobs rows. The queue routes enqueue calls to the right project's
@@ -57,8 +46,6 @@ export function registerJobHandler(
 function extractProjectSlug(payload: Record<string, unknown>): string | null {
   const a = payload.projectSlug;
   if (typeof a === "string" && a.length > 0) return a;
-  const b = payload.project_slug;
-  if (typeof b === "string" && b.length > 0) return b;
   return null;
 }
 
@@ -109,10 +96,10 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
       try {
         return await handler(job);
       } catch (error: unknown) {
-        // Mirror the legacy queue's behavior: clear the asset's pending-task
-        // sidecar and write .generation-error.json so /inbox doesn't show
-        // "generating" forever. The fs.queue layer separately marks the SQLite
-        // job row as failed via the runner's own catch.
+        // On handler error, clear the asset's pending-task sidecar and write
+        // .generation-error.json so /inbox doesn't show "generating" forever.
+        // The fs.queue layer separately marks the SQLite job row as failed via
+        // the runner's own catch.
         //
         // Fire-and-forget: the runner shouldn't block on this best-effort
         // sidecar cleanup. If the project dir was torn down (test cleanup,
@@ -174,14 +161,8 @@ export async function reconcileQueueOnStartup(): Promise<void> {
   }
 }
 
-export interface LegacyEnqueueResult {
-  jobId: string;
-  internalId: number;
-  projectSlug: string;
-}
-
-interface QueueShim {
-  enqueue(jobId: string, payload: JobPayload): Promise<LegacyEnqueueResult>;
+interface Queue {
+  enqueue(jobId: string, payload: JobPayload): Promise<void>;
   enqueueAndWait<T = unknown>(
     jobId: string,
     payload: JobPayload,
@@ -193,8 +174,6 @@ interface QueueShim {
   } | null>;
   start(): Promise<void>;
   stop(): Promise<void>;
-  /** Legacy execute() — no-op. Handlers are registered via registerJobHandler. */
-  execute(handler: unknown): void;
 }
 
 function mapState(state: JobState): "queued" | "running" | "completed" | "failed" {
@@ -219,7 +198,7 @@ async function ensureProjectReady(
   const slug = extractProjectSlug(payload);
   if (!slug) {
     throw new Error(
-      `queue.enqueue requires payload.projectSlug or project_slug; got jobId=${jobId} type=${String(payload.type)}`,
+      `queue.enqueue requires payload.projectSlug; got jobId=${jobId} type=${String(payload.type)}`,
     );
   }
   // Validate slug shape, then verify the project actually exists before
@@ -251,12 +230,11 @@ function buildEnqueueOptions(jobId: string, payload: JobPayload) {
   };
 }
 
-export const queue: QueueShim = {
+export const queue: Queue = {
   enqueue: async (jobId, payload) => {
     const { slug, dir } = await ensureProjectReady(jobId, payload);
     const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
     jobIdIndex.set(jobId, { slug, internalId: result.job.id });
-    return { jobId, internalId: result.job.id, projectSlug: slug };
   },
 
   enqueueAndWait: async <T = unknown>(
@@ -297,11 +275,6 @@ export const queue: QueueShim = {
     for (const info of infos) {
       closeStateDb(projectDirFor(info.slug));
     }
-  },
-
-  execute: () => {
-    // No-op: dispatch is handled per-runner via the resolveHandler closure
-    // installed by ensureRunner(). Kept for API compatibility.
   },
 };
 

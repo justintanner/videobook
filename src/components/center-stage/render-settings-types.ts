@@ -46,13 +46,6 @@ function extractAssetId(osgImagePath: string | undefined | null): string | null 
   return imgPart ?? null;
 }
 
-function migrateStyle(raw: string | undefined): RenderSettings['subtitleStyle'] | undefined {
-  if (!raw) return undefined;
-  if (raw === 'tikdance') return 'impact';
-  if (raw === 'impact' || raw === 'highlight') return raw;
-  return undefined;
-}
-
 export function getDefaultRenderSettings(orientation: string): RenderSettings {
   if (orientation === 'portrait') {
     return { ...DEFAULT_RENDER_SETTINGS, subtitleStyle: 'impact', textColor: '#FFFFFF', highlightColor: '#FFFF00' };
@@ -63,7 +56,7 @@ export function getDefaultRenderSettings(orientation: string): RenderSettings {
 export function storedToRenderSettings(stored: Record<string, unknown>): RenderSettings {
   return {
     subtitlesEnabled: (stored.subtitlesEnabled as boolean | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlesEnabled,
-    subtitleStyle: migrateStyle(stored.highlightStyle as string | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitleStyle,
+    subtitleStyle: (stored.highlightStyle as RenderSettings['subtitleStyle'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitleStyle,
     subtitlePosition: (stored.position as RenderSettings['subtitlePosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlePosition,
     fontSize: (stored.fontSize as RenderSettings['fontSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.fontSize,
     textColor: (stored.textColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.textColor,

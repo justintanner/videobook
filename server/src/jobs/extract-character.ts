@@ -18,7 +18,6 @@ export type Character = {
   subject_kind: CharacterSubjectKind;
   age: string;
   sex: string;
-  gender_presentation?: string;
   ethnicity: string;
   height: string;
   build: string;
@@ -109,12 +108,7 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
   const subjectKind = normalizeCharacterSubjectKind(
     typeof obj.subject_kind === "string" ? obj.subject_kind : undefined,
   );
-  const rawSex =
-    typeof obj.sex === "string" && obj.sex.trim()
-      ? obj.sex
-      : typeof obj.gender_presentation === "string"
-        ? obj.gender_presentation
-        : "";
+  const rawSex = typeof obj.sex === "string" ? obj.sex : "";
   for (const field of REQUIRED_FIELDS) {
     if (field === "sex") {
       if (subjectKind === "human" && !rawSex.trim()) {

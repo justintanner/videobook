@@ -48,7 +48,7 @@ const CHARACTER_PROFILE_SCHEMA = z.object({
   source_image_asset_id: z.string(),
 }).passthrough();
 
-export type CharacterPromptProfile = z.infer<typeof CHARACTER_PROFILE_SCHEMA> & { gender_presentation?: string; subject_kind?: string };
+export type CharacterPromptProfile = z.infer<typeof CHARACTER_PROFILE_SCHEMA>;
 type CharacterProfile = CharacterPromptProfile & { subject_kind: CharacterSubjectKind; sex: string };
 
 const schema = {

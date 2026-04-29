@@ -255,7 +255,7 @@ function compressCharacterProfile(c: Character | undefined): string {
     if (c.distinguishing_features) parts.push(`features ${trimDescriptor(c.distinguishing_features)}`);
     return parts.join("; ");
   }
-  const sex = normalizeCharacterSex(c.sex || c.gender_presentation || "");
+  const sex = normalizeCharacterSex(c.sex ?? "");
   const identity = [c.age, sex, c.ethnicity].filter(Boolean).join(" ");
   if (identity) parts.push(identity);
   const body = [c.height, c.build && `${c.build} build`].filter(Boolean).join(", ");

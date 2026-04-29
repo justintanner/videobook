@@ -10,7 +10,7 @@ import {
 } from '@/hooks/useGenerateOutfit';
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
-import { normalizeCharacterProfile, type CharacterProfile, type CharacterSubjectKind } from '@/hooks/useCharacterSlots';
+import { type CharacterProfile, type CharacterSubjectKind } from '@/hooks/useCharacterSlots';
 import type { UseMcpResult } from 'use-mcp/react';
 
 type ProfileFieldKey =
@@ -221,7 +221,7 @@ export function CharacterDialog({
       setAdditionalReferenceSlugs([]);
       setOutfitImageSlug(null);
       if (initialProfile) {
-        setProfile(normalizeCharacterProfile(initialProfile));
+        setProfile(initialProfile);
         return;
       }
       const extracted = await analyze(projectSlug, source.assetId);

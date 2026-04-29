@@ -41,7 +41,8 @@ describe("pin_character_slot / unpin_character_slot tools", () => {
       "character",
       {
         age: "early-20s",
-        gender_presentation: "feminine",
+        subject_kind: "human",
+        sex: "female",
         ethnicity: "Mediterranean",
         height: "tall",
         build: "lean athletic",
