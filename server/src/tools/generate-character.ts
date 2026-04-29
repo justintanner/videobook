@@ -20,36 +20,35 @@ import {
 } from "./generate-outfit.js";
 import {
   CHARACTER_METADATA_KEY,
-  isAnimalCharacterSubjectKind,
-  isFemaleCharacterSex,
-  isMaleCharacterSex,
-  normalizeCharacterSubjectKind,
-  normalizeCharacterSex,
+  isAnimalSubject,
+  isFreeformSubject,
+  isHumanSubject,
+  isOtherSubject,
+  normalizeCharacterProfile,
+  type Character,
   type CharacterSubjectKind,
 } from "../jobs/extract-character.js";
 
 const CHARACTER_PROFILE_SCHEMA = z.object({
   name: z.string().optional(),
-  subject_kind: z.enum(["human", "animal"]).optional(),
-  age: z.string(),
-  sex: z.string().optional(),
-  ethnicity: z.string(),
-  height: z.string(),
-  build: z.string(),
-  bust: z.string(),
-  waist: z.string(),
-  hips: z.string(),
-  glutes: z.string(),
-  face: z.string(),
-  hair: z.string(),
-  eyes: z.string(),
-  skin: z.string(),
-  distinguishing_features: z.string(),
+  subject_kind: z.enum(["female", "male", "animal", "other"]).optional(),
+  age: z.string().optional(),
+  ethnicity: z.string().optional(),
+  height: z.string().optional(),
+  build: z.string().optional(),
+  bust: z.string().optional(),
+  waist: z.string().optional(),
+  hips: z.string().optional(),
+  face: z.string().optional(),
+  hair: z.string().optional(),
+  eyes: z.string().optional(),
+  skin: z.string().optional(),
+  other: z.string().optional(),
   source_image_asset_id: z.string(),
 }).passthrough();
 
 export type CharacterPromptProfile = z.infer<typeof CHARACTER_PROFILE_SCHEMA>;
-type CharacterProfile = CharacterPromptProfile & { subject_kind: CharacterSubjectKind; sex: string };
+type CharacterProfile = Character & { subject_kind: CharacterSubjectKind };
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -71,11 +70,11 @@ const schema = {
   outfit_text: z
     .string()
     .optional()
-    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). For animals, use only explicit accessories/costumes. When unset, humans default to a sex-appropriate skin-tone baseline garment and animals render natural."),
+    .describe("Optional free-text override of the wardrobe to render the body shots in (e.g. 'plain white t-shirt and dark jeans'). For animals/other subjects, use only explicit accessories/costumes. When unset, humans default to a sex-appropriate skin-tone baseline garment, animals render natural, and 'other' subjects render as-is."),
   outfit_image_slug: z
     .string()
     .optional()
-    .describe("Optional @img-* slug of a garment/accessory reference. When supplied, the body shots in the sheet will dress the subject in this clothing or adapt the accessory/costume for animals."),
+    .describe("Optional @img-* slug of a garment/accessory reference. When supplied, the body shots in the sheet will dress the subject in this clothing or adapt the accessory/costume for animals/other subjects."),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -112,49 +111,56 @@ interface CharacterOutcome {
   profile_error?: string;
 }
 
+const HUMAN_BODY_FIELDS: Array<keyof CharacterProfile> = [
+  "age",
+  "ethnicity",
+  "height",
+  "build",
+  "bust",
+  "waist",
+  "hips",
+  "face",
+  "hair",
+  "eyes",
+  "skin",
+];
+
 function normalizeProfile(p: CharacterPromptProfile): CharacterProfile {
-  const subjectKind = normalizeCharacterSubjectKind(p.subject_kind);
-  const rawSex = p.sex ?? "";
-  if (subjectKind === "human" && !rawSex.trim()) {
-    throw new Error("profile.sex is required for human profiles");
+  const base = normalizeCharacterProfile(p, p.source_image_asset_id);
+  if (isFreeformSubject(base.subject_kind)) {
+    if (!base.other || !base.other.trim()) {
+      throw new Error(`profile.other is required for ${base.subject_kind} profiles`);
+    }
+  } else {
+    for (const field of HUMAN_BODY_FIELDS) {
+      const value = base[field];
+      if (typeof value !== "string" || !value.trim()) {
+        throw new Error(`profile.${field} is required for ${base.subject_kind} profiles`);
+      }
+    }
   }
-  return {
-    ...p,
-    subject_kind: subjectKind,
-    sex: rawSex.trim() ? normalizeCharacterSex(rawSex) : "",
-  };
+  return base as CharacterProfile;
 }
 
 function profileSubjectSentence(p: CharacterProfile): string {
-  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
-    return `${p.age} animal, ${p.ethnicity}, ${p.height}, ${p.build} build.`;
+  if (isFreeformSubject(p.subject_kind)) {
+    return `${p.other}.`;
   }
-  const bits: string[] = [];
-  bits.push(`${p.age} ${normalizeCharacterSex(p.sex)} of ${p.ethnicity} heritage`);
-  bits.push(`${p.height}, ${p.build} build`);
-  return bits.join(", ") + ".";
+  return `${p.age} ${p.subject_kind} of ${p.ethnicity} heritage, ${p.height}, ${p.build} build.`;
 }
 
 function profileDetailLines(p: CharacterProfile): string {
-  const lines: string[] = [];
-  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
-    lines.push(`Body: chest/torso ${p.bust}; midsection ${p.waist}; hindquarters ${p.hips}; rear/tail base ${p.glutes}`);
-    lines.push(`Head/face: ${p.face}`);
-    lines.push(`Coat/fur: ${p.hair}`);
-    lines.push(`Eyes: ${p.eyes}`);
-    lines.push(`Coat/skin texture: ${p.skin}`);
-    lines.push(`Distinguishing features: ${p.distinguishing_features}`);
-    return lines.join(". ") + ".";
+  if (isFreeformSubject(p.subject_kind)) {
+    return "";
   }
-  const chestLabel = isMaleCharacterSex(p.sex) ? "chest" : isFemaleCharacterSex(p.sex) ? "bust" : "chest/bust";
-  lines.push(
-    `Body: ${chestLabel} ${p.bust}; waist ${p.waist}; hips ${p.hips}; glutes ${p.glutes}`,
-  );
-  lines.push(`Face: ${p.face}`);
-  lines.push(`Hair: ${p.hair}`);
-  lines.push(`Eyes: ${p.eyes}`);
-  lines.push(`Skin: ${p.skin}`);
-  lines.push(`Distinguishing features: ${p.distinguishing_features}`);
+  const chestLabel = p.subject_kind === "male" ? "chest" : "bust";
+  const lines = [
+    `Body: ${chestLabel} ${p.bust}; waist ${p.waist}; hips ${p.hips}`,
+    `Face: ${p.face}`,
+    `Hair: ${p.hair}`,
+    `Eyes: ${p.eyes}`,
+    `Skin: ${p.skin}`,
+  ];
   return lines.join(". ") + ".";
 }
 
@@ -188,6 +194,14 @@ const ANIMAL_SHEET_LAYOUT =
   "Bottom-right quadrant: full-body 3/4 rear view in a natural standing pose appropriate to the species, showing back, hindquarters, tail or tail base, coat/fur markings, and rear-and-side body silhouette. " +
   "The four quadrants must show the same animal with the same coat/fur color, markings, length, texture, eye color, ear shape, tail shape, and body proportions. Use natural species-appropriate posture in every quadrant.";
 
+const OTHER_SHEET_LAYOUT =
+  "A 2x2 subject reference sheet on a clean white seamless studio background with even soft natural lighting. " +
+  "Top-left quadrant: tight head/upper-section side profile of the subject in clean side view looking to the right, showing top contour, surface detail, material structure and any face/feature elements. " +
+  "Top-right quadrant: tight head/upper-section front view of the subject directly to camera, showing front-facing structure, symmetry, surface texture and any face/feature elements. " +
+  "Bottom-left quadrant: full-body 3/4 front angle, the subject in its natural standing/upright orientation rotated about 30 degrees to the camera's right — clearly showing the front-and-side silhouette so the 3D form of the subject reads. " +
+  "Bottom-right quadrant: full-body 3/4 back angle, the subject rotated about 30 degrees so the camera sees one side and the back together — clearly showing the back-and-side silhouette so the 3D form reads. " +
+  "The four quadrants must show the same subject with the same form, materials, surface, color, markings, and proportions as Reference Image 1.";
+
 const HUMAN_STYLE_TAIL =
   "Photographic, editorial fashion-documentation style. " +
   "Preserve the subject's identity from Reference Image 1 — face structure, hair texture, skin tone — exactly. " +
@@ -196,6 +210,11 @@ const HUMAN_STYLE_TAIL =
 const ANIMAL_STYLE_TAIL =
   "Photographic, natural-history reference style. " +
   "Preserve the animal's identity from Reference Image 1 — head shape, coat/fur texture, markings, eye color, ear shape, tail shape, and body proportions — exactly. " +
+  "Render as one cohesive 1:1 square image with the four quadrants clearly separated by thin gutters of white background.";
+
+const OTHER_STYLE_TAIL =
+  "Photographic reference style. " +
+  "Preserve the subject's identity from Reference Image 1 — overall form, materials, surface texture, color, markings, structural detail, and proportions — exactly. " +
   "Render as one cohesive 1:1 square image with the four quadrants clearly separated by thin gutters of white background.";
 
 function identityReferenceClause(identityRefCount: number): string {
@@ -210,63 +229,77 @@ function identityReferenceClause(identityRefCount: number): string {
 }
 
 function sheetLayout(p: CharacterProfile): string {
-  if (isAnimalCharacterSubjectKind(p.subject_kind)) return ANIMAL_SHEET_LAYOUT;
-  if (isFemaleCharacterSex(p.sex)) return HUMAN_FEMALE_SHEET_LAYOUT;
-  return HUMAN_MALE_SHEET_LAYOUT;
+  switch (p.subject_kind) {
+    case "female":
+      return HUMAN_FEMALE_SHEET_LAYOUT;
+    case "male":
+      return HUMAN_MALE_SHEET_LAYOUT;
+    case "animal":
+      return ANIMAL_SHEET_LAYOUT;
+    case "other":
+      return OTHER_SHEET_LAYOUT;
+  }
 }
 
 function styleTail(p: CharacterProfile): string {
-  return isAnimalCharacterSubjectKind(p.subject_kind) ? ANIMAL_STYLE_TAIL : HUMAN_STYLE_TAIL;
+  if (isAnimalSubject(p.subject_kind)) return ANIMAL_STYLE_TAIL;
+  if (isOtherSubject(p.subject_kind)) return OTHER_STYLE_TAIL;
+  return HUMAN_STYLE_TAIL;
 }
 
-export function defaultCharacterWardrobeClause(sex: string): string {
-  if (isMaleCharacterSex(sex)) {
+export function defaultCharacterWardrobeClause(subjectKind: CharacterSubjectKind): string {
+  if (subjectKind === "male") {
     return (
       "Wardrobe for the body shots (bottom quadrants only): smooth skin-tone fitted boxer briefs or athletic trunks, color closely matched to the subject's own skin tone, no patterns, no logos. " +
       "The upper torso is bare natural skin with visible chest and shoulders; no bra, no chest binder, no camisole, no crop top, no straps and no breast-covering garment. " +
       "The garments should read as a clean baseline so the body's silhouette is the dominant signal. Top quadrants stay tightly cropped to bare head and neck."
     );
   }
-  if (isFemaleCharacterSex(sex)) {
-    return (
-      "Wardrobe for the body shots (bottom quadrants only): a smooth skin-tone undergarment set — a plain bra top with thick straps and matching high-waist briefs, " +
-      "color closely matched to the subject's own skin tone, no patterns, no logos, no lace. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
-      "Top quadrants stay tightly cropped to bare head and neck."
-    );
-  }
   return (
-    "Wardrobe for the body shots (bottom quadrants only): smooth skin-tone minimal baseline garments appropriate to the subject's body, color closely matched to the subject's own skin tone, no patterns, no logos, no lace. " +
-    "Do not add a bra, chest binder, camisole, crop top, straps or breast-covering garment to male bodies. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
+    "Wardrobe for the body shots (bottom quadrants only): a smooth skin-tone undergarment set — a plain bra top with thick straps and matching high-waist briefs, " +
+    "color closely matched to the subject's own skin tone, no patterns, no logos, no lace. The garments should read as a clean baseline so the body's silhouette is the dominant signal. " +
     "Top quadrants stay tightly cropped to bare head and neck."
   );
 }
 
-function animalWardrobeClause(outfitText: string | undefined, outfitRefIndex: number | null): string {
+function freeformWardrobeClause(
+  outfitText: string | undefined,
+  outfitRefIndex: number | null,
+  subjectKind: CharacterSubjectKind,
+): string {
   const outfitRef = outfitRefIndex ? `Reference Image ${outfitRefIndex}` : "the accessory/costume reference";
+  const preserveLine = isAnimalSubject(subjectKind)
+    ? "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+    : "Preserve the subject's core form, materials, surface, and structural proportions.";
   if (outfitRefIndex && outfitText?.trim()) {
+    const noun = isAnimalSubject(subjectKind) ? "animal accessory or costume" : "accessory or modification";
     return (
-      `Optional animal accessory or costume for the body shots only: adapt the item shown in ${outfitRef} (${outfitText.trim()}) to the animal's body only if it can fit naturally. ` +
-      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+      `Optional ${noun} for the body shots only: adapt the item shown in ${outfitRef} (${outfitText.trim()}) to the subject only if it can fit naturally. ` +
+      preserveLine
     );
   }
   if (outfitRefIndex) {
+    const noun = isAnimalSubject(subjectKind) ? "animal accessory or costume" : "accessory or modification";
     return (
-      `Optional animal accessory or costume for the body shots only: adapt the item shown in ${outfitRef} to the animal's body only if it can fit naturally. ` +
-      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+      `Optional ${noun} for the body shots only: adapt the item shown in ${outfitRef} to the subject only if it can fit naturally. ` +
+      preserveLine
     );
   }
   if (outfitText?.trim()) {
+    const noun = isAnimalSubject(subjectKind) ? "animal accessory or costume" : "accessory or modification";
     return (
-      `Optional animal accessory or costume for the body shots only: ${outfitText.trim()}. ` +
-      "Preserve the animal's anatomy, coat/fur markings, and species-appropriate posture."
+      `Optional ${noun} for the body shots only: ${outfitText.trim()}. ` +
+      preserveLine
     );
   }
-  return "No wardrobe: render the animal natural with no clothing or accessories.";
+  return isAnimalSubject(subjectKind)
+    ? "No wardrobe: render the animal natural with no clothing or accessories."
+    : "No wardrobe: render the subject as-is with no added clothing or accessories.";
 }
 
 function wardrobeClause(outfitText: string | undefined, outfitRefIndex: number | null, p: CharacterProfile): string {
-  if (isAnimalCharacterSubjectKind(p.subject_kind)) {
-    return animalWardrobeClause(outfitText, outfitRefIndex);
+  if (isFreeformSubject(p.subject_kind)) {
+    return freeformWardrobeClause(outfitText, outfitRefIndex, p.subject_kind);
   }
   const outfitRef = outfitRefIndex ? `Reference Image ${outfitRefIndex}` : "the clothing reference";
   if (outfitRefIndex && outfitText?.trim()) {
@@ -287,7 +320,7 @@ function wardrobeClause(outfitText: string | undefined, outfitRefIndex: number |
       "Top quadrants stay tightly cropped to bare head and neck."
     );
   }
-  return defaultCharacterWardrobeClause(p.sex);
+  return defaultCharacterWardrobeClause(p.subject_kind);
 }
 
 function buildPrompt(
@@ -301,10 +334,11 @@ function buildPrompt(
   const subject = profileSubjectSentence(p);
   const details = profileDetailLines(p);
   const wardrobe = wardrobeClause(outfitText, outfitRefIndex, p);
+  const subjectBlock = details ? `Subject: ${subject} ${details}` : `Subject: ${subject}`;
   const base =
     `${sheetLayout(p)}\n\n` +
     `${identityReferenceClause(identityRefCount)}\n\n` +
-    `Subject: ${subject} ${details}\n\n` +
+    `${subjectBlock}\n\n` +
     `${wardrobe}\n\n` +
     `${styleTail(p)}`;
   if (provider === "kie" && (model === "wan27_pro" || model === "qwen_image_edit")) {
@@ -384,11 +418,13 @@ function aspectRatioArgs(provider: OutfitProvider, model: OutfitModelKey): Recor
   return {};
 }
 
+export { isHumanSubject };
+
 export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_character",
     description:
-      "Generate a 4-up human or animal character reference sheet from a structured Character profile " +
+      "Generate a 4-up character reference sheet (female | male | animal | other) from a structured Character profile " +
       "and one to three identity reference images. Creates one new char-* asset " +
       "per selected model and writes the profile to that asset's .character.json metadata. The " +
       "source image is passed as the primary identity reference. Aspect ratio is fixed at 1:1.",

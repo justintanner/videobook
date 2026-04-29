@@ -1,30 +1,86 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
-export type CharacterSubjectKind = "human" | "animal";
+export type CharacterSubjectKind = "female" | "male" | "animal" | "other";
 
 export interface CharacterProfile {
   name?: string;
   subject_kind: CharacterSubjectKind;
-  age: string;
-  sex: string;
-  ethnicity: string;
-  height: string;
-  build: string;
-  bust: string;
-  waist: string;
-  hips: string;
-  glutes: string;
-  face: string;
-  hair: string;
-  eyes: string;
-  skin: string;
-  distinguishing_features: string;
+  // female / male only
+  age?: string;
+  ethnicity?: string;
+  height?: string;
+  build?: string;
+  bust?: string;
+  waist?: string;
+  hips?: string;
+  face?: string;
+  hair?: string;
+  eyes?: string;
+  skin?: string;
+  // animal / other only
+  other?: string;
   source_image_asset_id: string;
   wardrobe?: string[];
   poses?: string[];
   backdrop?: string[];
   outfits?: string[];
+}
+
+export const FREEFORM_SUBJECT_KINDS: ReadonlySet<CharacterSubjectKind> = new Set(["animal", "other"]);
+
+export function isFreeformSubject(kind: CharacterSubjectKind): boolean {
+  return FREEFORM_SUBJECT_KINDS.has(kind);
+}
+
+/**
+ * Coerce raw .character.json metadata (which may be an old `human`+`sex` blob,
+ * or new 4-way) into the new CharacterProfile shape. Drops removed legacy
+ * fields (`sex`, `glutes`, `distinguishing_features`).
+ */
+export function normalizeLegacyCharacterProfile(raw: unknown): CharacterProfile {
+  const obj: Record<string, unknown> = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const subjectKind = legacySubjectKind(obj);
+  const profile: CharacterProfile = {
+    subject_kind: subjectKind,
+    source_image_asset_id: getStr(obj, "source_image_asset_id"),
+  };
+  const name = getStr(obj, "name");
+  if (name) profile.name = name;
+  for (const k of ["wardrobe", "poses", "backdrop", "outfits"] as const) {
+    const v = obj[k];
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+      profile[k] = v as string[];
+    }
+  }
+  if (isFreeformSubject(subjectKind)) {
+    const other = getStr(obj, "other") || getStr(obj, "ethnicity");
+    if (other) profile.other = other;
+    return profile;
+  }
+  for (const k of ["age", "ethnicity", "height", "build", "bust", "waist", "hips", "face", "hair", "eyes", "skin"] as const) {
+    const v = getStr(obj, k);
+    if (v) profile[k] = v;
+  }
+  return profile;
+}
+
+function getStr(obj: Record<string, unknown>, key: string): string {
+  const v = obj[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function legacySubjectKind(obj: Record<string, unknown>): CharacterSubjectKind {
+  const raw = (typeof obj.subject_kind === "string" ? obj.subject_kind : "").trim().toLowerCase();
+  if (raw === "female" || raw === "male" || raw === "animal" || raw === "other") return raw;
+  if (raw === "human") {
+    const sex = (typeof obj.sex === "string" ? obj.sex : "").trim().toLowerCase();
+    if (["female", "feminine", "woman", "female-presenting", "female presenting"].includes(sex)) return "female";
+    if (["male", "masculine", "man", "male-presenting", "male presenting"].includes(sex)) return "male";
+    return "male";
+  }
+  if (raw === "animal") return "animal";
+  return "male";
 }
 
 export type SlotKind = "wardrobe" | "poses" | "backdrop" | "outfits";
@@ -98,7 +154,8 @@ export function useCharacterSlots(
           return;
         }
         const content = res.content as Array<{ type: string; text: string }>;
-        const parsed = JSON.parse(content[0].text) as CharacterProfile;
+        const raw = JSON.parse(content[0].text) as unknown;
+        const parsed = normalizeLegacyCharacterProfile(raw);
         setState({ assetId, profile: parsed, loading: false, error: null });
       } catch (e) {
         if (cancelled) return;

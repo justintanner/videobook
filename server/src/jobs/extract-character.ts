@@ -11,25 +11,25 @@ import {
 } from "./describe-image.js";
 import { findImageFile } from "../tools/_image-inputs.js";
 
-export type CharacterSubjectKind = "human" | "animal";
+export type CharacterSubjectKind = "female" | "male" | "animal" | "other";
 
 export type Character = {
   name?: string;
   subject_kind: CharacterSubjectKind;
-  age: string;
-  sex: string;
-  ethnicity: string;
-  height: string;
-  build: string;
-  bust: string;
-  waist: string;
-  hips: string;
-  glutes: string;
-  face: string;
-  hair: string;
-  eyes: string;
-  skin: string;
-  distinguishing_features: string;
+  // female / male only
+  age?: string;
+  ethnicity?: string;
+  height?: string;
+  build?: string;
+  bust?: string;
+  waist?: string;
+  hips?: string;
+  face?: string;
+  hair?: string;
+  eyes?: string;
+  skin?: string;
+  // animal / other only
+  other?: string;
   source_image_asset_id: string;
   wardrobe?: string[];
   poses?: string[];
@@ -37,21 +37,31 @@ export type Character = {
   outfits?: string[];
 };
 
-const REQUIRED_FIELDS: Array<keyof Character> = [
+type HumanStringField =
+  | "age"
+  | "ethnicity"
+  | "height"
+  | "build"
+  | "bust"
+  | "waist"
+  | "hips"
+  | "face"
+  | "hair"
+  | "eyes"
+  | "skin";
+
+const HUMAN_REQUIRED_FIELDS: HumanStringField[] = [
   "age",
-  "sex",
   "ethnicity",
   "height",
   "build",
   "bust",
   "waist",
   "hips",
-  "glutes",
   "face",
   "hair",
   "eyes",
   "skin",
-  "distinguishing_features",
 ];
 
 type ExtractCharacterPayload = {
@@ -68,33 +78,90 @@ const GUIDE_PATH = join(__dirname, "../guides/character_schema_guide.md");
 export const CHARACTER_METADATA_KEY = "character";
 export const VISION_MODEL = "grok-4.20-reasoning";
 
-export function normalizeCharacterSubjectKind(value: string | undefined): CharacterSubjectKind {
-  return value?.trim().toLowerCase() === "animal" ? "animal" : "human";
+export const isHumanSubject = (k: CharacterSubjectKind): boolean =>
+  k === "female" || k === "male";
+
+export const isAnimalSubject = (k: CharacterSubjectKind): boolean =>
+  k === "animal";
+
+export const isOtherSubject = (k: CharacterSubjectKind): boolean =>
+  k === "other";
+
+export const isFreeformSubject = (k: CharacterSubjectKind): boolean =>
+  k === "animal" || k === "other";
+
+export function normalizeCharacterSubjectKind(
+  obj: { subject_kind?: unknown; sex?: unknown },
+): CharacterSubjectKind {
+  const rawKind = typeof obj.subject_kind === "string" ? obj.subject_kind.trim().toLowerCase() : "";
+  if (rawKind === "female" || rawKind === "male" || rawKind === "animal" || rawKind === "other") {
+    return rawKind;
+  }
+  if (rawKind === "human") {
+    const rawSex = typeof obj.sex === "string" ? obj.sex.trim().toLowerCase() : "";
+    if (["female", "feminine", "woman", "female-presenting", "female presenting"].includes(rawSex)) {
+      return "female";
+    }
+    if (["male", "masculine", "man", "male-presenting", "male presenting"].includes(rawSex)) {
+      return "male";
+    }
+    return "male";
+  }
+  if (rawKind === "animal") return "animal";
+  return "male";
 }
 
-export function isAnimalCharacterSubjectKind(value: string | undefined): boolean {
-  return normalizeCharacterSubjectKind(value) === "animal";
+function strField(obj: Record<string, unknown>, key: string): string {
+  const v = obj[key];
+  return typeof v === "string" ? v.trim() : "";
 }
 
-export function normalizeCharacterSex(value: string): string {
-  const trimmed = value.trim();
-  const lower = trimmed.toLowerCase();
-  if (["masculine", "man", "male-presenting", "male presenting"].includes(lower)) return "male";
-  if (["feminine", "woman", "female-presenting", "female presenting"].includes(lower)) return "female";
-  return trimmed;
+function passthroughSlots(src: Record<string, unknown>, dst: Character): void {
+  for (const k of ["wardrobe", "poses", "backdrop", "outfits"] as const) {
+    const v = src[k];
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+      dst[k] = v as string[];
+    }
+  }
 }
 
-export function isMaleCharacterSex(value: string): boolean {
-  return normalizeCharacterSex(value).toLowerCase() === "male";
-}
+/**
+ * Coerce a raw JSON object (vision output OR an old `.character.json` on disk)
+ * into the new 4-way schema. Drops legacy `sex`, `glutes`, `distinguishing_features`.
+ */
+export function normalizeCharacterProfile(
+  raw: unknown,
+  sourceAssetId: string,
+): Character {
+  const obj: Record<string, unknown> = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const subjectKind = normalizeCharacterSubjectKind(obj);
+  const sourceId = strField(obj, "source_image_asset_id") || sourceAssetId;
+  const character: Character = {
+    subject_kind: subjectKind,
+    source_image_asset_id: sourceId,
+  };
+  const name = strField(obj, "name");
+  if (name) character.name = name;
+  passthroughSlots(obj, character);
 
-export function isFemaleCharacterSex(value: string): boolean {
-  return normalizeCharacterSex(value).toLowerCase() === "female";
+  if (isFreeformSubject(subjectKind)) {
+    // Prefer explicit `other`. Fall back to legacy `ethnicity` (which used to
+    // hold "white domestic longhair cat" for animals).
+    const other = strField(obj, "other") || strField(obj, "ethnicity");
+    if (other) character.other = other;
+    return character;
+  }
+
+  for (const k of HUMAN_REQUIRED_FIELDS) {
+    const v = strField(obj, k);
+    if (v) character[k] = v;
+  }
+  return character;
 }
 
 function buildSystemPrompt(guide: string): string {
   return (
-    "You are an expert visual analyst extracting a structured human or animal character profile from a photograph. " +
+    "You are an expert visual analyst extracting a structured character profile from a photograph. " +
     "Follow the guide exactly. Return ONLY a JSON object matching the schema. No markdown fences, no prose.\n\n" +
     `--- CHARACTER SCHEMA GUIDE ---\n${guide}\n--- END GUIDE ---`
   );
@@ -104,42 +171,21 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Vision model did not return a JSON object");
   }
-  const obj = parsed as Record<string, unknown>;
-  const subjectKind = normalizeCharacterSubjectKind(
-    typeof obj.subject_kind === "string" ? obj.subject_kind : undefined,
-  );
-  const rawSex = typeof obj.sex === "string" ? obj.sex : "";
-  for (const field of REQUIRED_FIELDS) {
-    if (field === "sex") {
-      if (subjectKind === "human" && !rawSex.trim()) {
-        throw new Error("Vision model returned missing/empty required field: sex");
-      }
-      continue;
+  const character = normalizeCharacterProfile(parsed, sourceAssetId);
+  if (isFreeformSubject(character.subject_kind)) {
+    if (!character.other || !character.other.trim()) {
+      throw new Error(
+        `Vision model returned missing/empty required field: other (subject_kind=${character.subject_kind})`,
+      );
     }
-    const value = obj[field];
+    return character;
+  }
+  for (const field of HUMAN_REQUIRED_FIELDS) {
+    const value = character[field];
     if (typeof value !== "string" || value.trim().length === 0) {
       throw new Error(`Vision model returned missing/empty required field: ${field}`);
     }
   }
-  const character: Character = {
-    subject_kind: subjectKind,
-    age: String(obj.age),
-    sex: rawSex.trim() ? normalizeCharacterSex(rawSex) : "",
-    ethnicity: String(obj.ethnicity),
-    height: String(obj.height),
-    build: String(obj.build),
-    bust: String(obj.bust),
-    waist: String(obj.waist),
-    hips: String(obj.hips),
-    glutes: String(obj.glutes),
-    face: String(obj.face),
-    hair: String(obj.hair),
-    eyes: String(obj.eyes),
-    skin: String(obj.skin),
-    distinguishing_features: String(obj.distinguishing_features),
-    source_image_asset_id: sourceAssetId,
-  };
-  if (typeof obj.name === "string" && obj.name.trim()) character.name = obj.name.trim();
   return character;
 }
 

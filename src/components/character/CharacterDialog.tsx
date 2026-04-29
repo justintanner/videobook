@@ -10,25 +10,23 @@ import {
 } from '@/hooks/useGenerateOutfit';
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
-import { type CharacterProfile, type CharacterSubjectKind } from '@/hooks/useCharacterSlots';
+import { type CharacterProfile, type CharacterSubjectKind, isFreeformSubject } from '@/hooks/useCharacterSlots';
 import type { UseMcpResult } from 'use-mcp/react';
 
 type ProfileFieldKey =
   | 'name'
   | 'age'
-  | 'sex'
   | 'ethnicity'
   | 'height'
   | 'build'
   | 'bust'
   | 'waist'
   | 'hips'
-  | 'glutes'
   | 'face'
   | 'hair'
   | 'eyes'
   | 'skin'
-  | 'distinguishing_features';
+  | 'other';
 
 interface FieldDef {
   key: ProfileFieldKey;
@@ -43,47 +41,38 @@ interface FieldGroup {
   fields: ProfileFieldKey[];
 }
 
+const SUBJECT_KINDS: ReadonlyArray<CharacterSubjectKind> = ['female', 'male', 'animal', 'other'];
+
 const HUMAN_GROUPS: FieldGroup[] = [
   { title: 'Identity', fields: ['name', 'age', 'ethnicity'] },
-  { title: 'Body', fields: ['height', 'build', 'bust', 'waist', 'hips', 'glutes'] },
-  { title: 'Face + Surface', fields: ['face', 'hair', 'eyes', 'skin', 'distinguishing_features'] },
+  { title: 'Body', fields: ['height', 'build', 'bust', 'waist', 'hips'] },
+  { title: 'Face + Surface', fields: ['face', 'hair', 'eyes', 'skin'] },
 ];
 
-const ANIMAL_GROUPS: FieldGroup[] = [
-  { title: 'Identity', fields: ['name', 'age', 'ethnicity'] },
-  { title: 'Body', fields: ['height', 'build', 'bust', 'waist', 'hips', 'glutes'] },
-  { title: 'Head + Coat', fields: ['face', 'hair', 'eyes', 'skin', 'distinguishing_features'] },
+const FREEFORM_GROUPS: FieldGroup[] = [
+  { title: 'Identity', fields: ['name', 'other'] },
 ];
 
-const HUMAN_FIELDS: Record<ProfileFieldKey, FieldDef> = {
+const FIELDS: Record<ProfileFieldKey, FieldDef> = {
   name: { key: 'name', label: 'Name', required: false, placeholder: 'optional handle' },
   age: { key: 'age', label: 'Age', required: true, placeholder: 'mid-30s' },
-  sex: { key: 'sex', label: 'Sex', required: true, placeholder: 'male or female' },
   ethnicity: { key: 'ethnicity', label: 'Background', required: true, placeholder: 'Mediterranean / Levantine heritage' },
   height: { key: 'height', label: 'Height', required: true, placeholder: 'average' },
   build: { key: 'build', label: 'Build', required: true, placeholder: 'lean athletic' },
   bust: { key: 'bust', label: 'Chest', required: true, placeholder: 'broad chest or small B-cup' },
   waist: { key: 'waist', label: 'Waist', required: true, placeholder: 'narrow ~26", sharp taper' },
   hips: { key: 'hips', label: 'Hips', required: true, placeholder: 'rounded ~36", curved outer thigh' },
-  glutes: { key: 'glutes', label: 'Glutes', required: true, placeholder: 'round and full, strong projection' },
   face: { key: 'face', label: 'Face', required: true, multiline: true },
   hair: { key: 'hair', label: 'Hair', required: true, multiline: true },
   eyes: { key: 'eyes', label: 'Eyes', required: true, multiline: true },
   skin: { key: 'skin', label: 'Skin', required: true, multiline: true },
-  distinguishing_features: { key: 'distinguishing_features', label: 'Features', required: true, multiline: true },
-};
-
-const ANIMAL_FIELD_OVERRIDES: Partial<Record<ProfileFieldKey, Partial<FieldDef>>> = {
-  ethnicity: { label: 'Species / breed', placeholder: 'white domestic longhair cat' },
-  height: { label: 'Size', placeholder: 'small, ~1ft / 30cm' },
-  bust: { label: 'Chest / torso', placeholder: 'narrow chest with fluffy fur coverage' },
-  waist: { label: 'Midsection', placeholder: 'slim tapered midsection' },
-  hips: { label: 'Hindquarters', placeholder: 'rounded hindquarters' },
-  glutes: { label: 'Rear / tail base', placeholder: 'soft tail base with minimal projection' },
-  face: { label: 'Head / face' },
-  hair: { label: 'Coat / fur' },
-  skin: { label: 'Coat / skin' },
-  distinguishing_features: { label: 'Markings / features' },
+  other: {
+    key: 'other',
+    label: 'Other',
+    required: true,
+    multiline: true,
+    placeholder: "e.g. 'white domestic longhair cat, fluffy white coat, heterochromatic eyes' or 'origami paper man, folded white cardstock, sharp creases, blank face'",
+  },
 };
 
 const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
@@ -106,40 +95,22 @@ function mediaItemToChoice(item: MediaItem): ImageChoice {
 }
 
 function fieldGroups(subjectKind: CharacterSubjectKind): FieldGroup[] {
-  return subjectKind === 'animal' ? ANIMAL_GROUPS : HUMAN_GROUPS;
+  return isFreeformSubject(subjectKind) ? FREEFORM_GROUPS : HUMAN_GROUPS;
 }
 
-function fieldDef(key: ProfileFieldKey, subjectKind: CharacterSubjectKind): FieldDef {
-  return {
-    ...HUMAN_FIELDS[key],
-    ...(subjectKind === 'animal' ? ANIMAL_FIELD_OVERRIDES[key] ?? {} : {}),
-  };
+function fieldDef(key: ProfileFieldKey): FieldDef {
+  return FIELDS[key];
 }
 
 function requiredFields(subjectKind: CharacterSubjectKind): ProfileFieldKey[] {
-  const fields = fieldGroups(subjectKind)
+  return fieldGroups(subjectKind)
     .flatMap((group) => group.fields)
-    .filter((key) => fieldDef(key, subjectKind).required);
-  return subjectKind === 'human' ? ['sex', ...fields] : fields;
+    .filter((key) => FIELDS[key].required);
 }
 
 function emptyProfile(sourceAssetId: string): CharacterProfile {
   return {
-    subject_kind: 'human',
-    age: '',
-    sex: '',
-    ethnicity: '',
-    height: '',
-    build: '',
-    bust: '',
-    waist: '',
-    hips: '',
-    glutes: '',
-    face: '',
-    hair: '',
-    eyes: '',
-    skin: '',
-    distinguishing_features: '',
+    subject_kind: 'female',
     source_image_asset_id: sourceAssetId,
   };
 }
@@ -203,8 +174,9 @@ export function CharacterDialog({
     if (!outfitImageSlug) return null;
     return garmentChoices.find((c) => c.assetId === outfitImageSlug) ?? null;
   }, [outfitImageSlug, garmentChoices]);
-  const subjectKind = profile?.subject_kind ?? 'human';
+  const subjectKind: CharacterSubjectKind = profile?.subject_kind ?? 'female';
   const activeFieldGroups = useMemo(() => fieldGroups(subjectKind), [subjectKind]);
+  const isFreeform = isFreeformSubject(subjectKind);
 
   const { analyze, loading: analyzing } = useAnalyzeCharacterImage(callTool);
   const lastAnalyzedRef = useRef<string | null>(null);
@@ -244,14 +216,7 @@ export function CharacterDialog({
   const setSubjectKind = useCallback((kind: CharacterSubjectKind) => {
     setProfile((prev) => {
       const base = prev ?? emptyProfile(source?.assetId ?? '');
-      return { ...base, subject_kind: kind, sex: kind === 'animal' ? '' : base.sex };
-    });
-  }, [source]);
-
-  const setHumanSex = useCallback((sex: 'male' | 'female') => {
-    setProfile((prev) => {
-      const base = prev ?? emptyProfile(source?.assetId ?? '');
-      return { ...base, sex, subject_kind: 'human' };
+      return { ...base, subject_kind: kind };
     });
   }, [source]);
 
@@ -391,7 +356,7 @@ export function CharacterDialog({
           <section>
             <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Subject</div>
             <div className="grid grid-cols-2 gap-1.5">
-              {(['human', 'animal'] as const).map((kind) => (
+              {SUBJECT_KINDS.map((kind) => (
                 <button
                   key={kind}
                   type="button"
@@ -407,36 +372,17 @@ export function CharacterDialog({
                 </button>
               ))}
             </div>
-            {subjectKind === 'human' && (
-              <div className="grid grid-cols-2 gap-1.5 mt-2">
-                {(['male', 'female'] as const).map((sex) => (
-                  <button
-                    key={sex}
-                    type="button"
-                    onClick={() => setHumanSex(sex)}
-                    className={cn(
-                      'px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
-                      profile?.sex === sex
-                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
-                    )}
-                  >
-                    {sex}
-                  </button>
-                ))}
-              </div>
-            )}
           </section>
 
           <section>
             <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
-              {subjectKind === 'animal' ? 'Sheet accessory / costume' : 'Sheet outfit'}
+              {isFreeform ? 'Sheet accessory / costume' : 'Sheet outfit'}
             </div>
             <div className="flex gap-2 items-start">
               <input
                 type="text"
                 value={outfitText}
-                placeholder={subjectKind === 'animal' ? 'e.g. red collar or tiny cape' : 'e.g. plain white t-shirt and dark jeans'}
+                placeholder={isFreeform ? 'e.g. red collar or tiny cape' : 'e.g. plain white t-shirt and dark jeans'}
                 onChange={(e) => setOutfitText(e.target.value)}
                 className={cn(
                   'flex-1 bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
@@ -572,7 +518,7 @@ export function CharacterDialog({
                 <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">{group.title}</div>
                 <div className="grid grid-cols-2 gap-2">
                   {group.fields.map((key) => {
-                    const f = fieldDef(key, subjectKind);
+                    const f = fieldDef(key);
                     const value = profile?.[f.key] ?? '';
                     const Tag = f.multiline ? 'textarea' : 'input';
                     return (
