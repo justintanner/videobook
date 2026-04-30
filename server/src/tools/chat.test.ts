@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,12 +7,17 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
+// Per-test createTestClient + create_project under parallel test load was
+// blowing past the 60s hook budget — every per-test call stomps the queue's
+// global projectsDir, racing concurrent suites into ENOENT. Tests don't
+// share persistent state in conflicting ways; only the OPENAI_API_KEY env
+// mutation needs per-test cleanup.
 describe("chat tool", () => {
   let client: Client;
   let tempDir: string;
   const origKey = process.env.OPENAI_API_KEY;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -21,11 +26,14 @@ describe("chat tool", () => {
     });
   });
 
-  afterEach(async () => {
-    if (origKey) process.env.OPENAI_API_KEY = origKey;
-    else delete process.env.OPENAI_API_KEY;
+  afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  afterEach(() => {
+    if (origKey) process.env.OPENAI_API_KEY = origKey;
+    else delete process.env.OPENAI_API_KEY;
   });
 
   it("returns error for unresolved @tag", async () => {
