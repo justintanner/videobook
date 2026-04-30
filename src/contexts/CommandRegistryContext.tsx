@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import type { ServerCommand } from '@/lib/command-registry';
+import type { ServerCommand, CommandArgValue } from '@/lib/command-registry';
 import { filterCommandsByMountKeys, parseCommandArgs } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
@@ -26,7 +26,7 @@ export function CommandRegistryProvider({
   state: string;
   projectSlug: string | undefined;
   uiActions: UiActionMap;
-  onAfterDispatch?: (toolName: string, toolArgs: Record<string, string | number | boolean>) => void;
+  onAfterDispatch?: (toolName: string, toolArgs: Record<string, string | number | boolean | string[]>) => void;
   children: React.ReactNode;
 }) {
   const mountKeys = useMountKeys();
@@ -66,14 +66,18 @@ export function CommandRegistryProvider({
       if (commandStr.startsWith('/')) {
         const cmd = allCommands.find((c) => c.command === commandStr);
         if (cmd) {
-          const args = parseCommandArgs(rest, cmd.params);
+          const args: Record<string, CommandArgValue> = parseCommandArgs(rest, cmd.params);
+          const stringArgs: Record<string, string> = {};
+          for (const [k, v] of Object.entries(args)) {
+            if (typeof v === 'string') stringArgs[k] = v;
+          }
 
           // uiAction dispatch
           if (cmd.uiAction) {
             // For switch_project, pass the slug from the command name
             if (cmd.uiAction === 'switch_project') {
               const slug = commandStr.slice(1); // remove leading /
-              return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args });
+              return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args: stringArgs });
             }
             // For gen commands, call directly to preserve @tags in prompt
             // (parseCommandArgs strips @ prefix from args)
@@ -85,12 +89,12 @@ export function CommandRegistryProvider({
               const fn = uiActions.open_gen_image;
               if (fn) { fn(rest); return true; }
             }
-            return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args });
+            return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args: stringArgs });
           }
 
           // mcpTool dispatch
           if (cmd.mcpTool) {
-            const toolArgs: Record<string, string | number | boolean> = { ...args };
+            const toolArgs: Record<string, string | number | boolean | string[]> = { ...args };
             if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
               toolArgs.project_slug = projectSlug;
             }

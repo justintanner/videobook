@@ -364,7 +364,7 @@ export function HomePage() {
     setTimelineSlotIndex(slotIndex);
   }, []);
 
-  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string | number | boolean>) => {
+  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string | number | boolean | string[]>) => {
     if (!projectSlug) return;
     fetchTimeline(projectSlug);
     listAssets(projectSlug, sortOrder);

@@ -3,7 +3,7 @@ import type { ToolDef } from "./tool-def.js";
 
 interface CommandParam {
   name: string;
-  type: "string" | "number" | "boolean";
+  type: "string" | "number" | "boolean" | "string[]";
   required: boolean;
   description: string;
 }
@@ -248,6 +248,21 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
     ],
     mcpTool: { tool: "suggest_sfx", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/plan-vis",
+    description: "Generate a per-scene cinematic visualization plan from a video/audio asset's elevenlabs.json, optionally referencing up to 5 characters by name. Writes to plan/.",
+    example: "/plan-vis @vid-input @char-naval @char-nivi @char-claude",
+    category: "context_menu",
+    icon: "Clapperboard",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "source_asset_id", type: "string", required: true, description: "Asset with elevenlabs.json (vid-* or aud-*)" },
+      { name: "character_asset_ids", type: "string[]", required: false, description: "Up to 5 char-* assets to reference by name" },
+    ],
+    mcpTool: { tool: "plan_visualization", autoInject: ["project_slug"] },
   },
   {
     command: "/grok-upscale",

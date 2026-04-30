@@ -198,6 +198,29 @@ describe("parseCommandArgs", () => {
     });
   });
 
+  it("rest-array param collects remaining tokens with @ stripped", () => {
+    const params: CommandParam[] = [
+      { name: "source_asset_id", type: "string", required: true, description: "" },
+      { name: "character_asset_ids", type: "string[]", required: false, description: "" },
+    ];
+    expect(
+      parseCommandArgs("@vid-input @char-naval @char-nivi @char-claude", params),
+    ).toEqual({
+      source_asset_id: "vid-input",
+      character_asset_ids: ["char-naval", "char-nivi", "char-claude"],
+    });
+  });
+
+  it("rest-array param is omitted when no extra tokens", () => {
+    const params: CommandParam[] = [
+      { name: "source_asset_id", type: "string", required: true, description: "" },
+      { name: "character_asset_ids", type: "string[]", required: false, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-input", params)).toEqual({
+      source_asset_id: "vid-input",
+    });
+  });
+
   it("extra tokens beyond param count are ignored", () => {
     const params: CommandParam[] = [
       { name: "asset_id", type: "string", required: true, description: "" },

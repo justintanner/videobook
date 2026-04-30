@@ -1,9 +1,11 @@
 export interface CommandParam {
   name: string;
-  type: 'string' | 'number' | 'boolean';
+  type: 'string' | 'number' | 'boolean' | 'string[]';
   required: boolean;
   description: string;
 }
+
+export type CommandArgValue = string | string[];
 
 export interface ServerCommand {
   command: string;
@@ -32,16 +34,22 @@ export function filterCommandsByMountKeys(
   });
 }
 
-export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, string> {
+const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
+
+export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, CommandArgValue> {
   if (!rest || params.length === 0) return {};
 
   const tokens = rest.split(/\s+/);
-  const args: Record<string, string> = {};
+  const args: Record<string, CommandArgValue> = {};
 
   for (let i = 0; i < params.length; i++) {
     if (i >= tokens.length) break;
+    const param = params[i];
+    const isLast = i === params.length - 1;
 
-    if (i === params.length - 1 && params[i].type === 'string') {
+    if (isLast && param.type === 'string[]') {
+      args[param.name] = tokens.slice(i).map(stripAt);
+    } else if (isLast && param.type === 'string') {
       // Last string param gets all remaining tokens joined.
       // Strip leading "to" connector (e.g. "/rename @slug to new-name")
       let remaining = tokens.slice(i);
@@ -49,10 +57,9 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
         remaining = remaining.slice(1);
       }
       const raw = remaining.join(' ');
-      args[params[i].name] = raw.startsWith('@') ? raw.slice(1) : raw;
+      args[param.name] = stripAt(raw);
     } else {
-      const raw = tokens[i];
-      args[params[i].name] = raw.startsWith('@') ? raw.slice(1) : raw;
+      args[param.name] = stripAt(tokens[i]);
     }
   }
 
