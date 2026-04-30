@@ -9,7 +9,7 @@
  * Covers: orientation x subtitles x highlight_style x position x font_size
  *         x background_mode x audio settings x OSG positions
  */
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -37,27 +37,31 @@ const FONT_SIZES = ["small", "medium", "large"] as const;
 const BACKGROUND_MODES = ["blur", "black"] as const;
 const OSG_POSITIONS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
 
+// Single shared client/project for the entire file. Each test uses unique
+// asset slugs and fully overwrites the timeline before calling render, so a
+// shared project is safe — and avoids paying ~340ms × 197 (~67s) for
+// per-test create_project + git init.
+let client: Client;
+let tempDir: string;
+
+beforeAll(async () => {
+  tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-shared-"));
+  client = await createTestClient(tempDir);
+  await client.callTool({
+    name: "create_project",
+    arguments: { project_slug: "jazzy-salmon-95" },
+  });
+});
+
+afterAll(async () => {
+  await client?.close();
+  await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+});
+
 // ---------------------------------------------------------------------------
 // 1. Video WITHOUT subtitles — orientation x background x audio permutations
 // ---------------------------------------------------------------------------
 describe("render orientation: video without subtitles", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-nosubs-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const orientation of ORIENTATIONS) {
     describe(`orientation=${orientation}`, () => {
       for (const background_mode of BACKGROUND_MODES) {
@@ -198,23 +202,6 @@ describe("render orientation: video without subtitles", () => {
 // 2. Video WITH subtitles — orientation x subtitle settings permutations
 // ---------------------------------------------------------------------------
 describe("render orientation: video with subtitles", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-subs-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const orientation of ORIENTATIONS) {
     describe(`orientation=${orientation}`, () => {
       for (const highlight_style of HIGHLIGHT_STYLES) {
@@ -339,23 +326,6 @@ describe("render orientation: video with subtitles", () => {
 // 3. OSG overlay — orientation x osg_position permutations
 // ---------------------------------------------------------------------------
 describe("render orientation: OSG overlay positions", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-osg-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const orientation of ORIENTATIONS) {
     for (const osg_position of OSG_POSITIONS) {
       it(`orientation=${orientation} osg_position=${osg_position}`, async () => {
@@ -396,23 +366,6 @@ describe("render orientation: OSG overlay positions", () => {
 // 4. Full settings matrix — both videos with all settings combined
 // ---------------------------------------------------------------------------
 describe("render orientation: full settings matrix", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-full-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const orientation of ORIENTATIONS) {
     it(`${orientation}: all subtitle+audio+background settings combined (with subs)`, async () => {
       const fs = createFs({ projectsDir: tempDir });
@@ -544,23 +497,6 @@ describe("render orientation: full settings matrix", () => {
 // 5. Timeline orientation switching — edit_timeline then render
 // ---------------------------------------------------------------------------
 describe("render orientation: timeline switching between orientations", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-switch-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   it("switches orientation via edit_timeline and renders in each", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "toothpaste-switch", "jazzy-salmon-95");
@@ -687,23 +623,6 @@ describe("render orientation: timeline switching between orientations", () => {
 // 6. Edge cases: subtitles_enabled=true without elevenlabs.json
 // ---------------------------------------------------------------------------
 describe("render orientation: subtitle edge cases", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-orient-edge-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const orientation of ORIENTATIONS) {
     it(`${orientation}: subtitles_enabled=true without elevenlabs.json errors`, async () => {
       const fs = createFs({ projectsDir: tempDir });
@@ -782,23 +701,6 @@ describe("render orientation: subtitle edge cases", () => {
 // 7. Focused subtitles_enabled and highlight_style tests
 // ---------------------------------------------------------------------------
 describe("render: subtitles_enabled and highlight_style focused", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-subs-style-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   // --- subtitles_enabled: true with elevenlabs.json ---
   it("subtitles_enabled=true succeeds when elevenlabs.json exists", async () => {
     const fs = createFs({ projectsDir: tempDir });
@@ -1053,23 +955,6 @@ describe("render: subtitles_enabled and highlight_style focused", () => {
 // 8. Audio settings — volume, fade-in, fade-out isolated permutations
 // ---------------------------------------------------------------------------
 describe("render audio settings", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-audio-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   async function createVidAsset(slug: string): Promise<string> {
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", slug, "jazzy-salmon-95");
@@ -1338,23 +1223,6 @@ describe("render audio settings", () => {
 // 9. Text color and highlight color settings
 // ---------------------------------------------------------------------------
 describe("render color settings: text_color and highlight_color", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-colors-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   async function createSubtitledVidAsset(name: string): Promise<string> {
     const localFs = createFs({ projectsDir: tempDir });
     const asset = await localFs.createAsset("vid", name, "jazzy-salmon-95");
@@ -1687,23 +1555,6 @@ describe("render color settings: text_color and highlight_color", () => {
 // 10. Focused subtitle position tests — each position value in isolation
 // ---------------------------------------------------------------------------
 describe("render settings: subtitle position", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-pos-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const position of POSITIONS) {
     it(`position=${position} renders successfully with subtitles`, async () => {
       const fs = createFs({ projectsDir: tempDir });
@@ -1794,23 +1645,6 @@ describe("render settings: subtitle position", () => {
 // 11. Focused font size tests — each font_size value in isolation
 // ---------------------------------------------------------------------------
 describe("render settings: font size", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-fontsize-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const font_size of FONT_SIZES) {
     it(`font_size=${font_size} renders successfully with subtitles`, async () => {
       const fs = createFs({ projectsDir: tempDir });
@@ -1901,23 +1735,6 @@ describe("render settings: font size", () => {
 // 12. Position x font_size cross-product — all 9 combinations
 // ---------------------------------------------------------------------------
 describe("render settings: position x font_size combinations", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-pos-font-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   for (const position of POSITIONS) {
     for (const font_size of FONT_SIZES) {
       it(`position=${position} font_size=${font_size}`, async () => {
@@ -1955,23 +1772,6 @@ describe("render settings: position x font_size combinations", () => {
 // 13. Focused OSG position tests — each position individually
 // ---------------------------------------------------------------------------
 describe("render: osg_position focused", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-osg-pos-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   it("osg_position=top-left enqueues successfully", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const vidAsset = await fs.createAsset("vid", "osg-tl-vid", "jazzy-salmon-95");
@@ -2155,23 +1955,6 @@ describe("render: osg_position focused", () => {
 // 14. Focused background_mode tests — blur and black individually
 // ---------------------------------------------------------------------------
 describe("render: background_mode focused", () => {
-  let client: Client;
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-bgmode-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "jazzy-salmon-95" },
-    });
-  });
-
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
   it("background_mode=blur enqueues successfully", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "bg-blur-vid", "jazzy-salmon-95");

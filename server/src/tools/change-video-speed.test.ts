@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -39,48 +39,44 @@ async function uploadVideo(
   return JSON.parse((result.content as TextContent)[0].text);
 }
 
+// Single shared client/project/source-video upload across all tests. The
+// per-test mkdtemp + createTestClient + create_project + upload was the
+// dominant cost (~10s/test). Validation tests just need a working video
+// asset_id; only the "no video file" test needs its own non-video upload.
 describe("change_video_speed tool", () => {
   let client: Client;
   let tempDir: string;
   let fixtureDir: string;
   let videoPath: string;
+  let sharedVideoAssetId: string;
 
   beforeAll(async () => {
     await queue.start();
-    // Encode the shared test source once. Under parallel test load, running
-    // libx264 inside beforeEach (6x per-suite) starves ffmpeg and can blow
-    // through the 60s hook timeout.
     fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
-  });
-
-  afterAll(async () => {
-    await queue.stop();
-    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
-  beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "speed-proj" },
     });
+    const uploaded = await uploadVideo(client, "speed-proj", videoPath);
+    sharedVideoAssetId = uploaded.assetId;
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("returns error for speed 1.0 (no-op)", async () => {
-    const uploaded = await uploadVideo(client, "speed-proj", videoPath);
-
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedVideoAssetId,
         project_slug: "speed-proj",
         speed: 1.0,
       },
@@ -92,12 +88,10 @@ describe("change_video_speed tool", () => {
   });
 
   it("returns error for speed below 0.25", async () => {
-    const uploaded = await uploadVideo(client, "speed-proj", videoPath);
-
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedVideoAssetId,
         project_slug: "speed-proj",
         speed: 0.1,
       },
@@ -110,12 +104,10 @@ describe("change_video_speed tool", () => {
   });
 
   it("returns error for speed above 4.0", async () => {
-    const uploaded = await uploadVideo(client, "speed-proj", videoPath);
-
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedVideoAssetId,
         project_slug: "speed-proj",
         speed: 5.0,
       },
@@ -163,12 +155,10 @@ describe("change_video_speed tool", () => {
   });
 
   it("enqueues job for valid speed change", async () => {
-    const uploaded = await uploadVideo(client, "speed-proj", videoPath);
-
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedVideoAssetId,
         project_slug: "speed-proj",
         speed: 2.0,
       },
@@ -176,7 +166,7 @@ describe("change_video_speed tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.asset_id).toBe(uploaded.assetId);
+    expect(parsed.asset_id).toBe(sharedVideoAssetId);
     expect(parsed.job_id).toMatch(/^speed-/);
     expect(parsed.status).toBe("enqueued");
   });

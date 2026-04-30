@@ -1,15 +1,18 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
+// Per-test createTestClient + create_project under parallel test load was
+// blowing past the 60s hook budget — every per-test call stomps the queue's
+// global projectsDir, so concurrent suites race into ENOENT on .project.lock.
 describe("asset_manifest tool", () => {
   let client: Client;
   let tempDir: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -18,7 +21,7 @@ describe("asset_manifest tool", () => {
     });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });

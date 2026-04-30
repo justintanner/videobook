@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -6,11 +6,14 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
+// Single shared client/project. Tests use unique asset ids and only read
+// history; no test mutates state visible to another. Per-test setup under
+// parallel test load was burning ~63s (16s/test).
 describe("asset_history tool", () => {
   let client: Client;
   let tempDir: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -19,7 +22,7 @@ describe("asset_history tool", () => {
     });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
