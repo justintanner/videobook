@@ -181,13 +181,16 @@ export async function readStoredRenderDefaults(
   fs: ClipfirstFs, assetId: string, projectSlug: string, targetOrientation: string,
 ): Promise<Record<string, unknown>> {
   const defaults = { ...BASE_DEFAULTS, ...(ORIENTATION_OVERRIDES[targetOrientation] ?? ORIENTATION_OVERRIDES.landscape) };
-  // Try target orientation first, then fall back to any other orientation
+  // Read every orientation's render metadata in parallel, then pick the
+  // target's own metadata first or fall back to any other orientation.
   const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];
-  for (const orient of tryOrder) {
-    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
-    if (meta.ok) {
-      return { ...defaults, ...meta.value };
-    }
+  const metas = await Promise.all(
+    tryOrder.map((orient) =>
+      fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug),
+    ),
+  );
+  for (const meta of metas) {
+    if (meta.ok) return { ...defaults, ...meta.value };
   }
   const recs = await readAnalysisRecommendations(fs, assetId, projectSlug);
   return { ...defaults, ...recs };
@@ -900,7 +903,10 @@ async function findAutoTranscribeActions(
 
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<TranscribeAction | null> => {
-      const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      const [manifestResult, locked] = await Promise.all([
+        fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
+        fs.isLocked(asset.path),
+      ]);
       if (!manifestResult.ok) return null;
 
       const manifest = manifestResult.value;
@@ -917,7 +923,7 @@ async function findAutoTranscribeActions(
       // User must manually clear the error to retry.
       if (fileNames.has(".generation-error.json")) return null;
       // Skip if locked
-      if (await fs.isLocked(manifest.path)) return null;
+      if (locked) return null;
 
       // Must have real dialog
       const dialogQuality = await readAndAssessDialog(fs, asset.id, projectSlug);
@@ -953,7 +959,11 @@ async function findAutoSpeechToTextActions(
 
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<SpeechToTextAction | null> => {
-      const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      const [manifestResult, locked, meta] = await Promise.all([
+        fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
+        fs.isLocked(asset.path),
+        fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug),
+      ]);
       if (!manifestResult.ok) return null;
 
       const manifest = manifestResult.value;
@@ -965,10 +975,9 @@ async function findAutoSpeechToTextActions(
       // Skip if already has speech-to-text
       if (fileNames.has(".analysis.gpt4otrans.json")) return null;
       // Skip if locked
-      if (await fs.isLocked(manifest.path)) return null;
+      if (locked) return null;
 
       // Must have audio (check metadata)
-      const meta = await fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug);
       if (!meta.ok || !meta.value.hasAudio) return null;
 
       // Skip if process_video hasn't yet written original.mp3 — analyze_video can
@@ -1006,7 +1015,10 @@ async function findAutoAnalyzeActions(
 
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<AnalyzeAction | null> => {
-      const manifest = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+      const [manifest, locked] = await Promise.all([
+        fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
+        fs.isLocked(asset.path),
+      ]);
       if (!manifest.ok) return null;
       const fileNames = new Set(manifest.value.files.map((f) => f.name));
 
@@ -1015,7 +1027,7 @@ async function findAutoAnalyzeActions(
       // Skip: process_video hasn't completed (no metadata = no frames)
       if (!fileNames.has(".original.json")) return null;
       // Skip: locked
-      if (await fs.isLocked(manifest.value.path)) return null;
+      if (locked) return null;
 
       return {
         assetId: asset.id,

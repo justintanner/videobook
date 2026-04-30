@@ -39,21 +39,25 @@ async function cutMiddle(
     const afterPath = join(tempDir, "after.mp4");
     const concatList = join(tempDir, "concat.txt");
 
+    // The before/after halves read disjoint ranges of the input and write to
+    // different output files, so run them in parallel. Halves cut-middle
+    // wall-clock on multi-core hosts.
     const fadeOutStart = Math.max(cutStart - CROSSFADE_SECS, 0);
-    await runFfmpeg([
-      "-y", "-i", inputPath,
-      "-t", String(cutStart),
-      "-af", `afade=t=out:st=${fadeOutStart}:d=${CROSSFADE_SECS}`,
-      ...H264_MEDIUM, ...AUDIO_OPTS,
-      beforePath,
-    ]);
-
-    await runFfmpeg([
-      "-y", "-ss", String(cutEnd),
-      "-i", inputPath,
-      "-af", `afade=t=in:d=${CROSSFADE_SECS}`,
-      ...H264_MEDIUM, ...AUDIO_OPTS,
-      afterPath,
+    await Promise.all([
+      runFfmpeg([
+        "-y", "-i", inputPath,
+        "-t", String(cutStart),
+        "-af", `afade=t=out:st=${fadeOutStart}:d=${CROSSFADE_SECS}`,
+        ...H264_MEDIUM, ...AUDIO_OPTS,
+        beforePath,
+      ]),
+      runFfmpeg([
+        "-y", "-ss", String(cutEnd),
+        "-i", inputPath,
+        "-af", `afade=t=in:d=${CROSSFADE_SECS}`,
+        ...H264_MEDIUM, ...AUDIO_OPTS,
+        afterPath,
+      ]),
     ]);
 
     await fsWriteFile(concatList, `file '${beforePath}'\nfile '${afterPath}'\n`);

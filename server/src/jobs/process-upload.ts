@@ -40,17 +40,20 @@ export async function findUnprocessedUploads(
   const results = await Promise.all(
     assets.map(async (asset): Promise<UnprocessedUpload | null> => {
       if (asset.id === "final") return null;
-      const manifest = await fs.getManifest(asset.id, projectSlug);
+      // Parallelize the three independent disk reads — each was ~5-20ms
+      // serially, multiplied by every asset on every sync.
+      const [manifest, originResult, locked] = await Promise.all([
+        fs.getManifest(asset.id, projectSlug),
+        fs.readMetadata(asset.id, "original", projectSlug),
+        fs.isLocked(asset.path),
+      ]);
       if (!manifest.ok) return null;
-
-      const originResult = await fs.readMetadata(asset.id, "original", projectSlug);
       if (originResult.ok) return null;
-
       // Skip assets currently held by another job (splice/trim/render mid-write).
       // Otherwise the sweep races the in-flight ffmpeg writing original.mp4 and
       // hands a half-written file to process_video, producing a spurious
       // .generation-error.json before the real owner finishes.
-      if (await fs.isLocked(asset.path)) return null;
+      if (locked) return null;
 
       const mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
