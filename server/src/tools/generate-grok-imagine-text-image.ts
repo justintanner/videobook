@@ -19,6 +19,8 @@ const generateGrokImagineTextImageSchema = {
   prompt: z.string().describe("Text prompt for image generation"),
   project_slug: z.string().describe("Project slug"),
   aspect_ratio: z.enum(grokTextToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  enable_pro: z.boolean().optional().describe("Quality mode when true, speed mode when false"),
+  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -31,7 +33,7 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
       "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
     schema: generateGrokImagineTextImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, _provider } = args as Args;
+      const { prompt, project_slug, aspect_ratio, enable_pro, nsfw_checker, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -62,6 +64,8 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
         imgAssetDir,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
+        ...(enable_pro !== undefined ? { enablePro: enable_pro } : {}),
+        ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 

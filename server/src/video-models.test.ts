@@ -352,10 +352,11 @@ describe("getVideoToolSchema", () => {
     expect(schema!.required).not.toContain("image_slugs");
     expect(schema!.required).not.toContain("prompt");
     expect(schema!.properties.mode.enum).toEqual(["fun", "normal", "spicy"]);
-    expect(schema!.properties.duration.type).toBe("integer");
-    expect(schema!.properties.duration.enum).toBeUndefined();
-    expect(schema!.properties.duration.minimum).toBe(6);
-    expect(schema!.properties.duration.maximum).toBe(30);
+    expect(schema!.properties.duration.type).toBe("string");
+    expect(schema!.properties.duration.enum).toEqual([
+      "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
+      "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+    ]);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.properties.nsfw_checker.type).toBe("boolean");

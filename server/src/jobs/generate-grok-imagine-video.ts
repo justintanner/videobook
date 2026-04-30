@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
+import type { GrokImageToVideoDuration } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { xai } from "@apicity/xai";
@@ -8,15 +9,14 @@ import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from ".
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
-  imagePath: string;
-  imageFilename: string;
+  sourceImageIds: string[];
+  imageFilenames: string[];
   vidAssetId: string;
   vidAssetDir: string;
-  sourceImageId: string;
   projectSlug: string;
   prompt?: string;
   mode?: "fun" | "normal" | "spicy";
-  duration?: number;
+  duration?: GrokImageToVideoDuration;
   resolution?: "480p" | "720p";
   aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
   nsfw_checker?: boolean;
@@ -26,9 +26,16 @@ type GenerateGrokImagineVideoPayload = {
 export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
-      imageFilename, vidAssetId, vidAssetDir,
-      sourceImageId, projectSlug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider,
+      sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
+      projectSlug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
+
+    if (sourceImageIds.length === 0) {
+      throw new Error("generate_grok_imagine_video requires at least one source image");
+    }
+    if (sourceImageIds.length !== imageFilenames.length) {
+      throw new Error("sourceImageIds / imageFilenames length mismatch");
+    }
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
 
@@ -37,12 +44,15 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
 
-      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
+      const imageUrls: string[] = [];
+      for (let i = 0; i < sourceImageIds.length; i++) {
+        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
+      }
 
       const provider = xai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
         { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
-        [imageUrl],
+        imageUrls,
       );
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
       const { request_id } = await provider.post.v1.videos.generations(request);
@@ -54,7 +64,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
           assetId: vidAssetId,
           assetDir: vidAssetDir,
           meta: {
-            sourceImageId,
+            sourceImageIds,
             ...(prompt !== undefined ? { prompt } : {}),
             ...(duration !== undefined ? { duration } : {}),
             ...(resolution !== undefined ? { resolution } : {}),
@@ -73,11 +83,14 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
+    const downloadUrls: string[] = [];
+    for (let i = 0; i < sourceImageIds.length; i++) {
+      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
+    }
 
     const request = buildGrokImagineVideoPayload(
       { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
-      [downloadUrl],
+      downloadUrls,
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
@@ -89,7 +102,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
         assetId: vidAssetId,
         assetDir: vidAssetDir,
         meta: {
-          sourceImageId,
+          sourceImageIds,
           ...(prompt !== undefined ? { prompt } : {}),
           ...(mode !== undefined ? { mode } : {}),
           ...(duration !== undefined ? { duration } : {}),

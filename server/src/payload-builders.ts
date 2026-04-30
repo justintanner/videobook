@@ -138,6 +138,8 @@ function buildGrokImagineImagePayload(
 type GrokImagineTextArgs = {
   prompt: string;
   aspect_ratio?: string;
+  enable_pro?: boolean;
+  nsfw_checker?: boolean;
 };
 
 function buildGrokImagineTextPayload(
@@ -148,6 +150,8 @@ function buildGrokImagineTextPayload(
     input: {
       prompt: args.prompt,
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokTextToImageRequest["input"]["aspect_ratio"] } : {}),
+      ...(args.enable_pro !== undefined ? { enable_pro: args.enable_pro } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
   };
 }
@@ -548,8 +552,12 @@ function buildXaiGrokImagineVideoPayload(
 ): XaiVideoGenerateRequest {
   return {
     prompt: args.prompt ?? "",
-    ...(imageUrls.length > 0 ? { image: { url: imageUrls[0] } } : {}),
-    ...(args.duration !== undefined ? { duration: args.duration } : {}),
+    ...(imageUrls.length === 1
+      ? { image: { url: imageUrls[0] } }
+      : imageUrls.length > 1
+        ? { reference_images: imageUrls.map((url) => ({ url })) }
+        : {}),
+    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };

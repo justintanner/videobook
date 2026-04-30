@@ -80,7 +80,8 @@ export function DynamicField({
     return null;
   }
 
-  // Handle string type with enum (2-4 items = toggle, 5+ items = dropdown)
+  // Handle string type with enum (2-4 items = toggle, 5+ items = dropdown,
+  // 7+ all-numeric = slider)
   if (schema.type === 'string' && schema.enum) {
     const options = schema.enum as string[];
 
@@ -89,6 +90,79 @@ export function DynamicField({
     }
 
     const effectiveValue = (value ?? schema.default) as string;
+
+    // Numeric-string enum with 7+ entries → slider+number-input that snaps to enum.
+    // Used for Grok image-to-video duration ("6"…"30").
+    const allNumeric = options.every((o) => /^\d+$/.test(o));
+    if (allNumeric && options.length >= 7) {
+      const nums = options.map(Number);
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      const current = effectiveValue && options.includes(effectiveValue) ? effectiveValue : String(min);
+      const currentNum = Number(current);
+      const snap = (n: number): string => {
+        const clamped = Math.min(max, Math.max(min, n));
+        let best = options[0];
+        let bestDist = Math.abs(Number(best) - clamped);
+        for (const opt of options) {
+          const d = Math.abs(Number(opt) - clamped);
+          if (d < bestDist) { best = opt; bestDist = d; }
+        }
+        return best;
+      };
+
+      return (
+        <GenField label={label} required={required} theme={theme} horizontal>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <input
+              type="range"
+              value={currentNum}
+              onChange={(e) => onChange(snap(parseInt(e.target.value, 10)))}
+              min={min}
+              max={max}
+              step={1}
+              disabled={disabled}
+              className={cn(
+                'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
+                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-primary/20',
+                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer',
+                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-primary/20',
+                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            />
+            <input
+              type="number"
+              value={currentNum}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '') return;
+                const n = parseInt(v, 10);
+                if (Number.isNaN(n)) return;
+                onChange(snap(n));
+              }}
+              onBlur={(e) => {
+                const v = e.target.value;
+                if (v === '') { onChange(snap(min)); return; }
+                const n = parseInt(v, 10);
+                if (Number.isNaN(n)) { onChange(snap(min)); return; }
+                onChange(snap(n));
+              }}
+              min={min}
+              max={max}
+              step={1}
+              disabled={disabled}
+              className={cn(
+                'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
+                theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+                'focus:outline-none focus:border-primary/60',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            />
+          </div>
+        </GenField>
+      );
+    }
 
     if (options.length >= 2 && options.length <= 4) {
       return (

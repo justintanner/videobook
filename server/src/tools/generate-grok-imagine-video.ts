@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
-import { join, extname } from "node:path";
+import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
@@ -16,20 +16,25 @@ function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
 }
 
-function deriveVideoName(imageAssetId: string): string {
-  const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
+function deriveVideoName(firstAssetId: string): string {
+  const baseName = firstAssetId.startsWith("img-") ? firstAssetId.slice(4) : firstAssetId;
   return `grok-${baseName}`;
 }
 
 const grokImageToVideoInputSchema = GrokImageToVideoRequestSchema.shape.input.shape;
 
+// Mirror of GrokImageToVideoDurationSchema (z.string().regex(/^([6-9]|[12][0-9]|30)$/)) —
+// materialized as a contiguous 6-30 string enum so the MCP JSON schema can drive a
+// snap-to-enum slider in the client.
+const GROK_I2V_DURATIONS = Array.from({ length: 25 }, (_, i) => String(i + 6)) as [string, ...string[]];
+
 const generateGrokImagineVideoSchema = {
-  asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
-  image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
+  image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
+  asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().max(5000).optional().describe("Optional prompt to guide video generation (max 5000 chars)"),
   mode: z.enum(GrokImagineModeSchema.options).optional().describe("Generation mode: fun / normal / spicy. Spicy is only available via task_id; external images force normal."),
-  duration: z.coerce.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
+  duration: z.enum(GROK_I2V_DURATIONS).optional().describe("Video duration in seconds (6-30)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
   aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (ignored for single-image input)"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
@@ -41,13 +46,10 @@ type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "generate_grok_imagine_video",
-    description: "Generate a video from an image asset using Grok Imagine image-to-video. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from 1-7 image asset(s) using Grok Imagine image-to-video. Multiple images act as references. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
       const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider } = args as Args;
-
-      // Derive asset_id from image_slugs if not provided directly
-      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -58,39 +60,48 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (!asset_id) {
+      // Normalize asset_id back-compat into image_slugs
+      const slugs = (image_slugs && image_slugs.length > 0)
+        ? image_slugs.map((s) => s.replace(/^@/, ""))
+        : (rawAssetId ? [rawAssetId.replace(/^@/, "")] : []);
+
+      if (slugs.length === 0) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "asset_id or image_slugs with at least one entry is required" }],
+          content: [{ type: "text" as const, text: "image_slugs (1-7) or asset_id is required" }],
         };
       }
 
-      if (!asset_id.startsWith("img-")) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `asset_id must start with img-, got: ${asset_id}` }],
-        };
+      const assetIds: string[] = [];
+      const imageFilenames: string[] = [];
+      for (const assetId of slugs) {
+        if (!assetId.startsWith("img-")) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `image asset must start with img-, got: ${assetId}` }],
+          };
+        }
+
+        const manifestResult = await fs.getManifest(assetId, project_slug);
+        if (!manifestResult.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: manifestResult.error.message }],
+          };
+        }
+
+        const imageFile = findImageFile(manifestResult.value.files);
+        if (!imageFile) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }],
+          };
+        }
+        assetIds.push(assetId);
+        imageFilenames.push(imageFile.name);
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
-      if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
-      }
-
-      const manifest = manifestResult.value;
-      const imageFile = findImageFile(manifest.files);
-      if (!imageFile) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `No image file found in asset ${asset_id}` }],
-        };
-      }
-
-      const imagePath = join(manifest.path, imageFile.name);
-      const videoName = deriveVideoName(asset_id);
+      const videoName = deriveVideoName(assetIds[0]);
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -105,11 +116,10 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video",
-        imagePath,
-        imageFilename: imageFile.name,
+        sourceImageIds: assetIds,
+        imageFilenames,
         vidAssetId,
         vidAssetDir,
-        sourceImageId: asset_id,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(mode !== undefined ? { mode } : {}),
@@ -125,7 +135,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
           type: "text" as const,
           text: JSON.stringify({
             vid_asset_id: vidAssetId,
-            source_image: asset_id,
+            source_images: assetIds,
             job_id: jobId,
             status: "enqueued",
           }),

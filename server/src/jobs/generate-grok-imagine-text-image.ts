@@ -13,13 +13,15 @@ type GenerateGrokImagineTextImagePayload = {
   imgAssetDir: string;
   projectSlug: string;
   aspectRatio?: string;
+  enablePro?: boolean;
+  nsfwChecker?: boolean;
   _provider?: string;
 };
 
 export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_text_image", async (payload, ctx) => {
     const {
-      prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, _provider,
+      prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, enablePro, nsfwChecker, _provider,
     } = payload as GenerateGrokImagineTextImagePayload;
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
@@ -71,7 +73,12 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
-    const request = buildGrokImagineTextPayload({ prompt, aspect_ratio: aspectRatio });
+    const request = buildGrokImagineTextPayload({
+      prompt,
+      aspect_ratio: aspectRatio,
+      ...(enablePro !== undefined ? { enable_pro: enablePro } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+    });
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
     const taskId = await submitMediaJob(provider, request);
     {
