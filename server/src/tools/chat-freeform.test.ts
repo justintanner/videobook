@@ -5,7 +5,7 @@
  * Tests cover: slot expansion, asset resolution, error handling, and edge cases
  * for inputs that users might type as freeform commands.
  */
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -27,12 +27,17 @@ function resultText(result: { content?: unknown; toolResult?: unknown }): string
   return "";
 }
 
+// Single shared client/project across the suite. Per-test `beforeEach` setup
+// (mkdtemp + createTestClient + create_project) was timing out the 60s hook
+// budget under parallel load — every createTestClient call stomps the queue's
+// global projectsDir, so concurrent suites can race each other into ENOENT.
+// Pinning everything to `beforeAll` removes that contention.
 describe("freeform chat commands", () => {
   let client: Client;
   let tempDir: string;
   const origKey = process.env.OPENAI_API_KEY;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-freeform-chat-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -43,7 +48,7 @@ describe("freeform chat commands", () => {
     delete process.env.OPENAI_API_KEY;
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     if (origKey) process.env.OPENAI_API_KEY = origKey;
     else delete process.env.OPENAI_API_KEY;
     await client?.close();
@@ -94,7 +99,7 @@ describe("freeform chat commands", () => {
   describe("freeform prompts with valid @asset tags", () => {
     let assetId: string;
 
-    beforeEach(async () => {
+    beforeAll(async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
@@ -251,6 +256,8 @@ describe("freeform chat commands", () => {
   describe("slot ref expansion in freeform prompts", () => {
     let assetId: string;
 
+    // beforeEach (not All) — assign_slot mutates project state and the
+    // "@s02 unassigned" test wants a clean baseline.
     beforeEach(async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
@@ -259,7 +266,6 @@ describe("freeform chat commands", () => {
       });
       assetId = JSON.parse(resultText(upload)).assetId;
 
-      // Assign asset to slot 1
       await client.callTool({
         name: "assign_slot",
         arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
@@ -439,7 +445,7 @@ describe("freeform chat commands", () => {
     let asset1: string;
     let asset2: string;
 
-    beforeEach(async () => {
+    beforeAll(async () => {
       const data = Buffer.from("fake-data").toString("base64");
       const u1 = await client.callTool({
         name: "upload_file",

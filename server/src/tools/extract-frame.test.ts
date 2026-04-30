@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { mkdtemp, rm, stat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -45,58 +45,51 @@ async function uploadVideo(
   client: Client,
   projectSlug: string,
   videoPath: string,
+  filename = "original.mp4",
 ): Promise<{ assetId: string; path: string }> {
-  const { readFile } = await import("node:fs/promises");
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { project_slug: projectSlug, filename, data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
 
+// Single shared client/project/source video across the suite. Per-test
+// `beforeEach` setup (mkdtemp + createTestClient + create_project) under
+// parallel test load was timing out the 60s hook budget; pinning everything
+// to `beforeAll` removes the per-test stamping of the queue's global
+// projectsDir and the per-test MCP transport churn.
 describe("extract_first_frame / extract_last_frame tools", () => {
   let client: Client;
   let tempDir: string;
-  let fixtureDir: string;
   let videoPath: string;
+  let sharedUpload: { assetId: string; path: string };
 
   beforeAll(async () => {
     await queue.start();
-    // Encode the shared test source once. Under parallel test load, running
-    // libx264 inside beforeEach (5x per-suite) starves ffmpeg and can blow
-    // through the 60s hook timeout.
-    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-extract-frame-fixture-"));
-    videoPath = join(fixtureDir, "test-source.mp4");
-    await generateTestVideo(videoPath);
-  });
-
-  afterAll(async () => {
-    await queue.stop();
-    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  });
-
-  beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-extract-frame-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "frame-proj" },
     });
+    videoPath = join(tempDir, "test-source.mp4");
+    await generateTestVideo(videoPath);
+    sharedUpload = await uploadVideo(client, "frame-proj", videoPath);
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("extracts first frame as a new image asset", async () => {
-    const uploaded = await uploadVideo(client, "frame-proj", videoPath);
-
     const result = await client.callTool({
       name: "extract_first_frame",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedUpload.assetId,
         project_slug: "frame-proj",
       },
     });
@@ -104,12 +97,11 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.image_asset_id).toMatch(/^img-/);
-    expect(parsed.source_video).toBe(uploaded.assetId);
+    expect(parsed.source_video).toBe(sharedUpload.assetId);
     expect(parsed.status).toBe("enqueued");
 
     await waitForJob(parsed.job_id);
 
-    // Verify the image file exists and is non-empty
     const manifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },
@@ -123,12 +115,10 @@ describe("extract_first_frame / extract_last_frame tools", () => {
   });
 
   it("extracts last frame as a new image asset", async () => {
-    const uploaded = await uploadVideo(client, "frame-proj", videoPath);
-
     const result = await client.callTool({
       name: "extract_last_frame",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedUpload.assetId,
         project_slug: "frame-proj",
       },
     });
@@ -136,7 +126,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.image_asset_id).toMatch(/^img-/);
-    expect(parsed.source_video).toBe(uploaded.assetId);
+    expect(parsed.source_video).toBe(sharedUpload.assetId);
     expect(parsed.status).toBe("enqueued");
 
     await waitForJob(parsed.job_id);
@@ -186,7 +176,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
   it("extracts last frame when audio stream is longer than video stream", async () => {
     const skewedPath = join(tempDir, "audio-longer.mp4");
     await generateAudioLongerThanVideo(skewedPath);
-    const uploaded = await uploadVideo(client, "frame-proj", skewedPath);
+    const uploaded = await uploadVideo(client, "frame-proj", skewedPath, "skewed.mp4");
 
     const result = await client.callTool({
       name: "extract_last_frame",
@@ -211,12 +201,10 @@ describe("extract_first_frame / extract_last_frame tools", () => {
   });
 
   it("writes .original.json with correct metadata", async () => {
-    const uploaded = await uploadVideo(client, "frame-proj", videoPath);
-
     const result = await client.callTool({
       name: "extract_first_frame",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: sharedUpload.assetId,
         project_slug: "frame-proj",
       },
     });
@@ -230,10 +218,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
 
-    const { readFile } = await import("node:fs/promises");
     const originJson = JSON.parse(await readFile(join(manifestData.path, ".original.json"), "utf-8"));
     expect(originJson.origin).toBe("first_frame");
-    expect(originJson.source_asset).toBe(uploaded.assetId);
+    expect(originJson.source_asset).toBe(sharedUpload.assetId);
     expect(originJson.timestamp).toBe(0.1);
     expect(originJson.width).toBe(320);
     expect(originJson.height).toBe(240);
