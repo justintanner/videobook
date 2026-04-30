@@ -36,6 +36,7 @@ const extendWan27VideoSchema = {
   resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
   duration: z.string().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
+  watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),
   nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
@@ -51,7 +52,7 @@ export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
     handler: async (args) => {
       const {
         project_slug, video_slug, prompt, negative_prompt,
-        resolution, duration, prompt_extend, nsfw_checker, seed,
+        resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
@@ -102,6 +103,7 @@ export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(prompt_extend !== undefined ? { prompt_extend } : {}),
+        ...(watermark !== undefined ? { watermark } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);

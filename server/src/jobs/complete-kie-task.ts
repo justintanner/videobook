@@ -14,7 +14,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "seedance2_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -78,14 +78,16 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "seedream_text_image" || taskType === "seedream_image") {
         await completeSeedreamImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
-      } else if (taskType === "kling30_video") {
-        await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls);
+      } else if (taskType === "kling30_video" || taskType === "kling30_motion_control_video") {
+        await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "seedance2_video") {
         await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
-      } else if (taskType === "grok_imagine_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "grok_imagine_extend_video" || taskType === "grok_imagine_upscale_video") {
+      } else if (taskType === "grok_imagine_video" || taskType === "grok_imagine_t2v_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "grok_imagine_extend_video" || taskType === "grok_imagine_upscale_video") {
         await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
-      } else if (taskType === "wan27_i2v_video" || taskType === "wan27_videoedit_video" || taskType === "wan27_r2v_video" || taskType === "wan27_extend_video") {
+      } else if (taskType === "wan27_t2v_video" || taskType === "wan27_i2v_video" || taskType === "wan27_videoedit_video" || taskType === "wan27_r2v_video" || taskType === "wan27_extend_video") {
         await completeWan27Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+      } else if (taskType === "happyhorse_t2v_video" || taskType === "happyhorse_i2v_video" || taskType === "happyhorse_ref_video" || taskType === "happyhorse_videoedit_video") {
+        await completeHappyHorseVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
       } else if (taskType === "wan27_image" || taskType === "wan27_image_pro") {
         await completeWan27Image(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "alibaba_video") {
@@ -344,6 +346,7 @@ async function completeKling30Video(
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
+  taskType?: string,
 ): Promise<void> {
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
@@ -352,7 +355,8 @@ async function completeKling30Video(
 
   const provenance = {
     source_assets: meta.sourceImageIds,
-    model: "kling-3.0/video",
+    source_videos: meta.sourceVideoIds,
+    model: taskType === "kling30_motion_control_video" ? "kling-3.0/motion-control" : "kling-3.0/video",
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
@@ -443,11 +447,16 @@ async function completeWan27Video(
 
   const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
+  const wan27Model =
+    meta.mode === "reference" ? "wan/2-7-r2v"
+      : meta.mode === "videoedit" ? "wan/2-7-videoedit"
+      : meta.mode === "t2v" ? "wan/2-7-text-to-video"
+      : "wan/2-7-image-to-video";
   const provenance = {
     source_images: meta.sourceImageIds,
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
-    model: meta.mode === "reference" ? "wan/2-7-r2v" : "wan/2-7-image-to-video",
+    model: wan27Model,
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
@@ -490,9 +499,11 @@ async function completeGrokImagineVideo(
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
     model: meta.upscale === true
       ? "grok-imagine/video-upscale"
-      : meta.sourceVideoId
-        ? "grok-imagine/video-extension"
-        : "grok-imagine/image-to-video",
+      : taskType === "grok_imagine_t2v_video"
+        ? "grok-imagine/text-to-video"
+        : meta.sourceVideoId
+          ? "grok-imagine/video-extension"
+          : "grok-imagine/image-to-video",
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
@@ -820,6 +831,54 @@ async function completeAlibabaQwenImage(
     projectSlug,
     extension: `.${ext}`,
     provenance: origin,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeHappyHorseVideo(
+  fs: ClipfirstFs,
+  assetId: string,
+  assetDir: string,
+  projectSlug: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: string,
+  taskId?: string,
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in result");
+
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+
+  const happyhorseModel =
+    taskType === "happyhorse_t2v_video" ? "happyhorse/text-to-video"
+      : taskType === "happyhorse_i2v_video" ? "happyhorse/image-to-video"
+      : taskType === "happyhorse_ref_video" ? "happyhorse/reference-to-video"
+      : "happyhorse/video-edit";
+  const provenance = {
+    source_images: meta.sourceImageIds,
+    source_videos: meta.sourceVideoIds,
+    source_audios: meta.sourceAudioIds,
+    model: happyhorseModel,
+    download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  const videoPath = join(assetDir, "original.mp4");
+
+  if (taskId !== undefined) {
+    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+  }
+
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    projectSlug,
+    provenance,
   } as unknown as Record<string, unknown>);
 }
 

@@ -20,6 +20,7 @@ type ExtendWan27VideoPayload = {
   resolution?: Wan27Resolution;
   duration?: string;
   prompt_extend?: boolean;
+  watermark?: boolean;
   nsfw_checker?: boolean;
   seed?: number;
 };
@@ -30,7 +31,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       sourceVideo,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
-      resolution, duration, prompt_extend, nsfw_checker, seed,
+      resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as ExtendWan27VideoPayload;
 
     const apiKey = process.env.KIE_API_KEY;
@@ -41,7 +42,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
     const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
 
     const request = buildWan27FramesVideoPayload(
-      { prompt, negative_prompt, resolution, duration, prompt_extend, nsfw_checker, seed },
+      { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstClipUrl },
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

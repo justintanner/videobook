@@ -19,6 +19,8 @@ type GenerateGrokImagineVideoPayload = {
   duration?: GrokImageToVideoDuration;
   resolution?: "480p" | "720p";
   aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
+  task_id?: string;
+  index?: number;
   nsfw_checker?: boolean;
   _provider?: string;
 };
@@ -27,11 +29,11 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
-      projectSlug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider,
+      projectSlug, prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
-    if (sourceImageIds.length === 0) {
-      throw new Error("generate_grok_imagine_video requires at least one source image");
+    if (sourceImageIds.length === 0 && !task_id) {
+      throw new Error("generate_grok_imagine_video requires at least one source image or a task_id");
     }
     if (sourceImageIds.length !== imageFilenames.length) {
       throw new Error("sourceImageIds / imageFilenames length mismatch");
@@ -89,7 +91,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     }
 
     const request = buildGrokImagineVideoPayload(
-      { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
+      { prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker },
       downloadUrls,
     );
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);

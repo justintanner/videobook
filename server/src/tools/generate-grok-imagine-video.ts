@@ -37,6 +37,8 @@ const generateGrokImagineVideoSchema = {
   duration: z.enum(GROK_I2V_DURATIONS).optional().describe("Video duration in seconds (6-30)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
   aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (ignored for single-image input)"),
+  task_id: z.string().max(100).optional().describe("Reference task ID for spicy mode without external images (kie only)"),
+  index: z.number().int().min(0).max(5).optional().describe("Frame index (0-5) when reusing a prior task_id (kie only)"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
@@ -49,7 +51,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
     description: "Generate a video from 1-7 image asset(s) using Grok Imagine image-to-video. Multiple images act as references. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -65,10 +67,10 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         ? image_slugs.map((s) => s.replace(/^@/, ""))
         : (rawAssetId ? [rawAssetId.replace(/^@/, "")] : []);
 
-      if (slugs.length === 0) {
+      if (slugs.length === 0 && !task_id) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "image_slugs (1-7) or asset_id is required" }],
+          content: [{ type: "text" as const, text: "image_slugs (1-7), asset_id, or task_id is required" }],
         };
       }
 
@@ -101,7 +103,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         imageFilenames.push(imageFile.name);
       }
 
-      const videoName = deriveVideoName(assetIds[0]);
+      const videoName = assetIds.length > 0 ? deriveVideoName(assetIds[0]) : `grok-task-${task_id?.slice(0, 12) ?? Date.now()}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -126,6 +128,8 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+        ...(task_id !== undefined ? { task_id } : {}),
+        ...(index !== undefined ? { index } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);

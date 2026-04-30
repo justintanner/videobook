@@ -4,12 +4,14 @@
 import type { ResolvedAsset } from "clipfirst-engine";
 import {
   GrokImageToVideoRequestSchema,
+  GrokTextToVideoRequestSchema,
   GrokImagineDurationSchema,
   GrokImagineModeSchema,
   GrokImagineResolutionSchema,
   KlingAspectRatioSchema,
   KlingDurationSchema,
   KlingModeSchema,
+  KlingMotionControlRequestSchema,
   KlingVideoRequestSchema,
   Seedance2FastRequestSchema,
   Seedance2RequestSchema,
@@ -17,6 +19,10 @@ import {
   Wan27AudioSettingSchema,
   Wan27RefToVideoRequestSchema,
   Wan27ResolutionSchema,
+  HappyHorseAspectRatioSchema,
+  HappyHorseAudioSettingSchema,
+  HappyHorseResolutionSchema,
+  HappyHorseReferenceToVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -70,6 +76,19 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "duration", "sound", "aspect_ratio",
     ],
     defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  kling30_motion_control: {
+    label: "Kling 3.0 Motion Control",
+    tool_name: "generate_kling30_motion_control_video",
+    description: "Apply motion from reference videos to character images using Kling 3.0 motion-control",
+    params: [
+      "prompt", "character_image_slugs", "motion_video_slugs",
+      "mode", "character_orientation", "background_source",
+    ],
+    defaults: { mode: "720p", character_orientation: "video", background_source: "input_video" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -146,6 +165,19 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
   },
+  wan27_t2v: {
+    label: "Wan 2.7 Text to Video",
+    tool_name: "generate_wan27_t2v_video",
+    description: "Wan 2.7 text-to-video with optional custom audio (kie)",
+    params: [
+      "prompt", "negative_prompt", "audio_slug",
+      "resolution", "aspect_ratio", "duration", "prompt_extend", "watermark", "nsfw_checker", "seed",
+    ],
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
   wan27_i2v: {
     label: "Wan 2.7 Image to Video",
     tool_name: "generate_wan27_i2v_video",
@@ -154,9 +186,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "negative_prompt",
       "first_frame_slug", "last_frame_slug", "first_clip_slug",
       "driving_audio_slug",
-      "resolution", "duration", "prompt_extend", "nsfw_checker", "seed",
+      "resolution", "duration", "prompt_extend", "watermark", "nsfw_checker", "seed",
     ],
-    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false },
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -183,9 +215,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "negative_prompt",
       "image_slugs", "video_slugs", "first_frame_slug",
       "audio_slug",
-      "resolution", "aspect_ratio", "duration", "prompt_extend", "nsfw_checker", "seed",
+      "resolution", "aspect_ratio", "duration", "prompt_extend", "watermark", "nsfw_checker", "seed",
     ],
-    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, nsfw_checker: false },
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -196,9 +228,9 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "Extend an existing video using Wan 2.7 Image to Video with clip continuation",
     params: [
       "video_slug", "prompt", "negative_prompt",
-      "resolution", "duration", "prompt_extend", "nsfw_checker", "seed",
+      "resolution", "duration", "prompt_extend", "watermark", "nsfw_checker", "seed",
     ],
-    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, nsfw_checker: false },
+    defaults: { resolution: "1080p", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -207,13 +239,23 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine",
     tool_name: "generate_grok_imagine_video",
     description: "Grok image-to-video with 1-7 reference images and fun/normal/spicy modes",
-    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
+    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "task_id", "index", "nsfw_checker"],
     defaults: { mode: "normal", duration: "6", resolution: "720p", aspect_ratio: "16:9", nsfw_checker: false },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
     falToolNames: { withRefs: "generate_grok_imagine_video_i2v_fal" },
+  },
+  grok_imagine_t2v: {
+    label: "Grok Imagine — Text",
+    tool_name: "generate_grok_imagine_t2v_video",
+    description: "Grok Imagine text-to-video (no reference images, kie)",
+    params: ["prompt", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
+    defaults: { mode: "normal", duration: 6, resolution: "480p", aspect_ratio: "2:3", nsfw_checker: false },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
   },
   grok_imagine_ref: {
     label: "Grok Imagine Reference",
@@ -231,6 +273,46 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     description: "Extend an existing video into a longer video using Grok Imagine",
     params: ["video_slug", "prompt", "extend_at", "extend_times"],
     defaults: { extend_times: "6" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  happyhorse_t2v: {
+    label: "HappyHorse — Text",
+    tool_name: "generate_happyhorse_t2v_video",
+    description: "HappyHorse text-to-video (kie)",
+    params: ["prompt", "resolution", "aspect_ratio", "duration", "seed"],
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  happyhorse_i2v: {
+    label: "HappyHorse — First Frame",
+    tool_name: "generate_happyhorse_i2v_video",
+    description: "HappyHorse image-to-video from a single first-frame image (kie)",
+    params: ["prompt", "first_frame_slug", "resolution", "duration", "seed"],
+    defaults: { resolution: "1080p", duration: "5" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  happyhorse_ref: {
+    label: "HappyHorse — Reference",
+    tool_name: "generate_happyhorse_ref_video",
+    description: "HappyHorse reference-to-video for multi-character scenes (1-9 reference images)",
+    params: ["prompt", "image_slugs", "resolution", "aspect_ratio", "duration", "seed"],
+    defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5" },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+    ],
+  },
+  happyhorse_videoedit: {
+    label: "HappyHorse — Video Edit",
+    tool_name: "generate_happyhorse_videoedit_video",
+    description: "HappyHorse video editing with optional reference images for character/style guidance (kie)",
+    params: ["prompt", "video_slug", "image_slugs", "resolution", "audio_setting", "seed"],
+    defaults: { resolution: "1080p", audio_setting: "auto" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
     ],
@@ -380,6 +462,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unkno
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
+  generate_happyhorse_ref_video: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.reference_image,
 };
 
 // ---------------------------------------------------------------------------
@@ -401,6 +484,9 @@ type ParamSchema = {
 const KLING_MODES = [...KlingModeSchema.options];
 const KLING_DURATIONS = [...KlingDurationSchema.options];
 const KLING_ASPECT_RATIOS = [...KlingAspectRatioSchema.options];
+const KLING_MOTION_CONTROL_MODES = [...KlingMotionControlRequestSchema.shape.input.shape.mode.unwrap().options];
+const KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS = [...KlingMotionControlRequestSchema.shape.input.shape.character_orientation.unwrap().options];
+const KLING_MOTION_CONTROL_BACKGROUND_SOURCES = [...KlingMotionControlRequestSchema.shape.input.shape.background_source.unwrap().options];
 
 const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
 const SEEDANCE2_FAST_RESOLUTIONS = [...Seedance2FastRequestSchema.shape.input.shape.resolution.unwrap().options];
@@ -420,12 +506,18 @@ const GROK_IMAGINE_DURATIONS = [...GrokImagineDurationSchema.options];
 const GROK_I2V_DURATIONS = Array.from({ length: 25 }, (_, i) => String(i + 6));
 const GROK_IMAGINE_RESOLUTIONS = [...GrokImagineResolutionSchema.options];
 const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = [...GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
+const GROK_TEXT_TO_VIDEO_ASPECT_RATIOS = [...GrokTextToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
 
 const XAI_VIDEO_ASPECT_RATIOS = [...XaiVideoGenerateRequestSchema.shape.aspect_ratio.unwrap().options];
 
 const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
 const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
 const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
+
+const HAPPYHORSE_RESOLUTIONS = [...HappyHorseResolutionSchema.options];
+const HAPPYHORSE_ASPECT_RATIOS = [...HappyHorseAspectRatioSchema.options];
+const HAPPYHORSE_AUDIO_SETTINGS = [...HappyHorseAudioSettingSchema.options];
+const HAPPYHORSE_DURATIONS = ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
 
 const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
 const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
@@ -452,7 +544,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   },
   aspect_ratio: { type: "string", description: "Output aspect ratio" },
   model: { type: "string", description: "Model variant" },
-  watermark: { type: "string", description: "Optional watermark text" },
+  watermark: { type: "boolean", description: "Add provider watermark to output (default false)", default: false },
   video_slug: { type: "string", description: "Video asset to extend (e.g., @vid-sunset-drone)" },
   duration: { type: "string", description: "Video duration in seconds" },
   mode: { type: "string", description: "Generation mode" },
@@ -505,6 +597,13 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   seed: { type: "integer", description: "Random seed for reproducibility" },
   extend_at: { type: "number", description: "Seconds into the source video to start extending from (default 0)" },
   extend_times: { type: "string", description: "Extension duration in seconds" },
+  task_id: { type: "string", description: "Reference task ID (kie only, used for Grok spicy mode without external images)" },
+  index: { type: "integer", description: "Frame index (0-5) when reusing a prior task_id (kie only)", minimum: 0, maximum: 5 },
+  audio_url: { type: "string", description: "Custom audio asset (e.g., @aud-music)" },
+  character_image_slugs: { type: "array", items: { type: "string" }, description: "Character image @slugs (input_urls)" },
+  motion_video_slugs: { type: "array", items: { type: "string" }, description: "Motion reference video @slugs (video_urls)" },
+  character_orientation: { type: "string", description: "Character orientation source: video / image" },
+  background_source: { type: "string", description: "Background source: input_video / input_image" },
 };
 
 // ---------------------------------------------------------------------------
@@ -539,11 +638,19 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     // Tool-specific enum/description overrides
     if (toolName === "generate_kling30_video") {
       if (param === "prompt") prop.description = "Video description";
-      if (param === "mode") { prop.enum = KLING_MODES; prop.description = "Resolution mode: std (standard) / pro (professional)"; }
+      if (param === "mode") { prop.enum = KLING_MODES; prop.description = "Resolution mode: std (standard) / pro (professional) / 4K"; }
       if (param === "duration") { prop.enum = KLING_DURATIONS; prop.description = "Video duration: 3s-15s"; }
       if (param === "aspect_ratio") { prop.enum = KLING_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "sound") prop.description = "Generate audio for the video (default: true)";
       if (param === "image_slugs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
+    }
+    if (toolName === "generate_kling30_motion_control_video") {
+      if (param === "prompt") prop.description = "Optional motion description";
+      if (param === "character_image_slugs") prop.description = "Character image @slugs (input_urls)";
+      if (param === "motion_video_slugs") prop.description = "Motion reference video @slugs (video_urls)";
+      if (param === "mode") { prop.enum = KLING_MOTION_CONTROL_MODES; prop.description = "Output resolution: 720p / 1080p (default 720p)"; }
+      if (param === "character_orientation") { prop.enum = KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS; prop.description = "Character orientation source: video / image"; }
+      if (param === "background_source") { prop.enum = KLING_MOTION_CONTROL_BACKGROUND_SOURCES; prop.description = "Background source: input_video / input_image"; }
     }
     if (SEEDANCE2_TOOL_NAMES.includes(toolName)) {
       if (param === "prompt") { prop.description = "Video description (3-2500 characters)"; prop.minLength = 3; prop.maxLength = 2500; }
@@ -570,6 +677,13 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "Reference image assets (1-9, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
+    }
+    if (toolName === "generate_wan27_t2v_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "audio_slug") prop.description = "Optional custom audio asset (e.g., @aud-music)";
+      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
     }
     if (toolName === "generate_wan27_i2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
@@ -608,6 +722,14 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio (ignored for single-image input)"; }
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; prop.default = false; }
       if (param === "image_slugs") prop.description = "Reference image assets (1-7 required, e.g., @img-sunset)";
+    }
+    if (toolName === "generate_grok_imagine_t2v_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation mode: fun / normal / spicy"; }
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
+      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
+      if (param === "aspect_ratio") { prop.enum = GROK_TEXT_TO_VIDEO_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; prop.default = false; }
     }
     if (toolName === "generate_grok_imagine_ref_video") {
       if (param === "prompt") { prop.description = "Video description"; }
@@ -670,6 +792,32 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "audio_setting") { prop.enum = FAL_WAN27_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
       if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
       if (param === "enable_safety_checker") { prop.description = "Content safety filter"; prop.default = false; }
+    }
+    if (toolName === "generate_happyhorse_t2v_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") { prop.enum = HAPPYHORSE_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+    }
+    if (toolName === "generate_happyhorse_i2v_video") {
+      if (param === "prompt") { prop.description = "Optional video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "first_frame_slug") prop.description = "First frame image asset (required, e.g., @img-start)";
+      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
+      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+    }
+    if (toolName === "generate_happyhorse_ref_video") {
+      if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "image_slugs") prop.description = "Reference image assets (1-9, order defines character1/character2/...)";
+      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") { prop.enum = HAPPYHORSE_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+    }
+    if (toolName === "generate_happyhorse_videoedit_video") {
+      if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "video_slug") prop.description = "Source video asset to edit (3-60s, e.g., @vid-scene)";
+      if (param === "image_slugs") prop.description = "0-5 optional reference images for character/style guidance";
+      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
+      if (param === "audio_setting") { prop.enum = HAPPYHORSE_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
     }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }

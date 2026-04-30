@@ -32,17 +32,24 @@ import { spliceVideoDef } from "./splice-video.js";
 import { transcribeDef } from "./transcribe.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
+import { generateGrokImagineT2vVideoDef } from "./generate-grok-imagine-t2v-video.js";
 import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
+import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
 import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js";
 import { generateSeedance2I2vVideoDef } from "./generate-seedance2-i2v-video.js";
 import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-video.js";
 import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
+import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
 import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
 import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
 import { generateWan27R2vVideoDef } from "./generate-wan27-r2v-video.js";
 import { extendWan27VideoDef } from "./extend-wan27-video.js";
+import { generateHappyhorseT2vVideoDef } from "./generate-happyhorse-t2v-video.js";
+import { generateHappyhorseI2vVideoDef } from "./generate-happyhorse-i2v-video.js";
+import { generateHappyhorseRefVideoDef } from "./generate-happyhorse-ref-video.js";
+import { generateHappyhorseVideoeditVideoDef } from "./generate-happyhorse-videoedit-video.js";
 import { generateWan27ImageDef } from "./generate-wan27-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
@@ -174,17 +181,24 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     transcribeDef(fs),
     generateGrokImagineVideoDef(fs),
     generateGrokImagineRefVideoDef(fs),
+    generateGrokImagineT2vVideoDef(fs),
     extendGrokImagineVideoDef(fs),
     upscaleGrokImagineVideoDef(fs),
     generateKling30VideoDef(fs),
+    generateKling30MotionControlVideoDef(fs),
     generateSeedance2T2vVideoDef(fs),
     generateSeedance2I2vVideoDef(fs),
     generateSeedance2FramesVideoDef(fs),
     generateSeedance2ReferenceVideoDef(fs),
+    generateWan27T2vVideoDef(fs),
     generateWan27I2vVideoDef(fs),
     generateWan27VideoeditVideoDef(fs),
     generateWan27R2vVideoDef(fs),
     extendWan27VideoDef(fs),
+    generateHappyhorseT2vVideoDef(fs),
+    generateHappyhorseI2vVideoDef(fs),
+    generateHappyhorseRefVideoDef(fs),
+    generateHappyhorseVideoeditVideoDef(fs),
     generateWan27ImageDef(fs),
     generateWan27ImageProDef(fs),
     generateNanoBananaImageDef(fs),

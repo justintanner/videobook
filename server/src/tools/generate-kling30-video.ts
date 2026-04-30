@@ -42,7 +42,7 @@ const generateKling30VideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().optional().describe("Video description"),
   image_slugs: z.array(z.string()).optional().describe("0-2 reference image @slugs (e.g., @img-sunset)"),
-  mode: z.enum(KlingModeSchema.options).optional().describe("Resolution mode: std (standard) / pro (professional)"),
+  mode: z.enum(KlingModeSchema.options).optional().describe("Resolution mode: std (standard) / pro (professional) / 4K"),
   duration: z.enum(KlingDurationSchema.options).optional().describe("Video duration: 3s-15s"),
   sound: z.boolean().optional().describe("Generate audio for the video (default: true)"),
   aspect_ratio: z.enum(KlingAspectRatioSchema.options).optional().describe("Video aspect ratio"),
