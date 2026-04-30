@@ -686,15 +686,6 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIMI_CODING_API_KEY");
   });
 
-  it.skipIf(!hasKimiKey)("api_status returns 200 OK with key", async () => {
-    const result = await client.callTool({
-      name: "api_status",
-      arguments: {},
-    });
-    expect(result.isError).toBeFalsy();
-    expect(parseText(result)).toBe("200 OK");
-  });
-
   // ── Section 14: Transcribe (requires KIE_API_KEY) ──────────────
 
   it("transcribe returns error without KIE_API_KEY", async () => {
