@@ -91,23 +91,12 @@ export const isFreeformSubject = (k: CharacterSubjectKind): boolean =>
   k === "animal" || k === "other";
 
 export function normalizeCharacterSubjectKind(
-  obj: { subject_kind?: unknown; sex?: unknown },
+  obj: { subject_kind?: unknown },
 ): CharacterSubjectKind {
   const rawKind = typeof obj.subject_kind === "string" ? obj.subject_kind.trim().toLowerCase() : "";
   if (rawKind === "female" || rawKind === "male" || rawKind === "animal" || rawKind === "other") {
     return rawKind;
   }
-  if (rawKind === "human") {
-    const rawSex = typeof obj.sex === "string" ? obj.sex.trim().toLowerCase() : "";
-    if (["female", "feminine", "woman", "female-presenting", "female presenting"].includes(rawSex)) {
-      return "female";
-    }
-    if (["male", "masculine", "man", "male-presenting", "male presenting"].includes(rawSex)) {
-      return "male";
-    }
-    return "male";
-  }
-  if (rawKind === "animal") return "animal";
   return "male";
 }
 
@@ -125,10 +114,6 @@ function passthroughSlots(src: Record<string, unknown>, dst: Character): void {
   }
 }
 
-/**
- * Coerce a raw JSON object (vision output OR an old `.character.json` on disk)
- * into the new 4-way schema. Drops legacy `sex`, `glutes`, `distinguishing_features`.
- */
 export function normalizeCharacterProfile(
   raw: unknown,
   sourceAssetId: string,
@@ -145,9 +130,7 @@ export function normalizeCharacterProfile(
   passthroughSlots(obj, character);
 
   if (isFreeformSubject(subjectKind)) {
-    // Prefer explicit `other`. Fall back to legacy `ethnicity` (which used to
-    // hold "white domestic longhair cat" for animals).
-    const other = strField(obj, "other") || strField(obj, "ethnicity");
+    const other = strField(obj, "other");
     if (other) character.other = other;
     return character;
   }

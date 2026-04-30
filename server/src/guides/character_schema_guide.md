@@ -68,4 +68,3 @@ Do not fill the human fields (`age`, `ethnicity`, `height`, `build`, `bust`, `wa
 - Total JSON must be under 2000 characters.
 - Do NOT include a `name` value — leave it empty or omit the key. The name is user-owned.
 - Do NOT speculate about profession, mood beyond the photo, or relationships.
-- Do NOT emit `sex`, `glutes`, `distinguishing_features` — these fields no longer exist in the schema.

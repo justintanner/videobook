@@ -337,7 +337,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     }, 0);
   }, [draft, cursorPos]);
 
-  // Execute a slash command (registry only — /save and /cancel were removed in favor of autosave)
   const executeCommand = useCallback((commandValue: string) => {
     stripCommandLine();
     dispatch(commandValue);

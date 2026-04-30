@@ -4,10 +4,7 @@ import {
   defaultCharacterWardrobeClause,
   type CharacterPromptProfile,
 } from "./generate-character.js";
-import {
-  normalizeCharacterProfile,
-  normalizeCharacterSubjectKind,
-} from "../jobs/extract-character.js";
+import { normalizeCharacterSubjectKind } from "../jobs/extract-character.js";
 
 const maleProfile: CharacterPromptProfile = {
   subject_kind: "male",
@@ -61,27 +58,6 @@ describe("character sheet prompt defaults", () => {
 
     expect(clause).toContain("bra top");
     expect(clause).toContain("high-waist briefs");
-  });
-
-  it("normalizes legacy human+sex profiles to the 4-way subject_kind", () => {
-    expect(
-      normalizeCharacterProfile(
-        { subject_kind: "human", sex: "female" },
-        "img-x",
-      ).subject_kind,
-    ).toBe("female");
-    expect(
-      normalizeCharacterProfile(
-        { subject_kind: "human", sex: "male" },
-        "img-x",
-      ).subject_kind,
-    ).toBe("male");
-    expect(
-      normalizeCharacterProfile(
-        { subject_kind: "animal" },
-        "img-x",
-      ).subject_kind,
-    ).toBe("animal");
   });
 
   it("maps a missing subject_kind to male as a fallback", () => {

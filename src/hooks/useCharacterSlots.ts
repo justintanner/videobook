@@ -33,14 +33,13 @@ export function isFreeformSubject(kind: CharacterSubjectKind): boolean {
   return FREEFORM_SUBJECT_KINDS.has(kind);
 }
 
-/**
- * Coerce raw .character.json metadata (which may be an old `human`+`sex` blob,
- * or new 4-way) into the new CharacterProfile shape. Drops removed legacy
- * fields (`sex`, `glutes`, `distinguishing_features`).
- */
-export function normalizeLegacyCharacterProfile(raw: unknown): CharacterProfile {
+export function normalizeCharacterProfile(raw: unknown): CharacterProfile {
   const obj: Record<string, unknown> = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const subjectKind = legacySubjectKind(obj);
+  const rawKind = (typeof obj.subject_kind === "string" ? obj.subject_kind : "").trim().toLowerCase();
+  const subjectKind: CharacterSubjectKind =
+    rawKind === "female" || rawKind === "male" || rawKind === "animal" || rawKind === "other"
+      ? rawKind
+      : "male";
   const profile: CharacterProfile = {
     subject_kind: subjectKind,
     source_image_asset_id: getStr(obj, "source_image_asset_id"),
@@ -54,7 +53,7 @@ export function normalizeLegacyCharacterProfile(raw: unknown): CharacterProfile 
     }
   }
   if (isFreeformSubject(subjectKind)) {
-    const other = getStr(obj, "other") || getStr(obj, "ethnicity");
+    const other = getStr(obj, "other");
     if (other) profile.other = other;
     return profile;
   }
@@ -68,19 +67,6 @@ export function normalizeLegacyCharacterProfile(raw: unknown): CharacterProfile 
 function getStr(obj: Record<string, unknown>, key: string): string {
   const v = obj[key];
   return typeof v === "string" ? v.trim() : "";
-}
-
-function legacySubjectKind(obj: Record<string, unknown>): CharacterSubjectKind {
-  const raw = (typeof obj.subject_kind === "string" ? obj.subject_kind : "").trim().toLowerCase();
-  if (raw === "female" || raw === "male" || raw === "animal" || raw === "other") return raw;
-  if (raw === "human") {
-    const sex = (typeof obj.sex === "string" ? obj.sex : "").trim().toLowerCase();
-    if (["female", "feminine", "woman", "female-presenting", "female presenting"].includes(sex)) return "female";
-    if (["male", "masculine", "man", "male-presenting", "male presenting"].includes(sex)) return "male";
-    return "male";
-  }
-  if (raw === "animal") return "animal";
-  return "male";
 }
 
 export type SlotKind = "wardrobe" | "poses" | "backdrop" | "outfits";
@@ -155,7 +141,7 @@ export function useCharacterSlots(
         }
         const content = res.content as Array<{ type: string; text: string }>;
         const raw = JSON.parse(content[0].text) as unknown;
-        const parsed = normalizeLegacyCharacterProfile(raw);
+        const parsed = normalizeCharacterProfile(raw);
         setState({ assetId, profile: parsed, loading: false, error: null });
       } catch (e) {
         if (cancelled) return;
