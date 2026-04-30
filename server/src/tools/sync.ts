@@ -321,10 +321,14 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         } catch { /* non-fatal */ }
       }
 
-      // Read script content from original.md for script assets
+      // Read markdown content for script (original.md) and plan (index.md) assets
       let prompt = (meta?.prompt as string) ?? null;
       if (!prompt && a.type === "script") {
         const md = await fs.readFile(a.id, "original.md", project_slug);
+        if (md.ok) prompt = md.value.toString();
+      }
+      if (!prompt && a.type === "plan") {
+        const md = await fs.readFile(a.id, "index.md", project_slug);
         if (md.ok) prompt = md.value.toString();
       }
 
