@@ -139,6 +139,7 @@ import { suggestSfxDef } from "./suggest-sfx.js";
 import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
+import { estimateCostDef } from "./estimate-cost.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
@@ -151,6 +152,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
   return [
     apiStatusDef(),
+    estimateCostDef(),
     createProjectDef(fs),
     renameProjectDef(fs),
     switchProjectDef(fs),

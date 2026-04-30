@@ -12,6 +12,8 @@ import {
 import { usePoseExtract } from '@/hooks/usePoseExtract';
 import { usePoseDescription } from '@/hooks/usePoseDescription';
 import { useOutfitPromptPreview } from '@/hooks/useOutfitPromptPreview';
+import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
+import { CostBadge } from '@/components/cost/CostBadge';
 import type { UseMcpResult } from 'use-mcp/react';
 
 const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
@@ -162,6 +164,18 @@ export function CharacterComposeRail({
 
   const activePreviewEntry = previewPrompts.find((p) => p.model === previewModel) ?? null;
 
+  // generate_outfit fans out one image-edit job per selected model. The
+  // rail always submits via kie, which the cost lib's pricing table doesn't
+  // cover — the badge falls back to "—" cleanly until kie rates land.
+  const estimateCalls = useMemo<EstimateCall[] | null>(() => {
+    if (callState !== 'ready' || selectedModels.size === 0) return null;
+    return [...selectedModels].map((m) => ({
+      toolName: `generate_${m}_kie_outfit`,
+      input: { prompt: activePreviewEntry?.prompt ?? '', aspect_ratio: aspectRatio },
+    }));
+  }, [callState, selectedModels, aspectRatio, activePreviewEntry]);
+  const cost = useEstimateCost(callTool, { calls: estimateCalls });
+
   return (
     <aside className="w-[34rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
       <div className="px-4 py-3 grid grid-cols-4 gap-2.5">
@@ -308,6 +322,15 @@ export function CharacterComposeRail({
       </div>
 
       <div className="sticky bottom-0 border-t border-violet-500/30 px-4 py-3 mt-auto bg-violet-500/5 backdrop-blur">
+        <div className="flex items-center justify-end mb-2">
+          <CostBadge
+            estimate={cost.estimate}
+            loading={cost.loading}
+            error={cost.error}
+            stale={cost.stale}
+            onRefresh={cost.refresh}
+          />
+        </div>
         <button
           type="button"
           onClick={handleGenerate}

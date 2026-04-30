@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@apicity/alibaba": "file:../apicity/packages/provider/alibaba",
+    "@apicity/cost": "file:../apicity/packages/provider/cost",
     "@apicity/elevenlabs": "file:../apicity/packages/provider/elevenlabs",
     "@apicity/fal": "file:../apicity/packages/provider/fal",
     "@apicity/free": "file:../apicity/packages/provider/free",

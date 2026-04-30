@@ -19,6 +19,15 @@ import { AutocompleteDropdown } from '@/components/ui/AutocompleteDropdown';
 import type { AutocompleteItem, ColorScheme } from '@/components/ui/AutocompleteDropdown';
 import { useRewriteScript } from '@/hooks/useRewriteScript';
 import { RewritePopover, type RewriteInitial } from './RewritePopover';
+import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
+import { CostBadge } from '@/components/cost/CostBadge';
+
+const GEN_IMAGES_FAN_OUT_TOOLS: readonly string[] = [
+  'generate_nano_banana_pro_fal',
+  'generate_wan27_pro_fal',
+  'generate_seedream_v5_lite_fal',
+  'generate_grok_imagine_image_fal',
+];
 import { useScriptHistoryNav } from '@/hooks/useScriptHistoryNav';
 import { useAssetOriginalMeta } from '@/hooks/useAssetOriginalMeta';
 import { LastRewriteChip } from './LastRewriteChip';
@@ -296,6 +305,23 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     }
   }, [genInFlight, isDirty, draft, saveNow, callTool, item.id, item.prompt, projectSlug]);
 
+  const promptText = (item.prompt ?? '').trim();
+
+  const rewriteEstimateCalls = useMemo<EstimateCall[] | null>(() => {
+    if (!promptText) return null;
+    return [{ toolName: 'rewrite_script', input: { script_text: promptText } }];
+  }, [promptText]);
+  const rewriteCost = useEstimateCost(callTool, { calls: rewriteEstimateCalls });
+
+  const genImagesEstimateCalls = useMemo<EstimateCall[] | null>(() => {
+    if (!promptText) return null;
+    return GEN_IMAGES_FAN_OUT_TOOLS.map((toolName) => ({
+      toolName,
+      input: { prompt: promptText },
+    }));
+  }, [promptText]);
+  const genImagesCost = useEstimateCost(callTool, { calls: genImagesEstimateCalls });
+
   const isGenerating = rewriting || item.status === 'generating';
   const rewriteDisabled = isGenerating;
   isGeneratingRef.current = isGenerating;
@@ -473,6 +499,13 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     : <Images className="w-3.5 h-3.5" />}
                   Gen Images
                 </button>
+                <CostBadge
+                  estimate={genImagesCost.estimate}
+                  loading={genImagesCost.loading}
+                  error={genImagesCost.error}
+                  stale={genImagesCost.stale}
+                  onRefresh={genImagesCost.refresh}
+                />
                 <RewritePopover
                   open={rewriteOpen}
                   onOpenChange={handleRewriteOpenChange}
@@ -502,6 +535,13 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       Rewrite
                     </button>
                   }
+                />
+                <CostBadge
+                  estimate={rewriteCost.estimate}
+                  loading={rewriteCost.loading}
+                  error={rewriteCost.error}
+                  stale={rewriteCost.stale}
+                  onRefresh={rewriteCost.refresh}
                 />
 
                 <div className="ml-auto flex items-center gap-1">

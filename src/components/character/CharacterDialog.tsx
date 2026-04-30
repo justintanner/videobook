@@ -11,7 +11,25 @@ import {
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
 import { type CharacterProfile, type CharacterSubjectKind, isFreeformSubject } from '@/hooks/useCharacterSlots';
+import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
+import { CostBadge } from '@/components/cost/CostBadge';
 import type { UseMcpResult } from 'use-mcp/react';
+
+const FAL_OUTFIT_ENDPOINT_BY_MODEL: Record<OutfitModelKey, string> = {
+  nano_banana_pro: 'fal-ai/nano-banana-pro/edit',
+  qwen_image_edit: 'fal-ai/qwen-image/edit',
+  gpt_image_2: 'fal-ai/nano-banana-pro/edit',
+  wan27_pro: 'fal-ai/wan/v2.7/pro/edit',
+  seedream_v5_lite: 'fal-ai/bytedance/seedream/v5/lite/edit',
+};
+
+const FAL_OUTFIT_TOOL_BY_MODEL: Record<OutfitModelKey, string> = {
+  nano_banana_pro: 'generate_nano_banana_pro_edit_fal',
+  qwen_image_edit: 'generate_qwen_image_edit_fal',
+  gpt_image_2: 'generate_nano_banana_pro_edit_fal',
+  wan27_pro: 'generate_wan27_pro_edit_fal',
+  seedream_v5_lite: 'generate_seedream_v5_lite_edit_fal',
+};
 
 type ProfileFieldKey =
   | 'name'
@@ -237,6 +255,25 @@ export function CharacterDialog({
   }, [profile]);
 
   const canSubmit = !submitting && !analyzing && !!projectSlug && !!source && !!profile && profileComplete && selectedModels.size > 0;
+
+  // Estimate cost for the fan-out: one image-edit job per selected model.
+  // Adapters only exist for fal endpoints today, so the kie path falls back
+  // to "—" via per-call warnings; the dialog's provider toggle gives the
+  // user a clear path to a numeric estimate.
+  const estimateCalls = useMemo<EstimateCall[] | null>(() => {
+    if (callState !== 'ready' || selectedModels.size === 0) return null;
+    if (selectedProvider !== 'fal') {
+      return [...selectedModels].map((m) => ({
+        toolName: `generate_${m}_kie_outfit`,
+        input: {},
+      }));
+    }
+    return [...selectedModels].map((m) => ({
+      toolName: FAL_OUTFIT_TOOL_BY_MODEL[m],
+      input: { prompt: 'character outfit edit', endpoint_id: FAL_OUTFIT_ENDPOINT_BY_MODEL[m] },
+    }));
+  }, [callState, selectedModels, selectedProvider]);
+  const cost = useEstimateCost(callTool, { calls: estimateCalls });
 
   const handleGenerate = useCallback(async () => {
     if (!canSubmit || !projectSlug || !source || !profile) return;
@@ -481,6 +518,16 @@ export function CharacterDialog({
               ))}
             </div>
           )}
+
+          <div className="flex items-center justify-end">
+            <CostBadge
+              estimate={cost.estimate}
+              loading={cost.loading}
+              error={cost.error}
+              stale={cost.stale}
+              onRefresh={cost.refresh}
+            />
+          </div>
 
           <button
             type="button"

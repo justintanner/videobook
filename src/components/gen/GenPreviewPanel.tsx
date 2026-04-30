@@ -18,6 +18,8 @@ import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePopover';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
+import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
+import { CostBadge } from '@/components/cost/CostBadge';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -373,6 +375,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     };
   }, [selectedOption, formValues, projectSlug, selectedProviderKey]);
 
+  const estimateCalls = useMemo<EstimateCall[] | null>(() => {
+    if (!selectedOption) return null;
+    return [{ toolName: selectedOption.tool_name, input: formValues }];
+  }, [selectedOption, formValues]);
+  const cost = useEstimateCost(callTool, { calls: estimateCalls });
+
   // Live validation warnings derived from current form values
   const liveWarnings = useMemo(() => {
     const warnings: string[] = [];
@@ -581,14 +589,23 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               disabled={isDisabled}
             />
           </div>
-          <CommandButton
-            command="/generate"
-            icon={<Zap className="w-3.5 h-3.5" />}
-            variant={buttonVariant}
-            state={genState}
-            onClick={handleGenerate}
-            disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
-          />
+          <div className="flex items-center gap-2">
+            <CostBadge
+              estimate={cost.estimate}
+              loading={cost.loading}
+              error={cost.error}
+              stale={cost.stale}
+              onRefresh={cost.refresh}
+            />
+            <CommandButton
+              command="/generate"
+              icon={<Zap className="w-3.5 h-3.5" />}
+              variant={buttonVariant}
+              state={genState}
+              onClick={handleGenerate}
+              disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
+            />
+          </div>
         </div>
       }
     >
