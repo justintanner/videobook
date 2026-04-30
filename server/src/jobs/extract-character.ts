@@ -214,10 +214,6 @@ export function registerExtractCharacterJob(fs: ClipfirstFs): void {
     } = payload as ExtractCharacterPayload;
 
     return withLocalLease(fs, projectSlug, charAssetId, ctx, "extract", async () => {
-    console.log(
-      `[extract_character] START char=${charAssetId} source=${sourceAssetId} project=${projectSlug}`,
-    );
-
     let imageFilename = sourceImageFilename;
     if (!imageFilename) {
       const manifest = await fs.getManifest(sourceAssetId, projectSlug);
@@ -268,9 +264,6 @@ export function registerExtractCharacterJob(fs: ClipfirstFs): void {
       projectSlug,
     );
 
-    console.log(
-      `[extract_character] DONE char=${charAssetId} source=${sourceAssetId}`,
-    );
     return { success: true, charAssetId, sourceAssetId };
     });
   });

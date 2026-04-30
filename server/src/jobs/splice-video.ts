@@ -3,6 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -158,7 +159,7 @@ async function spliceConcat(
 }
 
 export function registerSpliceVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("splice_video", async (payload) => {
+  registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,
       firstAssetId, secondAssetId,
@@ -167,13 +168,15 @@ export function registerSpliceVideoJob(fs: ClipfirstFs): void {
       firstHasAudio, secondHasAudio,
     } = payload as SpliceVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, {
-      durationMs: LOCK_DURATION_MS,
-      data: { state: "splicing" },
-    });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "splice",
+      { durationMs: LOCK_DURATION_MS, data: { state: "splicing" } },
+      async () => {
       const target = await extractTargetFrame(secondPath);
       const match = await findBestMatch(firstPath, target, firstFps);
 
@@ -194,19 +197,21 @@ export function registerSpliceVideoJob(fs: ClipfirstFs): void {
       };
       await fs.writeMetadata(assetId, "original", provenance, projectSlug);
 
-      const processJobId = `process-video-${assetId}-${Date.now()}`;
-      await queue.enqueue(processJobId, {
-        type: "process_video",
-        videoPath: outputPath,
-        assetId,
-        assetDir,
-        projectSlug,
-        provenance,
-      } as unknown as Record<string, unknown>);
+      return { provenance, timestamp: match.timestamp, score: match.score };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      return { success: true, splice_timestamp: match.timestamp, match_score: match.score };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
+    const processJobId = `process-video-${assetId}-${Date.now()}`;
+    await queue.enqueue(processJobId, {
+      type: "process_video",
+      videoPath: outputPath,
+      assetId,
+      assetDir,
+      projectSlug,
+      provenance: result.provenance,
+    } as unknown as Record<string, unknown>);
+
+    return { success: true, splice_timestamp: result.timestamp, match_score: result.score };
   });
 }

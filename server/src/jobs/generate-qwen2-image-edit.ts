@@ -58,7 +58,7 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
           ...(outputFormat !== undefined ? { outputFormat } : {}),
           ...(seed !== undefined ? { seed } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

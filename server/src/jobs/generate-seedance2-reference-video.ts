@@ -79,7 +79,7 @@ export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): voi
           sourceAudioIds,
           ...(return_last_frame !== undefined ? { return_last_frame } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

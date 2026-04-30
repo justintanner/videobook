@@ -9,14 +9,36 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { ClipfirstFs } from "clipfirst-engine";
 
 async function createImageAsset(fs: ClipfirstFs, projectSlug: string, name: string): Promise<string> {
-  // Create the asset directly via fs.createAsset rather than upload_file so
-  // we don't enqueue a process_image job. The async job would race with the
-  // test's failPendingTask + clear_failed_tasks calls and pollute results
-  // (process_image fails on synthetic image bytes and would write its own
-  // generation-error.json, getting swept up by clear_failed_tasks).
   const result = await fs.createAsset("img", name, projectSlug);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
   return result.value.assetId;
+}
+
+async function writeSyntheticPendingTask(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assetId: string,
+  taskId: string,
+): Promise<void> {
+  const lease = await fs.assetWork.begin(projectSlug, assetId, {
+    kind: "generate",
+    ownerKind: "job",
+    durationMs: 60_000,
+  });
+  if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
+  const written = await fs.pendingTasks.write(
+    projectSlug,
+    {
+      taskId,
+      taskType: "alibaba_image",
+      assetId,
+      assetDir: assetId,
+      meta: {},
+    },
+    lease.ownerId,
+  );
+  if (!written.ok) throw new Error(`pendingTasks.write failed: ${written.error.message}`);
+  if (!written.value) throw new Error(`pendingTasks.write lost lease for ${assetId}`);
 }
 
 describe("clear_failed_tasks tool", () => {
@@ -44,25 +66,10 @@ describe("clear_failed_tasks tool", () => {
     const failedTwo = await createImageAsset(fs, "test-proj", "bad two");
     const healthy = await createImageAsset(fs, "test-proj", "good");
 
-    // The strict CAS path requires a real (asset_id, task_id) row to succeed.
-    // Plant a synthetic provider task so failPendingTaskAndLog has a row to
-    // CAS-fail.
     const fakeTaskOne = "task-fail-one";
     const fakeTaskTwo = "task-fail-two";
-    await fs.pendingTasks.write("test-proj", {
-      taskId: fakeTaskOne,
-      taskType: "alibaba_image",
-      assetId: failedOne,
-      assetDir: failedOne,
-      meta: {},
-    });
-    await fs.pendingTasks.write("test-proj", {
-      taskId: fakeTaskTwo,
-      taskType: "alibaba_image",
-      assetId: failedTwo,
-      assetDir: failedTwo,
-      meta: {},
-    });
+    await writeSyntheticPendingTask(fs, "test-proj", failedOne, fakeTaskOne);
+    await writeSyntheticPendingTask(fs, "test-proj", failedTwo, fakeTaskTwo);
     await failPendingTaskAndLog(fs, "test-proj", failedOne, fakeTaskOne, { message: "boom" });
     await failPendingTaskAndLog(fs, "test-proj", failedTwo, fakeTaskTwo, { message: "kaboom" });
 

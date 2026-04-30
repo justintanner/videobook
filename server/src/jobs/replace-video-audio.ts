@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -24,16 +25,21 @@ type ReplaceVideoAudioPayload = {
 };
 
 export function registerReplaceVideoAudioJob(fs: ClipfirstFs): void {
-  registerJobHandler("replace_video_audio", async (payload) => {
+  registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
       inputPath, audioPath, outputPath,
       assetId, assetDir, audioAssetId, projectSlug,
     } = payload as ReplaceVideoAudioPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "replacing-audio" } });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "replace_audio",
+      { durationMs: LOCK_DURATION_MS, data: { state: "replacing-audio" } },
+      async () => {
       await runFfmpeg([
         "-y",
         "-i", inputPath,
@@ -57,20 +63,25 @@ export function registerReplaceVideoAudioJob(fs: ClipfirstFs): void {
       }
 
       const videoPath = join(assetDir, inputFilename);
-      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
-        type: "process_video",
-        videoPath, assetId, assetDir, projectSlug,
-        provenance: {
-          origin: "replace_audio",
-          source_audio: audioAssetId,
-          replaced_at: new Date().toISOString(),
-        },
-        force: true,
-      } as unknown as Record<string, unknown>);
+      return { videoPath };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
+    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+      type: "process_video",
+      videoPath: result.videoPath,
+      assetId,
+      assetDir,
+      projectSlug,
+      provenance: {
+        origin: "replace_audio",
+        source_audio: audioAssetId,
+        replaced_at: new Date().toISOString(),
+      },
+      force: true,
+    } as unknown as Record<string, unknown>);
+
+    return { success: true };
   });
 }

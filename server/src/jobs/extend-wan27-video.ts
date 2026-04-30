@@ -59,7 +59,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
           sourceVideoIds,
           sourceAudioIds,
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

@@ -43,7 +43,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
           ...(autoRender ? { autoRender } : {}),
           ...(endpointId ? { falEndpointId: endpointId } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

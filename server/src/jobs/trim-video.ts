@@ -3,6 +3,7 @@ import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 300_000;
 const CROSSFADE_SECS = 0.03;
@@ -84,16 +85,21 @@ type TrimVideoPayload = {
 };
 
 export function registerTrimVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("trim_video", async (payload) => {
+  registerJobHandler("trim_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
       assetId, assetDir, projectSlug,
     } = payload as TrimVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "trimming" } });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "trim",
+      { durationMs: LOCK_DURATION_MS, data: { state: "trimming" } },
+      async () => {
       if (mode === "cut") {
         await cutMiddle(inputPath, outputPath, cutStart!, cutEnd!);
       } else {
@@ -105,9 +111,6 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
       await fs.deleteFile(assetId, inputFilename, projectSlug);
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
 
-      // Clear stale analysis from pre-trim content so the full pipeline re-runs
-      // against the new trimmed file. NOT_FOUND is expected for files that weren't
-      // produced the first time around.
       for (const stale of [
         ".original.analysis.json",
         ".analysis.gpt4otrans.json",
@@ -118,16 +121,21 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
       }
 
       const videoPath = join(assetDir, inputFilename);
-      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+      return { videoPath };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
+
+    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
         type: "process_video",
-        videoPath, assetId, assetDir, projectSlug,
+      videoPath: result.videoPath,
+      assetId,
+      assetDir,
+      projectSlug,
         provenance: { origin: "trim", trimmed_at: new Date().toISOString() },
         force: true,
       } as unknown as Record<string, unknown>);
 
       return { success: true };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
   });
 }

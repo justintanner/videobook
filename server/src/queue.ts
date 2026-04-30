@@ -12,6 +12,7 @@ import * as fsp from "node:fs/promises";
 
 import {
   type ClipfirstFs,
+  type AssetWorkKind,
   type Job,
   type JobHandler,
   type JobState,
@@ -48,6 +49,7 @@ export type LeaseToken =
 
 export interface JobHandlerContext {
   setLease(token: LeaseToken): void;
+  getOwnerId(): string;
 }
 
 export type ServerJobHandler = (
@@ -99,6 +101,39 @@ const runnerByProject = new Map<string, RunnerInfo>();
 
 const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
 
+const directProviderHandoffKinds = new Map<string, AssetWorkKind>([
+  ["extend_grok_imagine_video", "generate"],
+  ["extend_wan27_video", "generate"],
+  ["generate_alibaba_image", "generate"],
+  ["generate_alibaba_image_pro", "generate"],
+  ["generate_alibaba_qwen_image", "generate"],
+  ["generate_alibaba_qwen_image_edit", "generate"],
+  ["generate_alibaba_video", "generate"],
+  ["generate_gpt_image", "generate"],
+  ["generate_gpt_image_text", "generate"],
+  ["generate_grok_imagine_image", "generate"],
+  ["generate_grok_imagine_ref_video", "generate"],
+  ["generate_grok_imagine_text_image", "generate"],
+  ["generate_grok_imagine_video", "generate"],
+  ["generate_kling30_video", "generate"],
+  ["generate_nano_banana_image", "generate"],
+  ["generate_qwen2_image_edit", "generate"],
+  ["generate_seedance2_frames_video", "generate"],
+  ["generate_seedance2_i2v_video", "generate"],
+  ["generate_seedance2_reference_video", "generate"],
+  ["generate_seedance2_t2v_video", "generate"],
+  ["generate_seedream_image", "generate"],
+  ["generate_seedream_text_image", "generate"],
+  ["generate_wan27_i2v_video", "generate"],
+  ["generate_wan27_image", "generate"],
+  ["generate_wan27_image_pro", "generate"],
+  ["generate_wan27_r2v_video", "generate"],
+  ["generate_wan27_videoedit_video", "generate"],
+  ["isolate_vocals", "isolate"],
+  ["transcribe", "transcribe"],
+  ["upscale_grok_imagine_video", "generate"],
+]);
+
 function projectDirFor(slug: string): string {
   if (!isValidProjectSlug(slug)) {
     throw new Error(`Invalid project slug: ${slug}`);
@@ -112,6 +147,8 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
     if (!handler) return null;
     return async (job: Job) => {
       let lease: LeaseToken | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const providerKind = directProviderHandoffKinds.get(type);
       const ctx: JobHandlerContext = {
         setLease(token) {
           if (lease !== null) {
@@ -144,9 +181,45 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
           }
           lease = token;
         },
+        getOwnerId() {
+          if (lease?.kind !== "owner") {
+            throw new Error("No active owner lease is registered");
+          }
+          return lease.ownerId;
+        },
       };
 
       try {
+        if (providerKind) {
+          const assetId = extractAssetId(job.payload);
+          const projectSlug = extractProjectSlug(job.payload);
+          if (!assetId || !projectSlug) {
+            throw new Error(
+              `Provider handoff job ${type} requires projectSlug and asset id`,
+            );
+          }
+          const claimed = await fsRef.current.assetWork.begin(
+            projectSlug,
+            assetId,
+            {
+              kind: providerKind,
+              ownerKind: "job",
+              durationMs: 15 * 60_000,
+            },
+          );
+          if (!claimed) {
+            throw new Error(`Could not claim local lease for ${assetId}`);
+          }
+          ctx.setLease({ kind: "owner", ownerId: claimed.ownerId });
+          heartbeat = setInterval(() => {
+            void fsRef.current.assetWork.renew(
+              projectSlug,
+              assetId,
+              claimed.ownerId,
+              60_000,
+            );
+          }, 20_000);
+        }
         return await handler(job.payload, ctx);
       } catch (error: unknown) {
         const assetId = extractAssetId(job.payload);
@@ -165,6 +238,8 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
           );
         }
         throw error;
+      } finally {
+        if (heartbeat) clearInterval(heartbeat);
       }
     };
   };

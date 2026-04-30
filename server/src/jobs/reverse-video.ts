@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -27,16 +28,21 @@ type ReverseVideoPayload = {
 };
 
 export function registerReverseVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("reverse_video", async (payload) => {
+  registerJobHandler("reverse_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, hasAudio,
       assetId, assetDir, projectSlug,
     } = payload as ReverseVideoPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "reversing" } });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "reverse",
+      { durationMs: LOCK_DURATION_MS, data: { state: "reversing" } },
+      async () => {
       const outputOptions = buildReverseOutputOptions(hasAudio);
       const FFmpeggy = await getFFmpeggy();
       const ff = new FFmpeggy({
@@ -55,17 +61,22 @@ export function registerReverseVideoJob(fs: ClipfirstFs): void {
       await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
 
       const videoPath = join(assetDir, inputFilename);
-      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
-        type: "process_video",
-        videoPath, assetId, assetDir, projectSlug,
-        provenance: { origin: "reverse", reversed_at: new Date().toISOString() },
-        force: true,
-        skipDownstreamJobs: true,
-      } as unknown as Record<string, unknown>);
+      return { videoPath };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
+    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+      type: "process_video",
+      videoPath: result.videoPath,
+      assetId,
+      assetDir,
+      projectSlug,
+      provenance: { origin: "reverse", reversed_at: new Date().toISOString() },
+      force: true,
+      skipDownstreamJobs: true,
+    } as unknown as Record<string, unknown>);
+
+    return { success: true };
   });
 }

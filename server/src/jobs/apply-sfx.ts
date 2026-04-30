@@ -3,6 +3,7 @@ import { join, basename } from "node:path";
 import { elevenlabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 1_800_000;
 // Tail fade as a click-suppressor in case a cue ends on a transient.
@@ -87,7 +88,7 @@ function buildMixFilter(sfx: SfxEntry[], hasAudio: boolean): string {
 }
 
 export function registerApplySfxJob(fs: ClipfirstFs): void {
-  registerJobHandler("apply_sfx", async (payload) => {
+  registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
       videoPath, outputPath, sfx, hasAudio,
       assetId, assetDir, projectSlug,
@@ -96,13 +97,15 @@ export function registerApplySfxJob(fs: ClipfirstFs): void {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not set");
 
-    const lockResult = await fs.acquireLock(assetDir, {
-      durationMs: LOCK_DURATION_MS,
-      data: { state: "applying_sfx" },
-    });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "apply_sfx",
+      { durationMs: LOCK_DURATION_MS, data: { state: "applying_sfx" } },
+      async () => {
       const provider = elevenlabs({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
@@ -135,23 +138,25 @@ export function registerApplySfxJob(fs: ClipfirstFs): void {
       }
 
       const newVideoPath = join(assetDir, inputFilename);
-      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
-        type: "process_video",
-        videoPath: newVideoPath,
-        assetId,
-        assetDir,
-        projectSlug,
-        provenance: {
-          origin: "apply_sfx",
-          sfx_count: sfx.length,
-          applied_at: new Date().toISOString(),
-        },
-        force: true,
-      } as unknown as Record<string, unknown>);
+      return { newVideoPath, sfxCount: sfx.length };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      return { success: true, sfx_count: sfx.length };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
+    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+      type: "process_video",
+      videoPath: result.newVideoPath,
+      assetId,
+      assetDir,
+      projectSlug,
+      provenance: {
+        origin: "apply_sfx",
+        sfx_count: result.sfxCount,
+        applied_at: new Date().toISOString(),
+      },
+      force: true,
+    } as unknown as Record<string, unknown>);
+
+    return { success: true, sfx_count: result.sfxCount };
   });
 }

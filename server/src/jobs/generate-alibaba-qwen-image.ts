@@ -73,7 +73,7 @@ async function runQwenImageJob(
     assetId: imgAssetId,
     assetDir: imgAssetDir,
     meta: { sourceImageIds, prompt, model },
-  });
+  }, ctx.getOwnerId());
   if (!ptResult.ok) {
     throw new Error(`Failed to write pending-task for ${imgAssetId}: ${ptResult.error.message}`);
   }

@@ -59,7 +59,7 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
           ...(thinkingMode !== undefined ? { thinkingMode } : {}),
           ...(seed !== undefined ? { seed } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });
@@ -107,7 +107,7 @@ export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
           ...(thinkingMode !== undefined ? { thinkingMode } : {}),
           ...(seed !== undefined ? { seed } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

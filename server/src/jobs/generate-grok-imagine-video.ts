@@ -59,7 +59,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
             ...(duration !== undefined ? { duration } : {}),
             ...(resolution !== undefined ? { resolution } : {}),
           },
-      });
+      }, ctx.getOwnerId());
         if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
       }
       ctx.setLease({ kind: "task", taskId: request_id });
@@ -95,7 +95,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
           ...(duration !== undefined ? { duration } : {}),
           ...(resolution !== undefined ? { resolution } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

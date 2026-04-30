@@ -83,7 +83,8 @@ type RenderProjectPayload = {
 };
 
 export function registerRenderProjectJob(fs: ClipfirstFs): void {
-  registerJobHandler("render_project", async (payload) => {
+  registerJobHandler("render_project", async (payload, _ctx) => {
+    void _ctx;
     const {
       projectSlug,
       orientation,

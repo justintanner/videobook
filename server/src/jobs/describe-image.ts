@@ -150,9 +150,6 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
-      const mode = scriptAssetId ? `script=${scriptAssetId}` : "analysis-only";
-      console.log(`[describe_image] START source=${sourceAssetId} ${mode} project=${projectSlug}`);
-
       const responses = buildResponses(process.env.XAI_API_KEY);
 
       const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
@@ -168,9 +165,6 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
       if (!cacheResult.ok) {
         if (cacheResult.error.code === "NOT_FOUND") {
-          console.log(
-            `[describe_image] source ${sourceAssetId} deleted during vision call — discarding analysis`,
-          );
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
         }
         console.warn(
@@ -199,9 +193,6 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
         );
       }
 
-      console.log(
-        `[describe_image] DONE source=${sourceAssetId} ${mode} (${parsed.prompt.length} chars)`,
-      );
       return { success: true, sourceAssetId, scriptAssetId, prompt: parsed.prompt };
     });
   });

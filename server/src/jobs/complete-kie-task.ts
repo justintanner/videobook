@@ -61,7 +61,6 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       // .kie-task.json isn't cleared until the completion job finishes).
       // Treat as a no-op — the other job will finish the work.
       if (lockResult.error.code === "LOCKED") {
-        console.log(`[complete_kie_task] ${assetId} already being completed, skipping duplicate`);
         return { success: true, skipped: true };
       }
       throw new Error(`Asset is locked: ${lockResult.error.message}`);

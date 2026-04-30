@@ -59,8 +59,6 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     } = payload as AnalyzeVideoPayload;
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
-    console.log(`[analyze_video] START ${assetId} assetDir=${assetDir} projectSlug=${projectSlug}`);
-
     {
 
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
@@ -154,7 +152,6 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
       }
     }
 
-    console.log(`[analyze_video] Writing analysis for ${assetId}, fallback=${analysis === FALLBACK_ANALYSIS}`);
     const jsonString = JSON.stringify(analysis, null, 2);
     await fs.writeFile(assetId, ".original.analysis.json", jsonString, projectSlug);
 
@@ -163,7 +160,6 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     // prior failure or in-progress task, and we haven't already transcribed.
     await maybeEnqueueAutoTranscribe(fs, assetId, assetDir, projectSlug);
 
-    console.log(`[analyze_video] DONE ${assetId}`);
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
 
     }

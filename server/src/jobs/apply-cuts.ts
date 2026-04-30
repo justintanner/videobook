@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -57,19 +58,21 @@ function buildFilterGraph(keeps: Array<[number, number]>, hasAudio: boolean): st
 }
 
 export function registerApplyCutsJob(fs: ClipfirstFs): void {
-  registerJobHandler("apply_cuts", async (payload) => {
+  registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
       inputPath, outputPath, cuts, duration, hasAudio,
       assetId, assetDir, projectSlug,
     } = payload as ApplyCutsPayload;
 
-    const lockResult = await fs.acquireLock(assetDir, {
-      durationMs: LOCK_DURATION_MS,
-      data: { state: "cutting" },
-    });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const result = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      assetDir,
+      ctx,
+      "apply_cuts",
+      { durationMs: LOCK_DURATION_MS, data: { state: "cutting" } },
+      async () => {
       const effectiveDuration = duration > 0 ? duration : (await probeVideo(inputPath)).duration;
       const keeps = buildKeepSegments(cuts, effectiveDuration);
       if (keeps.length === 0) {
@@ -98,23 +101,25 @@ export function registerApplyCutsJob(fs: ClipfirstFs): void {
       }
 
       const newVideoPath = join(assetDir, inputFilename);
-      await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
-        type: "process_video",
-        videoPath: newVideoPath,
-        assetId,
-        assetDir,
-        projectSlug,
-        provenance: {
-          origin: "apply_cuts",
-          cuts,
-          applied_at: new Date().toISOString(),
-        },
-        force: true,
-      } as unknown as Record<string, unknown>);
+      return { newVideoPath, keptSegments: keeps.length };
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      return { success: true, kept_segments: keeps.length };
-    } finally {
-      await fs.releaseLock(assetDir);
-    }
+    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+      type: "process_video",
+      videoPath: result.newVideoPath,
+      assetId,
+      assetDir,
+      projectSlug,
+      provenance: {
+        origin: "apply_cuts",
+        cuts,
+        applied_at: new Date().toISOString(),
+      },
+      force: true,
+    } as unknown as Record<string, unknown>);
+
+    return { success: true, kept_segments: result.keptSegments };
   });
 }

@@ -67,7 +67,7 @@ export function registerGenerateSeedance2FramesVideoJob(fs: ClipfirstFs): void {
           sourceImageIds,
           ...(return_last_frame !== undefined ? { return_last_frame } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

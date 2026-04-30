@@ -292,7 +292,7 @@ describe("getVideoToolSchema", () => {
     const schema = getVideoToolSchema("generate_kling30_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.properties.mode.enum).toEqual(["std", "pro"]);
+    expect(schema!.properties.mode.enum).toEqual(["std", "pro", "4K"]);
     expect(schema!.properties.duration.enum).toHaveLength(13); // "3" through "15"
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1"]);
     expect(schema!.properties.sound).toBeDefined();

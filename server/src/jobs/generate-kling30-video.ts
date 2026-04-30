@@ -94,7 +94,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
           ...(multi_shots !== undefined ? { multi_shots } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

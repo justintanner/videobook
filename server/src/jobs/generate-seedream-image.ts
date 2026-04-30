@@ -63,10 +63,9 @@ export function registerGenerateSeedreamImageJob(fs: ClipfirstFs): void {
           ...(quality !== undefined ? { quality } : {}),
           ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
-    ctx.setLease({ kind: "task", taskId });
     ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };

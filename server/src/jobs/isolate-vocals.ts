@@ -87,7 +87,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
           isAudioAsset,
           ...(originalDuration !== undefined ? { originalDuration } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

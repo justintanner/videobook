@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { stat } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -36,17 +37,22 @@ type ExtractFramePayload = {
 };
 
 export function registerExtractFrameJob(fs: ClipfirstFs): void {
-  registerJobHandler("extract_frame", async (payload) => {
+  registerJobHandler("extract_frame", async (payload, ctx) => {
     const {
       inputPath, outputPath, timestamp,
       imageAssetId, imageAssetDir, sourceVideoId,
       projectSlug, width, height, mode,
     } = payload as ExtractFramePayload;
 
-    const lockResult = await fs.acquireLock(imageAssetDir, { durationMs: LOCK_DURATION_MS });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    const origin = await withLockedLocalLease(
+      fs,
+      projectSlug,
+      imageAssetId,
+      imageAssetDir,
+      ctx,
+      "extract",
+      { durationMs: LOCK_DURATION_MS },
+      async () => {
       await runFfmpeg([
         "-y",
         "-ss", String(timestamp),
@@ -56,10 +62,6 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         outputPath,
       ]);
 
-      // ffmpeg-static (v6.0) exits 0 even when "Output file is empty, nothing
-      // was encoded" — e.g. seeking past the last decodable video frame.
-      // Verify the output exists and is non-empty so the failure surfaces here
-      // instead of in the downstream process_image job.
       const outStat = await stat(outputPath).catch(() => null);
       if (!outStat || outStat.size === 0) {
         throw new Error(
@@ -75,19 +77,20 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
         height,
       };
       await fs.writeMetadata(imageAssetId, "original", origin, projectSlug);
+      return origin;
+      },
+      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
+    );
 
-      const jobId = `process-image-${imageAssetId}-${Date.now()}`;
-      await queue.enqueue(jobId, {
-        type: "process_image",
-        assetId: imageAssetId,
-        projectSlug,
-        extension: ".jpg",
-        provenance: origin,
-      } as unknown as Record<string, unknown>);
+    const jobId = `process-image-${imageAssetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "process_image",
+      assetId: imageAssetId,
+      projectSlug,
+      extension: ".jpg",
+      provenance: origin,
+    } as unknown as Record<string, unknown>);
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(imageAssetDir);
-    }
+    return { success: true };
   });
 }

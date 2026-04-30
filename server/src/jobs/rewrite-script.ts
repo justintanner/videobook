@@ -157,12 +157,6 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
     } = payload as RewriteScriptPayload;
 
     return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
-      console.log(
-        `[rewrite_script] START script=${scriptAssetId} project=${projectSlug} ` +
-        `tldr=${!!tldr} platform=${platform ?? "none"} ` +
-        `customPrompt=${customPrompt ? `"${customPrompt.slice(0, 40)}..."` : "none"}`,
-      );
-
       const responses = buildResponses(process.env.XAI_API_KEY);
 
       const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
@@ -202,7 +196,6 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
         projectSlug,
       );
 
-      console.log(`[rewrite_script] DONE ${scriptAssetId} (${rewritten.prompt.length} chars)`);
       return { success: true, scriptAssetId, prompt: rewritten.prompt };
     });
   });

@@ -6,6 +6,7 @@ import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
+import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -126,17 +127,23 @@ export function imageExtension(info: InfoResult): string {
 export function registerDownloadVideoJob(fs: ClipfirstFs): void {
   const ytdlp = new YtDlp();
 
-  registerJobHandler("download_video", async (payload) => {
+  registerJobHandler("download_video", async (payload, ctx) => {
     const {
       url, outputPath, downloadSections,
       assetId, assetDir, projectSlug, exportVideos, full,
       sourcePrefix,
     } = payload as DownloadVideoPayload;
+    const slug = projectSlug ?? "";
 
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
-
-    try {
+    return withLockedLocalLease(
+      fs,
+      slug,
+      assetId,
+      assetDir,
+      ctx,
+      "download",
+      { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
+      async () => {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh img-
       // asset; a successful video download promotes it after step (d).
@@ -413,8 +420,8 @@ export function registerDownloadVideoJob(fs: ClipfirstFs): void {
       } as unknown as Record<string, unknown>);
 
       return { success: true, exports };
-    } finally {
-      try { await fs.releaseLock(assetDir); } catch { /* asset may have been retyped/deleted */ }
-    }
+      },
+      { durationMs: LOCK_DURATION_MS },
+    );
   });
 }

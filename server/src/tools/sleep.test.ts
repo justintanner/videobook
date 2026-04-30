@@ -84,15 +84,24 @@ describe("sleepDef handler", () => {
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.assetId;
 
-    // Write a pending task so sleep never resolves to ready
     {
-      const _ptResult = await fs.pendingTasks.write("test-proj", {
-        taskId: "task-will-timeout",
-        taskType: "transcribe",
-        assetId,
-        assetDir: assetResult.value.path,
-        meta: {},
-    });
+      const lease = await fs.assetWork.begin("test-proj", assetId, {
+        kind: "transcribe",
+        ownerKind: "job",
+        durationMs: 60_000,
+      });
+      if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
+      const _ptResult = await fs.pendingTasks.write(
+        "test-proj",
+        {
+          taskId: "task-will-timeout",
+          taskType: "transcribe",
+          assetId,
+          assetDir: assetResult.value.path,
+          meta: {},
+        },
+        lease.ownerId,
+      );
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
 

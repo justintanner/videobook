@@ -27,6 +27,36 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_EXTEND_MS = 60_000;
 const DEFAULT_LEASE_MS = 15 * 60_000;
 
+type LeaseOptions = {
+  durationMs?: number;
+  waitForActiveMs?: number;
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function beginLocalLease(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assetId: string,
+  kind: AssetWorkKind,
+  options: LeaseOptions,
+): Promise<{ ownerId: string } | null> {
+  const started = Date.now();
+  const waitForActiveMs = options.waitForActiveMs ?? 0;
+  while (true) {
+    const lease = await fs.assetWork.begin(projectSlug, assetId, {
+      kind,
+      ownerKind: "job",
+      durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
+    });
+    if (lease) return lease;
+    if (Date.now() - started >= waitForActiveMs) return null;
+    await sleep(250);
+  }
+}
+
 /**
  * Pattern A — Provider handoff. Claim a local job lease, run the submission
  * work (upload/build/submit), then atomically hand off to the provider lease
@@ -45,13 +75,9 @@ export async function withProviderHandoff<T>(
   ctx: JobHandlerContext,
   kind: AssetWorkKind,
   fn: (ownerId: string) => Promise<{ taskId: string; result: T }>,
-  options: { durationMs?: number } = {},
+  options: LeaseOptions = {},
 ): Promise<T> {
-  const lease = await fs.assetWork.begin(projectSlug, assetId, {
-    kind,
-    ownerKind: "job",
-    durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
-  });
+  const lease = await beginLocalLease(fs, projectSlug, assetId, kind, options);
   if (!lease) {
     throw new Error(
       `could not claim local lease for ${assetId}: active owner already holds it`,
@@ -82,13 +108,9 @@ export async function withLocalLease<T>(
   ctx: JobHandlerContext,
   kind: AssetWorkKind,
   fn: (ownerId: string) => Promise<T>,
-  options: { durationMs?: number } = {},
+  options: LeaseOptions = {},
 ): Promise<T> {
-  const lease = await fs.assetWork.begin(projectSlug, assetId, {
-    kind,
-    ownerKind: "job",
-    durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
-  });
+  const lease = await beginLocalLease(fs, projectSlug, assetId, kind, options);
   if (!lease) {
     throw new Error(
       `could not claim local lease for ${assetId}: active owner already holds it`,
@@ -109,5 +131,35 @@ export async function withLocalLease<T>(
     throw err;
   } finally {
     clearInterval(heartbeat);
+  }
+}
+
+export async function withLockedLocalLease<T>(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assetId: string,
+  assetDir: string,
+  ctx: JobHandlerContext,
+  kind: AssetWorkKind,
+  lock: { durationMs: number; data?: Record<string, unknown> },
+  fn: (ownerId: string) => Promise<T>,
+  options: LeaseOptions = {},
+): Promise<T> {
+  const lockResult = await fs.acquireLock(assetDir, lock);
+  if (!lockResult.ok) {
+    throw new Error(`Asset is locked: ${lockResult.error.message}`);
+  }
+  try {
+    return await withLocalLease(
+      fs,
+      projectSlug,
+      assetId,
+      ctx,
+      kind,
+      fn,
+      options,
+    );
+  } finally {
+    await fs.releaseLock(assetDir).catch(() => {});
   }
 }

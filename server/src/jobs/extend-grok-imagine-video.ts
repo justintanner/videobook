@@ -55,7 +55,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
           ...(extend_at !== undefined ? { extend_at } : {}),
           ...(extend_times !== undefined ? { extend_times } : {}),
         },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

@@ -81,7 +81,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
         assetId: imgAssetId,
         assetDir: imgAssetDir,
         meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
-    });
+    }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
     ctx.setLease({ kind: "task", taskId });

@@ -4,8 +4,9 @@ import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, AUDIO_OPTS } from "../ffmpeg.js";
+import { withLockedLocalLease } from "./_lease.js";
 
-const LOCK_DURATION_MS = 900_000; // 15 min
+const LOCK_DURATION_MS = 900_000;
 
 const LANDSCAPE_RENDER = "landscape.mp4";
 const PORTRAIT_RENDER = "portrait.mp4";
@@ -84,7 +85,7 @@ function buildOverlayAudioFilter(inputIndex: number, overlay: ResolvedAudioOverl
 }
 
 export function registerRenderTimelineJob(fs: ClipfirstFs): void {
-  registerJobHandler("render_timeline", async (payload) => {
+  registerJobHandler("render_timeline", async (payload, ctx) => {
     const {
       projectSlug,
       orientation,
@@ -99,10 +100,15 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
     const finalDir = join(projectDir, "final");
     await mkdir(finalDir, { recursive: true });
 
-    const lockResult = await fs.acquireLock(finalDir, { durationMs: LOCK_DURATION_MS });
-    if (!lockResult.ok) throw new Error(`Final asset is locked: ${lockResult.error.message}`);
-
-    try {
+    return withLockedLocalLease(
+      fs,
+      projectSlug,
+      "final",
+      finalDir,
+      ctx,
+      "final",
+      { durationMs: LOCK_DURATION_MS },
+      async () => {
       const renderFilename = orientation === "portrait" ? PORTRAIT_RENDER : orientation === "square" ? SQUARE_RENDER : LANDSCAPE_RENDER;
       const outputFilename = orientation === "portrait" ? PORTRAIT_OUTPUT : orientation === "square" ? SQUARE_OUTPUT : LANDSCAPE_OUTPUT;
       const outputPath = join(finalDir, outputFilename);
@@ -214,8 +220,8 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
       await fs.commitOperation("render-timeline", "final", { orientation, slotCount: n }, projectSlug);
 
       return { success: true, output: outputFilename };
-    } finally {
-      await fs.releaseLock(finalDir);
-    }
+      },
+      { durationMs: LOCK_DURATION_MS },
+    );
   });
 }
