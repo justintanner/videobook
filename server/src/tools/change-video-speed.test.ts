@@ -42,20 +42,26 @@ async function uploadVideo(
 describe("change_video_speed tool", () => {
   let client: Client;
   let tempDir: string;
+  let fixtureDir: string;
   let videoPath: string;
 
   beforeAll(async () => {
     await queue.start();
+    // Encode the shared test source once. Under parallel test load, running
+    // libx264 inside beforeEach (6x per-suite) starves ffmpeg and can blow
+    // through the 60s hook timeout.
+    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-fixture-"));
+    videoPath = join(fixtureDir, "test-source.mp4");
+    await generateTestVideo(videoPath);
   });
 
   afterAll(async () => {
     await queue.stop();
+    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-test-"));
-    videoPath = join(tempDir, "test-source.mp4");
-    await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
