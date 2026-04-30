@@ -3,7 +3,6 @@ import { z, type ZodRawShape } from "zod";
 import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -107,22 +106,6 @@ export function generateSeedance2FramesVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [firstFrame.assetId, lastFrame.assetId];
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "seedance2_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt,
-            mode: "frames",
-            sourceImageIds,
-            ...(return_last_frame !== undefined ? { return_last_frame } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `seedance2-frames-${vidAssetId}-${Date.now()}`;
 

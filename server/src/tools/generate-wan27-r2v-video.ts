@@ -4,7 +4,6 @@ import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod"
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "clipfirst-engine";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -152,23 +151,6 @@ export function generateWan27R2vVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds = [...imageInputs.map((i) => i.assetId), ...(firstFrame ? [firstFrame.assetId] : [])];
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = voiceRef ? [voiceRef.assetId] : [];
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "wan27_r2v_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt,
-            mode: "reference",
-            sourceImageIds,
-            sourceVideoIds,
-            sourceAudioIds,
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `wan27-r2v-${vidAssetId}-${Date.now()}`;
 

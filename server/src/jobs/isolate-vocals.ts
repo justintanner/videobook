@@ -20,7 +20,7 @@ type IsolateVocalsPayload = {
 };
 
 export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
-  registerJobHandler("isolate_vocals", async (payload) => {
+  registerJobHandler("isolate_vocals", async (payload, ctx) => {
     const {
       audioFilename, assetId, assetDir, projectSlug, isAudioAsset,
     } = payload as IsolateVocalsPayload;
@@ -90,6 +90,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

@@ -14,7 +14,7 @@ type GenerateGptImageTextPayload = {
 };
 
 export function registerGenerateGptImageTextJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_gpt_image_text", async (payload) => {
+  registerJobHandler("generate_gpt_image_text", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, nsfwChecker,
     } = payload as GenerateGptImageTextPayload;
@@ -46,6 +46,7 @@ export function registerGenerateGptImageTextJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

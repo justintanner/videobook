@@ -138,6 +138,25 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
             continue;
           }
 
+          // Per-asset lease: render is a single-asset transition for each
+          // entry in the loop; the wrapper's catch CAS-fails this exact owner
+          // (other assets in the batch keep their leases).
+          const lease = await fs.assetWork.begin(projectSlug, asset.assetId, {
+            kind: "render",
+            ownerKind: "job",
+            durationMs: LOCK_DURATION_MS,
+            meta: { orientation },
+          });
+          if (!lease) {
+            await fs.releaseLock(asset.assetDir);
+            failed.push({ assetId: asset.assetId, error: "active owner already holds asset lease" });
+            continue;
+          }
+          const heartbeat = setInterval(() => {
+            void fs.assetWork.renew(projectSlug, asset.assetId, lease.ownerId, 60_000);
+          }, 20_000);
+          let renderSucceeded = false;
+
           try {
             const probe = await probeVideo(asset.videoPath);
             const durationInSeconds = probe.duration;
@@ -269,10 +288,19 @@ export function registerRenderProjectJob(fs: ClipfirstFs): void {
               await fs.commitOperation("render", asset.assetId, { orientation }, projectSlug);
 
               rendered.push(asset.assetId);
+              renderSucceeded = true;
             } finally {
               await unlink(videoCopyPath).catch(() => {});
             }
           } finally {
+            clearInterval(heartbeat);
+            if (renderSucceeded) {
+              await fs.assetWork.complete(projectSlug, asset.assetId, lease.ownerId);
+            } else {
+              await fs.assetWork.fail(projectSlug, asset.assetId, lease.ownerId, {
+                message: "render failed",
+              });
+            }
             await fs.releaseLock(asset.assetDir);
           }
         } catch (err) {

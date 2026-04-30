@@ -3,7 +3,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
@@ -79,23 +78,6 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "qwen2_image_edit",
-          assetId: imgAssetId,
-          assetDir: imgAssetDir,
-          meta: {
-            sourceImageIds,
-            prompt,
-            ...(image_size !== undefined ? { imageSize: image_size } : {}),
-            ...(output_format !== undefined ? { outputFormat: output_format } : {}),
-            ...(seed !== undefined ? { seed } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `qwen2-image-edit-${imgAssetId}-${Date.now()}`;
 

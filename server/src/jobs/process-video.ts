@@ -2,10 +2,9 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { join } from "node:path";
 import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
-
-const PROCESSING_MARKER = ".processing.json";
 
 type ProcessVideoPayload = {
   type: "process_video";
@@ -19,24 +18,18 @@ type ProcessVideoPayload = {
 };
 
 export function registerProcessVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("process_video", async (payload) => {
+  registerJobHandler("process_video", async (payload, ctx) => {
     const {
       videoPath, assetId, assetDir, projectSlug, provenance,
       force, skipDownstreamJobs,
     } = payload as ProcessVideoPayload;
 
+    return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
 
-    await fs.writeFile(
-      assetId,
-      PROCESSING_MARKER,
-      JSON.stringify({ startedAt: new Date().toISOString() }),
-      projectSlug,
-    );
-
     let frameCount = 0;
-    try {
+    {
 
     await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
 
@@ -127,8 +120,6 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       width, height, duration, frame_count: frameCount,
     }, projectSlug);
 
-    } finally {
-      await fs.deleteFile(assetId, PROCESSING_MARKER, projectSlug).catch(() => {});
     }
 
     // Enqueue transcription and analysis for fresh assets (skip for re-processing)
@@ -149,6 +140,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       } as unknown as Record<string, unknown>);
     }
 
-    return { success: true, width, height, duration, frame_count: frameCount };
+      return { success: true, width, height, duration, frame_count: frameCount };
+    });
   });
 }

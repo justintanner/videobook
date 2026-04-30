@@ -19,7 +19,7 @@ type GenerateQwen2ImageEditPayload = {
 };
 
 export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_qwen2_image_edit", async (payload) => {
+  registerJobHandler("generate_qwen2_image_edit", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
       sourceImageIds, projectSlug, imageSize, outputFormat, seed,
@@ -61,6 +61,7 @@ export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

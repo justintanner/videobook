@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
@@ -25,51 +26,53 @@ type Payload = {
 };
 
 export function registerGenerateSeedance2R2vFalJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_seedance2_r2v_fal", async (payload) => {
+  registerJobHandler("generate_seedance2_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-
-    const image_urls: string[] = [];
-    for (const img of p.imageInputs) {
-      image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.projectSlug));
-    }
-    const video_urls: string[] = [];
-    for (const vid of p.videoInputs) {
-      video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.projectSlug));
-    }
-    const audio_urls: string[] = [];
-    for (const aud of p.audioInputs) {
-      audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename, p.projectSlug));
-    }
-
-    const input: Record<string, unknown> = {
-      prompt: p.prompt,
-      ...(image_urls.length > 0 ? { image_urls } : {}),
-      ...(video_urls.length > 0 ? { video_urls } : {}),
-      ...(audio_urls.length > 0 ? { audio_urls } : {}),
-      ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
-      ...(p.duration !== undefined ? { duration: p.duration } : {}),
-      ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
-      ...(p.generate_audio !== undefined ? { generate_audio: p.generate_audio } : {}),
-      ...(p.seed !== undefined ? { seed: p.seed } : {}),
-    };
-
-    const taskId = await submitFalJob({
-      fs,
-      projectSlug: p.projectSlug,
-      assetId: p.vidAssetId,
-      assetDir: p.vidAssetDir,
-      endpointId: "bytedance/seedance-2.0/reference-to-video",
-      input,
-      taskType: "fal_seedance2_r2v",
-      meta: {
+    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+  
+      const image_urls: string[] = [];
+      for (const img of p.imageInputs) {
+        image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.projectSlug));
+      }
+      const video_urls: string[] = [];
+      for (const vid of p.videoInputs) {
+        video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.projectSlug));
+      }
+      const audio_urls: string[] = [];
+      for (const aud of p.audioInputs) {
+        audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename, p.projectSlug));
+      }
+  
+      const input: Record<string, unknown> = {
         prompt: p.prompt,
-        mode: "reference",
-        sourceImageIds: p.sourceImageIds,
-        sourceVideoIds: p.sourceVideoIds,
-        sourceAudioIds: p.sourceAudioIds,
-      },
-    });
-
-    return { success: true, taskId };
+        ...(image_urls.length > 0 ? { image_urls } : {}),
+        ...(video_urls.length > 0 ? { video_urls } : {}),
+        ...(audio_urls.length > 0 ? { audio_urls } : {}),
+        ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
+        ...(p.duration !== undefined ? { duration: p.duration } : {}),
+        ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
+        ...(p.generate_audio !== undefined ? { generate_audio: p.generate_audio } : {}),
+        ...(p.seed !== undefined ? { seed: p.seed } : {}),
+      };
+  
+      const taskId = await submitFalJob({
+        fs,
+        projectSlug: p.projectSlug,
+        assetId: p.vidAssetId,
+        assetDir: p.vidAssetDir,
+        endpointId: "bytedance/seedance-2.0/reference-to-video",
+        input,
+        taskType: "fal_seedance2_r2v",
+        meta: {
+          prompt: p.prompt,
+          mode: "reference",
+          sourceImageIds: p.sourceImageIds,
+          sourceVideoIds: p.sourceVideoIds,
+          sourceAudioIds: p.sourceAudioIds,
+        },
+        expectedOwnerId: ownerId,
+      });
+  
+      return { taskId, result: { success: true, taskId } };    });
   });
 }

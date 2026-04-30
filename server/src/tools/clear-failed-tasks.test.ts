@@ -44,8 +44,27 @@ describe("clear_failed_tasks tool", () => {
     const failedTwo = await createImageAsset(fs, "test-proj", "bad two");
     const healthy = await createImageAsset(fs, "test-proj", "good");
 
-    await failPendingTaskAndLog(fs, "test-proj", failedOne, { message: "boom" });
-    await failPendingTaskAndLog(fs, "test-proj", failedTwo, { message: "kaboom" });
+    // The strict CAS path requires a real (asset_id, task_id) row to succeed.
+    // Plant a synthetic provider task so failPendingTaskAndLog has a row to
+    // CAS-fail.
+    const fakeTaskOne = "task-fail-one";
+    const fakeTaskTwo = "task-fail-two";
+    await fs.pendingTasks.write("test-proj", {
+      taskId: fakeTaskOne,
+      taskType: "alibaba_image",
+      assetId: failedOne,
+      assetDir: failedOne,
+      meta: {},
+    });
+    await fs.pendingTasks.write("test-proj", {
+      taskId: fakeTaskTwo,
+      taskType: "alibaba_image",
+      assetId: failedTwo,
+      assetDir: failedTwo,
+      meta: {},
+    });
+    await failPendingTaskAndLog(fs, "test-proj", failedOne, fakeTaskOne, { message: "boom" });
+    await failPendingTaskAndLog(fs, "test-proj", failedTwo, fakeTaskTwo, { message: "kaboom" });
 
     const res = await client.callTool({
       name: "clear_failed_tasks",

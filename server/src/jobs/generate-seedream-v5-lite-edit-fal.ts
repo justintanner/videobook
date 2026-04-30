@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
@@ -19,40 +20,42 @@ type Payload = {
 };
 
 export function registerGenerateSeedreamV5LiteEditFalJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_seedream_v5_lite_edit_fal", async (payload) => {
+  registerJobHandler("generate_seedream_v5_lite_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-
-    const image_urls = await Promise.all(
-      p.imageInputs.map((i) =>
-        "url" in i ? i.url : uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug),
-      ),
-    );
-
-    const input: Record<string, unknown> = {
-      prompt: p.prompt,
-      image_urls,
-      ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
-      ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
-      ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
-      ...(p.seed !== undefined ? { seed: p.seed } : {}),
-    };
-
-    const taskId = await submitFalJob({
-      fs,
-      projectSlug: p.projectSlug,
-      assetId: p.imgAssetId,
-      assetDir: p.imgAssetDir,
-      endpointId: "fal-ai/bytedance/seedream/v5/lite/edit",
-      input,
-      taskType: "fal_seedream_v5_lite_edit",
-      meta: {
+    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+  
+      const image_urls = await Promise.all(
+        p.imageInputs.map((i) =>
+          "url" in i ? i.url : uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug),
+        ),
+      );
+  
+      const input: Record<string, unknown> = {
         prompt: p.prompt,
-        sourceImageIds: p.sourceImageIds,
-        ...(p.image_size !== undefined ? { imageSize: p.image_size } : {}),
+        image_urls,
+        ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
+        ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
+        ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
         ...(p.seed !== undefined ? { seed: p.seed } : {}),
-      },
-    });
-
-    return { success: true, taskId };
+      };
+  
+      const taskId = await submitFalJob({
+        fs,
+        projectSlug: p.projectSlug,
+        assetId: p.imgAssetId,
+        assetDir: p.imgAssetDir,
+        endpointId: "fal-ai/bytedance/seedream/v5/lite/edit",
+        input,
+        taskType: "fal_seedream_v5_lite_edit",
+        meta: {
+          prompt: p.prompt,
+          sourceImageIds: p.sourceImageIds,
+          ...(p.image_size !== undefined ? { imageSize: p.image_size } : {}),
+          ...(p.seed !== undefined ? { seed: p.seed } : {}),
+        },
+        expectedOwnerId: ownerId,
+      });
+  
+      return { taskId, result: { success: true, taskId } };    });
   });
 }

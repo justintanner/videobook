@@ -17,7 +17,6 @@ import {
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
 } from "clipfirst-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import type { PendingTask } from "clipfirst-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
@@ -410,8 +409,8 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
   // Age out any non-completing task older than PENDING_TASK_TIMEOUT_MS so it
   // stops showing as pending forever. Completing tasks are skipped because the
-  // completion job is already dispatched; resetStaleCompletingTasks handles
-  // that lane on server restart.
+  // completion job is already dispatched; recoverAssetsTable handles that lane
+  // on server restart by clearing the completing flag and refreshing owner_id.
   const nowMs = Date.now();
   const activeTasks: PendingTask[] = [];
   for (const t of tasks) {
@@ -421,28 +420,34 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
       const prompt = metaPrompt(t.meta);
       result.failed.push({ assetId: t.assetId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-      await failPendingTaskAndLog(fs, project_slug, t.assetId, { message: failMsg, prompt });
+      await failPendingTaskAndLog(fs, project_slug, t.assetId, t.taskId, { message: failMsg, prompt });
     } else {
       activeTasks.push(t);
     }
-  }
-
-  // Queued tasks (not yet submitted to provider) — report as pending, skip polling
-  const queuedTasks = activeTasks.filter((t) => t.taskId === QUEUED_TASK_ID);
-  for (const t of queuedTasks) {
-    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 0, state: "queued", prompt: metaPrompt(t.meta) });
   }
 
   // Completing tasks — sync already enqueued a completion job for these on a
   // prior poll. Skip polling + re-enqueueing so duplicate completion jobs
   // don't race on the asset-directory lock. Report as pending with state
   // "success" so the inbox tile shows the DOWNLOAD/PROCESS phase.
-  const completingTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing === true);
+  const completingTasks = activeTasks.filter((t) => t.completing === true);
   for (const t of completingTasks) {
     result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 100, state: "success", prompt: metaPrompt(t.meta) });
   }
 
-  const pollableTasks = activeTasks.filter((t) => t.taskId !== QUEUED_TASK_ID && t.completing !== true);
+  const pollableTasks = activeTasks.filter((t) => t.completing !== true);
+
+  // Renew the assets-row deadline for every still-alive provider task so the
+  // reaper does not flip them to error while sync is actively polling them.
+  // CAS via the row's owner_id (per-task lease).
+  await Promise.all(
+    pollableTasks.map(async (task) => {
+      const ownerId = await fs.pendingTasks.getOwner(project_slug, task.assetId, task.taskId);
+      if (ownerId) {
+        await fs.assetWork.renew(project_slug, task.assetId, ownerId, 30 * 60_000);
+      }
+    }),
+  );
 
   // Poll KIE tasks (only if API key is set)
   const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_") && !t.taskType.startsWith("alibaba_"));
@@ -461,7 +466,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -480,7 +485,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (videoResult.status === "done" && videoResult.video?.url) {
           const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: `Asset not found: ${task.assetId}`, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
           await fs.pendingTasks.markCompleting(project_slug, task.assetId);
@@ -499,7 +504,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.assetId,
@@ -515,7 +520,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -536,7 +541,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (status === "SUCCEEDED") {
           const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: `Asset not found: ${task.assetId}`, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
           await fs.pendingTasks.markCompleting(project_slug, task.assetId);
@@ -572,7 +577,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           const failMsg = taskStatus.output.message ?? `Alibaba task ${status}`;
           const code = taskStatus.output.code;
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.assetId, {
+          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, {
             message: failMsg,
             prompt,
             ...(code !== undefined ? { failCode: code } : {}),
@@ -592,7 +597,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (e instanceof AlibabaError) {
           const alibabaErr = e as AlibabaError;
           if (alibabaErr.status >= 400 && alibabaErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -617,7 +622,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       if (!endpointId) {
         const failMsg = `FAL task missing falEndpointId in meta`;
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+        await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
         return;
       }
       const statusEndpointId = falNamespace(endpointId);
@@ -627,12 +632,12 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
           if (status.error) {
             const failMsg = status.error;
             result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
             return;
           }
           const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: `Asset not found: ${task.assetId}`, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
             return;
           }
           const resultObject = await provider.v1.queue.result({ endpoint_id: statusEndpointId, request_id: task.taskId });
@@ -667,7 +672,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
         if (e instanceof FalError) {
           const falErr = e as FalError;
           if (falErr.status >= 400 && falErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.assetId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -769,7 +774,7 @@ async function processSyncedTask(
   if (data?.state === "success") {
     const assetDirResult = await fs.resolveAssetDir(task.assetId, projectSlug);
     if (!assetDirResult.ok) {
-      await failPendingTaskAndLog(fs, projectSlug, task.assetId, { message: `Asset not found: ${task.assetId}`, prompt });
+      await failPendingTaskAndLog(fs, projectSlug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
       return;
     }
 
@@ -806,7 +811,7 @@ async function processSyncedTask(
       failedAt: new Date().toISOString(),
       prompt,
     });
-    await failPendingTaskAndLog(fs, projectSlug, task.assetId, {
+    await failPendingTaskAndLog(fs, projectSlug, task.assetId, task.taskId, {
       message: failMsg,
       prompt,
       ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),

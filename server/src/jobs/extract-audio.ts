@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -31,34 +32,36 @@ type ExtractAudioPayload = {
 };
 
 export function registerExtractAudioJob(fs: ClipfirstFs): void {
-  registerJobHandler("extract_audio", async (payload) => {
+  registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
       audioAssetId, audioAssetDir, sourceVideoId, projectSlug,
     } = payload as ExtractAudioPayload;
 
-    const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
-    if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
+    return withLocalLease(fs, projectSlug, audioAssetId, ctx, "extract", async () => {
+      const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
+      if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
-    try {
-      await runFfmpeg([
-        "-y",
-        "-i", inputPath,
-        "-vn",
-        "-acodec", "libmp3lame",
-        "-q:a", "2",
-        outputPath,
-      ]);
+      try {
+        await runFfmpeg([
+          "-y",
+          "-i", inputPath,
+          "-vn",
+          "-acodec", "libmp3lame",
+          "-q:a", "2",
+          outputPath,
+        ]);
 
-      const origin = {
-        origin: "extract_audio",
-        source_asset: sourceVideoId,
-      };
-      await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
+        const origin = {
+          origin: "extract_audio",
+          source_asset: sourceVideoId,
+        };
+        await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
 
-      return { success: true };
-    } finally {
-      await fs.releaseLock(audioAssetDir);
-    }
+        return { success: true };
+      } finally {
+        await fs.releaseLock(audioAssetDir);
+      }
+    });
   });
 }

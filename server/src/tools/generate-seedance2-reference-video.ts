@@ -4,7 +4,6 @@ import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "clipfirst-engine";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 
@@ -168,24 +167,6 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = audioInputs.map((i) => i.assetId);
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "seedance2_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt,
-            mode: "reference",
-            sourceImageIds,
-            sourceVideoIds,
-            sourceAudioIds,
-            ...(return_last_frame !== undefined ? { return_last_frame } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `seedance2-reference-${vidAssetId}-${Date.now()}`;
 

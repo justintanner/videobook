@@ -31,7 +31,7 @@ type GenerateKling30VideoPayload = {
 };
 
 export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_kling30_video", async (payload) => {
+  registerJobHandler("generate_kling30_video", async (payload, ctx) => {
     const {
       imageInputs, elementInputs, sourceImageIds,
       vidAssetId, vidAssetDir, projectSlug,
@@ -97,6 +97,7 @@ export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

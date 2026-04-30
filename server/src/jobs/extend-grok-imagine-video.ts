@@ -14,7 +14,7 @@ type ExtendGrokImagineVideoPayload = {
 };
 
 export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("extend_grok_imagine_video", async (payload) => {
+  registerJobHandler("extend_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir,
       projectSlug, prompt, extend_at, extend_times,
@@ -58,6 +58,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

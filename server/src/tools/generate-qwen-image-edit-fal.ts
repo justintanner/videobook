@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 
@@ -86,17 +85,6 @@ export function generateQwenImageEditFalDef(fs: ClipfirstFs): ToolDef {
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "fal_qwen_image_edit",
-          assetId: imgAssetId,
-          assetDir: imgAssetDir,
-          meta: { prompt, sourceImageIds: resolved.sourceImageIds },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `fal-qwen-image-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

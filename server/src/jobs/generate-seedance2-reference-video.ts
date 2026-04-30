@@ -41,7 +41,7 @@ async function uploadInputs(
 }
 
 export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_seedance2_reference_video", async (payload) => {
+  registerJobHandler("generate_seedance2_reference_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
       imageInputs, videoInputs, audioInputs,
@@ -82,6 +82,7 @@ export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): voi
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

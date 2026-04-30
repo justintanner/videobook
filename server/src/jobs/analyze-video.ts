@@ -5,10 +5,9 @@ import { openai, withRetry, withFallback, textPart, imageBase64Part, firstConten
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { kie } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 import { findAudioFile } from "clipfirst-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
-
-const ANALYZING_MARKER = ".analyzing.json";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -54,21 +53,15 @@ function sampleFrames(frames: string[]): string[] {
 }
 
 export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("analyze_video", async (payload) => {
+  registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
       assetId, assetDir, projectSlug, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
+    return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
     console.log(`[analyze_video] START ${assetId} assetDir=${assetDir} projectSlug=${projectSlug}`);
 
-    await fs.writeFile(
-      assetId,
-      ANALYZING_MARKER,
-      JSON.stringify({ startedAt: new Date().toISOString() }),
-      projectSlug,
-    );
-
-    try {
+    {
 
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
       assetId, "original", projectSlug
@@ -173,9 +166,8 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
     console.log(`[analyze_video] DONE ${assetId}`);
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
 
-    } finally {
-      await fs.deleteFile(assetId, ANALYZING_MARKER, projectSlug).catch(() => {});
     }
+    });
   });
 }
 

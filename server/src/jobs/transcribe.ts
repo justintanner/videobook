@@ -17,7 +17,7 @@ type TranscribePayload = {
 };
 
 export function registerTranscribeJob(fs: ClipfirstFs): void {
-  registerJobHandler("transcribe", async (payload) => {
+  registerJobHandler("transcribe", async (payload, ctx) => {
     const {
       audioFilename, tagAudioEvents, diarize,
       languageCode, assetId, assetDir, projectSlug, autoRender,
@@ -46,6 +46,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId, provider };
   });

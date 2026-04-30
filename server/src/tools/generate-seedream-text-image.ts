@@ -3,7 +3,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 
@@ -65,17 +64,6 @@ export function generateSeedreamTextImageDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "seedream_text_image",
-          assetId: imgAssetId,
-          assetDir: imgAssetDir,
-          meta: { prompt, sourceImageIds: [] },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `seedream-text-image-${imgAssetId}-${Date.now()}`;
 

@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
@@ -23,37 +24,39 @@ type Payload = {
 };
 
 export function registerGenerateWan27I2vFalJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_i2v_fal", async (payload) => {
+  registerJobHandler("generate_wan27_i2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-
-    const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
-    const end_image_url = p.endFrame
-      ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.projectSlug)
-      : undefined;
-
-    const input: Record<string, unknown> = {
-      prompt: p.prompt,
-      image_url,
-      ...(end_image_url ? { end_image_url } : {}),
-      ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
-      ...(p.duration !== undefined ? { duration: p.duration } : {}),
-      ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
-      ...(p.enable_prompt_expansion !== undefined ? { enable_prompt_expansion: p.enable_prompt_expansion } : {}),
-      ...(p.enable_safety_checker !== undefined ? { enable_safety_checker: p.enable_safety_checker } : {}),
-      ...(p.seed !== undefined ? { seed: p.seed } : {}),
-    };
-
-    const taskId = await submitFalJob({
-      fs,
-      projectSlug: p.projectSlug,
-      assetId: p.vidAssetId,
-      assetDir: p.vidAssetDir,
-      endpointId: "fal-ai/wan/v2.7/image-to-video",
-      input,
-      taskType: "fal_wan27_i2v",
-      meta: { prompt: p.prompt, mode: "i2v", sourceImageIds: p.sourceImageIds, return_last_frame: false },
-    });
-
-    return { success: true, taskId };
+    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+  
+      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
+      const end_image_url = p.endFrame
+        ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.projectSlug)
+        : undefined;
+  
+      const input: Record<string, unknown> = {
+        prompt: p.prompt,
+        image_url,
+        ...(end_image_url ? { end_image_url } : {}),
+        ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
+        ...(p.duration !== undefined ? { duration: p.duration } : {}),
+        ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
+        ...(p.enable_prompt_expansion !== undefined ? { enable_prompt_expansion: p.enable_prompt_expansion } : {}),
+        ...(p.enable_safety_checker !== undefined ? { enable_safety_checker: p.enable_safety_checker } : {}),
+        ...(p.seed !== undefined ? { seed: p.seed } : {}),
+      };
+  
+      const taskId = await submitFalJob({
+        fs,
+        projectSlug: p.projectSlug,
+        assetId: p.vidAssetId,
+        assetDir: p.vidAssetDir,
+        endpointId: "fal-ai/wan/v2.7/image-to-video",
+        input,
+        taskType: "fal_wan27_i2v",
+        meta: { prompt: p.prompt, mode: "i2v", sourceImageIds: p.sourceImageIds, return_last_frame: false },
+        expectedOwnerId: ownerId,
+      });
+  
+      return { taskId, result: { success: true, taskId } };    });
   });
 }

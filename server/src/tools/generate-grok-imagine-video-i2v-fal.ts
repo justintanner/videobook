@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 
@@ -41,17 +40,6 @@ export function generateGrokImagineVideoI2vFalDef(fs: ClipfirstFs): ToolDef {
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "fal_grok_imagine_video_i2v",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: { prompt, mode: "i2v", sourceImageIds: resolved.sourceImageIds },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `fal-grok-imagine-video-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

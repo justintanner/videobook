@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {
@@ -58,21 +57,6 @@ export function generateSeedance2T2vVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "seedance2_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt,
-            mode: "t2v",
-            ...(return_last_frame !== undefined ? { return_last_frame } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `seedance2-t2v-${vidAssetId}-${Date.now()}`;
 

@@ -11,7 +11,7 @@ type UpscaleGrokImagineVideoPayload = {
 };
 
 export function registerUpscaleGrokImagineVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("upscale_grok_imagine_video", async (payload) => {
+  registerJobHandler("upscale_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir, projectSlug,
     } = payload as UpscaleGrokImagineVideoPayload;
@@ -49,6 +49,7 @@ export function registerUpscaleGrokImagineVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

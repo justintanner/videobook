@@ -4,7 +4,6 @@ import { Wan27ImageToVideoRequestSchema, Wan27ResolutionSchema } from "@apicity/
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "clipfirst-engine";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 
@@ -156,23 +155,6 @@ export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds = [firstFrame?.assetId, lastFrame?.assetId].filter((v): v is string => v !== undefined);
       const sourceVideoIds = firstClip ? [firstClip.assetId] : [];
       const sourceAudioIds = drivingAudio ? [drivingAudio.assetId] : [];
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "wan27_i2v_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt,
-            mode: "i2v",
-            sourceImageIds,
-            sourceVideoIds,
-            sourceAudioIds,
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `wan27-i2v-${vidAssetId}-${Date.now()}`;
 

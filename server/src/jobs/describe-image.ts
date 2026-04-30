@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { xai, withRetry } from "@apicity/xai";
 import type { XaiResponseRequest, XaiResponseResponse } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
@@ -136,7 +137,7 @@ export async function describeImageBytes(
 }
 
 export function registerDescribeImageJob(fs: ClipfirstFs): void {
-  registerJobHandler("describe_image", async (payload) => {
+  registerJobHandler("describe_image", async (payload, ctx) => {
     const {
       sourceAssetId,
       sourceImageFilename,
@@ -144,64 +145,64 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
       projectSlug,
     } = payload as DescribeImagePayload;
 
-    const mode = scriptAssetId ? `script=${scriptAssetId}` : "analysis-only";
-    console.log(`[describe_image] START source=${sourceAssetId} ${mode} project=${projectSlug}`);
+    // When scriptAssetId is set, the queue wrote a pending row on it; claim
+    // the lease so the wrapper finalizes it (ready/error). Analysis-only
+    // mode runs on the source asset, which already exists at status='ready'.
+    const targetAssetId = scriptAssetId ?? sourceAssetId;
+    return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
+      const mode = scriptAssetId ? `script=${scriptAssetId}` : "analysis-only";
+      console.log(`[describe_image] START source=${sourceAssetId} ${mode} project=${projectSlug}`);
 
-    const responses = buildResponses(process.env.XAI_API_KEY);
+      const responses = buildResponses(process.env.XAI_API_KEY);
 
-    const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
-    if (!readResult.ok) {
-      throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
-    }
-    const buffer = Buffer.from(readResult.value);
-    const mime = mimeForFilename(sourceImageFilename);
+      const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
+      if (!readResult.ok) {
+        throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
+      }
+      const buffer = Buffer.from(readResult.value);
+      const mime = mimeForFilename(sourceImageFilename);
 
-    const parsed = await describeImageBytes(buffer, mime, responses);
+      const parsed = await describeImageBytes(buffer, mime, responses);
 
-    const analysisJson = JSON.stringify(parsed, null, 2);
-    const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
-    if (!cacheResult.ok) {
-      // Source can disappear mid-flight (user deletes the asset while the
-      // vision call is in progress). Treat that as a clean exit instead of
-      // an error: the analysis has nowhere to land and downstream work is
-      // moot. Other failure modes still warn.
-      if (cacheResult.error.code === "NOT_FOUND") {
-        console.log(
-          `[describe_image] source ${sourceAssetId} deleted during vision call — discarding analysis`,
+      const analysisJson = JSON.stringify(parsed, null, 2);
+      const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
+      if (!cacheResult.ok) {
+        if (cacheResult.error.code === "NOT_FOUND") {
+          console.log(
+            `[describe_image] source ${sourceAssetId} deleted during vision call — discarding analysis`,
+          );
+          return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
+        }
+        console.warn(
+          `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
         );
-        return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
-      }
-      console.warn(
-        `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
-      );
-    }
-
-    if (scriptAssetId) {
-      const markdown = formatMarkdown(parsed);
-      const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
-      if (!writeResult.ok) {
-        throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
       }
 
-      await fs.writeMetadata(
-        scriptAssetId,
-        "original",
-        {
-          origin: "describe_image",
-          sourceAssetId,
-          model: VISION_MODEL,
-          processed_at: new Date().toISOString(),
-          variant: "full",
-        },
-        projectSlug,
+      if (scriptAssetId) {
+        const markdown = formatMarkdown(parsed);
+        const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+        if (!writeResult.ok) {
+          throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
+        }
+
+        await fs.writeMetadata(
+          scriptAssetId,
+          "original",
+          {
+            origin: "describe_image",
+            sourceAssetId,
+            model: VISION_MODEL,
+            processed_at: new Date().toISOString(),
+            variant: "full",
+          },
+          projectSlug,
+        );
+      }
+
+      console.log(
+        `[describe_image] DONE source=${sourceAssetId} ${mode} (${parsed.prompt.length} chars)`,
       );
-
-      await fs.pendingTasks.delete(projectSlug, scriptAssetId);
-    }
-
-    console.log(
-      `[describe_image] DONE source=${sourceAssetId} ${mode} (${parsed.prompt.length} chars)`,
-    );
-    return { success: true, sourceAssetId, scriptAssetId, prompt: parsed.prompt };
+      return { success: true, sourceAssetId, scriptAssetId, prompt: parsed.prompt };
+    });
   });
 }

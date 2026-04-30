@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID, type PendingTask } from "clipfirst-engine";
+import { type PendingTask } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
@@ -68,21 +68,6 @@ async function enqueueModel(
     return { model: spec.toolType, error: assetResult.error.message };
   }
   const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-
-  {
-    const _ptResult = await fs.pendingTasks.write(projectSlug, {
-      taskId: QUEUED_TASK_ID,
-      taskType: spec.taskType,
-      assetId: imgAssetId,
-      assetDir: imgAssetDir,
-      meta: {
-        prompt,
-        sourceImageIds: [],
-        ...(sourceScriptId ? { sourceScriptId } : {}),
-      },
-  });
-    if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-  }
 
   const jobId = `${spec.jobPrefix}-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {

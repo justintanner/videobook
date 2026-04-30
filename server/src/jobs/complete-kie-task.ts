@@ -24,16 +24,27 @@ type CompleteKieTaskPayload = {
 };
 
 export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
-  registerJobHandler("complete_kie_task", async (payload) => {
+  registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
       taskId, taskType, assetId, projectSlug, meta,
       resultUrls, resultObject,
     } = payload as CompleteKieTaskPayload;
 
+    // Pattern C: inherit the provider lease via getOwner, abort if the row
+    // already terminated, and register the lease so the wrapper's catch path
+    // CAS-fails by task_id (unaffected by a fresh retry on the same asset).
+    const ownerId = await fs.pendingTasks.getOwner(projectSlug, assetId, taskId);
+    if (!ownerId) {
+      // The row was already removed by a fail/delete or a stale duplicate
+      // dispatch. Either way the task is no longer ours to complete.
+      return { success: true, skipped: true };
+    }
+    ctx.setLease({ kind: "task", taskId });
+
     // Resolve the asset directory at runtime so renames don't break completion.
     const assetDirResult = await fs.resolveAssetDir(assetId, projectSlug);
     if (!assetDirResult.ok) {
-      await fs.pendingTasks.delete(projectSlug, assetId);
+      await fs.pendingTasks.delete(projectSlug, assetId, taskId);
       return { success: true, skipped: true };
     }
     const assetDir = assetDirResult.value;
@@ -55,6 +66,11 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
       }
       throw new Error(`Asset is locked: ${lockResult.error.message}`);
     }
+
+    // Renew the provider lease while we work — covers downloads + processing.
+    const heartbeat = setInterval(() => {
+      void fs.assetWork.renew(projectSlug, assetId, ownerId, 60_000);
+    }, 20_000);
 
     try {
       if (taskType === "nano_banana_image") {
@@ -118,9 +134,10 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         }
       }
 
-      await fs.pendingTasks.delete(projectSlug, assetId);
+      await fs.pendingTasks.delete(projectSlug, assetId, taskId);
       return { success: true };
     } finally {
+      clearInterval(heartbeat);
       await fs.releaseLock(assetDir);
     }
   });

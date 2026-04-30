@@ -4,7 +4,6 @@ import { KlingAspectRatioSchema, KlingDurationSchema, KlingModeSchema } from "@a
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "clipfirst-engine";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -179,17 +178,6 @@ export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "kling30_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: { sourceImageIds, ...(prompt !== undefined ? { prompt } : {}) },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `kling30-video-${vidAssetId}-${Date.now()}`;
 

@@ -18,7 +18,7 @@ type GenerateSeedance2T2vVideoPayload = {
 };
 
 export function registerGenerateSeedance2T2vVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_seedance2_t2v_video", async (payload) => {
+  registerJobHandler("generate_seedance2_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
       aspect_ratio, resolution, duration,
@@ -50,6 +50,7 @@ export function registerGenerateSeedance2T2vVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

@@ -19,7 +19,7 @@ type GenerateWan27ImagePayload = {
 };
 
 export function registerGenerateWan27ImageJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_image", async (payload) => {
+  registerJobHandler("generate_wan27_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
       sourceImageIds, projectSlug, aspectRatio, resolution, seed, nsfwChecker,
@@ -58,6 +58,7 @@ export function registerGenerateWan27ImageJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

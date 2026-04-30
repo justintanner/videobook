@@ -22,7 +22,7 @@ type GenerateGrokImagineImagePayload = {
 };
 
 export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_grok_imagine_image", async (payload) => {
+  registerJobHandler("generate_grok_imagine_image", async (payload, ctx) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,
       sourceImageId, projectSlug, prompt, aspectRatio, _provider,
@@ -97,6 +97,7 @@ export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

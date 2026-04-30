@@ -3,6 +3,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { registerJobHandler } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 import {
   buildResponses,
   firstResponseText,
@@ -204,7 +205,7 @@ export async function extractCharacterFromBytes(
 }
 
 export function registerExtractCharacterJob(fs: ClipfirstFs): void {
-  registerJobHandler("extract_character", async (payload) => {
+  registerJobHandler("extract_character", async (payload, ctx) => {
     const {
       charAssetId,
       sourceAssetId,
@@ -212,6 +213,7 @@ export function registerExtractCharacterJob(fs: ClipfirstFs): void {
       projectSlug,
     } = payload as ExtractCharacterPayload;
 
+    return withLocalLease(fs, projectSlug, charAssetId, ctx, "extract", async () => {
     console.log(
       `[extract_character] START char=${charAssetId} source=${sourceAssetId} project=${projectSlug}`,
     );
@@ -270,5 +272,6 @@ export function registerExtractCharacterJob(fs: ClipfirstFs): void {
       `[extract_character] DONE char=${charAssetId} source=${sourceAssetId}`,
     );
     return { success: true, charAssetId, sourceAssetId };
+    });
   });
 }

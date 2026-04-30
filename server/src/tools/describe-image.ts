@@ -3,7 +3,6 @@ import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -58,18 +57,7 @@ export function describeImageDef(fs: ClipfirstFs): ToolDef {
       if (!createResult.ok) {
         return error(`Failed to create script asset: ${createResult.error.message}`);
       }
-      const { assetId: scriptAssetId, path: scriptAssetDir } = createResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "describe_image",
-          assetId: scriptAssetId,
-          assetDir: scriptAssetDir,
-          meta: { sourceAssetId: asset_id },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${scriptAssetId}: ${_ptResult.error.message}`);
-      }
+      const { assetId: scriptAssetId } = createResult.value;
 
       const jobId = `describe-image-${asset_id}-${Date.now()}`;
       await queue.enqueue(jobId, {

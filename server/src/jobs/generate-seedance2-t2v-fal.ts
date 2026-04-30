@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type Payload = {
@@ -16,29 +17,31 @@ type Payload = {
 };
 
 export function registerGenerateSeedance2T2vFalJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_seedance2_t2v_fal", async (payload) => {
+  registerJobHandler("generate_seedance2_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-
-    const input: Record<string, unknown> = {
-      prompt: p.prompt,
-      ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
-      ...(p.duration !== undefined ? { duration: p.duration } : {}),
-      ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
-      ...(p.generate_audio !== undefined ? { generate_audio: p.generate_audio } : {}),
-      ...(p.seed !== undefined ? { seed: p.seed } : {}),
-    };
-
-    const taskId = await submitFalJob({
-      fs,
-      projectSlug: p.projectSlug,
-      assetId: p.vidAssetId,
-      assetDir: p.vidAssetDir,
-      endpointId: "bytedance/seedance-2.0/text-to-video",
-      input,
-      taskType: "fal_seedance2_t2v",
-      meta: { prompt: p.prompt, mode: "t2v", sourceImageIds: [], return_last_frame: false },
-    });
-
-    return { success: true, taskId };
+    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+  
+      const input: Record<string, unknown> = {
+        prompt: p.prompt,
+        ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
+        ...(p.duration !== undefined ? { duration: p.duration } : {}),
+        ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
+        ...(p.generate_audio !== undefined ? { generate_audio: p.generate_audio } : {}),
+        ...(p.seed !== undefined ? { seed: p.seed } : {}),
+      };
+  
+      const taskId = await submitFalJob({
+        fs,
+        projectSlug: p.projectSlug,
+        assetId: p.vidAssetId,
+        assetDir: p.vidAssetDir,
+        endpointId: "bytedance/seedance-2.0/text-to-video",
+        input,
+        taskType: "fal_seedance2_t2v",
+        meta: { prompt: p.prompt, mode: "t2v", sourceImageIds: [], return_last_frame: false },
+        expectedOwnerId: ownerId,
+      });
+  
+      return { taskId, result: { success: true, taskId } };    });
   });
 }

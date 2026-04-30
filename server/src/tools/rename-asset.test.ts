@@ -33,14 +33,24 @@ describe("rename_asset tool", () => {
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
     );
 
-    const result = await client.callTool({
-      name: "rename_asset",
-      arguments: {
-        asset_id: uploaded.assetId,
-        new_name: "sunset beach",
-        project_slug: "test-proj",
-      },
-    });
+    // Wait for the auto-enqueued process_image job to settle. fake-png-data
+    // is not a real PNG so the handler errors out — the rename gate refuses
+    // while status='working', so we poll until the lease releases.
+    const deadline = Date.now() + 5000;
+    let result: Awaited<ReturnType<typeof client.callTool>> | null = null;
+    while (Date.now() < deadline) {
+      result = await client.callTool({
+        name: "rename_asset",
+        arguments: {
+          asset_id: uploaded.assetId,
+          new_name: "sunset beach",
+          project_slug: "test-proj",
+        },
+      });
+      if (!result.isError) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!result) throw new Error("rename never attempted");
 
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text

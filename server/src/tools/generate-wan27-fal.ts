@@ -1,7 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
@@ -34,17 +33,6 @@ export function generateWan27FalDef(fs: ClipfirstFs): ToolDef {
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "fal_wan27",
-          assetId: imgAssetId,
-          assetDir: imgAssetDir,
-          meta: { prompt, sourceImageIds: [] },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `fal-wan27-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type Payload = {
@@ -15,33 +16,35 @@ type Payload = {
 };
 
 export function registerGenerateWan27FalJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_fal", async (payload) => {
+  registerJobHandler("generate_wan27_fal", async (payload, ctx) => {
     const p = payload as Payload;
-
-    const input: Record<string, unknown> = {
-      prompt: p.prompt,
-      ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
-      ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
-      ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
-      ...(p.seed !== undefined ? { seed: p.seed } : {}),
-    };
-
-    const taskId = await submitFalJob({
-      fs,
-      projectSlug: p.projectSlug,
-      assetId: p.imgAssetId,
-      assetDir: p.imgAssetDir,
-      endpointId: "fal-ai/wan/v2.7/text-to-image",
-      input,
-      taskType: "fal_wan27",
-      meta: {
+    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+  
+      const input: Record<string, unknown> = {
         prompt: p.prompt,
-        sourceImageIds: [],
-        ...(p.image_size !== undefined ? { imageSize: p.image_size } : {}),
+        ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
+        ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
+        ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
         ...(p.seed !== undefined ? { seed: p.seed } : {}),
-      },
-    });
-
-    return { success: true, taskId };
+      };
+  
+      const taskId = await submitFalJob({
+        fs,
+        projectSlug: p.projectSlug,
+        assetId: p.imgAssetId,
+        assetDir: p.imgAssetDir,
+        endpointId: "fal-ai/wan/v2.7/text-to-image",
+        input,
+        taskType: "fal_wan27",
+        meta: {
+          prompt: p.prompt,
+          sourceImageIds: [],
+          ...(p.image_size !== undefined ? { imageSize: p.image_size } : {}),
+          ...(p.seed !== undefined ? { seed: p.seed } : {}),
+        },
+        expectedOwnerId: ownerId,
+      });
+  
+      return { taskId, result: { success: true, taskId } };    });
   });
 }

@@ -7,11 +7,6 @@ import { queue, reconcileQueueOnStartup } from "./queue.js";
 import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
-import {
-  cleanOrphanedQueuedTasks,
-  cleanStaleLockRaceErrors,
-  resetStaleCompletingTasks,
-} from "./jobs/startup-cleanup.js";
 
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const reaperHandles: { stop: () => void }[] = [];
@@ -94,14 +89,6 @@ async function start(): Promise<void> {
       intervalMs: ASSET_REAPER_INTERVAL_MS,
     });
     if (reaper) reaperHandles.push(reaper);
-  }
-  const orphanedQueued = await cleanOrphanedQueuedTasks(fs);
-  const staleCompleting = await resetStaleCompletingTasks(fs);
-  const staleLockErrors = await cleanStaleLockRaceErrors(fs);
-  if (orphanedQueued > 0 || staleCompleting > 0 || staleLockErrors > 0) {
-    console.log(
-      `[startup] sidecar cleanup: orphaned=${orphanedQueued} completing=${staleCompleting} lockErrors=${staleLockErrors}`,
-    );
   }
   await reconcileQueueOnStartup();
   const PORT = process.env.PORT ?? 3001;

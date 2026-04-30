@@ -38,7 +38,7 @@ async function uploadSingle(
 }
 
 export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_videoedit_video", async (payload) => {
+  registerJobHandler("generate_wan27_videoedit_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       videoInput, imageInput,
@@ -76,6 +76,7 @@ export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
 import {
   buildResponses,
   firstResponseText,
@@ -145,7 +146,7 @@ function formatTldrMarkdown(r: DescribeImageResult): string {
 }
 
 export function registerRewriteScriptJob(fs: ClipfirstFs): void {
-  registerJobHandler("rewrite_script", async (payload) => {
+  registerJobHandler("rewrite_script", async (payload, ctx) => {
     const {
       assetId: scriptAssetId,
       sourceAssetId,
@@ -155,54 +156,54 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
       customPrompt,
     } = payload as RewriteScriptPayload;
 
-    console.log(
-      `[rewrite_script] START script=${scriptAssetId} project=${projectSlug} ` +
-      `tldr=${!!tldr} platform=${platform ?? "none"} ` +
-      `customPrompt=${customPrompt ? `"${customPrompt.slice(0, 40)}..."` : "none"}`,
-    );
+    return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
+      console.log(
+        `[rewrite_script] START script=${scriptAssetId} project=${projectSlug} ` +
+        `tldr=${!!tldr} platform=${platform ?? "none"} ` +
+        `customPrompt=${customPrompt ? `"${customPrompt.slice(0, 40)}..."` : "none"}`,
+      );
 
-    const responses = buildResponses(process.env.XAI_API_KEY);
+      const responses = buildResponses(process.env.XAI_API_KEY);
 
-    const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
-    if (!readResult.ok) {
-      throw new Error(`Failed to read ${SCRIPT_FILENAME} from ${scriptAssetId}: ${readResult.error.message}`);
-    }
-    const currentMarkdown = Buffer.from(readResult.value).toString("utf-8");
-    const current = parseMarkdownToResult(currentMarkdown);
-    if (!current.prompt) {
-      throw new Error(`Script ${scriptAssetId} has no parseable prompt in ${SCRIPT_FILENAME}`);
-    }
+      const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
+      if (!readResult.ok) {
+        throw new Error(`Failed to read ${SCRIPT_FILENAME} from ${scriptAssetId}: ${readResult.error.message}`);
+      }
+      const currentMarkdown = Buffer.from(readResult.value).toString("utf-8");
+      const current = parseMarkdownToResult(currentMarkdown);
+      if (!current.prompt) {
+        throw new Error(`Script ${scriptAssetId} has no parseable prompt in ${SCRIPT_FILENAME}`);
+      }
 
-    const rewritten = await rewriteText(responses, current, {
-      tldr: tldr === true,
-      platform: platform ?? null,
-      customPrompt: customPrompt ?? null,
+      const rewritten = await rewriteText(responses, current, {
+        tldr: tldr === true,
+        platform: platform ?? null,
+        customPrompt: customPrompt ?? null,
+      });
+
+      const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
+      const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+      if (!writeResult.ok) {
+        throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
+      }
+
+      await fs.writeMetadata(
+        scriptAssetId,
+        "original",
+        {
+          origin: "describe_image",
+          sourceAssetId,
+          model: VISION_MODEL,
+          processed_at: new Date().toISOString(),
+          variant: tldr ? "tldr" : "full",
+          ...(platform ? { platform } : {}),
+          ...(customPrompt ? { customPrompt } : {}),
+        },
+        projectSlug,
+      );
+
+      console.log(`[rewrite_script] DONE ${scriptAssetId} (${rewritten.prompt.length} chars)`);
+      return { success: true, scriptAssetId, prompt: rewritten.prompt };
     });
-
-    const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
-    const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
-    if (!writeResult.ok) {
-      throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
-    }
-
-    await fs.writeMetadata(
-      scriptAssetId,
-      "original",
-      {
-        origin: "describe_image",
-        sourceAssetId,
-        model: VISION_MODEL,
-        processed_at: new Date().toISOString(),
-        variant: tldr ? "tldr" : "full",
-        ...(platform ? { platform } : {}),
-        ...(customPrompt ? { customPrompt } : {}),
-      },
-      projectSlug,
-    );
-
-    await fs.pendingTasks.delete(projectSlug, scriptAssetId);
-
-    console.log(`[rewrite_script] DONE ${scriptAssetId} (${rewritten.prompt.length} chars)`);
-    return { success: true, scriptAssetId, prompt: rewritten.prompt };
   });
 }

@@ -3,7 +3,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import { findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
@@ -88,22 +87,6 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "grok_imagine_extend_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            sourceVideoId: asset_id,
-            prompt,
-            ...(extend_at !== undefined ? { extend_at } : {}),
-            ...(extend_times !== undefined ? { extend_times } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `grok-imagine-extend-video-${vidAssetId}-${Date.now()}`;
 

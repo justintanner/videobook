@@ -4,7 +4,6 @@ import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema 
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "clipfirst-engine";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -128,23 +127,6 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds = imageInput ? [imageInput.assetId] : [];
       const sourceVideoIds = [videoInput.assetId];
       const sourceAudioIds: string[] = [];
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "wan27_videoedit_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: {
-            prompt: prompt ?? "",
-            mode: "videoedit",
-            sourceImageIds,
-            sourceVideoIds,
-            sourceAudioIds,
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `wan27-videoedit-${vidAssetId}-${Date.now()}`;
 

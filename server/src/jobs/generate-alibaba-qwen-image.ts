@@ -26,6 +26,7 @@ async function runQwenImageJob(
   fs: ClipfirstFs,
   payload: GenerateAlibabaQwenImagePayload,
   taskType: "alibaba_qwen_image" | "alibaba_qwen_image_edit",
+  ctx: import("../queue.js").JobHandlerContext,
 ): Promise<{ success: true; requestId: string }> {
   const {
     prompt, imageInputs, imgAssetId, imgAssetDir, sourceImageIds,
@@ -63,11 +64,21 @@ async function runQwenImageJob(
   }
   if (resultUrls.length === 0) throw new Error("Alibaba Qwen response contained no image URLs");
 
-  const existingTaskRes = await fs.pendingTasks.read(projectSlug, imgAssetId);
-  const existingTask = existingTaskRes.ok ? existingTaskRes.value : null;
-  if (existingTask) {
-    await fs.pendingTasks.markCompleting(projectSlug, imgAssetId);
+  // Hand off to the downstream completion job: write a pending_tasks row so
+  // complete_kie_task can claim the lease via getOwner+setLease, then mark
+  // completing so a duplicate dispatch is skipped.
+  const ptResult = await fs.pendingTasks.write(projectSlug, {
+    taskId: response.request_id,
+    taskType,
+    assetId: imgAssetId,
+    assetDir: imgAssetDir,
+    meta: { sourceImageIds, prompt, model },
+  });
+  if (!ptResult.ok) {
+    throw new Error(`Failed to write pending-task for ${imgAssetId}: ${ptResult.error.message}`);
   }
+  ctx.setLease({ kind: "task", taskId: response.request_id });
+  await fs.pendingTasks.markCompleting(projectSlug, imgAssetId);
 
   const jobId = `complete-alibaba-qwen-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
@@ -95,13 +106,13 @@ async function runQwenImageJob(
 }
 
 export function registerGenerateAlibabaQwenImageJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_alibaba_qwen_image", async (payload) => {
-    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image");
+  registerJobHandler("generate_alibaba_qwen_image", async (payload, ctx) => {
+    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image", ctx);
   });
 }
 
 export function registerGenerateAlibabaQwenImageEditJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_alibaba_qwen_image_edit", async (payload) => {
-    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image_edit");
+  registerJobHandler("generate_alibaba_qwen_image_edit", async (payload, ctx) => {
+    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image_edit", ctx);
   });
 }

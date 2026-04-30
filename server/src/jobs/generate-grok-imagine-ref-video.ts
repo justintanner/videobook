@@ -22,7 +22,7 @@ type GenerateGrokImagineRefVideoPayload = {
 };
 
 export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_grok_imagine_ref_video", async (payload) => {
+  registerJobHandler("generate_grok_imagine_ref_video", async (payload, ctx) => {
     const {
       prompt, vidAssetId, vidAssetDir, projectSlug,
       refImages, duration, resolution, aspectRatio,
@@ -62,6 +62,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId: request_id });
 
     return { success: true, requestId: request_id, provider: "xai" };
   });

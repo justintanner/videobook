@@ -25,7 +25,7 @@ type ExtendWan27VideoPayload = {
 };
 
 export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("extend_wan27_video", async (payload) => {
+  registerJobHandler("extend_wan27_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       sourceVideo,
@@ -62,6 +62,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });

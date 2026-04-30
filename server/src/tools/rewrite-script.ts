@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 type RewriteVariant = "full" | "tldr";
@@ -69,23 +68,6 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
       const scriptManifest = await fs.getManifest(asset_id, project_slug);
       if (!scriptManifest.ok) {
         return error(scriptManifest.error.message);
-      }
-      const scriptAssetDir = scriptManifest.value.path;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "rewrite_script",
-          assetId: asset_id,
-          assetDir: scriptAssetDir,
-          meta: {
-            sourceAssetId,
-            variant,
-            ...(platform ? { platform } : {}),
-            ...(custom_prompt ? { customPrompt: custom_prompt } : {}),
-          },
-      });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${asset_id}: ${_ptResult.error.message}`);
       }
 
       const jobId = `rewrite-script-${variant}-${asset_id}-${Date.now()}`;

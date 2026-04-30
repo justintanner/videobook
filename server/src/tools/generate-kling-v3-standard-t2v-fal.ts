@@ -2,7 +2,6 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3StandardTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { QUEUED_TASK_ID } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
@@ -39,17 +38,6 @@ export function generateKlingV3StandardT2vFalDef(fs: ClipfirstFs): ToolDef {
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-
-      {
-        const _ptResult = await fs.pendingTasks.write(project_slug, {
-          taskId: QUEUED_TASK_ID,
-          taskType: "fal_kling_v3_standard_t2v",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
-          meta: { prompt, mode: "t2v", sourceImageIds: [] },
-        });
-        if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      }
 
       const jobId = `fal-kling-v3-std-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -17,7 +17,6 @@ import {
   type JobState,
   QueueRunner,
   createFs,
-  getStateDb,
   isValidProjectSlug,
   queueApi,
   closeStateDb,
@@ -105,44 +104,6 @@ function projectDirFor(slug: string): string {
     throw new Error(`Invalid project slug: ${slug}`);
   }
   return path.join(activeProjectsDir, slug);
-}
-
-const QUEUE_PENDING_DEADLINE_MS = 5 * 60_000;
-
-/**
- * Write/refresh the assets row at status='pending' for a freshly enqueued
- * asset-scoped job. Never overwrites an active owner — the CAS guard ensures
- * a row in 'working' (someone is mid-work) is left alone.
- */
-function writePendingAssetRow(
-  projectDir: string,
-  assetId: string,
-  jobType: string,
-): void {
-  try {
-    const db = getStateDb(projectDir);
-    const now = Date.now() / 1000;
-    db.prepare(
-      `INSERT INTO assets (asset_id, status, meta, owner_id, owner_kind, pid, deadline_at, updated_at)
-       VALUES (?, 'pending', json_object('kind', ?, 'queued', json('true')), NULL, 'job', NULL, ?, ?)
-       ON CONFLICT(asset_id) DO UPDATE SET
-         status='pending',
-         meta=json_set(COALESCE(meta,'{}'), '$.queued', json('true'), '$.kind', ?),
-         deadline_at=?,
-         updated_at=?
-       WHERE assets.owner_id IS NULL`,
-    ).run(
-      assetId,
-      jobType,
-      now + QUEUE_PENDING_DEADLINE_MS / 1000,
-      now,
-      jobType,
-      now + QUEUE_PENDING_DEADLINE_MS / 1000,
-      now,
-    );
-  } catch {
-    // tolerate; recovery sweeps strays.
-  }
 }
 
 function makeWrappedResolver(): (type: string) => JobHandler | null {
@@ -337,8 +298,6 @@ function buildEnqueueOptions(jobId: string, payload: JobPayload) {
 export const queue: Queue = {
   enqueue: async (jobId, payload) => {
     const { slug, dir } = await ensureProjectReady(jobId, payload);
-    const assetId = extractAssetId(payload);
-    if (assetId) writePendingAssetRow(dir, assetId, extractType(payload));
     const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
     jobIdIndex.set(jobId, { slug, internalId: result.job.id });
   },
@@ -348,9 +307,7 @@ export const queue: Queue = {
     payload: JobPayload,
     timeoutMs = 300_000,
   ): Promise<T> => {
-    const { slug, dir } = await ensureProjectReady(jobId, payload);
-    const assetId = extractAssetId(payload);
-    if (assetId) writePendingAssetRow(dir, assetId, extractType(payload));
+    const { slug } = await ensureProjectReady(jobId, payload);
     return fsRef.current.queue.enqueueAndWait<T>(
       slug,
       buildEnqueueOptions(jobId, payload),

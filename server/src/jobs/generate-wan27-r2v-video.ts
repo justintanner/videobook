@@ -51,7 +51,7 @@ async function uploadSingle(
 }
 
 export function registerGenerateWan27R2vVideoJob(fs: ClipfirstFs): void {
-  registerJobHandler("generate_wan27_r2v_video", async (payload) => {
+  registerJobHandler("generate_wan27_r2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
       imageInputs, videoInputs, firstFrame, voiceRef,
@@ -91,6 +91,7 @@ export function registerGenerateWan27R2vVideoJob(fs: ClipfirstFs): void {
     });
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
     }
+    ctx.setLease({ kind: "task", taskId });
 
     return { success: true, taskId };
   });
