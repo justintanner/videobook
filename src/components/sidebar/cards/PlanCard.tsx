@@ -15,7 +15,7 @@ interface PlanCardProps {
 export function PlanCard({ item, contextMenuContent, selected, onClick }: PlanCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
-  const isCorrupt = status === 'corrupt';
+  const isCorrupt = false;
   const planText = item.prompt;
 
   return (

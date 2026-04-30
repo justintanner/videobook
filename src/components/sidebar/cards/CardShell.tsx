@@ -11,9 +11,7 @@ import {
   GeneratingOverlay,
   RenderingOverlay,
   ElfBuildingOverlay,
-  UntranscribedOverlay,
   TranscribingOverlay,
-  CorruptOverlay,
   FailedOverlay,
   LoadingOverlay,
   DeletingOverlay,
@@ -72,8 +70,6 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'generating' && type !== 'final') return <GeneratingOverlay item={item} />;
   if (isRenderingState(status)) return type === 'final' ? <ElfBuildingOverlay item={item} /> : <RenderingOverlay item={item} />;
   if (status === 'transcribing' && (type === 'video' || type === 'audio')) return <TranscribingOverlay item={item} />;
-  if (status === 'untranscribed' && (type === 'video' || type === 'audio')) return <UntranscribedOverlay item={item} />;
-  if (status === 'corrupt' && type !== 'final') return <CorruptOverlay item={item} />;
   if (status === 'error' && type !== 'script') return <FailedOverlay item={item} />;
   if (status === 'loading') return <LoadingOverlay item={item} />;
   if (status === 'deleting') return <DeletingOverlay item={item} />;
@@ -105,9 +101,7 @@ const stateClassMap: Partial<Record<ClipState, string>> = {
   'render-queued-portrait': 'clip-state-rendering cursor-wait',
   'rendering-square': 'clip-state-rendering cursor-wait',
   'render-queued-square': 'clip-state-rendering cursor-wait',
-  untranscribed: 'clip-state-untranscribed cursor-wait',
   transcribing: 'clip-state-transcribing cursor-pointer',
-  corrupt: 'clip-state-corrupt cursor-pointer',
   loading: 'clip-state-loading cursor-wait',
   deleting: 'clip-state-deleting pointer-events-none cursor-default',
 };
@@ -125,9 +119,7 @@ function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, i
     downloading: 'rgba(34, 197, 94, 0.7)',
     generating: 'rgba(34, 197, 94, 0.7)',
     rendering: 'rgba(0, 255, 255, 0.7)',
-    untranscribed: 'rgba(0, 255, 255, 0.4)',
     transcribing: 'rgba(0, 255, 255, 0.7)',
-    corrupt: 'rgba(255, 0, 128, 0.7)',
     loading: 'rgba(0, 255, 255, 0.5)',
   };
 

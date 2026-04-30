@@ -12,8 +12,7 @@ interface ScriptCardProps {
 }
 
 export function ScriptCard({ item, contextMenuContent, selected, onClick }: ScriptCardProps) {
-  const status = item.status ?? 'ready';
-  const isCorrupt = status === 'corrupt';
+  const isCorrupt = false;
   const scriptText = item.prompt;
 
   return (

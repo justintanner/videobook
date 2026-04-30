@@ -24,8 +24,6 @@ export type ClipState =
   | 'render-queued-square'
   | 'downloading'
   | 'transcribing'
-  | 'untranscribed'
-  | 'corrupt'
   | 'error'
   | 'deleting'
   | 'ready';

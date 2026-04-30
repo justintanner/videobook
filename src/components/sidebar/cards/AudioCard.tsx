@@ -16,7 +16,7 @@ interface AudioCardProps {
 export function AudioCard({ item, contextMenuContent, selected, onClick }: AudioCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
-  const isCorrupt = status === 'corrupt';
+  const isCorrupt = false;
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>

@@ -30,6 +30,21 @@ import type { ToolDef } from "./tool-def.js";
  *  "waiting" state indefinitely. */
 const PENDING_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
+export type AssetWorkProjection = {
+  /** New 4-status enum from the assets materialized table. */
+  status: "pending" | "working" | "ready" | "error";
+  meta: {
+    kind?: string | null;
+    orientation?: "portrait" | "landscape" | "square" | null;
+    queued?: boolean;
+    progress?: number | null;
+    error?: { message: string; code: string | null } | null;
+    [k: string]: unknown;
+  };
+  ownerKind: "job" | "provider" | null;
+  deadlineAt: number | null;
+};
+
 export type SyncAsset = {
   id: string;
   type: string;
@@ -38,6 +53,10 @@ export type SyncAsset = {
   media_url: string | null;
   thumbnail_url: string | null;
   status: string;
+  /** New (cutover step 7): durable status from the assets table. UI should
+   *  prefer assetWork.status + assetWork.meta when present; the legacy
+   *  `status` string remains for back-compat with older clients. */
+  assetWork: AssetWorkProjection | null;
   width: number | null;
   height: number | null;
   origin: string | null;
@@ -244,12 +263,13 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [manifestResult, lockData, pendingTask, generationError, metadata] = await Promise.all([
+      const [manifestResult, lockData, pendingTask, generationError, metadata, assetWorkRow] = await Promise.all([
         fs.getManifest(a.id, project_slug, { includeDotfiles: true }),
         fs.getLockData(a.path),
         fs.pendingTasks.read(project_slug, a.id),
         fs.generationErrors.read(project_slug, a.id),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
+        fs.assetWork.read(project_slug, a.id),
       ]);
 
       // If the asset directory disappeared between listAssets and getManifest,
@@ -332,11 +352,22 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         if (md.ok) prompt = md.value.toString();
       }
 
+      const assetWork: AssetWorkProjection | null =
+        assetWorkRow.ok && assetWorkRow.value
+          ? {
+              status: assetWorkRow.value.status,
+              meta: assetWorkRow.value.meta as AssetWorkProjection["meta"],
+              ownerKind: assetWorkRow.value.ownerKind,
+              deadlineAt: assetWorkRow.value.deadlineAt,
+            }
+          : null;
+
       return {
         ...a,
         media_url,
         thumbnail_url,
         status,
+        assetWork,
         width: (meta?.width as number) ?? null,
         height: (meta?.height as number) ?? null,
         origin: (meta?.origin as string) ?? null,

@@ -30,10 +30,6 @@ function getStatusDot(status: ClipState | undefined): string | null {
       return 'bg-green-500 animate-pulse';
     case 'error':
       return 'bg-red-500';
-    case 'corrupt':
-      return 'bg-pink-500';
-    case 'untranscribed':
-      return 'bg-primary/50';
     default:
       return null;
   }

@@ -13,6 +13,9 @@ import {
   resetStaleCompletingTasks,
 } from "./jobs/startup-cleanup.js";
 
+const ASSET_REAPER_INTERVAL_MS = 30_000;
+const reaperHandles: { stop: () => void }[] = [];
+
 const app = express();
 app.use(cors());
 app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
@@ -77,6 +80,20 @@ async function start(): Promise<void> {
         `[startup] aborted ${aborted} orphan operation(s) in ${project.slug}`,
       );
     }
+    // Backfill the assets table from disk + tables. Replaces the old
+    // sidecar-cleanup helpers for completing/queued/lock-race rows once the
+    // assets table is the projected source of truth.
+    const recovered = await fs.recoverAssetsTable(project.slug);
+    if (recovered.ok) {
+      console.log(
+        `[startup] recovered ${recovered.value.recovered} asset row(s) in ${project.slug}`,
+      );
+    }
+    // Start the deadline-driven reaper for this project.
+    const reaper = await fs.startAssetReaper(project.slug, {
+      intervalMs: ASSET_REAPER_INTERVAL_MS,
+    });
+    if (reaper) reaperHandles.push(reaper);
   }
   const orphanedQueued = await cleanOrphanedQueuedTasks(fs);
   const staleCompleting = await resetStaleCompletingTasks(fs);
@@ -94,12 +111,14 @@ async function start(): Promise<void> {
 }
 
 process.on("SIGINT", async () => {
+  for (const h of reaperHandles) h.stop();
   await queue.stop();
   fs.close();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
+  for (const h of reaperHandles) h.stop();
   await queue.stop();
   fs.close();
   process.exit(0);

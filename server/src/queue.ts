@@ -12,10 +12,12 @@ import * as fsp from "node:fs/promises";
 
 import {
   type ClipfirstFs,
+  type Job,
   type JobHandler,
   type JobState,
   QueueRunner,
   createFs,
+  getStateDb,
   isValidProjectSlug,
   queueApi,
   closeStateDb,
@@ -34,13 +36,33 @@ async function projectExists(dir: string): Promise<boolean> {
 
 type JobPayload = Record<string, unknown>;
 
-const handlers = new Map<string, JobHandler>();
+/**
+ * Lease token registered by a handler so the queue wrapper's catch can
+ * CAS-fail the correct owner. Handlers that hold a local lease pass `owner`
+ * (their beginAssetWork ownerId); handlers that observed a provider task pass
+ * `task` (the task_id). A handler that dies before registering is in the
+ * "queued-but-unclaimed" state, which the wrapper falls back to.
+ */
+export type LeaseToken =
+  | { kind: "owner"; ownerId: string }
+  | { kind: "task"; taskId: string };
+
+export interface JobHandlerContext {
+  setLease(token: LeaseToken): void;
+}
+
+export type ServerJobHandler = (
+  payload: Record<string, unknown>,
+  ctx: JobHandlerContext,
+) => Promise<unknown>;
+
+const handlers = new Map<string, ServerJobHandler>();
 
 export function registerJobHandler(
   type: string,
-  handler: (payload: Record<string, unknown>) => Promise<unknown>,
+  handler: ServerJobHandler,
 ): void {
-  handlers.set(type, async (job) => handler(job.payload));
+  handlers.set(type, handler);
 }
 
 function extractProjectSlug(payload: Record<string, unknown>): string | null {
@@ -76,9 +98,6 @@ interface RunnerInfo {
 }
 const runnerByProject = new Map<string, RunnerInfo>();
 
-// Maps the user-facing jobId (string) → the project + internal numeric row id
-// so getStatus/waitForJob can locate a job in O(1) without scanning every
-// project. Populated on enqueue + enqueueAndWait; cleared on stop/setProjectsDir.
 const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
 
 function projectDirFor(slug: string): string {
@@ -88,49 +107,142 @@ function projectDirFor(slug: string): string {
   return path.join(activeProjectsDir, slug);
 }
 
+const QUEUE_PENDING_DEADLINE_MS = 5 * 60_000;
+
+/**
+ * Write/refresh the assets row at status='pending' for a freshly enqueued
+ * asset-scoped job. Never overwrites an active owner — the CAS guard ensures
+ * a row in 'working' (someone is mid-work) is left alone.
+ */
+function writePendingAssetRow(
+  projectDir: string,
+  assetId: string,
+  jobType: string,
+): void {
+  try {
+    const db = getStateDb(projectDir);
+    const now = Date.now() / 1000;
+    db.prepare(
+      `INSERT INTO assets (asset_id, status, meta, owner_id, owner_kind, pid, deadline_at, updated_at)
+       VALUES (?, 'pending', json_object('kind', ?, 'queued', json('true')), NULL, 'job', NULL, ?, ?)
+       ON CONFLICT(asset_id) DO UPDATE SET
+         status='pending',
+         meta=json_set(COALESCE(meta,'{}'), '$.queued', json('true'), '$.kind', ?),
+         deadline_at=?,
+         updated_at=?
+       WHERE assets.owner_id IS NULL`,
+    ).run(
+      assetId,
+      jobType,
+      now + QUEUE_PENDING_DEADLINE_MS / 1000,
+      now,
+      jobType,
+      now + QUEUE_PENDING_DEADLINE_MS / 1000,
+      now,
+    );
+  } catch {
+    // tolerate; recovery sweeps strays.
+  }
+}
+
 function makeWrappedResolver(): (type: string) => JobHandler | null {
   return (type) => {
     const handler = handlers.get(type);
     if (!handler) return null;
-    return async (job) => {
+    return async (job: Job) => {
+      let lease: LeaseToken | null = null;
+      const ctx: JobHandlerContext = {
+        setLease(token) {
+          if (lease !== null) {
+            // Allow re-registration of the same shape (idempotent), or
+            // allow owner→task transition (Pattern A handoff).
+            if (lease.kind === token.kind) {
+              if (lease.kind === "owner" && token.kind === "owner") {
+                if (lease.ownerId !== token.ownerId) {
+                  throw new Error(
+                    `setLease: cannot replace existing owner lease`,
+                  );
+                }
+              } else if (lease.kind === "task" && token.kind === "task") {
+                if (lease.taskId !== token.taskId) {
+                  throw new Error(
+                    `setLease: cannot replace existing task lease`,
+                  );
+                }
+              }
+              return;
+            }
+            if (lease.kind === "owner" && token.kind === "task") {
+              // Allowed: Pattern A handoff from local job lease to provider task lease.
+              lease = token;
+              return;
+            }
+            throw new Error(
+              `setLease: invalid lease transition ${lease.kind}→${token.kind}`,
+            );
+          }
+          lease = token;
+        },
+      };
+
       try {
-        return await handler(job);
+        return await handler(job.payload, ctx);
       } catch (error: unknown) {
-        // On handler error, clear the asset's pending-task sidecar and write
-        // .generation-error.json so /inbox doesn't show "generating" forever.
-        // The fs.queue layer separately marks the SQLite job row as failed via
-        // the runner's own catch.
-        //
-        // Fire-and-forget: the runner shouldn't block on this best-effort
-        // sidecar cleanup. If the project dir was torn down (test cleanup,
-        // shutdown), proper-lockfile may retry for many seconds while
-        // mkdir(.project.lock) hits ENOENT, holding the runner from draining.
-        // We capture fsRef.current at throw time so the cleanup targets the
-        // active projectsDir, not stale defaultFs.
         const assetId = extractAssetId(job.payload);
         const projectSlug = extractProjectSlug(job.payload);
+        const message =
+          error instanceof Error ? error.message : String(error);
+
         if (assetId && projectSlug) {
           const fsForCleanup = fsRef.current;
-          const message = error instanceof Error ? error.message : String(error);
-          void fsForCleanup.pendingTasks
-            .fail(projectSlug, assetId, { message })
-            .then((r) => {
-              if (!r.ok) return;
-              return fsForCleanup
-                .logAction("job-error", { assetId, error: message }, projectSlug)
-                .catch(() => {});
-            })
-            .then(() => {
-              console.error(
-                `[queue] cleared pending task for ${assetId} in ${projectSlug}`,
-              );
-            })
-            .catch(() => {});
+          await dispatchFailure(
+            fsForCleanup,
+            projectSlug,
+            assetId,
+            lease,
+            message,
+          );
         }
         throw error;
       }
     };
   };
+}
+
+async function dispatchFailure(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  assetId: string,
+  lease: LeaseToken | null,
+  message: string,
+): Promise<void> {
+  try {
+    if (lease?.kind === "owner") {
+      await fs.assetWork.fail(projectSlug, assetId, lease.ownerId, {
+        message,
+      });
+      await fs
+        .logAction("job-error", { assetId, error: message }, projectSlug)
+        .catch(() => {});
+      return;
+    }
+    if (lease?.kind === "task") {
+      await fs.pendingTasks.fail(projectSlug, assetId, lease.taskId, {
+        message,
+      });
+      await fs
+        .logAction("job-error", { assetId, error: message }, projectSlug)
+        .catch(() => {});
+      return;
+    }
+    // No lease registered. Force-fail by asset_id to clear any pending row.
+    await fs.pendingTasks.forceFail(projectSlug, assetId, { message });
+    await fs
+      .logAction("job-error", { assetId, error: message }, projectSlug)
+      .catch(() => {});
+  } catch {
+    // best-effort; nothing more we can do here
+  }
 }
 
 function ensureRunner(slug: string): RunnerInfo {
@@ -201,9 +313,6 @@ async function ensureProjectReady(
       `queue.enqueue requires payload.projectSlug; got jobId=${jobId} type=${String(payload.type)}`,
     );
   }
-  // Validate slug shape, then verify the project actually exists before
-  // touching SQLite — queueApi opens .clipfirst/ as a side-effect, which
-  // would silently spawn a phantom project directory for typos.
   const dir = projectDirFor(slug);
   if (!(await projectExists(dir))) {
     throw new Error(
@@ -216,11 +325,6 @@ async function ensureProjectReady(
 }
 
 function buildEnqueueOptions(jobId: string, payload: JobPayload) {
-  // Don't pass externalTaskId here: clipfirst-engine reserves that field for jobs
-  // that track an already-submitted external task, and starts those rows in
-  // "running" state — which means the runner skips them. clipfirst's jobId is
-  // just a client-side dedupe key, so dedupeKey + jobIdIndex (in-memory) is
-  // the right pairing.
   return {
     type: extractType(payload),
     assetId: extractAssetId(payload),
@@ -233,6 +337,8 @@ function buildEnqueueOptions(jobId: string, payload: JobPayload) {
 export const queue: Queue = {
   enqueue: async (jobId, payload) => {
     const { slug, dir } = await ensureProjectReady(jobId, payload);
+    const assetId = extractAssetId(payload);
+    if (assetId) writePendingAssetRow(dir, assetId, extractType(payload));
     const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
     jobIdIndex.set(jobId, { slug, internalId: result.job.id });
   },
@@ -242,7 +348,9 @@ export const queue: Queue = {
     payload: JobPayload,
     timeoutMs = 300_000,
   ): Promise<T> => {
-    const { slug } = await ensureProjectReady(jobId, payload);
+    const { slug, dir } = await ensureProjectReady(jobId, payload);
+    const assetId = extractAssetId(payload);
+    if (assetId) writePendingAssetRow(dir, assetId, extractType(payload));
     return fsRef.current.queue.enqueueAndWait<T>(
       slug,
       buildEnqueueOptions(jobId, payload),
@@ -261,11 +369,7 @@ export const queue: Queue = {
     };
   },
 
-  start: async () => {
-    // No-op in the new SQLite-backed queue: runners are created lazily on
-    // first enqueue per project. Use reconcileQueueOnStartup() from server
-    // boot to scan disk sidecars and reap stale leases.
-  },
+  start: async () => {},
 
   stop: async () => {
     const infos = Array.from(runnerByProject.values());
@@ -300,8 +404,7 @@ export async function waitForJob(
 
 /**
  * Test-only: redirect all queue operations to a different projectsDir, and
- * tear down any runners pointing at the previous one. Tests call this from
- * createTestClient so each test's queue talks to its own state.sqlite.
+ * tear down any runners pointing at the previous one.
  */
 export async function setProjectsDir(dir: string): Promise<void> {
   if (dir === activeProjectsDir) return;

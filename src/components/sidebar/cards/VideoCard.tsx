@@ -28,13 +28,13 @@ interface VideoCardProps {
 export function VideoCard({ item, contextMenuContent, selected, onClick, onDelete }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
-  const isCorrupt = status === 'corrupt';
+  const isCorrupt = false;
   const isUploading = status === 'uploading';
   const isDownloading = status === 'downloading';
   const isGenerating = status === 'generating';
   const isLoading = status === 'loading';
   const isTranscribing = status === 'transcribing';
-  const isUntranscribed = status === 'untranscribed';
+  const isUntranscribed = false;
   const isRendering = status.startsWith('render');
   const isProcessing = isTranscribing || isUntranscribed || isRendering;
   const hasOpaqueOverlay = isUploading || isDownloading || isGenerating || isLoading || isCorrupt;

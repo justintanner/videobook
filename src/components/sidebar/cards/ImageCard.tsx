@@ -15,7 +15,7 @@ interface ImageCardProps {
 export function ImageCard({ item, contextMenuContent, selected, onClick }: ImageCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
-  const isCorrupt = status === 'corrupt';
+  const isCorrupt = false;
   const isUploading = status === 'uploading';
   const isGenerating = status === 'generating';
   const isLoading = status === 'loading';
