@@ -115,6 +115,7 @@ const directProviderHandoffKinds = new Map<string, AssetWorkKind>([
   ["generate_grok_imagine_ref_video", "generate"],
   ["generate_grok_imagine_text_image", "generate"],
   ["generate_grok_imagine_video", "generate"],
+  ["generate_kling30_motion_control_video", "generate"],
   ["generate_kling30_video", "generate"],
   ["generate_nano_banana_image", "generate"],
   ["generate_qwen2_image_edit", "generate"],
