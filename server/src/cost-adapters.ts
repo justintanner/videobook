@@ -89,18 +89,77 @@ const kieKling30MotionControl: CostAdapter = (input) => ({
   },
 });
 
-// kie gpt-image-2 (image-to-image and text-to-image). Pricing tiers off
-// input.resolution ("1K"|"2K"|"4K") which the actual KIE payload does not
-// carry — the API picks size from aspect_ratio. Default to "1K" since that
-// is the cheapest, base-size output and matches an unconfigured request.
-const kieGptImage = (model: string): CostAdapter => (input) => ({
+// kie image-tier adapter: prices keyed by input.resolution ("1K"|"2K"|"4K").
+// gpt-image-2 doesn't carry resolution in its actual payload (the KIE API
+// picks size from aspect_ratio) — pass a default so an unconfigured request
+// still returns a price. nano-banana-pro and wan/2-7-image{,-pro} do accept
+// resolution, so we forward it when present.
+const kieTieredImage = (model: string, defaultResolution: string): CostAdapter => (input) => ({
   provider: "kie",
   payload: {
     model,
     input: {
-      resolution: str(input.resolution) || "1K",
+      resolution: str(input.resolution) || defaultResolution,
     },
   },
+});
+
+// kie flat per-image adapter for models that price one rate regardless of
+// shape (qwen2, seedream/5-lite). The rate table reads input.n (defaulting
+// to 1) — clipfirst tools never expose n, so we just leave it out.
+const kieFlatImage = (model: string): CostAdapter => () => ({
+  provider: "kie",
+  payload: { model, input: {} },
+});
+
+// kie flat per-second video adapter (wan/2-7-* video family — all priced at
+// $0.10/s regardless of resolution). The rate table reads input.duration in
+// seconds; clipfirst tools pass duration as a numeric string we coerce here.
+const kieFlatVideo = (model: string, defaultSeconds = 5): CostAdapter => (input) => ({
+  provider: "kie",
+  payload: {
+    model,
+    input: {
+      duration: num(input.duration) ?? defaultSeconds,
+    },
+  },
+});
+
+// kie resolution-tiered video adapter (grok-imagine + happyhorse). Both
+// families key per-second rates off input.resolution. happyhorse/video-edit
+// has no duration field upstream — clipfirst's tool also omits it — so we
+// fall back to defaultSeconds for a nonzero estimate.
+const kieResolutionVideo = (
+  model: string,
+  defaultResolution: string,
+  defaultSeconds = 5,
+): CostAdapter => (input) => ({
+  provider: "kie",
+  payload: {
+    model,
+    input: {
+      resolution: str(input.resolution) || defaultResolution,
+      duration: num(input.duration) ?? defaultSeconds,
+    },
+  },
+});
+
+// kie grok-imagine/text-to-image: 2 rates by enable_pro (false → $0.02,
+// true → $0.025). Per-call pricing — input shape is just the toggle.
+const kieGrokImagineTextImage: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "grok-imagine/text-to-image",
+    input: {
+      ...(input.enable_pro === true ? { enable_pro: true } : {}),
+    },
+  },
+});
+
+// kie grok-imagine/image-to-image: flat $0.02 per call.
+const kieGrokImagineImageEdit: CostAdapter = () => ({
+  provider: "kie",
+  payload: { model: "grok-imagine/image-to-image", input: {} },
 });
 
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
@@ -122,9 +181,45 @@ const ADAPTERS: Record<string, CostAdapter> = {
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
 
+  // --- KIE Wan 2.7 video (flat $0.10/s across all four endpoints) ---
+  generate_wan27_t2v_video: kieFlatVideo("wan/2-7-text-to-video"),
+  generate_wan27_i2v_video: kieFlatVideo("wan/2-7-image-to-video"),
+  generate_wan27_r2v_video: kieFlatVideo("wan/2-7-r2v"),
+  // videoedit upstream has no duration field (output matches source). Tool
+  // default is "0" which would zero out the estimate, so default to 5s.
+  generate_wan27_videoedit_video: kieFlatVideo("wan/2-7-videoedit"),
+  // extend reuses the i2v rate ($0.10/s). Tool exposes duration; default 5s.
+  extend_wan27_video: kieFlatVideo("wan/2-7-image-to-video"),
+
+  // --- KIE Grok Imagine video (resolution-tiered, $0.008/$0.015 per sec) ---
+  generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", "720p", 6),
+  generate_grok_imagine_t2v_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
+
+  // --- KIE HappyHorse video (resolution-tiered, $0.155/$0.265 per sec) ---
+  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse/text-to-video", "1080p"),
+  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse/image-to-video", "1080p"),
+  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse/reference-to-video", "1080p"),
+  generate_happyhorse_videoedit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
+
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
-  generate_gpt_image: kieGptImage("gpt-image-2-image-to-image"),
-  generate_gpt_image_text: kieGptImage("gpt-image-2-text-to-image"),
+  generate_gpt_image: kieTieredImage("gpt-image-2-image-to-image", "1K"),
+  generate_gpt_image_text: kieTieredImage("gpt-image-2-text-to-image", "1K"),
+
+  // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
+  generate_nano_banana_image: kieTieredImage("nano-banana-pro", "2K"),
+
+  // --- KIE Wan 2.7 image (per-image, tiered by resolution) ---
+  generate_wan27_image: kieTieredImage("wan/2-7-image", "2K"),
+  generate_wan27_image_pro: kieTieredImage("wan/2-7-image-pro", "2K"),
+
+  // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
+  generate_qwen2_image_edit: kieFlatImage("qwen2/image-edit"),
+  generate_seedream_text_image: kieFlatImage("seedream/5-lite-text-to-image"),
+  generate_seedream_image: kieFlatImage("seedream/5-lite-image-to-image"),
+
+  // --- KIE Grok Imagine images (flat per-call) ---
+  generate_grok_imagine_text_image: kieGrokImagineTextImage,
+  generate_grok_imagine_image: kieGrokImagineImageEdit,
 };
 
 export function getCostAdapter(toolName: string): CostAdapter | null {

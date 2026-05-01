@@ -85,6 +85,44 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.breakdown.inputTokens).toBe(100);
   });
 
+  it("prices every kie tool wired into cost-adapters with a >0 estimate", async () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      // Wan 2.7 video (flat $0.10/s)
+      ["generate_wan27_t2v_video", { duration: "5" }],
+      ["generate_wan27_i2v_video", { duration: "5" }],
+      ["generate_wan27_r2v_video", { duration: "5" }],
+      ["generate_wan27_videoedit_video", {}],
+      ["extend_wan27_video", { duration: "5" }],
+      // Grok-imagine video (resolution-tiered)
+      ["generate_grok_imagine_video", { resolution: "720p", duration: 6 }],
+      ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],
+      // HappyHorse video (resolution-tiered)
+      ["generate_happyhorse_t2v_video", { resolution: "1080p", duration: "5" }],
+      ["generate_happyhorse_i2v_video", { resolution: "720p", duration: "5" }],
+      ["generate_happyhorse_ref_video", { resolution: "1080p", duration: "5" }],
+      ["generate_happyhorse_videoedit_video", {}],
+      // Per-image (tiered + flat)
+      ["generate_nano_banana_image", { resolution: "2K" }],
+      ["generate_wan27_image", { resolution: "2K" }],
+      ["generate_wan27_image_pro", { resolution: "4K" }],
+      ["generate_qwen2_image_edit", {}],
+      ["generate_seedream_text_image", {}],
+      ["generate_seedream_image", {}],
+      ["generate_grok_imagine_text_image", { enable_pro: true }],
+      ["generate_grok_imagine_image", {}],
+    ];
+    for (const [tool_name, input] of cases) {
+      const result = await client.callTool({
+        name: "estimate_cost",
+        arguments: { calls: [{ tool_name, input }] },
+      });
+      const payload = parse(result);
+      expect(payload.estimate.warnings, `${tool_name} warnings`).toEqual([]);
+      expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
+      expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
+    }
+  });
+
   it("sums multiple calls into one summed estimate", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
