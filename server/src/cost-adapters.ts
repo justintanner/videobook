@@ -89,6 +89,20 @@ const kieKling30MotionControl: CostAdapter = (input) => ({
   },
 });
 
+// kie gpt-image-2 (image-to-image and text-to-image). Pricing tiers off
+// input.resolution ("1K"|"2K"|"4K") which the actual KIE payload does not
+// carry — the API picks size from aspect_ratio. Default to "1K" since that
+// is the cheapest, base-size output and matches an unconfigured request.
+const kieGptImage = (model: string): CostAdapter => (input) => ({
+  provider: "kie",
+  payload: {
+    model,
+    input: {
+      resolution: str(input.resolution) || "1K",
+    },
+  },
+});
+
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available).
 // Fal-backed tools have no entry: @apicity/cost dropped fal coverage when it
@@ -107,6 +121,10 @@ const ADAPTERS: Record<string, CostAdapter> = {
   generate_seedance2_reference_video: kieSeedance("i2v"),
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
+
+  // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
+  generate_gpt_image: kieGptImage("gpt-image-2-image-to-image"),
+  generate_gpt_image_text: kieGptImage("gpt-image-2-text-to-image"),
 };
 
 export function getCostAdapter(toolName: string): CostAdapter | null {

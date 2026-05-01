@@ -32,7 +32,7 @@ const stateText: Record<ExecuteButtonState, string | null> = {
   success: '/complete',
 };
 
-type SlotTone = 'normal' | 'stale' | 'error' | 'unknown' | 'loading';
+type SlotTone = 'normal' | 'stale' | 'loading';
 
 interface SlotState {
   text: string;
@@ -40,20 +40,13 @@ interface SlotState {
   tooltip: string;
 }
 
-function deriveSlotState(cost: UseEstimateCostResult): SlotState {
-  if (cost.error) {
-    return { text: '—', tone: 'error', tooltip: cost.error };
-  }
+function deriveSlotState(cost: UseEstimateCostResult): SlotState | null {
+  // Hide entirely on error or unknown — surfacing "—" inside the button reads as broken.
+  if (cost.error) return null;
   if (cost.loading && !cost.estimate) {
     return { text: '···', tone: 'loading', tooltip: 'Estimating…' };
   }
-  if (isUnknownEstimate(cost.estimate)) {
-    return {
-      text: '—',
-      tone: 'unknown',
-      tooltip: cost.estimate ? tooltipText(cost.estimate) : 'Unknown',
-    };
-  }
+  if (isUnknownEstimate(cost.estimate)) return null;
   const e = cost.estimate as NonNullable<typeof cost.estimate>;
   const text = `${isHeuristic(e) ? '~' : ''}${formatUsd(e.usd)}`;
   return { text, tone: cost.stale ? 'stale' : 'normal', tooltip: tooltipText(e) };
@@ -191,64 +184,66 @@ export function GenerateCommandButton({
         )}
       </div>
 
-      {/* Coin-slot zone (the LCD cost readout) */}
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              role={slotLocked ? undefined : 'button'}
-              tabIndex={-1}
-              onClick={handleSlotClick}
-              className={cn(
-                'relative z-10 flex items-center h-full px-2 gap-1 select-none',
-                'border-x border-current/20 bg-black/60',
-                'shadow-[inset_0_0_6px_rgba(0,0,0,0.85)]',
-                'overflow-hidden',
-                slotLocked ? 'cursor-default' : 'cursor-pointer hover:bg-black/80',
-                slot.tone === 'stale' && 'text-yellow-300',
-                slot.tone === 'error' && 'text-red-300',
-                slot.tone === 'unknown' && 'text-zinc-500',
-                slot.tone === 'loading' && 'text-current/60',
-                slot.tone === 'normal' && !isDisabledVisual && v.text,
-                slot.tone === 'normal' && isDisabledVisual && 'text-zinc-600',
-              )}
-            >
-              {/* Scanlines overlay — retro CRT readout */}
+      {/* Coin-slot zone — only when we have a real number (or are computing one) */}
+      {slot && (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <span
-                aria-hidden
-                className="absolute inset-0 pointer-events-none scanlines opacity-70"
-              />
+                role={slotLocked ? undefined : 'button'}
+                tabIndex={-1}
+                onClick={handleSlotClick}
+                className={cn(
+                  'relative z-10 flex items-center h-full px-2 gap-1 select-none',
+                  'border-x border-current/20 bg-black/60',
+                  'shadow-[inset_0_0_6px_rgba(0,0,0,0.85)]',
+                  'overflow-hidden',
+                  slotLocked ? 'cursor-default' : 'cursor-pointer hover:bg-black/80',
+                  slot.tone === 'loading' && 'text-current/60',
+                  // Use the variant color in both 'normal' and 'stale' so the
+                  // LCD never clashes with the surrounding button hue.
+                  slot.tone !== 'loading' && !isDisabledVisual && v.text,
+                  slot.tone !== 'loading' && isDisabledVisual && 'text-zinc-600',
+                  slot.tone === 'stale' && 'opacity-60',
+                )}
+              >
+                {/* Scanlines overlay — retro CRT readout */}
+                <span
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none scanlines opacity-70"
+                />
 
-              {/* Flash on value change — re-keyed on text so the animation restarts */}
-              <span
-                key={slot.text}
-                aria-hidden
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: `linear-gradient(90deg, transparent, ${v.shadow}, transparent)`,
-                  backgroundSize: '200% 100%',
-                  animation: 'showcase-charge 0.5s linear 1',
-                  opacity: 0.6,
-                }}
-              />
+                {/* Flash on value change — re-keyed on text so the animation restarts */}
+                <span
+                  key={slot.text}
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: `linear-gradient(90deg, transparent, ${v.shadow}, transparent)`,
+                    backgroundSize: '200% 100%',
+                    animation: 'showcase-charge 0.5s linear 1',
+                    opacity: 0.6,
+                  }}
+                />
 
-              <span aria-hidden className="text-[8px] leading-none opacity-70">{'◆'}</span>
-              <span className={cn(
-                'relative font-mono text-[11px] leading-none tracking-wider tabular-nums',
-                slot.tone === 'loading' && 'animate-pulse',
-              )}>
-                {slot.text}
+                <span aria-hidden className="text-[8px] leading-none opacity-70">{'◆'}</span>
+                <span className={cn(
+                  'relative font-mono text-[11px] leading-none tracking-wider tabular-nums',
+                  slot.tone === 'loading' && 'animate-pulse',
+                )}>
+                  {slot.text}
+                </span>
               </span>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            className="whitespace-pre-line max-w-xs text-[11px] bg-zinc-900 border-zinc-700 text-zinc-300"
-          >
-            {slot.tooltip}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              className="whitespace-pre-line max-w-xs text-[11px] bg-zinc-900 border-zinc-700 text-zinc-300"
+            >
+              {slot.tooltip}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {/* Icon zone */}
       <div className={cn(
