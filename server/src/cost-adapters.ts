@@ -3,7 +3,14 @@ import type { UsdRequest } from "@apicity/cost";
 export type CostAdapter = (input: Record<string, unknown>) => UsdRequest | null;
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
-const num = (v: unknown): number | undefined => (typeof v === "number" ? v : undefined);
+const num = (v: unknown): number | undefined => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
 
 // XAI text models. The default is the model the corresponding job actually
 // uses today; the pricing table may not contain that exact version, in which
@@ -35,6 +42,19 @@ const kiePerSecond = (model: string): CostAdapter => (input) => ({
   model,
   seconds: num(input.duration) ?? num(input.seconds) ?? 5,
 });
+
+// Kie's seedance-2 pricing table is keyed by `<tier>-<resolution>-<direction>`
+// (e.g. `seedance-2-fast-720p-t2v`). Compose the key from the inputs.
+const kieSeedance = (direction: "t2v" | "i2v"): CostAdapter => (input) => {
+  const apiModel = str(input.model);
+  const tier = apiModel === "bytedance/seedance-2" ? "seedance-2" : "seedance-2-fast";
+  const resolution = str(input.resolution) || "720p";
+  return {
+    provider: "kie",
+    model: `${tier}-${resolution}-${direction}`,
+    seconds: num(input.duration) ?? num(input.seconds) ?? 5,
+  };
+};
 
 // Map from MCP tool_name -> UsdRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available).
@@ -82,10 +102,10 @@ const ADAPTERS: Record<string, CostAdapter> = {
   generate_wan27_videoedit_fal: falPassthrough("fal-ai/wan/v2.7/edit-video"),
 
   // --- KIE per-second video (only models present in the cost lib's table) ---
-  generate_seedance2_t2v_video: kiePerSecond("seedance-2"),
-  generate_seedance2_i2v_video: kiePerSecond("seedance-2"),
-  generate_seedance2_frames_video: kiePerSecond("seedance-2"),
-  generate_seedance2_reference_video: kiePerSecond("seedance-2"),
+  generate_seedance2_t2v_video: kieSeedance("t2v"),
+  generate_seedance2_i2v_video: kieSeedance("i2v"),
+  generate_seedance2_frames_video: kieSeedance("i2v"),
+  generate_seedance2_reference_video: kieSeedance("i2v"),
   generate_kling30_video: kiePerSecond("kling-3.0"),
   generate_kling30_motion_control_video: kiePerSecond("kling-3.0"),
 };
