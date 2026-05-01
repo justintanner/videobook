@@ -376,8 +376,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const estimateCalls = useMemo<EstimateCall[] | null>(() => {
     if (!selectedOption) return null;
-    return [{ toolName: selectedOption.tool_name, input: formValues }];
-  }, [selectedOption, formValues]);
+    // project_slug lets the server resolve duration-priced models like
+    // kling-3.0/motion-control where the billable seconds come from the input
+    // motion video, not a user-typed parameter.
+    const input: Record<string, unknown> = projectSlug
+      ? { ...formValues, project_slug: projectSlug }
+      : formValues;
+    return [{ toolName: selectedOption.tool_name, input }];
+  }, [selectedOption, formValues, projectSlug]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
 
   // Live validation warnings derived from current form values

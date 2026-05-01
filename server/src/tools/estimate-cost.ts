@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
+import type { ClipfirstFs } from "clipfirst-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
@@ -32,10 +33,41 @@ function unknown(toolName: string): CostEstimate {
   };
 }
 
-function estimateOne(toolName: string, input: Record<string, unknown>): CostEstimate {
+// Tools where the model's billable duration is the input motion video's
+// duration rather than a parameter the user types. The cost adapter still
+// reads `input.duration`, so we enrich the input here (for the estimate only —
+// the actual generation payload doesn't carry a duration field).
+async function enrichInput(
+  fs: ClipfirstFs,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (toolName !== "generate_kling30_motion_control_video") return input;
+  if (typeof input.duration === "number") return input;
+
+  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const motionSlugs = Array.isArray(input.motion_video_slugs)
+    ? (input.motion_video_slugs as unknown[]).filter((s): s is string => typeof s === "string")
+    : [];
+  if (!projectSlug || motionSlugs.length === 0) return input;
+
+  const meta = await fs.readMetadata(motionSlugs[0], "original", projectSlug);
+  if (!meta.ok) return input;
+  const duration = (meta.value as { duration?: unknown }).duration;
+  if (typeof duration !== "number" || duration <= 0) return input;
+
+  return { ...input, duration };
+}
+
+async function estimateOne(
+  fs: ClipfirstFs,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<CostEstimate> {
   const adapter = getCostAdapter(toolName);
   if (!adapter) return unknown(toolName);
-  const req = adapter(input);
+  const enriched = await enrichInput(fs, toolName, input);
+  const req = adapter(enriched);
   if (!req) return unknown(toolName);
   return getCostProvider().estimate(req);
 }
@@ -57,7 +89,7 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
   };
 }
 
-export function estimateCostDef(): ToolDef {
+export function estimateCostDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "estimate_cost",
     description:
@@ -68,7 +100,7 @@ export function estimateCostDef(): ToolDef {
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;
-      const estimates = calls.map((c) => estimateOne(c.tool_name, c.input));
+      const estimates = await Promise.all(calls.map((c) => estimateOne(fs, c.tool_name, c.input)));
       const total = sumEstimates(estimates);
       return {
         content: [{

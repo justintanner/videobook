@@ -152,7 +152,7 @@ export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
 export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
   return [
     apiStatusDef(),
-    estimateCostDef(),
+    estimateCostDef(fs),
     createProjectDef(fs),
     renameProjectDef(fs),
     switchProjectDef(fs),

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { CostEstimate } from "@apicity/cost";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import { queue } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -121,6 +122,62 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
+  });
+
+  it("uses the motion video's actual duration for kling-3.0/motion-control", async () => {
+    // Regression: kling-3.0/motion-control bills per second of the *input
+    // motion video* — there is no user-typed duration. The previous estimate
+    // always charged the 5s default, so a 30s motion video showed the price
+    // for 5s at /generate. Server now resolves the duration from metadata.
+    const fs = createFsForTest(tempDir);
+    const projectResult = await fs.createProject("est-proj");
+    expect(projectResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("vid", "long-motion", "est-proj");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    const motionAssetId = assetResult.value.assetId;
+
+    const ACTUAL_DURATION = 30;
+    const writeMeta = await fs.writeMetadata(
+      motionAssetId,
+      "original",
+      { duration: ACTUAL_DURATION, width: 720, height: 1280 },
+      "est-proj",
+    );
+    expect(writeMeta.ok).toBe(true);
+
+    const fiveSecond = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_kling30_motion_control_video",
+          input: { mode: "1080p", motion_video_slugs: [motionAssetId] },
+        }],
+      },
+    });
+    const fiveSecondPayload = parse(fiveSecond);
+    expect(fiveSecondPayload.estimate.breakdown.units).toBe(5);
+
+    const enriched = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_kling30_motion_control_video",
+          input: {
+            mode: "1080p",
+            motion_video_slugs: [motionAssetId],
+            project_slug: "est-proj",
+          },
+        }],
+      },
+    });
+    const enrichedPayload = parse(enriched);
+    expect(enrichedPayload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
+    expect(enrichedPayload.estimate.usd).toBeCloseTo(
+      fiveSecondPayload.estimate.usd * (ACTUAL_DURATION / 5),
+      4,
+    );
   });
 
   it("sums multiple calls into one summed estimate", async () => {
