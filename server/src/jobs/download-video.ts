@@ -4,7 +4,7 @@ import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
-import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -30,7 +30,17 @@ export async function validateDownloadOutput(outputPath: string): Promise<void> 
       try { await unlink(outputPath); } catch { /* best-effort cleanup */ }
       throw new Error("Download produced an empty file");
     }
-    return; // file exists with content — success
+    // yt-dlp can finalize a non-empty mp4 that is structurally broken (missing
+    // moov atom when --download-sections aborts before muxing the trailer).
+    // Probe the container so process_video doesn't get a non-decodable file.
+    try {
+      await probeVideo(outputPath);
+    } catch (error) {
+      try { await unlink(outputPath); } catch { /* best-effort cleanup */ }
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Download produced an unreadable video: ${msg}`);
+    }
+    return;
   }
 
   // Output file missing — check for .part file

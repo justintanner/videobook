@@ -27,13 +27,39 @@ describe("validateDownloadOutput (RC1)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("succeeds when output file exists with content", async () => {
+  async function writeValidMp4(path: string): Promise<void> {
+    const { runFfmpeg } = await import("../ffmpeg.js");
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=black:s=16x16:d=0.1:r=10",
+      "-pix_fmt", "yuv420p",
+      "-c:v", "libx264", "-preset", "ultrafast",
+      "-movflags", "+faststart",
+      path,
+    ]);
+  }
+
+  it("succeeds when output file exists and contains a valid mp4", async () => {
     const { validateDownloadOutput } = await import("./download-video.js");
     const outputPath = join(tempDir, "original.mp4");
-    await writeFile(outputPath, "fake-video-content");
+    await writeValidMp4(outputPath);
 
     // Should not throw
     await validateDownloadOutput(outputPath);
+  });
+
+  it("throws when the file is non-empty but not a decodable container", async () => {
+    // Regression: yt-dlp can finalize a non-empty mp4 missing its moov atom
+    // when --download-sections is interrupted. The size check passed but
+    // process_video would then fail mid-pipeline and strand the asset.
+    const { validateDownloadOutput } = await import("./download-video.js");
+    const { access } = await import("node:fs/promises");
+    const outputPath = join(tempDir, "original.mp4");
+    await writeFile(outputPath, "fake-video-content-no-moov-atom");
+
+    await expect(validateDownloadOutput(outputPath)).rejects.toThrow(/unreadable video/i);
+    // Broken file is removed so a retry doesn't trip on stale bytes.
+    await expect(access(outputPath)).rejects.toThrow();
   });
 
   it("throws when output file is missing and .part file exists", async () => {

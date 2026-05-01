@@ -1,35 +1,34 @@
-import type { ClipfirstFs, AssetEntry } from "clipfirst-engine";
+import type { ClipfirstFs, AssetEntry, AssetType } from "clipfirst-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 
-const MEDIA_EXTENSIONS = new Set([
-  ".mp4", ".mov", ".webm", ".avi", ".mkv",
-  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
-  ".mp3", ".wav", ".aac", ".flac", ".ogg",
-]);
-
-const SUPPORTED_EXTENSIONS = new Set([
-  ...MEDIA_EXTENSIONS,
-  ".md",
-]);
-
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv"]);
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".aac", ".flac", ".ogg"]);
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]);
+const SCRIPT_EXTENSIONS = new Set([".md"]);
+
+type UploadMediaType = "video" | "image" | "audio" | "script";
 
 export type UnprocessedUpload = {
   assetId: string;
   assetDir: string;
   mediaFilename: string;
   extension: string;
-  mediaType: "video" | "image" | "audio" | "script";
+  mediaType: UploadMediaType;
 };
 
-function getMediaType(ext: string): "video" | "image" | "audio" | "script" | null {
-  if (VIDEO_EXTENSIONS.has(ext)) return "video";
-  if (AUDIO_EXTENSIONS.has(ext)) return "audio";
-  if (ext === ".md") return "script";
-  if (SUPPORTED_EXTENSIONS.has(ext)) return "image";
-  return null;
+// The asset id prefix is authoritative for type — a vid- asset with a
+// promoted OG thumbnail (original.jpg) must not be classified as an image
+// upload just because the .jpg sorts before the .mp4. Returns null for asset
+// types that aren't candidates for the upload sweep (character/final/plan).
+function uploadShapeFor(type: AssetType): { mediaType: UploadMediaType; extensions: Set<string> } | null {
+  switch (type) {
+    case "video": return { mediaType: "video", extensions: VIDEO_EXTENSIONS };
+    case "audio": return { mediaType: "audio", extensions: AUDIO_EXTENSIONS };
+    case "image": return { mediaType: "image", extensions: IMAGE_EXTENSIONS };
+    case "script": return { mediaType: "script", extensions: SCRIPT_EXTENSIONS };
+    default: return null;
+  }
 }
 
 export async function findUnprocessedUploads(
@@ -40,12 +39,16 @@ export async function findUnprocessedUploads(
   const results = await Promise.all(
     assets.map(async (asset): Promise<UnprocessedUpload | null> => {
       if (asset.id === "final") return null;
-      // Parallelize the three independent disk reads — each was ~5-20ms
-      // serially, multiplied by every asset on every sync.
-      const [manifest, originResult, locked] = await Promise.all([
+      const shape = uploadShapeFor(asset.type);
+      if (!shape) return null;
+
+      // Parallelize the independent disk/db reads — each was ~5-20ms serially,
+      // multiplied by every asset on every sync.
+      const [manifest, originResult, locked, work] = await Promise.all([
         fs.getManifest(asset.id, projectSlug),
         fs.readMetadata(asset.id, "original", projectSlug),
         fs.isLocked(asset.path),
+        fs.assetWork.read(projectSlug, asset.id),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;
@@ -54,23 +57,26 @@ export async function findUnprocessedUploads(
       // hands a half-written file to process_video, producing a spurious
       // .generation-error.json before the real owner finishes.
       if (locked) return null;
+      // Skip assets in terminal 'error' state — a prior process_video/image
+      // failed and nothing has cleared the row. Re-enqueuing without recovery
+      // would just spin forever (the engine's lease guard rejects new work
+      // until the row is cleared via /clear-failed-tasks or equivalent).
+      if (work.ok && work.value?.status === "error") return null;
 
       const mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
-        return SUPPORTED_EXTENSIONS.has(ext);
+        return shape.extensions.has(ext);
       });
       if (!mediaFile) return null;
 
       const ext = path.extname(mediaFile.name).toLowerCase();
-      const mediaType = getMediaType(ext);
-      if (!mediaType) return null;
 
       return {
         assetId: asset.id,
         assetDir: asset.path,
         mediaFilename: mediaFile.name,
         extension: ext,
-        mediaType,
+        mediaType: shape.mediaType,
       };
     })
   );
