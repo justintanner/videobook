@@ -11,7 +11,6 @@ import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fi
 import { stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
-import { CommandButton } from '@/components/commands';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
 import type { ExecuteButtonState } from '@/components/commands/types';
@@ -19,7 +18,7 @@ import type { UseMcpResult } from 'use-mcp/react';
 import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePopover';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
 import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
-import { CostBadge } from '@/components/cost/CostBadge';
+import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -589,23 +588,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               disabled={isDisabled}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <CostBadge
-              estimate={cost.estimate}
-              loading={cost.loading}
-              error={cost.error}
-              stale={cost.stale}
-              onRefresh={cost.refresh}
-            />
-            <CommandButton
-              command="/generate"
-              icon={<Zap className="w-3.5 h-3.5" />}
-              variant={buttonVariant}
-              state={genState}
-              onClick={handleGenerate}
-              disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
-            />
-          </div>
+          <GenerateCommandButton
+            variant={buttonVariant}
+            state={genState}
+            cost={cost}
+            onClick={handleGenerate}
+            disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
+          />
+
         </div>
       }
     >
