@@ -47,6 +47,8 @@ function callsKey(calls: EstimateCall[]): string {
   return JSON.stringify(calls);
 }
 
+const DEBOUNCE_MS = 300;
+
 export function useEstimateCost(
   callTool: UseMcpResult["callTool"],
   { calls, enabled = true }: UseEstimateCostOptions,
@@ -60,9 +62,12 @@ export function useEstimateCost(
   callToolRef.current = callTool;
 
   const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const computedKeyRef = useRef<string | null>(null);
   const callsRef = useRef<EstimateCall[] | null>(calls);
   callsRef.current = calls;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   const fetchEstimate = useCallback(async () => {
     const current = callsRef.current;
@@ -96,28 +101,42 @@ export function useEstimateCost(
     }
   }, []);
 
-  // Initial compute when enabled with calls — caller gates on connection state.
+  const scheduleFetch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      if (!enabledRef.current) return;
+      void fetchEstimate();
+    }, DEBOUNCE_MS);
+  }, [fetchEstimate]);
+
+  // First compute fires immediately; subsequent input changes debounce-refetch.
   useEffect(() => {
     if (!enabled) return;
     if (!calls || calls.length === 0) return;
-    if (computedKeyRef.current !== null) return;
-    void fetchEstimate();
-  }, [enabled, calls, fetchEstimate]);
-
-  // Mark estimate stale when inputs change after first compute.
-  useEffect(() => {
-    if (!calls || calls.length === 0) return;
-    if (computedKeyRef.current === null) return;
     const nextKey = callsKey(calls);
-    if (nextKey !== computedKeyRef.current) setStale(true);
-  }, [calls]);
+    if (computedKeyRef.current === nextKey) return;
+    if (computedKeyRef.current === null) {
+      void fetchEstimate();
+    } else {
+      setStale(true);
+      scheduleFetch();
+    }
+  }, [enabled, calls, fetchEstimate, scheduleFetch]);
 
-  // Cancel in-flight request on unmount.
+  // Cancel in-flight request and pending debounce on unmount.
   useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const refresh = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
     void fetchEstimate();
   }, [fetchEstimate]);
 
