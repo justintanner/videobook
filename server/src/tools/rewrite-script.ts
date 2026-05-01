@@ -61,8 +61,8 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
         );
       }
 
-      if (!process.env.XAI_API_KEY) {
-        return error("XAI_API_KEY is not set");
+      if (!process.env.OPENAI_API_KEY) {
+        return error("OPENAI_API_KEY is not set");
       }
 
       const scriptManifest = await fs.getManifest(asset_id, project_slug);

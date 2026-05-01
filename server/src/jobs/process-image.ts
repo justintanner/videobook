@@ -47,7 +47,7 @@ export function registerProcessImageJob(fs: ClipfirstFs): void {
       // The compose rail's `usePoseDescription` reads this file directly, and
       // missing it forces the outfit prompt to fall back to skeleton-only.
       // Skipped for SVG/GIF — vision is unreliable on vector/animated formats.
-      if (process.env.XAI_API_KEY && !SKIP_CROP_EXTENSIONS.has(extension)) {
+      if (process.env.OPENAI_API_KEY && !SKIP_CROP_EXTENSIONS.has(extension)) {
         const jobId = `describe-image-auto-${assetId}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "describe_image",

@@ -157,7 +157,7 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
     } = payload as RewriteScriptPayload;
 
     return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
-      const responses = buildResponses(process.env.XAI_API_KEY);
+      const responses = buildResponses(process.env.OPENAI_API_KEY);
 
       const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
       if (!readResult.ok) {

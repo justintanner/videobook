@@ -22,10 +22,10 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
       "Used by the /character flow to seed the editable form before generating a character sheet.",
     schema,
     handler: async (args) => {
-      if (!process.env.XAI_API_KEY) {
+      if (!process.env.OPENAI_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "XAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
         };
       }
       const { project_slug, image_slug } = args as { project_slug: string; image_slug: string };

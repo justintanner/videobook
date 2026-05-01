@@ -77,7 +77,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/character_schema_guide.md");
 
 export const CHARACTER_METADATA_KEY = "character";
-export const VISION_MODEL = "grok-4.20-reasoning";
+export const VISION_MODEL = "gpt-5.4";
 
 export const isHumanSubject = (k: CharacterSubjectKind): boolean =>
   k === "female" || k === "male";
@@ -179,7 +179,7 @@ export async function extractCharacterFromBytes(
   sourceAssetId: string,
   responses?: ResponsesFn,
 ): Promise<Character> {
-  const fn = responses ?? buildResponses(process.env.XAI_API_KEY);
+  const fn = responses ?? buildResponses(process.env.OPENAI_API_KEY);
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const response = await fn({

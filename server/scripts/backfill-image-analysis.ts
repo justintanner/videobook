@@ -5,7 +5,7 @@
  * Usage:
  *   tsx server/scripts/backfill-image-analysis.ts <project-slug>
  *
- * Reads XAI_API_KEY from `.env`. Idempotent — assets that already have
+ * Reads OPENAI_API_KEY from `.env`. Idempotent — assets that already have
  * `.original.analysis.json` are skipped.
  */
 import "dotenv/config";
@@ -53,8 +53,8 @@ async function main() {
     console.error("usage: tsx server/scripts/backfill-image-analysis.ts <project-slug>");
     process.exit(1);
   }
-  if (!process.env.XAI_API_KEY) {
-    console.error("XAI_API_KEY not set");
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("OPENAI_API_KEY not set");
     process.exit(1);
   }
   const projectDir = join(PROJECTS_DIR, projectSlug);

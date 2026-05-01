@@ -2,8 +2,8 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import { xai, withRetry } from "@apicity/xai";
-import type { XaiResponseRequest, XaiResponseResponse } from "@apicity/xai";
+import { openai, withRetry } from "@apicity/openai";
+import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 type DescribeImagePayload = {
@@ -24,14 +24,14 @@ export type DescribeImageResult = {
   pose?: string;
 };
 
-export type ResponsesFn = (req: XaiResponseRequest, signal?: AbortSignal) => Promise<XaiResponseResponse>;
+export type ResponsesFn = (req: OpenAiResponseRequest, signal?: AbortSignal) => Promise<OpenAiResponseResponse>;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
 export const ANALYSIS_FILENAME = ".original.analysis.json";
-export const VISION_MODEL = "grok-4.20-reasoning";
+export const VISION_MODEL = "gpt-5.4";
 export const PROMPT_CHAR_LIMIT = 1900;
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
@@ -77,9 +77,9 @@ export function mimeForImageFilename(filename: string): "image/jpeg" | "image/pn
 
 export function buildResponses(apiKey: string | undefined): ResponsesFn {
   if (!apiKey) {
-    throw new Error("XAI_API_KEY is not set");
+    throw new Error("OPENAI_API_KEY is not set");
   }
-  const client = xai({ apiKey, timeout: 180_000 });
+  const client = openai({ apiKey, timeout: 180_000 });
   return withRetry(client.post.v1.responses, { retries: 2, baseMs: 500 });
 }
 
@@ -87,7 +87,7 @@ export function buildResponses(apiKey: string | undefined): ResponsesFn {
 // produced a refusal — Grok rarely does this on the kinds of images
 // describe_image runs against, but we surface it explicitly rather than
 // silently returning an empty string.
-export function firstResponseText(response: XaiResponseResponse): string {
+export function firstResponseText(response: OpenAiResponseResponse): string {
   const texts: string[] = [];
   for (const item of response.output) {
     if (item.type !== "message") continue;
@@ -104,7 +104,7 @@ export async function describeImageBytes(
   mime: "image/jpeg" | "image/png" | "image/webp",
   responses?: ResponsesFn,
 ): Promise<DescribeImageResult> {
-  const fn = responses ?? buildResponses(process.env.XAI_API_KEY);
+  const fn = responses ?? buildResponses(process.env.OPENAI_API_KEY);
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const response = await fn({
@@ -150,7 +150,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
-      const responses = buildResponses(process.env.XAI_API_KEY);
+      const responses = buildResponses(process.env.OPENAI_API_KEY);
 
       const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
       if (!readResult.ok) {
