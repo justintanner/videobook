@@ -1,12 +1,69 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { execFile } from "node:child_process";
 import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
+import { promisify } from "node:util";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS, FFPROBE } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+
+const execFileAsync = promisify(execFile);
 
 const LOCK_DURATION_MS = 300_000;
 const CROSSFADE_SECS = 0.03;
+const DURATION_EPSILON_SECS = 0.5;
+const AV_DRIFT_TOLERANCE_SECS = 0.5;
+
+interface StreamDurations {
+  format: number;
+  video: number;
+  audio: number | null;
+}
+
+async function probeStreamDurations(filePath: string): Promise<StreamDurations> {
+  const { stdout } = await execFileAsync(FFPROBE, [
+    "-v", "error",
+    "-print_format", "json",
+    "-show_streams",
+    "-show_format",
+    filePath,
+  ]);
+  const data = JSON.parse(stdout) as {
+    streams?: Array<{ codec_type?: string; duration?: string }>;
+    format?: { duration?: string };
+  };
+  const format = Number(data.format?.duration ?? 0);
+  const videoStream = data.streams?.find((s) => s.codec_type === "video");
+  const audioStream = data.streams?.find((s) => s.codec_type === "audio");
+  const video = Number(videoStream?.duration ?? format);
+  const audio = audioStream ? Number(audioStream.duration ?? format) : null;
+  return { format, video, audio };
+}
+
+async function assertSaneTrimOutput(
+  inputPath: string,
+  outputPath: string,
+): Promise<void> {
+  const [input, output] = await Promise.all([
+    probeStreamDurations(inputPath),
+    probeStreamDurations(outputPath),
+  ]);
+  if (output.format <= 0 || output.video <= 0) {
+    throw new Error(
+      `Trim output has zero duration (format=${output.format}, video=${output.video})`,
+    );
+  }
+  if (output.format > input.format + DURATION_EPSILON_SECS) {
+    throw new Error(
+      `Trim output duration ${output.format.toFixed(3)}s exceeds input ${input.format.toFixed(3)}s — likely a corrupted concat`,
+    );
+  }
+  if (output.audio !== null && Math.abs(output.video - output.audio) > AV_DRIFT_TOLERANCE_SECS) {
+    throw new Error(
+      `Trim output audio/video duration mismatch: video=${output.video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
+    );
+  }
+}
 
 async function trimRange(
   inputPath: string,
@@ -62,10 +119,14 @@ async function cutMiddle(
 
     await fsWriteFile(concatList, `file '${beforePath}'\nfile '${afterPath}'\n`);
 
+    // Re-encode rather than `-c copy`: the two halves are independently-encoded
+    // libx264/AAC streams, so their SPS/PPS, GOP boundaries, and AAC priming
+    // samples don't line up — a copy-concat produces a container with bogus
+    // duration metadata and a truncated audio stream.
     await runFfmpeg([
       "-y", "-f", "concat", "-safe", "0",
       "-i", concatList,
-      "-c", "copy",
+      ...H264_MEDIUM, ...AUDIO_OPTS,
       outputPath,
     ]);
   } finally {
@@ -108,6 +169,13 @@ export function registerTrimVideoJob(fs: ClipfirstFs): void {
         await cutMiddle(inputPath, outputPath, cutStart!, cutEnd!);
       } else {
         await trimRange(inputPath, outputPath, trimStart, trimEnd);
+      }
+
+      try {
+        await assertSaneTrimOutput(inputPath, outputPath);
+      } catch (err) {
+        await rm(outputPath, { force: true });
+        throw err;
       }
 
       const inputFilename = basename(inputPath);
