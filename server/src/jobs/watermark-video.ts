@@ -9,7 +9,7 @@ import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 300_000;
 const WATERMARK_DURATION_SECS = 2;
-const OVERLAY_ALPHA = 0.2;
+const OVERLAY_ALPHA = 0.65;
 
 const QR_SIZE = 240;
 const PADDING = 12;
