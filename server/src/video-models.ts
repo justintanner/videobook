@@ -839,7 +839,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     properties[param] = prop;
 
     // Required fields
-    if (param === "prompt" && toolName !== "generate_grok_imagine_video" && toolName !== "generate_wan27_videoedit_video") required.push(param);
+    if (
+      param === "prompt"
+      && toolName !== "generate_grok_imagine_video"
+      && toolName !== "generate_wan27_videoedit_video"
+      && toolName !== "generate_kling30_motion_control_video"
+    ) required.push(param);
     if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video")) required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
@@ -850,6 +855,10 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       && param === "first_frame_slug"
     ) required.push(param);
     if (toolName === "generate_seedance2_frames_video" && param === "last_frame_slug") required.push(param);
+    if (
+      toolName === "generate_kling30_motion_control_video"
+      && (param === "character_image_slugs" || param === "motion_video_slugs")
+    ) required.push(param);
   }
 
   return { type: "object", properties, required, defaults: model.defaults };

@@ -13,12 +13,19 @@ export function isAssetField(name: string): boolean {
     || name === 'first_clip_slug'
     || name === 'driving_audio_slug'
     || name === 'audio_slug'
+    || name === 'character_image_slugs'
+    || name === 'motion_video_slugs'
   );
 }
 
 /** Return the accepted asset type for a slug field name */
 export function slugFieldAssetType(name: string): 'image' | 'video' | 'audio' {
-  if (name === 'video_slug' || name === 'video_slugs' || name === 'first_clip_slug') return 'video';
+  if (
+    name === 'video_slug'
+    || name === 'video_slugs'
+    || name === 'first_clip_slug'
+    || name === 'motion_video_slugs'
+  ) return 'video';
   if (name === 'audio_slug' || name === 'driving_audio_slug') return 'audio';
   return 'image';
 }

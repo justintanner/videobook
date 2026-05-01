@@ -61,6 +61,8 @@ const SLUG_DISPLAY_LABELS: Record<string, string> = {
   audio: 'Reference Voice',
   image_slugs: 'References',
   video_slugs: 'Reference Videos',
+  character_image_slugs: 'Character Images',
+  motion_video_slugs: 'Motion Videos',
 };
 
 function formatSlotCount(filled: number, min: number, max: number | null): string {
@@ -161,7 +163,7 @@ function ArraySlotSection({
   const fieldAssetType = slugFieldAssetType(field.name);
   const sectionLabel = `/${prettifySlugFieldName(field.name).toLowerCase().replace(/\s+/g, '-')}`;
   const currentSlugs = Array.isArray(field.value) ? field.value.map(String).filter(Boolean) : [];
-  const minSlots = imageSlots?.min ?? 0;
+  const minSlots = imageSlots?.min ?? (field.required ? 1 : 0);
   const maxSlotsRaw = imageSlots?.max;
   const maxSlots: number | null = maxSlotsRaw === null ? null : Math.max(maxSlotsRaw ?? 5, 1);
   const filledCount = currentSlugs.length;
@@ -272,6 +274,10 @@ export function ImageParamSlots({
   // (e.g. Wan 2.7 Reference: first_frame_slug + audio_slug + image_slugs + video_slugs)
   const isHybridMode = arrayFields.length > 0 && stringFields.length > 0;
 
+  // Multi-array mode: 2+ array slug fields with no string slots
+  // (e.g. Kling 3.0 Motion Control: character_image_slugs + motion_video_slugs)
+  const isMultiArrayMode = arrayFields.length > 1 && stringFields.length === 0;
+
   if (isNamedSlotMode) {
     return (
       <NamedSlotList
@@ -285,22 +291,24 @@ export function ImageParamSlots({
     );
   }
 
-  if (isHybridMode) {
+  if (isHybridMode || isMultiArrayMode) {
     return (
       <div className="space-y-2">
-        <NamedSlotList
-          fields={stringFields}
-          defaultAssetType={assetType}
-          resolvedAssets={resolvedAssets}
-          droppedAssets={droppedAssets}
-          onChange={onChange}
-          disabled={disabled}
-        />
+        {isHybridMode && (
+          <NamedSlotList
+            fields={stringFields}
+            defaultAssetType={assetType}
+            resolvedAssets={resolvedAssets}
+            droppedAssets={droppedAssets}
+            onChange={onChange}
+            disabled={disabled}
+          />
+        )}
         {arrayFields.map((af) => (
           <ArraySlotSection
             key={af.name}
             field={af}
-            imageSlots={imageSlots}
+            imageSlots={af === arrayFields[0] ? imageSlots : null}
             resolvedAssets={resolvedAssets}
             droppedAssets={droppedAssets}
             onChange={onChange}
