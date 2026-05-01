@@ -280,6 +280,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "plan_visualization", autoInject: ["project_slug"] },
   },
   {
+    command: "/watermark",
+    description: "Overlay a black-and-white QR + 'X: <handle>' in the bottom-right during the last 2 seconds of a video",
+    example: "/watermark @hero-clip",
+    category: "context_menu",
+    icon: "QrCode",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to watermark" },
+      { name: "handle", type: "string", required: false, description: "X handle without @ (default: justinwtanner)" },
+      { name: "url", type: "string", required: false, description: "URL the QR resolves to (default: https://x.com/<handle>)" },
+    ],
+    mcpTool: { tool: "watermark_video", autoInject: ["project_slug"] },
+  },
+  {
     command: "/grok-upscale",
     description: "Upscale a Grok-Imagine video via Kie",
     example: "/grok-upscale @vid-clip",

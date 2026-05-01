@@ -89,6 +89,7 @@ import { registerGenerateGrokImagineVideoR2vFalJob } from "./generate-grok-imagi
 import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-imagine-video-extend-fal.js";
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
 import { registerPostToXJob } from "./post-to-x.js";
+import { registerWatermarkVideoJob } from "./watermark-video.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -183,4 +184,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGrokImagineVideoExtendFalJob(fs);
   registerGenerateGrokImagineVideoEditFalJob(fs);
   registerPostToXJob(fs);
+  registerWatermarkVideoJob(fs);
 }

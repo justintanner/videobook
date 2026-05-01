@@ -222,6 +222,13 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={() => onAnimateEdit?.(`/splice ${slug} `)}
             MenuItem={MenuItem}
           />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <CommandMenuItem
+            command={`/watermark ${slug}`}
+            title="Watermark (last 2s)"
+            onSelect={() => onAnimateCommand?.(`/watermark ${slug}`)}
+            MenuItem={MenuItem}
+          />
         </>
       )}
       <div className="-mx-1 my-1 h-px bg-border" />
