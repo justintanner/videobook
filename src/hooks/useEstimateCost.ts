@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export type CostSource =
-  | "upstream-usd"
-  | "tokens-api+table"
   | "tokens-heuristic+table"
   | "per-unit-table"
   | "free";

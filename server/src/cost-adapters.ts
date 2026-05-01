@@ -1,6 +1,6 @@
-import type { UsdRequest } from "@apicity/cost";
+import type { EstimateRequest } from "@apicity/cost";
 
-export type CostAdapter = (input: Record<string, unknown>) => UsdRequest | null;
+export type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number | undefined => {
@@ -12,52 +12,87 @@ const num = (v: unknown): number | undefined => {
   return undefined;
 };
 
-// XAI text models. The default is the model the corresponding job actually
-// uses today; the pricing table may not contain that exact version, in which
-// case the cost lib returns usd: 0 with a warning we surface to the user.
-const xaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => ({
-  provider: "xai",
-  model,
-  text: str(input.script_text) || str(input.prompt) || str(input.text) || "",
-  maxOutputTokens: num(input.max_output_tokens) ?? defaultMaxOut,
-  useHeuristic: true,
-});
-
-const openaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => ({
-  provider: "openai",
-  model,
-  text: str(input.prompt) || str(input.text) || "",
-  maxOutputTokens: num(input.max_output_tokens) ?? defaultMaxOut,
-  useHeuristic: true,
-});
-
-const falPassthrough = (endpoint_id: string): CostAdapter => (input) => ({
-  provider: "fal",
-  endpoint_id,
-  payload: input,
-});
-
-const kiePerSecond = (model: string): CostAdapter => (input) => ({
-  provider: "kie",
-  model,
-  seconds: num(input.duration) ?? num(input.seconds) ?? 5,
-});
-
-// Kie's seedance-2 pricing table is keyed by `<tier>-<resolution>-<direction>`
-// (e.g. `seedance-2-fast-720p-t2v`). Compose the key from the inputs.
-const kieSeedance = (direction: "t2v" | "i2v"): CostAdapter => (input) => {
-  const apiModel = str(input.model);
-  const tier = apiModel === "bytedance/seedance-2" ? "seedance-2" : "seedance-2-fast";
-  const resolution = str(input.resolution) || "720p";
+// xAI / OpenAI text payloads mirror the upstream API body. The cost lib's
+// extractor flattens chat/responses payloads to a single string for the
+// chars/4 token heuristic, then prices via the bundled rate table.
+const xaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => {
+  const max = num(input.max_output_tokens) ?? defaultMaxOut;
   return {
-    provider: "kie",
-    model: `${tier}-${resolution}-${direction}`,
-    seconds: num(input.duration) ?? num(input.seconds) ?? 5,
+    provider: "xai",
+    payload: {
+      model,
+      text: str(input.script_text) || str(input.prompt) || str(input.text) || "",
+      ...(max !== undefined ? { max_output_tokens: max } : {}),
+    },
   };
 };
 
-// Map from MCP tool_name -> UsdRequest builder. Tools not listed here return
+const openaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => {
+  const max = num(input.max_output_tokens) ?? defaultMaxOut;
+  return {
+    provider: "openai",
+    payload: {
+      model,
+      input: str(input.prompt) || str(input.text) || "",
+      ...(max !== undefined ? { max_output_tokens: max } : {}),
+    },
+  };
+};
+
+// Kie seedance: the cost lib reads payload.input.{resolution, duration} and
+// uses payload.input.first_frame_url to discriminate i2v vs t2v. Default
+// resolution to "720p" so a bare estimate still returns a price (matches the
+// production tool's effective default).
+const kieSeedance = (direction: "t2v" | "i2v"): CostAdapter => (input) => {
+  const apiModel = str(input.model);
+  const model =
+    apiModel === "bytedance/seedance-2"
+      ? "bytedance/seedance-2"
+      : "bytedance/seedance-2-fast";
+  return {
+    provider: "kie",
+    payload: {
+      model,
+      input: {
+        resolution: str(input.resolution) || "720p",
+        duration: num(input.duration) ?? num(input.seconds) ?? 5,
+        ...(direction === "i2v" ? { first_frame_url: "stub" } : {}),
+      },
+    },
+  };
+};
+
+// kling-3.0/video keys by mode + sound (sound===true selects "|sound").
+// Defaults match buildKling30VideoPayload in payload-builders.ts.
+const kieKling30Video: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "kling-3.0/video",
+    input: {
+      mode: str(input.mode) || "std",
+      sound: input.sound !== false,
+      duration: num(input.duration) ?? 5,
+    },
+  },
+});
+
+// kling-3.0/motion-control keys by mode ("720p" | "1080p"). Audio is not
+// separately priced for motion-control.
+const kieKling30MotionControl: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "kling-3.0/motion-control",
+    input: {
+      mode: str(input.mode) || "720p",
+      duration: num(input.duration) ?? 5,
+    },
+  },
+});
+
+// Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available).
+// Fal-backed tools have no entry: @apicity/cost dropped fal coverage when it
+// switched to a pure-local pricing table.
 const ADAPTERS: Record<string, CostAdapter> = {
   // --- text rewrites / chat ---
   rewrite_script: xaiText("grok-4.20-reasoning", 4000),
@@ -65,49 +100,13 @@ const ADAPTERS: Record<string, CostAdapter> = {
   chat: openaiText("gpt-5.4", 2000),
   describe_image: xaiText("grok-4.20-reasoning", 1500),
 
-  // --- FAL image/video (upstream USD via fal pricing API) ---
-  generate_grok_imagine_image_fal: falPassthrough("xai/grok-imagine-image"),
-  generate_grok_imagine_image_edit_fal: falPassthrough("xai/grok-imagine-image/edit"),
-  generate_grok_imagine_video_i2v_fal: falPassthrough("xai/grok-imagine-video/image-to-video"),
-  generate_grok_imagine_video_r2v_fal: falPassthrough("xai/grok-imagine-video/reference-to-video"),
-  generate_grok_imagine_video_extend_fal: falPassthrough("xai/grok-imagine-video/extend-video"),
-  generate_grok_imagine_video_edit_fal: falPassthrough("xai/grok-imagine-video/edit-video"),
-  generate_kling_v3_pro_t2v_fal: falPassthrough("fal-ai/kling-video/v3/pro/text-to-video"),
-  generate_kling_v3_pro_i2v_fal: falPassthrough("fal-ai/kling-video/v3/pro/image-to-video"),
-  generate_kling_v3_standard_t2v_fal: falPassthrough("fal-ai/kling-video/v3/standard/text-to-video"),
-  generate_kling_v3_standard_i2v_fal: falPassthrough("fal-ai/kling-video/v3/standard/image-to-video"),
-  generate_nano_banana_fal: falPassthrough("fal-ai/nano-banana"),
-  generate_nano_banana_edit_fal: falPassthrough("fal-ai/nano-banana/edit"),
-  generate_nano_banana_2_fal: falPassthrough("fal-ai/nano-banana-2"),
-  generate_nano_banana_2_edit_fal: falPassthrough("fal-ai/nano-banana-2/edit"),
-  generate_nano_banana_pro_fal: falPassthrough("fal-ai/nano-banana-pro"),
-  generate_nano_banana_pro_edit_fal: falPassthrough("fal-ai/nano-banana-pro/edit"),
-  generate_qwen_image_fal: falPassthrough("fal-ai/qwen-image"),
-  generate_qwen_image_edit_fal: falPassthrough("fal-ai/qwen-image/edit"),
-  generate_seedance2_t2v_fal: falPassthrough("bytedance/seedance-2.0/text-to-video"),
-  generate_seedance2_i2v_fal: falPassthrough("bytedance/seedance-2.0/image-to-video"),
-  generate_seedance2_r2v_fal: falPassthrough("bytedance/seedance-2.0/reference-to-video"),
-  generate_seedance2_fast_t2v_fal: falPassthrough("bytedance/seedance-2.0/fast/text-to-video"),
-  generate_seedance2_fast_i2v_fal: falPassthrough("bytedance/seedance-2.0/fast/image-to-video"),
-  generate_seedance2_fast_r2v_fal: falPassthrough("bytedance/seedance-2.0/fast/reference-to-video"),
-  generate_seedream_v5_lite_fal: falPassthrough("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
-  generate_seedream_v5_lite_edit_fal: falPassthrough("fal-ai/bytedance/seedream/v5/lite/edit"),
-  generate_wan27_fal: falPassthrough("fal-ai/wan/v2.7/text-to-image"),
-  generate_wan27_edit_fal: falPassthrough("fal-ai/wan/v2.7/edit"),
-  generate_wan27_pro_fal: falPassthrough("fal-ai/wan/v2.7/pro/text-to-image"),
-  generate_wan27_pro_edit_fal: falPassthrough("fal-ai/wan/v2.7/pro/edit"),
-  generate_wan27_t2v_fal: falPassthrough("fal-ai/wan/v2.7/text-to-video"),
-  generate_wan27_i2v_fal: falPassthrough("fal-ai/wan/v2.7/image-to-video"),
-  generate_wan27_r2v_fal: falPassthrough("fal-ai/wan/v2.7/reference-to-video"),
-  generate_wan27_videoedit_fal: falPassthrough("fal-ai/wan/v2.7/edit-video"),
-
-  // --- KIE per-second video (only models present in the cost lib's table) ---
+  // --- KIE per-second video ---
   generate_seedance2_t2v_video: kieSeedance("t2v"),
   generate_seedance2_i2v_video: kieSeedance("i2v"),
   generate_seedance2_frames_video: kieSeedance("i2v"),
   generate_seedance2_reference_video: kieSeedance("i2v"),
-  generate_kling30_video: kiePerSecond("kling-3.0"),
-  generate_kling30_motion_control_video: kiePerSecond("kling-3.0"),
+  generate_kling30_video: kieKling30Video,
+  generate_kling30_motion_control_video: kieKling30MotionControl,
 };
 
 export function getCostAdapter(toolName: string): CostAdapter | null {

@@ -32,24 +32,12 @@ function unknown(toolName: string): CostEstimate {
   };
 }
 
-async function estimateOne(toolName: string, input: Record<string, unknown>): Promise<CostEstimate> {
+function estimateOne(toolName: string, input: Record<string, unknown>): CostEstimate {
   const adapter = getCostAdapter(toolName);
   if (!adapter) return unknown(toolName);
   const req = adapter(input);
   if (!req) return unknown(toolName);
-  try {
-    return await getCostProvider().usd(req);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return {
-      usd: 0,
-      currency: "USD",
-      source: "free",
-      breakdown: {},
-      rateAsOf: null,
-      warnings: [`estimate failed: ${message}`],
-    };
-  }
+  return getCostProvider().estimate(req);
 }
 
 function sumEstimates(estimates: CostEstimate[]): CostEstimate {
@@ -75,12 +63,12 @@ export function estimateCostDef(): ToolDef {
     description:
       "Estimate the USD cost of a generation tool call before invoking it. Accepts one or more " +
       "{tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based " +
-      "providers (openai/anthropic/xai) use a heuristic count (chars/4) and avoid upstream count-tokens " +
-      "API hits. Tools without a registered cost adapter return a $0 estimate with a warning.",
+      "providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. " +
+      "Tools without a registered cost adapter return a $0 estimate with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;
-      const estimates = await Promise.all(calls.map((c) => estimateOne(c.tool_name, c.input)));
+      const estimates = calls.map((c) => estimateOne(c.tool_name, c.input));
       const total = sumEstimates(estimates);
       return {
         content: [{
