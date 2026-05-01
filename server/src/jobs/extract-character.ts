@@ -189,7 +189,7 @@ export async function extractCharacterFromBytes(
       role: "user",
       content: [
         { type: "input_image", image_url: dataUrl, detail: "high" },
-        { type: "input_text", text: "Extract the character profile as specified." },
+        { type: "input_text", text: "Extract the character profile as a JSON object matching the schema in the guide." },
       ],
     }],
     text: { format: { type: "json_object" } },

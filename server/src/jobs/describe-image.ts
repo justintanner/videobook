@@ -114,7 +114,7 @@ export async function describeImageBytes(
       role: "user",
       content: [
         { type: "input_image", image_url: dataUrl, detail: "high" },
-        { type: "input_text", text: "Analyze this image and produce the reproduction prompt as specified." },
+        { type: "input_text", text: "Analyze this image and produce the reproduction prompt as a JSON object matching the schema in the guide." },
       ],
     }],
     text: { format: { type: "json_object" } },
