@@ -25,6 +25,21 @@ interface Command {
 
 const HARDCODED_COMMANDS: Command[] = [
   {
+    command: "/post",
+    description: "Post a video or image asset to X (Twitter), now or scheduled",
+    example: "/post @hero-clip Check this out!",
+    category: "action",
+    icon: "Share2",
+    size: "default",
+    variant: "blue",
+    chevron: "right",
+    params: [
+      { name: "asset_slug", type: "string", required: false, description: "Asset to post (@vid-* or @img-*)" },
+      { name: "text", type: "string", required: false, description: "Post text (max 280 chars)" },
+    ],
+    uiAction: "open_post_composer",
+  },
+  {
     command: "/video",
     description: "Generate video from prompt",
     example: "/video a dog on a skateboard @bg-neon",

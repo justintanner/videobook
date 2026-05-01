@@ -88,6 +88,7 @@ import { registerGenerateSeedance2FastR2vFalJob } from "./generate-seedance2-fas
 import { registerGenerateGrokImagineVideoR2vFalJob } from "./generate-grok-imagine-video-r2v-fal.js";
 import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-imagine-video-extend-fal.js";
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
+import { registerPostToXJob } from "./post-to-x.js";
 
 export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
@@ -181,4 +182,5 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerGenerateGrokImagineVideoR2vFalJob(fs);
   registerGenerateGrokImagineVideoExtendFalJob(fs);
   registerGenerateGrokImagineVideoEditFalJob(fs);
+  registerPostToXJob(fs);
 }

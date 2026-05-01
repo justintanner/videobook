@@ -25,6 +25,7 @@
     "@apicity/kie": "file:../apicity/packages/provider/kie",
     "@apicity/kimicoding": "file:../apicity/packages/provider/kimicoding",
     "@apicity/openai": "file:../apicity/packages/provider/openai",
+    "@apicity/x": "file:../apicity/packages/provider/x",
     "@apicity/xai": "file:../apicity/packages/provider/xai",
     "@mediapipe/tasks-vision": "^0.10.34",
     "@radix-ui/react-context-menu": "^2.2.16",

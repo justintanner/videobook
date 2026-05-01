@@ -7,6 +7,7 @@ import { queue, reconcileQueueOnStartup } from "./queue.js";
 import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
+import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const reaperHandles: { stop: () => void }[] = [];
@@ -91,6 +92,7 @@ async function start(): Promise<void> {
     if (reaper) reaperHandles.push(reaper);
   }
   await reconcileQueueOnStartup();
+  await loadAndArmAll();
   const PORT = process.env.PORT ?? 3001;
   app.listen(PORT, () => {
     console.log(`MCP server listening on http://127.0.0.1:${PORT}/mcp`);
@@ -99,6 +101,7 @@ async function start(): Promise<void> {
 
 process.on("SIGINT", async () => {
   for (const h of reaperHandles) h.stop();
+  stopScheduler();
   await queue.stop();
   fs.close();
   process.exit(0);
@@ -106,6 +109,7 @@ process.on("SIGINT", async () => {
 
 process.on("SIGTERM", async () => {
   for (const h of reaperHandles) h.stop();
+  stopScheduler();
   await queue.stop();
   fs.close();
   process.exit(0);

@@ -25,6 +25,7 @@ import { TrimEditor } from '@/components/commands/TrimEditor';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
 import { CharacterDialog } from '@/components/character/CharacterDialog';
+import { PostComposerDialog } from '@/components/post/PostComposerDialog';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { useGenerateCharacter } from '@/hooks/useGenerateCharacter';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
@@ -84,6 +85,7 @@ export function HomePage() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
+  const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -579,7 +581,14 @@ export function HomePage() {
       const cleaned = initialSlug.trim();
       setCharacterDialog({ initialSlug: cleaned ? cleaned : null });
     },
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting]);
+    open_post_composer: (assetSlug: string, text: string) => {
+      const cleaned = assetSlug.trim().replace(/^@/, '');
+      const matched = cleaned
+        ? mediaItems.find((m) => m.id === cleaned || m.slug === `@${cleaned}` || m.slug === cleaned) ?? null
+        : selectedItem;
+      setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
+    },
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem]);
 
   return (
     <MountKeyProvider>
@@ -871,6 +880,14 @@ export function HomePage() {
         submitting={characterSubmitting}
         callTool={callTool}
         callState={state}
+      />
+      <PostComposerDialog
+        open={!!postPanel}
+        onOpenChange={(next) => { if (!next) setPostPanel(null); }}
+        item={postPanel?.assetId ? mediaItems.find((m) => m.id === postPanel.assetId) ?? null : null}
+        initialText={postPanel?.text ?? ''}
+        projectSlug={projectSlug}
+        callTool={callTool}
       />
     </CommandRegistryProvider>
     </MountKeyProvider>
