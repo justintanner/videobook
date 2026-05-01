@@ -807,6 +807,20 @@ async function processSyncedTask(
     result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
   } else if (data?.state === "fail") {
     const failMsg = data.failMsg ?? "unknown error";
+    // failCode "500" is kie's transient internal error ("please try again
+    // later") — the task may still complete on their side. Stay pending so
+    // subsequent polls can pick it up; the 30m sync timeout (PENDING_TASK_TIMEOUT_MS)
+    // ages it out if it really stays dead.
+    if (data.failCode === "500") {
+      result.pending.push({
+        assetId: task.assetId,
+        taskType: task.taskType,
+        progress: data.progress,
+        state: data.state,
+        prompt,
+      });
+      return;
+    }
     result.failed.push({
       assetId: task.assetId,
       taskType: task.taskType,
