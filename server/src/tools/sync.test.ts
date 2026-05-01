@@ -66,28 +66,34 @@ describe("sync tool", () => {
   });
 });
 
+// Per-test createTestClient + create_project under parallel test load was
+// racing on the queue's global projectsDir, intermittently failing with
+// ENOENT on .project.lock. Mirror asset-manifest.test.ts: a single
+// beforeAll/afterAll, with a unique project slug per test for isolation.
 describe("list_assets tool", () => {
   let client: Client;
   let tempDir: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
     client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "test-proj" },
-    });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("empty project returns empty assets array", async () => {
+    const slug = "list-empty";
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: slug },
+    });
+
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: slug },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -96,15 +102,21 @@ describe("list_assets tool", () => {
   });
 
   it("lists assets after upload", async () => {
+    const slug = "list-populated";
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: slug },
+    });
+
     const imgData = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data: imgData },
+      arguments: { project_slug: slug, filename: "photo.png", data: imgData },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: slug },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,36 +11,36 @@ const MINIMAL_PNG = Buffer.from(
   "base64",
 );
 
+// Per-test createTestClient + create_project under parallel test load was
+// racing on the queue's global projectsDir, intermittently failing with
+// ENOENT on .project.lock. Mirror asset-manifest.test.ts: a single
+// beforeAll/afterAll, with a unique project slug per test for isolation.
 describe("list_assets tool", () => {
   let client: Client;
   let tempDir: string;
 
   beforeAll(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    client = await createTestClient(tempDir);
     await queue.start();
   });
 
   afterAll(async () => {
     await queue.stop();
-  });
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
-    client = await createTestClient(tempDir);
-    await client.callTool({
-      name: "create_project",
-      arguments: { project_slug: "test-proj" },
-    });
-  });
-
-  afterEach(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("returns empty assets array for empty project", async () => {
+    const slug = "list-empty";
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: slug },
+    });
+
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: slug },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -48,19 +48,25 @@ describe("list_assets tool", () => {
   });
 
   it("lists uploaded assets", async () => {
+    const slug = "list-uploaded";
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: slug },
+    });
+
     const pngData = MINIMAL_PNG.toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data: pngData },
+      arguments: { project_slug: slug, filename: "photo.png", data: pngData },
     });
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "script.md", data: Buffer.from("# Hello").toString("base64") },
+      arguments: { project_slug: slug, filename: "script.md", data: Buffer.from("# Hello").toString("base64") },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: slug },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -71,17 +77,23 @@ describe("list_assets tool", () => {
   });
 
   it("sorts newest vs oldest", async () => {
+    const slug = "list-sort";
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: slug },
+    });
+
     const pngData = MINIMAL_PNG.toString("base64");
     const firstResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "first.png", data: pngData },
+      arguments: { project_slug: slug, filename: "first.png", data: pngData },
     });
     const firstParsed = JSON.parse(
       (firstResult.content as Array<{ type: string; text: string }>)[0].text,
     );
     const secondResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "second.png", data: pngData },
+      arguments: { project_slug: slug, filename: "second.png", data: pngData },
     });
     const secondParsed = JSON.parse(
       (secondResult.content as Array<{ type: string; text: string }>)[0].text,
@@ -89,12 +101,12 @@ describe("list_assets tool", () => {
 
     // Force distinct timestamps so sort order is deterministic
     const now = Math.floor(Date.now() / 1000);
-    await writeFile(join(tempDir, "test-proj", firstParsed.assetId, ".created_at"), String(now - 100));
-    await writeFile(join(tempDir, "test-proj", secondParsed.assetId, ".created_at"), String(now));
+    await writeFile(join(tempDir, slug, firstParsed.assetId, ".created_at"), String(now - 100));
+    await writeFile(join(tempDir, slug, secondParsed.assetId, ".created_at"), String(now));
 
     const newestResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj", sort: "newest" },
+      arguments: { project_slug: slug, sort: "newest" },
     });
     const newestContent = newestResult.content as Array<{ type: string; text: string }>;
     const newestData = JSON.parse(newestContent[0].text);
@@ -102,7 +114,7 @@ describe("list_assets tool", () => {
 
     const oldestResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj", sort: "oldest" },
+      arguments: { project_slug: slug, sort: "oldest" },
     });
     const oldestContent = oldestResult.content as Array<{ type: string; text: string }>;
     const oldestData = JSON.parse(oldestContent[0].text);
