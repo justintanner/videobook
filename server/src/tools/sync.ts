@@ -698,8 +698,8 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   }
 
   // Auto-render is intentionally NOT performed here. Renders only fire from
-  // explicit /render, assign_slot, or post-transcribe completion (see
-  // jobs/complete-kie-task.ts). Sync should never enqueue render_project.
+  // explicit /render or assign_slot (lazy render on slot drop). Sync should
+  // never enqueue render_project.
 
   // Auto-pipeline: retry missing speech-to-text (gpt4otrans) for analyzed videos with audio
   for (const action of sttActions) {
@@ -726,7 +726,6 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       assetId: action.assetId,
       assetDir: action.assetDir,
       projectSlug: project_slug,
-      autoRender: true,
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
   }

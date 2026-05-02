@@ -201,6 +201,5 @@ async function maybeEnqueueAutoTranscribe(
     assetId,
     assetDir,
     projectSlug,
-    autoRender: true,
   } as unknown as Record<string, unknown>);
 }

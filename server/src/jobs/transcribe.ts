@@ -4,14 +4,8 @@ import type {
   ElevenLabsSpeechToTextResponse,
 } from "@apicity/elevenlabs";
 import { elevenlabs } from "@apicity/elevenlabs";
-import { findVideoFile } from "clipfirst-engine";
-import { join } from "node:path";
-import { queue, registerJobHandler } from "../queue.js";
+import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
-import {
-  readStoredRenderDefaults,
-  readAnalysisRecommendations,
-} from "../tools/sync.js";
 
 type TranscribePayload = {
   type: "transcribe";
@@ -23,7 +17,6 @@ type TranscribePayload = {
   assetId: string;
   assetDir: string;
   projectSlug: string;
-  autoRender?: boolean;
 };
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
@@ -57,9 +50,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       diarize,
       languageCode,
       assetId,
-      assetDir,
       projectSlug,
-      autoRender,
     } = payload as TranscribePayload;
 
     return withLocalLease(
@@ -109,66 +100,8 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
           projectSlug,
         );
 
-        if (autoRender) {
-          await enqueueAutoRender(fs, assetId, assetDir, projectSlug);
-        }
-
         return { success: true, provider: "elevenlabs" as const };
       },
     );
-  });
-}
-
-async function enqueueAutoRender(
-  fs: ClipfirstFs,
-  assetId: string,
-  assetDir: string,
-  projectSlug: string,
-): Promise<void> {
-  const manifestResult = await fs.getManifest(assetId, projectSlug);
-  if (!manifestResult.ok) {
-    throw new Error(`Failed to get manifest for auto-render: ${manifestResult.error.message}`);
-  }
-
-  const videoFile = findVideoFile(manifestResult.value.files);
-  if (!videoFile) throw new Error(`No video file found for auto-render: ${assetId}`);
-
-  const videoPath = join(assetDir, videoFile.name);
-  const jobId = `auto-render-${assetId}`;
-
-  const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", projectSlug);
-  const orientation = timelineResult.ok
-    ? (Array.isArray(timelineResult.value.render)
-        ? timelineResult.value.render[0]
-        : timelineResult.value.render) ?? "landscape"
-    : "landscape";
-
-  const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
-  const analysisRecs = await readAnalysisRecommendations(fs, assetId, projectSlug);
-  const subtitlesEnabled = analysisRecs.subtitlesEnabled !== false;
-
-  await queue.enqueue(jobId, {
-    type: "render_project",
-    projectSlug,
-    orientation,
-    assets: [{
-      assetId,
-      assetDir,
-      videoPath,
-      videoFilename: videoFile.name,
-      hasElevenlabs: true,
-    }],
-    subtitlesEnabled,
-    highlightStyle: stored.highlightStyle as string,
-    position: stored.position as string,
-    fontSize: stored.fontSize as string,
-    textColor: stored.textColor as string,
-    highlightColor: stored.highlightColor as string,
-    audioFadeIn: stored.audioFadeIn as number,
-    audioFadeOut: stored.audioFadeOut as number,
-    audioVolume: stored.audioVolume as number,
-    osgImagePath: (stored.osgImagePath as string | null) ?? null,
-    osgPosition: stored.osgPosition as string,
-    backgroundMode: stored.backgroundMode as string,
   });
 }

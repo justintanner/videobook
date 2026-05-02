@@ -196,4 +196,22 @@ describe("assign_slot tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.render).toBe("landscape");
   });
+
+  it("does not enqueue auto_render for non-vid assets", async () => {
+    // assetId here is an img- asset (uploaded photo.png). Assigning it must
+    // never trigger a render — only vid- assets are eligible for lazy render
+    // on slot drop.
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: {
+        project_slug: "test-proj",
+        asset_id: assetId,
+        slot: "s01",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_render).toBeUndefined();
+  });
 });

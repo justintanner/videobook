@@ -752,6 +752,57 @@
   }
 }
 
+/* ==================== SLOT HOURGLASS (lazy render indicator) ==================== */
+
+@keyframes slot-hourglass-top {
+  0% {
+    height: 10px;
+    y: 2px;
+  }
+  90%,
+  100% {
+    height: 0;
+    y: 12px;
+  }
+}
+
+@keyframes slot-hourglass-bot {
+  0% {
+    height: 0;
+    y: 22px;
+  }
+  90%,
+  100% {
+    height: 10px;
+    y: 12px;
+  }
+}
+
+@keyframes slot-hourglass-stream {
+  0%,
+  6% {
+    opacity: 0;
+  }
+  10%,
+  88% {
+    opacity: 1;
+  }
+  92%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.slot-hg-sand-top {
+  animation: slot-hourglass-top 4s steps(10) infinite;
+}
+.slot-hg-sand-bot {
+  animation: slot-hourglass-bot 4s steps(10) infinite;
+}
+.slot-hg-stream {
+  animation: slot-hourglass-stream 4s linear infinite;
+}
+
 /* ==================== CORRUPT STATE ANIMATIONS ==================== */
 
 @keyframes corrupt-rgb-split {

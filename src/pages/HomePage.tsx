@@ -822,6 +822,7 @@ export function HomePage() {
                     waveform={slotAsset?.waveform ?? undefined}
                     duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
+                    renderStatus={slotAsset?.status}
                     onClick={() => slotSlug && handleSlotClick(i)}
                     onAnimateCommand={handleAnimateCommand}
                   />

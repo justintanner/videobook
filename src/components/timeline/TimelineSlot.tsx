@@ -9,6 +9,8 @@ import {
   ContextMenuItem,
 } from '@/components/ui/context-menu';
 import { Waveform } from './Waveform';
+import { SlotHourglass } from './SlotHourglass';
+import type { ClipState } from '@/components/sidebar/types';
 
 function parseTimestamp(url: string): number {
   const match = url.match(/(\d+\.\d+)\.jpg$/);
@@ -91,9 +93,15 @@ interface TimelineSlotProps {
   waveform?: number[];
   duration?: number;
   assetId?: string;
+  renderStatus?: ClipState;
   flex?: number;
   onClick?: () => void;
   onAnimateCommand?: (text: string) => void;
+}
+
+function isRenderingStatus(status: ClipState | undefined): boolean {
+  if (!status) return false;
+  return status.startsWith('render-queued') || status.startsWith('rendering');
 }
 
 export function TimelineSlot({
@@ -105,6 +113,7 @@ export function TimelineSlot({
   waveform,
   duration,
   assetId,
+  renderStatus,
   flex = 1,
   onClick,
   onAnimateCommand,
@@ -159,6 +168,8 @@ export function TimelineSlot({
     }));
   }, [frameUrls, duration]);
 
+  const isRendering = isRenderingStatus(renderStatus);
+
   const slot = (
     <div
       className={cn(
@@ -170,7 +181,8 @@ export function TimelineSlot({
             : hasContent
               ? 'border border-white/[0.08] hover:border-primary/30'
               : 'border border-dashed border-border/30 hover:border-border/50',
-        hasContent && !isDragOver && 'cursor-grab active:cursor-grabbing'
+        hasContent && !isDragOver && !isRendering && 'cursor-grab active:cursor-grabbing',
+        isRendering && 'clip-state-rendering',
       )}
       style={{ flex: `${flex} 1 0`, minWidth: '60px' }}
       onClick={onClick}
@@ -180,7 +192,11 @@ export function TimelineSlot({
     >
       {/* Clipped inner content */}
       <div className="absolute inset-0 rounded overflow-hidden">
-        {hasContent ? (
+        {isRendering ? (
+          <div className="absolute inset-0 bg-primary/5 flex items-center justify-center">
+            <SlotHourglass />
+          </div>
+        ) : hasContent ? (
           <>
             {/* Dark background base */}
             <div className="absolute inset-0 bg-primary/5" />
@@ -207,7 +223,7 @@ export function TimelineSlot({
       </div>
 
       {/* Micro frame thumbnails — outside overflow-hidden so hover previews escape */}
-      {hasContent && framePcts.length > 0 && (
+      {hasContent && !isRendering && framePcts.length > 0 && (
         <div className="absolute inset-x-3 bottom-0 top-0 z-20">
           {framePcts.map(({ url, pct }) => (
             <MicroThumb key={url} url={url} pct={pct} />
@@ -219,7 +235,7 @@ export function TimelineSlot({
       <div className="absolute top-1 left-1.5 z-30">
         <span className={cn(
           'text-xs font-mono font-bold tracking-wide leading-none',
-          hasContent ? 'text-white/80 drop-shadow-md' : 'text-muted-foreground/35'
+          hasContent || isRendering ? 'text-white/80 drop-shadow-md' : 'text-muted-foreground/35'
         )}>
           {label}
         </span>
@@ -243,7 +259,7 @@ export function TimelineSlot({
       </div>
 
       {/* Asset ID — bottom-left */}
-      {assetId && (
+      {assetId && !isRendering && (
         <div className="absolute bottom-1 left-1.5 z-20 max-w-[calc(100%-12px)]">
           <span className="text-[9px] font-mono text-white/40 truncate block leading-tight drop-shadow-sm">
             {assetId}
