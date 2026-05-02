@@ -99,13 +99,11 @@ async function extractFrame(
 
   const { assetId: imageAssetId, path: imageAssetDir } = assetResult.value;
 
-  const outputPath = join(imageAssetDir, "original.jpg");
   const jobId = `extract-frame-${imageAssetId}-${Date.now()}`;
 
   await queue.enqueue(jobId, {
     type: "extract_frame",
     inputPath: videoPath,
-    outputPath,
     timestamp,
     imageAssetId,
     imageAssetDir,

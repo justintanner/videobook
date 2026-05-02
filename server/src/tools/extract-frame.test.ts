@@ -200,6 +200,30 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(jpgStat.size).toBeGreaterThan(0);
   });
 
+  it("commits original.jpg through fs.writeFile so it's tracked by git", async () => {
+    // Regression: extract_frame used to invoke ffmpeg with a destination path
+    // inside the asset dir, bypassing fs.writeFile. The file landed on disk
+    // (so manifests + UI worked) but git never saw it, breaking the engine's
+    // version-history invariant.
+    const result = await client.callTool({
+      name: "extract_first_frame",
+      arguments: {
+        asset_id: sharedUpload.assetId,
+        project_slug: "frame-proj",
+      },
+    });
+
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    await waitForJob(parsed.job_id);
+
+    const projectDir = join(tempDir, "frame-proj");
+    const tracked = await execFileAsync("git", [
+      "-C", projectDir,
+      "ls-files", `${parsed.image_asset_id}/original.jpg`,
+    ]);
+    expect(tracked.stdout.trim()).toBe(`${parsed.image_asset_id}/original.jpg`);
+  });
+
   it("writes .original.json with correct metadata", async () => {
     const result = await client.callTool({
       name: "extract_first_frame",
