@@ -325,6 +325,13 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         lockData,
         pendingTask: pendingTask.ok ? pendingTask.value : null,
         generationError: generationError.ok ? generationError.value : null,
+        assetRow:
+          assetWorkRow.ok && assetWorkRow.value
+            ? {
+                status: assetWorkRow.value.status,
+                meta: assetWorkRow.value.meta,
+              }
+            : null,
       });
 
       const meta = metadata.ok ? metadata.value : null;

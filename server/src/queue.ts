@@ -101,43 +101,80 @@ const runnerByProject = new Map<string, RunnerInfo>();
 
 const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
 
-const directProviderHandoffKinds = new Map<string, AssetWorkKind>([
-  ["extend_grok_imagine_video", "generate"],
-  ["extend_wan27_video", "generate"],
-  ["generate_alibaba_image", "generate"],
-  ["generate_alibaba_image_pro", "generate"],
-  ["generate_alibaba_qwen_image", "generate"],
-  ["generate_alibaba_qwen_image_edit", "generate"],
-  ["generate_alibaba_video", "generate"],
-  ["generate_gpt_image", "generate"],
-  ["generate_gpt_image_text", "generate"],
-  ["generate_grok_imagine_image", "generate"],
-  ["generate_grok_imagine_ref_video", "generate"],
-  ["generate_grok_imagine_t2v_video", "generate"],
-  ["generate_grok_imagine_text_image", "generate"],
-  ["generate_grok_imagine_video", "generate"],
-  ["generate_happyhorse_i2v_video", "generate"],
-  ["generate_happyhorse_ref_video", "generate"],
-  ["generate_happyhorse_t2v_video", "generate"],
-  ["generate_happyhorse_videoedit_video", "generate"],
-  ["generate_kling30_motion_control_video", "generate"],
-  ["generate_kling30_video", "generate"],
-  ["generate_nano_banana_image", "generate"],
-  ["generate_qwen2_image_edit", "generate"],
-  ["generate_seedance2_frames_video", "generate"],
-  ["generate_seedance2_i2v_video", "generate"],
-  ["generate_seedance2_reference_video", "generate"],
-  ["generate_seedance2_t2v_video", "generate"],
-  ["generate_seedream_image", "generate"],
-  ["generate_seedream_text_image", "generate"],
-  ["generate_wan27_i2v_video", "generate"],
-  ["generate_wan27_image", "generate"],
-  ["generate_wan27_image_pro", "generate"],
-  ["generate_wan27_r2v_video", "generate"],
-  ["generate_wan27_videoedit_video", "generate"],
-  ["isolate_vocals", "isolate"],
-  ["upscale_grok_imagine_video", "generate"],
-]);
+type Orientation = "portrait" | "landscape" | "square";
+type ClassifiedJob = { kind: AssetWorkKind; orientation?: Orientation };
+
+/**
+ * Maps a job type to the clean AssetWorkKind that the engine writes into
+ * assets.meta.kind at enqueue time. Mirrors what the corresponding handler
+ * later passes to beginAssetWork, so a single in-progress UI state is
+ * derivable for the asset across the queued → working → ready lifecycle.
+ *
+ * Returns null for jobs that should not surface an asset state (e.g.
+ * post_to_x — runs sub-second and the asset is already ready).
+ */
+function jobTypeToAssetWorkKind(
+  jobType: string,
+  payload: JobPayload,
+): ClassifiedJob | null {
+  if (jobType === "render_project" || jobType === "render_timeline") {
+    const o = payload.orientation;
+    const orientation =
+      o === "portrait" || o === "landscape" || o === "square"
+        ? (o as Orientation)
+        : undefined;
+    const kind: AssetWorkKind =
+      jobType === "render_timeline" ? "final" : "render";
+    return orientation ? { kind, orientation } : { kind };
+  }
+  switch (jobType) {
+    case "process_video":
+    case "process_image":          return { kind: "process" };
+    case "analyze_video":          return { kind: "analyze" };
+    case "transcribe":
+    case "transcribe_video_audio": return { kind: "transcribe" };
+    case "trim_video":             return { kind: "trim" };
+    case "splice_video":           return { kind: "splice" };
+    case "reverse_video":          return { kind: "reverse" };
+    case "change_video_speed":     return { kind: "change_speed" };
+    case "replace_video_audio":    return { kind: "replace_audio" };
+    case "apply_cuts":             return { kind: "apply_cuts" };
+    case "apply_sfx":              return { kind: "apply_sfx" };
+    case "extract_frame":
+    case "extract_audio":
+    case "extract_character":      return { kind: "extract" };
+    case "describe_image":         return { kind: "describe" };
+    case "rewrite_script":         return { kind: "rewrite_script" };
+    case "download_video":         return { kind: "download" };
+    case "watermark_video":        return { kind: "final" };
+    case "complete_kie_task":      return { kind: "generate" };
+    case "post_to_x":              return null;
+  }
+  if (jobType === "isolate_vocals") return { kind: "isolate" };
+  if (
+    jobType.startsWith("generate_") ||
+    jobType.startsWith("extend_") ||
+    jobType.startsWith("upscale_")
+  ) {
+    return { kind: "generate" };
+  }
+  return null;
+}
+
+/** Subset of jobTypeToAssetWorkKind used by the wrapper to decide whether to
+ *  pre-claim a local lease before invoking the handler (Pattern A handoff).
+ *  Only generation/extend/upscale/isolate_vocals follow this pattern. */
+function providerHandoffKindFor(jobType: string): AssetWorkKind | null {
+  if (jobType === "isolate_vocals") return "isolate";
+  if (
+    jobType.startsWith("generate_") ||
+    jobType.startsWith("extend_") ||
+    jobType.startsWith("upscale_")
+  ) {
+    return "generate";
+  }
+  return null;
+}
 
 function projectDirFor(slug: string): string {
   if (!isValidProjectSlug(slug)) {
@@ -153,7 +190,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
     return async (job: Job) => {
       let lease: LeaseToken | null = null;
       let heartbeat: ReturnType<typeof setInterval> | null = null;
-      const providerKind = directProviderHandoffKinds.get(type);
+      const providerKind = providerHandoffKindFor(type);
       const ctx: JobHandlerContext = {
         setLease(token) {
           if (lease !== null) {
@@ -366,12 +403,17 @@ async function ensureProjectReady(
 }
 
 function buildEnqueueOptions(jobId: string, payload: JobPayload) {
+  const type = extractType(payload);
+  const assetId = extractAssetId(payload);
+  const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
   return {
-    type: extractType(payload),
-    assetId: extractAssetId(payload),
+    type,
+    assetId,
     payload,
     dedupeKey: jobId,
     maxAttempts: 1,
+    assetWorkKind: classified?.kind ?? null,
+    assetWorkOrientation: classified?.orientation ?? null,
   };
 }
 
