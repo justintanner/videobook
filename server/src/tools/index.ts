@@ -141,6 +141,7 @@ import { applySfxDef } from "./apply-sfx.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
+import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { watermarkVideoDef } from "./watermark-video.js";
 import { withLogging } from "./log-wrapper.js";
 
@@ -296,6 +297,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     pinCharacterSlotDef(fs),
     unpinCharacterSlotDef(fs),
     postDef(),
+    xConnectStartDef(),
+    xConnectStatusDef(),
     watermarkVideoDef(fs),
   ];
 }

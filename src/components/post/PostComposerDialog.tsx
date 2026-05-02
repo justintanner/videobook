@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Send, Share2, X, Calendar, Image as ImageIcon, Film } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, LogIn, Send, Share2, X, Calendar, Image as ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -21,6 +21,17 @@ interface ToolTextResult {
   isError?: boolean;
   content?: Array<{ type: string; text: string }>;
 }
+
+interface XConnectStatus {
+  connected: boolean;
+  pending: boolean;
+  has_credentials: boolean;
+  error?: string;
+  expires_at?: string;
+}
+
+const POLL_INTERVAL_MS = 1500;
+const POLL_TIMEOUT_MS = 5 * 60_000;
 
 function extractText(result: unknown): string | null {
   const r = result as ToolTextResult;
@@ -51,20 +62,113 @@ export function PostComposerDialog({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ status: 'posted' | 'scheduled'; tweet_url?: string; scheduled_for?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [xStatus, setXStatus] = useState<XConnectStatus | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const userPickedOrientationRef = useRef(false);
+  const pollTimerRef = useRef<number | null>(null);
+  const pollDeadlineRef = useRef<number>(0);
+
+  const fetchXStatus = useCallback(async (): Promise<XConnectStatus | null> => {
+    try {
+      const res = await callTool('x_connect_status', {});
+      const r = res as ToolTextResult;
+      if (r.isError) return null;
+      const t = extractText(res);
+      if (!t) return null;
+      return JSON.parse(t) as XConnectStatus;
+    } catch {
+      return null;
+    }
+  }, [callTool]);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const pollStatus = useCallback(async () => {
+    pollTimerRef.current = null;
+    if (Date.now() > pollDeadlineRef.current) {
+      setConnecting(false);
+      setConnectError('Timed out waiting for X authorization. Try again.');
+      return;
+    }
+    const s = await fetchXStatus();
+    if (s) {
+      setXStatus(s);
+      if (s.connected) {
+        setConnecting(false);
+        setConnectError(null);
+        return;
+      }
+      if (s.error && !s.pending) {
+        setConnecting(false);
+        setConnectError(s.error);
+        return;
+      }
+    }
+    pollTimerRef.current = window.setTimeout(pollStatus, POLL_INTERVAL_MS);
+  }, [fetchXStatus]);
+
+  const connectX = useCallback(async () => {
+    if (connecting) return;
+    setConnectError(null);
+    setConnecting(true);
+    try {
+      const res = await callTool('x_connect_start', {});
+      const r = res as ToolTextResult;
+      if (r.isError) {
+        setConnectError(extractText(res) ?? 'Could not start X connect flow');
+        setConnecting(false);
+        return;
+      }
+      const t = extractText(res);
+      if (!t) {
+        setConnectError('Empty response from x_connect_start');
+        setConnecting(false);
+        return;
+      }
+      const parsed = JSON.parse(t) as { authorize_url: string };
+      window.open(parsed.authorize_url, '_blank', 'noopener,noreferrer');
+      pollDeadlineRef.current = Date.now() + POLL_TIMEOUT_MS;
+      pollTimerRef.current = window.setTimeout(pollStatus, POLL_INTERVAL_MS);
+    } catch (err) {
+      setConnectError(err instanceof Error ? err.message : String(err));
+      setConnecting(false);
+    }
+  }, [callTool, connecting, pollStatus]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      stopPolling();
+      setConnecting(false);
+      setConnectError(null);
+      return;
+    }
     setText(initialText);
     setScheduleEnabled(false);
     setScheduledFor(localDatetimeNowPlus(30));
     setResult(null);
     setError(null);
-  }, [open, initialText, item?.id]);
+    userPickedOrientationRef.current = false;
+    setOrientation('portrait');
+    fetchXStatus().then((s) => {
+      if (s) setXStatus(s);
+    });
+    return () => {
+      stopPolling();
+    };
+  }, [open, initialText, item?.id, fetchXStatus, stopPolling]);
 
   const charCount = text.length;
   const overLimit = charCount > MAX_TEXT;
   const hasMedia = !!item;
-  const canSubmit = !submitting && hasMedia && !overLimit && !!projectSlug;
+  const needsXConnect = platform === 'x' && xStatus !== null && !xStatus.connected;
+  const canSubmit = !submitting && hasMedia && !overLimit && !!projectSlug && !needsXConnect;
 
   const previewKind = useMemo(() => {
     if (!item) return null;
@@ -84,6 +188,7 @@ export function PostComposerDialog({
         platform,
       };
       if (text.trim().length > 0) args.text = text.trim();
+      if (previewKind === 'video') args.orientation = orientation;
       if (scheduleEnabled) {
         const iso = new Date(scheduledFor).toISOString();
         args.scheduled_for = iso;
@@ -142,10 +247,20 @@ export function PostComposerDialog({
             {item && previewKind === 'video' && item.filePath ? (
               <video
                 src={item.filePath}
-                className="w-full aspect-video rounded border border-border/40 bg-black object-contain"
+                className={cn(
+                  'w-full rounded border border-border/40 bg-black object-contain',
+                  orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-video',
+                )}
                 controls
                 muted
                 playsInline
+                onLoadedMetadata={(e) => {
+                  if (userPickedOrientationRef.current) return;
+                  const v = e.currentTarget;
+                  if (v.videoWidth && v.videoHeight) {
+                    setOrientation(v.videoHeight > v.videoWidth ? 'portrait' : 'landscape');
+                  }
+                }}
               />
             ) : item && previewKind === 'image' && (item.thumbnailSrc || item.filePath) ? (
               <img
@@ -213,6 +328,73 @@ export function PostComposerDialog({
                 </button>
               </div>
             </div>
+
+            {previewKind === 'video' ? (
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70 block mb-1">Orientation</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      userPickedOrientationRef.current = true;
+                      setOrientation('portrait');
+                    }}
+                    className={cn(
+                      'flex-1 px-3 py-1.5 text-xs font-mono rounded border transition-colors',
+                      orientation === 'portrait'
+                        ? 'border-blue-400/60 bg-blue-500/10 text-blue-100'
+                        : 'border-border/40 text-muted-foreground hover:border-border/70',
+                    )}
+                  >
+                    Portrait 9:16
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      userPickedOrientationRef.current = true;
+                      setOrientation('landscape');
+                    }}
+                    className={cn(
+                      'flex-1 px-3 py-1.5 text-xs font-mono rounded border transition-colors',
+                      orientation === 'landscape'
+                        ? 'border-blue-400/60 bg-blue-500/10 text-blue-100'
+                        : 'border-border/40 text-muted-foreground hover:border-border/70',
+                    )}
+                  >
+                    Landscape 16:9
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {needsXConnect ? (
+              <div className="text-[11px] font-mono text-amber-200 bg-amber-950/30 border border-amber-500/30 rounded px-3 py-2 flex items-center gap-2">
+                <span className="flex-1">
+                  {xStatus?.has_credentials === false
+                    ? 'Set X_CLIENT_ID and X_CLIENT_SECRET in .env, then connect.'
+                    : 'Sign in to X once — token auto-refreshes after that.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={connectX}
+                  disabled={connecting || xStatus?.has_credentials === false}
+                  className={cn(
+                    'px-2.5 py-1 text-xs font-mono rounded border flex items-center gap-1.5 transition-colors',
+                    connecting || xStatus?.has_credentials === false
+                      ? 'border-border/30 text-muted-foreground/50 cursor-not-allowed'
+                      : 'border-amber-400/60 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30',
+                  )}
+                >
+                  {connecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogIn className="w-3 h-3" />}
+                  {connecting ? 'Waiting…' : 'Connect X'}
+                </button>
+              </div>
+            ) : null}
+            {connectError ? (
+              <div className="text-[11px] font-mono text-red-300 bg-red-950/40 border border-red-500/30 rounded px-3 py-2 whitespace-pre-wrap">
+                {connectError}
+              </div>
+            ) : null}
 
             <div>
               <label className="flex items-center gap-2 text-[11px] font-mono text-blue-200/90 cursor-pointer">

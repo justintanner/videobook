@@ -9,6 +9,7 @@ export interface ScheduledPostPayload {
   project_slug: string;
   platform: "x";
   text?: string;
+  orientation?: "portrait" | "landscape";
 }
 
 export type ScheduledPostStatus =
@@ -111,6 +112,7 @@ async function firePost(scheduleId: string): Promise<void> {
         assetId: entry.payload.asset_id,
         projectSlug: entry.payload.project_slug,
         text: entry.payload.text,
+        orientation: entry.payload.orientation,
         scheduleId,
         scheduledFor: entry.scheduled_for,
       },

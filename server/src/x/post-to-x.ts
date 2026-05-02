@@ -2,9 +2,13 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { findPrimaryMediaFile } from "clipfirst-engine";
 import { x as createX } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
-import { extname } from "node:path";
+import { extname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { readFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { getValidAccessToken } from "./x-tokens.js";
 import { appendXPostMetadata } from "./post-metadata.js";
+import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 const APPEND_CHUNK_BYTES = 4 * 1024 * 1024;
 const STATUS_POLL_TIMEOUT_MS = 5 * 60_000;
@@ -42,15 +46,64 @@ function inferMediaType(filename: string): MediaTypeInfo | null {
   }
 }
 
+export type PostOrientation = "portrait" | "landscape";
+
 export interface PostToXArgs {
   fs: ClipfirstFs;
   assetId: string;
   projectSlug: string;
   text?: string;
+  orientation?: PostOrientation;
   scheduleId?: string;
   scheduledFor?: string;
   x?: XProvider;
   signal?: AbortSignal;
+}
+
+interface OrientationOutput {
+  buffer: Buffer;
+  tempPath: string;
+  mediaType: "video/mp4";
+}
+
+async function maybeReorientVideo(
+  inputPath: string,
+  orientation: PostOrientation | undefined,
+): Promise<OrientationOutput | null> {
+  if (!orientation) return null;
+  const probe = await probeVideo(inputPath);
+  if (!probe.width || !probe.height) return null;
+  const sourceMatches
+    = orientation === "portrait"
+      ? probe.height >= probe.width
+      : probe.width >= probe.height;
+  if (sourceMatches) return null;
+
+  const targetW = orientation === "portrait" ? 1080 : 1920;
+  const targetH = orientation === "portrait" ? 1920 : 1080;
+  const filter
+    = `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,`
+    + `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
+  const tempPath = join(tmpdir(), `clipfirst-orient-${randomUUID()}.mp4`);
+  const args = [
+    "-y",
+    "-i",
+    inputPath,
+    "-vf",
+    filter,
+    ...H264_MEDIUM,
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+  ];
+  if (probe.hasAudio) args.push(...AUDIO_OPTS);
+  else args.push("-an");
+  args.push(tempPath);
+
+  await runFfmpeg(args);
+  const buffer = await readFile(tempPath);
+  return { buffer, tempPath, mediaType: "video/mp4" };
 }
 
 export interface PostToXResult {
@@ -154,69 +207,106 @@ async function waitForProcessing(
 }
 
 export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
-  const { fs, assetId, projectSlug, text, scheduleId, scheduledFor, signal } = args;
+  const {
+    fs,
+    assetId,
+    projectSlug,
+    text,
+    orientation,
+    scheduleId,
+    scheduledFor,
+    signal,
+  } = args;
 
   const manifestResult = await fs.getManifest(assetId, projectSlug);
   if (!manifestResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
   }
-  const file = findPrimaryMediaFile(manifestResult.value.files, assetId);
+  const manifest = manifestResult.value;
+  const file = findPrimaryMediaFile(manifest.files, assetId);
   if (!file) {
     throw new Error(`Asset ${assetId} has no primary media file to post`);
   }
-  const info = inferMediaType(file.name);
+  let info = inferMediaType(file.name);
   if (!info) {
     throw new Error(
       `Cannot post asset ${assetId}: unsupported media file ${file.name}`,
     );
   }
 
-  const readResult = await fs.readFile(assetId, file.name, projectSlug);
-  if (!readResult.ok) {
-    throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
+  let buffer: Buffer;
+  let tempPath: string | null = null;
+  if (orientation && info.mediaCategory === "tweet_video") {
+    const inputPath = join(manifest.path, file.name);
+    const transformed = await maybeReorientVideo(inputPath, orientation);
+    if (transformed) {
+      buffer = transformed.buffer;
+      tempPath = transformed.tempPath;
+      info = { mediaType: transformed.mediaType, mediaCategory: "tweet_video" };
+    } else {
+      const readResult = await fs.readFile(assetId, file.name, projectSlug);
+      if (!readResult.ok) {
+        throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
+      }
+      buffer = readResult.value;
+    }
+  } else {
+    const readResult = await fs.readFile(assetId, file.name, projectSlug);
+    if (!readResult.ok) {
+      throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
+    }
+    buffer = readResult.value;
   }
-  const buffer = readResult.value;
 
-  const x = await getXClient(args.x);
-  const mediaId = await uploadMedia(x, buffer, info, signal);
-
-  const tweetRes = await x.post.v2.tweets(
-    {
-      ...(text !== undefined && text.length > 0 ? { text } : {}),
-      media: { media_ids: [mediaId] },
-    },
-    signal,
-  );
-
-  const tweetId = tweetRes.data.id;
-  const postedAt = new Date().toISOString();
-
+  let mediaId: string;
   try {
-    await appendXPostMetadata({
-      fs,
-      assetId,
-      projectSlug,
-      entry: {
-        tweet_id: tweetId,
-        tweet_url: tweetUrl(tweetId),
-        posted_at: postedAt,
-        media_id: mediaId,
-        text: text !== undefined && text.length > 0 ? text : null,
-        scheduled_for: scheduledFor ?? null,
-        schedule_id: scheduleId ?? null,
-      },
-    });
-  } catch (err) {
-    console.error(
-      `[post_to_x] tweet ${tweetId} succeeded but writing .post.x.json failed:`,
-      err instanceof Error ? err.message : err,
-    );
-  }
+    const x = await getXClient(args.x);
+    mediaId = await uploadMedia(x, buffer, info, signal);
 
-  return {
-    tweet_id: tweetId,
-    tweet_url: tweetUrl(tweetId),
-    media_id: mediaId,
-    posted_at: postedAt,
-  };
+    const tweetRes = await x.post.v2.tweets(
+      {
+        ...(text !== undefined && text.length > 0 ? { text } : {}),
+        media: { media_ids: [mediaId] },
+      },
+      signal,
+    );
+
+    const tweetId = tweetRes.data.id;
+    const postedAt = new Date().toISOString();
+
+    try {
+      await appendXPostMetadata({
+        fs,
+        assetId,
+        projectSlug,
+        entry: {
+          tweet_id: tweetId,
+          tweet_url: tweetUrl(tweetId),
+          posted_at: postedAt,
+          media_id: mediaId,
+          text: text !== undefined && text.length > 0 ? text : null,
+          scheduled_for: scheduledFor ?? null,
+          schedule_id: scheduleId ?? null,
+        },
+      });
+    } catch (err) {
+      console.error(
+        `[post_to_x] tweet ${tweetId} succeeded but writing .post.x.json failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    return {
+      tweet_id: tweetId,
+      tweet_url: tweetUrl(tweetId),
+      media_id: mediaId,
+      posted_at: postedAt,
+    };
+  } finally {
+    if (tempPath) {
+      await unlink(tempPath).catch(() => {
+        /* best-effort cleanup */
+      });
+    }
+  }
 }

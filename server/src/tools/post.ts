@@ -19,6 +19,12 @@ export function postDef(): ToolDef {
         .max(280)
         .optional()
         .describe("Post text (X limit 280 chars). Optional when media is attached."),
+      orientation: z
+        .enum(["portrait", "landscape"])
+        .optional()
+        .describe(
+          "Force a target video orientation. Pads with black bars to 1080x1920 (portrait) or 1920x1080 (landscape) before upload. Skipped when source already matches.",
+        ),
       scheduled_for: z
         .string()
         .datetime()
@@ -26,12 +32,13 @@ export function postDef(): ToolDef {
         .describe("ISO 8601 timestamp to publish at. Omit to post immediately."),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, platform = "x", text, scheduled_for } =
+      const { asset_id, project_slug, platform = "x", text, orientation, scheduled_for } =
         args as {
           asset_id: string;
           project_slug: string;
           platform?: "x";
           text?: string;
+          orientation?: "portrait" | "landscape";
           scheduled_for?: string;
         };
 
@@ -57,7 +64,7 @@ export function postDef(): ToolDef {
         if (when - Date.now() > SCHEDULE_LEAD_MS) {
           try {
             const result = await schedulePost(
-              { asset_id, project_slug, platform, text },
+              { asset_id, project_slug, platform, text, orientation },
               scheduled_for,
             );
             return {
@@ -97,6 +104,7 @@ export function postDef(): ToolDef {
           assetId: asset_id,
           projectSlug: project_slug,
           text,
+          orientation,
         });
         return {
           content: [
