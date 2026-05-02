@@ -136,7 +136,6 @@ const directProviderHandoffKinds = new Map<string, AssetWorkKind>([
   ["generate_wan27_r2v_video", "generate"],
   ["generate_wan27_videoedit_video", "generate"],
   ["isolate_vocals", "isolate"],
-  ["transcribe", "transcribe"],
   ["upscale_grok_imagine_video", "generate"],
 ]);
 
