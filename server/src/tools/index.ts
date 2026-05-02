@@ -81,6 +81,7 @@ import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
 import { exportToDownloadsDef } from "./export-to-downloads.js";
 import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
+import { recordPromptDef, listPromptHistoryDef } from "./prompt-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
 import { describeImageDef } from "./describe-image.js";
 import { rewriteScriptDef } from "./rewrite-script.js";
@@ -236,6 +237,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     slugsDef(fs),
     pushChatHistoryDef(fs),
     listChatHistoryDef(fs),
+    recordPromptDef(fs),
+    listPromptHistoryDef(fs),
     rewritePromptDef(fs),
     describeImageDef(fs),
     rewriteScriptDef(fs),

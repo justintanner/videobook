@@ -3,6 +3,9 @@ import { Loader2, LogIn, Send, Share2, X, Calendar, Image as ImageIcon, Film } f
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
+import { usePromptHistory } from '@/hooks/usePromptHistory';
+import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
+import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 
 const MAX_TEXT = 280;
 
@@ -69,6 +72,15 @@ export function PostComposerDialog({
   const userPickedOrientationRef = useRef(false);
   const pollTimerRef = useRef<number | null>(null);
   const pollDeadlineRef = useRef<number>(0);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const history = usePromptHistory(callTool, 'post', projectSlug);
+  const slashPicker = useSlashCommandPicker({
+    value: text,
+    setValue: setText,
+    textareaRef,
+    onAfterDispatch: () => onOpenChange(false),
+  });
 
   const fetchXStatus = useCallback(async (): Promise<XConnectStatus | null> => {
     try {
@@ -156,12 +168,15 @@ export function PostComposerDialog({
     setError(null);
     userPickedOrientationRef.current = false;
     setOrientation('portrait');
+    history.reset();
     fetchXStatus().then((s) => {
       if (s) setXStatus(s);
     });
     return () => {
       stopPolling();
     };
+    // `history` is recreated each render — reset is stable enough; deps below cover the trigger surface.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialText, item?.id, fetchXStatus, stopPolling]);
 
   const charCount = text.length;
@@ -182,16 +197,20 @@ export function PostComposerDialog({
     setSubmitting(true);
     setError(null);
     try {
+      const trimmedText = text.trim();
       const args: Record<string, unknown> = {
         asset_id: item.id,
         project_slug: projectSlug,
         platform,
       };
-      if (text.trim().length > 0) args.text = text.trim();
+      if (trimmedText.length > 0) args.text = trimmedText;
       if (previewKind === 'video') args.orientation = orientation;
       if (scheduleEnabled) {
         const iso = new Date(scheduledFor).toISOString();
         args.scheduled_for = iso;
+      }
+      if (trimmedText.length > 0) {
+        history.push(trimmedText, { platform });
       }
       const res = await callTool('post', args);
       const r = res as ToolTextResult;
@@ -287,20 +306,51 @@ export function PostComposerDialog({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70">Text</label>
-                <span className={cn(
-                  'text-[10px] font-mono',
-                  overLimit ? 'text-red-400' : charCount > MAX_TEXT * 0.85 ? 'text-amber-400' : 'text-muted-foreground',
-                )}>
-                  {charCount}/{MAX_TEXT}
-                </span>
+                <div className="flex items-center gap-2">
+                  <PromptHistoryArrows
+                    cursor={history.cursor}
+                    total={history.entries.length}
+                    onPrev={() => {
+                      const prev = history.navigateBack(text);
+                      if (prev !== null) setText(prev);
+                    }}
+                    onNext={() => {
+                      const next = history.navigateForward();
+                      if (next !== null) setText(next);
+                    }}
+                    colorClass="text-blue-300/70"
+                  />
+                  <span className={cn(
+                    'text-[10px] font-mono',
+                    overLimit ? 'text-red-400' : charCount > MAX_TEXT * 0.85 ? 'text-amber-400' : 'text-muted-foreground',
+                  )}>
+                    {charCount}/{MAX_TEXT}
+                  </span>
+                </div>
               </div>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={6}
-                placeholder="What's happening?"
-                className="w-full text-sm bg-black/40 border border-border/40 rounded px-3 py-2 outline-none focus:border-blue-400/60 resize-none font-mono"
-              />
+              <div className="relative">
+                {slashPicker.dropdown}
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={(e) => { setText(e.target.value); history.reset(); }}
+                  onKeyDown={(e) => {
+                    if (slashPicker.onKeyDown(e)) return;
+                    if (e.key === 'ArrowUp' && !e.shiftKey && (textareaRef.current?.selectionStart ?? 0) === 0) {
+                      const prev = history.navigateBack(text);
+                      if (prev !== null) { e.preventDefault(); setText(prev); }
+                      return;
+                    }
+                    if (e.key === 'ArrowDown' && !e.shiftKey && history.cursor !== -1) {
+                      const next = history.navigateForward();
+                      if (next !== null) { e.preventDefault(); setText(next); }
+                    }
+                  }}
+                  rows={6}
+                  placeholder="What's happening?  (or /help)"
+                  className="w-full text-sm bg-black/40 border border-border/40 rounded px-3 py-2 outline-none focus:border-blue-400/60 resize-none font-mono"
+                />
+              </div>
             </div>
 
             <div>

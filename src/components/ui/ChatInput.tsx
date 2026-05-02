@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { AutocompleteDropdown } from './AutocompleteDropdown';
 import { CommandBadge } from './CommandBadge';
 import { useAnimateType } from '@/hooks/useAnimateType';
-import { useChatHistory } from '@/hooks/useChatHistory';
+import { usePromptHistory } from '@/hooks/usePromptHistory';
 import type { AutocompleteItem, ColorScheme } from './AutocompleteDropdown';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { CommandDescriptor } from '@/lib/command-registry';
@@ -149,7 +149,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [navigatingHistory, setNavigatingHistory] = useState(false);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
-  const history = useChatHistory(callTool, projectSlug);
+  const history = usePromptHistory(callTool, 'chat', projectSlug);
 
   const runResultSequence = useCallback(async (text: string) => {
     clearTimeout(resultTimeoutRef.current);

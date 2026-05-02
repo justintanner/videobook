@@ -4,6 +4,10 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils';
 import type { RewritePlatform, RewriteVariant } from '@/hooks/useRewriteScript';
 import { PLATFORM_OPTIONS } from './rewrite-platforms';
+import { usePromptHistory } from '@/hooks/usePromptHistory';
+import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
+import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
+import type { UseMcpResult } from 'use-mcp/react';
 
 const CUSTOM_PROMPT_MAX = 500;
 
@@ -27,6 +31,8 @@ interface RewritePopoverProps {
   disabled?: boolean;
   trigger: React.ReactNode;
   initial?: RewriteInitial | null;
+  callTool?: UseMcpResult['callTool'];
+  projectSlug?: string;
 }
 
 export function RewritePopover({
@@ -37,11 +43,15 @@ export function RewritePopover({
   disabled,
   trigger,
   initial,
+  callTool,
+  projectSlug,
 }: RewritePopoverProps) {
   const [variant, setVariant] = useState<RewriteVariant>('tldr');
   const [platform, setPlatform] = useState<RewritePlatform | ''>('');
   const [customPrompt, setCustomPrompt] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const history = usePromptHistory(callTool, 'script_rewrite', projectSlug);
 
   // Seed state from `initial` each time the popover opens.
   useEffect(() => {
@@ -49,6 +59,7 @@ export function RewritePopover({
     setVariant(initial?.variant ?? 'tldr');
     setPlatform(initial?.platform ?? '');
     setCustomPrompt(initial?.customPrompt ?? '');
+    history.reset();
     // Intentionally only re-seed when `open` flips — ignore identity changes of `initial`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -59,25 +70,62 @@ export function RewritePopover({
       setVariant('tldr');
       setPlatform('');
       setCustomPrompt('');
+      history.reset();
     }
     onOpenChange(next);
-  }, [onOpenChange]);
+  }, [onOpenChange, history]);
+
+  const slashPicker = useSlashCommandPicker({
+    value: customPrompt,
+    setValue: (next) => setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX)),
+    textareaRef,
+    onAfterDispatch: () => onOpenChange(false),
+  });
 
   const submit = useCallback(() => {
     if (rewriting) return;
+    const trimmed = customPrompt.trim();
+    if (trimmed) {
+      history.push(trimmed, {
+        variant,
+        ...(platform ? { platform } : {}),
+      });
+    }
     onSubmit({
       variant,
       platform: platform || undefined,
-      customPrompt: customPrompt.trim() || undefined,
+      customPrompt: trimmed || undefined,
     });
-  }, [rewriting, onSubmit, variant, platform, customPrompt]);
+  }, [rewriting, onSubmit, variant, platform, customPrompt, history]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashPicker.onKeyDown(e)) return;
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       submit();
+      return;
     }
-  }, [submit]);
+    if (e.key === 'ArrowUp' && !e.shiftKey && (textareaRef.current?.selectionStart ?? 0) === 0) {
+      const prev = history.navigateBack(customPrompt);
+      if (prev !== null) {
+        e.preventDefault();
+        setCustomPrompt(prev.slice(0, CUSTOM_PROMPT_MAX));
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' && !e.shiftKey && history.cursor !== -1) {
+      const next = history.navigateForward();
+      if (next !== null) {
+        e.preventDefault();
+        setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
+      }
+    }
+  }, [slashPicker, submit, history, customPrompt]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCustomPrompt(e.target.value.slice(0, CUSTOM_PROMPT_MAX));
+    history.reset();
+  }, [history]);
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -160,31 +208,49 @@ export function RewritePopover({
           <div className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/70">Instruction (optional)</span>
-              <span className="text-[10px] font-mono text-amber-500/50 tabular-nums">
-                {customPrompt.length}/{CUSTOM_PROMPT_MAX}
-              </span>
+              <div className="flex items-center gap-2">
+                <PromptHistoryArrows
+                  cursor={history.cursor}
+                  total={history.entries.length}
+                  onPrev={() => {
+                    const prev = history.navigateBack(customPrompt);
+                    if (prev !== null) setCustomPrompt(prev.slice(0, CUSTOM_PROMPT_MAX));
+                  }}
+                  onNext={() => {
+                    const next = history.navigateForward();
+                    if (next !== null) setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
+                  }}
+                  colorClass="text-amber-400/70"
+                />
+                <span className="text-[10px] font-mono text-amber-500/50 tabular-nums">
+                  {customPrompt.length}/{CUSTOM_PROMPT_MAX}
+                </span>
+              </div>
             </div>
-            <textarea
-              ref={textareaRef}
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value.slice(0, CUSTOM_PROMPT_MAX))}
-              onKeyDown={handleKeyDown}
-              disabled={disabled || rewriting}
-              rows={3}
-              placeholder="e.g. replace the pig with a man in a blue suit"
-              className={cn(
-                'w-full px-2.5 py-1.5 rounded border resize-none',
-                'border-amber-500/30 bg-black/60',
-                'text-[12px] font-mono text-amber-100 placeholder:text-amber-500/30',
-                'hover:border-amber-400/60 focus:outline-none focus:ring-1 focus:ring-amber-400/60',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-            />
+            <div className="relative">
+              {slashPicker.dropdown}
+              <textarea
+                ref={textareaRef}
+                value={customPrompt}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                disabled={disabled || rewriting}
+                rows={3}
+                placeholder="e.g. replace the pig with a man in a blue suit  (or /help)"
+                className={cn(
+                  'w-full px-2.5 py-1.5 rounded border resize-none',
+                  'border-amber-500/30 bg-black/60',
+                  'text-[12px] font-mono text-amber-100 placeholder:text-amber-500/30',
+                  'hover:border-amber-400/60 focus:outline-none focus:ring-1 focus:ring-amber-400/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              />
+            </div>
           </div>
 
           {/* Submit */}
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-[10px] font-mono text-amber-500/40">⌘↵ to submit</span>
+            <span className="text-[10px] font-mono text-amber-500/40">⌘↵ to submit · ↑/↓ history</span>
             <button
               type="button"
               onClick={submit}

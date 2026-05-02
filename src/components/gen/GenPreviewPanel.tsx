@@ -700,6 +700,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               onSubmit={handleRewriteImagePromptSubmit}
                               rewriting={rewriting}
                               disabled={rewriteDisabled && !rewriteOpen}
+                              callTool={callTool}
+                              projectSlug={projectSlug}
+                              model={selectedModelKey}
                               trigger={
                                 <button
                                   type="button"

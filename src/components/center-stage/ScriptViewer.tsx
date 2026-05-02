@@ -512,6 +512,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   onSubmit={handleRewriteSubmit}
                   rewriting={rewriting}
                   initial={pendingRewriteArgs}
+                  callTool={callTool}
+                  projectSlug={projectSlug}
                   trigger={
                     <button
                       type="button"
