@@ -30,7 +30,7 @@ export function recordPromptDef(fs: ClipfirstFs): ToolDef {
       surface: z
         .string()
         .describe(
-          "Which input surface generated this prompt (chat | image_rewrite | script_rewrite | post)",
+          `Which input surface generated this prompt (${SURFACE_LIST})`,
         ),
       prompt: z.string().describe("The raw user-typed prompt to store"),
       params: z
@@ -99,7 +99,7 @@ export function listPromptHistoryDef(fs: ClipfirstFs): ToolDef {
       surface: z
         .string()
         .describe(
-          "Which input surface to read history for (chat | image_rewrite | script_rewrite | post)",
+          `Which input surface to read history for (${SURFACE_LIST})`,
         ),
       limit: z
         .number()

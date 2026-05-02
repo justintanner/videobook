@@ -26,10 +26,10 @@ function PromptHistoryArrows({
   className,
   colorClass = 'text-muted-foreground',
 }: PromptHistoryArrowsProps) {
-  if (total === 0) return null;
   const { current } = position(cursor, total);
   const canBack = total > 0 && cursor !== 0;
   const canForward = cursor !== -1;
+  const empty = total === 0;
 
   return (
     <div
@@ -66,6 +66,9 @@ function PromptHistoryArrows({
       >
         <ChevronRight className="h-3 w-3" />
       </button>
+      {empty && (
+        <span className="ml-1.5 italic opacity-60 select-none">no history yet</span>
+      )}
     </div>
   );
 }

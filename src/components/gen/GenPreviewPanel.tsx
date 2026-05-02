@@ -19,6 +19,8 @@ import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePo
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
 import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton';
+import { usePromptHistory } from '@/hooks/usePromptHistory';
+import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -104,6 +106,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [translateLoading, setTranslateLoading] = useState(false);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const { rewrite: rewriteImagePrompt, rewriting } = useRewriteImagePrompt(callTool);
+  const promptHistorySurface = category === 'video' ? 'video_generate' : 'image_generate';
+  const promptHistory = usePromptHistory(callTool, promptHistorySurface, projectSlug);
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
   const formValuesRef = useRef(formValues);
@@ -461,6 +466,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         const content = result.content as Array<{ type: string; text: string }>;
         setError(content[0]?.text ?? 'Generation failed');
       } else {
+        const submittedPrompt = typeof formValues.prompt === 'string' ? formValues.prompt : '';
+        if (submittedPrompt.trim()) {
+          promptHistory.push(submittedPrompt, {
+            model: selectedModelKey,
+            provider: selectedProviderKey,
+          });
+        }
         setGenState('success');
         setTimeout(() => {
           setGenState(undefined);
@@ -470,7 +482,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
@@ -692,8 +704,21 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                         {schema?.required?.includes(name) && (
                           <span className="text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
                         )}
-                        {category === 'image' && (
-                          <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-2">
+                          <PromptHistoryArrows
+                            cursor={promptHistory.cursor}
+                            total={promptHistory.entries.length}
+                            onPrev={() => {
+                              const prev = promptHistory.navigateBack(promptValue);
+                              if (prev !== null) handleFieldChange(name, prev);
+                            }}
+                            onNext={() => {
+                              const next = promptHistory.navigateForward();
+                              if (next !== null) handleFieldChange(name, next);
+                            }}
+                            colorClass="text-emerald-400/70"
+                          />
+                          {category === 'image' && (
                             <ImagePromptRewritePopover
                               open={rewriteOpen}
                               onOpenChange={setRewriteOpen}
@@ -727,13 +752,34 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                                 </button>
                               }
                             />
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                       <div className="px-3 py-2.5">
                         <textarea
+                          ref={promptTextareaRef}
                           value={promptValue.replace(/\\n/g, '\n')}
-                          onChange={(e) => handleFieldChange(name, e.target.value)}
+                          onChange={(e) => {
+                            handleFieldChange(name, e.target.value);
+                            promptHistory.reset();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'ArrowUp' && !e.shiftKey && (promptTextareaRef.current?.selectionStart ?? 0) === 0) {
+                              const prev = promptHistory.navigateBack(promptValue);
+                              if (prev !== null) {
+                                e.preventDefault();
+                                handleFieldChange(name, prev);
+                              }
+                              return;
+                            }
+                            if (e.key === 'ArrowDown' && !e.shiftKey && promptHistory.cursor !== -1) {
+                              const next = promptHistory.navigateForward();
+                              if (next !== null) {
+                                e.preventDefault();
+                                handleFieldChange(name, next);
+                              }
+                            }
+                          }}
                           disabled={isDisabled}
                           autoFocus
                           rows={12}
