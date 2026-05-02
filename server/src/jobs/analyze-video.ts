@@ -173,16 +173,17 @@ async function maybeEnqueueAutoTranscribe(
   assetDir: string,
   projectSlug: string,
 ): Promise<void> {
-  if (!process.env.KIE_API_KEY) return;
+  if (!process.env.ELEVENLABS_API_KEY) return;
 
   const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return;
   const manifest = manifestResult.value;
   const fileNames = new Set(manifest.files.map((f) => f.name));
 
-  if (fileNames.has(".kie-task.json")) return;
-  if (fileNames.has(".generation-error.json")) return;
   if (fileNames.has("elevenlabs.json")) return;
+
+  const errorRow = await fs.generationErrors.read(projectSlug, assetId);
+  if (errorRow.ok && errorRow.value !== null) return;
 
   const dialog = await readAndAssessDialog(fs, assetId, projectSlug);
   if (!dialog.hasDialog) return;

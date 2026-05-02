@@ -12,7 +12,7 @@ type TextContent = Array<{ type: string; text: string }>;
 describe("transcribe tool", () => {
   let client: Client;
   let tempDir: string;
-  const originalKey = process.env.KIE_API_KEY;
+  const originalKey = process.env.ELEVENLABS_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -23,7 +23,7 @@ describe("transcribe tool", () => {
   });
 
   beforeEach(async () => {
-    delete process.env.KIE_API_KEY;
+    delete process.env.ELEVENLABS_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-transcribe-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -34,15 +34,15 @@ describe("transcribe tool", () => {
 
   afterEach(async () => {
     if (originalKey) {
-      process.env.KIE_API_KEY = originalKey;
+      process.env.ELEVENLABS_API_KEY = originalKey;
     } else {
-      delete process.env.KIE_API_KEY;
+      delete process.env.ELEVENLABS_API_KEY;
     }
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when KIE_API_KEY is not set", async () => {
+  it("returns error when ELEVENLABS_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
@@ -57,7 +57,7 @@ describe("transcribe tool", () => {
   });
 
   it("returns error for nonexistent asset", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const result = await client.callTool({
       name: "transcribe",
@@ -71,7 +71,7 @@ describe("transcribe tool", () => {
   });
 
   it("returns error when aud- asset has no audio file", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("aud", "silent", "test-proj");
@@ -94,7 +94,7 @@ describe("transcribe tool", () => {
   });
 
   it("enqueues job with valid aud- asset containing audio", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "test-key";
 
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("aud", "podcast", "test-proj");

@@ -3,18 +3,16 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
 import { queue, registerJobHandler } from "../queue.js";
-import { findVideoFile } from "clipfirst-engine";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
-import { readStoredRenderDefaults, readAnalysisRecommendations } from "../tools/sync.js";
 
 const LOCK_DURATION_MS = 300_000;
 
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "transcribe" | "fal_transcribe" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -49,11 +47,7 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
     }
     const assetDir = assetDirResult.value;
 
-    const lockState = (taskType === "transcribe" || taskType === "fal_transcribe")
-      ? "transcribing"
-      : taskType === "isolate_vocals"
-        ? "isolating"
-        : "generating";
+    const lockState = taskType === "isolate_vocals" ? "isolating" : "generating";
     const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
     if (!lockResult.ok) {
       // LOCKED means another completion job for this same asset is already
@@ -100,8 +94,6 @@ export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
         await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "gpt_image" || taskType === "gpt_image_text") {
         await completeGptImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
-      } else if (taskType === "transcribe" || taskType === "fal_transcribe") {
-        await completeTranscribe(fs, assetId, assetDir, projectSlug, meta, resultObject);
       } else if (taskType === "isolate_vocals") {
         await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType.startsWith("fal_")) {
@@ -592,71 +584,6 @@ async function completeGptImage(
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
-}
-
-async function completeTranscribe(
-  fs: ClipfirstFs,
-  assetId: string,
-  assetDir: string,
-  projectSlug: string,
-  meta: Record<string, unknown>,
-  resultObject?: Record<string, unknown>,
-): Promise<void> {
-  if (!resultObject) throw new Error("No transcription data in result");
-
-  const transcriptionStr = JSON.stringify(resultObject, null, 2);
-  const writeResult = await fs.writeFile(assetId, "elevenlabs.json", transcriptionStr, projectSlug);
-  if (!writeResult.ok) throw new Error(`Failed to write transcription: ${writeResult.error.message}`);
-
-  await fs.commitOperation("transcribe", assetId, {
-    ...(meta.languageCode ? { language_code: meta.languageCode } : {}),
-  }, projectSlug);
-
-  if (meta.autoRender) {
-    const manifestResult = await fs.getManifest(assetId, projectSlug);
-    if (!manifestResult.ok) throw new Error(`Failed to get manifest for auto-render: ${manifestResult.error.message}`);
-
-    const videoFile = findVideoFile(manifestResult.value.files);
-    if (!videoFile) throw new Error(`No video file found for auto-render: ${assetId}`);
-
-    const videoPath = join(assetDir, videoFile.name);
-    const jobId = `auto-render-${assetId}`;
-
-    // Read orientation from timeline config
-    const timelineResult = await fs.readProjectMeta<{ render?: string }>("timeline", projectSlug);
-    const orientation = timelineResult.ok
-      ? (Array.isArray(timelineResult.value.render) ? timelineResult.value.render[0] : timelineResult.value.render) ?? "landscape"
-      : "landscape";
-
-    const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
-    const analysisRecs = await readAnalysisRecommendations(fs, assetId, projectSlug);
-    // Enable subs after transcription unless burned-in subs were detected
-    const subtitlesEnabled = analysisRecs.subtitlesEnabled !== false;
-    await queue.enqueue(jobId, {
-      type: "render_project",
-      projectSlug,
-      orientation,
-      assets: [{
-        assetId,
-        assetDir,
-        videoPath,
-        videoFilename: videoFile.name,
-        hasElevenlabs: true,
-      }],
-      subtitlesEnabled,
-      highlightStyle: stored.highlightStyle as string,
-      position: stored.position as string,
-      fontSize: stored.fontSize as string,
-      textColor: stored.textColor as string,
-      highlightColor: stored.highlightColor as string,
-      audioFadeIn: stored.audioFadeIn as number,
-      audioFadeOut: stored.audioFadeOut as number,
-      audioVolume: stored.audioVolume as number,
-      osgImagePath: (stored.osgImagePath as string | null) ?? null,
-      osgPosition: stored.osgPosition as string,
-      backgroundMode: stored.backgroundMode as string,
-    });
-  }
 }
 
 async function completeIsolateVocals(

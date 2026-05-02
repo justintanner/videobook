@@ -24,9 +24,8 @@ import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
- *  before sync ages it out. Guards against providers (observed with Kie's
- *  elevenlabs/speech-to-text endpoint) that leave jobs in an intermediate
- *  "waiting" state indefinitely. */
+ *  before sync ages it out. Guards against providers leaving jobs in an
+ *  intermediate "waiting" state indefinitely. */
 const PENDING_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
 export type AssetWorkProjection = {
@@ -878,7 +877,9 @@ export async function findAutoRenderActions(
         if (meta.ok && meta.value.hasAudio) return null;
       }
 
-      // Skip if transcription is in progress (completeTranscribe will auto-render)
+      // Skip if a KIE task is in flight on this asset (its completion will
+      // auto-render). The transcribe job auto-renders directly after writing
+      // elevenlabs.json so it does not need its own sidecar to gate this.
       if (fileNames.has(".kie-task.json")) return null;
 
       // For videos with dialog, wait for ElevenLabs transcription
@@ -913,13 +914,14 @@ async function findAutoTranscribeActions(
   projectSlug: string,
   assets: AssetEntry[],
 ): Promise<TranscribeAction[]> {
-  if (!process.env.KIE_API_KEY) return [];
+  if (!process.env.ELEVENLABS_API_KEY) return [];
 
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<TranscribeAction | null> => {
-      const [manifestResult, locked] = await Promise.all([
+      const [manifestResult, locked, errorRow] = await Promise.all([
         fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
         fs.isLocked(asset.path),
+        fs.generationErrors.read(projectSlug, asset.id),
       ]);
       if (!manifestResult.ok) return null;
 
@@ -931,11 +933,9 @@ async function findAutoTranscribeActions(
       if (!fileNames.has(".original.analysis.json")) return null;
       // Skip if already transcribed
       if (fileNames.has("elevenlabs.json")) return null;
-      // Skip if transcription already in progress
-      if (fileNames.has(".kie-task.json")) return null;
       // Skip if a prior transcription attempt failed — do not auto-retry.
       // User must manually clear the error to retry.
-      if (fileNames.has(".generation-error.json")) return null;
+      if (errorRow.ok && errorRow.value !== null) return null;
       // Skip if locked
       if (locked) return null;
 

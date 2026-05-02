@@ -675,15 +675,15 @@ describe("performSync — auto-transcribe", () => {
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
-    savedKey = process.env.KIE_API_KEY;
-    process.env.KIE_API_KEY = "test-key";
+    savedKey = process.env.ELEVENLABS_API_KEY;
+    process.env.ELEVENLABS_API_KEY = "test-key";
   });
 
   afterEach(async () => {
     if (savedKey !== undefined) {
-      process.env.KIE_API_KEY = savedKey;
+      process.env.ELEVENLABS_API_KEY = savedKey;
     } else {
-      delete process.env.KIE_API_KEY;
+      delete process.env.ELEVENLABS_API_KEY;
     }
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -733,6 +733,7 @@ describe("performSync — auto-transcribe", () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "prior-failure", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.assetId;
     const assetDir = createResult.value.path;
 
     await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
@@ -743,11 +744,11 @@ describe("performSync — auto-transcribe", () => {
     await writeFile(join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
       text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
     }));
-    await writeFile(join(assetDir, ".generation-error.json"), JSON.stringify({
+    const writeErr = await fs.generationErrors.write("test-proj", assetId, {
       message: "The upstream API service timed out and no results were returned, please try again.",
       failCode: "500",
-      failedAt: new Date().toISOString(),
-    }));
+    });
+    if (!writeErr.ok) throw new Error(writeErr.error.message);
 
     const result = await performSync(fs, "test-proj");
     expect(result.auto_transcribe.length).toBe(0);

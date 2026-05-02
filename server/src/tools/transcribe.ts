@@ -26,10 +26,10 @@ export function transcribeDef(fs: ClipfirstFs): ToolDef {
         diarize: boolean;
       };
 
-      if (!process.env.KIE_API_KEY) {
+      if (!process.env.ELEVENLABS_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "ELEVENLABS_API_KEY environment variable is not set" }],
         };
       }
 
