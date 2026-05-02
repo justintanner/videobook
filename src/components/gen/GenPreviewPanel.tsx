@@ -699,12 +699,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                     const rewriteDisabled = isDisabled || rewriting || (!promptValue.trim() && slugsCount === 0);
                     return (
                     <div key={name} className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
-                        <span className="font-mono font-bold text-xs tracking-widest text-emerald-400">/prompt</span>
+                      <div className="flex items-center gap-3 px-4 py-2.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
+                        <span className="font-mono font-bold text-base tracking-widest text-emerald-400">/prompt</span>
                         {schema?.required?.includes(name) && (
-                          <span className="text-[8px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
+                          <span className="text-[10px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
                         )}
-                        <div className="ml-auto flex items-center gap-2">
+                        <div className="ml-auto flex items-center gap-3">
                           <PromptHistoryArrows
                             cursor={promptHistory.cursor}
                             total={promptHistory.entries.length}
@@ -717,6 +717,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               if (next !== null) handleFieldChange(name, next);
                             }}
                             colorClass="text-emerald-400/70"
+                            size="lg"
                           />
                           {category === 'image' && (
                             <ImagePromptRewritePopover
@@ -736,18 +737,18 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                                   disabled={rewriteDisabled}
                                   title="Rewrite prompt to match a platform aesthetic (IG/TikTok/YouTube) and clean up artifacts"
                                   className={cn(
-                                    'h-6 px-2 flex items-center gap-1.5 rounded',
-                                    'text-[10px] font-mono font-bold uppercase tracking-wider',
-                                    'text-amber-300/90 hover:text-amber-200',
-                                    'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
+                                    'h-8 px-3 flex items-center gap-2 rounded',
+                                    'text-xs font-mono font-bold uppercase tracking-wider',
+                                    'text-emerald-300/90 hover:text-emerald-200',
+                                    'bg-transparent hover:bg-emerald-500/15 border border-emerald-500/40 hover:border-emerald-400/70',
                                     'transition-colors duration-150',
                                     'disabled:opacity-50 disabled:cursor-not-allowed',
-                                    rewriteOpen && 'bg-amber-500/15 border-amber-400/60 text-amber-200',
+                                    rewriteOpen && 'bg-emerald-500/15 border-emerald-400/70 text-emerald-200',
                                   )}
                                 >
                                   {rewriting
-                                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                                    : <Zap className="w-3 h-3" />}
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Zap className="w-3.5 h-3.5" />}
                                   Rewrite
                                 </button>
                               }
