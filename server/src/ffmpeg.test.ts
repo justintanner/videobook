@@ -12,6 +12,7 @@ import {
   probeVideo,
   runFfmpeg,
   getFFmpeggy,
+  summarizeFfmpegStderr,
 } from "./ffmpeg.js";
 
 const execFileAsync = promisify(execFile);
@@ -121,6 +122,61 @@ describe("runFfmpeg", () => {
     await expect(
       runFfmpeg(["-i", "/nonexistent/file.mp4", "-y", "/tmp/out.mp4"]),
     ).rejects.toThrow("ffmpeg failed");
+  });
+
+  it("error message excludes the ffmpeg version banner", async () => {
+    let caught: Error | null = null;
+    try {
+      await runFfmpeg(["-i", "/nonexistent/file.mp4", "-y", "/tmp/out.mp4"]);
+    } catch (err) {
+      caught = err as Error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).not.toContain("Copyright (c)");
+    expect(caught!.message).not.toContain("configuration:");
+    expect(caught!.message).not.toMatch(/lib\w+\s+\d+\./);
+    expect(caught!.message.length).toBeLessThan(800);
+  });
+});
+
+describe("summarizeFfmpegStderr", () => {
+  it("strips banner and keeps the actual error tail", () => {
+    const stderr = `ffmpeg version 6.0 Copyright (c) 2000-2023 the FFmpeg developers
+  built with Apple clang version 13.1.6 (clang-1316.0.21.2.5)
+  configuration: --prefix=/Volumes/tempdisk/sw --extra-cflags=-fno-stack-check
+  libavutil      58.  2.100 / 58.  2.100
+  libavcodec     60.  3.100 / 60.  3.100
+  libavformat    60.  3.100 / 60.  3.100
+  libpostproc    57.  1.100 / 57.  1.100
+Input #0, concat, from '/path/to/concat.txt':
+  Duration: N/A, bitrate: N/A
+Output #0, mp4, to '/path/to/original_trimmed.mp4':
+[out#0/mp4 @ 0x600000150540] Output file does not contain any stream
+`;
+    const result = summarizeFfmpegStderr(stderr);
+    expect(result).not.toContain("ffmpeg version");
+    expect(result).not.toContain("Copyright");
+    expect(result).not.toContain("configuration:");
+    expect(result).not.toContain("libavutil");
+    expect(result).toContain("Output file does not contain any stream");
+    expect(result).toContain("Input #0, concat");
+    expect(result.length).toBeLessThan(600);
+  });
+
+  it("drops frame= progress lines", () => {
+    const stderr = `frame=  120 fps= 60 q=23.0 size=    1024kB time=00:00:04.00 bitrate=2097.2kbits/s
+frame=  240 fps= 60 q=23.0 size=    2048kB time=00:00:08.00 bitrate=2097.2kbits/s
+[error] could not write trailer
+Conversion failed!
+`;
+    const result = summarizeFfmpegStderr(stderr);
+    expect(result).not.toContain("frame=");
+    expect(result).toContain("could not write trailer");
+    expect(result).toContain("Conversion failed");
+  });
+
+  it("falls back gracefully when stderr is empty", () => {
+    expect(summarizeFfmpegStderr("")).toBe("");
   });
 });
 

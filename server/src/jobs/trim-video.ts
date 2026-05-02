@@ -88,6 +88,20 @@ async function cutMiddle(
   cutStart: number,
   cutEnd: number,
 ): Promise<void> {
+  // Degenerate cuts: if the cut starts at 0 or ends at/past input duration,
+  // one of the two halves would be empty (`-t 0` or seek-past-end) and the
+  // subsequent concat fails with "Output file does not contain any stream".
+  // Delegate to a single trimRange call in those cases.
+  if (cutStart <= 0) {
+    await trimRange(inputPath, outputPath, cutEnd, undefined);
+    return;
+  }
+  const { format: inputDuration } = await probeStreamDurations(inputPath);
+  if (cutEnd >= inputDuration - DURATION_EPSILON_SECS) {
+    await trimRange(inputPath, outputPath, undefined, cutStart);
+    return;
+  }
+
   const tempDir = join(outputPath, "..", ".trim_temp");
   await mkdir(tempDir, { recursive: true });
 

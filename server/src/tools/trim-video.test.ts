@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
+import { FFPROBE } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -179,6 +180,62 @@ describe("trim_video tool", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("Cannot specify both");
   });
+
+  it("cut_start=0 succeeds (degenerate head-cut)", async () => {
+    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+
+    const result = await client.callTool({
+      name: "trim_video",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "trim-proj",
+        cut_start: 0,
+        cut_end: 1,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("completed");
+
+    const trimmedPath = join(uploaded.path, "original.mp4");
+    const { stdout } = await execFileAsync(FFPROBE, [
+      "-v", "error", "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      trimmedPath,
+    ]);
+    const duration = Number(stdout.trim());
+    expect(duration).toBeGreaterThan(1.5);
+    expect(duration).toBeLessThan(2.5);
+  }, 60_000);
+
+  it("cut_end at/past input duration succeeds (degenerate tail-cut)", async () => {
+    const uploaded = await uploadVideo(client, "trim-proj", videoPath);
+
+    const result = await client.callTool({
+      name: "trim_video",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "trim-proj",
+        cut_start: 2,
+        cut_end: 3,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("completed");
+
+    const trimmedPath = join(uploaded.path, "original.mp4");
+    const { stdout } = await execFileAsync(FFPROBE, [
+      "-v", "error", "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      trimmedPath,
+    ]);
+    const duration = Number(stdout.trim());
+    expect(duration).toBeGreaterThan(1.5);
+    expect(duration).toBeLessThan(2.5);
+  }, 60_000);
 
   it("returns error when cut_start >= cut_end", async () => {
     const uploaded = await uploadVideo(client, "trim-proj", videoPath);

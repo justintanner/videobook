@@ -65,12 +65,28 @@ export async function probeVideo(filePath: string): Promise<ProbeResult> {
   return { width, height, duration, fps, hasAudio };
 }
 
+export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {
+  const lines = stderr.split("\n").map((l) => l.trimEnd()).filter(Boolean);
+  const meaningful = lines.filter((l) => {
+    if (/^ffmpeg version /.test(l)) return false;
+    if (/^\s*built with /.test(l)) return false;
+    if (/^\s*configuration:/.test(l)) return false;
+    if (/^\s*lib\w+\s+\d/.test(l)) return false;
+    if (/^(frame|size)=/.test(l)) return false;
+    return true;
+  });
+  const tail = meaningful.slice(-8).join("\n");
+  return tail.length > maxChars ? tail.slice(-maxChars) : tail;
+}
+
 export async function runFfmpeg(args: string[]): Promise<void> {
   try {
     await execFileAsync(FFMPEG, args);
   } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
+    const stderrRaw = error instanceof Error ? (error as Error & { stderr?: string }).stderr : undefined;
+    const fallback = error instanceof Error ? error.message : String(error);
+    const summary = stderrRaw ? summarizeFfmpegStderr(stderrRaw) : "";
+    throw new Error(`ffmpeg failed: ${summary || fallback}`);
   }
 }
 
