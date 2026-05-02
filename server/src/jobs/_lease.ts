@@ -77,22 +77,38 @@ export async function withProviderHandoff<T>(
   fn: (ownerId: string) => Promise<{ taskId: string; result: T }>,
   options: LeaseOptions = {},
 ): Promise<T> {
-  const lease = await beginLocalLease(fs, projectSlug, assetId, kind, options);
-  if (!lease) {
-    throw new Error(
-      `could not claim local lease for ${assetId}: active owner already holds it`,
-    );
-  }
-  ctx.setLease({ kind: "owner", ownerId: lease.ownerId });
-  const heartbeat = setInterval(() => {
-    void fs.assetWork.renew(projectSlug, assetId, lease.ownerId, HEARTBEAT_EXTEND_MS);
-  }, HEARTBEAT_INTERVAL_MS);
+  let ownerId: string | null = null;
+  let ownsLease = false;
   try {
-    const { taskId, result } = await fn(lease.ownerId);
+    ownerId = ctx.getOwnerId();
+  } catch {
+    ownerId = null;
+  }
+
+  if (!ownerId) {
+    const lease = await beginLocalLease(fs, projectSlug, assetId, kind, options);
+    if (!lease) {
+      throw new Error(
+        `could not claim local lease for ${assetId}: active owner already holds it`,
+      );
+    }
+    ownerId = lease.ownerId;
+    ownsLease = true;
+    ctx.setLease({ kind: "owner", ownerId });
+  }
+
+  const activeOwnerId = ownerId;
+  const heartbeat = ownsLease
+    ? setInterval(() => {
+        void fs.assetWork.renew(projectSlug, assetId, activeOwnerId, HEARTBEAT_EXTEND_MS);
+      }, HEARTBEAT_INTERVAL_MS)
+    : null;
+  try {
+    const { taskId, result } = await fn(activeOwnerId);
     ctx.setLease({ kind: "task", taskId });
     return result;
   } finally {
-    clearInterval(heartbeat);
+    if (heartbeat) clearInterval(heartbeat);
   }
 }
 

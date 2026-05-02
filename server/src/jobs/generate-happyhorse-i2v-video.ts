@@ -46,6 +46,7 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: ClipfirstFs): void {
         meta: { mode: "i2v", sourceImageIds, ...(prompt !== undefined ? { prompt } : {}) },
     }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
     }
     ctx.setLease({ kind: "task", taskId });
 

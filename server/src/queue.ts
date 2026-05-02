@@ -262,7 +262,17 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
             );
           }, 20_000);
         }
-        return await handler(job.payload, ctx);
+        const result = await handler(job.payload, ctx);
+        const assetId = extractAssetId(job.payload);
+        const projectSlug = extractProjectSlug(job.payload);
+        if (lease?.kind === "owner" && assetId && projectSlug) {
+          await fsRef.current.assetWork.complete(
+            projectSlug,
+            assetId,
+            lease.ownerId,
+          );
+        }
+        return result;
       } catch (error: unknown) {
         const assetId = extractAssetId(job.payload);
         const projectSlug = extractProjectSlug(job.payload);

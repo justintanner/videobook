@@ -77,6 +77,9 @@ async function runQwenImageJob(
   if (!ptResult.ok) {
     throw new Error(`Failed to write pending-task for ${imgAssetId}: ${ptResult.error.message}`);
   }
+  if (ptResult.value === null) {
+    throw new Error("Lost local lease while writing pending-task");
+  }
   ctx.setLease({ kind: "task", taskId: response.request_id });
   await fs.pendingTasks.markCompleting(projectSlug, imgAssetId);
 

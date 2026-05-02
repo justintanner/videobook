@@ -63,6 +63,7 @@ export function registerGenerateSeedance2I2vVideoJob(fs: ClipfirstFs): void {
         },
     }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
+      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
     }
     ctx.setLease({ kind: "task", taskId });
 
