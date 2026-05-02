@@ -7,6 +7,13 @@ const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".aac", ".flac", ".ogg"]);
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]);
 const SCRIPT_EXTENSIONS = new Set([".md"]);
 
+// process_image writes these alongside an original image. Their presence is
+// proof that processing already ran, so the upload sweep must never promote
+// one of them to `original.{ext}` — that's how a portrait PNG gets cropped
+// into a 1920x1080 landscape JPG when the sweep races a missing
+// .original.json.
+const IMAGE_VARIANT_FILENAMES = new Set(["landscape.jpg", "portrait.jpg", "square.jpg"]);
+
 type UploadMediaType = "video" | "image" | "audio" | "script";
 
 export type UnprocessedUpload = {
@@ -63,10 +70,26 @@ export async function findUnprocessedUploads(
       // until the row is cleared via /clear-failed-tasks or equivalent).
       if (work.ok && work.value?.status === "error") return null;
 
-      const mediaFile = manifest.value.files.find((f) => {
+      // Prefer a literal `original.{ext}` first — that's the canonical shape
+      // produced by upload-file and processExternalUpload itself. Only fall
+      // back to an arbitrary-name file (user dragged "photo.png" straight
+      // into the asset folder) when no `original.*` exists AND no
+      // process_image variant exists. Without that variant guard, a missing
+      // `.original.json` would cause the sweep to pick the alphabetically
+      // first variant (landscape.jpg) and rename it to original.jpg.
+      let mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
-        return shape.extensions.has(ext);
+        return shape.extensions.has(ext) && f.name === `original${ext}`;
       });
+      if (!mediaFile) {
+        const hasImageVariant = shape.mediaType === "image"
+          && manifest.value.files.some((f) => IMAGE_VARIANT_FILENAMES.has(f.name));
+        if (hasImageVariant) return null;
+        mediaFile = manifest.value.files.find((f) => {
+          const ext = path.extname(f.name).toLowerCase();
+          return shape.extensions.has(ext);
+        });
+      }
       if (!mediaFile) return null;
 
       const ext = path.extname(mediaFile.name).toLowerCase();

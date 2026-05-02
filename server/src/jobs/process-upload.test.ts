@@ -118,6 +118,65 @@ describe("findUnprocessedUploads", () => {
     expect(result[0].mediaType).toBe("video");
   });
 
+  it("skips an image asset that already has process_image variants but lost its origin metadata", async () => {
+    // Regression: when process_image's writeMetadata commit lags behind the
+    // variant writes, a sync-sweep race used to pick `landscape.jpg` (the
+    // alphabetically first matching file) and rename it to `original.jpg`,
+    // permanently cropping a portrait PNG into a 1920x1080 landscape JPG.
+    const createResult = await fs.createProject("test-proj");
+    expect(createResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("img", "racey", "test-proj");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    const assetId = assetResult.value.assetId;
+
+    const pngData = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    // Simulate a real post-process_image asset where .original.json is
+    // briefly missing: original.png plus the three cropped variants.
+    await fs.writeFile(assetId, "original.png", pngData, "test-proj");
+    await fs.writeFile(assetId, "landscape.jpg", Buffer.from("fake"), "test-proj");
+    await fs.writeFile(assetId, "portrait.jpg", Buffer.from("fake"), "test-proj");
+    await fs.writeFile(assetId, "square.jpg", Buffer.from("fake"), "test-proj");
+
+    const assets = await fs.listAssets("test-proj");
+    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+
+    // The upload that gets processed must be the canonical original.png —
+    // never landscape.jpg, which would be promoted into original.jpg by
+    // processExternalUpload.
+    expect(result.length).toBe(1);
+    expect(result[0].assetId).toBe(assetId);
+    expect(result[0].mediaFilename).toBe("original.png");
+    expect(result[0].extension).toBe(".png");
+  });
+
+  it("skips an image asset whose only image files are process_image variants", async () => {
+    // Defense in depth: even if original.png is somehow missing but the
+    // variants stayed behind, the sweep must not promote a variant to
+    // `original.jpg`. Better to leave the asset alone and surface the
+    // anomaly than to silently rewrite the canonical original.
+    const createResult = await fs.createProject("test-proj");
+    expect(createResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("img", "variants-only", "test-proj");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    const assetId = assetResult.value.assetId;
+
+    await fs.writeFile(assetId, "landscape.jpg", Buffer.from("fake"), "test-proj");
+    await fs.writeFile(assetId, "portrait.jpg", Buffer.from("fake"), "test-proj");
+    await fs.writeFile(assetId, "square.jpg", Buffer.from("fake"), "test-proj");
+
+    const assets = await fs.listAssets("test-proj");
+    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+
+    expect(result).toEqual([]);
+  });
+
   it("skips assets whose prior work is in 'error' state", async () => {
     // Regression: when process_video fails it sets the assets row to 'error'.
     // The engine's lease guard then refuses any new owner, so re-enqueuing
