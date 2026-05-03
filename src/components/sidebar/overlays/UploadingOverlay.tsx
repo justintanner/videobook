@@ -1,7 +1,11 @@
 import { Film, FileText, Image as ImageIcon } from 'lucide-react';
 import type { OverlayProps } from './types';
+import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
 export function UploadingOverlay({ item }: OverlayProps) {
+  const visual = getCardVisualState(item);
+  const colorRgba = (alpha: number) => colorWithAlpha(visual, alpha);
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 overflow-hidden">
       {/* Scanline overlay - cyan tint */}
@@ -15,9 +19,10 @@ export function UploadingOverlay({ item }: OverlayProps) {
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
-            className="absolute bottom-0 text-[8px] font-mono text-cyan-500/40 whitespace-nowrap"
+            className="absolute bottom-0 text-[8px] font-mono whitespace-nowrap"
             style={{
               left: `${15 + i * 15}%`,
+              color: colorRgba(0.4),
               animation: `uploading-data-rise ${2 + i * 0.3}s linear infinite`,
               animationDelay: `${i * 0.4}s`,
             }}
@@ -44,7 +49,7 @@ export function UploadingOverlay({ item }: OverlayProps) {
               stroke="currentColor"
               strokeWidth="2"
               strokeDasharray="8 4"
-              className="text-cyan-500/30"
+              style={{ color: colorRgba(0.3) }}
             />
             <circle
               cx="32"
@@ -55,47 +60,44 @@ export function UploadingOverlay({ item }: OverlayProps) {
               strokeWidth="2"
               strokeDasharray="44 132"
               strokeLinecap="round"
-              className="text-cyan-500 drop-shadow-[0_0_8px_#00ffff]"
+              style={{ color: visual.color, filter: `drop-shadow(0 0 8px ${visual.color})` }}
             />
           </svg>
           {item.type === 'video' ? (
-            <Film className="absolute inset-0 m-auto w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#00ffff]" />
+            <Film className="absolute inset-0 m-auto w-4 h-4" style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }} />
           ) : item.type === 'script' ? (
-            <FileText className="absolute inset-0 m-auto w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#00ffff]" />
+            <FileText className="absolute inset-0 m-auto w-4 h-4" style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }} />
           ) : (
-            <ImageIcon className="absolute inset-0 m-auto w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_#00ffff]" />
+            <ImageIcon className="absolute inset-0 m-auto w-4 h-4" style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }} />
           )}
         </div>
 
         {/* Retro progress bar */}
-        <div className="mt-3 w-24 h-2 bg-cyan-950/50 border border-cyan-500/40 rounded-sm overflow-hidden">
+        <div className="mt-3 w-24 h-2 border rounded-sm overflow-hidden" style={{ backgroundColor: colorRgba(0.12), borderColor: colorRgba(0.4) }}>
           <div
-            className="h-full bg-gradient-to-r from-cyan-600 to-teal-500"
+            className="h-full"
             style={{
+              background: `linear-gradient(to right, ${colorRgba(0.65)}, ${colorRgba(0.9)})`,
               animation: 'uploading-progress 2s ease-in-out infinite',
-              boxShadow: '0 0 8px #00ffff',
+              boxShadow: `0 0 8px ${visual.color}`,
             }}
           />
         </div>
 
         {/* Terminal text with cursor */}
-        <div className="mt-2 text-[10px] font-mono text-cyan-400 tracking-wider flex items-center">
-          <span className="drop-shadow-[0_0_4px_#00ffff]">UPLOADING</span>
+        <div className="mt-2 text-[10px] font-mono tracking-wider flex items-center" style={{ color: visual.color }}>
+          <span style={{ filter: `drop-shadow(0 0 4px ${visual.color})` }}>UPLOADING</span>
           <span className="uploading-cursor ml-0.5">█</span>
         </div>
       </div>
 
-      {/* Slug name at bottom */}
-      <div className="absolute bottom-4 left-0 right-0 text-center">
-        <span className="text-[8px] font-mono text-cyan-500/60 tracking-wider truncate max-w-[90%] inline-block px-2">
-          {item.slug}
-        </span>
-      </div>
-
       {/* Glitch scanline sweep (upward) */}
       <div
-        className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent h-8"
-        style={{ animation: 'uploading-scanline 3s linear infinite' }}
+        className="absolute inset-0 pointer-events-none h-8"
+        style={{
+          background: `linear-gradient(to bottom, transparent, ${colorRgba(0.1)}, transparent)`,
+          animation: 'uploading-scanline 3s linear infinite',
+        }}
       />
     </div>
   );

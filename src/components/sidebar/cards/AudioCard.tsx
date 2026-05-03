@@ -15,8 +15,6 @@ interface AudioCardProps {
 }
 
 export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: AudioCardProps) {
-  const status = item.status ?? 'ready';
-  const isError = status === 'error';
   const isCorrupt = false;
 
   return (
@@ -36,7 +34,7 @@ export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkS
       </div>
 
       {/* Slug badge */}
-      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
+      {!isCorrupt && <SlugBadge item={item} />}
     </CardShell>
   );
 }

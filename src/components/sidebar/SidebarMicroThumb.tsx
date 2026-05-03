@@ -3,7 +3,7 @@ import { AudioLines, Compass, FileText, Film, ImageIcon, User } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { MediaItem } from './types';
-import { STATE_ACCENTS } from './stateColors';
+import { getCardVisualState } from './stateColors';
 
 interface SidebarMicroThumbProps {
   item: MediaItem;
@@ -34,7 +34,7 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
   const src = item.thumbnailSrc ?? (item.filePath || null);
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const hasImage = !!src && erroredSrc !== src && (item.type === 'image' || item.type === 'character' || item.type === 'video' || item.type === 'final');
-  const dot = item.status ? STATE_ACCENTS[item.status]?.dot ?? null : null;
+  const dot = getCardVisualState(item).dot;
   const isGold = item.type === 'final';
 
   return (

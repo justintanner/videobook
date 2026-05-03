@@ -1,7 +1,8 @@
 import { AlertTriangle } from 'lucide-react';
 import type { OverlayProps } from './types';
 
-export function CorruptOverlay({ item }: OverlayProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function CorruptOverlay({ item: _item }: OverlayProps) {
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 overflow-hidden">
       {/* Scanline overlay */}
@@ -39,12 +40,6 @@ export function CorruptOverlay({ item }: OverlayProps) {
         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-transparent to-pink-500/10" />
       </div>
 
-      {/* Corner brackets - displaced HUD style */}
-      <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2 border-pink-500/70" />
-      <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2 border-pink-500/70" />
-      <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2 border-pink-500/70" />
-      <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2 border-pink-500/70" />
-
       {/* Center content */}
       <div className="relative flex flex-col items-center z-10">
         {/* Alert icon with RGB split effect */}
@@ -59,11 +54,6 @@ export function CorruptOverlay({ item }: OverlayProps) {
 
         {/* CORRUPT label */}
         <div className="mt-2 text-sm font-mono font-bold tracking-[0.2em] text-pink-500">CORRUPT</div>
-      </div>
-
-      {/* Slug at bottom */}
-      <div className="absolute bottom-4 left-2 right-2 text-center">
-        <span className="text-[9px] font-mono text-pink-500/60 tracking-wide">{item.slug}</span>
       </div>
 
       {/* Vignette with color aberration */}

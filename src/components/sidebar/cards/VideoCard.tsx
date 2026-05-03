@@ -65,12 +65,10 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       )}
 
       {/* Duration badge - top left */}
-      {!hasOpaqueOverlay && !isError && duration && <DurationBadge duration={duration} isProcessing={isProcessing} />}
+      {!hasOpaqueOverlay && !isError && duration && <DurationBadge item={item} duration={duration} muted={isProcessing} />}
 
       {/* Slug badge */}
-      {!hasOpaqueOverlay && (
-        <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} isProcessing={isProcessing} />
-      )}
+      {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isProcessing} />}
 
       {/* Delete button — visible on hover for error-state cards */}
       {isError && onDelete && (
@@ -81,7 +79,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
             onDelete(item);
           }}
           aria-label={`Delete ${item.slug}`}
-          className="absolute top-1 right-1 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+          className="absolute top-1 right-1 z-50 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
         >
           <X className="w-3 h-3" />
         </button>

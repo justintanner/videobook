@@ -14,8 +14,6 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: PlanCardProps) {
-  const status = item.status ?? 'ready';
-  const isError = status === 'error';
   const isCorrupt = false;
   const planText = item.prompt;
 
@@ -51,7 +49,7 @@ export function PlanCard({ item, contextMenuContent, selected, onClick, onMarkSe
       </div>
 
       {/* Slug badge */}
-      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
+      {!isCorrupt && <SlugBadge item={item} />}
     </CardShell>
   );
 }

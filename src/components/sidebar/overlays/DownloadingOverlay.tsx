@@ -1,7 +1,11 @@
 import { Film, Image as ImageIcon } from 'lucide-react';
 import type { OverlayProps } from './types';
+import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
 export function DownloadingOverlay({ item }: OverlayProps) {
+  const visual = getCardVisualState(item);
+  const colorRgba = (alpha: number) => colorWithAlpha(visual, alpha);
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 overflow-hidden">
       {/* Scanline overlay - green tint */}
@@ -15,9 +19,10 @@ export function DownloadingOverlay({ item }: OverlayProps) {
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
-            className="absolute top-0 text-[8px] font-mono text-green-500/40 whitespace-nowrap"
+            className="absolute top-0 text-[8px] font-mono whitespace-nowrap"
             style={{
               left: `${15 + i * 15}%`,
+              color: colorRgba(0.4),
               animation: `downloading-data-fall ${2 + i * 0.3}s linear infinite`,
               animationDelay: `${i * 0.4}s`,
             }}
@@ -44,7 +49,7 @@ export function DownloadingOverlay({ item }: OverlayProps) {
               stroke="currentColor"
               strokeWidth="2"
               strokeDasharray="8 4"
-              className="text-green-500/30"
+              style={{ color: colorRgba(0.3) }}
             />
             <circle
               cx="32"
@@ -55,45 +60,42 @@ export function DownloadingOverlay({ item }: OverlayProps) {
               strokeWidth="2"
               strokeDasharray="44 132"
               strokeLinecap="round"
-              className="text-green-500 drop-shadow-[0_0_8px_#22c55e]"
+              style={{ color: visual.color, filter: `drop-shadow(0 0 8px ${visual.color})` }}
             />
           </svg>
           {item.type === 'image' ? (
-            <ImageIcon className="absolute inset-0 m-auto w-4 h-4 text-green-400 drop-shadow-[0_0_6px_#22c55e]" />
+            <ImageIcon className="absolute inset-0 m-auto w-4 h-4" style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }} />
           ) : (
-            <Film className="absolute inset-0 m-auto w-4 h-4 text-green-400 drop-shadow-[0_0_6px_#22c55e]" />
+            <Film className="absolute inset-0 m-auto w-4 h-4" style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }} />
           )}
         </div>
 
         {/* Retro progress bar */}
-        <div className="mt-3 w-24 h-2 bg-green-950/50 border border-green-500/40 rounded-sm overflow-hidden">
+        <div className="mt-3 w-24 h-2 border rounded-sm overflow-hidden" style={{ backgroundColor: colorRgba(0.12), borderColor: colorRgba(0.4) }}>
           <div
-            className="h-full bg-gradient-to-r from-green-600 to-emerald-500"
+            className="h-full"
             style={{
+              background: `linear-gradient(to right, ${colorRgba(0.65)}, ${colorRgba(0.9)})`,
               animation: 'downloading-progress 2s ease-in-out infinite',
-              boxShadow: '0 0 8px #22c55e',
+              boxShadow: `0 0 8px ${visual.color}`,
             }}
           />
         </div>
 
         {/* Terminal text with cursor */}
-        <div className="mt-2 text-[10px] font-mono text-green-400 tracking-wider flex items-center">
-          <span className="drop-shadow-[0_0_4px_#22c55e]">DOWNLOADING</span>
+        <div className="mt-2 text-[10px] font-mono tracking-wider flex items-center" style={{ color: visual.color }}>
+          <span style={{ filter: `drop-shadow(0 0 4px ${visual.color})` }}>DOWNLOADING</span>
           <span className="downloading-cursor ml-0.5">█</span>
         </div>
       </div>
 
-      {/* Slug name at bottom */}
-      <div className="absolute bottom-4 left-0 right-0 text-center">
-        <span className="text-[8px] font-mono text-green-500/60 tracking-wider truncate max-w-[90%] inline-block px-2">
-          {item.slug}
-        </span>
-      </div>
-
       {/* Glitch scanline sweep (downward) */}
       <div
-        className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-green-500/10 to-transparent h-8"
-        style={{ animation: 'downloading-scanline 3s linear infinite' }}
+        className="absolute inset-0 pointer-events-none h-8"
+        style={{
+          background: `linear-gradient(to bottom, transparent, ${colorRgba(0.1)}, transparent)`,
+          animation: 'downloading-scanline 3s linear infinite',
+        }}
       />
     </div>
   );

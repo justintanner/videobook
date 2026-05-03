@@ -20,6 +20,7 @@ export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkS
   const isUploading = status === 'uploading';
   const isGenerating = status === 'generating';
   const isLoading = status === 'loading';
+  const isDownloading = status === 'downloading';
   const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   return (
@@ -37,11 +38,11 @@ export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkS
 
       {/* Resolution Badge - Top Left */}
       {!hasOpaqueOverlay && !isError && item.width && item.height && (
-        <ResolutionBadge width={item.width} height={item.height} />
+        <ResolutionBadge item={item} width={item.width} height={item.height} />
       )}
 
       {/* Slug badge */}
-      {!hasOpaqueOverlay && <SlugBadge slug={item.slug} colorScheme="cyan" isError={isError} />}
+      {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isDownloading} />}
     </CardShell>
   );
 }

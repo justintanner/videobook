@@ -1,5 +1,5 @@
-import { ChevronRight, ChevronLeft } from 'lucide-react';
 import type { OverlayProps } from './types';
+import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
 const typeFallbackLabels: Record<string, string> = {
   video: 'VIDEO',
@@ -19,25 +19,12 @@ interface GeneratingOverlayProps extends OverlayProps {
 export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
   const fallbackLabel = typeFallbackLabels[item.type] ?? 'ASSET';
   const displayLabel = label ?? `GENERATING ${fallbackLabel}`;
-
-  const primaryColor = item.type === 'image' || item.type === 'character' ? '#3b82f6' : '#22c55e';
-  const glowStyle = `0 0 8px ${primaryColor}`;
-
-  const hexToRgb = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `${r}, ${g}, ${b}`;
-  };
-
-  const hexToRgba = (hex: string, alpha: number) => {
-    return `rgba(${hexToRgb(hex)}, ${alpha})`;
-  };
-
-  const colorRgba = (alpha: number) => hexToRgba(primaryColor, alpha);
+  const visual = getCardVisualState(item);
+  const glowStyle = `0 0 8px ${visual.color}`;
+  const colorRgba = (alpha: number) => colorWithAlpha(visual, alpha);
 
   return (
-    <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden" style={{ '--gen-color': hexToRgb(primaryColor) } as React.CSSProperties}>
+    <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden" style={{ '--gen-color': visual.rgb } as React.CSSProperties}>
       {/* Layer 1: CRT Scanlines */}
       <div
         className="absolute inset-0 pointer-events-none opacity-50"
@@ -86,36 +73,17 @@ export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
         ))}
       </div>
 
-      {/* Layer 4: HUD Corner Brackets */}
-      <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2" style={{ borderColor: colorRgba(0.7) }} />
-      <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2" style={{ borderColor: colorRgba(0.7) }} />
-      <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2" style={{ borderColor: colorRgba(0.7) }} />
-      <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2" style={{ borderColor: colorRgba(0.7) }} />
-
-      {/* Layer 5: Center Content */}
+      {/* Layer 4: Center Content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
-        {/* Slug display */}
-        <div className="max-w-full flex items-center gap-1 overflow-hidden">
-          <ChevronRight className="w-2.5 h-2.5 flex-shrink-0" style={{ color: colorRgba(0.5) }} />
-          <span
-            className="truncate text-xs font-mono font-bold tracking-wide"
-            style={{ color: primaryColor, textShadow: `0 0 8px ${primaryColor}` }}
-          >
-            {item.slug}
-          </span>
-          <ChevronLeft className="w-2.5 h-2.5 flex-shrink-0" style={{ color: colorRgba(0.5) }} />
-        </div>
-
-        {/* "GENERATING" badge */}
         <div
-          className="mt-2 px-2 py-1 text-[10px] font-mono font-bold tracking-wider border flex items-center gap-1"
+          className="px-2 py-1 text-[10px] font-mono font-bold tracking-wider border flex items-center gap-1"
           style={{
-            color: primaryColor,
+            color: visual.color,
             borderColor: colorRgba(0.6),
             backgroundColor: colorRgba(0.15),
             boxShadow: glowStyle,
             animation: 'generating-model-pulse 2s ease-in-out infinite',
-            textShadow: `0 0 8px ${primaryColor}`,
+            textShadow: `0 0 8px ${visual.color}`,
           }}
         >
           <span>{displayLabel}</span>
@@ -140,7 +108,7 @@ export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
         </div>
       </div>
 
-      {/* Layer 6: Scanline Sweep */}
+      {/* Layer 5: Scanline Sweep */}
       <div
         className="absolute inset-0 pointer-events-none h-8"
         style={{

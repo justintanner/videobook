@@ -32,7 +32,7 @@ export function ScriptCard({ item, contextMenuContent, selected, onClick, onMark
       </div>
 
       {/* Slug badge */}
-      {!isCorrupt && <SlugBadge slug={item.slug} colorScheme="cyan" isError={false} />}
+      {!isCorrupt && <SlugBadge item={item} />}
     </CardShell>
   );
 }
