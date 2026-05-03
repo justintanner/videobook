@@ -296,10 +296,36 @@ function cursorClassForTone(tone: CardTone): string {
 
 const IDLE_TONES = new Set<CardTone>(['ready', 'video', 'image', 'character', 'audio', 'script', 'plan']);
 
+// Tones whose animation should run in the asset type's color rather than a
+// fixed state color. Keeps the animation/timing but tints it per asset type.
+const TYPED_STATE_TONES = new Set<CardTone>([
+  'uploading',
+  'generating',
+  'generating-image',
+  'downloading',
+  'rendering',
+  'transcribing',
+  'loading',
+]);
+
 export function getCardVisualState(item: MediaItem): CardVisualState {
   const status = item.status ?? 'ready';
   const tone = toneForStatus(status, item);
-  const style = TONE_STYLES[tone];
+  const baseStyle = TONE_STYLES[tone];
+  const typeStyle = TYPED_STATE_TONES.has(tone)
+    ? TONE_STYLES[TYPE_TO_TONE[item.type] ?? 'ready']
+    : null;
+  const style = typeStyle
+    ? {
+        ...baseStyle,
+        color: typeStyle.color,
+        rgb: typeStyle.rgb,
+        border: typeStyle.border,
+        glow: typeStyle.glow,
+        soft: typeStyle.soft,
+        faint: typeStyle.faint,
+      }
+    : baseStyle;
   const isGold = tone === 'final' || tone === 'plan';
   const isActive = !IDLE_TONES.has(tone) && tone !== 'final' && tone !== 'error';
 
