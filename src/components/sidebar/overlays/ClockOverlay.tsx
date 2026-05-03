@@ -55,15 +55,18 @@ export function ClockOverlay({ item, label, startedAt }: ClockOverlayProps) {
   return (
     <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden">
       <AnimatedBackground visual={visual} fall={label === 'DOWNLOADING'} />
-      <div
-        className="absolute inset-0 pb-10 flex items-center justify-center gap-3"
-        style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }}
-      >
-        <TypeIcon type={item.type} />
-        <div className="flex flex-col font-mono leading-none">
-          <span className="text-[8px] font-bold tracking-[0.2em] opacity-90">{label}</span>
-          <span className="text-[15px] font-bold tabular-nums mt-1.5">{elapsedLabel}</span>
+      <div className="absolute inset-0 flex flex-col">
+        <div
+          className="flex-1 flex items-center justify-center gap-3"
+          style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }}
+        >
+          <TypeIcon type={item.type} />
+          <div className="flex flex-col font-mono leading-none">
+            <span className="text-[8px] font-bold tracking-[0.2em] opacity-90">{label}</span>
+            <span className="text-[15px] font-bold tabular-nums mt-1.5">{elapsedLabel}</span>
+          </div>
         </div>
+        <div aria-hidden className="h-9 shrink-0" />
       </div>
     </div>
   );
