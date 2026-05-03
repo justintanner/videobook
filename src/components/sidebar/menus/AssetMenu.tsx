@@ -59,8 +59,8 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
           <CommandMenuItem
             command={`/image ${slug}`}
             title="Generate Image"
-            titleClassName="text-blue-400"
-            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
+            titleClassName="text-primary"
+            accentColor="border-l-primary/50 focus:border-l-primary/80"
             onSelect={() => onAnimateCommand?.(`/image ${slug}`)}
             MenuItem={MenuItem}
           />
@@ -206,8 +206,8 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
           <CommandMenuItem
             command={`/extract-first-frame ${slug}`}
             title="Extract First Frame"
-            titleClassName="text-blue-400"
-            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
+            titleClassName="text-primary"
+            accentColor="border-l-primary/50 focus:border-l-primary/80"
             onSelect={() => onAnimateCommand?.(`/extract-first-frame ${slug}`)}
             MenuItem={MenuItem}
           />
@@ -215,8 +215,8 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
           <CommandMenuItem
             command={`/extract-last-frame ${slug}`}
             title="Extract Last Frame"
-            titleClassName="text-blue-400"
-            accentColor="border-l-blue-500/50 focus:border-l-blue-500/80"
+            titleClassName="text-primary"
+            accentColor="border-l-primary/50 focus:border-l-primary/80"
             onSelect={() => onAnimateCommand?.(`/extract-last-frame ${slug}`)}
             MenuItem={MenuItem}
           />
