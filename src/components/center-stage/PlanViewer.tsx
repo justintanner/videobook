@@ -255,8 +255,8 @@ function SceneBlock({ scene, index, dispatch }: {
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
-              'text-fuchsia-300/90 hover:text-fuchsia-200',
-              'bg-fuchsia-500/5 hover:bg-fuchsia-500/15 border border-fuchsia-500/30 hover:border-fuchsia-400/60',
+              'text-violet-300/90 hover:text-violet-200',
+              'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
               'transition-colors duration-150',
             )}
           >

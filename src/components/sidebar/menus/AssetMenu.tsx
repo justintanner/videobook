@@ -68,8 +68,8 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
           <CommandMenuItem
             command={`/video ${slug}`}
             title="Generate Video"
-            titleClassName="text-fuchsia-400"
-            accentColor="border-l-fuchsia-500/50 focus:border-l-fuchsia-500/80"
+            titleClassName="text-violet-400"
+            accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
             onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
             MenuItem={MenuItem}
           />
@@ -190,8 +190,8 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
           <CommandMenuItem
             command={`/video ${slug}`}
             title="Extend Video"
-            titleClassName="text-fuchsia-400"
-            accentColor="border-l-fuchsia-500/50 focus:border-l-fuchsia-500/80"
+            titleClassName="text-violet-400"
+            accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
             onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
             MenuItem={MenuItem}
           />

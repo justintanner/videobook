@@ -527,7 +527,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
-  const buttonVariant = category === 'video' ? 'fuchsia' as const : 'blue' as const;
+  const buttonVariant = category === 'video' ? 'violet' as const : 'blue' as const;
 
   // -- Loading state --
   if (loading) {
@@ -727,7 +727,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       required={schema?.required?.includes('prompt')}
                       warning={routedWarnings.prompt}
                       category={category}
-                      color={category === 'video' ? 'fuchsia' : 'blue'}
+                      color={category === 'video' ? 'violet' : 'blue'}
                       promptHistory={promptHistory}
                       callTool={callTool}
                       projectSlug={projectSlug}
