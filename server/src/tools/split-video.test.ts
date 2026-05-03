@@ -115,11 +115,14 @@ describe("split_video tool", () => {
 
     const durA = await probeDuration(aPath);
     const durB = await probeDuration(bPath);
+    // Chunk A's actual duration must be ≤ the requested cut point. ffmpeg's
+    // boundary alignment normally overshoots by 10–50ms; trimRange's safety
+    // margin ensures the output stays under any downstream duration cap.
     expect(durA).toBeGreaterThan(1.0);
-    expect(durA).toBeLessThan(2.0);
+    expect(durA).toBeLessThanOrEqual(1.5);
     expect(durB).toBeGreaterThan(2.0);
     expect(durB).toBeLessThan(3.0);
-    expect(durA + durB).toBeGreaterThan(3.5);
+    expect(durA + durB).toBeGreaterThan(3.0);
     expect(durA + durB).toBeLessThan(4.5);
 
     // Source asset should still exist.

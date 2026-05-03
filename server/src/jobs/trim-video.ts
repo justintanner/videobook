@@ -13,6 +13,11 @@ const LOCK_DURATION_MS = 300_000;
 const CROSSFADE_SECS = 0.03;
 const DURATION_EPSILON_SECS = 0.5;
 const AV_DRIFT_TOLERANCE_SECS = 0.5;
+// `ffmpeg -t N` lands on the next frame/sample boundary, so the container's
+// reported format duration is typically 10–50ms longer than N. Pre-shrink by
+// one slack window so the output stays ≤ the requested length — required for
+// downstream caps like Wan 2.7's 10s VideoEdit limit.
+const TRIM_DURATION_SAFETY_SECS = 0.05;
 
 interface StreamDurations {
   format: number;
@@ -75,8 +80,9 @@ export async function trimRange(
   if (start !== undefined) args.push("-ss", String(start));
   args.push("-i", inputPath);
   if (end !== undefined) {
-    const duration = start !== undefined ? end - start : end;
-    args.push("-t", String(duration));
+    const requested = start !== undefined ? end - start : end;
+    const safe = Math.max(0.01, requested - TRIM_DURATION_SAFETY_SECS);
+    args.push("-t", String(safe));
   }
   args.push(...H264_MEDIUM, ...AUDIO_OPTS, outputPath);
   await runFfmpeg(args);
