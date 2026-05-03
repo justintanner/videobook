@@ -56,7 +56,7 @@ export function ClockOverlay({ item, label, startedAt }: ClockOverlayProps) {
     <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden">
       <AnimatedBackground visual={visual} fall={label === 'DOWNLOADING'} />
       <div
-        className="absolute inset-x-0 top-4 flex items-center justify-center gap-3"
+        className="absolute inset-0 pb-10 flex items-center justify-center gap-3"
         style={{ color: visual.color, filter: `drop-shadow(0 0 6px ${visual.color})` }}
       >
         <TypeIcon type={item.type} />
