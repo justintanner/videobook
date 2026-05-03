@@ -27,19 +27,32 @@ export function SlugBadge({ item, muted }: SlugBadgeProps) {
   );
 }
 
+function formatDuration(seconds: number | null | undefined): string | null {
+  if (seconds == null || seconds <= 0) return null;
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  if (m > 0) return `${m}:${String(s).padStart(2, '0')}`;
+  return `${s}s`;
+}
+
 interface DurationBadgeProps {
   item: MediaItem;
-  duration: string;
+  seconds: number | null | undefined;
   muted?: boolean;
 }
 
-export function DurationBadge({ item, duration, muted }: DurationBadgeProps) {
+export function DurationBadge({ item, seconds, muted }: DurationBadgeProps) {
   const visual = getCardVisualState(item);
+  const duration = formatDuration(seconds);
+  if (!duration) return null;
 
   return (
     <div className="absolute top-2 left-2 z-20">
       <div
-        className="px-2 py-1 rounded bg-black/70 backdrop-blur-md border text-[10px] font-mono font-bold"
+        className="w-6 h-6 inline-flex items-center justify-center rounded bg-black/70 backdrop-blur-md border text-[10px] font-mono font-bold"
         style={{
           borderColor: muted ? visual.border : colorWithAlpha(visual, 0.32),
           color: visual.color,

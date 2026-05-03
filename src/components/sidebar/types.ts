@@ -47,7 +47,6 @@ export interface MediaItem {
   title: string;
   status?: ClipState;
   filePath: string;
-  durationSeconds?: number | null;
   width?: number | null;
   height?: number | null;
   origin?: string | null;

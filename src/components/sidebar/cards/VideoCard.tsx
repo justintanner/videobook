@@ -6,15 +6,6 @@ import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge, DurationBadge } from './badges';
 
-function formatDuration(seconds: number | null | undefined): string | null {
-  if (seconds == null || seconds <= 0) return null;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
 import type { ReactNode } from 'react';
 
 interface VideoCardProps {
@@ -40,7 +31,6 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
   const isProcessing = isTranscribing || isUntranscribed || isRendering;
   const hasOpaqueOverlay = isUploading || isDownloading || isGenerating || isLoading || isCorrupt;
 
-  const duration = formatDuration(item.durationSeconds);
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
 
   // Track which src value failed to load. Reset implicitly when thumbSrc
@@ -65,7 +55,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       )}
 
       {/* Duration badge - top left */}
-      {!hasOpaqueOverlay && !isError && duration && <DurationBadge item={item} duration={duration} muted={isProcessing} />}
+      {!hasOpaqueOverlay && !isError && <DurationBadge item={item} seconds={item.duration} muted={isProcessing} />}
 
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isProcessing} />}

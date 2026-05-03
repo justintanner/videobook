@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
-import { SlugBadge } from './badges';
+import { SlugBadge, DurationBadge } from './badges';
 
 import type { ReactNode } from 'react';
 
@@ -33,6 +33,9 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick, on
           onError={() => setErroredSrc(thumbSrc)}
         />
       )}
+
+      {/* Duration badge - top left */}
+      <DurationBadge item={item} seconds={item.duration} muted={status !== 'ready'} />
 
       {/* Slug badge */}
       <SlugBadge item={item} muted={status !== 'ready'} />

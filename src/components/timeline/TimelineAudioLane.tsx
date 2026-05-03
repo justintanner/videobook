@@ -170,7 +170,7 @@ export function TimelineAudioLane({
       const dragged = parsed as IncomingAssetDrag;
       if (!dragged.id || dragged.type !== 'audio') return;
       const item = mediaItems.find((m) => m.id === dragged.id);
-      const seconds = item?.duration ?? item?.durationSeconds ?? 0;
+      const seconds = item?.duration ?? 0;
       const durationFrames = seconds > 0 ? Math.max(1, Math.round(seconds * FPS)) : undefined;
       const cursorPct = (x / rect.width) * 100;
       const { startFrame } = resolveDrop(cursorPct, rect.width, totalDurationInFrames, slotBoundaries, bypass);
