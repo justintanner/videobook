@@ -9,6 +9,7 @@ export type ClipState =
   | 'processing'
   | 'analyzing'
   | 'trimming'
+  | 'cropping'
   | 'splicing'
   | 'reversing'
   | 'changing-speed'

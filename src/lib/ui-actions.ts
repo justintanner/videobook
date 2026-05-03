@@ -9,6 +9,7 @@ export interface UiActionCallbacks {
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
   open_trim: (assetId: string) => void;
+  open_crop: (assetId: string, ratio?: string) => void;
   switch_project: (slug: string) => void;
   viewer_set_original: () => void;
   viewer_set_landscape: () => void;
@@ -58,6 +59,9 @@ export function executeUiAction(
       break;
     case 'open_trim':
       (fn as UiActionCallbacks['open_trim'])(ctx.args.asset_id ?? ctx.raw);
+      break;
+    case 'open_crop':
+      (fn as UiActionCallbacks['open_crop'])(ctx.args.asset_id ?? ctx.raw, ctx.args.ratio);
       break;
     case 'open_gen':
       (fn as UiActionCallbacks['open_gen'])(ctx.args.type ?? '', ctx.args.prompt ?? ctx.raw);

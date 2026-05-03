@@ -113,6 +113,21 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_trim",
   },
   {
+    command: "/crop",
+    description: "Crop video to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
+    example: "/crop @vid-yt-inglourious-basterds-top",
+    category: "context_menu",
+    icon: "Crop",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to crop" },
+      { name: "ratio", type: "string", required: false, description: "Initial ratio: 16:9 | 9:16 | 1:1" },
+    ],
+    uiAction: "open_crop",
+  },
+  {
     command: "/trim-audio",
     description: "Trim audio clip",
     example: "/trim-audio @voiceover-main 0:00 0:30",

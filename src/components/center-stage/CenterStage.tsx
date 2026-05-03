@@ -17,7 +17,7 @@ export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBa
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onEditCharacterProfile }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onEditCharacterProfile, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -37,6 +37,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClose: () => void;
   imageAssets: MediaItem[];
   onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile) => void;
+  cropTarget?: { assetId: string; ratio?: string } | null;
+  onCropConsumed?: () => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isText = item.type === 'script' || item.type === 'plan';
@@ -62,6 +64,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onSettingsChange={onSettingsChange}
         callTool={callTool}
         onClose={onClose}
+        cropTarget={cropTarget}
+        onCropConsumed={onCropConsumed}
       />
     );
   }

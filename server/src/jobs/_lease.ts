@@ -8,6 +8,7 @@ type AssetWorkKind =
   | "isolate"
   | "download"
   | "trim"
+  | "crop"
   | "splice"
   | "reverse"
   | "change_speed"

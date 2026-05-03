@@ -134,6 +134,7 @@ function jobTypeToAssetWorkKind(
     case "transcribe":
     case "transcribe_video_audio": return { kind: "transcribe" };
     case "trim_video":             return { kind: "trim" };
+    case "crop_video":             return { kind: "crop" };
     case "splice_video":           return { kind: "splice" };
     case "reverse_video":          return { kind: "reverse" };
     case "change_video_speed":     return { kind: "change_speed" };

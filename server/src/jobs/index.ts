@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerTrimVideoJob } from "./trim-video.js";
+import { registerCropVideoJob } from "./crop-video.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
@@ -95,6 +96,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerTranscribeJob(fs);
   registerDownloadVideoJob(fs);
   registerTrimVideoJob(fs);
+  registerCropVideoJob(fs);
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);
   registerChangeVideoSpeedJob(fs);

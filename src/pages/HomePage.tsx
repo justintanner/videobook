@@ -74,6 +74,7 @@ export function HomePage() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [statusOpen, setStatusOpen] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
@@ -518,6 +519,14 @@ export function HomePage() {
     open_upload: triggerUpload,
     open_status: () => setStatusOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
+    open_crop: (assetId: string, ratio?: string) => {
+      const cleaned = assetId.trim().replace(/^@/, '');
+      const target = cleaned || selectedItem?.id || '';
+      if (!target) return;
+      const item = mediaItems.find((m) => m.id === target || m.slug === `@${target}` || m.slug === target);
+      if (item) handleSelectItem(item);
+      setCropTarget({ assetId: item?.id ?? target, ratio });
+    },
     open_gen: (type: string, prompt: string) => {
       setSelectedItem(null);
       setTimelineSlotIndex(null);
@@ -598,7 +607,7 @@ export function HomePage() {
         : selectedItem;
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget]);
 
   return (
     <MountKeyProvider>
@@ -741,6 +750,8 @@ export function HomePage() {
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
                     onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
+                    cropTarget={cropTarget}
+                    onCropConsumed={() => setCropTarget(null)}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer

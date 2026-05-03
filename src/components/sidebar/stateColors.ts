@@ -156,6 +156,7 @@ const PIPELINE_STATES = new Set<ClipState>([
   'processing',
   'analyzing',
   'trimming',
+  'cropping',
   'splicing',
   'reversing',
   'changing-speed',

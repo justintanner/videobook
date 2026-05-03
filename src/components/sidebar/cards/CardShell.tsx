@@ -48,6 +48,7 @@ const PIPELINE_STATE_LABELS: Partial<Record<ClipState, string>> = {
   processing: 'PROCESSING',
   analyzing: 'ANALYZING',
   trimming: 'TRIMMING',
+  cropping: 'CROPPING',
   splicing: 'SPLICING',
   reversing: 'REVERSING',
   'changing-speed': 'CHANGING SPEED',

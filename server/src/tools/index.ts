@@ -23,6 +23,7 @@ import { readFileAtCommitDef } from "./read-file-at-commit.js";
 import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
+import { cropVideoDef } from "./crop-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
 import { reverseVideoDef } from "./reverse-video.js";
@@ -179,6 +180,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     readAssetMetadataDef(fs),
     rewindProjectDef(fs),
     trimVideoDef(fs),
+    cropVideoDef(fs),
     downloadVideoDef(fs),
     changeVideoSpeedDef(fs),
     reverseVideoDef(fs),
