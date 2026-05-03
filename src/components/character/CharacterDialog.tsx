@@ -238,6 +238,18 @@ export function CharacterDialog({
     });
   }, [source]);
 
+  const handleReanalyze = useCallback(async () => {
+    if (!source || !projectSlug || callState !== 'ready' || analyzing) return;
+    setAnalyzeError(null);
+    const kind = profile?.subject_kind ?? 'female';
+    const extracted = await analyze(projectSlug, source.assetId, kind);
+    if (extracted) {
+      setProfile(extracted);
+    } else {
+      setAnalyzeError('Vision extraction failed. Edit the fields manually and click Generate.');
+    }
+  }, [source, projectSlug, callState, analyzing, profile, analyze]);
+
   const toggleAdditionalReference = useCallback((assetId: string) => {
     setAdditionalReferenceSlugs((prev) => {
       if (prev.includes(assetId)) return prev.filter((id) => id !== assetId);
@@ -391,7 +403,24 @@ export function CharacterDialog({
           )}
 
           <section>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Subject</div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Subject</div>
+              <button
+                type="button"
+                onClick={handleReanalyze}
+                disabled={!source || !projectSlug || callState !== 'ready' || analyzing}
+                title={`Re-run vision as ${subjectKind}`}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider rounded border transition-colors',
+                  !source || !projectSlug || callState !== 'ready' || analyzing
+                    ? 'border-zinc-700 text-zinc-500 cursor-not-allowed'
+                    : 'border-violet-500/30 text-violet-300/80 hover:border-violet-300 hover:text-violet-100',
+                )}
+              >
+                {analyzing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}
+                Re-analyze as {subjectKind}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {SUBJECT_KINDS.map((kind) => (
                 <button

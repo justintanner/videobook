@@ -143,11 +143,37 @@ export function normalizeCharacterProfile(
   return character;
 }
 
-function buildSystemPrompt(guide: string): string {
+function subjectKindOverrideClause(kind: CharacterSubjectKind): string {
+  switch (kind) {
+    case "male":
+      return (
+        "SUBJECT KIND OVERRIDE: the user has chosen `male`. Set `subject_kind` to `male` and describe the subject as a human male. " +
+        "Body fields must use male anatomy descriptors: `bust` is chest width, pectoral fullness and ribcage taper (NEVER bra cup sizes); " +
+        "`hips` is hip width and seat without bust/cup language. Adjust `face`, `hair`, `build` accordingly. " +
+        "If the photograph is androgynous or stylized, commit to a plausible male reading rather than refusing."
+      );
+    case "female":
+      return (
+        "SUBJECT KIND OVERRIDE: the user has chosen `female`. Set `subject_kind` to `female` and describe the subject as a human female. " +
+        "Use the female body field rules from the guide. If the photograph is androgynous or stylized, commit to a plausible female reading."
+      );
+    case "animal":
+      return (
+        "SUBJECT KIND OVERRIDE: the user has chosen `animal`. Set `subject_kind` to `animal` and fill ONLY the freeform `other` field per the guide."
+      );
+    case "other":
+      return (
+        "SUBJECT KIND OVERRIDE: the user has chosen `other`. Set `subject_kind` to `other` and fill ONLY the freeform `other` field per the guide."
+      );
+  }
+}
+
+function buildSystemPrompt(guide: string, subjectKindOverride?: CharacterSubjectKind): string {
+  const override = subjectKindOverride ? `\n\n${subjectKindOverrideClause(subjectKindOverride)}` : "";
   return (
     "You are an expert visual analyst extracting a structured character profile from a photograph. " +
     "Follow the guide exactly. Return ONLY a JSON object matching the schema. No markdown fences, no prose.\n\n" +
-    `--- CHARACTER SCHEMA GUIDE ---\n${guide}\n--- END GUIDE ---`
+    `--- CHARACTER SCHEMA GUIDE ---\n${guide}\n--- END GUIDE ---${override}`
   );
 }
 
@@ -173,23 +199,31 @@ function validateCharacter(parsed: unknown, sourceAssetId: string): Character {
   return character;
 }
 
+export interface ExtractCharacterOptions {
+  responses?: ResponsesFn;
+  subjectKindOverride?: CharacterSubjectKind;
+}
+
 export async function extractCharacterFromBytes(
   bytes: Buffer,
   mime: "image/jpeg" | "image/png" | "image/webp",
   sourceAssetId: string,
-  responses?: ResponsesFn,
+  options: ExtractCharacterOptions = {},
 ): Promise<Character> {
-  const fn = responses ?? buildResponses(process.env.OPENAI_API_KEY);
+  const fn = options.responses ?? buildResponses(process.env.OPENAI_API_KEY);
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+  const userText = options.subjectKindOverride
+    ? `Extract the character profile as a JSON object matching the schema in the guide. The user has explicitly chosen subject_kind = '${options.subjectKindOverride}'; honor that override.`
+    : "Extract the character profile as a JSON object matching the schema in the guide.";
   const response = await fn({
     model: VISION_MODEL,
-    instructions: buildSystemPrompt(guide),
+    instructions: buildSystemPrompt(guide, options.subjectKindOverride),
     input: [{
       role: "user",
       content: [
         { type: "input_image", image_url: dataUrl, detail: "high" },
-        { type: "input_text", text: "Extract the character profile as a JSON object matching the schema in the guide." },
+        { type: "input_text", text: userText },
       ],
     }],
     text: { format: { type: "json_object" } },

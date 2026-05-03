@@ -9,6 +9,12 @@ import { findImageFile } from "./_image-inputs.js";
 const schema = {
   project_slug: z.string().describe("Project slug"),
   image_slug: z.string().describe("@img-* slug of a portrait/photo to extract a character profile from"),
+  subject_kind: z
+    .enum(["female", "male", "animal", "other"])
+    .optional()
+    .describe(
+      "Optional override. When set, the vision model commits to this subject kind (useful for androgynous or stylized images, or to re-extract with a different reading)."
+    ),
 };
 
 export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
@@ -18,8 +24,9 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
       "Run vision on an image asset and return a structured Character profile. Subject kind is one of " +
       "'female' | 'male' | 'animal' | 'other'. For female/male the profile holds age, ethnicity, height, " +
       "build, body measurements (chest/waist/hips), face, hair, eyes, skin. For animal/other it collapses " +
-      "into a single freeform 'other' description. Synchronous — no jobs, no assets created. " +
-      "Used by the /character flow to seed the editable form before generating a character sheet.",
+      "into a single freeform 'other' description. Pass `subject_kind` to force a specific reading — " +
+      "useful for androgynous or stylized images, or to re-extract after the user flips the toggle. " +
+      "Synchronous — no jobs, no assets created. Used by the /character flow to seed the editable form before generating a character sheet.",
     schema,
     handler: async (args) => {
       if (!process.env.OPENAI_API_KEY) {
@@ -28,7 +35,11 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
           content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
         };
       }
-      const { project_slug, image_slug } = args as { project_slug: string; image_slug: string };
+      const { project_slug, image_slug, subject_kind } = args as {
+        project_slug: string;
+        image_slug: string;
+        subject_kind?: "female" | "male" | "animal" | "other";
+      };
       const assetId = image_slug.replace(/^@/, "");
 
       const manifest = await fs.getManifest(assetId, project_slug);
@@ -58,6 +69,7 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
           Buffer.from(read.value),
           mimeForImageFilename(imageFile.name),
           assetId,
+          { subjectKindOverride: subject_kind },
         );
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ profile }) }],

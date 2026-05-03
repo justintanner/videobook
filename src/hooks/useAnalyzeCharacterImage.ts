@@ -1,10 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
-import { type CharacterProfile } from "@/hooks/useCharacterSlots";
+import { type CharacterProfile, type CharacterSubjectKind } from "@/hooks/useCharacterSlots";
 import { toast } from "@/hooks/useToast";
 
 export interface UseAnalyzeCharacterImageResult {
-  analyze: (projectSlug: string, imageSlug: string) => Promise<CharacterProfile | null>;
+  analyze: (
+    projectSlug: string,
+    imageSlug: string,
+    subjectKind?: CharacterSubjectKind,
+  ) => Promise<CharacterProfile | null>;
   loading: boolean;
   error: string | null;
 }
@@ -15,14 +19,20 @@ export function useAnalyzeCharacterImage(callTool: UseMcpResult["callTool"]): Us
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
 
-  const analyze = useCallback(async (projectSlug: string, imageSlug: string): Promise<CharacterProfile | null> => {
+  const analyze = useCallback(async (
+    projectSlug: string,
+    imageSlug: string,
+    subjectKind?: CharacterSubjectKind,
+  ): Promise<CharacterProfile | null> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await callToolRef.current("analyze_character_image", {
+      const args: { project_slug: string; image_slug: string; subject_kind?: CharacterSubjectKind } = {
         project_slug: projectSlug,
         image_slug: imageSlug,
-      });
+      };
+      if (subjectKind) args.subject_kind = subjectKind;
+      const res = await callToolRef.current("analyze_character_image", args);
       if (res.isError) {
         const content = res.content as Array<{ type: string; text: string }> | undefined;
         const msg = content?.[0]?.text ?? "analyze_character_image failed";
