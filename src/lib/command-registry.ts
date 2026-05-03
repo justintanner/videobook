@@ -14,7 +14,7 @@ export interface ServerCommand {
   category: 'action' | 'project' | 'context_menu' | 'viewer';
   icon: string;
   size: 'sm' | 'default' | 'lg';
-  variant: 'default' | 'violet' | 'fuchsia' | 'blue' | 'zinc';
+  variant: 'default' | 'violet' | 'fuchsia' | 'blue' | 'zinc' | 'amber' | 'emerald' | 'pink';
   chevron: 'right' | 'down';
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };

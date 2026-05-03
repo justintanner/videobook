@@ -1,4 +1,4 @@
-import type { ClipState, MediaItem } from './types';
+import type { AssetType, ClipState, MediaItem } from './types';
 
 export type CardTone =
   | 'ready'
@@ -11,7 +11,13 @@ export type CardTone =
   | 'rendering'
   | 'transcribing'
   | 'loading'
-  | 'deleting';
+  | 'deleting'
+  | 'video'
+  | 'image'
+  | 'character'
+  | 'audio'
+  | 'script'
+  | 'plan';
 
 export interface CardVisualState {
   tone: CardTone;
@@ -150,6 +156,70 @@ const TONE_STYLES: Record<CardTone, {
     faint: 'rgba(239, 68, 68, 0.06)',
     dot: null,
   },
+  video: {
+    color: '#8b5cf6',
+    rgb: '139, 92, 246',
+    border: 'rgba(139, 92, 246, 0.35)',
+    glow: 'rgba(139, 92, 246, 0.35)',
+    soft: 'rgba(139, 92, 246, 0.14)',
+    faint: 'rgba(139, 92, 246, 0.06)',
+    dot: null,
+  },
+  image: {
+    color: READY_RAW,
+    rgb: '0, 255, 255',
+    border: 'rgba(0, 255, 255, 0.35)',
+    glow: 'rgba(0, 255, 255, 0.35)',
+    soft: 'rgba(0, 255, 255, 0.14)',
+    faint: 'rgba(0, 255, 255, 0.06)',
+    dot: null,
+  },
+  character: {
+    color: '#ec4899',
+    rgb: '236, 72, 153',
+    border: 'rgba(236, 72, 153, 0.35)',
+    glow: 'rgba(236, 72, 153, 0.35)',
+    soft: 'rgba(236, 72, 153, 0.14)',
+    faint: 'rgba(236, 72, 153, 0.06)',
+    dot: null,
+  },
+  audio: {
+    color: '#10b981',
+    rgb: '16, 185, 129',
+    border: 'rgba(16, 185, 129, 0.35)',
+    glow: 'rgba(16, 185, 129, 0.35)',
+    soft: 'rgba(16, 185, 129, 0.14)',
+    faint: 'rgba(16, 185, 129, 0.06)',
+    dot: null,
+  },
+  script: {
+    color: '#facc15',
+    rgb: '250, 204, 21',
+    border: 'rgba(250, 204, 21, 0.35)',
+    glow: 'rgba(250, 204, 21, 0.35)',
+    soft: 'rgba(250, 204, 21, 0.14)',
+    faint: 'rgba(250, 204, 21, 0.06)',
+    dot: null,
+  },
+  plan: {
+    color: FINAL_RAW,
+    rgb: '251, 191, 36',
+    border: 'rgba(251, 191, 36, 0.35)',
+    glow: 'rgba(251, 191, 36, 0.35)',
+    soft: 'rgba(251, 191, 36, 0.14)',
+    faint: 'rgba(251, 191, 36, 0.06)',
+    dot: null,
+  },
+};
+
+const TYPE_TO_TONE: Record<AssetType, CardTone> = {
+  video: 'video',
+  image: 'image',
+  character: 'character',
+  audio: 'audio',
+  script: 'script',
+  plan: 'plan',
+  final: 'final',
 };
 
 const PIPELINE_STATES = new Set<ClipState>([
@@ -180,7 +250,7 @@ function toneForStatus(status: ClipState, item: Pick<MediaItem, 'type'>): CardTo
   if (status === 'generating' || isPipelineState(status)) {
     return item.type === 'image' || item.type === 'character' ? 'generating-image' : 'generating';
   }
-  return 'ready';
+  return TYPE_TO_TONE[item.type] ?? 'ready';
 }
 
 function stateClassForTone(tone: CardTone): string | null {
@@ -204,6 +274,12 @@ function stateClassForTone(tone: CardTone): string | null {
     case 'final':
       return 'clip-state-final';
     case 'ready':
+    case 'video':
+    case 'image':
+    case 'character':
+    case 'audio':
+    case 'script':
+    case 'plan':
       return 'clip-state-ready';
     case 'error':
       return null;
@@ -218,12 +294,14 @@ function cursorClassForTone(tone: CardTone): string {
   return 'cursor-pointer';
 }
 
+const IDLE_TONES = new Set<CardTone>(['ready', 'video', 'image', 'character', 'audio', 'script', 'plan']);
+
 export function getCardVisualState(item: MediaItem): CardVisualState {
   const status = item.status ?? 'ready';
   const tone = toneForStatus(status, item);
   const style = TONE_STYLES[tone];
-  const isGold = tone === 'final';
-  const isActive = tone !== 'ready' && tone !== 'final' && tone !== 'error';
+  const isGold = tone === 'final' || tone === 'plan';
+  const isActive = !IDLE_TONES.has(tone) && tone !== 'final' && tone !== 'error';
 
   return {
     tone,

@@ -15,7 +15,7 @@ interface Command {
   category: "action" | "project" | "context_menu" | "viewer";
   icon: string;
   size: "sm" | "default" | "lg";
-  variant: "default" | "violet" | "fuchsia" | "blue" | "zinc";
+  variant: "default" | "violet" | "fuchsia" | "blue" | "zinc" | "amber" | "emerald" | "pink";
   chevron: "right" | "down";
   params: CommandParam[];
   mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
@@ -46,7 +46,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "Film",
     size: "default",
-    variant: "fuchsia",
+    variant: "violet",
     chevron: "right",
     params: [
       { name: "prompt", type: "string", required: false, description: "The prompt to generate from" },
@@ -60,7 +60,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "Image",
     size: "default",
-    variant: "blue",
+    variant: "default",
     chevron: "right",
     params: [
       { name: "prompt", type: "string", required: false, description: "The prompt to generate from" },
@@ -74,7 +74,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "User",
     size: "default",
-    variant: "blue",
+    variant: "pink",
     chevron: "down",
     params: [
       { name: "source_slug", type: "string", required: false, description: "Source portrait @img-* to extract a profile from" },
@@ -134,7 +134,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "Scissors",
     size: "default",
-    variant: "default",
+    variant: "emerald",
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to trim" },
@@ -286,7 +286,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "MapPin",
     size: "default",
-    variant: "violet",
+    variant: "amber",
     chevron: "right",
     params: [],
     uiAction: "open_plan",
@@ -298,7 +298,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "context_menu",
     icon: "Clapperboard",
     size: "default",
-    variant: "default",
+    variant: "amber",
     chevron: "right",
     params: [
       { name: "source_asset_id", type: "string", required: true, description: "Asset with elevenlabs.json (vid-* or aud-*)" },
@@ -503,7 +503,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "context_menu",
     icon: "Music",
     size: "default",
-    variant: "default",
+    variant: "emerald",
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
@@ -605,7 +605,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "Mic",
     size: "default",
-    variant: "violet",
+    variant: "emerald",
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to isolate vocals from" },

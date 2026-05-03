@@ -71,6 +71,17 @@ export const variants = {
     text: 'text-fuchsia-400/70 group-hover:text-fuchsia-400/90',
     icon: 'text-fuchsia-400/80 group-hover:text-fuchsia-400',
   },
+  pink: {
+    bg: 'bg-pink-500/20 border-pink-500/30',
+    shadow: 'rgba(236,72,153,0.5)',
+    chevron: 'text-pink-400/40 group-hover:text-pink-400/50',
+    chevronDown: 'text-pink-400/40 group-hover:text-pink-400/60',
+    cursorBg: 'bg-pink-400/40',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(236,72,153,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(236,72,153,0.12)]',
+    text: 'text-pink-400/70 group-hover:text-pink-400/90',
+    icon: 'text-pink-400/80 group-hover:text-pink-400',
+  },
   emerald: {
     bg: 'bg-emerald-500/20 border-emerald-500/30',
     shadow: 'rgba(16,185,129,0.5)',
