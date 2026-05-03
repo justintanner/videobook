@@ -1,7 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
-import { trimRange, assertSaneTrimOutput } from "./trim-video.js";
+import { trimRange, trimRangeExact, assertSaneTrimOutput } from "./trim-video.js";
 
 type EvenSplitChunkPayload = {
   assetId: string;
@@ -30,11 +30,21 @@ async function buildChunk(
     assetId: string;
     projectSlug: string;
     provenance: Record<string, unknown>;
+    /**
+     * If true, encode with `trimRangeExact` so the container duration reads
+     * as the integer second value (e.g. exactly 10.000s). Used for the
+     * first /even-split chunk where the user wants a magic-length head.
+     */
+    exact?: boolean;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance } = args;
+  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance, exact } = args;
   try {
-    await trimRange(sourcePath, outputPath, start, end);
+    if (exact) {
+      await trimRangeExact(sourcePath, outputPath, start, end - start);
+    } else {
+      await trimRange(sourcePath, outputPath, start, end);
+    }
     await assertSaneTrimOutput(sourcePath, outputPath);
   } catch (err) {
     await rm(outputPath, { force: true });
@@ -59,6 +69,8 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
         chunk_duration: chunk.duration,
         split_at_iso: splitAtIso,
       };
+      // Only the first chunk needs exact-second container duration — the
+      // second chunk is "the rest" and the user explicitly doesn't care.
       return buildChunk(fs, {
         sourcePath,
         outputPath: chunk.outputPath,
@@ -67,6 +79,7 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
         assetId: chunk.assetId,
         projectSlug,
         provenance,
+        exact: i === 0,
       });
     });
     await Promise.all(buildPromises);

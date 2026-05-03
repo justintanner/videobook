@@ -88,6 +88,35 @@ export async function trimRange(
   await runFfmpeg(args);
 }
 
+/**
+ * Cut exactly `durationSec` seconds starting at `startSec`, with the output's
+ * container duration reported as the integer second value (not 9.97 / 10.01).
+ *
+ * The trick: forcing the output framerate to 24 means a 23.976-fps source
+ * (very common — YouTube, most films) becomes 240 frames at 24fps = 10.000s.
+ * Audio gets `-t durationSec` directly. With both streams landing on
+ * the same integer-second boundary, ffprobe reports `format=duration` as
+ * an integer.
+ *
+ * Used by /even-split where the user wants the first chunk to read as
+ * "exactly 10s" / "exactly 9s" — a hard requirement for some video-gen UIs
+ * that match on the duration field. No safety margin: precision is the goal.
+ */
+export async function trimRangeExact(
+  inputPath: string,
+  outputPath: string,
+  startSec: number,
+  durationSec: number,
+): Promise<void> {
+  const args = ["-y"];
+  if (startSec > 0) args.push("-ss", String(startSec));
+  args.push("-i", inputPath);
+  args.push("-t", String(durationSec));
+  args.push("-r", "24", "-vsync", "cfr");
+  args.push(...H264_MEDIUM, ...AUDIO_OPTS, outputPath);
+  await runFfmpeg(args);
+}
+
 async function cutMiddle(
   inputPath: string,
   outputPath: string,
