@@ -59,6 +59,10 @@ export interface MediaItem {
   pendingState?: PendingState;
   pendingProgress?: number;
   pendingTaskType?: string;
+  /** Unix ms when the underlying generation job started, sourced from the
+   *  pending task's `createdAt`. Undefined when the asset isn't generating
+   *  or no pending entry exists yet. Drives the GeneratingOverlay clock. */
+  pendingStartedAt?: number | null;
   createdAt?: string;
   failedAt?: string;
   failedMessage?: string;

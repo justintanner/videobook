@@ -178,13 +178,13 @@ export function HomePage() {
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
     const failedMap = new Map<string, { failMsg: string; failedAt: string; taskType: string; prompt: string | null }>();
-    const pendingMap = new Map<string, { state: PendingState; progress: number; taskType: string; prompt: string | null }>();
+    const pendingMap = new Map<string, { state: PendingState; progress: number; taskType: string; prompt: string | null; startedAt: number | null }>();
     if (result) {
       for (const f of result.failed) {
         failedMap.set(f.assetId, { failMsg: f.failMsg, failedAt: f.failedAt, taskType: f.taskType, prompt: f.prompt });
       }
       for (const p of result.pending) {
-        pendingMap.set(p.assetId, { state: p.state as PendingState, progress: p.progress, taskType: p.taskType, prompt: p.prompt });
+        pendingMap.set(p.assetId, { state: p.state as PendingState, progress: p.progress, taskType: p.taskType, prompt: p.prompt, startedAt: p.startedAt });
       }
     }
 
@@ -216,6 +216,7 @@ export function HomePage() {
         pendingState: pending?.state,
         pendingProgress: pending?.progress,
         pendingTaskType: pending?.taskType,
+        pendingStartedAt: pending?.startedAt ?? null,
         failedAt: failed?.failedAt,
         failedMessage: failed?.failMsg,
         failedTaskType: failed?.taskType,

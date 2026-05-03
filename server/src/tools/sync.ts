@@ -69,7 +69,7 @@ export type SyncAsset = {
 };
 
 export type SyncResult = {
-  pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null }>;
+  pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null; startedAt: number | null }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
@@ -445,7 +445,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   // "success" so the inbox tile shows the DOWNLOAD/PROCESS phase.
   const completingTasks = activeTasks.filter((t) => t.completing === true);
   for (const t of completingTasks) {
-    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 100, state: "success", prompt: metaPrompt(t.meta) });
+    result.pending.push({ assetId: t.assetId, taskType: t.taskType, progress: 100, state: "success", prompt: metaPrompt(t.meta), startedAt: Math.round(t.createdAt * 1000) });
   }
 
   const pollableTasks = activeTasks.filter((t) => t.completing !== true);
@@ -525,6 +525,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             progress: videoResult.progress ?? 0,
             state: videoResult.status,
             prompt,
+            startedAt: Math.round(task.createdAt * 1000),
           });
         }
       } catch (e) {
@@ -602,6 +603,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             progress: 0,
             state: status.toLowerCase(),
             prompt,
+            startedAt: Math.round(task.createdAt * 1000),
           });
         }
       } catch (e) {
@@ -677,6 +679,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
             progress: 0,
             state: status.status.toLowerCase(),
             prompt,
+            startedAt: Math.round(task.createdAt * 1000),
           });
         }
       } catch (e) {
@@ -827,6 +830,7 @@ async function processSyncedTask(
         progress: data.progress,
         state: data.state,
         prompt,
+        startedAt: Math.round(task.createdAt * 1000),
       });
       return;
     }
@@ -849,6 +853,7 @@ async function processSyncedTask(
       progress: data?.progress,
       state: data?.state,
       prompt,
+      startedAt: Math.round(task.createdAt * 1000),
     });
   }
 }

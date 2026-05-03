@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export interface SyncResult {
-  pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null }>;
+  pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null; startedAt: number | null }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
