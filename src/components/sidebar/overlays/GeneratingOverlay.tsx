@@ -2,12 +2,11 @@ import type { OverlayProps } from './types';
 import { ClockOverlay } from './ClockOverlay';
 
 interface GeneratingOverlayProps extends OverlayProps {
-  /** Reserved for callers that previously customized the overlay label
-   *  (e.g. "PROCESSING", "ANALYZING"). The clock no longer renders text,
-   *  so this value is currently unused but kept to avoid touching call sites. */
+  /** Label override for pipeline states (PROCESSING, ANALYZING, TRIMMING, …).
+   *  Defaults to "GENERATING". */
   label?: string;
 }
 
-export function GeneratingOverlay({ item }: GeneratingOverlayProps) {
-  return <ClockOverlay item={item} startedAt={item.pendingStartedAt ?? null} />;
+export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
+  return <ClockOverlay item={item} label={label ?? 'GENERATING'} startedAt={item.pendingStartedAt ?? null} />;
 }
