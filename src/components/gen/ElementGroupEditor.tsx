@@ -5,6 +5,7 @@ import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { JSONSchemaProperty, ResolvedAsset } from './types';
 import { MAX_ELEMENT_GROUPS } from './types';
 import { stripSlugPrefix } from '@/lib/slugs';
+import { GenSection } from './ui/GenSection';
 
 interface Asset {
   slug: string;
@@ -153,14 +154,16 @@ export function ElementGroupEditor({
   };
 
   return (
-    <div className="rounded border border-violet-500/15 bg-violet-500/[0.03]">
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-violet-500/30 bg-violet-500/15">
-        <span className="font-mono font-bold text-xs tracking-widest text-violet-400">/elements</span>
-        <span className="ml-auto text-[10px] font-mono text-violet-400/50">
+    <GenSection
+      label="elements"
+      color="violet"
+      rightSlot={
+        <span className="text-[10px] font-mono text-violet-400/50">
           {effectiveVisible}/{maxGroups}
         </span>
-      </div>
-      <div className="px-2.5 py-2.5 space-y-2.5">
+      }
+      bodyClassName="px-2.5 py-2.5 space-y-2.5"
+    >
       {activeIndices.map((groupIdx) => {
         const slugsSchema = elementSchemas.get(`element${groupIdx}_slugs`);
         const maxItems = slugsSchema?.maxItems ?? 4;
@@ -311,7 +314,6 @@ export function ElementGroupEditor({
           <span>/elements add</span>
         </button>
       )}
-      </div>
-    </div>
+    </GenSection>
   );
 }

@@ -15,12 +15,12 @@ import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
-import { ImagePromptRewritePopover } from '@/components/gen/ImagePromptRewritePopover';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
 import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
-import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
+import { GenSection } from '@/components/gen/ui/GenSection';
+import { PromptSection } from '@/components/gen/ui/PromptSection';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -108,7 +108,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const { rewrite: rewriteImagePrompt, rewriting } = useRewriteImagePrompt(callTool);
   const promptHistorySurface = category === 'video' ? 'video_generate' : 'image_generate';
   const promptHistory = usePromptHistory(callTool, promptHistorySurface, projectSlug);
-  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const callToolRef = useRef(callTool);
   callToolRef.current = callTool;
   const formValuesRef = useRef(formValues);
@@ -423,6 +422,48 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const missingRequiredLabel = (name: string): string =>
     name.replace(/_slugs?$/, '').replace(/_/g, ' ');
 
+  // Bucket validation warnings by the section they relate to so each renders
+  // inline with its target instead of as a top-of-form banner.
+  const routedWarnings = useMemo(() => {
+    const buckets: { prompt: string[]; references: string[]; settings: string[]; general: string[] } = {
+      prompt: [],
+      references: [],
+      settings: [],
+      general: [],
+    };
+    if (!selectedOption) return buckets;
+    const settingsFieldKeys = Object.keys(selectedOption.schema.properties).filter(
+      (n) => n !== 'project_slug' && n !== 'prompt' && !isAssetField(n) && !isElementField(n),
+    );
+    const settingsTokens = settingsFieldKeys.flatMap((k) => [k, k.replace(/_/g, ' ')]);
+    const REFERENCE_TOKENS = /\b(reference|frame|clip|slug|asset|image|video|audio)s?\b/i;
+
+    const route = (msg: string): keyof typeof buckets => {
+      const lower = msg.toLowerCase();
+      if (/^missing required field/i.test(msg)) {
+        if (/\bprompt\b/.test(lower)) return 'prompt';
+        if (settingsTokens.some((t) => lower.includes(t.toLowerCase()))) return 'settings';
+        return 'references';
+      }
+      if (REFERENCE_TOKENS.test(msg)) return 'references';
+      if (settingsTokens.some((t) => lower.includes(t.toLowerCase()))) return 'settings';
+      return 'general';
+    };
+
+    const missingToDisplay = liveMissingRequired.filter((n) => n !== 'prompt');
+    if (missingToDisplay.length > 0) {
+      const composed = `Missing required field${missingToDisplay.length === 1 ? '' : 's'}: ${missingToDisplay.map(missingRequiredLabel).join(', ')}`;
+      buckets[route(composed)].push(composed);
+    }
+    for (const w of selectedOption.validation.warnings ?? []) {
+      buckets[route(w)].push(w);
+    }
+    for (const w of liveWarnings) {
+      buckets[route(w)].push(w);
+    }
+    return buckets;
+  }, [selectedOption, liveMissingRequired, liveWarnings]);
+
   const fetchTranslatedPayload = useCallback(async () => {
     if (!jsonPayload) return;
     setTranslateLoading(true);
@@ -567,6 +608,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
+  // Everything that isn't prompt-specific renders inside /settings.
+  const settingsLevelWarnings = [
+    ...routedWarnings.references,
+    ...routedWarnings.settings,
+    ...routedWarnings.general,
+  ];
+
   return (
     <GenPanel
       label={panelLabel}
@@ -663,140 +711,38 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
             )}
 
-            {/* Warnings (server-side + live frontend validation) */}
-            {(() => {
-              const allWarnings = [
-                ...(selectedOption?.validation.warnings ?? []),
-                ...liveWarnings,
-              ];
-              const missingToDisplay = liveMissingRequired.filter((n) => n !== 'prompt');
-              if (missingToDisplay.length > 0) {
-                allWarnings.unshift(
-                  `Missing required field${missingToDisplay.length === 1 ? '' : 's'}: ${missingToDisplay.map(missingRequiredLabel).join(', ')}`,
-                );
-              }
-              return allWarnings.length > 0 && (
-                <div className="mb-3 space-y-1">
-                  {allWarnings.map((w, i) => (
-                    <div key={i} className="px-3 py-1.5 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-mono">
-                      {w}
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
             <div className="flex gap-2">
               {/* Left column: prompt + inline params */}
               <div className="flex-1 space-y-2">
-                {/* Prompt field in /prompt section */}
-                {regularFields
-                  .filter(([name]) => name === 'prompt')
-                  .map(([name]) => {
-                    const promptValue = typeof formValues[name] === 'string' ? (formValues[name] as string) : '';
-                    const slugsRaw = formValues.image_slugs;
-                    const slugsCount = Array.isArray(slugsRaw) ? slugsRaw.length : 0;
-                    const rewriteDisabled = isDisabled || rewriting || (!promptValue.trim() && slugsCount === 0);
-                    return (
-                    <div key={name} className="rounded border border-emerald-500/15 bg-emerald-500/[0.03]">
-                      <div className="flex items-center gap-3 px-4 py-2.5 rounded-t border-b border-emerald-500/30 bg-emerald-500/15">
-                        <span className="font-mono font-bold text-base tracking-widest text-emerald-400">/prompt</span>
-                        {schema?.required?.includes(name) && (
-                          <span className="text-[10px] font-bold text-emerald-400/60 tracking-wider">*REQ</span>
-                        )}
-                        <div className="ml-auto flex items-center gap-3">
-                          <PromptHistoryArrows
-                            cursor={promptHistory.cursor}
-                            total={promptHistory.entries.length}
-                            onPrev={() => {
-                              const prev = promptHistory.navigateBack(promptValue);
-                              if (prev !== null) handleFieldChange(name, prev);
-                            }}
-                            onNext={() => {
-                              const next = promptHistory.navigateForward();
-                              if (next !== null) handleFieldChange(name, next);
-                            }}
-                            colorClass="text-emerald-400/70"
-                            size="lg"
-                          />
-                          {category === 'image' && (
-                            <ImagePromptRewritePopover
-                              open={rewriteOpen}
-                              onOpenChange={setRewriteOpen}
-                              onSubmit={handleRewriteImagePromptSubmit}
-                              rewriting={rewriting}
-                              disabled={rewriteDisabled && !rewriteOpen}
-                              callTool={callTool}
-                              projectSlug={projectSlug}
-                              model={selectedModelKey}
-                              trigger={
-                                <button
-                                  type="button"
-                                  tabIndex={-1}
-                                  onClick={() => setRewriteOpen((o) => !o)}
-                                  disabled={rewriteDisabled}
-                                  title="Rewrite prompt to match a platform aesthetic (IG/TikTok/YouTube) and clean up artifacts"
-                                  className={cn(
-                                    'h-8 px-3 flex items-center gap-2 rounded',
-                                    'text-xs font-mono font-bold uppercase tracking-wider',
-                                    'text-emerald-300/90 hover:text-emerald-200',
-                                    'bg-transparent hover:bg-emerald-500/15 border border-emerald-500/40 hover:border-emerald-400/70',
-                                    'transition-colors duration-150',
-                                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                                    rewriteOpen && 'bg-emerald-500/15 border-emerald-400/70 text-emerald-200',
-                                  )}
-                                >
-                                  {rewriting
-                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    : <Zap className="w-3.5 h-3.5" />}
-                                  Rewrite
-                                </button>
-                              }
-                            />
-                          )}
-                        </div>
-                      </div>
-                      <div className="px-3 py-2.5">
-                        <textarea
-                          ref={promptTextareaRef}
-                          value={promptValue.replace(/\\n/g, '\n')}
-                          onChange={(e) => {
-                            handleFieldChange(name, e.target.value);
-                            promptHistory.reset();
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp' && !e.shiftKey && (promptTextareaRef.current?.selectionStart ?? 0) === 0) {
-                              const prev = promptHistory.navigateBack(promptValue);
-                              if (prev !== null) {
-                                e.preventDefault();
-                                handleFieldChange(name, prev);
-                              }
-                              return;
-                            }
-                            if (e.key === 'ArrowDown' && !e.shiftKey && promptHistory.cursor !== -1) {
-                              const next = promptHistory.navigateForward();
-                              if (next !== null) {
-                                e.preventDefault();
-                                handleFieldChange(name, next);
-                              }
-                            }
-                          }}
-                          disabled={isDisabled}
-                          autoFocus
-                          rows={12}
-                          className="w-full px-3 py-2 resize-none bg-black/60 border border-emerald-500/15 rounded text-emerald-200 placeholder:text-emerald-400/30 font-mono text-sm leading-relaxed focus:outline-none focus:border-emerald-400/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                    );
-                  })}
-                {/* Other fields in /settings section */}
-                {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
-                  <div className="rounded border border-cyan-500/15 bg-cyan-500/[0.03]">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-t border-b border-cyan-500/30 bg-cyan-500/15">
-                      <span className="font-mono font-bold text-xs tracking-widest text-cyan-400">/settings</span>
-                    </div>
-                    <div className="px-3 py-2.5">
+                {regularFields.some(([name]) => name === 'prompt') && (() => {
+                  const promptValue = typeof formValues.prompt === 'string' ? (formValues.prompt as string) : '';
+                  const slugsRaw = formValues.image_slugs;
+                  const slugsCount = Array.isArray(slugsRaw) ? slugsRaw.length : 0;
+                  const rewriteDisabled = isDisabled || rewriting || (!promptValue.trim() && slugsCount === 0);
+                  return (
+                    <PromptSection
+                      value={promptValue}
+                      onChange={(v) => handleFieldChange('prompt', v)}
+                      disabled={isDisabled}
+                      required={schema?.required?.includes('prompt')}
+                      warning={routedWarnings.prompt}
+                      category={category}
+                      color={category === 'video' ? 'fuchsia' : 'blue'}
+                      promptHistory={promptHistory}
+                      callTool={callTool}
+                      projectSlug={projectSlug}
+                      selectedModelKey={selectedModelKey}
+                      rewriteOpen={rewriteOpen}
+                      setRewriteOpen={setRewriteOpen}
+                      rewriting={rewriting}
+                      onRewriteSubmit={handleRewriteImagePromptSubmit}
+                      rewriteDisabled={rewriteDisabled}
+                    />
+                  );
+                })()}
+                {(regularFields.filter(([name]) => name !== 'prompt').length > 0 || settingsLevelWarnings.length > 0) && (
+                  <GenSection label="settings" color="cyan" warning={settingsLevelWarnings}>
+                    {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
                       <div className="flex flex-wrap gap-x-6 gap-y-3">
                         {regularFields
                           .filter(([name]) => name !== 'prompt')
@@ -812,8 +758,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                             />
                           ))}
                       </div>
-                    </div>
-                  </div>
+                    )}
+                  </GenSection>
                 )}
               </div>
 
