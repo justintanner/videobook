@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -37,14 +38,14 @@ export function generateHappyhorseT2vVideoDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
       }
 
-      const videoName = `happyhorse-t2v-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "happyhorse/text-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      const jobId = `happyhorse-t2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "happyhorse/text-to-video")}-t2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_t2v_video",

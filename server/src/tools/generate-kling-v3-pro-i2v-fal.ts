@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -35,12 +36,12 @@ export function generateKlingV3ProI2vFalDef(fs: ClipfirstFs): ToolDef {
 
       const [firstFrame, endFrame] = resolved.inputs;
       const nameSource = prompt ?? first_frame_slug;
-      const assetResult = await fs.createAsset("vid", `kling-v3-pro-${slugify(nameSource) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-kling-v3-pro-i2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "kling-3.0/video/pro")}-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_kling_v3_pro_i2v_fal",
         vidAssetId,

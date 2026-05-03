@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -48,7 +49,7 @@ export function generateHappyhorseI2vVideoDef(fs: ClipfirstFs): ToolDef {
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
-      const videoName = `happyhorse-i2v-${assetId.replace(/^img-/, "")}`;
+      const videoName = `${modelSlug("kie", "happyhorse/image-to-video")}-${assetId.replace(/^img-/, "")}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -56,7 +57,7 @@ export function generateHappyhorseI2vVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [assetId];
-      const jobId = `happyhorse-i2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "happyhorse/image-to-video")}-i2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_i2v_video",

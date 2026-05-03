@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -107,12 +108,12 @@ export function generateSeedance2R2vFalDef(fs: ClipfirstFs): ToolDef {
       const resolvedAudios = await resolveAudioSlugs(fs, audSlugs, project_slug);
       if (!resolvedAudios.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolvedAudios.error }] };
 
-      const assetResult = await fs.createAsset("vid", `seedance2-ref-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-seedance2-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_seedance2_r2v_fal",
         vidAssetId,

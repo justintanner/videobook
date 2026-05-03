@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamImageToImageRequestSchema } from "@apicity/kie/zod";
@@ -69,7 +70,7 @@ export function generateSeedreamImageDef(fs: ClipfirstFs): ToolDef {
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const assetName = `seedream-${slugify(prompt) || String(Date.now())}`;
+      const assetName = `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -80,7 +81,7 @@ export function generateSeedreamImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `seedream-image-${imgAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_seedream_image",

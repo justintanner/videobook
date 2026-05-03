@@ -3,6 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const WAN27_IMAGE_SIZES = ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"] as const;
 
@@ -29,12 +30,12 @@ export function generateWan27FalDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("img", `wan27-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "wan/2-7-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-wan27-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "wan/2-7-image")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_wan27_fal",
         imgAssetId,

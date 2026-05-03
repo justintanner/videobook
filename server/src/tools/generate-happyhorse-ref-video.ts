@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -64,7 +65,7 @@ export function generateHappyhorseRefVideoDef(fs: ClipfirstFs): ToolDef {
         imageInputs.push({ assetId, filename: file.name });
       }
 
-      const videoName = `happyhorse-ref-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "happyhorse/reference-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -72,7 +73,7 @@ export function generateHappyhorseRefVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
-      const jobId = `happyhorse-ref-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "happyhorse/reference-to-video")}-r2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_ref_video",

@@ -4,6 +4,7 @@ import { FalNanoBanana2TextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const base = FalNanoBanana2TextToImageRequestSchema.shape;
 const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
@@ -39,12 +40,12 @@ export function generateNanoBanana2FalDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("img", `nano-banana-2-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "nano-banana-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-nano-banana-2-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "nano-banana-2")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_nano_banana_2_fal",
         imgAssetId,

@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingMotionControlRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -88,7 +89,7 @@ export function generateKling30MotionControlVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const baseName = prompt ? slugify(prompt) : imageInputs[0].assetId.replace(/^img-/, "");
-      const videoName = `kling-motion-${baseName || Date.now()}`;
+      const videoName = `${modelSlug("kie", "kling-3.0/motion-control")}-${baseName || Date.now()}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -98,7 +99,7 @@ export function generateKling30MotionControlVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
 
-      const jobId = `kling30-motion-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "kling-3.0/motion-control")}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_kling30_motion_control_video",

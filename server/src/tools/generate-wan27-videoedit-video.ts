@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -118,7 +119,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
         imageInput = r.value;
       }
 
-      const videoName = `wan27-edit-${slugify(prompt ?? "") || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt ?? "") || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -132,7 +133,7 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoIds = [videoInput.assetId];
       const sourceAudioIds: string[] = [];
 
-      const jobId = `wan27-videoedit-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "wan/2-7-videoedit")}-edit-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_wan27_videoedit_video",

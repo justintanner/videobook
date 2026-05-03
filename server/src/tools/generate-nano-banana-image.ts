@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
@@ -68,7 +69,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const assetName = slugify(prompt);
+      const assetName = `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -79,7 +80,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `nano-banana-image-${imgAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "nano-banana-pro")}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_nano_banana_image",

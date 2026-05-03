@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingAspectRatioSchema, KlingDurationSchema, KlingModeSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -168,7 +169,7 @@ export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       // Create output video asset
-      const videoName = prompt ? `kling-${slugify(prompt)}` : `kling-${Date.now()}`;
+      const videoName = prompt ? `${modelSlug("kie", "kling-3.0/video")}-${slugify(prompt)}` : `${modelSlug("kie", "kling-3.0/video")}-${Date.now()}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -179,7 +180,7 @@ export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `kling30-video-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "kling-3.0/video")}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_kling30_video",

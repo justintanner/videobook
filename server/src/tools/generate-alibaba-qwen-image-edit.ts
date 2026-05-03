@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -119,7 +120,7 @@ export function generateAlibabaQwenImageEditDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds.push(id);
       }
 
-      const assetResult = await fs.createAsset("img", slugify(prompt), project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -129,7 +130,7 @@ export function generateAlibabaQwenImageEditDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `alibaba-qwen-image-edit-${imgAssetId}-${Date.now()}`;
+      const jobId = `alibaba-${modelSlug("alibaba", resolvedModel)}-edit-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_alibaba_qwen_image_edit",

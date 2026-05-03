@@ -4,6 +4,7 @@ import { FalKlingVideoV3ProTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const base = FalKlingVideoV3ProTextToVideoRequestSchema.shape;
 const shotTypeOptions = base.shot_type.unwrap().options as readonly [string, ...string[]];
@@ -34,12 +35,12 @@ export function generateKlingV3ProT2vFalDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("vid", `kling-v3-pro-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-kling-v3-pro-t2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "kling-3.0/video/pro")}-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_kling_v3_pro_t2v_fal",
         vidAssetId,

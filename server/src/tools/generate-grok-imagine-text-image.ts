@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -44,7 +45,7 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const assetName = slugify(prompt);
+      const assetName = `${modelSlug("kie", "grok-imagine/text-to-image")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -55,7 +56,7 @@ export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-text-${imgAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_text_image",

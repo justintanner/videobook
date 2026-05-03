@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -33,12 +34,12 @@ export function generateWan27EditFalDef(fs: ClipfirstFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `wan27-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "wan/2-7-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-wan27-edit-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "wan/2-7-image")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_wan27_edit_fal",
         imgAssetId,

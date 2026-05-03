@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -154,7 +155,7 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         audioInputs.push(r.value);
       }
 
-      const videoName = `seedance2-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -168,7 +169,7 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = audioInputs.map((i) => i.assetId);
 
-      const jobId = `seedance2-reference-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "bytedance/seedance-2")}-r2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_seedance2_reference_video",

@@ -3,6 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -27,12 +28,12 @@ export function generateSeedreamV5LiteFalDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("img", `seedream-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-seedream-v5-lite-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "seedream/5-lite-text-to-image")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_seedream_v5_lite_fal",
         imgAssetId,

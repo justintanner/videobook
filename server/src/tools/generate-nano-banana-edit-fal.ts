@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalNanoBananaEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -38,12 +39,12 @@ export function generateNanoBananaEditFalDef(fs: ClipfirstFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `nano-banana-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "nano-banana")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-nano-banana-edit-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "nano-banana")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_nano_banana_edit_fal",
         imgAssetId,

@@ -4,6 +4,7 @@ import { FalSeedance2p0TextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const base = FalSeedance2p0TextToVideoRequestSchema.shape;
 const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
@@ -34,12 +35,12 @@ export function generateSeedance2T2vFalDef(fs: ClipfirstFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("vid", `seedance2-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-seedance2-t2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2")}-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_seedance2_t2v_fal",
         vidAssetId,

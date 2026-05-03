@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7ImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -40,12 +41,12 @@ export function generateWan27I2vFalDef(fs: ClipfirstFs): ToolDef {
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.createAsset("vid", `wan27-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-wan27-i2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "wan/2-7-image-to-video")}-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_wan27_i2v_fal",
         vidAssetId,

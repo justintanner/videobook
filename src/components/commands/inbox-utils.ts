@@ -1,3 +1,4 @@
+import { modelDisplay } from '@apicity/cost';
 import type { MediaItem } from '@/components/sidebar/types';
 
 type Orientation = 'portrait' | 'square' | 'landscape';
@@ -40,30 +41,30 @@ interface TaskInfo {
 }
 
 const TASK_INFO: Record<string, TaskInfo> = {
-  nano_banana_image:             { model: 'Nano Banana',         provider: 'Kie' },
-  qwen2_image_edit:              { model: 'Qwen 2 Edit',         provider: 'Kie' },
-  grok_imagine_image:            { model: 'Grok Imagine',        provider: 'Kie' },
-  grok_imagine_video:            { model: 'Grok Imagine',        provider: 'Kie' },
-  grok_imagine_text:             { model: 'Grok Imagine',        provider: 'Kie' },
-  grok_imagine_extend_video:     { model: 'Grok Extend',         provider: 'Kie' },
-  gpt_image:                     { model: 'GPT Image 2.0 Edit',  provider: 'Kie' },
-  gpt_image_text:                { model: 'GPT Image 2.0',       provider: 'Kie' },
-  kling30_video:                 { model: 'Kling 3.0',           provider: 'Kie' },
-  seedance2_video:                { model: 'Seedance 2',          provider: 'Kie' },
-  wan27_image:                   { model: 'WAN 2.7',             provider: 'Kie' },
-  wan27_image_pro:               { model: 'WAN 2.7 Pro',         provider: 'Kie' },
-  wan27_i2v_video:               { model: 'WAN 2.7 I2V',         provider: 'Kie' },
-  wan27_videoedit_video:         { model: 'WAN 2.7 Edit',        provider: 'Kie' },
-  wan27_r2v_video:               { model: 'WAN 2.7 R2V',         provider: 'Kie' },
-  xai_grok_imagine_video:        { model: 'Grok Imagine',        provider: 'xAI' },
-  xai_grok_imagine_ref_video:    { model: 'Grok Imagine Ref',    provider: 'xAI' },
-  alibaba_image:                 { model: 'Wan 2.7 Image',       provider: 'Alibaba' },
-  alibaba_image_pro:             { model: 'Wan 2.7 Image Pro',   provider: 'Alibaba' },
-  alibaba_qwen_image:            { model: 'Qwen Image',          provider: 'Alibaba' },
-  alibaba_qwen_image_edit:       { model: 'Qwen Image Edit',     provider: 'Alibaba' },
-  alibaba_video:                 { model: 'Wan 2.7 Video',       provider: 'Alibaba' },
-  transcribe:                    { model: 'Whisper',             provider: 'OpenAI' },
-  isolate_vocals:                { model: 'Vocal Isolation',     provider: 'Kie' },
+  nano_banana_image:             { model: modelDisplay('kie', 'nano-banana'),                       provider: 'Kie' },
+  qwen2_image_edit:              { model: modelDisplay('kie', 'qwen2/image-edit'),                  provider: 'Kie' },
+  grok_imagine_image:            { model: modelDisplay('kie', 'grok-imagine/text-to-image'),        provider: 'Kie' },
+  grok_imagine_video:            { model: modelDisplay('kie', 'grok-imagine/text-to-video'),        provider: 'Kie' },
+  grok_imagine_text:             { model: modelDisplay('kie', 'grok-imagine/text-to-image'),        provider: 'Kie' },
+  grok_imagine_extend_video:     { model: modelDisplay('kie', 'grok-imagine/extend'),               provider: 'Kie' },
+  gpt_image:                     { model: modelDisplay('kie', 'gpt-image-2-image-to-image'),        provider: 'Kie' },
+  gpt_image_text:                { model: modelDisplay('kie', 'gpt-image-2-text-to-image'),         provider: 'Kie' },
+  kling30_video:                 { model: modelDisplay('kie', 'kling-3.0/video'),                   provider: 'Kie' },
+  seedance2_video:               { model: modelDisplay('kie', 'bytedance/seedance-2'),              provider: 'Kie' },
+  wan27_image:                   { model: modelDisplay('kie', 'wan/2-7-image'),                     provider: 'Kie' },
+  wan27_image_pro:               { model: modelDisplay('kie', 'wan/2-7-image-pro'),                 provider: 'Kie' },
+  wan27_i2v_video:               { model: modelDisplay('kie', 'wan/2-7-image-to-video'),            provider: 'Kie' },
+  wan27_videoedit_video:         { model: modelDisplay('kie', 'wan/2-7-videoedit'),                 provider: 'Kie' },
+  wan27_r2v_video:               { model: modelDisplay('kie', 'wan/2-7-r2v'),                       provider: 'Kie' },
+  xai_grok_imagine_video:        { model: modelDisplay('kie', 'grok-imagine/text-to-video'),        provider: 'xAI' },
+  xai_grok_imagine_ref_video:    { model: modelDisplay('kie', 'grok-imagine/image-to-video'),       provider: 'xAI' },
+  alibaba_image:                 { model: modelDisplay('alibaba', 'wan2.7-image-pro'),              provider: 'Alibaba' },
+  alibaba_image_pro:             { model: modelDisplay('alibaba', 'wan2.7-image-pro'),              provider: 'Alibaba' },
+  alibaba_qwen_image:            { model: modelDisplay('alibaba', 'qwen-image-2.0'),                provider: 'Alibaba' },
+  alibaba_qwen_image_edit:       { model: modelDisplay('alibaba', 'qwen-image-edit'),               provider: 'Alibaba' },
+  alibaba_video:                 { model: modelDisplay('alibaba', 'wan2.7-image-pro'),              provider: 'Alibaba' },
+  transcribe:                    { model: 'Whisper',                                                provider: 'OpenAI' },
+  isolate_vocals:                { model: 'Vocal Isolation',                                        provider: 'Kie' },
 };
 
 export function getTaskInfo(taskType: string | undefined): TaskInfo {

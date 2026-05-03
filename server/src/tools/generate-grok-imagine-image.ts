@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { join, extname } from "node:path";
@@ -94,7 +95,7 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-image-${imgAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_image",

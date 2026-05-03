@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamTextToImageRequestSchema } from "@apicity/kie/zod";
@@ -54,7 +55,7 @@ export function generateSeedreamTextImageDef(fs: ClipfirstFs): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const assetName = `seedream-${slugify(prompt) || String(Date.now())}`;
+      const assetName = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -65,7 +66,7 @@ export function generateSeedreamTextImageDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `seedream-text-image-${imgAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_seedream_text_image",

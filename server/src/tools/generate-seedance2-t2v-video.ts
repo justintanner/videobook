@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -47,7 +48,7 @@ export function generateSeedance2T2vVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const videoName = `seedance2-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -58,7 +59,7 @@ export function generateSeedance2T2vVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `seedance2-t2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "bytedance/seedance-2")}-t2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_seedance2_t2v_video",

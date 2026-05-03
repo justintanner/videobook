@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
@@ -89,12 +90,12 @@ export function generateWan27R2vFalDef(fs: ClipfirstFs): ToolDef {
       const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, project_slug);
       if (!resolvedVideos.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolvedVideos.error }] };
 
-      const assetResult = await fs.createAsset("vid", `wan27-ref-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-wan27-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "wan/2-7-r2v")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_wan27_r2v_fal",
         vidAssetId,

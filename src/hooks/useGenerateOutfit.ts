@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
+import { modelDisplay } from "@apicity/cost";
 import { toast } from "@/hooks/useToast";
 
 export const OUTFIT_CUSTOM_PROMPT_MAX = 500;
@@ -7,14 +8,20 @@ export const OUTFIT_CUSTOM_PROMPT_MAX = 500;
 export const OUTFIT_PLATFORMS = ["ig", "tiktok", "youtube"] as const;
 export type OutfitPlatform = typeof OUTFIT_PLATFORMS[number];
 
-export const OUTFIT_MODEL_OPTIONS = [
-  { key: "nano_banana_pro", label: "Nano Banana Pro" },
-  { key: "qwen_image_edit", label: "Qwen Image Edit" },
-  { key: "gpt_image_2", label: "GPT Image 2.0" },
-  { key: "wan27_pro", label: "Wan 2.7 Pro" },
-  { key: "seedream_v5_lite", label: "Seedream 5 Lite" },
-] as const;
-export type OutfitModelKey = typeof OUTFIT_MODEL_OPTIONS[number]["key"];
+export type OutfitModelKey =
+  | "nano_banana_pro"
+  | "qwen_image_edit"
+  | "gpt_image_2"
+  | "wan27_pro"
+  | "seedream_v5_lite";
+
+export const OUTFIT_MODEL_OPTIONS: ReadonlyArray<{ key: OutfitModelKey; label: string }> = [
+  { key: "nano_banana_pro", label: modelDisplay("kie", "nano-banana-pro") },
+  { key: "qwen_image_edit", label: modelDisplay("kie", "qwen2/image-edit") },
+  { key: "gpt_image_2", label: modelDisplay("kie", "gpt-image-2-image-to-image") },
+  { key: "wan27_pro", label: modelDisplay("kie", "wan/2-7-image-pro") },
+  { key: "seedream_v5_lite", label: modelDisplay("kie", "seedream/5-lite-image-to-image") },
+];
 
 export const OUTFIT_PROVIDERS = [
   { key: "kie", label: "Kie" },

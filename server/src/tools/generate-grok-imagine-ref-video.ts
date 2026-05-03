@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
@@ -96,7 +97,7 @@ export function generateGrokImagineRefVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       // Create output video asset
-      const assetName = slugify(prompt);
+      const assetName = `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -107,7 +108,7 @@ export function generateGrokImagineRefVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-ref-video-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/image-to-video")}-r2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_ref_video",

@@ -4,6 +4,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -35,12 +36,12 @@ export function generateGrokImagineVideoExtendFalDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.createAsset("vid", `grok-imagine-extend-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "grok-imagine/extend")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-grok-imagine-video-extend-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "grok-imagine/extend")}-extend-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video_extend_fal",
         vidAssetId,

@@ -5,6 +5,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
+import { modelSlug } from "@apicity/cost";
 
 const base = FalXaiGrokImagineVideoEditVideoRequestSchema.shape;
 const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
@@ -39,12 +40,12 @@ export function generateGrokImagineVideoEditFalDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.createAsset("vid", `grok-imagine-edit-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-grok-imagine-video-edit-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "grok-imagine/text-to-video")}-edit-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video_edit_fal",
         vidAssetId,

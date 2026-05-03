@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
   GrokImagineModeSchema,
@@ -47,7 +48,7 @@ export function generateGrokImagineT2vVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const videoName = `grok-t2v-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -58,7 +59,7 @@ export function generateGrokImagineT2vVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-t2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/text-to-video")}-t2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_t2v_video",

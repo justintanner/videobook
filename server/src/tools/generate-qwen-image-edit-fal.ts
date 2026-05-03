@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -81,12 +82,12 @@ export function generateQwenImageEditFalDef(fs: ClipfirstFs): ToolDef {
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.createAsset(prefix, `qwen-image-edit-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-qwen-image-edit-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "qwen2/image-edit")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_qwen_image_edit_fal",
         imgAssetId,

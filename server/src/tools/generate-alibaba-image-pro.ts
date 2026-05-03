@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -95,7 +96,7 @@ export function generateAlibabaImageProDef(fs: ClipfirstFs): ToolDef {
         }
       }
 
-      const assetName = slugify(prompt);
+      const assetName = `${modelSlug("alibaba", "wan2.7-image-pro")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -106,7 +107,7 @@ export function generateAlibabaImageProDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `alibaba-image-pro-${imgAssetId}-${Date.now()}`;
+      const jobId = `alibaba-${modelSlug("alibaba", "wan2.7-image-pro")}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_alibaba_image_pro",

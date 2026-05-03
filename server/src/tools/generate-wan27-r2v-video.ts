@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -139,7 +140,7 @@ export function generateWan27R2vVideoDef(fs: ClipfirstFs): ToolDef {
         voiceRef = r.value;
       }
 
-      const videoName = `wan27-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -153,7 +154,7 @@ export function generateWan27R2vVideoDef(fs: ClipfirstFs): ToolDef {
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = voiceRef ? [voiceRef.assetId] : [];
 
-      const jobId = `wan27-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "wan/2-7-r2v")}-r2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_wan27_r2v_video",

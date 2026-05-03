@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
@@ -92,7 +93,7 @@ export function upscaleGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-upscale-video-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/upscale")}-upscale-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "upscale_grok_imagine_video",

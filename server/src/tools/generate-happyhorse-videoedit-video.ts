@@ -1,4 +1,5 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAudioSettingSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -74,7 +75,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: ClipfirstFs): ToolDef {
         imageInputs.push({ assetId, filename: file.name });
       }
 
-      const videoName = `happyhorse-edit-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "happyhorse/video-edit")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -83,7 +84,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceVideoIds = [videoAssetId];
       const sourceImageIds = imageInputs.map((i) => i.assetId);
-      const jobId = `happyhorse-edit-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "happyhorse/video-edit")}-edit-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_videoedit_video",

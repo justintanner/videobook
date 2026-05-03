@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -36,12 +37,12 @@ export function generateGrokImagineVideoI2vFalDef(fs: ClipfirstFs): ToolDef {
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame] = resolved.inputs;
-      const assetResult = await fs.createAsset("vid", `grok-imagine-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `fal-grok-imagine-video-i2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `fal-${modelSlug("kie", "grok-imagine/image-to-video")}-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video_i2v_fal",
         vidAssetId,

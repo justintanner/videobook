@@ -1,4 +1,5 @@
 import type { ClipfirstFs } from "clipfirst-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -73,7 +74,7 @@ export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 
-      const videoName = `wan27-extend-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -87,7 +88,7 @@ export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
       const sourceImageIds: string[] = [];
       const sourceAudioIds: string[] = [];
 
-      const jobId = `wan27-extend-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "wan/2-7-image-to-video")}-extend-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "extend_wan27_video",

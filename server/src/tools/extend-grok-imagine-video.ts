@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { modelSlug } from "@apicity/cost";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema } from "@apicity/kie/zod";
@@ -88,7 +89,7 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `grok-imagine-extend-video-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/extend")}-extend-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "extend_grok_imagine_video",
