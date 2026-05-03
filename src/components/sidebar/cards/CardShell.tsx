@@ -137,7 +137,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
       <StateOverlay item={item} />
 
       {/* NEW badge (top-right) - only when ready, not errored, never seen */}
-      {isUnseen && <NewBadge />}
+      {isUnseen && <NewBadge item={item} />}
 
       {/* CONTENT - Type-specific rendering */}
       {children}
