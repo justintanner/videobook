@@ -12,7 +12,7 @@ import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, PlanViewer } from '@/components/center-stage';
 import type { ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -21,7 +21,7 @@ import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
-import { TrimEditor } from '@/components/commands/TrimEditor';
+import { TrimEditor } from '@/components/commands/trim/TrimEditor';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
 import { CharacterDialog } from '@/components/character/CharacterDialog';
@@ -88,6 +88,7 @@ export function HomePage() {
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
+  const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +177,7 @@ export function HomePage() {
     fetchTimeline(projectSlug);
   }, [projectSlug, syncCount, fetchTimeline]);
 
+
   const mediaItems = useMemo(() => {
     if (!assetList) return [] as Array<MediaItem & { created_at: string }>;
     const failedMap = new Map<string, { failMsg: string; failedAt: string; taskType: string; prompt: string | null }>();
@@ -244,6 +246,13 @@ export function HomePage() {
     return mediaItems.find(m => m.id === selectedItem.id) ?? null;
   }, [mediaItems, selectedItem]);
 
+  // While the empty-plan state is showing, prefer the populated plan as soon
+  // as the asset appears (e.g. just generated). PlanViewer handles both modes.
+  const planAssetForOverride = useMemo(
+    () => (planEmptyOverride ? mediaItems.find((m) => m.id === 'plan') ?? null : null),
+    [planEmptyOverride, mediaItems],
+  );
+
   const handleMarkSeen = useCallback((assetId: string) => {
     if (!projectSlug) return;
     markAssetSeenLocal(assetId);
@@ -254,6 +263,7 @@ export function HomePage() {
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
+    setPlanEmptyOverride(false);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
@@ -607,6 +617,17 @@ export function HomePage() {
         : selectedItem;
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
+    open_plan: () => {
+      const planAsset = mediaItems.find((m) => m.id === 'plan');
+      if (planAsset) {
+        handleSelectItem(planAsset);
+      } else {
+        setSelectedItem(null);
+        setGenPanel(null);
+        setTimelineSlotIndex(null);
+        setPlanEmptyOverride(true);
+      }
+    },
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget]);
 
   return (
@@ -749,9 +770,19 @@ export function HomePage() {
                     callState={state}
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
+                    mediaItems={mediaItems}
                     onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
                     cropTarget={cropTarget}
                     onCropConsumed={() => setCropTarget(null)}
+                  />
+                ) : planEmptyOverride ? (
+                  <PlanViewer
+                    item={planAssetForOverride}
+                    emptyOverride={!planAssetForOverride}
+                    mediaItems={mediaItems}
+                    projectSlug={projectSlug ?? ''}
+                    callTool={callTool}
+                    onClose={() => setPlanEmptyOverride(false)}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer

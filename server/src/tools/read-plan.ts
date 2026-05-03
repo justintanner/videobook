@@ -1,0 +1,49 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ClipfirstFs } from "clipfirst-engine";
+import { z } from "zod";
+import type { ToolDef, ToolResult } from "./tool-def.js";
+
+interface PlanScene {
+  start: number;
+  end: number;
+  visual: string;
+}
+
+interface PlanSidecar {
+  scenes: PlanScene[];
+  total_duration_s: number;
+  max_scene_seconds: number;
+  source_asset_id: string;
+  characters: Array<{ asset_id: string; name: string; description: string }>;
+  model: string;
+}
+
+export function readPlanDef(fs: ClipfirstFs): ToolDef {
+  return {
+    name: "read_plan",
+    description:
+      "Read the per-project visualization plan sidecar (plan/.plan.json). " +
+      "Returns the parsed structured plan or an error if no plan exists yet (run /plan-vis first).",
+    schema: {
+      project_slug: z.string().describe("Project slug"),
+    },
+    handler: async (args): Promise<ToolResult> => {
+      const { project_slug } = args as { project_slug: string };
+      const result = await fs.readMetadata<PlanSidecar>("plan", "plan", project_slug);
+      if (!result.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: result.error.message }],
+        };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result.value) }],
+      };
+    },
+  };
+}
+
+export function registerReadPlanTool(server: McpServer, fs: ClipfirstFs): void {
+  const def = readPlanDef(fs);
+  server.tool(def.name, def.description, def.schema, def.handler);
+}

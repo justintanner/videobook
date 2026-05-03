@@ -8,6 +8,7 @@ import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
 import { CharacterViewer } from './CharacterViewer';
+import { PlanViewer } from './PlanViewer';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 
@@ -17,7 +18,7 @@ export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBa
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, onEditCharacterProfile, cropTarget, onCropConsumed }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -36,12 +37,14 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   callState: UseMcpResult['state'];
   onClose: () => void;
   imageAssets: MediaItem[];
+  mediaItems: MediaItem[];
   onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile) => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
   onCropConsumed?: () => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
-  const isText = item.type === 'script' || item.type === 'plan';
+  const isPlan = item.type === 'plan';
+  const isScript = item.type === 'script';
   const isAudio = item.type === 'audio';
   const isCharacter = item.type === 'character';
 
@@ -70,7 +73,20 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     );
   }
 
-  if (isText) {
+  if (isPlan) {
+    return (
+      <PlanViewer
+        item={item}
+        emptyOverride={false}
+        mediaItems={mediaItems}
+        projectSlug={projectSlug}
+        callTool={callTool}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (isScript) {
     return (
       <ScriptViewer
         item={item}

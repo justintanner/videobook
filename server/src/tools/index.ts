@@ -23,6 +23,7 @@ import { readFileAtCommitDef } from "./read-file-at-commit.js";
 import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
+import { splitVideoDef } from "./split-video.js";
 import { cropVideoDef } from "./crop-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
@@ -137,6 +138,7 @@ import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
 import { planVisualizationDef } from "./plan-visualization.js";
+import { readPlanDef } from "./read-plan.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { applyCutsDef } from "./apply-cuts.js";
@@ -180,6 +182,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     readAssetMetadataDef(fs),
     rewindProjectDef(fs),
     trimVideoDef(fs),
+    splitVideoDef(fs),
     cropVideoDef(fs),
     downloadVideoDef(fs),
     changeVideoSpeedDef(fs),
@@ -297,6 +300,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
     planVisualizationDef(fs),
+    readPlanDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
     applyCutsDef(fs),

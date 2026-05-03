@@ -280,6 +280,18 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "suggest_sfx", autoInject: ["project_slug"] },
   },
   {
+    command: "/plan",
+    description: "Open the project's visualization plan with per-scene image/video gen buttons. Singleton per project.",
+    example: "/plan",
+    category: "action",
+    icon: "MapPin",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [],
+    uiAction: "open_plan",
+  },
+  {
     command: "/plan-vis",
     description: "Generate a per-scene cinematic visualization plan from a video/audio asset's elevenlabs.json, optionally referencing up to 5 characters by name. Writes to plan/.",
     example: "/plan-vis @vid-input @char-naval @char-nivi @char-claude",

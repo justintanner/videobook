@@ -75,6 +75,13 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/info");
     expect(commandNames).toContain("/settings");
     expect(commandNames).toContain("/files");
+    expect(commandNames).toContain("/plan");
+    expect(commandNames).toContain("/plan-vis");
+
+    const plan = commands.find((c) => c.command === "/plan")!;
+    expect(plan.uiAction).toBe("open_plan");
+    expect(plan.params).toEqual([]);
+    expect(plan.category).toBe("action");
   });
 
   it("includes dynamic project commands", async () => {
