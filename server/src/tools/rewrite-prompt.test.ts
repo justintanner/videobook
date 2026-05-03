@@ -47,6 +47,11 @@ describe("loadGuide", () => {
     expect(guide.length).toBeGreaterThan(0);
   });
 
+  it("loads the seedance2 guide successfully", async () => {
+    const guide = await loadGuide("seedance2");
+    expect(guide.length).toBeGreaterThan(0);
+  });
+
   it("throws for unsupported model", () => {
     expect(() => loadGuide("unknown_model")).toThrow("No prompting guide available");
   });
