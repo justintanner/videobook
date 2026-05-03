@@ -226,7 +226,6 @@ export function GenerateCommandButton({
                   }}
                 />
 
-                <span aria-hidden className="text-[8px] leading-none opacity-70">{'◆'}</span>
                 <span className={cn(
                   'relative font-mono text-[11px] leading-none tracking-wider tabular-nums',
                   slot.tone === 'loading' && 'animate-pulse',

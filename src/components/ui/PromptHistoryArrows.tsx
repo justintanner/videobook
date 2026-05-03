@@ -82,7 +82,7 @@ function PromptHistoryArrows({
         <ChevronLeft className={sz.icon} />
       </button>
       <span className={cn('select-none', sz.count)}>
-        {current === 0 ? `·/${total}` : `${current}/${total}`}
+        {current === 0 ? `${total}` : `${current}/${total}`}
       </span>
       <button
         type="button"
