@@ -1,4 +1,3 @@
-import { AudioLines, Compass, FileText, Film, ImageIcon, User } from 'lucide-react';
 import type { MediaItem } from '../types';
 import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
@@ -71,19 +70,6 @@ export function DurationBadge({ item, seconds, muted }: DurationBadgeProps) {
   );
 }
 
-function NewIcon({ type }: { type: MediaItem['type'] }) {
-  const className = 'w-3 h-3';
-  switch (type) {
-    case 'audio': return <AudioLines className={className} />;
-    case 'script': return <FileText className={className} />;
-    case 'plan': return <Compass className={className} />;
-    case 'video': return <Film className={className} />;
-    case 'image': return <ImageIcon className={className} />;
-    case 'character': return <User className={className} />;
-    case 'final': return <Film className={className} />;
-  }
-}
-
 interface NewBadgeProps {
   item: MediaItem;
 }
@@ -92,14 +78,13 @@ export function NewBadge({ item }: NewBadgeProps) {
   const visual = getCardVisualState(item);
   return (
     <div
-      className="absolute top-2 right-2 z-30 w-5 h-5 inline-flex items-center justify-center rounded bg-black/70 backdrop-blur-md border pointer-events-none"
+      className="absolute top-2 right-2 z-30 px-1.5 py-0.5 rounded text-black text-[9px] font-mono font-bold tracking-wider pointer-events-none"
       style={{
-        borderColor: colorWithAlpha(visual, 0.32),
-        color: visual.color,
-        boxShadow: `0 0 8px -2px ${visual.color}`,
+        backgroundColor: visual.color,
+        boxShadow: `0 0 8px ${colorWithAlpha(visual, 0.7)}`,
       }}
     >
-      <NewIcon type={item.type} />
+      NEW
     </div>
   );
 }
