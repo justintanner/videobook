@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { openai, withRetry } from "@apicity/openai";
 import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 type DescribeImagePayload = {
   type: "describe_image";
@@ -104,7 +105,7 @@ export async function describeImageBytes(
   mime: "image/jpeg" | "image/png" | "image/webp",
   responses?: ResponsesFn,
 ): Promise<DescribeImageResult> {
-  const fn = responses ?? buildResponses(process.env.OPENAI_API_KEY);
+  const fn = responses ?? buildResponses(requireApiKey("OPENAI_API_KEY"));
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const response = await fn({
@@ -150,7 +151,7 @@ export function registerDescribeImageJob(fs: ClipfirstFs): void {
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
-      const responses = buildResponses(process.env.OPENAI_API_KEY);
+      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
       if (!readResult.ok) {

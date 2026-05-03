@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildAlibabaImagePayload } from "../payload-builders.js";
 
 type GenerateAlibabaImagePayload = {
@@ -27,8 +28,7 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
       sourceImageIds, projectSlug, model, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
-    const apiKey = process.env.DASHSCOPE_API_KEY;
-    if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
@@ -76,8 +76,7 @@ export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
       sourceImageIds, projectSlug, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
-    const apiKey = process.env.DASHSCOPE_API_KEY;
-    if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {

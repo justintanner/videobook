@@ -5,6 +5,7 @@ import { openai, withRetry, withFallback, textPart, imageBase64Part, firstConten
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { kie } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
+import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { findAudioFile } from "clipfirst-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -117,8 +118,8 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
 
     let analysis: Record<string, unknown> = FALLBACK_ANALYSIS;
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const kieKey = process.env.KIE_API_KEY;
+    const openaiKey = getApiKey("OPENAI_API_KEY");
+    const kieKey = getApiKey("KIE_API_KEY");
 
     const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
     if (openaiKey) {
@@ -173,7 +174,7 @@ async function maybeEnqueueAutoTranscribe(
   assetDir: string,
   projectSlug: string,
 ): Promise<void> {
-  if (!process.env.ELEVENLABS_API_KEY) return;
+  if (!getApiKey("ELEVENLABS_API_KEY")) return;
 
   const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return;

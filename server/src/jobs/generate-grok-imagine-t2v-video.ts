@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineT2vVideoPayload = {
@@ -23,8 +24,7 @@ export function registerGenerateGrokImagineT2vVideoJob(fs: ClipfirstFs): void {
       mode, duration, resolution, aspect_ratio, nsfw_checker,
     } = payload as GenerateGrokImagineT2vVideoPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 

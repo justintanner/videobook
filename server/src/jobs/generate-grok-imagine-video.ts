@@ -5,6 +5,7 @@ import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
 
 type GenerateGrokImagineVideoPayload = {
@@ -43,8 +44,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
 
     if (isXai) {
       // xAI path — async video generation with pending task
-      const apiKey = process.env.XAI_API_KEY;
-      if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
+      const apiKey = requireApiKey("XAI_API_KEY");
 
       const imageUrls: string[] = [];
       for (let i = 0; i < sourceImageIds.length; i++) {
@@ -81,8 +81,7 @@ export function registerGenerateGrokImagineVideoJob(fs: ClipfirstFs): void {
     }
 
     // Kie path — async task-based generation
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 

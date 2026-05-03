@@ -5,6 +5,7 @@ import {
   prepareBytesForUpload,
   uploadBytesToFreeHost,
 } from "../upload.js";
+import { getApiKey } from "../api-key.js";
 
 // Upload prepared bytes to Kie's native storage via POST /api/file-stream-upload.
 // Kie workers run in China — using their first-party CDN avoids the
@@ -16,7 +17,7 @@ async function uploadPreparedToKie(
   hashedFilename: string,
   contentType: string,
 ): Promise<string> {
-  const apiKey = process.env.KIE_API_KEY;
+  const apiKey = getApiKey("KIE_API_KEY");
   if (apiKey) {
     try {
       const provider = kie({ apiKey, timeout: 120_000 });

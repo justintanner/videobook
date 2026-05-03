@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { openai } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
+import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 
 type TranscribeVideoAudioPayload = {
@@ -15,7 +16,7 @@ export function registerTranscribeVideoAudioJob(fs: ClipfirstFs): void {
   registerJobHandler("transcribe_video_audio", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as TranscribeVideoAudioPayload;
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = getApiKey("OPENAI_API_KEY");
     if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "transcribe", async () => {

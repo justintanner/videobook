@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { join, basename } from "node:path";
 import { elevenlabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -94,8 +95,7 @@ export function registerApplySfxJob(fs: ClipfirstFs): void {
       assetId, assetDir, projectSlug,
     } = payload as ApplySfxPayload;
 
-    const apiKey = process.env.ELEVENLABS_API_KEY;
-    if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not set");
+    const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
     const result = await withLockedLocalLease(
       fs,

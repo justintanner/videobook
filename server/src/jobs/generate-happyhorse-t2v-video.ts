@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseT2vPayload } from "../payload-builders.js";
 
 type GenerateHappyhorseT2vVideoPayload = {
@@ -19,8 +20,7 @@ export function registerGenerateHappyhorseT2vVideoJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_happyhorse_t2v_video", async (payload, ctx) => {
     const { vidAssetId, vidAssetDir, projectSlug, prompt, resolution, aspect_ratio, duration, seed } = payload as GenerateHappyhorseT2vVideoPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 

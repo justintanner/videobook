@@ -1,5 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import {
   buildResponses,
@@ -157,7 +158,7 @@ export function registerRewriteScriptJob(fs: ClipfirstFs): void {
     } = payload as RewriteScriptPayload;
 
     return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
-      const responses = buildResponses(process.env.OPENAI_API_KEY);
+      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
       if (!readResult.ok) {

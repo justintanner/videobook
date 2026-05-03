@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
@@ -50,8 +51,7 @@ export function registerGenerateSeedance2ReferenceVideoJob(fs: ClipfirstFs): voi
       generate_audio, return_last_frame, web_search,
     } = payload as GenerateSeedance2ReferenceVideoPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 

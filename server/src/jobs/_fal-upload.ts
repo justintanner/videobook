@@ -5,6 +5,7 @@ import {
   prepareBytesForUpload,
   uploadBytesToFreeHost,
 } from "../upload.js";
+import { getApiKey } from "../api-key.js";
 
 // Upload prepared bytes to fal's native CDN via @apicity/fal's uploadFile
 // helper. Returns a stable https://v3.fal.media/... URL. Falls back to the
@@ -14,7 +15,7 @@ async function uploadPreparedToFal(
   hashedFilename: string,
   contentType: string,
 ): Promise<string> {
-  const apiKey = process.env.FAL_API_KEY;
+  const apiKey = getApiKey("FAL_API_KEY");
   if (apiKey) {
     try {
       const provider = fal({ apiKey, timeout: 60_000 });

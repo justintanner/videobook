@@ -5,6 +5,7 @@ import type {
 } from "@apicity/elevenlabs";
 import { elevenlabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 
 type TranscribePayload = {
@@ -60,8 +61,7 @@ export function registerTranscribeJob(fs: ClipfirstFs): void {
       ctx,
       "transcribe",
       async () => {
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        if (!apiKey) throw new Error("ELEVENLABS_API_KEY environment variable is not set");
+        const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
         const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
         if (!readResult.ok) {

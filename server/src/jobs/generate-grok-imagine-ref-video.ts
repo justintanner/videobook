@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { uploadAssetFile } from "../upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
 
 type RefImageInput = {
@@ -28,8 +29,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
       refImages, duration, resolution, aspectRatio,
     } = payload as GenerateGrokImagineRefVideoPayload;
 
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) throw new Error("XAI_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("XAI_API_KEY");
 
     const imageUrls: string[] = [];
     for (const ref of refImages) {

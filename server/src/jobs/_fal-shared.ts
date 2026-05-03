@@ -1,6 +1,7 @@
 import { fal } from "@apicity/fal";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { type PendingTask } from "clipfirst-engine";
+import { requireApiKey } from "../api-key.js";
 export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
 
 export type FalSubmitArgs = {
@@ -17,8 +18,7 @@ export type FalSubmitArgs = {
 };
 
 export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
-  const apiKey = process.env.FAL_API_KEY;
-  if (!apiKey) throw new Error("FAL_API_KEY environment variable is not set");
+  const apiKey = requireApiKey("FAL_API_KEY");
 
   const provider = fal({ apiKey, timeout: 60_000 });
 

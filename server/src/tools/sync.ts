@@ -10,6 +10,7 @@ import { xai, XaiError } from "@apicity/xai";
 import { alibaba, AlibabaError } from "@apicity/alibaba";
 import { fal, FalError } from "@apicity/fal";
 import { queue } from "../queue.js";
+import { getApiKey } from "../api-key.js";
 import {
   findVideoFile,
   findAudioFile,
@@ -464,8 +465,9 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
 
   // Poll KIE tasks (only if API key is set)
   const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_") && !t.taskType.startsWith("alibaba_"));
-  if (process.env.KIE_API_KEY && kieTasks.length > 0) {
-    const provider = kie({ apiKey: process.env.KIE_API_KEY, timeout: 30_000 });
+  const kieApiKey = getApiKey("KIE_API_KEY");
+  if (kieApiKey && kieTasks.length > 0) {
+    const provider = kie({ apiKey: kieApiKey, timeout: 30_000 });
 
     await Promise.all(kieTasks.map(async (task) => {
       try {
@@ -1040,7 +1042,7 @@ async function findAutoAnalyzeActions(
   assets: AssetEntry[],
 ): Promise<AnalyzeAction[]> {
   // Need at least one API provider for analysis
-  if (!process.env.OPENAI_API_KEY && !process.env.KIE_API_KEY) return [];
+  if (!getApiKey("OPENAI_API_KEY") && !getApiKey("KIE_API_KEY")) return [];
 
   const candidates = await Promise.all(
     assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<AnalyzeAction | null> => {

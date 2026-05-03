@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildAlibabaVideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
@@ -48,8 +49,7 @@ export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
       resolution, duration, prompt_extend, watermark, audio_setting, seed,
     } = payload as GenerateAlibabaVideoPayload;
 
-    const apiKey = process.env.DASHSCOPE_API_KEY;
-    if (!apiKey) throw new Error("DASHSCOPE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadModel = model ?? "wan2.7-i2v";
     const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug, uploadModel) : undefined;

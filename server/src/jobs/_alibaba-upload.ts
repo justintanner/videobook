@@ -1,6 +1,7 @@
 import { alibaba, uploadFile } from "@apicity/alibaba";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
+import { getApiKey } from "../api-key.js";
 
 // Upload an asset to DashScope's OSS bucket via @apicity/alibaba's uploadFile
 // helper. Falls back to the free-host rotation if the policy fetch or OSS
@@ -19,7 +20,7 @@ export async function uploadAssetToAlibaba(
     projectSlug,
   );
 
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getApiKey("DASHSCOPE_API_KEY");
   if (apiKey) {
     try {
       const provider = alibaba({ apiKey, timeout: 60_000 });

@@ -5,6 +5,7 @@ import { writeFile, unlink } from "node:fs/promises";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadBytesToFreeHost, contentHash } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 const MIN_ISOLATION_DURATION = 4.6;
 const PAD_TARGET_DURATION = 5.0;
@@ -25,8 +26,7 @@ export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
       audioFilename, assetId, assetDir, projectSlug, isAudioAsset,
     } = payload as IsolateVocalsPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 

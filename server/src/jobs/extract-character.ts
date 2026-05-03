@@ -3,6 +3,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import {
   buildResponses,
@@ -210,7 +211,7 @@ export async function extractCharacterFromBytes(
   sourceAssetId: string,
   options: ExtractCharacterOptions = {},
 ): Promise<Character> {
-  const fn = options.responses ?? buildResponses(process.env.OPENAI_API_KEY);
+  const fn = options.responses ?? buildResponses(requireApiKey("OPENAI_API_KEY"));
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const userText = options.subjectKindOverride

@@ -1,6 +1,7 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 type ExtendGrokImagineVideoPayload = {
   type: "extend_grok_imagine_video";
   sourceVideoId: string;
@@ -20,8 +21,7 @@ export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
       projectSlug, prompt, extend_at, extend_times,
     } = payload as ExtendGrokImagineVideoPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const kieTaskIdResult = await fs.readMetadata<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
     if (!kieTaskIdResult.ok) {

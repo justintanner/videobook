@@ -2,6 +2,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
+import { requireApiKey } from "../api-key.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
 
 type RefInput = { assetId: string; filename: string };
@@ -34,8 +35,7 @@ export function registerExtendWan27VideoJob(fs: ClipfirstFs): void {
       resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as ExtendWan27VideoPayload;
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+    const apiKey = requireApiKey("KIE_API_KEY");
 
     const provider = kie({ apiKey, timeout: 60_000 });
 
