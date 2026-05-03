@@ -99,11 +99,15 @@ export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
       const videoInput = videoResult.value;
 
       const MAX_INPUT_DURATION = 10;
+      // Container-level mp4 durations almost never land cleanly on a whole
+      // second, so a 10s preset typically produces ~10.01s. Allow a small
+      // tolerance before failing.
+      const DURATION_TOLERANCE = 0.05;
       const meta = await fs.readMetadata<{ duration?: number }>(videoInput.assetId, "original", project_slug);
-      if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION) {
+      if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION + DURATION_TOLERANCE) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Source video is ${meta.value.duration.toFixed(1)}s — Wan 2.7 Video Edit accepts at most ${MAX_INPUT_DURATION}s. Trim the video first.` }],
+          content: [{ type: "text" as const, text: `Source video is ${meta.value.duration.toFixed(2)}s — Wan 2.7 Video Edit accepts at most ${MAX_INPUT_DURATION}s. Trim the video first.` }],
         };
       }
 
