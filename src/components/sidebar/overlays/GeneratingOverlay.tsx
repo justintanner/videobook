@@ -51,21 +51,21 @@ export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
         }}
       />
 
-      {/* Layer 3: Diagonal Pixel Particle Streams (4 streams of 6 dots) */}
+      {/* Layer 3: Diagonal Pixel Particle Streams */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[0, 1, 2, 3].map((stream) => (
+        {[0, 1, 2].map((stream) => (
           <div key={stream} className="absolute inset-0">
-            {[0, 1, 2, 3, 4, 5].map((dot) => (
+            {[0, 1, 2, 3].map((dot) => (
               <div
                 key={dot}
                 className="absolute w-1 h-1 rounded-full"
                 style={{
-                  left: `${18 + stream * 20}%`,
-                  bottom: `${dot * 15}%`,
+                  left: `${24 + stream * 24}%`,
+                  bottom: `${12 + dot * 20}%`,
                   backgroundColor: colorRgba(0.6),
                   boxShadow: `0 0 4px ${colorRgba(0.4)}`,
-                  animation: `generating-particle-rise ${2.5 + stream * 0.4}s linear infinite`,
-                  animationDelay: `${stream * 0.3 + dot * 0.35}s`,
+                  animation: `generating-particle-rise ${2.8 + stream * 0.35}s linear infinite`,
+                  animationDelay: `${stream * 0.35 + dot * 0.25}s`,
                 }}
               />
             ))}
@@ -74,37 +74,43 @@ export function GeneratingOverlay({ item, label }: GeneratingOverlayProps) {
       </div>
 
       {/* Layer 4: Center Content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
+      <div className="absolute inset-x-0 top-2 bottom-9 flex items-center justify-center z-10 px-3">
         <div
-          className="px-2 py-1 text-[10px] font-mono font-bold tracking-wider border flex items-center gap-1"
+          className="relative max-w-[86%] min-w-[62%] h-8 px-2.5 py-1 font-mono font-bold tracking-wider border overflow-hidden"
           style={{
             color: visual.color,
             borderColor: colorRgba(0.6),
-            backgroundColor: colorRgba(0.15),
+            background: `linear-gradient(90deg, ${colorRgba(0.18)}, rgba(0,0,0,0.72), ${colorRgba(0.14)})`,
             boxShadow: glowStyle,
             animation: 'generating-model-pulse 2s ease-in-out infinite',
             textShadow: `0 0 8px ${visual.color}`,
           }}
         >
-          <span>{displayLabel}</span>
-          <span className="generating-cursor" style={{ position: 'relative', top: '-1px' }}>
-            █
-          </span>
-        </div>
-
-        {/* Segmented health bar (5 segments) */}
-        <div className="mt-2 flex gap-0.5">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="w-4 h-1.5 border"
-              style={{
-                borderColor: colorRgba(0.4),
-                animation: 'generating-segment-fill 2.5s ease-in-out infinite',
-                animationDelay: `${i * 0.4}s`,
-              }}
-            />
-          ))}
+          <div
+            className="absolute inset-y-0 left-0 w-1"
+            style={{ backgroundColor: visual.color, boxShadow: `0 0 10px ${visual.color}` }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 w-1"
+            style={{ backgroundColor: visual.color, boxShadow: `0 0 10px ${visual.color}` }}
+          />
+          <div className="relative flex h-full items-center justify-between gap-2">
+            <span className="truncate text-[8px] leading-none">{displayLabel}</span>
+            <span className="generating-cursor shrink-0 text-[10px] leading-none">█</span>
+          </div>
+          <div className="absolute left-2 right-2 bottom-1 flex gap-0.5">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-1 flex-1 border"
+                style={{
+                  borderColor: colorRgba(0.4),
+                  animation: 'generating-segment-fill 2.5s ease-in-out infinite',
+                  animationDelay: `${i * 0.28}s`,
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
