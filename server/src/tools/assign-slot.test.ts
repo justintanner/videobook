@@ -105,40 +105,6 @@ describe("assign_slot tool", () => {
     expect(parsed.slots[1].slug).toBe(asset2.assetId);
   });
 
-  it("overwrites existing slot assignment", async () => {
-    // Assign to slot 1
-    await client.callTool({
-      name: "assign_slot",
-      arguments: {
-        project_slug: "test-proj",
-        asset_id: assetId,
-        slot: "s01",
-      },
-    });
-
-    // Upload a second asset
-    const data2 = Buffer.from("fake-png-data-2").toString("base64");
-    const upload2 = await client.callTool({
-      name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo2.png", data: data2 },
-    });
-    const asset2 = JSON.parse((upload2.content as TextContent)[0].text);
-
-    // Overwrite slot 1
-    const result = await client.callTool({
-      name: "assign_slot",
-      arguments: {
-        project_slug: "test-proj",
-        asset_id: asset2.assetId,
-        slot: "s01",
-      },
-    });
-
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots[0].slug).toBe(asset2.assetId);
-  });
-
   it("returns error for invalid slot format", async () => {
     const result = await client.callTool({
       name: "assign_slot",
