@@ -72,7 +72,7 @@ describe("extractLastSettingsPerModel", () => {
       },
       {
         hash: "a2",
-        action: "tool-generate-seedance2-t2v-video",
+        action: "tool-generate-seedance2-video",
         payload: { prompt: "seedance prompt", resolution: "720p" },
         date: "2026-03-08T00:00:00Z",
       },
@@ -80,7 +80,7 @@ describe("extractLastSettingsPerModel", () => {
     const result = extractLastSettingsPerModel(log);
     expect(result.size).toBe(2);
     expect(result.get("generate_kling30_video")).toEqual({ prompt: "kling prompt", duration: "8" });
-    expect(result.get("generate_seedance2_t2v_video")).toEqual({ prompt: "seedance prompt", resolution: "720p" });
+    expect(result.get("generate_seedance2_video")).toEqual({ prompt: "seedance prompt", resolution: "720p" });
   });
 
   it("ignores non-video-gen action entries", () => {
@@ -118,10 +118,8 @@ describe("extractLastSettingsPerModel", () => {
   it("handles all video model action names correctly", () => {
     const actionNames = [
       "tool-generate-kling30-video",
-      "tool-generate-seedance2-t2v-video",
-      "tool-generate-seedance2-i2v-video",
-      "tool-generate-seedance2-frames-video",
-      "tool-generate-seedance2-reference-video",
+      "tool-generate-seedance2-video",
+      "tool-generate-seedance2-fast-video",
       "tool-generate-grok-imagine-video",
     ];
     const log: ActionLogEntry[] = actionNames.map((action, i) => ({
@@ -131,12 +129,10 @@ describe("extractLastSettingsPerModel", () => {
       date: "2026-03-08T00:00:00Z",
     }));
     const result = extractLastSettingsPerModel(log);
-    expect(result.size).toBe(6);
+    expect(result.size).toBe(4);
     expect(result.has("generate_kling30_video")).toBe(true);
-    expect(result.has("generate_seedance2_t2v_video")).toBe(true);
-    expect(result.has("generate_seedance2_i2v_video")).toBe(true);
-    expect(result.has("generate_seedance2_frames_video")).toBe(true);
-    expect(result.has("generate_seedance2_reference_video")).toBe(true);
+    expect(result.has("generate_seedance2_video")).toBe(true);
+    expect(result.has("generate_seedance2_fast_video")).toBe(true);
     expect(result.has("generate_grok_imagine_video")).toBe(true);
   });
 });
@@ -178,12 +174,12 @@ describe("extractLastUsedModel", () => {
       },
       {
         hash: "h2",
-        action: "tool-generate-seedance2-t2v-video",
+        action: "tool-generate-seedance2-video",
         payload: { prompt: "test" },
         date: "2026-03-08T01:00:00Z",
       },
     ];
-    expect(extractLastUsedModel(log)).toBe("seedance2_t2v");
+    expect(extractLastUsedModel(log)).toBe("seedance2");
   });
 
   it("skips entries with string payloads", () => {
@@ -211,7 +207,7 @@ describe("extractLastUsedModel", () => {
 
 describe("buildModelOption history integration", () => {
   const kling = VIDEO_MODELS.kling30;
-  const seedance = VIDEO_MODELS.seedance2_t2v;
+  const seedance = VIDEO_MODELS.seedance2;
 
   it("history params fill in as defaults when router params are empty", () => {
     const history: ActionLogEntry[] = [
@@ -255,10 +251,10 @@ describe("buildModelOption history integration", () => {
         date: "2026-03-08T00:00:00Z",
       },
     ];
-    const option = buildModelOption("seedance2_t2v", seedance, {}, [], history);
+    const option = buildModelOption("seedance2", seedance, {}, [], history);
     // Should not have kling's prompt or mode
     expect(option.prefilled_values.prompt).toBeUndefined();
-    // mode is not in seedance2_t2v's params at all, so it shouldn't appear
+    // mode is not in seedance2's params at all, so it shouldn't appear
     expect(option.prefilled_values).not.toHaveProperty("mode");
   });
 
@@ -266,15 +262,15 @@ describe("buildModelOption history integration", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-seedance2-t2v-video",
+        action: "tool-generate-seedance2-video",
         payload: { prompt: "test", resolution: "720p", sound: true },
         date: "2026-03-08T00:00:00Z",
       },
     ];
-    const option = buildModelOption("seedance2_t2v", seedance, {}, [], history);
+    const option = buildModelOption("seedance2", seedance, {}, [], history);
     expect(option.prefilled_values.prompt).toBe("test");
     expect(option.prefilled_values.resolution).toBe("720p");
-    // sound is not in seedance2_t2v's allowed params
+    // sound is not in seedance2's allowed params
     expect(option.prefilled_values).not.toHaveProperty("sound");
   });
 });
@@ -298,52 +294,36 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.sound).toBeDefined();
   });
 
-  it("seedance2 t2v: aspect_ratio and duration required, correct enums", () => {
-    const schema = getVideoToolSchema("generate_seedance2_t2v_video");
+  it("seedance2 (full): aspect_ratio and duration required, full resolution range, all input slots exposed", () => {
+    const schema = getVideoToolSchema("generate_seedance2_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).toContain("aspect_ratio");
     expect(schema!.required).toContain("duration");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
-    expect(schema!.properties.duration.enum).toEqual(["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]);
-    expect(schema!.properties.prompt.minLength).toBe(3);
-    expect(schema!.properties.prompt.maxLength).toBe(2500);
-  });
-
-  it("seedance2 i2v: exposes first_frame_slug (required) and optional last_frame_slug, model, 1080p resolution", () => {
-    const schema = getVideoToolSchema("generate_seedance2_i2v_video");
-    expect(schema).not.toBeNull();
-    expect(schema!.properties.first_frame_slug).toBeDefined();
-    expect(schema!.properties.last_frame_slug).toBeDefined();
-    expect(schema!.required).toContain("first_frame_slug");
+    expect(schema!.required).not.toContain("first_frame_slug");
     expect(schema!.required).not.toContain("last_frame_slug");
-    expect(schema!.properties.model.enum).toEqual(["bytedance/seedance-2-fast", "bytedance/seedance-2"]);
+    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
-  });
-
-  it("seedance2 frames: requires both first_frame_slug AND last_frame_slug, exposes model + 1080p", () => {
-    const schema = getVideoToolSchema("generate_seedance2_frames_video");
-    expect(schema).not.toBeNull();
+    expect(schema!.properties.duration.enum).toEqual(["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]);
     expect(schema!.properties.first_frame_slug).toBeDefined();
     expect(schema!.properties.last_frame_slug).toBeDefined();
-    expect(schema!.required).toContain("first_frame_slug");
-    expect(schema!.required).toContain("last_frame_slug");
-    expect(schema!.properties.aspect_ratio.enum).toContain("adaptive");
-    expect(schema!.properties.model.enum).toEqual(["bytedance/seedance-2-fast", "bytedance/seedance-2"]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
-  });
-
-  it("seedance2 reference: exposes image/video/audio slugs, model + 1080p", () => {
-    const schema = getVideoToolSchema("generate_seedance2_reference_video");
-    expect(schema).not.toBeNull();
     expect(schema!.properties.image_slugs).toBeDefined();
     expect(schema!.properties.video_slugs).toBeDefined();
     expect(schema!.properties.audio_slugs).toBeDefined();
-    expect(schema!.properties.video_slugs.type).toBe("array");
-    expect(schema!.properties.audio_slugs.type).toBe("array");
-    expect(schema!.properties.model.enum).toEqual(["bytedance/seedance-2-fast", "bytedance/seedance-2"]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
+    expect(schema!.properties.nsfw_checker).toBeDefined();
+    expect(schema!.properties.model).toBeUndefined();
+    expect(schema!.properties.prompt.minLength).toBe(3);
+    expect(schema!.properties.prompt.maxLength).toBe(20000);
+  });
+
+  it("seedance2 fast: same input shape but resolution capped at 720p", () => {
+    const schema = getVideoToolSchema("generate_seedance2_fast_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+    expect(schema!.properties.first_frame_slug).toBeDefined();
+    expect(schema!.properties.image_slugs).toBeDefined();
+    expect(schema!.properties.model).toBeUndefined();
   });
 
   it("grok_imagine: no hard required fields (matches Zod optionals)", () => {
@@ -415,54 +395,32 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("multi-shot mode allows max 1"))).toBe(true);
   });
 
-  it("seedance2 frames: missing last_frame_slug is flagged as missing_required", () => {
-    const result = validateVideoParams("generate_seedance2_frames_video", {
-      prompt: "test",
-      first_frame_slug: "@img-a",
-      aspect_ratio: "16:9",
-      duration: "8",
-    });
-    expect(result.missing_required).toContain("last_frame_slug");
-    expect(result.valid).toBe(false);
-  });
-
-  it("seedance2 i2v: missing first_frame_slug is flagged as missing_required", () => {
-    const result = validateVideoParams("generate_seedance2_i2v_video", {
+  it("seedance2 (full): text-only with aspect_ratio + duration is valid", () => {
+    const result = validateVideoParams("generate_seedance2_video", {
       prompt: "test",
       aspect_ratio: "16:9",
       duration: "8",
     });
-    expect(result.missing_required).toContain("first_frame_slug");
+    expect(result.valid).toBe(true);
+    expect(result.missing_required).toEqual([]);
   });
 
-  it("seedance2 reference: warns when no references provided", () => {
-    const noRefs = validateVideoParams("generate_seedance2_reference_video", {
+  it("seedance2 fast: 1080p resolution produces warning", () => {
+    const result = validateVideoParams("generate_seedance2_fast_video", {
       prompt: "test",
       aspect_ratio: "16:9",
       duration: "8",
-    });
-    expect(noRefs.warnings.some((w) => w.includes("requires at least one reference"))).toBe(true);
-  });
-
-  it("seedance2 i2v: 1080p with fast model produces warning", () => {
-    const result = validateVideoParams("generate_seedance2_i2v_video", {
-      prompt: "test",
-      first_frame_slug: "@img-a",
-      aspect_ratio: "16:9",
-      duration: "8",
-      model: "bytedance/seedance-2-fast",
       resolution: "1080p",
     });
-    expect(result.warnings.some((w) => w.includes("1080p") && w.includes("bytedance/seedance-2"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("Fast caps at 720p"))).toBe(true);
   });
 
-  it("seedance2 i2v: 1080p with standard model is valid", () => {
-    const result = validateVideoParams("generate_seedance2_i2v_video", {
+  it("seedance2 (full): 1080p resolution is accepted without warning", () => {
+    const result = validateVideoParams("generate_seedance2_video", {
       prompt: "test",
       first_frame_slug: "@img-a",
       aspect_ratio: "16:9",
       duration: "8",
-      model: "bytedance/seedance-2",
       resolution: "1080p",
     });
     expect(result.warnings.some((w) => w.includes("1080p"))).toBe(false);
@@ -477,15 +435,6 @@ describe("validateVideoParams", () => {
   });
 
   it("tools without image-array fields return null image_slots", () => {
-    const framesResult = validateVideoParams("generate_seedance2_frames_video", {
-      prompt: "test",
-      first_frame_slug: "@img-a",
-      last_frame_slug: "@img-b",
-      aspect_ratio: "16:9",
-      duration: "8",
-    });
-    expect(framesResult.image_slots).toBeNull();
-
     const extendResult = validateVideoParams("extend_wan27_video", {
       prompt: "test",
       video_slug: "@vid-a",
@@ -531,10 +480,8 @@ describe("buildVideoRoutingPrompt", () => {
   it("mentions all video tool names", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("generate_kling30_video");
-    expect(prompt).toContain("generate_seedance2_t2v_video");
-    expect(prompt).toContain("generate_seedance2_i2v_video");
-    expect(prompt).toContain("generate_seedance2_frames_video");
-    expect(prompt).toContain("generate_seedance2_reference_video");
+    expect(prompt).toContain("generate_seedance2_video");
+    expect(prompt).toContain("generate_seedance2_fast_video");
     expect(prompt).toContain("generate_grok_imagine_video");
   });
 
@@ -557,16 +504,14 @@ describe("buildVideoRoutingPrompt", () => {
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kling30_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_reference_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_fast_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_grok_imagine_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_wan27_r2v_video");
   });
 
-  it("omits tools that take no image-array field (extend, text-to-video, frames)", () => {
+  it("omits tools that take no image-array field (extend, text-to-video)", () => {
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_grok_imagine_video");
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_t2v_video");
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_i2v_video");
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_seedance2_frames_video");
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_wan27_i2v_video");
   });
 });

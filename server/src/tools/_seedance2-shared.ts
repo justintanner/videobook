@@ -1,12 +1,18 @@
 import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import { findAudioFile, findVideoFile } from "clipfirst-engine";
+import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { Seedance2FastRequestSchema } from "@apicity/kie/zod";
-import { extname } from "node:path";
+import {
+  Seedance2FastRequestSchema,
+  Seedance2RequestSchema,
+} from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "clipfirst-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
+
+type Seedance2Model = "bytedance/seedance-2" | "bytedance/seedance-2-fast";
+type Resolution = "480p" | "720p" | "1080p";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -27,14 +33,14 @@ function slugify(text: string): string {
     .replace(/-$/, "");
 }
 
-type RefInput = { assetId: string; filename: string };
+export type RefInput = { assetId: string; filename: string };
 
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
 async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("img-")) return { ok: false, error: `image slug must be img-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
@@ -44,7 +50,7 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 
 async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("vid-")) return { ok: false, error: `video slug must be vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
@@ -54,7 +60,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 
 async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slugs entries must be aud-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio slug must be aud-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
@@ -62,37 +68,52 @@ async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-const seedance2FastInputSchema = Seedance2FastRequestSchema.shape.input.shape;
+const seedance2InputSchema = Seedance2FastRequestSchema.shape.input.shape;
 
-const generateSeedance2ReferenceVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (3-2500 characters)"),
-  image_slugs: z.array(z.string()).optional().describe("1-9 reference image @slugs (e.g., @img-style)"),
-  video_slugs: z.array(z.string()).optional().describe("0-3 reference video @slugs, total ≤15s (e.g., @vid-motion)"),
-  audio_slugs: z.array(z.string()).optional().describe("0-3 reference audio @slugs, total ≤15s (e.g., @aud-music)"),
-  model: z.enum(["bytedance/seedance-2-fast", "bytedance/seedance-2"]).optional().describe("Seedance model variant (fast default, standard adds 1080p)"),
-  aspect_ratio: z.enum(seedance2FastInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
-  resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Output resolution (1080p requires model=bytedance/seedance-2)"),
-  duration: z.string().optional().describe("Video duration in seconds (4-15)"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
-  return_last_frame: z.boolean().optional().describe("Return the final frame as an image (default false)"),
-  web_search: z.boolean().optional().describe("Use web search for enhanced grounding (default false)"),
-  _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
-} satisfies ZodRawShape;
-
-type Args = SchemaArgs<typeof generateSeedance2ReferenceVideoSchema>;
-
-export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
+function buildSchema(resolutions: readonly Resolution[]) {
   return {
-    name: "generate_seedance2_reference_video",
-    description: "Generate a video using ByteDance Seedance 2.0 Fast guided by reference images (1-9), videos (0-3), and/or audio (0-3). Creates a new vid- asset and enqueues a background job.",
-    schema: generateSeedance2ReferenceVideoSchema,
+    project_slug: z.string().describe("Project slug"),
+    prompt: z.string().describe("Video description (3-20000 characters)"),
+    first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
+    last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
+    image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (0-9, e.g., @img-style)"),
+    video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
+    audio_slugs: z.array(z.string()).optional().describe("Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
+    aspect_ratio: z.enum(seedance2InputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
+    resolution: z.enum(resolutions as [Resolution, ...Resolution[]]).optional().describe("Output resolution"),
+    duration: z.string().optional().describe("Video duration in seconds (4-15)"),
+    generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
+    web_search: z.boolean().optional().describe("Use web search for grounding (default false)"),
+    nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+    _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
+  } satisfies ZodRawShape;
+}
+
+type Seedance2ToolFactoryOpts = {
+  toolName: string;
+  description: string;
+  apiModel: Seedance2Model;
+  resolutions: readonly Resolution[];
+};
+
+export function buildSeedance2ToolDef(
+  fs: ClipfirstFs,
+  opts: Seedance2ToolFactoryOpts,
+): ToolDef {
+  const schema = buildSchema(opts.resolutions);
+  type Args = SchemaArgs<typeof schema>;
+
+  return {
+    name: opts.toolName,
+    description: opts.description,
+    schema,
     handler: async (args) => {
       const {
         project_slug, prompt,
+        first_frame_slug, last_frame_slug,
         image_slugs, video_slugs, audio_slugs,
-        model, aspect_ratio, resolution, duration,
-        generate_audio, return_last_frame, web_search,
+        aspect_ratio, resolution, duration,
+        generate_audio, web_search, nsfw_checker,
       } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
@@ -102,10 +123,10 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      if (resolution === "1080p" && model !== "bytedance/seedance-2") {
+      if (resolution !== undefined && !opts.resolutions.includes(resolution as Resolution)) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "resolution '1080p' requires model='bytedance/seedance-2' (the fast variant tops out at 720p)" }],
+          content: [{ type: "text" as const, text: `resolution '${resolution}' not supported by ${opts.apiModel} (allowed: ${opts.resolutions.join(", ")})` }],
         };
       }
 
@@ -113,26 +134,41 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       const vids = video_slugs ?? [];
       const auds = audio_slugs ?? [];
 
-      // Apicity Seedance2FastRequestSchema caps reference arrays at 9/3/3.
-      // The at-least-one rule is not encoded in apicity (the schema covers
-      // t2v, frames, and reference modes) — enforce it here.
-      if (imgs.length === 0 && vids.length === 0 && auds.length === 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Seedance 2.0 Reference mode requires at least one reference asset (image, video, or audio)" }],
-        };
-      }
-      const apicityCheck = Seedance2FastRequestSchema.safeParse({
-        model: "bytedance/seedance-2-fast",
+      const requestSchema = opts.apiModel === "bytedance/seedance-2"
+        ? Seedance2RequestSchema
+        : Seedance2FastRequestSchema;
+      const apicityCheck = requestSchema.safeParse({
+        model: opts.apiModel,
         input: {
           prompt,
           web_search: web_search ?? false,
+          nsfw_checker: nsfw_checker ?? false,
+          ...(first_frame_slug !== undefined ? { first_frame_url: first_frame_slug } : {}),
+          ...(last_frame_slug !== undefined ? { last_frame_url: last_frame_slug } : {}),
           ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
           ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
           ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
+          ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
+          ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
+          ...(generate_audio !== undefined ? { generate_audio } : {}),
         },
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
+
+      let firstFrame: RefInput | undefined;
+      if (first_frame_slug !== undefined) {
+        const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        firstFrame = r.value;
+      }
+
+      let lastFrame: RefInput | undefined;
+      if (last_frame_slug !== undefined) {
+        const r = await resolveImageSlug(fs, last_frame_slug, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        lastFrame = r.value;
+      }
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
@@ -155,7 +191,7 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
         audioInputs.push(r.value);
       }
 
-      const videoName = `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${modelSlug("kie", opts.apiModel)}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -165,31 +201,36 @@ export function generateSeedance2ReferenceVideoDef(fs: ClipfirstFs): ToolDef {
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      const sourceImageIds = imageInputs.map((i) => i.assetId);
+      const sourceImageIds: string[] = [];
+      if (firstFrame) sourceImageIds.push(firstFrame.assetId);
+      if (lastFrame && lastFrame.assetId !== firstFrame?.assetId) sourceImageIds.push(lastFrame.assetId);
+      for (const i of imageInputs) sourceImageIds.push(i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = audioInputs.map((i) => i.assetId);
 
-      const jobId = `${modelSlug("kie", "bytedance/seedance-2")}-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", opts.apiModel)}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
-        type: "generate_seedance2_reference_video",
+        type: opts.toolName,
         vidAssetId,
         vidAssetDir,
         projectSlug: project_slug,
         prompt,
+        apiModel: opts.apiModel,
+        ...(firstFrame ? { firstFrame } : {}),
+        ...(lastFrame ? { lastFrame } : {}),
         imageInputs,
         videoInputs,
         audioInputs,
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,
-        ...(model !== undefined ? { model } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(generate_audio !== undefined ? { generate_audio } : {}),
-        ...(return_last_frame !== undefined ? { return_last_frame } : {}),
-        ...(web_search !== undefined ? { web_search } : {}),
+        web_search: web_search ?? false,
+        ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

@@ -41,10 +41,8 @@ import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
-import { generateSeedance2T2vVideoDef } from "./generate-seedance2-t2v-video.js";
-import { generateSeedance2I2vVideoDef } from "./generate-seedance2-i2v-video.js";
-import { generateSeedance2FramesVideoDef } from "./generate-seedance2-frames-video.js";
-import { generateSeedance2ReferenceVideoDef } from "./generate-seedance2-reference-video.js";
+import { generateSeedance2VideoDef } from "./generate-seedance2-video.js";
+import { generateSeedance2FastVideoDef } from "./generate-seedance2-fast-video.js";
 import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
 import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
 import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
@@ -201,10 +199,8 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     upscaleGrokImagineVideoDef(fs),
     generateKling30VideoDef(fs),
     generateKling30MotionControlVideoDef(fs),
-    generateSeedance2T2vVideoDef(fs),
-    generateSeedance2I2vVideoDef(fs),
-    generateSeedance2FramesVideoDef(fs),
-    generateSeedance2ReferenceVideoDef(fs),
+    generateSeedance2VideoDef(fs),
+    generateSeedance2FastVideoDef(fs),
     generateWan27T2vVideoDef(fs),
     generateWan27I2vVideoDef(fs),
     generateWan27VideoeditVideoDef(fs),

@@ -226,8 +226,8 @@ type Seedance2VideoArgs = {
   resolution?: Seedance2Resolution;
   duration?: string;
   generate_audio?: boolean;
-  return_last_frame?: boolean;
   web_search?: boolean;
+  nsfw_checker?: boolean;
 };
 
 type Seedance2VideoOpts = {
@@ -245,6 +245,7 @@ function buildSeedance2VideoPayload(
   const model: Seedance2Model = args.model ?? "bytedance/seedance-2-fast";
   const input = {
     prompt: args.prompt,
+    web_search: args.web_search ?? false,
     ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
     ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
     ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
@@ -253,8 +254,7 @@ function buildSeedance2VideoPayload(
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Seedance2FastRequest["input"]["aspect_ratio"] } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
     ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
-    ...(args.return_last_frame !== undefined ? { return_last_frame: args.return_last_frame } : {}),
-    ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
+    ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
   };
   if (model === "bytedance/seedance-2") {
     return {
@@ -966,31 +966,26 @@ function translateToolPayload(
       const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_seedance2_t2v_video": {
-      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, {});
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_seedance2_i2v_video": {
+    case "generate_seedance2_video":
+    case "generate_seedance2_fast_video": {
+      const apiModel: Seedance2Model = toolName === "generate_seedance2_video"
+        ? "bytedance/seedance-2"
+        : "bytedance/seedance-2-fast";
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
-      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, { firstFrameUrl, lastFrameUrl });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_seedance2_frames_video": {
-      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
-      const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
-      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, { firstFrameUrl, lastFrameUrl });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_seedance2_reference_video": {
-      const referenceImageUrls = imageSlugs;
-      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? [];
-      const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? [];
-      const payload = buildSeedance2VideoPayload(args as Seedance2VideoArgs, {
-        referenceImageUrls,
-        referenceVideoUrls,
-        referenceAudioUrls,
-      });
+      const referenceImageUrls = imageSlugs.length > 0 ? imageSlugs : undefined;
+      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? undefined;
+      const payload = buildSeedance2VideoPayload(
+        { ...(args as Seedance2VideoArgs), model: apiModel },
+        {
+          ...(firstFrameUrl !== undefined ? { firstFrameUrl } : {}),
+          ...(lastFrameUrl !== undefined ? { lastFrameUrl } : {}),
+          ...(referenceImageUrls !== undefined ? { referenceImageUrls } : {}),
+          ...(referenceVideoUrls !== undefined && referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),
+          ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
+        },
+      );
       return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {
@@ -1170,7 +1165,7 @@ function translateToolPayload(
 
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_kling30_motion_control_video",
-  "generate_seedance2_t2v_video", "generate_seedance2_i2v_video", "generate_seedance2_frames_video", "generate_seedance2_reference_video",
+  "generate_seedance2_video", "generate_seedance2_fast_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
   "generate_wan27_t2v_video", "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",

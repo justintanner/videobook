@@ -40,23 +40,24 @@ const openaiText = (model: string, defaultMaxOut?: number): CostAdapter => (inpu
 };
 
 // Kie seedance: the cost lib reads payload.input.{resolution, duration} and
-// uses payload.input.first_frame_url to discriminate i2v vs t2v. Default
-// resolution to "720p" so a bare estimate still returns a price (matches the
-// production tool's effective default).
-const kieSeedance = (direction: "t2v" | "i2v"): CostAdapter => (input) => {
-  const apiModel = str(input.model);
-  const model =
-    apiModel === "bytedance/seedance-2"
-      ? "bytedance/seedance-2"
-      : "bytedance/seedance-2-fast";
+// uses payload.input.first_frame_url to discriminate i2v vs t2v. Each unified
+// tool entry locks the apiModel; we surface i2v pricing when any first/last
+// frame or reference input is present, else t2v.
+const kieSeedance = (apiModel: "bytedance/seedance-2" | "bytedance/seedance-2-fast"): CostAdapter => (input) => {
+  const hasInput =
+    Boolean(str(input.first_frame_slug)) ||
+    Boolean(str(input.last_frame_slug)) ||
+    (Array.isArray(input.image_slugs) && input.image_slugs.length > 0) ||
+    (Array.isArray(input.video_slugs) && input.video_slugs.length > 0) ||
+    (Array.isArray(input.audio_slugs) && input.audio_slugs.length > 0);
   return {
     provider: "kie",
     payload: {
-      model,
+      model: apiModel,
       input: {
         resolution: str(input.resolution) || "720p",
         duration: num(input.duration) ?? num(input.seconds) ?? 5,
-        ...(direction === "i2v" ? { first_frame_url: "stub" } : {}),
+        ...(hasInput ? { first_frame_url: "stub" } : {}),
       },
     },
   };
@@ -174,10 +175,8 @@ const ADAPTERS: Record<string, CostAdapter> = {
   describe_image: xaiText("grok-4.20-reasoning", 1500),
 
   // --- KIE per-second video ---
-  generate_seedance2_t2v_video: kieSeedance("t2v"),
-  generate_seedance2_i2v_video: kieSeedance("i2v"),
-  generate_seedance2_frames_video: kieSeedance("i2v"),
-  generate_seedance2_reference_video: kieSeedance("i2v"),
+  generate_seedance2_video: kieSeedance("bytedance/seedance-2"),
+  generate_seedance2_fast_video: kieSeedance("bytedance/seedance-2-fast"),
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
 

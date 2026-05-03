@@ -59,7 +59,7 @@ describe("estimate_cost tool", () => {
       name: "estimate_cost",
       arguments: {
         calls: [{
-          tool_name: "generate_seedance2_t2v_video",
+          tool_name: "generate_seedance2_video",
           input: { prompt: "test", duration: 5 },
         }],
       },
@@ -185,7 +185,7 @@ describe("estimate_cost tool", () => {
       name: "estimate_cost",
       arguments: {
         calls: [
-          { tool_name: "generate_seedance2_t2v_video", input: { duration: 5 } },
+          { tool_name: "generate_seedance2_video", input: { duration: 5 } },
           { tool_name: "generate_kling30_video", input: { duration: 5 } },
         ],
       },
