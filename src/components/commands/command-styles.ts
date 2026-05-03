@@ -93,6 +93,17 @@ export const variants = {
     text: 'text-blue-400/70 group-hover:text-blue-400/90',
     icon: 'text-blue-400/80 group-hover:text-blue-400',
   },
+  amber: {
+    bg: 'bg-amber-500/20 border-amber-500/30',
+    shadow: 'rgba(245,158,11,0.5)',
+    chevron: 'text-amber-400/40 group-hover:text-amber-400/50',
+    chevronDown: 'text-amber-400/40 group-hover:text-amber-400/60',
+    cursorBg: 'bg-amber-400/40',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(245,158,11,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(245,158,11,0.12)]',
+    text: 'text-amber-400/70 group-hover:text-amber-400/90',
+    icon: 'text-amber-400/80 group-hover:text-amber-400',
+  },
   zinc: {
     bg: 'bg-zinc-500/20 border-zinc-500/30',
     shadow: 'rgba(161,161,170,0.5)',

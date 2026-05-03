@@ -20,7 +20,7 @@ interface StreamDurations {
   audio: number | null;
 }
 
-async function probeStreamDurations(filePath: string): Promise<StreamDurations> {
+export async function probeStreamDurations(filePath: string): Promise<StreamDurations> {
   const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "error",
     "-print_format", "json",
@@ -40,7 +40,7 @@ async function probeStreamDurations(filePath: string): Promise<StreamDurations> 
   return { format, video, audio };
 }
 
-async function assertSaneTrimOutput(
+export async function assertSaneTrimOutput(
   inputPath: string,
   outputPath: string,
 ): Promise<void> {
@@ -65,7 +65,7 @@ async function assertSaneTrimOutput(
   }
 }
 
-async function trimRange(
+export async function trimRange(
   inputPath: string,
   outputPath: string,
   start: number | undefined,
