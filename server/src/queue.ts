@@ -134,6 +134,7 @@ function jobTypeToAssetWorkKind(
     case "transcribe":
     case "transcribe_video_audio": return { kind: "transcribe" };
     case "trim_video":             return { kind: "trim" };
+    case "split_video":            return { kind: "trim" };
     case "crop_video":             return { kind: "crop" };
     case "splice_video":           return { kind: "splice" };
     case "reverse_video":          return { kind: "reverse" };
@@ -189,23 +190,32 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
     const handler = handlers.get(type);
     if (!handler) return null;
     return async (job: Job) => {
-      let lease: LeaseToken | null = null;
+      // Ref-cell instead of `let lease`: setLease is captured in ctx and
+      // invoked via `ctx.setLease(...)` from inside this scope and via the
+      // handler. TypeScript's control-flow analysis doesn't widen a let
+      // variable's narrowing through object-method calls on a captured
+      // closure, so reads of `lease` after `ctx.setLease(...)` would be
+      // narrowed back to the initial `null` (and `lease?.kind === "owner"`
+      // would dead-narrow to `never`). A ref-cell sidesteps that — TS treats
+      // each `leaseRef.current` read as a fresh access at its declared type.
+      const leaseRef: { current: LeaseToken | null } = { current: null };
       let heartbeat: ReturnType<typeof setInterval> | null = null;
       const providerKind = providerHandoffKindFor(type);
       const ctx: JobHandlerContext = {
         setLease(token) {
-          if (lease !== null) {
+          const current = leaseRef.current;
+          if (current !== null) {
             // Allow re-registration of the same shape (idempotent), or
             // allow owner→task transition (Pattern A handoff).
-            if (lease.kind === token.kind) {
-              if (lease.kind === "owner" && token.kind === "owner") {
-                if (lease.ownerId !== token.ownerId) {
+            if (current.kind === token.kind) {
+              if (current.kind === "owner" && token.kind === "owner") {
+                if (current.ownerId !== token.ownerId) {
                   throw new Error(
                     `setLease: cannot replace existing owner lease`,
                   );
                 }
-              } else if (lease.kind === "task" && token.kind === "task") {
-                if (lease.taskId !== token.taskId) {
+              } else if (current.kind === "task" && token.kind === "task") {
+                if (current.taskId !== token.taskId) {
                   throw new Error(
                     `setLease: cannot replace existing task lease`,
                   );
@@ -213,22 +223,23 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
               }
               return;
             }
-            if (lease.kind === "owner" && token.kind === "task") {
+            if (current.kind === "owner" && token.kind === "task") {
               // Allowed: Pattern A handoff from local job lease to provider task lease.
-              lease = token;
+              leaseRef.current = token;
               return;
             }
             throw new Error(
-              `setLease: invalid lease transition ${lease.kind}→${token.kind}`,
+              `setLease: invalid lease transition ${current.kind}→${token.kind}`,
             );
           }
-          lease = token;
+          leaseRef.current = token;
         },
         getOwnerId() {
-          if (lease?.kind !== "owner") {
+          const current = leaseRef.current;
+          if (current?.kind !== "owner") {
             throw new Error("No active owner lease is registered");
           }
-          return lease.ownerId;
+          return current.ownerId;
         },
       };
 
@@ -266,11 +277,12 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
         const result = await handler(job.payload, ctx);
         const assetId = extractAssetId(job.payload);
         const projectSlug = extractProjectSlug(job.payload);
-        if (lease?.kind === "owner" && assetId && projectSlug) {
+        const finalLease = leaseRef.current;
+        if (finalLease?.kind === "owner" && assetId && projectSlug) {
           await fsRef.current.assetWork.complete(
             projectSlug,
             assetId,
-            lease.ownerId,
+            finalLease.ownerId,
           );
         }
         return result;
@@ -286,7 +298,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
             fsForCleanup,
             projectSlug,
             assetId,
-            lease,
+            leaseRef.current,
             message,
           );
         }
