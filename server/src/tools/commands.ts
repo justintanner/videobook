@@ -541,6 +541,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "splice_video", autoInject: ["project_slug"] },
   },
   {
+    command: "/even-split",
+    description: "Split a video into N gen-friendly chunks (≤10s each; prefers exact 10s/15s, falls back to integer-second equal-ish chunks). Original is preserved.",
+    example: "/even-split @vid-source 10",
+    category: "context_menu",
+    icon: "Scissors",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to split" },
+      { name: "target_sec", type: "string", required: false, description: "Preferred chunk length hint, e.g. '10' or '10s' (default 10)" },
+    ],
+    mcpTool: { tool: "even_split", autoInject: ["project_slug"] },
+  },
+  {
     command: "/assign",
     description: "Assign asset to timeline slot",
     example: "/assign @vid-clip @s02",

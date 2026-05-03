@@ -3,6 +3,7 @@ import { registerTranscribeJob } from "./transcribe.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerTrimVideoJob } from "./trim-video.js";
 import { registerSplitVideoJob } from "./split-video.js";
+import { registerEvenSplitJob } from "./even-split.js";
 import { registerCropVideoJob } from "./crop-video.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
@@ -98,6 +99,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerDownloadVideoJob(fs);
   registerTrimVideoJob(fs);
   registerSplitVideoJob(fs);
+  registerEvenSplitJob(fs);
   registerCropVideoJob(fs);
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);

@@ -24,6 +24,7 @@ import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
 import { splitVideoDef } from "./split-video.js";
+import { evenSplitDef } from "./even-split.js";
 import { cropVideoDef } from "./crop-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
@@ -183,6 +184,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     rewindProjectDef(fs),
     trimVideoDef(fs),
     splitVideoDef(fs),
+    evenSplitDef(fs),
     cropVideoDef(fs),
     downloadVideoDef(fs),
     changeVideoSpeedDef(fs),
