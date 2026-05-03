@@ -10,16 +10,17 @@ interface PlanCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
 }
 
-export function PlanCard({ item, contextMenuContent, selected, onClick }: PlanCardProps) {
+export function PlanCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: PlanCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
   const planText = item.prompt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen}>
       {/* CONTENT - Blueprint aesthetic */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Indigo-to-navy gradient background */}

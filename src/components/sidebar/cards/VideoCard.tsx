@@ -22,10 +22,11 @@ interface VideoCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
   onDelete?: (item: MediaItem) => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick, onDelete }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -50,7 +51,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onDelet
   const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {showThumb && (
         <img

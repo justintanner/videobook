@@ -17,6 +17,7 @@ export interface ListAsset {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
+  seen_at: number | null;
 }
 
 interface UseListAssetsResult {
@@ -24,6 +25,7 @@ interface UseListAssetsResult {
   assets: ListAsset[] | undefined;
   clearAssets: () => void;
   removeAsset: (assetId: string) => void;
+  markAssetSeenLocal: (assetId: string) => void;
 }
 
 export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssetsResult {
@@ -65,5 +67,20 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
     });
   }, []);
 
-  return { listAssets, assets, clearAssets, removeAsset };
+  const markAssetSeenLocal = useCallback((assetId: string) => {
+    setAssets((prev) => {
+      if (!prev) return prev;
+      let mutated = false;
+      const next = prev.map((a) => {
+        if (a.id !== assetId || a.seen_at !== null) return a;
+        mutated = true;
+        return { ...a, seen_at: Math.floor(Date.now() / 1000) };
+      });
+      if (!mutated) return prev;
+      prevJsonRef.current = JSON.stringify({ assets: next });
+      return next;
+    });
+  }, []);
+
+  return { listAssets, assets, clearAssets, removeAsset, markAssetSeenLocal };
 }

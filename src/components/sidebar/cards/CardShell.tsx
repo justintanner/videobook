@@ -6,6 +6,8 @@ import {
   ContextMenuContent,
 } from '@/components/ui/context-menu';
 import type { MediaItem, ClipState } from '../types';
+import { cornerStrokeColor, isRenderingState } from '../stateColors';
+import { NewBadge } from './badges';
 import {
   UploadingOverlay,
   GeneratingOverlay,
@@ -34,17 +36,10 @@ export interface CardShellProps {
   onClick?: () => void;
   draggable?: boolean;
   dragData?: DragData;
-}
-
-function isRenderingState(status: string): boolean {
-  return status === 'rendering' ||
-    status === 'rendering-landscape' ||
-    status === 'rendering-portrait' ||
-    status === 'render-queued' ||
-    status === 'render-queued-landscape' ||
-    status === 'render-queued-portrait' ||
-    status === 'rendering-square' ||
-    status === 'render-queued-square';
+  /** Fired before `onClick` when the user clicks an unseen asset, and on a
+   *  successful drag-drop (dropEffect !== 'none'). HomePage wires this to the
+   *  optimistic local update + the `mark_asset_seen` MCP tool. */
+  onMarkSeen?: () => void;
 }
 
 // Pipeline states that all reuse GeneratingOverlay with a custom label.
@@ -106,32 +101,13 @@ const stateClassMap: Partial<Record<ClipState, string>> = {
   deleting: 'clip-state-deleting pointer-events-none cursor-default',
 };
 
-function getCornerStrokeColor(status: ClipState | undefined, isFinal: boolean, isError: boolean, isReady: boolean, itemType?: string): string {
-  if (isError) return '#ef4444';
-  if (status === 'deleting') return 'rgba(239, 68, 68, 0.4)';
-  if (isFinal && (isReady || isRenderingState(status ?? ''))) return '#fbbf24';
-  if (isReady) return 'var(--color-primary)';
-
-  if (status === 'generating' && itemType === 'image') return 'rgba(59, 130, 246, 0.7)';
-
-  const stateColors: Partial<Record<ClipState, string>> = {
-    uploading: 'rgba(0, 255, 255, 0.7)',
-    downloading: 'rgba(34, 197, 94, 0.7)',
-    generating: 'rgba(34, 197, 94, 0.7)',
-    rendering: 'rgba(0, 255, 255, 0.7)',
-    transcribing: 'rgba(0, 255, 255, 0.7)',
-    loading: 'rgba(0, 255, 255, 0.5)',
-  };
-
-  return (status && stateColors[status]) ?? 'var(--color-primary)';
-}
-
-export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData, onMarkSeen }: CardShellProps) {
   const status = item.status ?? 'ready';
   const isFinal = item.type === 'final';
   const isReady = status === 'ready';
   const isError = status === 'error' && item.type !== 'script';
   const isGold = isFinal && (isReady || isRenderingState(status));
+  const isUnseen = isReady && !isError && item.seenAt == null;
 
   const generatingClass = status === 'generating' && (item.type === 'image' || item.type === 'character')
     ? 'clip-state-generating-image cursor-wait'
@@ -168,13 +144,29 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
       }
     : undefined;
 
+  const handleDragEnd = draggable && onMarkSeen && isUnseen
+    ? (e: React.DragEvent) => {
+        if (e.dataTransfer.dropEffect !== 'none') onMarkSeen();
+      }
+    : undefined;
+
+  const handleClick = onClick || onMarkSeen
+    ? () => {
+        if (isUnseen) onMarkSeen?.();
+        onClick?.();
+      }
+    : undefined;
+
   const card = (
-    <div className={classes} onClick={onClick} draggable={draggable} onDragStart={handleDragStart}>
+    <div className={classes} onClick={handleClick} draggable={draggable} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {/* Bottom border accent */}
       <div className={accentClasses} />
 
       {/* State overlay */}
       <StateOverlay item={item} />
+
+      {/* NEW badge (top-right) - only when ready, not errored, never seen */}
+      {isUnseen && <NewBadge />}
 
       {/* CONTENT - Type-specific rendering */}
       {children}
@@ -192,7 +184,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
           y1="14"
           x2="14"
           y2="0"
-          stroke={getCornerStrokeColor(item.status, isFinal, isError, isReady, item.type)}
+          stroke={cornerStrokeColor({ status: item.status, isFinal, isError, isReady, itemType: item.type })}
           strokeWidth={isGold || isError ? '2.5' : '2'}
         />
       </svg>

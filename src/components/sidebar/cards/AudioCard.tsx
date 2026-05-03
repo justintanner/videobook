@@ -11,15 +11,16 @@ interface AudioCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
 }
 
-export function AudioCard({ item, contextMenuContent, selected, onClick }: AudioCardProps) {
+export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: AudioCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Audio icon */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

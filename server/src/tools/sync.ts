@@ -63,6 +63,9 @@ export type SyncAsset = {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
+  /** Unix seconds when user first viewed this asset, or null if still unseen.
+   *  Drives the sidebar's NEW badge. */
+  seen_at: number | null;
 };
 
 export type SyncResult = {
@@ -384,6 +387,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         duration,
         waveform,
         frame_dirs: frameDirs,
+        seen_at: assetWorkRow.ok && assetWorkRow.value ? assetWorkRow.value.seenAt : null,
       };
     }),
   );

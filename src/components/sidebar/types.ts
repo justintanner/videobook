@@ -63,4 +63,7 @@ export interface MediaItem {
   failedAt?: string;
   failedMessage?: string;
   failedTaskType?: string;
+  /** Unix seconds when user first viewed this asset, or null if still unseen.
+   *  Drives the NEW badge in the sidebar. */
+  seenAt?: number | null;
 }

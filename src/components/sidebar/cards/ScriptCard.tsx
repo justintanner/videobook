@@ -9,14 +9,15 @@ interface ScriptCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
 }
 
-export function ScriptCard({ item, contextMenuContent, selected, onClick }: ScriptCardProps) {
+export function ScriptCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: ScriptCardProps) {
   const isCorrupt = false;
   const scriptText = item.prompt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen}>
       {/* CONTENT - Script */}
       <div className="w-full h-full relative overflow-hidden">
         {/* Dark gradient overlay */}

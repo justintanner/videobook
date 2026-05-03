@@ -2,37 +2,13 @@ import { useState } from 'react';
 import { AudioLines, Compass, FileText, Film, ImageIcon, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import type { MediaItem, ClipState } from './types';
+import type { MediaItem } from './types';
+import { STATE_ACCENTS } from './stateColors';
 
 interface SidebarMicroThumbProps {
   item: MediaItem;
   selected?: boolean;
   onClick?: () => void;
-}
-
-function getStatusDot(status: ClipState | undefined): string | null {
-  if (!status) return null;
-  switch (status) {
-    case 'uploading':
-    case 'rendering':
-    case 'rendering-landscape':
-    case 'rendering-portrait':
-    case 'rendering-square':
-    case 'render-queued':
-    case 'render-queued-landscape':
-    case 'render-queued-portrait':
-    case 'render-queued-square':
-    case 'transcribing':
-    case 'loading':
-      return 'bg-primary animate-pulse';
-    case 'generating':
-    case 'downloading':
-      return 'bg-green-500 animate-pulse';
-    case 'error':
-      return 'bg-red-500';
-    default:
-      return null;
-  }
 }
 
 function ThumbIcon({ type }: { type: MediaItem['type'] }) {
@@ -58,7 +34,7 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
   const src = item.thumbnailSrc ?? (item.filePath || null);
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const hasImage = !!src && erroredSrc !== src && (item.type === 'image' || item.type === 'character' || item.type === 'video' || item.type === 'final');
-  const dot = getStatusDot(item.status);
+  const dot = item.status ? STATE_ACCENTS[item.status]?.dot ?? null : null;
   const isGold = item.type === 'final';
 
   return (

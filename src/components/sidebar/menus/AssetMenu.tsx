@@ -9,6 +9,9 @@ interface AssetMenuProps {
   onAnimateCommand?: (text: string) => void;
   onAnimateEdit?: (text: string) => void;
   onExtractSkeleton?: () => void;
+  /** When provided, renders a "Mark Seen" entry that dismisses the NEW badge.
+   *  HomePage only supplies this for unseen assets. */
+  onMarkSeen?: () => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
 
@@ -35,9 +38,22 @@ function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect
   );
 }
 
-export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, onMarkSeen, MenuItem }: AssetMenuProps) {
   return (
     <>
+      {onMarkSeen && (
+        <>
+          <CommandMenuItem
+            command="/mark-seen"
+            title="Mark Seen"
+            titleClassName="text-primary"
+            accentColor="border-l-primary/50 focus:border-l-primary/80"
+            onSelect={onMarkSeen}
+            MenuItem={MenuItem}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+        </>
+      )}
       {itemType === 'image' && (
         <>
           <CommandMenuItem

@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { SLUG_BADGE_BORDER, ERROR_RAW, FINAL_RAW } from '../stateColors';
 
 interface SlugBadgeProps {
   slug: string;
@@ -23,11 +24,11 @@ export function SlugBadge({ slug, colorScheme, isError, isProcessing }: SlugBadg
         )}
         style={{
           borderColor: isError
-            ? 'rgba(239, 68, 68, 0.7)'
+            ? SLUG_BADGE_BORDER.error
             : isGold
-              ? 'rgba(251, 191, 36, 0.5)'
-              : 'rgba(0, 255, 255, 0.2)',
-          textShadow: isError ? '0 0 8px #ef4444' : isGold ? '0 0 8px #fbbf24' : undefined,
+              ? SLUG_BADGE_BORDER.gold
+              : SLUG_BADGE_BORDER.cyan,
+          textShadow: isError ? `0 0 8px ${ERROR_RAW}` : isGold ? `0 0 8px ${FINAL_RAW}` : undefined,
         }}
         title={slug}
       >
@@ -53,6 +54,16 @@ export function DurationBadge({ duration, isProcessing }: DurationBadgeProps) {
       >
         {duration}
       </div>
+    </div>
+  );
+}
+
+export function NewBadge() {
+  return (
+    <div
+      className="absolute top-2 right-2 z-30 px-1.5 py-0.5 rounded bg-primary text-black text-[9px] font-mono font-bold tracking-wider shadow-[0_0_8px_var(--color-primary)] pointer-events-none"
+    >
+      NEW
     </div>
   );
 }

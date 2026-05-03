@@ -10,9 +10,10 @@ interface ImageCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
 }
 
-export function ImageCard({ item, contextMenuContent, selected, onClick }: ImageCardProps) {
+export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: ImageCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -22,7 +23,7 @@ export function ImageCard({ item, contextMenuContent, selected, onClick }: Image
   const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Image */}
       {item.filePath && (
         <img

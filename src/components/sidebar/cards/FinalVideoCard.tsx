@@ -3,17 +3,7 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge } from './badges';
-
-function isRenderingState(status: string): boolean {
-  return status === 'rendering' ||
-    status === 'rendering-landscape' ||
-    status === 'rendering-portrait' ||
-    status === 'render-queued' ||
-    status === 'render-queued-landscape' ||
-    status === 'render-queued-portrait' ||
-    status === 'rendering-square' ||
-    status === 'render-queued-square';
-}
+import { isRenderingState } from '../stateColors';
 
 import type { ReactNode } from 'react';
 
@@ -22,9 +12,10 @@ interface FinalVideoCardProps {
   contextMenuContent?: ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  onMarkSeen?: () => void;
 }
 
-export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: FinalVideoCardProps) {
+export function FinalVideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: FinalVideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const showElfOverlay = isRenderingState(status);
@@ -33,7 +24,7 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick }: 
   const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
 
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
+    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {showThumb && (
         <img

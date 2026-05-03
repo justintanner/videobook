@@ -39,6 +39,7 @@ import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
+import { useMarkAssetSeen } from '@/hooks/useMarkAssetSeen';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
 import { useRenderSettings } from '@/hooks/useRenderSettings';
@@ -96,7 +97,8 @@ export function HomePage() {
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
-  const { listAssets, assets: assetList, clearAssets, removeAsset } = useListAssets(callTool);
+  const { listAssets, assets: assetList, clearAssets, removeAsset, markAssetSeenLocal } = useListAssets(callTool);
+  const markAssetSeen = useMarkAssetSeen(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
@@ -217,6 +219,7 @@ export function HomePage() {
         failedAt: failed?.failedAt,
         failedMessage: failed?.failMsg,
         failedTaskType: failed?.taskType,
+        seenAt: asset.seen_at,
       };
     });
   }, [assetList, result, renderingOverrides, deletingIds]);
@@ -238,6 +241,12 @@ export function HomePage() {
     if (!selectedItem) return null;
     return mediaItems.find(m => m.id === selectedItem.id) ?? null;
   }, [mediaItems, selectedItem]);
+
+  const handleMarkSeen = useCallback((assetId: string) => {
+    if (!projectSlug) return;
+    markAssetSeenLocal(assetId);
+    void markAssetSeen(assetId, projectSlug);
+  }, [projectSlug, markAssetSeenLocal, markAssetSeen]);
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSelectedItem(item);
@@ -667,6 +676,8 @@ export function HomePage() {
                   {assets.map((item) => {
                     const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
                     const itemFilePath = item.filePath;
+                    const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
+                    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -677,15 +688,16 @@ export function HomePage() {
                         onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
                           ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
                           : undefined}
+                        onMarkSeen={onMarkSeen}
                         MenuItem={ContextMenuItem}
                       />
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                        {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                        {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
-                        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+                        {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+                        {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+                        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
                       </div>
                     );
                   })}
@@ -779,6 +791,8 @@ export function HomePage() {
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
                   {clips.map((item) => {
+                    const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
+                    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -786,13 +800,14 @@ export function HomePage() {
                         itemType={item.type}
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
+                        onMarkSeen={onMarkSeen}
                         MenuItem={ContextMenuItem}
                       />
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onDelete={handleDeleteClip} />}
-                        {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} />}
+                        {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
                       </div>
                     );
                   })}
