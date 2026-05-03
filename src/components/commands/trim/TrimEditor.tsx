@@ -13,8 +13,10 @@ import { useSnapPoints } from './useSnapPoints';
 import { useTrimSelection } from './useTrimSelection';
 import { Waveform } from './Waveform';
 import { TrimToolbar } from './TrimToolbar';
-import { buildFrameBadges, buildTimeMarks, clampPct, formatDurationMS, parseTimestamp, snapRangePct } from './utils';
+import { buildFrameBadges, buildTimeMarks, clampPct, formatDurationMS, parseTimestamp, pctFromMouse, snapRangePct, snapToNearest } from './utils';
 import type { TrimMode, TrimRange } from './types';
+
+const SPLIT_SNAP_TOLERANCE_SEC = 0.15;
 
 interface TrimEditorProps {
   open: boolean;
@@ -56,7 +58,14 @@ export function TrimEditor({
     return () => clearTimeout(t);
   }, [open]);
 
+  // Selection model:
+  // - Keep/Remove use trimRange (a draggable range).
+  // - Split uses a single splitPointPct (where to cut) plus overlapSec (a
+  //   numeric input). They are independent so changing the overlap doesn't
+  //   move the cut, and clicking a new cut doesn't reset the overlap.
   const [trimRange, setTrimRange] = useState<TrimRange | null>(null);
+  const [splitPointPct, setSplitPointPct] = useState<number | null>(null);
+  const [overlapSec, setOverlapSec] = useState(0);
 
   // Cap line position depends on the live selection start (Keep mode only).
   const capPointSec = useMemo(() => {
@@ -69,7 +78,7 @@ export function TrimEditor({
   const extraSnapPoints = useMemo(() => (capPointSec !== null ? [capPointSec] : undefined), [capPointSec]);
   const snapPoints = useSnapPoints({ duration, markers, item, extraPoints: extraSnapPoints });
 
-  const { handleWaveformMouseDown, startHandleMouseDown, endHandleMouseDown } = useTrimSelection({
+  const krSelection = useTrimSelection({
     open,
     duration,
     snapPoints,
@@ -78,12 +87,26 @@ export function TrimEditor({
     setTrimRange,
   });
 
-  // Reset selection when the asset changes — derive a "previous assetId" via
-  // useState so we can compare during render and reset without an effect.
-  const [prevAssetId, setPrevAssetId] = useState(assetId);
-  if (prevAssetId !== assetId) {
-    setPrevAssetId(assetId);
+  const handleSplitClick = useCallback((e: React.MouseEvent) => {
+    const rect = waveformRef.current?.getBoundingClientRect();
+    if (!rect || duration <= 0) return;
+    const rawPct = pctFromMouse(e, rect);
+    const rawSec = (rawPct / 100) * duration;
+    const snappedSec = snapToNearest(rawSec, snapPoints, SPLIT_SNAP_TOLERANCE_SEC);
+    setSplitPointPct(clampPct((snappedSec / duration) * 100));
+  }, [duration, snapPoints]);
+
+  const handleWaveformMouseDown =
+    trimMode === 'split' ? handleSplitClick : krSelection.handleWaveformMouseDown;
+
+  // Reset selection when the asset OR mode changes.
+  const [prevKey, setPrevKey] = useState<string>(`${assetId ?? ''}|${trimMode}`);
+  const currentKey = `${assetId ?? ''}|${trimMode}`;
+  if (prevKey !== currentKey) {
+    setPrevKey(currentKey);
     setTrimRange(null);
+    setSplitPointPct(null);
+    setOverlapSec(0);
   }
 
   // Video timeupdate → playhead + active word.
@@ -129,7 +152,11 @@ export function TrimEditor({
 
   const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch();
 
-  const handleClear = useCallback(() => setTrimRange(null), [setTrimRange]);
+  const handleClear = useCallback(() => {
+    setTrimRange(null);
+    setSplitPointPct(null);
+    setOverlapSec(0);
+  }, [setTrimRange]);
 
   const runMcp = useCallback(async (
     name: 'trim_video' | 'split_video',
@@ -153,6 +180,8 @@ export function TrimEditor({
       setTimeout(() => {
         setTrimState(undefined);
         setTrimRange(null);
+        setSplitPointPct(null);
+        setOverlapSec(0);
         onClose();
       }, 1200);
     } catch (err) {
@@ -162,24 +191,28 @@ export function TrimEditor({
   }, [callTool, onClose, setTrimRange]);
 
   const handleAction = useCallback(() => {
-    if (!trimRange || duration <= 0 || trimState || !assetId || !projectSlug) return;
+    if (duration <= 0 || trimState || !assetId || !projectSlug) return;
+    if (trimMode === 'split') {
+      if (splitPointPct === null) return;
+      const splitSec = (splitPointPct / 100) * duration;
+      const half = overlapSec / 2;
+      runMcp('split_video', {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        chunk_a_end: splitSec + half,
+        chunk_b_start: splitSec - half,
+      });
+      return;
+    }
+    if (!trimRange) return;
     const startSec = (trimRange.startPct / 100) * duration;
     const endSec = (trimRange.endPct / 100) * duration;
     if (trimMode === 'keep') {
       runMcp('trim_video', { asset_id: assetId, project_slug: projectSlug, trim_start: startSec, trim_end: endSec });
-    } else if (trimMode === 'remove') {
-      runMcp('trim_video', { asset_id: assetId, project_slug: projectSlug, cut_start: startSec, cut_end: endSec });
     } else {
-      // split: chunk_a_end = right edge, chunk_b_start = left edge of overlap.
-      // (zero-width selection → clean split, both equal.)
-      runMcp('split_video', {
-        asset_id: assetId,
-        project_slug: projectSlug,
-        chunk_a_end: endSec,
-        chunk_b_start: startSec,
-      });
+      runMcp('trim_video', { asset_id: assetId, project_slug: projectSlug, cut_start: startSec, cut_end: endSec });
     }
-  }, [trimRange, duration, trimState, assetId, projectSlug, trimMode, runMcp]);
+  }, [trimRange, splitPointPct, overlapSec, duration, trimState, assetId, projectSlug, trimMode, runMcp]);
 
   const handleSend = async (message: string): Promise<boolean> => {
     const cmd = message.trim().toLowerCase();
@@ -213,7 +246,7 @@ export function TrimEditor({
       handleAction();
       return true;
     }
-    if (cmd.startsWith('/split') && trimRange && duration > 0) {
+    if (cmd.startsWith('/split') && splitPointPct !== null && duration > 0) {
       setTrimMode('split');
       handleAction();
       return true;
@@ -231,11 +264,25 @@ export function TrimEditor({
   const selectedDurationSec = Math.max(0, selectedEndSec - selectedStartSec);
   const resultDurationSec = trimMode === 'keep'
     ? selectedDurationSec
-    : trimMode === 'remove'
-      ? Math.max(0, duration - selectedDurationSec)
-      : 0;
-  const chunkADurationSec = trimRange && duration > 0 ? selectedEndSec : 0;
-  const chunkBDurationSec = trimRange && duration > 0 ? duration - selectedStartSec : 0;
+    : Math.max(0, duration - selectedDurationSec);
+
+  const splitPointSec = splitPointPct !== null && duration > 0 ? (splitPointPct / 100) * duration : null;
+  const chunkADurationSec = splitPointSec !== null ? splitPointSec + overlapSec / 2 : 0;
+  const chunkBDurationSec = splitPointSec !== null ? duration - splitPointSec + overlapSec / 2 : 0;
+
+  // For Waveform rendering in split mode: derive a visual range = the overlap
+  // window centered on the split point.
+  const splitVisualRange = useMemo<TrimRange | null>(() => {
+    if (trimMode !== 'split' || splitPointPct === null || duration <= 0) return null;
+    const overlapPct = (overlapSec / duration) * 100;
+    return {
+      startPct: clampPct(splitPointPct - overlapPct / 2),
+      endPct: clampPct(splitPointPct + overlapPct / 2),
+    };
+  }, [trimMode, splitPointPct, overlapSec, duration]);
+
+  const displayRange = trimMode === 'split' ? splitVisualRange : trimRange;
+  const hasActionable = trimMode === 'split' ? splitPointPct !== null : trimRange !== null;
 
   const placeholder = trimMode === 'split'
     ? 'click on the waveform to set a split point, then /split here'
@@ -329,12 +376,15 @@ export function TrimEditor({
           <TrimToolbar
             trimMode={trimMode}
             onModeChange={setTrimMode}
-            hasSelection={trimRange !== null}
+            hasActionable={hasActionable}
             duration={duration}
             selectedStartSec={selectedStartSec}
             selectedEndSec={selectedEndSec}
             selectedDurationSec={selectedDurationSec}
             resultDurationSec={resultDurationSec}
+            splitPointSec={splitPointSec}
+            overlapSec={overlapSec}
+            onOverlapChange={setOverlapSec}
             chunkADurationSec={chunkADurationSec}
             chunkBDurationSec={chunkBDurationSec}
             trimError={trimError}
@@ -347,7 +397,7 @@ export function TrimEditor({
             waveformRef={waveformRef}
             duration={duration}
             waveform={waveform}
-            trimRange={trimRange}
+            trimRange={displayRange}
             trimMode={trimMode}
             overCap={trimMode === 'keep' && resultDurationSec > VIDEO_EDIT_MAX_SEC + 0.05}
             capLineSec={capPointSec}
@@ -355,8 +405,8 @@ export function TrimEditor({
             frameBadges={frameBadges}
             playheadPercent={playheadPercent}
             onMouseDown={handleWaveformMouseDown}
-            onStartHandleMouseDown={startHandleMouseDown}
-            onEndHandleMouseDown={endHandleMouseDown}
+            onStartHandleMouseDown={krSelection.startHandleMouseDown}
+            onEndHandleMouseDown={krSelection.endHandleMouseDown}
           />
 
           {duration > 0 && (

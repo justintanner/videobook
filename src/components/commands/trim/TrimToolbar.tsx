@@ -10,14 +10,19 @@ interface TrimToolbarProps {
   trimMode: TrimMode;
   onModeChange: (mode: TrimMode) => void;
 
-  hasSelection: boolean;
+  hasActionable: boolean;
   duration: number;
   selectedStartSec: number;
   selectedEndSec: number;
   selectedDurationSec: number;
-  resultDurationSec: number; // used for keep/remove
-  chunkADurationSec: number; // split mode
-  chunkBDurationSec: number; // split mode
+  resultDurationSec: number;
+
+  // Split-mode state.
+  splitPointSec: number | null;
+  overlapSec: number;
+  onOverlapChange: (sec: number) => void;
+  chunkADurationSec: number;
+  chunkBDurationSec: number;
 
   trimError: string | null;
   trimState: ExecuteButtonState | undefined;
@@ -28,12 +33,15 @@ interface TrimToolbarProps {
 export function TrimToolbar({
   trimMode,
   onModeChange,
-  hasSelection,
+  hasActionable,
   duration,
   selectedStartSec,
   selectedEndSec,
   selectedDurationSec,
   resultDurationSec,
+  splitPointSec,
+  overlapSec,
+  onOverlapChange,
   chunkADurationSec,
   chunkBDurationSec,
   trimError,
@@ -61,26 +69,23 @@ export function TrimToolbar({
       {/* Mode tiles */}
       <div className="flex rounded border border-zinc-700/70 bg-black/40 overflow-hidden">
         <ModeTile
-          mode="keep"
           active={trimMode === 'keep'}
           icon={<Check className="w-4 h-4" />}
-          label="Keep Selection"
+          label="Keep"
           activeBg="bg-emerald-500/18"
           activeText="text-emerald-300"
           onClick={() => onModeChange('keep')}
         />
         <ModeTile
-          mode="remove"
           active={trimMode === 'remove'}
           icon={<Trash2 className="w-4 h-4" />}
-          label="Remove Selection"
+          label="Remove"
           activeBg="bg-red-500/18"
           activeText="text-red-300"
           onClick={() => onModeChange('remove')}
           borderL
         />
         <ModeTile
-          mode="split"
           active={trimMode === 'split'}
           icon={<Scissors className="w-4 h-4" />}
           label="Split"
@@ -93,29 +98,27 @@ export function TrimToolbar({
 
       {/* Summary panel */}
       <div className={cn('min-w-0 rounded border px-3 py-2 font-mono', modeClasses.border, modeClasses.soft)}>
-        {hasSelection && duration > 0 ? (
-          trimMode === 'split' ? (
-            <SplitSummary
-              startSec={selectedStartSec}
-              endSec={selectedEndSec}
-              chunkA={chunkADurationSec}
-              chunkB={chunkBDurationSec}
-            />
-          ) : (
-            <KeepRemoveSummary
-              mode={trimMode}
-              startSec={selectedStartSec}
-              endSec={selectedEndSec}
-              selectedSec={selectedDurationSec}
-              resultSec={resultDurationSec}
-              overCap={overCap}
-            />
-          )
+        {trimMode === 'split' ? (
+          <SplitSummary
+            splitPointSec={splitPointSec}
+            overlapSec={overlapSec}
+            onOverlapChange={onOverlapChange}
+            duration={duration}
+            chunkA={chunkADurationSec}
+            chunkB={chunkBDurationSec}
+          />
+        ) : hasActionable && duration > 0 ? (
+          <KeepRemoveSummary
+            mode={trimMode}
+            startSec={selectedStartSec}
+            endSec={selectedEndSec}
+            selectedSec={selectedDurationSec}
+            resultSec={resultDurationSec}
+            overCap={overCap}
+          />
         ) : (
           <div className="text-[11px] uppercase tracking-widest text-zinc-500">
-            {trimMode === 'split'
-              ? 'Click to set a clean split, or drag to set an overlap window'
-              : 'Drag across the waveform to select a range'}
+            Drag across the waveform to select a range
           </div>
         )}
       </div>
@@ -131,7 +134,7 @@ export function TrimToolbar({
           icon={actionIcon}
           size="default"
           variant={modeClasses.buttonVariant}
-          state={trimState ?? (hasSelection ? undefined : 'disabled')}
+          state={trimState ?? (hasActionable ? undefined : 'disabled')}
           disabledReason={
             trimMode === 'split'
               ? 'Click on the waveform to set a split point'
@@ -145,7 +148,6 @@ export function TrimToolbar({
 }
 
 interface ModeTileProps {
-  mode: TrimMode;
   active: boolean;
   icon: React.ReactNode;
   label: string;
@@ -182,14 +184,14 @@ interface KeepRemoveSummaryProps {
 }
 
 function KeepRemoveSummary({ mode, startSec, endSec, selectedSec, resultSec, overCap }: KeepRemoveSummaryProps) {
-  const modeClasses = getModeClasses(mode, false); // header text always reflects mode
+  const modeClasses = getModeClasses(mode, false);
   return (
     <div className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 text-[11px]">
       <span className={cn('uppercase tracking-widest', modeClasses.text)}>
-        {mode === 'keep' ? 'Keeping selected range' : 'Removing selected range'}
+        {mode === 'keep' ? 'Keep' : 'Remove'}
       </span>
       <span className="text-zinc-500">
-        {formatSecondsBadge(startSec)} to {formatSecondsBadge(endSec)}
+        {formatSecondsBadge(startSec)} → {formatSecondsBadge(endSec)}
       </span>
       <span className="text-zinc-600 truncate">
         selected {formatSecondsBadge(selectedSec)}
@@ -200,24 +202,59 @@ function KeepRemoveSummary({ mode, startSec, endSec, selectedSec, resultSec, ove
 }
 
 interface SplitSummaryProps {
-  startSec: number;
-  endSec: number;
+  splitPointSec: number | null;
+  overlapSec: number;
+  onOverlapChange: (sec: number) => void;
+  duration: number;
   chunkA: number;
   chunkB: number;
 }
 
-function SplitSummary({ startSec, endSec, chunkA, chunkB }: SplitSummaryProps) {
-  const overlap = Math.max(0, endSec - startSec);
+function SplitSummary({ splitPointSec, overlapSec, onOverlapChange, duration, chunkA, chunkB }: SplitSummaryProps) {
+  if (splitPointSec === null) {
+    return (
+      <div className="text-[11px] uppercase tracking-widest text-zinc-500">
+        Click on the waveform to set the split point
+      </div>
+    );
+  }
   return (
-    <div className="grid grid-cols-[auto_auto_1fr_auto_auto] items-center gap-3 text-[11px]">
-      <span className="uppercase tracking-widest text-violet-300">Splitting</span>
-      <span className="text-zinc-500">
-        overlap {formatSecondsBadge(overlap)}
-      </span>
-      <span className="text-zinc-600 truncate" />
+    <div className="grid grid-cols-[auto_auto_auto_1fr_auto_auto] items-center gap-3 text-[11px]">
+      <span className="uppercase tracking-widest text-violet-300">Split</span>
+      <span className="text-zinc-400">at {formatSecondsBadge(splitPointSec)}</span>
+      <OverlapInput value={overlapSec} max={Math.max(0, Math.min(splitPointSec, duration - splitPointSec) * 2)} onChange={onOverlapChange} />
+      <span />
       <ResultPill sec={chunkA} overCap={isOverEditCap(chunkA)} prefix="A" />
       <ResultPill sec={chunkB} overCap={isOverEditCap(chunkB)} prefix="B" />
     </div>
+  );
+}
+
+interface OverlapInputProps {
+  value: number;
+  max: number;
+  onChange: (sec: number) => void;
+}
+
+function OverlapInput({ value, max, onChange }: OverlapInputProps) {
+  return (
+    <label className="inline-flex items-center gap-1.5 text-zinc-400">
+      <span className="uppercase tracking-widest text-[10px]">overlap</span>
+      <input
+        type="number"
+        step={0.1}
+        min={0}
+        max={max}
+        value={value.toFixed(2).replace(/\.?0+$/, '')}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (!Number.isFinite(n)) return;
+          onChange(Math.max(0, Math.min(max, n)));
+        }}
+        className="w-14 h-6 px-1.5 rounded bg-black/40 border border-violet-400/40 text-violet-200 text-right font-mono text-[11px] focus:outline-none focus:border-violet-300/60"
+      />
+      <span className="text-[10px] text-zinc-500">s</span>
+    </label>
   );
 }
 
@@ -235,7 +272,6 @@ function ResultPill({ sec, overCap, prefix }: { sec: number; overCap: boolean; p
       {prefix && <span className="text-zinc-400 font-bold">{prefix}</span>}
       {overCap && <span>⚠</span>}
       <span>{formatSecondsBadge(sec)}</span>
-      {overCap && <span className="hidden md:inline text-[10px] uppercase tracking-wider">over {VIDEO_EDIT_MAX_SEC}s cap</span>}
     </span>
   );
 }

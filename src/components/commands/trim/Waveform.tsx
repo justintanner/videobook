@@ -57,7 +57,6 @@ export function Waveform({
             trimRange={trimRange}
             trimMode={trimMode}
             overCap={overCap}
-            duration={duration}
           />
         )}
 
@@ -66,8 +65,9 @@ export function Waveform({
           <CapLine capLineSec={capLineSec} duration={duration} />
         )}
 
-        {/* Start/end handles */}
-        {trimRange && (
+        {/* Start/end handles + per-handle time labels (Keep/Remove only — split
+            has a single-point selection, not a draggable range). */}
+        {trimRange && !splitMode && (
           <>
             <div
               className="absolute top-0 bottom-0 z-20 flex items-stretch cursor-ew-resize"
@@ -89,13 +89,13 @@ export function Waveform({
                   className={cn('absolute top-0.5 text-[9px] font-mono pointer-events-none z-30 -translate-x-1/2', modeClasses.text)}
                   style={{ left: `${trimRange.startPct}%` }}
                 >
-                  {splitMode ? 'A→' : formatDurationMS((trimRange.startPct / 100) * duration)}
+                  {formatDurationMS((trimRange.startPct / 100) * duration)}
                 </span>
                 <span
                   className={cn('absolute top-0.5 text-[9px] font-mono pointer-events-none z-30 -translate-x-1/2', modeClasses.text)}
                   style={{ left: `${trimRange.endPct}%` }}
                 >
-                  {splitMode ? '←B' : formatDurationMS((trimRange.endPct / 100) * duration)}
+                  {formatDurationMS((trimRange.endPct / 100) * duration)}
                 </span>
               </>
             )}
@@ -153,54 +153,27 @@ interface SelectionOverlayProps {
   trimRange: TrimRange;
   trimMode: TrimMode;
   overCap: boolean;
-  duration: number;
 }
 
-function SelectionOverlay({ trimRange, trimMode, overCap, duration }: SelectionOverlayProps) {
+function SelectionOverlay({ trimRange, trimMode, overCap }: SelectionOverlayProps) {
   const modeClasses = getModeClasses(trimMode, overCap);
   const widthPct = trimRange.endPct - trimRange.startPct;
 
   if (trimMode === 'split') {
+    // Single split-point line, plus a faint overlap band when overlap > 0.
+    const midPct = (trimRange.startPct + trimRange.endPct) / 2;
     return (
       <>
-        {/* Left half tint = chunk A */}
-        <div
-          className="absolute top-0 bottom-0 left-0 bg-emerald-500/8 pointer-events-none z-10"
-          style={{ width: `${trimRange.endPct}%` }}
-        />
-        {/* Right half tint = chunk B */}
-        <div
-          className="absolute top-0 bottom-0 right-0 bg-cyan-500/8 pointer-events-none z-10"
-          style={{ width: `${100 - trimRange.startPct}%` }}
-        />
-        {/* Overlap zone (violet) */}
         {widthPct > 0.05 && (
           <div
             className={cn('absolute top-0 bottom-0 pointer-events-none z-10', modeClasses.tint)}
             style={{ left: `${trimRange.startPct}%`, width: `${widthPct}%` }}
           />
         )}
-        {/* A / B / overlap labels */}
-        <span
-          className="absolute top-7 z-30 -translate-x-1/2 rounded border border-emerald-400/50 bg-zinc-950/90 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-emerald-300 pointer-events-none"
-          style={{ left: `${trimRange.startPct / 2}%` }}
-        >
-          A · {formatDurationMS((trimRange.endPct / 100) * duration)}
-        </span>
-        <span
-          className="absolute top-7 z-30 -translate-x-1/2 rounded border border-cyan-400/50 bg-zinc-950/90 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-cyan-300 pointer-events-none"
-          style={{ left: `${(100 + trimRange.endPct) / 2}%` }}
-        >
-          B · {formatDurationMS(duration - (trimRange.startPct / 100) * duration)}
-        </span>
-        {widthPct > 0.05 && (
-          <span
-            className={cn('absolute top-14 z-30 -translate-x-1/2 rounded border bg-zinc-950/90 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest pointer-events-none', modeClasses.text, modeClasses.border)}
-            style={{ left: `${(trimRange.startPct + trimRange.endPct) / 2}%` }}
-          >
-            overlap {formatDurationMS((widthPct / 100) * duration)}
-          </span>
-        )}
+        <div
+          className={cn('absolute top-0 bottom-0 w-0.5 -translate-x-1/2 pointer-events-none z-20', modeClasses.line)}
+          style={{ left: `${midPct}%` }}
+        />
       </>
     );
   }
@@ -223,16 +196,6 @@ function SelectionOverlay({ trimRange, trimMode, overCap, duration }: SelectionO
         className={cn('absolute top-0 bottom-0 pointer-events-none z-10', modeClasses.tint)}
         style={{ left: `${trimRange.startPct}%`, width: `${widthPct}%` }}
       />
-      <div
-        className={cn(
-          'absolute top-7 z-30 -translate-x-1/2 rounded border bg-zinc-950/90 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest pointer-events-none',
-          modeClasses.text,
-          modeClasses.border,
-        )}
-        style={{ left: `${(trimRange.startPct + trimRange.endPct) / 2}%` }}
-      >
-        {trimMode === 'keep' ? 'Keep' : 'Remove'}
-      </div>
     </>
   );
 }
