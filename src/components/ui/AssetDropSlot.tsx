@@ -50,9 +50,12 @@ const themes = {
 
 export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'default' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
   const isAudioOnly = acceptTypes.length === 1 && acceptTypes[0] === 'audio';
   const t = themes[variant];
+  const thumbUrl = value?.thumbnailSrc || value?.src || '';
+  const hasThumb = !!thumbUrl && brokenUrl !== thumbUrl;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -115,8 +118,14 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
         <>
           {compact ? (
             <div className="w-full h-full flex items-center gap-2 px-2">
-              {(value.thumbnailSrc || value.src) && (
-                <img src={value.thumbnailSrc || value.src} alt={value.slug} draggable={false} className="h-6 w-6 object-contain shrink-0" />
+              {hasThumb && (
+                <img
+                  src={thumbUrl}
+                  alt=""
+                  draggable={false}
+                  onError={() => setBrokenUrl(thumbUrl)}
+                  className="h-6 w-6 object-contain shrink-0"
+                />
               )}
               <span className={cn('text-xs font-mono truncate', t.labelText)}>{value.slug}</span>
             </div>
@@ -125,9 +134,15 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               <Music className={cn('w-5 h-5', t.activeText)} />
               <span className={cn('text-xs font-mono truncate px-2', t.labelText)}>{value.slug}</span>
             </div>
-          ) : (value.thumbnailSrc || value.src) ? (
+          ) : hasThumb ? (
             <>
-              <img src={value.thumbnailSrc || value.src} alt={value.slug} draggable={false} className="w-full h-full object-cover" />
+              <img
+                src={thumbUrl}
+                alt=""
+                draggable={false}
+                onError={() => setBrokenUrl(thumbUrl)}
+                className="w-full h-full object-cover"
+              />
               <div className="absolute bottom-1 left-1 right-1 z-10 flex justify-start">
                 <span className={cn(
                   'max-w-full text-[10px] font-mono font-bold truncate px-1.5 py-0.5 rounded',
@@ -142,8 +157,9 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               </div>
             </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className={cn('text-xs font-mono truncate px-2', t.labelText)}>{value.slug}</span>
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-2">
+              <ImageIcon className={cn('w-5 h-5', t.inactiveText)} />
+              <span className={cn('text-xs font-mono truncate max-w-full', t.labelText)}>{value.slug}</span>
             </div>
           )}
 
