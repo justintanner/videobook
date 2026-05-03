@@ -542,7 +542,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/even-split",
-    description: "Split a video into N gen-friendly chunks (≤10s each; prefers exact 10s/15s, falls back to integer-second equal-ish chunks). Original is preserved.",
+    description: "Split off a magic-length first chunk (10s default; 9s backup) plus the rest. Two chunks total, original preserved.",
     example: "/even-split @vid-source 10",
     category: "context_menu",
     icon: "Scissors",

@@ -51,65 +51,87 @@ async function probeDuration(filePath: string): Promise<number> {
 }
 
 describe("planEvenSplit (pure)", () => {
-  function lengths(D: number): number[] {
-    return planEvenSplit(D).map((c) => c.duration);
-  }
-
-  it("magic 10s for D=30", () => {
-    expect(lengths(30)).toEqual([10, 10, 10]);
+  it("normal case: D=30, target=10 → first 10s, second 20s", () => {
+    const r = planEvenSplit(30, 10);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(10);
+    expect(r.second.duration).toBe(20);
+    expect(r.usedTarget).toBe(10);
   });
 
-  it("magic 10s wins over 15s for D=30", () => {
-    // Both fit, but 10 has priority.
-    const out = lengths(30);
-    expect(out).toEqual([10, 10, 10]);
+  it("D=20, target=10 → [10, 10]", () => {
+    const r = planEvenSplit(20, 10);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(10);
+    expect(r.second.duration).toBe(10);
   });
 
-  it("magic 15s for D=45", () => {
-    expect(lengths(45)).toEqual([15, 15, 15]);
+  it("D=10.5, target=10 → exact 10s split, tiny 0.5s tail", () => {
+    const r = planEvenSplit(10.5, 10);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(10);
+    expect(r.second.duration).toBeCloseTo(0.5, 5);
+    expect(r.usedTarget).toBe(10);
   });
 
-  it("equal-ish [9, 9] for D=18", () => {
-    expect(lengths(18)).toEqual([9, 9]);
+  it("D=10.4, target=10 → falls back to 9s (10s would leave a sub-MIN tail)", () => {
+    const r = planEvenSplit(10.4, 10);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(9);
+    expect(r.second.duration).toBeCloseTo(1.4, 5);
+    expect(r.usedTarget).toBe(9);
   });
 
-  it("equal-ish [10, 9] for D=19", () => {
-    expect(lengths(19)).toEqual([10, 9]);
+  it("D=9.5, target=10 → 9s backup, 0.5s tail", () => {
+    const r = planEvenSplit(9.5, 10);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(9);
+    expect(r.second.duration).toBeCloseTo(0.5, 5);
+    expect(r.usedTarget).toBe(9);
   });
 
-  it("equal-ish [9, 9, 9, 8] for D=35", () => {
-    expect(lengths(35)).toEqual([9, 9, 9, 8]);
+  it("D=8, target=10 → error (too short for either)", () => {
+    const r = planEvenSplit(8, 10);
+    expect(r.ok).toBe(false);
   });
 
-  it("absorbs fractional remainder into last chunk for D=35.4", () => {
-    const out = lengths(35.4);
-    expect(out.slice(0, 3)).toEqual([9, 9, 9]);
-    expect(out[3]).toBeCloseTo(8.4, 5);
+  it("D=20, target=15 → exact 15s + 5s rest", () => {
+    const r = planEvenSplit(20, 15);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(15);
+    expect(r.second.duration).toBe(5);
   });
 
-  it("fallback for D=21", () => {
-    expect(lengths(21)).toEqual([7, 7, 7]);
+  it("default target_sec is 10", () => {
+    const r = planEvenSplit(30);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.first.duration).toBe(10);
   });
 
-  it("returns single-chunk plan for D=8 (caller decides whether to refuse)", () => {
-    expect(lengths(8)).toEqual([8]);
+  it("rejects invalid input", () => {
+    expect(planEvenSplit(0, 10).ok).toBe(false);
+    expect(planEvenSplit(-1, 10).ok).toBe(false);
+    expect(planEvenSplit(NaN, 10).ok).toBe(false);
+    expect(planEvenSplit(30, 0).ok).toBe(false);
+    expect(planEvenSplit(30, -1).ok).toBe(false);
   });
 
-  it("cumulative ranges cover the source exactly", () => {
-    for (const D of [30, 45, 18, 19, 35, 35.4, 21, 8]) {
-      const chunks = planEvenSplit(D);
-      expect(chunks[0].start).toBe(0);
-      expect(chunks[chunks.length - 1].end).toBeCloseTo(D, 5);
-      for (let i = 1; i < chunks.length; i++) {
-        expect(chunks[i].start).toBeCloseTo(chunks[i - 1].end, 5);
-      }
+  it("cumulative ranges cover the whole source", () => {
+    for (const [D, target] of [[30, 10], [20, 10], [10.5, 10], [10.4, 10], [9.5, 10], [20, 15]] as const) {
+      const r = planEvenSplit(D, target);
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      expect(r.first.start).toBe(0);
+      expect(r.second.start).toBeCloseTo(r.first.end, 5);
+      expect(r.second.end).toBeCloseTo(D, 5);
     }
-  });
-
-  it("returns [] for invalid input", () => {
-    expect(planEvenSplit(0)).toEqual([]);
-    expect(planEvenSplit(-1)).toEqual([]);
-    expect(planEvenSplit(NaN)).toEqual([]);
   });
 });
 
@@ -142,7 +164,7 @@ describe("even_split tool (integration)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   }, 120_000);
 
-  it("rejects sources already short enough to skip splitting", async () => {
+  it("rejects sources too short for any split", async () => {
     const videoPath = join(fixtureDir, "short-4s.mp4");
     await generateTestVideo(videoPath, 4);
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
@@ -157,12 +179,12 @@ describe("even_split tool (integration)", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("already short enough");
+    expect(content[0].text).toContain("too short");
   }, 60_000);
 
-  it("splits a 30s source into 3 chunks of ~10s each", async () => {
-    const videoPath = join(fixtureDir, "thirty-30s.mp4");
-    await generateTestVideo(videoPath, 30);
+  it("splits a 20s source into [10, 10] with default target", async () => {
+    const videoPath = join(fixtureDir, "twenty-20s.mp4");
+    await generateTestVideo(videoPath, 20);
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
@@ -175,18 +197,18 @@ describe("even_split tool (integration)", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.chunk_count).toBe(3);
-    expect(parsed.chunk_asset_ids).toHaveLength(3);
-    expect(parsed.chunk_durations).toEqual([10, 10, 10]);
+    expect(parsed.chunk_a_duration).toBe(10);
+    expect(parsed.chunk_b_duration).toBe(10);
+    expect(parsed.used_first_chunk_sec).toBe(10);
 
-    for (const chunkId of parsed.chunk_asset_ids) {
+    // Verify on-disk durations stay at or under the requested cap.
+    for (const chunkId of [parsed.chunk_a_asset_id, parsed.chunk_b_asset_id]) {
       const manifest = await client.callTool({
         name: "asset_manifest",
         arguments: { asset_id: chunkId, project_slug: "even-split-proj" },
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
-      // trimRange's safety margin guarantees ≤ requested.
       expect(dur).toBeLessThanOrEqual(10);
       expect(dur).toBeGreaterThan(9.5);
     }
@@ -197,6 +219,25 @@ describe("even_split tool (integration)", () => {
       arguments: { asset_id: uploaded.assetId, project_slug: "even-split-proj" },
     });
     expect(sourceManifest.isError).toBeFalsy();
+  }, 120_000);
+
+  it("accepts target_sec as a string with 's' suffix (chat-style)", async () => {
+    const videoPath = join(fixtureDir, "twenty-20s-string.mp4");
+    await generateTestVideo(videoPath, 20);
+    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
+
+    const result = await client.callTool({
+      name: "even_split",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "even-split-proj",
+        target_sec: "10s",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.target_sec).toBe(10);
   }, 120_000);
 
   it("returns error for nonexistent asset", async () => {

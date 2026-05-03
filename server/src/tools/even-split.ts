@@ -7,14 +7,10 @@ import { findVideoFile } from "clipfirst-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
-// Magic durations video gens accept exactly. Tried in priority order: a clean
-// 10s split beats a clean 15s split, and both beat the equal-ish fallback.
-const MAGIC_DURATIONS: readonly number[] = [10, 15];
-// Cap each chunk at 10s in the fallback path — Wan 2.7 VideoEdit's hard limit.
-const MAX_CHUNK_SEC = 10;
-// Allow tiny rounding slack when checking magic divisibility against a probed
-// (and therefore noisy) source duration.
-const MAGIC_TOLERANCE_SEC = 0.1;
+// Default first-chunk target. Caller can override via target_sec.
+const DEFAULT_TARGET_SEC = 10;
+// ffmpeg can't reliably produce a usable mp4 below this. Mirrors split-video.ts.
+const MIN_CHUNK_SEC = 0.5;
 
 export interface EvenSplitChunk {
   start: number;
@@ -22,56 +18,58 @@ export interface EvenSplitChunk {
   duration: number;
 }
 
+export type PlanResult =
+  | { ok: true; first: EvenSplitChunk; second: EvenSplitChunk; usedTarget: number }
+  | { ok: false; error: string };
+
 /**
- * Plan how to slice a source of duration `D` (seconds) into N chunks for video
- * generators. Returns one chunk per output asset; cumulative `start`/`end`
- * cover the whole source. See plan file for the worked-examples table.
+ * Slice the source into exactly two chunks: first chunk == `target` seconds
+ * (or `target - 1` if the remainder would be too tiny), second chunk is the
+ * leftover. Caller decides whether to keep the leftover.
+ *
+ * Why a 1-second backup? Most gens accept 9s clips just as readily as 10s,
+ * so when `target` would leave a sub-MIN tail, dropping 1s from the head is
+ * the cheapest way to still get a magic-sized first chunk.
  */
-export function planEvenSplit(D: number): EvenSplitChunk[] {
-  if (!Number.isFinite(D) || D <= 0) return [];
-
-  // Magic-divisor fast path: prefer 10s, then 15s.
-  for (const m of MAGIC_DURATIONS) {
-    const ratio = D / m;
-    const N = Math.round(ratio);
-    if (N >= 1 && Math.abs(D - N * m) < MAGIC_TOLERANCE_SEC) {
-      return buildCumulative(distributeMagic(D, m, N));
-    }
+export function planEvenSplit(D: number, target = DEFAULT_TARGET_SEC): PlanResult {
+  if (!Number.isFinite(D) || D <= 0) {
+    return { ok: false, error: "Invalid source duration." };
   }
-
-  // Equal-ish integer fallback. Use floor(D) for the integer math; any
-  // sub-second remainder is added back to the very last chunk so we don't
-  // drop source content.
-  const Dint = Math.floor(D);
-  const N = Math.max(1, Math.ceil(D / MAX_CHUNK_SEC));
-  const base = Math.floor(Dint / N);
-  const extra = Dint - base * N;
-  const lengths: number[] = [];
-  for (let i = 0; i < extra; i++) lengths.push(base + 1);
-  for (let i = 0; i < N - extra; i++) lengths.push(base);
-  // Absorb the fractional tail (e.g. 35.4 - 35 = 0.4s) into the last chunk.
-  const lengthSum = lengths.reduce((a, b) => a + b, 0);
-  lengths[lengths.length - 1] += D - lengthSum;
-  return buildCumulative(lengths);
+  if (!Number.isFinite(target) || target <= 0) {
+    return { ok: false, error: "Invalid target_sec." };
+  }
+  // Try exact target first.
+  if (D - target >= MIN_CHUNK_SEC) {
+    return {
+      ok: true,
+      first: { start: 0, end: target, duration: target },
+      second: { start: target, end: D, duration: D - target },
+      usedTarget: target,
+    };
+  }
+  // Backup: target - 1 (e.g. 9s for the default 10s).
+  const backup = target - 1;
+  if (backup > 0 && D - backup >= MIN_CHUNK_SEC) {
+    return {
+      ok: true,
+      first: { start: 0, end: backup, duration: backup },
+      second: { start: backup, end: D, duration: D - backup },
+      usedTarget: backup,
+    };
+  }
+  return {
+    ok: false,
+    error: `Source ${D.toFixed(2)}s is too short to split off a ${target}s (or ${backup}s backup) first chunk.`,
+  };
 }
 
-function distributeMagic(D: number, m: number, N: number): number[] {
-  const lengths = new Array<number>(N).fill(m);
-  // Probed durations are noisy — fold any tiny over/undershoot into the tail
-  // so cumulative ranges still cover the whole source exactly.
-  const lengthSum = lengths.reduce((a, b) => a + b, 0);
-  lengths[lengths.length - 1] += D - lengthSum;
-  return lengths;
-}
-
-function buildCumulative(lengths: number[]): EvenSplitChunk[] {
-  const out: EvenSplitChunk[] = [];
-  let t = 0;
-  for (const len of lengths) {
-    out.push({ start: t, end: t + len, duration: len });
-    t += len;
-  }
-  return out;
+function parseTargetSec(input: number | string | undefined): number {
+  if (input === undefined) return DEFAULT_TARGET_SEC;
+  if (typeof input === "number") return input;
+  // Strip a trailing unit suffix like "s" / " sec" so "10s" parses cleanly.
+  const stripped = input.trim().replace(/\s*s(ec(onds?)?)?$/i, "");
+  const n = Number(stripped);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TARGET_SEC;
 }
 
 // Suffixes "1".."N" survive slugifyName's stop-word filter; trim source name to
@@ -88,7 +86,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "even_split",
     description:
-      "Split a video into N gen-friendly chunks. Prefers exact 10s or 15s chunks when the source duration divides cleanly; otherwise falls back to integer-second equal-ish chunks all ≤10s. Produces N new assets, source preserved.",
+      "Split a video at a magic-length mark: produces a first chunk of exactly target_sec (default 10s; falls back to target_sec - 1 if the leftover would be too tiny) and a second chunk with the rest. Source is preserved.",
     schema: {
       asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
       project_slug: z.string().describe("Project slug"),
@@ -97,14 +95,16 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
       target_sec: z
         .union([z.number(), z.string()])
         .optional()
-        .describe("Preferred chunk length hint, advisory (e.g. 10 or '10s'). Default 10."),
+        .describe("First chunk length in seconds (default 10). Accepts '10', '10s', or 10."),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as {
+      const { asset_id, project_slug, target_sec } = args as {
         asset_id: string;
         project_slug: string;
         target_sec?: number | string;
       };
+
+      const target = parseTargetSec(target_sec);
 
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
@@ -138,33 +138,30 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const plannedChunks = planEvenSplit(sourceDurationSec);
-      if (plannedChunks.length < 2) {
+      const plan = planEvenSplit(sourceDurationSec, target);
+      if (!plan.ok) {
         return {
           isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Source is ${sourceDurationSec.toFixed(2)}s; already short enough for video gens (≤${MAX_CHUNK_SEC}s). No split needed.`,
-          }],
+          content: [{ type: "text" as const, text: plan.error }],
         };
       }
 
       const prefix = asset_id.split("-")[0];
-      const createdAssets: Array<{ assetId: string; assetDir: string; outputPath: string; start: number; end: number; duration: number }> = [];
-      for (let i = 0; i < plannedChunks.length; i++) {
-        const chunk = plannedChunks[i];
+      const created: Array<{ assetId: string; assetDir: string; outputPath: string; start: number; end: number; duration: number }> = [];
+      for (let i = 0; i < 2; i++) {
+        const chunk = i === 0 ? plan.first : plan.second;
         const name = deriveChunkName(asset_id, i + 1);
-        const created = await fs.createAsset(prefix, name, project_slug);
-        if (!created.ok) {
+        const c = await fs.createAsset(prefix, name, project_slug);
+        if (!c.ok) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `Failed to create chunk ${i + 1} asset: ${created.error.message}` }],
+            content: [{ type: "text" as const, text: `Failed to create chunk ${i + 1} asset: ${c.error.message}` }],
           };
         }
-        createdAssets.push({
-          assetId: created.value.assetId,
-          assetDir: created.value.path,
-          outputPath: join(created.value.path, "original.mp4"),
+        created.push({
+          assetId: c.value.assetId,
+          assetDir: c.value.path,
+          outputPath: join(c.value.path, "original.mp4"),
           start: chunk.start,
           end: chunk.end,
           duration: chunk.duration,
@@ -177,7 +174,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
           type: "even_split",
           sourcePath,
           sourceAssetId: asset_id,
-          chunks: createdAssets,
+          chunks: created,
           projectSlug: project_slug,
         });
       } catch (err) {
@@ -195,9 +192,12 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
           type: "text" as const,
           text: JSON.stringify({
             source_asset_id: asset_id,
-            chunk_asset_ids: createdAssets.map((c) => c.assetId),
-            chunk_durations: createdAssets.map((c) => c.duration),
-            chunk_count: createdAssets.length,
+            chunk_a_asset_id: created[0].assetId,
+            chunk_b_asset_id: created[1].assetId,
+            chunk_a_duration: created[0].duration,
+            chunk_b_duration: created[1].duration,
+            target_sec: target,
+            used_first_chunk_sec: plan.usedTarget,
             source_duration_sec: sourceDurationSec,
             job_id: jobId,
             status: "completed",
