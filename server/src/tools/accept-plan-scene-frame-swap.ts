@@ -12,6 +12,8 @@ type PlanScene = {
     image2: string | null;
     image1_accepted?: boolean;
     image2_accepted?: boolean;
+    image1_variants?: Record<string, string>;
+    image2_variants?: Record<string, string>;
   } | null;
 };
 

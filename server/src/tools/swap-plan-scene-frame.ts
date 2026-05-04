@@ -8,7 +8,7 @@ import { type ImageInput, resolveImageSlugs } from "./_image-inputs.js";
 const REQUIRED_CHARACTERS = 2;
 
 const SUPPORTED_PROVIDERS = ["kie"] as const;
-const SUPPORTED_MODELS = ["nano-banana-pro", "gpt-image-2"] as const;
+const SUPPORTED_MODELS = ["nano-banana-pro", "gpt-image-2", "wan-2-7-image-pro"] as const;
 const SUPPORTED_MODELS_BY_PROVIDER = {
   kie: SUPPORTED_MODELS,
 } as const;
@@ -17,10 +17,23 @@ type Model = typeof SUPPORTED_MODELS[number];
 
 const DEFAULT_MODEL: Model = "nano-banana-pro";
 
-const JOB_TYPE_BY_MODEL: Record<Model, "generate_gpt_image" | "generate_nano_banana_image"> = {
+type SwapJobType = "generate_gpt_image" | "generate_nano_banana_image" | "generate_wan27_image_pro";
+
+const JOB_TYPE_BY_MODEL: Record<Model, SwapJobType> = {
   "gpt-image-2": "generate_gpt_image",
   "nano-banana-pro": "generate_nano_banana_image",
+  "wan-2-7-image-pro": "generate_wan27_image_pro",
 };
+
+// Short model codes embedded in the swap asset slug so multiple models
+// running for the same scene/frame don't collide on slug-uniqueness retries.
+const SLUG_CODE_BY_MODEL: Record<Model, string> = {
+  "gpt-image-2": "gpt",
+  "nano-banana-pro": "nbp",
+  "wan-2-7-image-pro": "wan",
+};
+
+type SwapVariants = Record<string, string>;
 
 type PlanScene = {
   start: number;
@@ -31,6 +44,8 @@ type PlanScene = {
     image2: string | null;
     image1_accepted?: boolean;
     image2_accepted?: boolean;
+    image1_variants?: SwapVariants;
+    image2_variants?: SwapVariants;
   } | null;
 };
 
@@ -199,7 +214,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
 
       const newAssetResult = await fs.createAsset(
         "img",
-        `scene-${scene_index}-image${frame_index}-swap`,
+        `scene-${scene_index}-image${frame_index}-${SLUG_CODE_BY_MODEL[model]}-swap`,
         project_slug,
       );
       if (!newAssetResult.ok) {
@@ -214,9 +229,25 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       const { assetId: imgAssetId, path: imgAssetDir } = newAssetResult.value;
 
       const swap = scene.swap ?? { image1: null, image2: null };
-      swap[`image${frame_index}` as "image1" | "image2"] = imgAssetId;
-      // A regen invalidates any prior human acceptance for this frame.
-      swap[`image${frame_index}_accepted` as "image1_accepted" | "image2_accepted"] = false;
+      const slotKey = `image${frame_index}` as "image1" | "image2";
+      const variantsKey = `image${frame_index}_variants` as "image1_variants" | "image2_variants";
+      const acceptedKey = `image${frame_index}_accepted` as "image1_accepted" | "image2_accepted";
+
+      const variants: SwapVariants = { ...(swap[variantsKey] ?? {}) };
+      const previousForModel = variants[model];
+      variants[model] = imgAssetId;
+      swap[variantsKey] = variants;
+
+      // Update the selected pointer to the new asset id when:
+      //   - nothing was selected yet (first run for this frame), OR
+      //   - the user was on this model's previous variant (a regen of the
+      //     selected one should follow the new asset).
+      // Otherwise the user has an explicit selection on a different model and
+      // we don't override their choice.
+      if (!swap[slotKey] || swap[slotKey] === previousForModel) {
+        swap[slotKey] = imgAssetId;
+        swap[acceptedKey] = false;
+      }
       plan.scenes[scene_index] = { ...scene, swap };
 
       const writeResult = await fs.writeFile(

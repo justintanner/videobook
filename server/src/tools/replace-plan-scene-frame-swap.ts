@@ -12,6 +12,8 @@ type PlanScene = {
     image2: string | null;
     image1_accepted?: boolean;
     image2_accepted?: boolean;
+    image1_variants?: Record<string, string>;
+    image2_variants?: Record<string, string>;
   } | null;
 };
 
@@ -28,7 +30,8 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   scene_index: z.number().int().nonnegative().describe("Zero-based scene index in plan/.plan.json"),
   frame_index: z.union([z.literal(1), z.literal(2)]).describe("1 = first-frame swap, 2 = last-frame swap"),
-  asset_id: z.string().describe("img-* asset id to point this swap at (e.g. one already created via /api/upload)"),
+  asset_id: z.string().describe("img-* asset id to point this swap at (e.g. one already created via /api/upload, or an existing model variant)"),
+  auto_accept: z.boolean().optional().describe("Default true. Set false to switch the selected variant without auto-accepting (e.g. while comparing model outputs)."),
 };
 
 export function replacePlanSceneFrameSwapDef(fs: ClipfirstFs): ToolDef {
@@ -38,12 +41,14 @@ export function replacePlanSceneFrameSwapDef(fs: ClipfirstFs): ToolDef {
       "Point a plan scene's swap frame at an existing img-* asset (typically one the user just dropped in via /api/upload). Updates scenes[N].swap.image{1|2} and marks it accepted=true since the user explicitly chose this image. Returns the updated sidecar.",
     schema,
     handler: async (args) => {
-      const { project_slug, scene_index, frame_index, asset_id } = args as {
+      const { project_slug, scene_index, frame_index, asset_id, auto_accept } = args as {
         project_slug: string;
         scene_index: number;
         frame_index: 1 | 2;
         asset_id: string;
+        auto_accept?: boolean;
       };
+      const shouldAutoAccept = auto_accept !== false;
 
       const assetDir = await fs.resolveAssetDir(asset_id, project_slug);
       if (!assetDir.ok) {
@@ -87,8 +92,7 @@ export function replacePlanSceneFrameSwapDef(fs: ClipfirstFs): ToolDef {
 
       const swap = scene.swap ?? { image1: null, image2: null };
       swap[`image${frame_index}` as "image1" | "image2"] = asset_id;
-      // The user explicitly picked this image — auto-accept it.
-      swap[`image${frame_index}_accepted` as "image1_accepted" | "image2_accepted"] = true;
+      swap[`image${frame_index}_accepted` as "image1_accepted" | "image2_accepted"] = shouldAutoAccept;
       plan.scenes[scene_index] = { ...scene, swap };
 
       const writeResult = await fs.writeFile(
