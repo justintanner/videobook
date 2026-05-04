@@ -76,7 +76,14 @@ const schema = {
     .boolean()
     .optional()
     .describe("When true, uses a much tamer prompt that avoids 'replace people' wording — for retrying after a content-moderation block."),
+  custom_prompt: z
+    .string()
+    .optional()
+    .describe("If provided, used verbatim as the prompt. Overrides the built-in default and ignores safe_mode."),
 };
+
+// The default prompt — exposed so the client can prefill the inline editor.
+export const DEFAULT_SWAP_PROMPT = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
 
 // Short, neutral prompt. Earlier versions embedded scene prose plus identity
 // language ("face, hair, skin tone, body type") and tripped gpt-image-2's
@@ -106,7 +113,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       "Run an image-to-image model (nano-banana-pro by default; gpt-image-2 alternative) on a plan scene's source frame, swapping the two on-screen subjects with two character references. Creates a new img-* asset for the swapped frame and updates plan/.plan.json with that asset's id at scenes[N].swap.image{1|2}. Reuses the existing generate_nano_banana_image / generate_gpt_image job pipelines.",
     schema,
     handler: async (args) => {
-      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg, prior_swap_asset_id, safe_mode } = args as {
+      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg, prior_swap_asset_id, safe_mode, custom_prompt } = args as {
         project_slug: string;
         scene_index: number;
         frame_index: 1 | 2;
@@ -115,6 +122,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         model?: Model;
         prior_swap_asset_id?: string;
         safe_mode?: boolean;
+        custom_prompt?: string;
       };
 
       const provider: Provider = providerArg ?? "kie";
@@ -224,7 +232,9 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         imageInputs.push({ assetId: prior_swap_asset_id, filename: "original.png" });
       }
 
-      const prompt = buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true);
+      const prompt = custom_prompt && custom_prompt.trim().length > 0
+        ? custom_prompt.trim()
+        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true);
 
       const newAssetResult = await fs.createAsset(
         "img",

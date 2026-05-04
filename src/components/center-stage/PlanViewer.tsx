@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RotateCw } from 'lucide-react';
+import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText, Code, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -208,14 +208,6 @@ const PROVIDER_OPTIONS: { value: SwapProvider; label: string; disabled?: boolean
   // Future: { value: 'fal', label: 'fal', disabled: true },
 ];
 
-const MODEL_OPTIONS_BY_PROVIDER: Record<SwapProvider, { value: SwapModel; label: string }[]> = {
-  kie: [
-    { value: 'nano-banana-pro', label: 'nano-banana-pro' },
-    { value: 'gpt-image-2', label: 'gpt-image-2' },
-    { value: 'wan-2-7-image-pro', label: 'wan-2-7-image-pro' },
-  ],
-};
-
 function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   data: PlanSidecar;
   mediaItems: MediaItem[];
@@ -225,19 +217,7 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
   const [swapProvider, setSwapProvider] = useState<SwapProvider>('kie');
-  const [swapModels, setSwapModels] = useState<Set<SwapModel>>(() => new Set(ALL_SWAP_MODELS));
   const [submittingAll, setSubmittingAll] = useState(false);
-  const toggleSwapModel = useCallback((model: SwapModel) => {
-    setSwapModels((prev) => {
-      const next = new Set(prev);
-      if (next.has(model)) {
-        if (next.size > 1) next.delete(model);
-      } else {
-        next.add(model);
-      }
-      return next;
-    });
-  }, []);
 
   const eligibleSceneIndices = useMemo(
     () => data.scenes.flatMap((scene, idx) => (videoReadyForGen(scene).ok ? [idx] : [])),
@@ -355,22 +335,6 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
               ))}
             </select>
           </dd>
-          <dt className="text-primary/60">Swap models</dt>
-          <dd>
-            <div className="flex flex-wrap gap-3">
-              {MODEL_OPTIONS_BY_PROVIDER[swapProvider].map((m) => (
-                <label key={m.value} className="flex items-center gap-1.5 text-xs font-mono text-primary/90 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={swapModels.has(m.value)}
-                    onChange={() => toggleSwapModel(m.value)}
-                    className="accent-primary"
-                  />
-                  {m.label}
-                </label>
-              ))}
-            </div>
-          </dd>
         </dl>
       </div>
       <div className="space-y-5">
@@ -383,7 +347,6 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
             mediaItems={mediaItems}
             projectSlug={projectSlug}
             swapProvider={swapProvider}
-            swapModels={swapModels}
             callTool={callTool}
             dispatch={dispatch}
             onSidecarUpdate={onSidecarUpdate}
@@ -451,46 +414,17 @@ function deriveTileState(
   return { kind: 'generating' };
 }
 
-type VariantTileState =
-  | { kind: 'idle' }                            // model checked, no swap yet
-  | { kind: 'generating' }                      // swap submitted, waiting for ready
-  | { kind: 'ready'; src: string }              // swap completed
-  | { kind: 'error'; message: string };         // swap failed
-
-function deriveVariantState(
-  variantAssetId: string | null,
-  inFlight: boolean,
-  mediaItems: MediaItem[],
-): VariantTileState {
-  if (inFlight && !variantAssetId) return { kind: 'generating' };
-  if (!variantAssetId) return { kind: 'idle' };
-  const item = mediaItems.find((m) => m.id === variantAssetId);
-  if (!item) return { kind: 'generating' };
-  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'swap failed' };
-  if (item.status === 'ready') {
-    const src = item.thumbnailSrc ?? item.filePath ?? null;
-    if (src) return { kind: 'ready', src };
-    return { kind: 'generating' };
-  }
-  return { kind: 'generating' };
-}
-
-function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModels, onRegen, onGenerate, onRephraseRetry, onAccept, onReplace, onSelectVariant, swapsInFlight, accepting, replacing, selecting }: {
+function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, anyInFlight1, anyInFlight2, accepting, replacing, onAccept, onReplace }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
   mediaItems: MediaItem[];
-  swapModels: Set<SwapModel>;
-  onRegen: (frameIndex: 1 | 2, model: SwapModel) => void;
-  onGenerate: (frameIndex: 1 | 2, model: SwapModel) => void;
-  onRephraseRetry: (frameIndex: 1 | 2, model: SwapModel) => void;
-  onAccept: (frameIndex: 1 | 2) => void;
-  onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
-  onSelectVariant: (frameIndex: 1 | 2, assetId: string) => void;
-  swapsInFlight: Set<string>;
+  anyInFlight1: boolean;
+  anyInFlight2: boolean;
   accepting: Set<1 | 2>;
   replacing: Set<1 | 2>;
-  selecting: Set<1 | 2>;
+  onAccept: (frameIndex: 1 | 2) => void;
+  onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
 }) {
   // Cache-bust the source-frame thumbnails on scene-boundary changes — when
   // /plan-vis re-runs and produces different chunks, timestamps shift and the
@@ -499,143 +433,100 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
   const sourceUrl = (i: 1 | 2) =>
     `/files/${projectSlug}/plan/scene-${sceneIndex}-image${i}-source.jpg?v=${v}`;
   return (
-    <div className="flex flex-wrap gap-5 px-3 py-3 border-b border-zinc-800/40 bg-black/20">
-      <SceneFrameVariantStrip
+    <div className="flex flex-wrap gap-6 px-3 py-3 border-b border-zinc-800/40 bg-black/20">
+      <SourceSlotPair
         frameIndex={1}
-        scene={scene}
         sourceSrc={sourceUrl(1)}
+        state={deriveTileState(scene, 1, mediaItems)}
+        anyInFlight={anyInFlight1}
         label={`image1 · first ${formatTimecode(scene.start)}`}
-        mediaItems={mediaItems}
-        swapModels={swapModels}
-        swapsInFlight={swapsInFlight}
         accepting={accepting.has(1)}
         replacing={replacing.has(1)}
-        selecting={selecting.has(1)}
-        onRegen={(model) => onRegen(1, model)}
-        onGenerate={(model) => onGenerate(1, model)}
-        onRephraseRetry={(model) => onRephraseRetry(1, model)}
         onAccept={() => onAccept(1)}
         onReplace={(source) => onReplace(1, source)}
-        onSelectVariant={(assetId) => onSelectVariant(1, assetId)}
       />
-      <SceneFrameVariantStrip
+      <SourceSlotPair
         frameIndex={2}
-        scene={scene}
         sourceSrc={sourceUrl(2)}
+        state={deriveTileState(scene, 2, mediaItems)}
+        anyInFlight={anyInFlight2}
         label={`image2 · last ${formatTimecode(scene.end)}`}
-        mediaItems={mediaItems}
-        swapModels={swapModels}
-        swapsInFlight={swapsInFlight}
         accepting={accepting.has(2)}
         replacing={replacing.has(2)}
-        selecting={selecting.has(2)}
-        onRegen={(model) => onRegen(2, model)}
-        onGenerate={(model) => onGenerate(2, model)}
-        onRephraseRetry={(model) => onRephraseRetry(2, model)}
         onAccept={() => onAccept(2)}
         onReplace={(source) => onReplace(2, source)}
-        onSelectVariant={(assetId) => onSelectVariant(2, assetId)}
       />
     </div>
   );
 }
 
-function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItems, swapModels, swapsInFlight, accepting, replacing, selecting, onRegen, onGenerate, onRephraseRetry, onAccept, onReplace, onSelectVariant }: {
+function SourceSlotPair({ frameIndex, sourceSrc, state, anyInFlight, label, accepting, replacing, onAccept, onReplace }: {
   frameIndex: 1 | 2;
-  scene: PlanScene;
   sourceSrc: string;
+  state: FrameTileState;
+  anyInFlight: boolean;
   label: string;
-  mediaItems: MediaItem[];
-  swapModels: Set<SwapModel>;
-  swapsInFlight: Set<string>;
   accepting: boolean;
   replacing: boolean;
-  selecting: boolean;
-  onRegen: (model: SwapModel) => void;
-  onGenerate: (model: SwapModel) => void;
-  onRephraseRetry: (model: SwapModel) => void;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
-  onSelectVariant: (assetId: string) => void;
 }) {
-  const variants = scene.swap?.[`image${frameIndex}_variants` as 'image1_variants' | 'image2_variants'] ?? {};
-  const selectedAssetId = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'] ?? null;
-  const isAccepted = scene.swap?.[`image${frameIndex}_accepted` as 'image1_accepted' | 'image2_accepted'] === true;
-  // Display order: every model the user currently has checked, plus any
-  // historical variants from earlier runs whose models are no longer checked.
-  const displayModels = Array.from(new Set<SwapModel>([
-    ...ALL_SWAP_MODELS.filter((m) => swapModels.has(m)),
-    ...Object.keys(variants).filter((m): m is SwapModel => (ALL_SWAP_MODELS as readonly string[]).includes(m)),
-  ]));
+  void frameIndex;
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex gap-1.5">
-        {displayModels.map((model) => {
-          const variantAssetId = variants[model] ?? null;
-          const inFlight = swapsInFlight.has(`${model}-${frameIndex}`);
-          const isSelected = !!variantAssetId && variantAssetId === selectedAssetId;
-          const state = deriveVariantState(variantAssetId, inFlight, mediaItems);
-          return (
-            <SceneFrameVariantTile
-              key={model}
-              model={model}
-              sourceSrc={sourceSrc}
-              state={state}
-              isSelected={isSelected}
-              isAccepted={isSelected && isAccepted}
-              accepting={isSelected && accepting}
-              replacing={isSelected && replacing}
-              selecting={isSelected && selecting}
-              onClick={() => {
-                if (state.kind === 'idle') {
-                  onGenerate(model);
-                  return;
-                }
-                if (variantAssetId && !isSelected) onSelectVariant(variantAssetId);
-              }}
-              onRegen={() => onRegen(model)}
-              onRephraseRetry={() => onRephraseRetry(model)}
-              onAccept={onAccept}
-              onReplace={onReplace}
-            />
-          );
-        })}
+      <div className="flex gap-2">
+        <SourceThumb src={sourceSrc} alt={`source ${label}`} />
+        <SwapSlot
+          state={state}
+          sourceSrc={sourceSrc}
+          anyInFlight={anyInFlight}
+          accepting={accepting}
+          replacing={replacing}
+          onAccept={onAccept}
+          onReplace={onReplace}
+        />
       </div>
       <div className="text-[10px] font-mono text-primary/50">{label}</div>
     </div>
   );
 }
 
-function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted, accepting, replacing, selecting, onClick, onRegen, onRephraseRetry, onAccept, onReplace }: {
-  model: SwapModel;
+function SourceThumb({ src, alt }: { src: string; alt: string }) {
+  const [errored, setErrored] = useState(false);
+  return (
+    <div className="w-40 aspect-video bg-zinc-900 border border-zinc-700/40 rounded overflow-hidden flex items-center justify-center">
+      {errored ? (
+        <span className="text-[9px] font-mono text-primary/30 px-2 text-center">missing</span>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-full object-cover opacity-80"
+          loading="lazy"
+          onError={() => setErrored(true)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SwapSlot({ state, sourceSrc, anyInFlight, accepting, replacing, onAccept, onReplace }: {
+  state: FrameTileState;
   sourceSrc: string;
-  state: VariantTileState;
-  isSelected: boolean;
-  isAccepted: boolean;
+  anyInFlight: boolean;
   accepting: boolean;
   replacing: boolean;
-  selecting: boolean;
-  onClick: () => void;
-  onRegen: () => void;
-  onRephraseRetry: () => void;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const showSource = state.kind !== 'ready';
-  const showSpinner = state.kind === 'generating' || (isSelected && replacing) || (isSelected && selecting);
-  const showReadyActions = isSelected && state.kind === 'ready' && !isAccepted && !accepting && !replacing && !selecting;
-  const showAcceptedBadge = isSelected && state.kind === 'ready' && isAccepted && !accepting && !replacing && !selecting;
+  const showSpinner = state.kind === 'generating' || replacing || (anyInFlight && state.kind === 'idle');
+  const showReadyActions = state.kind === 'ready' && !state.accepted && !accepting && !replacing;
+  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !accepting && !replacing;
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
-    // Drop only acts on the SELECTED variant (so the user can't accidentally
-    // overwrite a non-current variant). Click the tile to select it first.
-    if (!isSelected) {
-      toast({ title: 'Select this variant first', description: 'Click the variant to select it, then drop your image.', duration: 2500 });
-      return;
-    }
     const json = e.dataTransfer.getData('application/json');
     if (json) {
       try {
@@ -661,157 +552,148 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
     }
     onReplace({ kind: 'file', file });
   };
-  const isClickable = state.kind === 'idle' || (state.kind === 'ready' && !isSelected);
-  const clickHint = state.kind === 'idle'
-    ? `Click to generate with ${SHORT_LABEL_BY_MODEL[model]}`
-    : state.kind === 'ready' && !isSelected
-      ? `Select ${SHORT_LABEL_BY_MODEL[model]} variant`
-      : undefined;
   return (
-    <div className="flex flex-col gap-1">
-      <div
-        className={cn(
-          'relative w-28 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
-          dragActive
-            ? 'border-emerald-300 ring-2 ring-emerald-300/40'
-            : isSelected
-              ? 'border-emerald-400 ring-1 ring-emerald-300/50'
-              : 'border-zinc-700/60',
-          isClickable && 'cursor-pointer hover:border-zinc-500',
-        )}
-        onClick={isClickable ? onClick : undefined}
-        title={clickHint}
-        onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
-        onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
-        onDrop={handleDrop}
-      >
-        {state.kind === 'ready' ? (
-          <img
-            src={state.src}
-            alt={`${model} swap`}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : state.kind === 'idle' ? (
-          <>
-            {showSource && !errored ? (
-              <img
-                src={sourceSrc}
-                alt={`${model} idle`}
-                className="w-full h-full object-cover opacity-30 group-hover:opacity-50 transition-opacity"
-                loading="lazy"
-                onError={() => setErrored(true)}
-              />
-            ) : (
-              <span className="text-[10px] font-mono text-primary/40 px-2 text-center">—</span>
+    <div
+      className={cn(
+        'relative w-40 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
+        dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
+      )}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      {state.kind === 'ready' ? (
+        <img src={state.src} alt="swap result" className="w-full h-full object-cover" loading="lazy" />
+      ) : state.kind === 'idle' && !anyInFlight ? (
+        <span className="text-[10px] font-mono text-primary/30 px-2 text-center">drop image or run gen</span>
+      ) : !errored ? (
+        <img
+          src={sourceSrc}
+          alt="working"
+          className="w-full h-full object-cover opacity-40"
+          loading="lazy"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <span className="text-[10px] font-mono text-primary/40 px-2 text-center">missing</span>
+      )}
+      {showSpinner && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+        </div>
+      )}
+      {state.kind === 'error' && !showSpinner && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/70 px-1.5">
+          <span className="text-[9px] font-mono text-red-200/90 text-center line-clamp-3">
+            {state.message}
+          </span>
+        </div>
+      )}
+      {showReadyActions && (
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={onAccept}
+            title="Accept this swap"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-emerald-100 hover:text-white',
+              'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
             )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity pointer-events-none">
-              <ImageIcon className="w-4 h-4 text-primary/70" />
-              <span className="text-[9px] font-mono uppercase tracking-wider text-primary/70 font-bold">Gen {SHORT_LABEL_BY_MODEL[model]}</span>
-            </div>
-          </>
-        ) : showSource && !errored ? (
-          <img
-            src={sourceSrc}
-            alt={`${model} working`}
-            className={cn('w-full h-full object-cover', state.kind === 'error' && 'opacity-50')}
-            loading="lazy"
-            onError={() => setErrored(true)}
-          />
-        ) : (
-          <span className="text-[10px] font-mono text-primary/40 px-2 text-center">missing</span>
-        )}
-        {showSpinner && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <Loader2 className="w-4 h-4 animate-spin text-primary/80" />
-          </div>
-        )}
-        {state.kind === 'error' && !showSpinner && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/70 px-1">
-            <span className="text-[9px] font-mono text-red-200/90 text-center line-clamp-2">
-              {state.message}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRephraseRetry(); }}
-              title="Rephrase the prompt to dodge content moderation, then retry."
-              className={cn(
-                'h-5 px-1.5 flex items-center gap-1 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-red-100 hover:text-white',
-                'bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 hover:border-red-300/70',
-              )}
-            >
-              Rephrase + Retry
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRegen(); }}
-              title="Retry with the original prompt"
-              className={cn(
-                'h-5 px-1.5 flex items-center gap-1 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-red-100/80 hover:text-white',
-                'bg-red-500/10 hover:bg-red-500/20 border border-red-400/30 hover:border-red-300/50',
-              )}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        {showReadyActions && (
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 px-1 py-0.5 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onAccept(); }}
-              title="Accept this swap"
-              className={cn(
-                'h-5 px-1.5 flex items-center gap-0.5 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-emerald-100 hover:text-white',
-                'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
-              )}
-            >
-              <Check className="w-2.5 h-2.5" />
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRegen(); }}
-              title={`Regenerate with ${model}`}
-              className={cn(
-                'h-5 px-1.5 flex items-center gap-0.5 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-amber-100 hover:text-white',
-                'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 hover:border-amber-300/70',
-              )}
-            >
-              <RotateCw className="w-2.5 h-2.5" />
-              Regen
-            </button>
-          </div>
-        )}
-        {showAcceptedBadge && (
-          <div
-            className="absolute top-0.5 right-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-500/30 border border-emerald-300/60 text-[8px] font-mono uppercase tracking-wider text-emerald-50"
-            title="Accepted"
           >
-            <Check className="w-2 h-2" />
-            Accepted
-          </div>
-        )}
-        {dragActive && !replacing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop</span>
-          </div>
-        )}
+            <Check className="w-3 h-3" />
+            Accept
+          </button>
+        </div>
+      )}
+      {showAcceptedBadge && (
+        <div
+          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 border border-emerald-300/60 text-[9px] font-mono uppercase tracking-wider text-emerald-50"
+          title="Accepted"
+        >
+          <Check className="w-2.5 h-2.5" />
+          Accepted
+        </div>
+      )}
+      {dragActive && !replacing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop to replace</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const DEFAULT_SWAP_PROMPT = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+
+function ImagePanel({ models, onToggleModel, prompt, onPromptChange, running, onRun, onCancel }: {
+  models: Set<SwapModel>;
+  onToggleModel: (model: SwapModel) => void;
+  prompt: string;
+  onPromptChange: (next: string) => void;
+  running: boolean;
+  onRun: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/30 flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-mono">
+        <span className="text-primary/50 uppercase tracking-wider text-[10px]">Models</span>
+        {ALL_SWAP_MODELS.map((m) => (
+          <label key={m} className="flex items-center gap-1.5 text-primary/90 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={models.has(m)}
+              onChange={() => onToggleModel(m)}
+              className="accent-primary"
+            />
+            {m}
+          </label>
+        ))}
       </div>
-      <div className={cn(
-        'text-[9px] font-mono text-center px-1',
-        isSelected ? 'text-emerald-300' : 'text-primary/50',
-      )}>
-        {SHORT_LABEL_BY_MODEL[model]}
+      <textarea
+        value={prompt}
+        onChange={(e) => onPromptChange(e.target.value)}
+        placeholder={DEFAULT_SWAP_PROMPT}
+        rows={3}
+        className={cn(
+          'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-primary/90 resize-y',
+          'focus:outline-none focus:border-primary/60',
+          'placeholder:text-primary/40',
+        )}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={running}
+          className={cn(
+            'h-7 px-2.5 flex items-center rounded',
+            'text-[11px] font-mono uppercase tracking-wider',
+            'text-primary/60 hover:text-primary/90 border border-zinc-700/60 hover:border-zinc-500',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={running || models.size === 0}
+          title={models.size === 0 ? 'Pick at least one model' : `Run ${models.size} model${models.size === 1 ? '' : 's'} for both frames`}
+          className={cn(
+            'h-7 px-3 flex items-center gap-1.5 rounded',
+            'text-[11px] font-mono font-bold uppercase tracking-wider',
+            'text-primary hover:text-white',
+            'bg-primary/15 hover:bg-primary/25 border border-primary/50 hover:border-primary/80',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+        >
+          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+          {running ? 'Running…' : `Run ${models.size}`}
+        </button>
       </div>
     </div>
   );
@@ -879,14 +761,13 @@ function buildSeedancePayload(
   };
 }
 
-function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapProvider, swapModels, callTool, dispatch, onSidecarUpdate }: {
+function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapProvider, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
   projectSlug: string;
   swapProvider: SwapProvider;
-  swapModels: Set<SwapModel>;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
@@ -900,22 +781,39 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const [swapsInFlight, setSwapsInFlight] = useState<Set<string>>(new Set());
   const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
   const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
-  const [selecting, setSelecting] = useState<Set<1 | 2>>(new Set());
+  // The IMAGE panel — collapsed by default, opens when the user clicks IMAGE.
+  // Holds its own model picks and prompt so each scene can override per-run.
+  const [imagePanelOpen, setImagePanelOpen] = useState(false);
+  const [panelModels, setPanelModels] = useState<Set<SwapModel>>(() => new Set(ALL_SWAP_MODELS));
+  const [panelPrompt, setPanelPrompt] = useState('');
   // Per-model image1 → image2 chains. Each entry is "wait for this image1
   // asset to reach 'ready', then dispatch image2 swap for that model with
   // image1 as the prior reference."
-  const [pendingImage2Chains, setPendingImage2Chains] = useState<Array<{ model: SwapModel; image1AssetId: string }>>([]);
+  const [pendingImage2Chains, setPendingImage2Chains] = useState<Array<{ model: SwapModel; image1AssetId: string; customPrompt: string }>>([]);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
   const isGenerating = (s: FrameTileState) => s.kind === 'generating';
   const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
+  const inFlight1 = isGenerating(tile1) || Array.from(swapsInFlight).some((t) => t.endsWith('-1'));
+  const inFlight2 = isGenerating(tile2) || Array.from(swapsInFlight).some((t) => t.endsWith('-2'));
   const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
+  const togglePanelModel = useCallback((m: SwapModel) => {
+    setPanelModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) {
+        if (next.size > 1) next.delete(m);
+      } else {
+        next.add(m);
+      }
+      return next;
+    });
+  }, []);
 
   const runSwap = useCallback(async (
     frameIndex: 1 | 2,
     model: SwapModel,
-    opts?: { priorSwapAssetId?: string; safeMode?: boolean },
+    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ): Promise<{ newAssetId: string } | null> => {
     const tag = `${model}-${frameIndex}`;
     setSwapsInFlight((prev) => {
@@ -933,6 +831,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         model,
         ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
         ...(opts?.safeMode ? { safe_mode: true } : {}),
+        ...(opts?.customPrompt && opts.customPrompt.trim().length > 0 ? { custom_prompt: opts.customPrompt.trim() } : {}),
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
@@ -957,20 +856,22 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     }
   }, [callTool, projectSlug, index, characters, onSidecarUpdate, swapProvider]);
 
-  const handleImage = useCallback(async () => {
+  const runImagePanel = useCallback(async () => {
     if (anySwapInFlight) return;
-    if (swapModels.size === 0) return;
+    if (panelModels.size === 0) return;
+    setImagePanelOpen(false);
     setPendingImage2Chains([]);
-    const models = Array.from(swapModels);
+    const models = Array.from(panelModels);
+    const customPrompt = panelPrompt;
     // Fan out image1 swaps across every checked model in parallel.
-    const results = await Promise.all(models.map((m) => runSwap(1, m)));
+    const results = await Promise.all(models.map((m) => runSwap(1, m, { customPrompt })));
     // Queue each successful image1 → image2 chain. The useEffect picks them
     // up as the corresponding image1 assets reach 'ready'.
     const nextChains = models
-      .map((m, i) => (results[i] ? { model: m, image1AssetId: results[i]!.newAssetId } : null))
-      .filter((x): x is { model: SwapModel; image1AssetId: string } => x !== null);
+      .map((m, i) => (results[i] ? { model: m, image1AssetId: results[i]!.newAssetId, customPrompt } : null))
+      .filter((x): x is { model: SwapModel; image1AssetId: string; customPrompt: string } => x !== null);
     if (nextChains.length > 0) setPendingImage2Chains(nextChains);
-  }, [anySwapInFlight, runSwap, swapModels]);
+  }, [anySwapInFlight, runSwap, panelModels, panelPrompt]);
 
   // Walk the pending chains; for each entry whose image1 asset is now ready
   // (or errored, in which case we drop the chain), dispatch the image2 swap
@@ -994,7 +895,10 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     if (dispatch.length === 0) return;
     setPendingImage2Chains(stillPending);
     for (const entry of dispatch) {
-      void runSwap(2, entry.model, { priorSwapAssetId: entry.image1AssetId });
+      void runSwap(2, entry.model, {
+        priorSwapAssetId: entry.image1AssetId,
+        customPrompt: entry.customPrompt,
+      });
     }
   }, [pendingImage2Chains, mediaItems, runSwap]);
 
@@ -1089,43 +993,6 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     }
   }, [callTool, projectSlug, index, onSidecarUpdate]);
 
-  const runSelectVariant = useCallback(async (frameIndex: 1 | 2, assetId: string) => {
-    setSelecting((prev) => {
-      const next = new Set(prev);
-      next.add(frameIndex);
-      return next;
-    });
-    try {
-      const result = await callTool('replace_plan_scene_frame_swap', {
-        project_slug: projectSlug,
-        scene_index: index,
-        frame_index: frameIndex,
-        asset_id: assetId,
-        // The user is comparing variants — don't auto-accept until they
-        // explicitly click Accept.
-        auto_accept: false,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Select failed';
-        toast({ title: `Scene ${index + 1} image${frameIndex} select failed`, description: msg, duration: 4000 });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        // Sidecar refreshes on next read_plan.
-      }
-    } finally {
-      setSelecting((prev) => {
-        const next = new Set(prev);
-        next.delete(frameIndex);
-        return next;
-      });
-    }
-  }, [callTool, projectSlug, index, onSidecarUpdate]);
-
   const videoGate = useMemo(() => videoReadyForGen(scene), [scene]);
 
   const handleVideo = useCallback(async () => {
@@ -1180,16 +1047,15 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={handleImage}
-            disabled={anySwapInFlight}
-            title={anySwapInFlight
-              ? 'Swap in progress…'
-              : `Run ${swapModels.size === 1 ? Array.from(swapModels)[0] : `${swapModels.size} models`} to swap the two on-screen subjects in both source frames with the two character refs`}
+            onClick={() => setImagePanelOpen((o) => !o)}
+            disabled={anySwapInFlight && !imagePanelOpen}
+            title={imagePanelOpen ? 'Close image panel' : 'Pick models / edit prompt for swap gen'}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
-              'text-primary/90 hover:text-primary',
-              'bg-primary/5 hover:bg-primary/15 border border-primary/30 hover:border-primary/60',
+              imagePanelOpen
+                ? 'text-primary bg-primary/15 border border-primary/60'
+                : 'text-primary/90 hover:text-primary bg-primary/5 hover:bg-primary/15 border border-primary/30 hover:border-primary/60',
               'transition-colors duration-150',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
@@ -1220,59 +1086,28 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
           </button>
         </div>
       </header>
-      <SceneFrameTiles
+      {imagePanelOpen && (
+        <ImagePanel
+          models={panelModels}
+          onToggleModel={togglePanelModel}
+          prompt={panelPrompt}
+          onPromptChange={setPanelPrompt}
+          running={anySwapInFlight}
+          onRun={() => { void runImagePanel(); }}
+          onCancel={() => setImagePanelOpen(false)}
+        />
+      )}
+      <SceneFrameRows
         sceneIndex={index}
         scene={scene}
         projectSlug={projectSlug}
         mediaItems={mediaItems}
-        swapModels={swapModels}
-        onRegen={(frameIndex, model) => {
-          // Per-tile Regen for image2 re-uses the model's existing image1
-          // swap as the continuity reference (matches the bulk handleImage
-          // path which chains per-model).
-          if (frameIndex === 2) {
-            const priorVariants = scene.swap?.image1_variants ?? {};
-            const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
-            if (priorSwapAssetId) {
-              void runSwap(2, model, { priorSwapAssetId });
-              return;
-            }
-          }
-          void runSwap(frameIndex, model);
-        }}
-        onGenerate={(frameIndex, model) => {
-          // Click-to-generate on an idle (model-checked-but-not-yet-run) tile.
-          // Same prior_swap chaining rule as Regen.
-          if (frameIndex === 2) {
-            const priorVariants = scene.swap?.image1_variants ?? {};
-            const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
-            if (priorSwapAssetId) {
-              void runSwap(2, model, { priorSwapAssetId });
-              return;
-            }
-          }
-          void runSwap(frameIndex, model);
-        }}
-        onRephraseRetry={(frameIndex, model) => {
-          // Same args as Regen, plus safe_mode=true so the server uses a
-          // tamer prompt that avoids 'replace people' wording.
-          if (frameIndex === 2) {
-            const priorVariants = scene.swap?.image1_variants ?? {};
-            const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
-            if (priorSwapAssetId) {
-              void runSwap(2, model, { priorSwapAssetId, safeMode: true });
-              return;
-            }
-          }
-          void runSwap(frameIndex, model, { safeMode: true });
-        }}
-        onAccept={(frameIndex) => { void runAccept(frameIndex); }}
-        onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
-        onSelectVariant={(frameIndex, assetId) => { void runSelectVariant(frameIndex, assetId); }}
-        swapsInFlight={swapsInFlight}
+        anyInFlight1={inFlight1}
+        anyInFlight2={inFlight2}
         accepting={accepting}
         replacing={replacing}
-        selecting={selecting}
+        onAccept={(frameIndex) => { void runAccept(frameIndex); }}
+        onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
       />
       <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
         <div className="flex">
