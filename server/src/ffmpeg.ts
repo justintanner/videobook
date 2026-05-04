@@ -18,6 +18,8 @@ export interface ProbeResult {
   duration: number;
   fps: number;
   hasAudio: boolean;
+  videoCodec: string | null;
+  audioCodec: string | null;
 }
 
 export async function probeVideo(filePath: string): Promise<ProbeResult> {
@@ -58,11 +60,15 @@ export async function probeVideo(filePath: string): Promise<ProbeResult> {
     if (den > 0) fps = num / den;
   }
 
-  const hasAudio = (data.streams as Array<Record<string, unknown>>)?.some(
+  const audioStream = (data.streams as Array<Record<string, unknown>>)?.find(
     (s) => s.codec_type === "audio",
-  ) ?? false;
+  );
+  const hasAudio = audioStream !== undefined;
 
-  return { width, height, duration, fps, hasAudio };
+  const videoCodec = typeof videoStream?.codec_name === "string" ? videoStream.codec_name : null;
+  const audioCodec = typeof audioStream?.codec_name === "string" ? audioStream.codec_name : null;
+
+  return { width, height, duration, fps, hasAudio, videoCodec, audioCodec };
 }
 
 export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {

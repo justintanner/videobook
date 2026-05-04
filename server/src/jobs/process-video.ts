@@ -39,13 +39,26 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       // muxer can't handle (e.g. subrip from MKV rips), which would otherwise
       // fail the whole transcode. Also pin to the first audio track so files
       // with multiple language tracks pick a deterministic stream.
+      //
+      // Stream-copy when the source codec is already mp4-compatible (h264
+      // video, aac audio). For a 10-min h264 mkv this turns a multi-minute
+      // re-encode into a few-second remux. Fall back to libx264 / aac for
+      // anything else (hevc, vp9, dts, opus, etc).
+      const canCopyVideo = probe.videoCodec === "h264";
+      const canCopyAudio = probe.audioCodec === "aac";
+      const videoArgs = canCopyVideo ? ["-c:v", "copy"] : H264_MEDIUM;
+      const audioArgs = !probe.hasAudio
+        ? ["-an"]
+        : canCopyAudio
+          ? ["-c:a", "copy"]
+          : AUDIO_OPTS;
       const transcodeArgs = [
         "-y",
         "-i", videoPath,
         "-map", "0:v:0",
         ...(probe.hasAudio ? ["-map", "0:a:0"] : []),
-        ...H264_MEDIUM,
-        ...(probe.hasAudio ? AUDIO_OPTS : ["-an"]),
+        ...videoArgs,
+        ...audioArgs,
         "-movflags", "+faststart",
         "-f", "mp4",
         tempPath,
