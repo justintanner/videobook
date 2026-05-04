@@ -542,8 +542,8 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/even-split",
-    description: "Split off a magic-length first chunk (10s default; 9s backup) plus the rest. Two chunks total, original preserved.",
-    example: "/even-split @vid-source 10",
+    description: "Split a video into N targeted chunks plus a leftover with the rest. One target → 2 chunks (e.g. 10s + rest); two targets → 3 chunks; etc. Original preserved.",
+    example: "/even-split @vid-source 10 15",
     category: "context_menu",
     icon: "Scissors",
     size: "default",
@@ -551,7 +551,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to split" },
-      { name: "target_sec", type: "string", required: false, description: "Preferred chunk length hint, e.g. '10' or '10s' (default 10)" },
+      { name: "target_secs", type: "string[]", required: false, description: "Ordered chunk lengths, e.g. '10' or '10 15' (default 10). Each accepts '10' or '10s'." },
     ],
     mcpTool: { tool: "even_split", autoInject: ["project_slug"] },
   },

@@ -51,86 +51,137 @@ async function probeDuration(filePath: string): Promise<number> {
 }
 
 describe("planEvenSplit (pure)", () => {
-  it("normal case: D=30, target=10 → first 10s, second 20s", () => {
-    const r = planEvenSplit(30, 10);
+  it("single target, normal case: D=30, [10] → [10, 20]", () => {
+    const r = planEvenSplit(30, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(10);
-    expect(r.second.duration).toBe(20);
-    expect(r.usedTarget).toBe(10);
+    expect(r.chunks.map((c) => c.duration)).toEqual([10, 20]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, false]);
+    expect(r.usedTargets).toEqual([10]);
+    expect(r.hasLeftover).toBe(true);
   });
 
-  it("D=20, target=10 → [10, 10]", () => {
-    const r = planEvenSplit(20, 10);
+  it("single target, exact fit: D=20, [10] → [10, 10]", () => {
+    const r = planEvenSplit(20, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(10);
-    expect(r.second.duration).toBe(10);
+    expect(r.chunks.map((c) => c.duration)).toEqual([10, 10]);
+    expect(r.hasLeftover).toBe(true);
   });
 
-  it("D=10.5, target=10 → exact 10s split, tiny 0.5s tail", () => {
-    const r = planEvenSplit(10.5, 10);
+  it("D=10.5, [10] → exact 10s split, tiny 0.5s tail", () => {
+    const r = planEvenSplit(10.5, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(10);
-    expect(r.second.duration).toBeCloseTo(0.5, 5);
-    expect(r.usedTarget).toBe(10);
+    expect(r.chunks[0].duration).toBe(10);
+    expect(r.chunks[1].duration).toBeCloseTo(0.5, 5);
+    expect(r.usedTargets).toEqual([10]);
   });
 
-  it("D=10.4, target=10 → falls back to 9s (10s would leave a sub-MIN tail)", () => {
-    const r = planEvenSplit(10.4, 10);
+  it("D=10.4, [10] → backup last target to 9 (10s would leave a sub-MIN tail)", () => {
+    const r = planEvenSplit(10.4, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(9);
-    expect(r.second.duration).toBeCloseTo(1.4, 5);
-    expect(r.usedTarget).toBe(9);
+    expect(r.chunks[0].duration).toBe(9);
+    expect(r.chunks[1].duration).toBeCloseTo(1.4, 5);
+    expect(r.usedTargets).toEqual([9]);
   });
 
-  it("D=9.5, target=10 → 9s backup, 0.5s tail", () => {
-    const r = planEvenSplit(9.5, 10);
+  it("D=9.5, [10] → 9s backup, 0.5s tail", () => {
+    const r = planEvenSplit(9.5, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(9);
-    expect(r.second.duration).toBeCloseTo(0.5, 5);
-    expect(r.usedTarget).toBe(9);
+    expect(r.chunks[0].duration).toBe(9);
+    expect(r.chunks[1].duration).toBeCloseTo(0.5, 5);
+    expect(r.usedTargets).toEqual([9]);
   });
 
-  it("D=8, target=10 → error (too short for either)", () => {
-    const r = planEvenSplit(8, 10);
+  it("D=8, [10] → error (sum exceeds source)", () => {
+    const r = planEvenSplit(8, [10]);
     expect(r.ok).toBe(false);
   });
 
-  it("D=20, target=15 → exact 15s + 5s rest", () => {
-    const r = planEvenSplit(20, 15);
+  it("default-shaped call: D=30, [10] → first chunk is 10s", () => {
+    const r = planEvenSplit(30, [10]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.first.duration).toBe(15);
-    expect(r.second.duration).toBe(5);
-  });
-
-  it("default target_sec is 10", () => {
-    const r = planEvenSplit(30);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.first.duration).toBe(10);
+    expect(r.chunks[0].duration).toBe(10);
   });
 
   it("rejects invalid input", () => {
-    expect(planEvenSplit(0, 10).ok).toBe(false);
-    expect(planEvenSplit(-1, 10).ok).toBe(false);
-    expect(planEvenSplit(NaN, 10).ok).toBe(false);
-    expect(planEvenSplit(30, 0).ok).toBe(false);
-    expect(planEvenSplit(30, -1).ok).toBe(false);
+    expect(planEvenSplit(0, [10]).ok).toBe(false);
+    expect(planEvenSplit(-1, [10]).ok).toBe(false);
+    expect(planEvenSplit(NaN, [10]).ok).toBe(false);
+    expect(planEvenSplit(30, []).ok).toBe(false);
+    expect(planEvenSplit(30, [0]).ok).toBe(false);
+    expect(planEvenSplit(30, [-1]).ok).toBe(false);
+    expect(planEvenSplit(30, [10, NaN]).ok).toBe(false);
+  });
+
+  it("two targets: D=40, [10, 15] → [10, 15, 15]", () => {
+    const r = planEvenSplit(40, [10, 15]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([10, 15, 15]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, true, false]);
+    expect(r.usedTargets).toEqual([10, 15]);
+    expect(r.hasLeftover).toBe(true);
+  });
+
+  it("two targets that exhaust source: D=25, [10, 15] → [10, 15], no leftover", () => {
+    const r = planEvenSplit(25, [10, 15]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([10, 15]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, true]);
+    expect(r.hasLeftover).toBe(false);
+  });
+
+  it("two targets, sub-MIN leftover: D=25.4, [10, 15] → backup last → [10, 14] + 1.4s", () => {
+    const r = planEvenSplit(25.4, [10, 15]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks[0].duration).toBe(10);
+    expect(r.chunks[1].duration).toBe(14);
+    expect(r.chunks[2].duration).toBeCloseTo(1.4, 5);
+    expect(r.usedTargets).toEqual([10, 14]);
+    expect(r.hasLeftover).toBe(true);
+  });
+
+  it("two targets, sum exceeds source: D=12, [10, 15] → error", () => {
+    const r = planEvenSplit(12, [10, 15]);
+    expect(r.ok).toBe(false);
+  });
+
+  it("three targets: D=35, [10, 10, 10] → [10, 10, 10, 5]", () => {
+    const r = planEvenSplit(35, [10, 10, 10]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([10, 10, 10, 5]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, true, true, false]);
   });
 
   it("cumulative ranges cover the whole source", () => {
-    for (const [D, target] of [[30, 10], [20, 10], [10.5, 10], [10.4, 10], [9.5, 10], [20, 15]] as const) {
-      const r = planEvenSplit(D, target);
+    const cases: Array<[number, number[]]> = [
+      [30, [10]],
+      [20, [10]],
+      [10.5, [10]],
+      [10.4, [10]],
+      [9.5, [10]],
+      [40, [10, 15]],
+      [25, [10, 15]],
+      [25.4, [10, 15]],
+      [35, [10, 10, 10]],
+    ];
+    for (const [D, targets] of cases) {
+      const r = planEvenSplit(D, targets);
       expect(r.ok).toBe(true);
       if (!r.ok) continue;
-      expect(r.first.start).toBe(0);
-      expect(r.second.start).toBeCloseTo(r.first.end, 5);
-      expect(r.second.end).toBeCloseTo(D, 5);
+      expect(r.chunks[0].start).toBe(0);
+      for (let i = 1; i < r.chunks.length; i++) {
+        expect(r.chunks[i].start).toBeCloseTo(r.chunks[i - 1].end, 5);
+      }
+      expect(r.chunks[r.chunks.length - 1].end).toBeCloseTo(D, 5);
     }
   });
 });
@@ -197,15 +248,17 @@ describe("even_split tool (integration)", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.chunk_a_duration).toBe(10);
-    expect(parsed.chunk_b_duration).toBe(10);
-    expect(parsed.used_first_chunk_sec).toBe(10);
+    expect(parsed.chunks).toHaveLength(2);
+    expect(parsed.chunks[0].duration).toBe(10);
+    expect(parsed.chunks[1].duration).toBe(10);
+    expect(parsed.used_target_secs).toEqual([10]);
+    expect(parsed.has_leftover).toBe(true);
 
     // Verify on-disk durations stay at or under the requested cap.
-    for (const chunkId of [parsed.chunk_a_asset_id, parsed.chunk_b_asset_id]) {
+    for (const chunk of parsed.chunks) {
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: chunkId, project_slug: "even-split-proj" },
+        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
@@ -221,7 +274,7 @@ describe("even_split tool (integration)", () => {
     expect(sourceManifest.isError).toBeFalsy();
   }, 120_000);
 
-  it("accepts target_sec as a string with 's' suffix (chat-style)", async () => {
+  it("accepts target_secs as strings with 's' suffix (chat-style)", async () => {
     const videoPath = join(fixtureDir, "twenty-20s-string.mp4");
     await generateTestVideo(videoPath, 20);
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
@@ -231,14 +284,54 @@ describe("even_split tool (integration)", () => {
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
-        target_sec: "10s",
+        target_secs: ["10s"],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.target_sec).toBe(10);
+    expect(parsed.used_target_secs).toEqual([10]);
   }, 120_000);
+
+  it("splits a 30s source with two targets [10, 15] into 3 chunks", async () => {
+    const videoPath = join(fixtureDir, "thirty-30s-multi.mp4");
+    await generateTestVideo(videoPath, 30);
+    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
+
+    const result = await client.callTool({
+      name: "even_split",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "even-split-proj",
+        target_secs: ["10", "15"],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.chunks).toHaveLength(3);
+    expect(parsed.chunks[0].duration).toBe(10);
+    expect(parsed.chunks[1].duration).toBe(15);
+    expect(parsed.chunks[2].duration).toBeCloseTo(5, 1);
+    expect(parsed.chunks[0].exact).toBe(true);
+    expect(parsed.chunks[1].exact).toBe(true);
+    expect(parsed.chunks[2].exact).toBe(false);
+    expect(parsed.used_target_secs).toEqual([10, 15]);
+    expect(parsed.has_leftover).toBe(true);
+
+    const expectedDurations = [10, 15, 5];
+    for (let i = 0; i < parsed.chunks.length; i++) {
+      const chunk = parsed.chunks[i];
+      const manifest = await client.callTool({
+        name: "asset_manifest",
+        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
+      });
+      const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
+      const dur = await probeDuration(path);
+      expect(dur).toBeLessThanOrEqual(expectedDurations[i] + 0.05);
+      expect(dur).toBeGreaterThan(expectedDurations[i] - 0.5);
+    }
+  }, 180_000);
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({

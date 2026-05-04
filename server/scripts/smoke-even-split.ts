@@ -4,10 +4,10 @@
  * probes the produced files via ffprobe.
  *
  * Usage:
- *   npx tsx server/scripts/smoke-even-split.ts <project-slug> <asset-id> [target_sec]
+ *   npx tsx server/scripts/smoke-even-split.ts <project-slug> <asset-id> [target_secs...]
  *
  * Example:
- *   npx tsx server/scripts/smoke-even-split.ts god vid-yt-inglourious-basterds-top-4 10
+ *   npx tsx server/scripts/smoke-even-split.ts god vid-yt-inglourious-basterds-top-4 10 15
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -24,6 +24,7 @@ const require = createRequire(import.meta.url);
 const FFPROBE: string = require("ffprobe-static").path;
 
 type TextContent = Array<{ type: string; text: string }>;
+type ParsedChunk = { asset_id: string; duration: number; exact: boolean };
 
 async function probeFormatDuration(filePath: string): Promise<string> {
   const { stdout } = await execFileAsync(FFPROBE, [
@@ -36,9 +37,9 @@ async function probeFormatDuration(filePath: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const [, , projectSlug, assetId, targetArg] = process.argv;
+  const [, , projectSlug, assetId, ...targetArgs] = process.argv;
   if (!projectSlug || !assetId) {
-    console.error("Usage: tsx scripts/smoke-even-split.ts <project-slug> <asset-id> [target_sec]");
+    console.error("Usage: tsx scripts/smoke-even-split.ts <project-slug> <asset-id> [target_secs...]");
     process.exit(2);
   }
 
@@ -50,13 +51,14 @@ async function main(): Promise<void> {
   await server.connect(serverTransport);
   await client.connect(clientTransport);
   try {
-    console.log(`/even-split @${assetId} ${targetArg ?? 10} (project: ${projectSlug})`);
+    const targetsLabel = targetArgs.length > 0 ? targetArgs.join(" ") : "10 (default)";
+    console.log(`/even-split @${assetId} ${targetsLabel} (project: ${projectSlug})`);
     const result = await client.callTool({
       name: "even_split",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
-        ...(targetArg !== undefined ? { target_sec: targetArg } : {}),
+        ...(targetArgs.length > 0 ? { target_secs: targetArgs } : {}),
       },
     });
 
@@ -68,23 +70,29 @@ async function main(): Promise<void> {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     console.log("\nTool result:");
     console.log(`  source_duration_sec:    ${parsed.source_duration_sec}`);
-    console.log(`  used_first_chunk_sec:   ${parsed.used_first_chunk_sec} (target was ${parsed.target_sec})`);
-    console.log(`  chunk A asset:          ${parsed.chunk_a_asset_id}  (planned ${parsed.chunk_a_duration}s)`);
-    console.log(`  chunk B asset:          ${parsed.chunk_b_asset_id}  (planned ${parsed.chunk_b_duration}s)`);
+    console.log(`  target_secs:            [${parsed.target_secs.join(", ")}]`);
+    console.log(`  used_target_secs:       [${parsed.used_target_secs.join(", ")}]`);
+    console.log(`  has_leftover:           ${parsed.has_leftover}`);
+    for (let i = 0; i < parsed.chunks.length; i++) {
+      const c: ParsedChunk = parsed.chunks[i];
+      const tag = c.exact ? "targeted" : "leftover";
+      console.log(`  chunk ${i + 1} (${tag}):    ${c.asset_id}  (planned ${c.duration}s)`);
+    }
 
     // Probe the actual files via the engine's manifest (knows the path).
-    for (const [label, id] of [["A", parsed.chunk_a_asset_id], ["B", parsed.chunk_b_asset_id]] as const) {
+    for (let i = 0; i < parsed.chunks.length; i++) {
+      const c: ParsedChunk = parsed.chunks[i];
       const m = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: id, project_slug: projectSlug },
+        arguments: { asset_id: c.asset_id, project_slug: projectSlug },
       });
       const manifest = JSON.parse((m.content as TextContent)[0].text);
       const path = `${manifest.path}/original.mp4`;
       const dur = await probeFormatDuration(path);
-      const ok = label === "A"
-        ? Number(dur).toFixed(6) === Number(parsed.used_first_chunk_sec).toFixed(6)
+      const ok = c.exact
+        ? Number(dur).toFixed(6) === Number(c.duration).toFixed(6)
         : true;
-      console.log(`  ffprobe chunk ${label}:        format=duration=${dur}s  ${ok ? "✓" : "✗ NOT EXACT"}`);
+      console.log(`  ffprobe chunk ${i + 1}:        format=duration=${dur}s  ${ok ? "✓" : "✗ NOT EXACT"}`);
     }
   } finally {
     await client.close();

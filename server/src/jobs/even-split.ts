@@ -10,6 +10,8 @@ type EvenSplitChunkPayload = {
   start: number;
   end: number;
   duration: number;
+  /** When true, encode with exact-second container duration. False for the trailing leftover. */
+  exact: boolean;
 };
 
 type EvenSplitPayload = {
@@ -32,8 +34,8 @@ async function buildChunk(
     provenance: Record<string, unknown>;
     /**
      * If true, encode with `trimRangeExact` so the container duration reads
-     * as the integer second value (e.g. exactly 10.000s). Used for the
-     * first /even-split chunk where the user wants a magic-length head.
+     * as the integer second value (e.g. exactly 10.000s). Set on every
+     * targeted chunk; false on the trailing leftover.
      */
     exact?: boolean;
   },
@@ -69,8 +71,8 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
         chunk_duration: chunk.duration,
         split_at_iso: splitAtIso,
       };
-      // Only the first chunk needs exact-second container duration — the
-      // second chunk is "the rest" and the user explicitly doesn't care.
+      // Targeted chunks need exact-second container duration; the trailing
+      // leftover does not (and the user explicitly doesn't care).
       return buildChunk(fs, {
         sourcePath,
         outputPath: chunk.outputPath,
@@ -79,7 +81,7 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
         assetId: chunk.assetId,
         projectSlug,
         provenance,
-        exact: i === 0,
+        exact: chunk.exact,
       });
     });
     await Promise.all(buildPromises);
