@@ -8,6 +8,7 @@ import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { initImageModels } from "./image-models.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
+import { uploadLocalStream } from "./local-upload.js";
 
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const reaperHandles: { stop: () => void }[] = [];
@@ -15,6 +16,28 @@ const reaperHandles: { stop: () => void }[] = [];
 const app = express();
 app.use(cors());
 app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
+
+app.post("/api/upload/:projectSlug", async (req, res) => {
+  const filename = typeof req.query.filename === "string" ? req.query.filename : "";
+  if (!filename) {
+    res.status(400).json({ error: "Missing filename" });
+    return;
+  }
+
+  const result = await uploadLocalStream(fs, {
+    projectSlug: req.params.projectSlug,
+    filename,
+    stream: req,
+  });
+
+  if (!result.ok) {
+    res.status(result.statusCode).json({ error: result.message });
+    return;
+  }
+
+  res.json(result.value);
+});
+
 app.use(express.json({ limit: "500mb" }));
 
 app.get("/api/manifest/:projectSlug/:assetId", async (req, res) => {

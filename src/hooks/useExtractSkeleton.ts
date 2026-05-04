@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
 import { detectHolistic, loadImage } from "@/lib/poseExtract";
 import { countLandmarks, renderSkeletonPng } from "@/lib/poseRender";
+import { uploadProjectFile } from "@/lib/upload";
 
 export interface ExtractSkeletonArgs {
   projectSlug: string;
@@ -15,25 +15,10 @@ export interface UseExtractSkeletonResult {
   submitting: boolean;
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      resolve(dataUrl.split(",")[1]);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
-    reader.readAsDataURL(blob);
-  });
-}
-
 export function useExtractSkeleton(
-  callTool: UseMcpResult["callTool"],
   sync: (projectSlug: string) => void,
 ): UseExtractSkeletonResult {
   const [submitting, setSubmitting] = useState(false);
-  const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
   const syncRef = useRef(sync);
   syncRef.current = sync;
   const inFlightRef = useRef(false);
@@ -55,20 +40,11 @@ export function useExtractSkeleton(
         aspectRatio: img.naturalWidth / img.naturalHeight,
       });
       const landmarkCount = countLandmarks(holistic);
-      const base64 = await blobToBase64(skeleton.blob);
-      const uploadRes = await callToolRef.current("upload_file", {
-        project_slug: args.projectSlug,
-        filename: `pose-skeleton-${args.sourceAssetId}.png`,
-        data: base64,
-      });
-      if (uploadRes.isError) {
-        const content = uploadRes.content as Array<{ type: string; text: string }> | undefined;
-        const msg = content?.[0]?.text ?? "upload_file failed";
-        toast({ title: "Skeleton upload failed", description: msg, duration: 4000 });
-        return null;
-      }
-      const content = uploadRes.content as Array<{ type: string; text: string }>;
-      const uploaded = JSON.parse(content[0].text) as { assetId: string };
+      const uploaded = await uploadProjectFile(
+        args.projectSlug,
+        skeleton.blob,
+        `pose-skeleton-${args.sourceAssetId}.png`,
+      );
       toast({
         title: "Skeleton extracted",
         description: `${landmarkCount} landmarks · @${uploaded.assetId}`,

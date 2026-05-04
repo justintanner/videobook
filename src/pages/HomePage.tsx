@@ -95,7 +95,7 @@ export function HomePage() {
   const prevStatusOpenRef = useRef(false);
 
   const { callTool, state } = useMcpConnection();
-  const { upload } = useUploadFile(callTool);
+  const { upload } = useUploadFile();
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
@@ -104,7 +104,7 @@ export function HomePage() {
   const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
   const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
-  const { extract: extractSkeleton } = useExtractSkeleton(callTool, sync);
+  const { extract: extractSkeleton } = useExtractSkeleton(sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
 

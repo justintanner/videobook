@@ -1,29 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
-import * as path from "node:path";
-import { queue } from "../queue.js";
+import { uploadLocalBytes } from "../local-upload.js";
 import type { ToolDef } from "./tool-def.js";
-
-const extensionToPrefix: Record<string, string> = {
-  ".mp4": "vid",
-  ".mov": "vid",
-  ".webm": "vid",
-  ".avi": "vid",
-  ".mkv": "vid",
-  ".jpg": "img",
-  ".jpeg": "img",
-  ".png": "img",
-  ".gif": "img",
-  ".webp": "img",
-  ".svg": "img",
-  ".mp3": "aud",
-  ".wav": "aud",
-  ".aac": "aud",
-  ".flac": "aud",
-  ".ogg": "aud",
-  ".md": "script",
-};
 
 export function uploadFileDef(fs: ClipfirstFs): ToolDef {
   return {
@@ -36,68 +15,23 @@ export function uploadFileDef(fs: ClipfirstFs): ToolDef {
     },
     handler: async (args) => {
       const { project_slug, filename, data } = args as { project_slug: string; filename: string; data: string };
-      const ext = path.extname(filename).toLowerCase();
-      const prefix = extensionToPrefix[ext];
-      if (!prefix) {
+      const result = await uploadLocalBytes(fs, {
+        projectSlug: project_slug,
+        filename,
+        data: Buffer.from(data, "base64"),
+        waitForProcessing: true,
+      });
+
+      if (!result.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Unsupported file extension: ${ext}` }],
+          content: [{ type: "text" as const, text: result.message }],
         };
       }
-
-      const assetName = path.basename(filename, ext);
-      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
-      if (!assetResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: assetResult.error.message }],
-        };
-      }
-
-      const { assetId, path: assetPath } = assetResult.value;
-      const writtenFilename = `original${ext}`;
-      const writeResult = await fs.writeFile(
-        assetId,
-        writtenFilename,
-        Buffer.from(data, "base64"),
-        project_slug,
-      );
-      if (!writeResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: writeResult.error.message }],
-        };
-      }
-
-      const provenance = { origin: "upload", processed_at: new Date().toISOString() };
-      if (assetId.startsWith("vid-")) {
-        const videoPath = path.join(assetPath, writtenFilename);
-        const jobId = `process-video-${assetId}-${Date.now()}`;
-        await queue.enqueue(jobId, {
-          type: "process_video",
-          videoPath,
-          assetId,
-          assetDir: assetPath,
-          projectSlug: project_slug,
-          provenance,
-        } as unknown as Record<string, unknown>);
-      } else if (assetId.startsWith("img-")) {
-        const jobId = `process-image-${assetId}-${Date.now()}`;
-        await queue.enqueue(jobId, {
-          type: "process_image",
-          assetId,
-          projectSlug: project_slug,
-          extension: ext,
-          provenance,
-        } as unknown as Record<string, unknown>);
-      } else {
-        await fs.writeMetadata(assetId, "original", provenance, project_slug);
-      }
-
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ assetId, path: assetPath, filename: writtenFilename }),
+          text: JSON.stringify(result.value),
         }],
       };
     },

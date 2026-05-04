@@ -11,7 +11,7 @@ interface FileUploadProps {
 
 export function FileUpload({ callTool }: FileUploadProps) {
   const { projects, loading: loadingProjects, error: projectsError, refresh } = useListProjects(callTool);
-  const { upload, uploading, result, error: uploadError } = useUploadFile(callTool);
+  const { upload, uploading, result, error: uploadError } = useUploadFile();
 
   const [selectedSlug, setSelectedSlug] = useState("");
   const [file, setFile] = useState<File | null>(null);
