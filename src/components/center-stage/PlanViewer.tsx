@@ -475,13 +475,14 @@ function deriveVariantState(
   return { kind: 'generating' };
 }
 
-function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModels, onRegen, onAccept, onReplace, onSelectVariant, swapsInFlight, accepting, replacing, selecting }: {
+function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModels, onRegen, onGenerate, onAccept, onReplace, onSelectVariant, swapsInFlight, accepting, replacing, selecting }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
   mediaItems: MediaItem[];
   swapModels: Set<SwapModel>;
   onRegen: (frameIndex: 1 | 2, model: SwapModel) => void;
+  onGenerate: (frameIndex: 1 | 2, model: SwapModel) => void;
   onAccept: (frameIndex: 1 | 2) => void;
   onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
   onSelectVariant: (frameIndex: 1 | 2, assetId: string) => void;
@@ -510,6 +511,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
         replacing={replacing.has(1)}
         selecting={selecting.has(1)}
         onRegen={(model) => onRegen(1, model)}
+        onGenerate={(model) => onGenerate(1, model)}
         onAccept={() => onAccept(1)}
         onReplace={(source) => onReplace(1, source)}
         onSelectVariant={(assetId) => onSelectVariant(1, assetId)}
@@ -526,6 +528,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
         replacing={replacing.has(2)}
         selecting={selecting.has(2)}
         onRegen={(model) => onRegen(2, model)}
+        onGenerate={(model) => onGenerate(2, model)}
         onAccept={() => onAccept(2)}
         onReplace={(source) => onReplace(2, source)}
         onSelectVariant={(assetId) => onSelectVariant(2, assetId)}
@@ -534,7 +537,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
   );
 }
 
-function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItems, swapModels, swapsInFlight, accepting, replacing, selecting, onRegen, onAccept, onReplace, onSelectVariant }: {
+function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItems, swapModels, swapsInFlight, accepting, replacing, selecting, onRegen, onGenerate, onAccept, onReplace, onSelectVariant }: {
   frameIndex: 1 | 2;
   scene: PlanScene;
   sourceSrc: string;
@@ -546,6 +549,7 @@ function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItem
   replacing: boolean;
   selecting: boolean;
   onRegen: (model: SwapModel) => void;
+  onGenerate: (model: SwapModel) => void;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onSelectVariant: (assetId: string) => void;
@@ -578,7 +582,13 @@ function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItem
               accepting={isSelected && accepting}
               replacing={isSelected && replacing}
               selecting={isSelected && selecting}
-              onClick={() => { if (variantAssetId && !isSelected) onSelectVariant(variantAssetId); }}
+              onClick={() => {
+                if (state.kind === 'idle') {
+                  onGenerate(model);
+                  return;
+                }
+                if (variantAssetId && !isSelected) onSelectVariant(variantAssetId);
+              }}
               onRegen={() => onRegen(model)}
               onAccept={onAccept}
               onReplace={onReplace}
@@ -645,7 +655,12 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
     }
     onReplace({ kind: 'file', file });
   };
-  const isClickable = state.kind === 'ready' && !isSelected;
+  const isClickable = state.kind === 'idle' || (state.kind === 'ready' && !isSelected);
+  const clickHint = state.kind === 'idle'
+    ? `Click to generate with ${SHORT_LABEL_BY_MODEL[model]}`
+    : state.kind === 'ready' && !isSelected
+      ? `Select ${SHORT_LABEL_BY_MODEL[model]} variant`
+      : undefined;
   return (
     <div className="flex flex-col gap-1">
       <div
@@ -659,6 +674,7 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
           isClickable && 'cursor-pointer hover:border-zinc-500',
         )}
         onClick={isClickable ? onClick : undefined}
+        title={clickHint}
         onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
         onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
@@ -672,17 +688,23 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
             loading="lazy"
           />
         ) : state.kind === 'idle' ? (
-          showSource && !errored ? (
-            <img
-              src={sourceSrc}
-              alt={`${model} idle`}
-              className="w-full h-full object-cover opacity-30"
-              loading="lazy"
-              onError={() => setErrored(true)}
-            />
-          ) : (
-            <span className="text-[10px] font-mono text-primary/40 px-2 text-center">—</span>
-          )
+          <>
+            {showSource && !errored ? (
+              <img
+                src={sourceSrc}
+                alt={`${model} idle`}
+                className="w-full h-full object-cover opacity-30 group-hover:opacity-50 transition-opacity"
+                loading="lazy"
+                onError={() => setErrored(true)}
+              />
+            ) : (
+              <span className="text-[10px] font-mono text-primary/40 px-2 text-center">—</span>
+            )}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <ImageIcon className="w-4 h-4 text-primary/70" />
+              <span className="text-[9px] font-mono uppercase tracking-wider text-primary/70 font-bold">Gen {SHORT_LABEL_BY_MODEL[model]}</span>
+            </div>
+          </>
         ) : showSource && !errored ? (
           <img
             src={sourceSrc}
@@ -1187,6 +1209,19 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
           // Per-tile Regen for image2 re-uses the model's existing image1
           // swap as the continuity reference (matches the bulk handleImage
           // path which chains per-model).
+          if (frameIndex === 2) {
+            const priorVariants = scene.swap?.image1_variants ?? {};
+            const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
+            if (priorSwapAssetId) {
+              void runSwap(2, model, { priorSwapAssetId });
+              return;
+            }
+          }
+          void runSwap(frameIndex, model);
+        }}
+        onGenerate={(frameIndex, model) => {
+          // Click-to-generate on an idle (model-checked-but-not-yet-run) tile.
+          // Same prior_swap chaining rule as Regen.
           if (frameIndex === 2) {
             const priorVariants = scene.swap?.image1_variants ?? {};
             const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
