@@ -3,7 +3,7 @@ import { defineConfig, configDefaults } from 'vitest/config';
 export default defineConfig({
   test: {
     exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
-    fileParallelism: false,
+    setupFiles: ['./vitest.setup.ts'],
     testTimeout: 30_000,
     // Generous hookTimeout so beforeEach can absorb the prior test's runner
     // drain (process_video + analyze_video can stay in-flight after a test
