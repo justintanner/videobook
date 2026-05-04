@@ -867,6 +867,17 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "generate_seedance2_video" || toolName === "generate_seedance2_fast_video") {
+    const audioSlugs = params.audio_slugs as string[] | undefined;
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const lastFrame = params.last_frame_slug as string | undefined;
+    const hasAudio = (audioSlugs?.filter(Boolean).length ?? 0) > 0;
+    const hasFrame = !!firstFrame || !!lastFrame;
+    if (hasAudio && hasFrame) {
+      warnings.push("Seedance 2 does not support reference audio combined with first/last frame — pick one or the other");
+    }
+  }
+
   if (toolName === "generate_wan27_i2v_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;

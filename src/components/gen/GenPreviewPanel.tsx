@@ -401,8 +401,19 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         warnings.push('Wan 2.7 Image to Video does not support first_clip combined with both first_frame and last_frame. Use first_clip alone, first_clip + one frame, or first_frame + last_frame without a clip.');
       }
     }
+    if (
+      selectedOption?.tool_name === 'generate_seedance2_video'
+      || selectedOption?.tool_name === 'generate_seedance2_fast_video'
+    ) {
+      const audio = formValues.audio_slugs;
+      const hasAudio = Array.isArray(audio) && audio.some((s) => typeof s === 'string' && s.length > 0);
+      const hasFrame = !!formValues.first_frame_slug || !!formValues.last_frame_slug;
+      if (hasAudio && hasFrame) {
+        warnings.push('Seedance 2 does not support reference audio combined with first/last frame — pick one or the other.');
+      }
+    }
     return warnings;
-  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug]);
+  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug, formValues.audio_slugs]);
 
   // Live required-field check derived from current form values. The server
   // computes validation.missing_required once at preview time; this recomputes

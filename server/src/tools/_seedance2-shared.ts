@@ -108,13 +108,16 @@ export function buildSeedance2ToolDef(
     description: opts.description,
     schema,
     handler: async (args) => {
+      const raw = args as Args;
       const {
         project_slug, prompt,
-        first_frame_slug, last_frame_slug,
         image_slugs, video_slugs, audio_slugs,
         aspect_ratio, resolution, duration,
         generate_audio, web_search, nsfw_checker,
-      } = args as Args;
+      } = raw;
+      const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
+      const first_frame_slug = blank(raw.first_frame_slug) ? undefined : raw.first_frame_slug;
+      const last_frame_slug = blank(raw.last_frame_slug) ? undefined : raw.last_frame_slug;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -130,9 +133,18 @@ export function buildSeedance2ToolDef(
         };
       }
 
-      const imgs = image_slugs ?? [];
-      const vids = video_slugs ?? [];
-      const auds = audio_slugs ?? [];
+      const dropBlanks = (xs: string[] | undefined): string[] =>
+        (xs ?? []).filter((s) => !blank(s));
+      const imgs = dropBlanks(image_slugs);
+      const vids = dropBlanks(video_slugs);
+      const auds = dropBlanks(audio_slugs);
+
+      if (auds.length > 0 && (first_frame_slug !== undefined || last_frame_slug !== undefined)) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Seedance 2 does not support reference audio combined with first/last frame — pick one or the other" }],
+        };
+      }
 
       const requestSchema = opts.apiModel === "bytedance/seedance-2"
         ? Seedance2RequestSchema
