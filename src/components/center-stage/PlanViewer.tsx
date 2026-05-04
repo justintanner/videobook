@@ -217,6 +217,45 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
 }) {
   const [swapProvider, setSwapProvider] = useState<SwapProvider>('kie');
   const [swapModel, setSwapModel] = useState<SwapModel>(DEFAULT_SWAP_MODEL);
+  const [submittingAll, setSubmittingAll] = useState(false);
+
+  const eligibleSceneIndices = useMemo(
+    () => data.scenes.flatMap((scene, idx) => (videoReadyForGen(scene).ok ? [idx] : [])),
+    [data.scenes],
+  );
+
+  const handleGenerateAll = useCallback(async () => {
+    if (submittingAll || eligibleSceneIndices.length === 0) return;
+    setSubmittingAll(true);
+    try {
+      let enqueued = 0;
+      let failed = 0;
+      // Sequential rather than parallel — keeps the toast log readable and
+      // gives the queue a chance to apply per-job concurrency caps.
+      for (const idx of eligibleSceneIndices) {
+        const scene = data.scenes[idx];
+        const payload = buildSeedancePayload(scene, data.characters, mediaItems) as { args: Record<string, unknown> };
+        const result = await callTool('generate_seedance2_r2v_fal', {
+          project_slug: projectSlug,
+          ...payload.args,
+        });
+        if (result.isError) {
+          failed += 1;
+          const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'enqueue failed';
+          toast({ title: `Scene ${idx + 1} failed`, description: msg, duration: 4000 });
+        } else {
+          enqueued += 1;
+        }
+      }
+      toast({
+        title: `Generate all videos: ${enqueued} enqueued${failed > 0 ? `, ${failed} failed` : ''}`,
+        description: 'Seedance 2 r2v · 720p',
+        duration: 3000,
+      });
+    } finally {
+      setSubmittingAll(false);
+    }
+  }, [submittingAll, eligibleSceneIndices, data.scenes, data.characters, mediaItems, callTool, projectSlug]);
 
   const sourceItem = useMemo(
     () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
@@ -233,7 +272,28 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   return (
     <div className="max-w-3xl mx-auto px-6 py-6">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
-        <h1 className="text-lg font-bold text-primary font-mono uppercase tracking-wider mb-3">Plan: visualization</h1>
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <h1 className="text-lg font-bold text-primary font-mono uppercase tracking-wider">Plan: visualization</h1>
+          <button
+            type="button"
+            onClick={handleGenerateAll}
+            disabled={submittingAll || eligibleSceneIndices.length === 0}
+            title={eligibleSceneIndices.length === 0
+              ? 'No scenes are ready — accept both swap frames per scene first'
+              : `Enqueue Seedance 2 r2v at 720p for ${eligibleSceneIndices.length} of ${data.scenes.length} scene${data.scenes.length === 1 ? '' : 's'}`}
+            className={cn(
+              'h-7 px-3 flex items-center gap-1.5 rounded shrink-0',
+              'text-[11px] font-mono font-bold uppercase tracking-wider',
+              'text-violet-300/90 hover:text-violet-200',
+              'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
+              'transition-colors duration-150',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+          >
+            {submittingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Film className="w-3.5 h-3.5" />}
+            Generate all videos · {eligibleSceneIndices.length}/{data.scenes.length}
+          </button>
+        </div>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs font-mono items-center">
           <dt className="text-primary/60">Source</dt>
           <dd>
@@ -591,6 +651,17 @@ function rewriteVisualWithImageTokens(
   return result;
 }
 
+function videoReadyForGen(scene: PlanScene): { ok: boolean; reason?: string } {
+  const swap = scene.swap;
+  const hasAny = !!(swap?.image1 || swap?.image2);
+  if (!hasAny) return { ok: true };
+  const accepted1 = swap?.image1_accepted === true;
+  const accepted2 = swap?.image2_accepted === true;
+  if (accepted1 && accepted2) return { ok: true };
+  if (!accepted1 && !accepted2) return { ok: false, reason: 'Accept both swap frames first' };
+  return { ok: false, reason: `Accept image${accepted1 ? '2' : '1'} swap first` };
+}
+
 function readySwapAssetIds(
   scene: PlanScene,
   mediaItems: MediaItem[],
@@ -785,8 +856,11 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     }
   }, [callTool, projectSlug, index, onSidecarUpdate]);
 
+  const videoGate = useMemo(() => videoReadyForGen(scene), [scene]);
+
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
+    if (!videoGate.ok) return;
     setSubmittingVideo(true);
     try {
       const payload = buildSeedancePayload(scene, characters, mediaItems) as { args: Record<string, unknown> };
@@ -804,7 +878,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady]);
+  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady]);
 
   const json = useMemo(
     () => JSON.stringify(buildSeedancePayload(scene, characters, mediaItems), null, 2),
@@ -856,10 +930,12 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
           <button
             type="button"
             onClick={handleVideo}
-            disabled={submittingVideo || anySwapInFlight}
-            title={swapsReady
-              ? 'Enqueue Seedance 2 r2v at 720p with the swapped frames as @Image1 / @Image2'
-              : 'Enqueue Seedance 2 r2v at 720p with the raw character refs (run Image first to use swapped frames)'}
+            disabled={submittingVideo || anySwapInFlight || !videoGate.ok}
+            title={!videoGate.ok
+              ? videoGate.reason
+              : swapsReady
+                ? 'Enqueue Seedance 2 r2v at 720p with the swapped frames as @Image1 / @Image2'
+                : 'Enqueue Seedance 2 r2v at 720p with the raw character refs'}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
