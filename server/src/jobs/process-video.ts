@@ -47,6 +47,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
         ...H264_MEDIUM,
         ...(probe.hasAudio ? AUDIO_OPTS : ["-an"]),
         "-movflags", "+faststart",
+        "-f", "mp4",
         tempPath,
       ];
       try {
