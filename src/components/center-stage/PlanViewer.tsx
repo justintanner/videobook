@@ -71,6 +71,7 @@ export function PlanViewer({ item, emptyOverride, mediaItems, projectSlug, callT
   return (
     <PlanPopulated
       item={item}
+      mediaItems={mediaItems}
       projectSlug={projectSlug}
       callTool={callTool}
       onClose={onClose}
@@ -116,8 +117,9 @@ function PlanShell({ title, slug, onClose, children }: {
   );
 }
 
-function PlanPopulated({ item, projectSlug, callTool, onClose }: {
+function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
   item: MediaItem;
+  mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onClose: () => void;
@@ -167,34 +169,58 @@ function PlanPopulated({ item, projectSlug, callTool, onClose }: {
           </div>
         )}
         {loadState.kind === 'ready' && (
-          <PlanScenes data={loadState.data} dispatch={dispatch} />
+          <PlanScenes data={loadState.data} mediaItems={mediaItems} dispatch={dispatch} />
         )}
       </div>
     </PlanShell>
   );
 }
 
-function PlanScenes({ data, dispatch }: {
+function PlanScenes({ data, mediaItems, dispatch }: {
   data: PlanSidecar;
+  mediaItems: MediaItem[];
   dispatch: (input: string) => Promise<boolean>;
 }) {
-  const characterLabel = data.characters.length === 0
-    ? 'none'
-    : data.characters.map((c) => c.name).join(', ');
+  const sourceItem = useMemo(
+    () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
+    [mediaItems, data.source_asset_id],
+  );
+  const characterItems = useMemo(
+    () => data.characters.map((c) => ({
+      character: c,
+      item: mediaItems.find((m) => m.id === c.asset_id) ?? null,
+    })),
+    [mediaItems, data.characters],
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-6">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <h1 className="text-lg font-bold text-primary font-mono uppercase tracking-wider mb-3">Plan: visualization</h1>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono">
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs font-mono items-center">
           <dt className="text-primary/60">Source</dt>
-          <dd className="text-primary/90">{data.source_asset_id}</dd>
+          <dd>
+            <AssetCard
+              item={sourceItem}
+              fallbackLabel={data.source_asset_id}
+            />
+          </dd>
           <dt className="text-primary/60">Duration</dt>
           <dd className="text-primary/90">{data.total_duration_s.toFixed(2)}s</dd>
           <dt className="text-primary/60">Scenes</dt>
-          <dd className="text-primary/90">{data.scenes.length} (≤{data.max_scene_seconds}s each)</dd>
+          <dd className="text-primary/90">{data.scenes.length} ({data.max_scene_seconds}s each except the last)</dd>
           <dt className="text-primary/60">Characters</dt>
-          <dd className="text-primary/90">{characterLabel}</dd>
+          <dd>
+            <div className="flex flex-wrap gap-2">
+              {characterItems.map(({ character, item }) => (
+                <AssetCard
+                  key={character.asset_id}
+                  item={item}
+                  fallbackLabel={character.name || character.asset_id}
+                />
+              ))}
+            </div>
+          </dd>
           <dt className="text-primary/60">Model</dt>
           <dd className="text-primary/90">{data.model}</dd>
         </dl>
@@ -204,6 +230,26 @@ function PlanScenes({ data, dispatch }: {
           <SceneBlock key={`${scene.start}-${scene.end}-${idx}`} scene={scene} index={idx} dispatch={dispatch} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function AssetCard({ item, fallbackLabel }: {
+  item: MediaItem | null;
+  fallbackLabel: string;
+}) {
+  const src = item?.thumbnailSrc ?? item?.filePath ?? null;
+  const label = item?.slug ?? fallbackLabel;
+  return (
+    <div className="inline-flex items-center gap-2 pr-2 rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
+      <div className="w-10 h-10 shrink-0 bg-zinc-900 flex items-center justify-center">
+        {src ? (
+          <img src={src} alt={label} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <FileText className="w-4 h-4 text-primary/40" />
+        )}
+      </div>
+      <span className="text-xs font-mono text-primary/85">{label}</span>
     </div>
   );
 }

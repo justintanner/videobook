@@ -1,12 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
-import { findAudioFile } from "clipfirst-engine";
+import { findAudioFile, findVideoFile } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile, mkdir } from "node:fs/promises";
 import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import { queue } from "../queue.js";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   MODEL,
@@ -16,9 +17,7 @@ import {
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
-const TARGET_CHUNK_S = 12;
-const MIN_CHUNK_S = 10;
-const MAX_CHUNK_S = 15;
+const CHUNK_S = 15;
 const REQUIRED_CHARACTERS = 2;
 
 type CharacterContext = {
@@ -63,7 +62,7 @@ const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed vi
 
 INPUTS YOU RECEIVE:
 - Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
-- A pre-computed list of chunks. Each chunk has a fixed start/end (10s–15s wide) and the transcript words spoken inside it.
+- A pre-computed list of chunks. Each chunk has a fixed start/end (${CHUNK_S}s wide; the final chunk may be shorter) and the transcript words spoken inside it.
 - Sampled frames from the source clip (image inputs). Each frame is labelled with its timestamp in the user message; map frames to chunks by timestamp to ground your descriptions in what actually appears on screen.
 
 YOUR JOB:
@@ -124,47 +123,18 @@ async function loadCharacter(
   return { asset_id: cleanId, name, description };
 }
 
-// Even-split the clip into chunks each in [MIN_CHUNK_S, MAX_CHUNK_S], snapping
-// internal boundaries to the nearest word start so audio extraction never cuts
-// mid-word. Single chunk if the clip is shorter than MAX_CHUNK_S.
-function computeChunks(words: ElevenLabsWord[]): Chunk[] {
-  const wordsOnly = words.filter((w) => w.type === "word");
-  if (wordsOnly.length === 0) return [];
-
-  const firstStart = wordsOnly[0].start;
-  const lastEnd = wordsOnly[wordsOnly.length - 1].end;
-  const totalDuration = lastEnd - firstStart;
-
-  if (totalDuration <= MAX_CHUNK_S) {
-    return [{ start: firstStart, end: lastEnd }];
-  }
-
-  const nLo = Math.ceil(totalDuration / MAX_CHUNK_S);
-  const nHi = Math.max(nLo, Math.floor(totalDuration / MIN_CHUNK_S));
-  const target = Math.round(totalDuration / TARGET_CHUNK_S);
-  const n = Math.max(nLo, Math.min(nHi, target));
-  const targetSpan = totalDuration / n;
-
-  const boundaries: number[] = [firstStart];
-  for (let i = 1; i < n; i++) {
-    const t = firstStart + i * targetSpan;
-    let bestT = t;
-    let bestDelta = Infinity;
-    for (const w of wordsOnly) {
-      const d = Math.abs(w.start - t);
-      if (d < bestDelta) {
-        bestDelta = d;
-        bestT = w.start;
-      }
-    }
-    boundaries.push(bestT);
-  }
-  boundaries.push(lastEnd);
-
+// Cover the whole clip in fixed CHUNK_S slabs from t=0. The final slab is the
+// remainder, so all but the last chunk are exactly CHUNK_S long.
+function computeChunks(duration: number): Chunk[] {
+  if (duration <= 0) return [];
+  if (duration <= CHUNK_S) return [{ start: 0, end: duration }];
   const chunks: Chunk[] = [];
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    chunks.push({ start: boundaries[i], end: boundaries[i + 1] });
+  let t = 0;
+  while (duration - t > CHUNK_S) {
+    chunks.push({ start: t, end: t + CHUNK_S });
+    t += CHUNK_S;
   }
+  chunks.push({ start: t, end: duration });
   return chunks;
 }
 
@@ -218,7 +188,7 @@ function renderMarkdown(
     "",
     `**Source:** ${sourceAssetId}`,
     `**Duration:** ${totalDuration.toFixed(2)}s`,
-    `**Chunks:** ${scenes.length} (${MIN_CHUNK_S}–${MAX_CHUNK_S}s each, even-split, snapped to word boundaries)`,
+    `**Chunks:** ${scenes.length} (${CHUNK_S}s each except the last)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
     "",
@@ -246,7 +216,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
     name: "plan_visualization",
     description:
       `Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video asset. ` +
-      `Even-splits the clip into ${MIN_CHUNK_S}–${MAX_CHUNK_S}s chunks, samples frames + transcript across the clip, ` +
+      `Splits the clip into fixed ${CHUNK_S}s chunks from the start (last chunk holds the remainder), samples frames + transcript across the clip, ` +
       `then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
       `Requires exactly ${REQUIRED_CHARACTERS} character assets (the two on-screen subjects to swap) and a transcribed video source (elevenlabs.json with word timings). ` +
       `Writes plan/index.md (human-readable) and plan/.plan.json (structured), overwriting prior.`,
@@ -368,7 +338,22 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           };
         }
       }
-      const totalDuration = transcript.words[transcript.words.length - 1].end;
+      const videoManifest = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: false });
+      if (!videoManifest.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: videoManifest.error.message }],
+        };
+      }
+      const videoFile = findVideoFile(videoManifest.value.files);
+      if (!videoFile) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `No video file found in asset ${sourceAssetId}` }],
+        };
+      }
+      const probe = await probeVideo(join(videoManifest.value.path, videoFile.name));
+      const totalDuration = probe.duration;
 
       const characters: CharacterContext[] = [];
       for (const charId of character_asset_ids) {
@@ -382,7 +367,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         characters.push(ctx);
       }
 
-      const chunks = computeChunks(transcript.words);
+      const chunks = computeChunks(totalDuration);
       if (chunks.length === 0) {
         return {
           isError: true as const,
@@ -466,7 +451,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         scenes,
         source_asset_id: sourceAssetId,
         total_duration_s: totalDuration,
-        max_scene_seconds: MAX_CHUNK_S,
+        max_scene_seconds: CHUNK_S,
         characters,
         model: MODEL,
       };
@@ -510,7 +495,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
             asset_id: "plan",
             scenes: scenes.length,
             total_duration_s: totalDuration,
-            max_scene_seconds: MAX_CHUNK_S,
+            max_scene_seconds: CHUNK_S,
             model: MODEL,
             sampled_frames: sampled.length,
           }),
