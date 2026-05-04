@@ -15,6 +15,7 @@ type GenerateGptImagePayload = {
   sourceImageIds: string[];
   projectSlug: string;
   aspectRatio?: string;
+  resolution?: string;
   nsfwChecker?: boolean;
 };
 
@@ -22,7 +23,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
   registerJobHandler("generate_gpt_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
-      sourceImageIds, projectSlug, aspectRatio, nsfwChecker,
+      sourceImageIds, projectSlug, aspectRatio, resolution, nsfwChecker,
     } = payload as GenerateGptImagePayload;
 
     const apiKey = requireApiKey("KIE_API_KEY");
@@ -39,7 +40,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
     }
 
     const request = buildGptImagePayload(
-      { prompt, aspect_ratio: aspectRatio, nsfw_checker: nsfwChecker },
+      { prompt, aspect_ratio: aspectRatio, resolution, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
     await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
@@ -54,6 +55,7 @@ export function registerGenerateGptImageJob(fs: ClipfirstFs): void {
           sourceImageIds,
           prompt,
           ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
           ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
         },
     }, ctx.getOwnerId());

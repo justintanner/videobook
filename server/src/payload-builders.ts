@@ -18,8 +18,10 @@ import type {
   NanoBananaProRequest,
   GptImage2ImageToImageRequest,
   GptImage2ImageToImageAspectRatio,
+  GptImage2ImageToImageResolution,
   GptImage2TextToImageRequest,
   GptImage2TextToImageAspectRatio,
+  GptImage2TextToImageResolution,
   SeedreamTextToImageRequest,
   SeedreamImageToImageRequest,
   Qwen2ImageEditRequest,
@@ -367,6 +369,7 @@ function buildQwen2ImageEditPayload(
 type GptImageArgs = {
   prompt: string;
   aspect_ratio?: string;
+  resolution?: string;
   nsfw_checker?: boolean;
 };
 
@@ -380,6 +383,7 @@ function buildGptImagePayload(
       prompt: args.prompt,
       input_urls: inputUrls,
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2ImageToImageAspectRatio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as GptImage2ImageToImageResolution } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
   };
@@ -388,6 +392,7 @@ function buildGptImagePayload(
 type GptImageTextArgs = {
   prompt: string;
   aspect_ratio?: string;
+  resolution?: string;
   nsfw_checker?: boolean;
 };
 
@@ -399,6 +404,7 @@ function buildGptImageTextPayload(
     input: {
       prompt: args.prompt,
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2TextToImageAspectRatio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution as GptImage2TextToImageResolution } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
   };

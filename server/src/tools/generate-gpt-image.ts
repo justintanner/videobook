@@ -23,6 +23,7 @@ const generateGptImageSchema = {
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).describe("1-16 @img-* slugs for reference images"),
   aspect_ratio: z.enum(gptImageToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  resolution: z.enum(gptImageToImageInputSchema.resolution.unwrap().options).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
@@ -36,7 +37,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, nsfw_checker, output_prefix } = args as Args;
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, nsfw_checker, output_prefix } = args as Args;
       const prefix = output_prefix ?? "img";
 
       const rawSlugs = image_slugs ?? [];
@@ -55,6 +56,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
           prompt,
           input_urls: rawSlugs.map((s) => s.replace(/^@/, "")),
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
           ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         },
       });
@@ -88,6 +90,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);
 

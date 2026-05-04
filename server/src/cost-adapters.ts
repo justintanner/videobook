@@ -91,10 +91,9 @@ const kieKling30MotionControl: CostAdapter = (input) => ({
 });
 
 // kie image-tier adapter: prices keyed by input.resolution ("1K"|"2K"|"4K").
-// gpt-image-2 doesn't carry resolution in its actual payload (the KIE API
-// picks size from aspect_ratio) — pass a default so an unconfigured request
-// still returns a price. nano-banana-pro and wan/2-7-image{,-pro} do accept
-// resolution, so we forward it when present.
+// gpt-image-2, nano-banana-pro, and wan/2-7-image{,-pro} all accept resolution
+// upstream — forward when present, else fall back to the default tier so an
+// unconfigured request still returns a price.
 const kieTieredImage = (model: string, defaultResolution: string): CostAdapter => (input) => ({
   provider: "kie",
   payload: {

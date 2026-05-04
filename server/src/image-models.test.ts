@@ -270,21 +270,23 @@ describe("getImageToolSchema", () => {
     expect(schema!.required).toContain("image_slugs");
   });
 
-  it("gpt_image: both prompt and image_slugs required, aspect_ratio enum", () => {
+  it("gpt_image: both prompt and image_slugs required, aspect_ratio + resolution enums", () => {
     const schema = getImageToolSchema("generate_gpt_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).toContain("image_slugs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "16:9", "9:16", "3:2", "2:3"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "9:16", "16:9", "4:3", "3:4"]);
+    expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
     expect(schema!.properties).not.toHaveProperty("quality");
   });
 
-  it("gpt_image_text: prompt required, no image_slugs", () => {
+  it("gpt_image_text: prompt required, no image_slugs, aspect_ratio + resolution enums", () => {
     const schema = getImageToolSchema("generate_gpt_image_text");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("image_slugs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "16:9", "9:16", "3:2"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "9:16", "16:9", "4:3", "3:4"]);
+    expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
   });
 });
 

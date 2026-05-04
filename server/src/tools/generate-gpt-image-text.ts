@@ -21,6 +21,7 @@ const generateGptImageTextSchema = {
   prompt: z.string().describe("Text prompt for image generation (1-20000 chars)"),
   project_slug: z.string().describe("Project slug"),
   aspect_ratio: z.enum(gptImageTextInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  resolution: z.enum(gptImageTextInputSchema.resolution.unwrap().options).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
@@ -33,7 +34,7 @@ export function generateGptImageTextDef(fs: ClipfirstFs): ToolDef {
     description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageTextSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, nsfw_checker } = args as Args;
+      const { prompt, project_slug, aspect_ratio, resolution, nsfw_checker } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -47,6 +48,7 @@ export function generateGptImageTextDef(fs: ClipfirstFs): ToolDef {
         input: {
           prompt,
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+          ...(resolution !== undefined ? { resolution } : {}),
           ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         },
       });
@@ -72,6 +74,7 @@ export function generateGptImageTextDef(fs: ClipfirstFs): ToolDef {
         imgAssetDir,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);
 
