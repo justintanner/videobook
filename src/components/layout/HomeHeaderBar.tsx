@@ -1,4 +1,4 @@
-import { Clapperboard, Film, ImageIcon, Settings, History } from 'lucide-react';
+import { Clapperboard, Film, ImageIcon, MapPin, Settings, History } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -35,7 +35,8 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         {/* Generation shortcuts */}
         <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} onClick={() => onAnimateCommand('/image')} />
         <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="violet" onClick={() => onAnimateCommand('/video')} />
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} onClick={() => onAnimateCommand('/final')} />
+        <CommandButton command="/plan" icon={<MapPin className="w-3.5 h-3.5" />} variant="emerald" onClick={() => onAnimateCommand('/plan')} />
+        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="amber" onClick={() => onAnimateCommand('/final')} />
       </div>
 
       {/* Right side */}

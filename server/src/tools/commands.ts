@@ -286,7 +286,7 @@ const HARDCODED_COMMANDS: Command[] = [
     category: "action",
     icon: "MapPin",
     size: "default",
-    variant: "amber",
+    variant: "emerald",
     chevron: "right",
     params: [],
     uiAction: "open_plan",
