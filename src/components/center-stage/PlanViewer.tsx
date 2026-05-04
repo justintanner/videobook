@@ -279,7 +279,7 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
   onClose: () => void;
 }) {
   const sourceCandidates = useMemo(
-    () => mediaItems.filter((m) => m.type === 'video' || m.type === 'audio'),
+    () => mediaItems.filter((m) => m.type === 'video'),
     [mediaItems],
   );
   const characterCandidates = useMemo(
@@ -335,7 +335,7 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
 
   const blockingMessage =
     sourceCandidates.length === 0
-      ? 'No video or audio assets in this project yet — upload one first.'
+      ? 'No video assets in this project yet — upload one first.'
       : characterCandidates.length < 2
       ? `Need 2 character assets (have ${characterCandidates.length}) — create char-* assets first.`
       : null;
@@ -424,8 +424,8 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
           </div>
         )}
         <p className="text-[11px] text-muted-foreground/50 font-mono text-center max-w-md">
-          Source must already be transcribed (has <code className="text-primary/60">elevenlabs.json</code>).
-          If not, run <code className="text-primary/60">/transcribe</code> on it first.
+          Source must be a processed video (sampled frames + <code className="text-primary/60">elevenlabs.json</code> with word timings).
+          If missing, run <code className="text-primary/60">/process-video</code> then <code className="text-primary/60">/transcribe</code>.
         </p>
       </div>
     </PlanShell>

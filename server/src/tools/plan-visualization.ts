@@ -2,14 +2,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { mkdir } from "node:fs/promises";
-import { openai, withRetry, textPart, firstContent } from "@apicity/openai";
+import { readFile as fsReadFile } from "node:fs/promises";
+import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import type { ToolDef } from "./tool-def.js";
 import {
   MODEL,
   decodeBuffer,
-  type ElevenLabs,
+  loadAssetForAnalysis,
+  sampleFrames,
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
@@ -35,16 +36,8 @@ type Scene = {
   visual: string;
 };
 
-type Plan = {
-  scenes: Scene[];
-};
-
-const VisualSchema = z.object({
-  visual: z.string().min(20),
-});
-
 const VisualsSchema = z.object({
-  visuals: z.array(VisualSchema).min(1),
+  visuals: z.array(z.object({ visual: z.string().min(20) })).min(1),
 });
 
 const VISUALS_JSON_SCHEMA = {
@@ -58,62 +51,30 @@ const VISUALS_JSON_SCHEMA = {
         type: "object",
         required: ["visual"],
         additionalProperties: false,
-        properties: {
-          visual: { type: "string" },
-        },
+        properties: { visual: { type: "string" } },
       },
     },
   },
 } as const;
 
-function buildSystemPrompt(charA: CharacterContext, charB: CharacterContext): string {
-  return `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
+const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
 
 INPUTS YOU RECEIVE:
 - Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
 - A pre-computed list of chunks. Each chunk has a fixed start/end (10s–15s wide) and the transcript words spoken inside it.
+- Sampled frames from the source clip (image inputs). Each frame is labelled with its timestamp in the user message; map frames to chunks by timestamp to ground your descriptions in what actually appears on screen.
 
 YOUR JOB:
 For each chunk, return one "visual" — a single dense paragraph (60–110 words) that:
 
-1. Names the two characters by their @asset_id token verbatim (e.g. \`@${charA.asset_id}\` and \`@${charB.asset_id}\`). Never use the human-readable name in the visual text. Downstream tools resolve @asset_id to the actual likeness.
-2. Describes the cinematic SHOT for the chunk — environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field.
-3. Describes the ACTION the two characters perform across the chunk — phrased so it reads as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). The Seedance call interpolates between two edited reference frames; your prompt must imply that motion arc explicitly.
-4. Locks character identity: include the phrase "lock the appearance of @${charA.asset_id} and @${charB.asset_id} to reference image 1 and reference image 2 respectively" (or the equivalent — the model needs the cue that frames are reference images, NOT first_frame_url/last_frame_url, since those are mutually exclusive with the multimodal reference fields).
-5. Honors the chunk's audio: dialogue, pacing, and any audible action cues from the transcript drive what the characters DO. Match the on-screen action to the words in this chunk's transcript.
+1. Names the two characters by their @asset_id token verbatim. Never use the human-readable name. Downstream tools resolve @asset_id to the actual likeness.
+2. Describes the cinematic SHOT — environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Anchor to what the sampled frames actually show in this chunk's time window.
+3. Describes the ACTION the two characters perform across the chunk — phrased so it reads as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). Seedance interpolates between two edited reference frames; your prompt must imply that motion arc explicitly.
+4. Locks character identity: include "lock the appearance of @<charA-id> and @<charB-id> to reference image 1 and reference image 2 respectively". The frames go in reference_image_urls (NOT first_frame_url / last_frame_url — those are mutually exclusive with the multimodal reference fields and would be rejected by the Seedance 2 schema).
+5. Honors the chunk's audio: dialogue, pacing, and audible action cues from the transcript drive what the characters DO. Match on-screen action to the words spoken in this chunk.
 6. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
 
 OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
-}
-
-function buildUserContext(
-  characters: CharacterContext[],
-  chunks: Chunk[],
-  words: ElevenLabsWord[],
-): string {
-  const charBlock = characters
-    .map((c, i) => `  ${i + 1}. @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`)
-    .join("\n");
-
-  const wordsOnly = words.filter((w) => w.type === "word");
-  const chunkBlocks = chunks.map((c, i) => {
-    const inChunk = wordsOnly.filter((w) => w.start >= c.start && w.start < c.end);
-    const text = inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
-    return [
-      `Chunk ${i + 1}: ${c.start.toFixed(2)}s – ${c.end.toFixed(2)}s (${(c.end - c.start).toFixed(2)}s)`,
-      `Transcript: ${text}`,
-    ].join("\n");
-  });
-
-  return [
-    `Characters (use the @asset_id token verbatim in every visual):`,
-    charBlock,
-    "",
-    `Chunks (${chunks.length} total — produce one "visual" per chunk, in order):`,
-    "",
-    chunkBlocks.join("\n\n"),
-  ].join("\n");
-}
 
 async function loadCharacter(
   fs: ClipfirstFs,
@@ -205,12 +166,48 @@ function computeChunks(words: ElevenLabsWord[]): Chunk[] {
   return chunks;
 }
 
+function buildPlanContext(
+  characters: CharacterContext[],
+  chunks: Chunk[],
+  words: ElevenLabsWord[],
+  sampledFrameNames: string[],
+): string {
+  const charBlock = characters
+    .map((c, i) => `  ${i + 1}. @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`)
+    .join("\n");
+
+  const wordsOnly = words.filter((w) => w.type === "word");
+  const chunkBlocks = chunks.map((c, i) => {
+    const inChunk = wordsOnly.filter((w) => w.start >= c.start && w.start < c.end);
+    const text = inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
+    return [
+      `Chunk ${i + 1}: ${c.start.toFixed(2)}s – ${c.end.toFixed(2)}s (${(c.end - c.start).toFixed(2)}s)`,
+      `Transcript: ${text}`,
+    ].join("\n");
+  });
+
+  const frameTimestamps = sampledFrameNames
+    .map((name) => parseFloat(name).toFixed(2))
+    .join(", ");
+
+  return [
+    `Characters (use the @asset_id token verbatim in every visual):`,
+    charBlock,
+    "",
+    `Chunks (${chunks.length} total — produce one "visual" per chunk, in order):`,
+    "",
+    chunkBlocks.join("\n\n"),
+    "",
+    `Frame timestamps (in seconds, in the same order as the image inputs that follow): ${frameTimestamps}`,
+  ].join("\n");
+}
+
 function renderMarkdown(
   sourceAssetId: string,
   totalDuration: number,
   characters: CharacterContext[],
   model: string,
-  plan: Plan,
+  scenes: Scene[],
 ): string {
   const charLine = characters.map((c) => `@${c.asset_id} (${c.name})`).join(", ");
 
@@ -219,7 +216,7 @@ function renderMarkdown(
     "",
     `**Source:** ${sourceAssetId}`,
     `**Duration:** ${totalDuration.toFixed(2)}s`,
-    `**Chunks:** ${plan.scenes.length} (${MIN_CHUNK_S}–${MAX_CHUNK_S}s each, even-split)`,
+    `**Chunks:** ${scenes.length} (${MIN_CHUNK_S}–${MAX_CHUNK_S}s each, even-split, snapped to word boundaries)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
     "",
@@ -229,7 +226,7 @@ function renderMarkdown(
     "",
   ].join("\n");
 
-  const blocks = plan.scenes.map((s, i) => {
+  const blocks = scenes.map((s, i) => {
     const duration = (s.end - s.start).toFixed(2);
     return [
       `## Chunk ${i + 1} — ${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s (${duration}s)`,
@@ -246,12 +243,13 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "plan_visualization",
     description:
-      `Generate a per-chunk remix plan from a video/audio asset's elevenlabs.json. ` +
-      `Even-splits the clip into ${MIN_CHUNK_S}–${MAX_CHUNK_S}s chunks, then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
-      `Requires exactly ${REQUIRED_CHARACTERS} character assets (the two on-screen subjects to swap). ` +
-      `Writes plan/index.md (human-readable) and plan/.plan.json (structured) into the singleton plan asset, overwriting prior.`,
+      `Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video asset. ` +
+      `Even-splits the clip into ${MIN_CHUNK_S}–${MAX_CHUNK_S}s chunks, samples frames + transcript across the clip, ` +
+      `then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
+      `Requires exactly ${REQUIRED_CHARACTERS} character assets (the two on-screen subjects to swap) and a transcribed video source (elevenlabs.json with word timings). ` +
+      `Writes plan/index.md (human-readable) and plan/.plan.json (structured), overwriting prior.`,
     schema: {
-      source_asset_id: z.string().describe("Asset ID with elevenlabs.json (vid-* or aud-*)"),
+      source_asset_id: z.string().describe("Video asset with elevenlabs.json (vid-* — word-level timings required)"),
       project_slug: z.string().describe("Project slug"),
       character_asset_ids: z
         .array(z.string())
@@ -289,61 +287,25 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const projectResult = await fs.getProject(project_slug);
-      if (!projectResult.ok) {
+      const loaded = await loadAssetForAnalysis(fs, sourceAssetId, project_slug);
+      if (!loaded.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: projectResult.error.message }],
+          content: [{ type: "text" as const, text: loaded.error.message }],
         };
       }
-      const projectDir = projectResult.value.path;
+      const { framesDir, frameNames, transcript } = loaded.value;
 
-      const manifestResult = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: true });
-      if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
-      }
-
-      const elevenFile = manifestResult.value.files.find((f) => f.name === "elevenlabs.json");
-      if (!elevenFile) {
+      if (transcript.source !== "elevenlabs") {
         return {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: `No elevenlabs.json in asset ${sourceAssetId}. Run /transcribe first.`,
+            text: `Plan visualization needs word-level timings (elevenlabs.json). ${sourceAssetId} only has a ${transcript.source} transcript — re-run /transcribe with elevenlabs.`,
           }],
         };
       }
-
-      const elevenRead = await fs.readFile(sourceAssetId, "elevenlabs.json", project_slug);
-      if (!elevenRead.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: elevenRead.error.message }],
-        };
-      }
-
-      let transcript: ElevenLabs;
-      try {
-        transcript = JSON.parse(decodeBuffer(elevenRead.value)) as ElevenLabs;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to parse elevenlabs.json: ${msg}` }],
-        };
-      }
-
-      const wordsOnly = transcript.words.filter((w) => w.type === "word");
-      if (wordsOnly.length === 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "elevenlabs.json contains no word entries" }],
-        };
-      }
-      const totalDuration = wordsOnly[wordsOnly.length - 1].end;
+      const totalDuration = transcript.words[transcript.words.length - 1].end;
 
       const characters: CharacterContext[] = [];
       for (const charId of character_asset_ids) {
@@ -357,16 +319,6 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         characters.push(ctx);
       }
 
-      if (characters.length !== REQUIRED_CHARACTERS) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Resolved ${characters.length}/${REQUIRED_CHARACTERS} characters; aborting`,
-          }],
-        };
-      }
-
       const chunks = computeChunks(transcript.words);
       if (chunks.length === 0) {
         return {
@@ -375,8 +327,16 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      const sampled = sampleFrames(frameNames);
+      const frameParts: OpenAiContentPart[] = [];
+      for (const file of sampled) {
+        const buf = await fsReadFile(join(framesDir, file));
+        frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
+      }
+
       const userContent: OpenAiContentPart[] = [
-        textPart(buildUserContext(characters, chunks, transcript.words)),
+        textPart(buildPlanContext(characters, chunks, transcript.words, sampled)),
+        ...frameParts,
       ];
 
       const provider = openai({ apiKey, timeout: 240_000 });
@@ -388,7 +348,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           model: MODEL,
           stream: false,
           messages: [
-            { role: "system", content: buildSystemPrompt(characters[0], characters[1]) },
+            { role: "system", content: SYSTEM_PROMPT_PLAN },
             { role: "user", content: userContent },
           ],
           response_format: {
@@ -448,16 +408,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         model: MODEL,
       };
 
-      const planDir = join(projectDir, "plan");
-      await mkdir(planDir, { recursive: true });
-
-      const markdown = renderMarkdown(
-        sourceAssetId,
-        totalDuration,
-        characters,
-        MODEL,
-        { scenes },
-      );
+      const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, MODEL, scenes);
 
       const writeMd = await fs.writeFile("plan", "index.md", markdown, project_slug);
       if (!writeMd.ok) {
@@ -489,6 +440,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
             total_duration_s: totalDuration,
             max_scene_seconds: MAX_CHUNK_S,
             model: MODEL,
+            sampled_frames: sampled.length,
           }),
         }],
       };
