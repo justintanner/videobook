@@ -26,7 +26,12 @@ type PlanScene = {
   start: number;
   end: number;
   visual: string;
-  swap?: { image1: string | null; image2: string | null } | null;
+  swap?: {
+    image1: string | null;
+    image2: string | null;
+    image1_accepted?: boolean;
+    image2_accepted?: boolean;
+  } | null;
 };
 
 type PlanSidecar = {
@@ -187,6 +192,8 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
 
       const swap = scene.swap ?? { image1: null, image2: null };
       swap[`image${frame_index}` as "image1" | "image2"] = imgAssetId;
+      // A regen invalidates any prior human acceptance for this frame.
+      swap[`image${frame_index}_accepted` as "image1_accepted" | "image2_accepted"] = false;
       plan.scenes[scene_index] = { ...scene, swap };
 
       const writeResult = await fs.writeFile(

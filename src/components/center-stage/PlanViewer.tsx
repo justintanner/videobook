@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText, Code, Copy, Check } from 'lucide-react';
+import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -12,7 +12,12 @@ interface PlanScene {
   start: number;
   end: number;
   visual: string;
-  swap?: { image1: string | null; image2: string | null } | null;
+  swap?: {
+    image1: string | null;
+    image2: string | null;
+    image1_accepted?: boolean;
+    image2_accepted?: boolean;
+  } | null;
 }
 
 interface PlanSidecar {
@@ -335,7 +340,7 @@ function AssetCard({ item, fallbackLabel }: {
 type FrameTileState =
   | { kind: 'idle' }
   | { kind: 'generating' }
-  | { kind: 'ready'; src: string }
+  | { kind: 'ready'; src: string; accepted: boolean }
   | { kind: 'error'; message: string };
 
 function deriveTileState(
@@ -352,19 +357,22 @@ function deriveTileState(
   }
   if (item.status === 'ready') {
     const src = item.thumbnailSrc ?? item.filePath ?? null;
-    if (src) return { kind: 'ready', src };
+    const accepted = scene.swap?.[`image${frameIndex}_accepted` as 'image1_accepted' | 'image2_accepted'] === true;
+    if (src) return { kind: 'ready', src, accepted };
     return { kind: 'generating' };
   }
   return { kind: 'generating' };
 }
 
-function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRetry, swapsInFlight }: {
+function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, onAccept, swapsInFlight, accepting }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
   mediaItems: MediaItem[];
-  onRetry: (frameIndex: 1 | 2) => void;
+  onRegen: (frameIndex: 1 | 2) => void;
+  onAccept: (frameIndex: 1 | 2) => void;
   swapsInFlight: Set<1 | 2>;
+  accepting: Set<1 | 2>;
 }) {
   // Cache-bust the source-frame thumbnails on scene-boundary changes — when
   // /plan-vis re-runs and produces different chunks, timestamps shift and the
@@ -379,32 +387,40 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRetry, 
         state={deriveTileState(scene, 1, mediaItems)}
         label={`image1 · first ${formatTimecode(scene.start)}`}
         inFlight={swapsInFlight.has(1)}
-        onRetry={() => onRetry(1)}
+        accepting={accepting.has(1)}
+        onRegen={() => onRegen(1)}
+        onAccept={() => onAccept(1)}
       />
       <SceneFrameTile
         sourceSrc={sourceUrl(2)}
         state={deriveTileState(scene, 2, mediaItems)}
         label={`image2 · last ${formatTimecode(scene.end)}`}
         inFlight={swapsInFlight.has(2)}
-        onRetry={() => onRetry(2)}
+        accepting={accepting.has(2)}
+        onRegen={() => onRegen(2)}
+        onAccept={() => onAccept(2)}
       />
     </div>
   );
 }
 
-function SceneFrameTile({ sourceSrc, state, label, inFlight, onRetry }: {
+function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, onRegen, onAccept }: {
   sourceSrc: string;
   state: FrameTileState;
   label: string;
   inFlight: boolean;
-  onRetry: () => void;
+  accepting: boolean;
+  onRegen: () => void;
+  onAccept: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const showSource = state.kind !== 'ready';
   const showSpinner = inFlight || state.kind === 'generating';
+  const showReadyActions = state.kind === 'ready' && !state.accepted && !inFlight;
+  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !inFlight;
   return (
     <div className="flex flex-col gap-1">
-      <div className="relative w-40 aspect-video bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center">
+      <div className="relative w-40 aspect-video bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center group">
         {state.kind === 'ready' ? (
           <img
             src={state.src}
@@ -435,7 +451,7 @@ function SceneFrameTile({ sourceSrc, state, label, inFlight, onRetry }: {
             </span>
             <button
               type="button"
-              onClick={onRetry}
+              onClick={onRegen}
               className={cn(
                 'h-6 px-2 flex items-center gap-1 rounded',
                 'text-[10px] font-mono uppercase tracking-wider',
@@ -445,6 +461,49 @@ function SceneFrameTile({ sourceSrc, state, label, inFlight, onRetry }: {
             >
               Retry
             </button>
+          </div>
+        )}
+        {showReadyActions && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={accepting}
+              title="Accept this swap"
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-emerald-100 hover:text-white',
+                'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            >
+              {accepting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={onRegen}
+              title="Regenerate this swap"
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-amber-100 hover:text-white',
+                'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 hover:border-amber-300/70',
+              )}
+            >
+              <RotateCw className="w-3 h-3" />
+              Regen
+            </button>
+          </div>
+        )}
+        {showAcceptedBadge && (
+          <div
+            className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 border border-emerald-300/60 text-[9px] font-mono uppercase tracking-wider text-emerald-50"
+            title="Accepted"
+          >
+            <Check className="w-2.5 h-2.5" />
+            Accepted
           </div>
         )}
       </div>
@@ -521,6 +580,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const [copied, setCopied] = useState(false);
   const [submittingVideo, setSubmittingVideo] = useState(false);
   const [swapsInFlight, setSwapsInFlight] = useState<Set<1 | 2>>(new Set());
+  const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -569,6 +629,40 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     void runSwap(1);
     void runSwap(2);
   }, [anySwapInFlight, runSwap]);
+
+  const runAccept = useCallback(async (frameIndex: 1 | 2) => {
+    setAccepting((prev) => {
+      const next = new Set(prev);
+      next.add(frameIndex);
+      return next;
+    });
+    try {
+      const result = await callTool('accept_plan_scene_frame_swap', {
+        project_slug: projectSlug,
+        scene_index: index,
+        frame_index: frameIndex,
+        accepted: true,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Accept failed';
+        toast({ title: `Scene ${index + 1} image${frameIndex} accept failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // The accept flag is persisted; sidecar refreshes on next read_plan.
+      }
+    } finally {
+      setAccepting((prev) => {
+        const next = new Set(prev);
+        next.delete(frameIndex);
+        return next;
+      });
+    }
+  }, [callTool, projectSlug, index, onSidecarUpdate]);
 
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
@@ -664,8 +758,10 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         scene={scene}
         projectSlug={projectSlug}
         mediaItems={mediaItems}
-        onRetry={(frameIndex) => { void runSwap(frameIndex); }}
+        onRegen={(frameIndex) => { void runSwap(frameIndex); }}
+        onAccept={(frameIndex) => { void runAccept(frameIndex); }}
         swapsInFlight={swapsInFlight}
+        accepting={accepting}
       />
       <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
         <div className="flex">
