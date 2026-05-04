@@ -218,6 +218,31 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
+  // Kick off audio extraction once on mount per (project, source) — the
+  // VIDEO button needs `aud-ext-${base}` to splice onto the silent r2v output.
+  // Skipped if the asset is already present.
+  const audioBootstrapKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const expected = sourceAudioAssetId(data.source_asset_id);
+    const key = `${projectSlug}/${data.source_asset_id}`;
+    if (audioBootstrapKeyRef.current === key) return;
+    if (mediaItems.some((m) => m.id === expected)) {
+      audioBootstrapKeyRef.current = key;
+      return;
+    }
+    audioBootstrapKeyRef.current = key;
+    void (async () => {
+      const result = await callTool('extract_audio', {
+        project_slug: projectSlug,
+        asset_id: data.source_asset_id,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_audio failed';
+        toast({ title: 'Source audio extract failed', description: msg, duration: 5000 });
+      }
+    })();
+  }, [projectSlug, data.source_asset_id, mediaItems, callTool]);
+
   const sourceItem = useMemo(
     () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
     [mediaItems, data.source_asset_id],
@@ -715,19 +740,24 @@ function buildSeedancePayload(
   scene: PlanScene,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
+  sourceVideoAssetId: string,
 ): unknown {
   const swapped = readySwapAssetIds(scene, mediaItems);
   const imageSlugs = swapped
     ? swapped.map((id) => `@${id}`)
     : characters.map((c) => `@${c.asset_id}`);
   return {
-    tool: 'generate_seedance2_r2v_fal',
+    tool: 'generate_seedance2_video',
     args: {
       prompt: rewriteVisualWithImageTokens(scene.visual, characters),
+      // Seedance 2 (kie) ref inputs: 2 swap frames + source vid + source aud.
       image_slugs: imageSlugs,
+      video_slugs: [`@${sourceVideoAssetId}`],
+      audio_slugs: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
       resolution: '720p',
       aspect_ratio: '16:9',
-      duration: 'auto',
+      // Kie seedance accepts 4–15s integers; clamp the scene length.
+      duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
       // Silent video — we splice the source's extracted audio onto it
       // afterwards via replace_video_audio (see SceneBlock.handleVideo).
       generate_audio: false,
@@ -1002,13 +1032,13 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     }
     setSubmittingVideo(true);
     try {
-      const payload = buildSeedancePayload(scene, characters, mediaItems) as { args: Record<string, unknown> };
-      const result = await callTool('generate_seedance2_r2v_fal', {
+      const payload = buildSeedancePayload(scene, characters, mediaItems, sourceVideoAssetId) as { args: Record<string, unknown> };
+      const result = await callTool('generate_seedance2_video', {
         project_slug: projectSlug,
         ...payload.args,
       });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2 r2v';
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
         toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
         return;
       }
@@ -1024,7 +1054,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
       if (newVidAssetId) {
         setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId }]);
       }
-      const note = swapsReady ? 'Seedance 2 r2v · 720p · swapped frames' : 'Seedance 2 r2v · 720p · char refs';
+      const note = swapsReady ? 'Seedance 2 (kie) · 720p · swapped frames' : 'Seedance 2 (kie) · 720p · char refs';
       toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
     } finally {
       setSubmittingVideo(false);
@@ -1074,8 +1104,8 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   }, [pendingAudioReplace, mediaItems, callTool, projectSlug, index]);
 
   const json = useMemo(
-    () => JSON.stringify(buildSeedancePayload(scene, characters, mediaItems), null, 2),
-    [scene, characters, mediaItems],
+    () => JSON.stringify(buildSeedancePayload(scene, characters, mediaItems, sourceVideoAssetId), null, 2),
+    [scene, characters, mediaItems, sourceVideoAssetId],
   );
 
   const handleCopy = useCallback(async () => {
@@ -1108,8 +1138,8 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
             title={!videoGate.ok
               ? videoGate.reason
               : swapsReady
-                ? 'Enqueue Seedance 2 r2v at 720p with the swapped frames as @Image1 / @Image2'
-                : 'Enqueue Seedance 2 r2v at 720p with the raw character refs'}
+                ? 'Enqueue Seedance 2 (kie) at 720p with the swapped frames + source vid + source aud as refs'
+                : 'Enqueue Seedance 2 (kie) at 720p with the raw character refs + source vid + source aud'}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
