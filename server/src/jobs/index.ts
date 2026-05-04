@@ -8,6 +8,7 @@ import { registerCropVideoJob } from "./crop-video.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
+import { registerAudioBoostJob } from "./audio-boost.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
@@ -102,6 +103,7 @@ export function registerAllJobHandlers(fs: ClipfirstFs): void {
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);
   registerChangeVideoSpeedJob(fs);
+  registerAudioBoostJob(fs);
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);

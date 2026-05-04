@@ -28,6 +28,7 @@ import { evenSplitDef } from "./even-split.js";
 import { cropVideoDef } from "./crop-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
+import { audioBoostDef } from "./audio-boost.js";
 import { reverseVideoDef } from "./reverse-video.js";
 import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
@@ -186,6 +187,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     cropVideoDef(fs),
     downloadVideoDef(fs),
     changeVideoSpeedDef(fs),
+    audioBoostDef(fs),
     reverseVideoDef(fs),
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
