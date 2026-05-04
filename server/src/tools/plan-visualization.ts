@@ -87,7 +87,7 @@ async function loadCharacter(
   if (!manifestResult.ok) return null;
 
   const files = manifestResult.value.files;
-  let name = cleanId.replace(/^char-/, "");
+  let name = cleanId.replace(/^(char-|img-)/, "");
   let description = "";
 
   const charJsonFile = files.find((f) => f.name === ".character.json");
@@ -218,7 +218,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       `Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video asset. ` +
       `Splits the clip into fixed ${CHUNK_S}s chunks from the start (last chunk holds the remainder), samples frames + transcript across the clip, ` +
       `then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
-      `Requires exactly ${REQUIRED_CHARACTERS} character assets (the two on-screen subjects to swap) and a transcribed video source (elevenlabs.json with word timings). ` +
+      `Requires exactly ${REQUIRED_CHARACTERS} subject assets (char-* or img-*) and a transcribed video source (elevenlabs.json with word timings). ` +
       `Writes plan/index.md (human-readable) and plan/.plan.json (structured), overwriting prior.`,
     schema: {
       source_asset_id: z.string().describe("Video asset with elevenlabs.json (vid-* — word-level timings required)"),
@@ -226,7 +226,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       character_asset_ids: z
         .array(z.string())
         .length(REQUIRED_CHARACTERS)
-        .describe(`Exactly ${REQUIRED_CHARACTERS} char-* assets — the two on-screen subjects to swap in each chunk`),
+        .describe(`Exactly ${REQUIRED_CHARACTERS} subject assets (char-* or img-*) — the two on-screen subjects to swap in each chunk`),
     },
     handler: async (args) => {
       const apiKey = process.env.OPENAI_API_KEY;

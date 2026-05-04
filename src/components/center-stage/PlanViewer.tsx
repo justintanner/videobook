@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText } from 'lucide-react';
+import { Image as ImageIcon, Film, Loader2, MapPin, X, FileText, Code, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -169,16 +169,24 @@ function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
           </div>
         )}
         {loadState.kind === 'ready' && (
-          <PlanScenes data={loadState.data} mediaItems={mediaItems} dispatch={dispatch} />
+          <PlanScenes
+            data={loadState.data}
+            mediaItems={mediaItems}
+            projectSlug={projectSlug}
+            callTool={callTool}
+            dispatch={dispatch}
+          />
         )}
       </div>
     </PlanShell>
   );
 }
 
-function PlanScenes({ data, mediaItems, dispatch }: {
+function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch }: {
   data: PlanSidecar;
   mediaItems: MediaItem[];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
 }) {
   const sourceItem = useMemo(
@@ -227,7 +235,15 @@ function PlanScenes({ data, mediaItems, dispatch }: {
       </div>
       <div className="space-y-5">
         {data.scenes.map((scene, idx) => (
-          <SceneBlock key={`${scene.start}-${scene.end}-${idx}`} scene={scene} index={idx} dispatch={dispatch} />
+          <SceneBlock
+            key={`${scene.start}-${scene.end}-${idx}`}
+            scene={scene}
+            index={idx}
+            characters={data.characters}
+            projectSlug={projectSlug}
+            callTool={callTool}
+            dispatch={dispatch}
+          />
         ))}
       </div>
     </div>
@@ -254,17 +270,89 @@ function AssetCard({ item, fallbackLabel }: {
   );
 }
 
-function SceneBlock({ scene, index, dispatch }: {
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function rewriteVisualWithImageTokens(
+  visual: string,
+  characters: PlanSidecar['characters'],
+): string {
+  let result = visual;
+  characters.forEach((c, i) => {
+    const re = new RegExp(`@${escapeRegExp(c.asset_id)}\\b`, 'g');
+    result = result.replace(re, `@Image${i + 1}`);
+  });
+  return result;
+}
+
+function buildSeedancePayload(
+  scene: PlanScene,
+  characters: PlanSidecar['characters'],
+): unknown {
+  return {
+    tool: 'generate_seedance2_r2v_fal',
+    args: {
+      prompt: rewriteVisualWithImageTokens(scene.visual, characters),
+      image_slugs: characters.map((c) => `@${c.asset_id}`),
+      resolution: '720p',
+      aspect_ratio: '16:9',
+      duration: 'auto',
+      generate_audio: true,
+    },
+  };
+}
+
+function SceneBlock({ scene, index, characters, projectSlug, callTool, dispatch }: {
   scene: PlanScene;
   index: number;
+  characters: PlanSidecar['characters'];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
 }) {
+  const [view, setView] = useState<'prompt' | 'json'>('prompt');
+  const [copied, setCopied] = useState(false);
+  const [submittingVideo, setSubmittingVideo] = useState(false);
+
   const handleImage = useCallback(() => {
     void dispatch(`/image ${scene.visual}`);
   }, [dispatch, scene.visual]);
-  const handleVideo = useCallback(() => {
-    void dispatch(`/video ${scene.visual}`);
-  }, [dispatch, scene.visual]);
+
+  const handleVideo = useCallback(async () => {
+    if (submittingVideo) return;
+    setSubmittingVideo(true);
+    try {
+      const payload = buildSeedancePayload(scene, characters) as { args: Record<string, unknown> };
+      const result = await callTool('generate_seedance2_r2v_fal', {
+        project_slug: projectSlug,
+        ...payload.args,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2 r2v';
+        toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
+        return;
+      }
+      toast({ title: `Scene ${index + 1} enqueued`, description: 'Seedance 2 r2v · 720p · 16:9', duration: 2500 });
+    } finally {
+      setSubmittingVideo(false);
+    }
+  }, [submittingVideo, scene, characters, callTool, projectSlug, index]);
+
+  const json = useMemo(
+    () => JSON.stringify(buildSeedancePayload(scene, characters), null, 2),
+    [scene, characters],
+  );
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore clipboard permission failures
+    }
+  }, [json]);
 
   const duration = (scene.end - scene.start).toFixed(2);
 
@@ -282,7 +370,7 @@ function SceneBlock({ scene, index, dispatch }: {
           <button
             type="button"
             onClick={handleImage}
-            title={`Open the image gen panel pre-filled with this scene's visual`}
+            title="Open the image gen panel pre-filled with this scene's visual"
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
@@ -297,24 +385,84 @@ function SceneBlock({ scene, index, dispatch }: {
           <button
             type="button"
             onClick={handleVideo}
-            title={`Open the video gen panel pre-filled with this scene's visual`}
+            disabled={submittingVideo}
+            title="Enqueue Seedance 2 r2v at 720p with the two character refs"
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
               'text-violet-300/90 hover:text-violet-200',
               'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
               'transition-colors duration-150',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
-            <Film className="w-3.5 h-3.5" />
+            {submittingVideo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Film className="w-3.5 h-3.5" />}
             Video
           </button>
         </div>
       </header>
-      <p className="px-4 py-3 text-sm leading-relaxed text-primary/75 whitespace-pre-wrap">
-        {scene.visual}
-      </p>
+      <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
+        <div className="flex">
+          <TabButton active={view === 'prompt'} onClick={() => setView('prompt')} icon={<FileText className="w-3 h-3" />}>
+            Prompt
+          </TabButton>
+          <TabButton active={view === 'json'} onClick={() => setView('json')} icon={<Code className="w-3 h-3" />}>
+            JSON
+          </TabButton>
+        </div>
+        {view === 'json' && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            title="Copy JSON payload"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-primary/70 hover:text-primary',
+              'bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40',
+              'transition-colors duration-150',
+            )}
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+      {view === 'prompt' ? (
+        <p className="px-4 py-3 text-sm leading-relaxed text-primary/75 whitespace-pre-wrap">
+          {scene.visual}
+        </p>
+      ) : (
+        <pre className="px-4 py-3 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-x-auto scrollbar-cyan">
+          {json}
+        </pre>
+      )}
     </section>
+  );
+}
+
+function TabButton({ active, onClick, icon, children }: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'h-7 px-3 flex items-center gap-1.5',
+        'text-[11px] font-mono font-bold uppercase tracking-wider',
+        'border-b-2 transition-colors duration-150',
+        active
+          ? 'text-primary border-primary'
+          : 'text-primary/40 border-transparent hover:text-primary/70',
+      )}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }
 
@@ -329,7 +477,7 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
     [mediaItems],
   );
   const characterCandidates = useMemo(
-    () => mediaItems.filter((m) => m.id.startsWith('char-')),
+    () => mediaItems.filter((m) => m.id.startsWith('char-') || m.id.startsWith('img-')),
     [mediaItems],
   );
   const [selectedSource, setSelectedSource] = useState<string>('');
@@ -383,7 +531,7 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
     sourceCandidates.length === 0
       ? 'No video assets in this project yet — upload one first.'
       : characterCandidates.length < 2
-      ? `Need 2 character assets (have ${characterCandidates.length}) — create char-* assets first.`
+      ? `Need 2 char-* or img-* assets (have ${characterCandidates.length}).`
       : null;
 
   return (
