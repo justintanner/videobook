@@ -108,8 +108,8 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       try {
         await runFfmpeg([
           "-y",
-          "-i", activeVideoPath,
           "-ss", String(ts),
+          "-i", activeVideoPath,
           "-frames:v", "1",
           "-q:v", "2",
           "-strict", "unofficial",
