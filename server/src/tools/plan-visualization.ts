@@ -1,10 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClipfirstFs } from "clipfirst-engine";
+import { findAudioFile } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
 import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   MODEL,
@@ -294,16 +296,77 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           content: [{ type: "text" as const, text: loaded.error.message }],
         };
       }
-      const { framesDir, frameNames, transcript } = loaded.value;
+      let { framesDir, frameNames, transcript } = loaded.value;
 
       if (transcript.source !== "elevenlabs") {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Plan visualization needs word-level timings (elevenlabs.json). ${sourceAssetId} only has a ${transcript.source} transcript — re-run /transcribe with elevenlabs.`,
-          }],
-        };
+        if (!process.env.ELEVENLABS_API_KEY) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Plan visualization needs word-level timings (elevenlabs.json) but ${sourceAssetId} only has a ${transcript.source} transcript, and ELEVENLABS_API_KEY is not set so we can't auto-transcribe. Set the key or run /transcribe manually.`,
+            }],
+          };
+        }
+
+        const manifestResult = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: true });
+        if (!manifestResult.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: manifestResult.error.message }],
+          };
+        }
+        const audioFile = findAudioFile(manifestResult.value.files, sourceAssetId);
+        if (!audioFile) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `No audio file found in asset ${sourceAssetId}; cannot auto-transcribe for plan visualization.` }],
+          };
+        }
+
+        const jobId = `transcribe-${sourceAssetId}-${Date.now()}`;
+        try {
+          await queue.enqueueAndWait(
+            jobId,
+            {
+              type: "transcribe",
+              audioPath: join(manifestResult.value.path, audioFile.name),
+              audioFilename: audioFile.name,
+              tagAudioEvents: true,
+              diarize: true,
+              assetId: sourceAssetId,
+              assetDir: manifestResult.value.path,
+              projectSlug: project_slug,
+            } as unknown as Record<string, unknown>,
+            10 * 60_000,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Auto-transcribe failed for ${sourceAssetId}: ${msg}` }],
+          };
+        }
+
+        const reloaded = await loadAssetForAnalysis(fs, sourceAssetId, project_slug);
+        if (!reloaded.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: reloaded.error.message }],
+          };
+        }
+        framesDir = reloaded.value.framesDir;
+        frameNames = reloaded.value.frameNames;
+        transcript = reloaded.value.transcript;
+        if (transcript.source !== "elevenlabs") {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Auto-transcribe finished for ${sourceAssetId} but elevenlabs.json is still not loadable.`,
+            }],
+          };
+        }
       }
       const totalDuration = transcript.words[transcript.words.length - 1].end;
 
