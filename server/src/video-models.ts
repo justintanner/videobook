@@ -13,8 +13,8 @@ import {
   KlingModeSchema,
   KlingMotionControlRequestSchema,
   KlingVideoRequestSchema,
-  Seedance2FastRequestSchema,
-  Seedance2RequestSchema,
+  Seedance2FastInputSchema,
+  Seedance2InputSchema,
   Wan27AspectRatioSchema,
   Wan27AudioSettingSchema,
   Wan27RefToVideoRequestSchema,
@@ -424,8 +424,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
 
 const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unknown }> = {
   generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
-  generate_seedance2_video: Seedance2RequestSchema.shape.input.shape.reference_image_urls,
-  generate_seedance2_fast_video: Seedance2FastRequestSchema.shape.input.shape.reference_image_urls,
+  generate_seedance2_video: Seedance2InputSchema.shape.reference_image_urls,
+  generate_seedance2_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
@@ -455,9 +455,9 @@ const KLING_MOTION_CONTROL_MODES = [...KlingMotionControlRequestSchema.shape.inp
 const KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS = [...KlingMotionControlRequestSchema.shape.input.shape.character_orientation.unwrap().options];
 const KLING_MOTION_CONTROL_BACKGROUND_SOURCES = [...KlingMotionControlRequestSchema.shape.input.shape.background_source.unwrap().options];
 
-const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
-const SEEDANCE2_FAST_RESOLUTIONS = [...Seedance2FastRequestSchema.shape.input.shape.resolution.unwrap().options];
-const SEEDANCE2_RESOLUTIONS = [...Seedance2RequestSchema.shape.input.shape.resolution.unwrap().options];
+const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastInputSchema.shape.aspect_ratio.unwrap().options];
+const SEEDANCE2_FAST_RESOLUTIONS = [...Seedance2FastInputSchema.shape.resolution.unwrap().options];
+const SEEDANCE2_RESOLUTIONS = [...Seedance2InputSchema.shape.resolution.unwrap().options];
 
 const SEEDANCE2_TOOL_NAMES = [
   "generate_seedance2_video",

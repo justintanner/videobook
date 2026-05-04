@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
+  Seedance2FastInputSchema,
   Seedance2FastRequestSchema,
   Seedance2RequestSchema,
 } from "@apicity/kie/zod";
@@ -68,7 +69,7 @@ async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-const seedance2InputSchema = Seedance2FastRequestSchema.shape.input.shape;
+const seedance2InputSchema = Seedance2FastInputSchema.shape;
 
 function buildSchema(resolutions: readonly Resolution[]) {
   return {
