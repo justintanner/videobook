@@ -1,9 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-engine";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
-import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
 type ProcessVideoPayload = {
@@ -27,6 +27,45 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
+
+    // Transcode non-mp4 uploads to original.mp4 so downstream consumers
+    // (browser <video>, ffmpeg jobs, transcribe) all get a single canonical
+    // container. Skip when already mp4 — re-encoding would be wasted work.
+    let activeVideoPath = videoPath;
+    const sourceExt = extname(videoPath).toLowerCase();
+    if (sourceExt !== ".mp4") {
+      const tempPath = join(assetDir, "original.mp4.tmp");
+      // Explicit -map drops subtitle/data/attachment streams that the mp4
+      // muxer can't handle (e.g. subrip from MKV rips), which would otherwise
+      // fail the whole transcode. Also pin to the first audio track so files
+      // with multiple language tracks pick a deterministic stream.
+      const transcodeArgs = [
+        "-y",
+        "-i", videoPath,
+        "-map", "0:v:0",
+        ...(probe.hasAudio ? ["-map", "0:a:0"] : []),
+        ...H264_MEDIUM,
+        ...(probe.hasAudio ? AUDIO_OPTS : ["-an"]),
+        "-movflags", "+faststart",
+        tempPath,
+      ];
+      try {
+        await runFfmpeg(transcodeArgs);
+        const mp4Buf = await fsReadFile(tempPath);
+        const mp4Result = await fs.writeFile(assetId, "original.mp4", mp4Buf, projectSlug);
+        if (!mp4Result.ok) {
+          throw new Error(`writeFile original.mp4 failed for ${assetId}: ${mp4Result.error.message}`);
+        }
+      } finally {
+        await rm(tempPath, { force: true });
+      }
+      const sourceFilename = `original${sourceExt}`;
+      const deleteResult = await fs.deleteFile(assetId, sourceFilename, projectSlug);
+      if (!deleteResult.ok) {
+        throw new Error(`deleteFile ${sourceFilename} failed for ${assetId}: ${deleteResult.error.message}`);
+      }
+      activeVideoPath = join(assetDir, "original.mp4");
+    }
 
     let frameCount = 0;
     {
@@ -59,7 +98,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       try {
         await runFfmpeg([
           "-y",
-          "-i", videoPath,
+          "-i", activeVideoPath,
           "-ss", String(ts),
           "-frames:v", "1",
           "-q:v", "2",
@@ -75,7 +114,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     // standalone audio reads — timeline, transcription — match the source).
     if (probe.hasAudio) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
-      await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath]);
+      await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath]);
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
         const mp3Result = await fs.writeFile(assetId, "original.mp3", mp3Buf, projectSlug);
@@ -89,7 +128,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
 
     // Extract waveform and persist via the typed primitive (committed to git
     // alongside metadata.sqlite + the per-asset canonical export).
-    const waveform = await extractWaveform(videoPath);
+    const waveform = await extractWaveform(activeVideoPath);
     if (waveform.length > 0) {
       const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
       if (!wavResult.ok) {
@@ -129,7 +168,7 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
       const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
       await queue.enqueue(transcribeJobId, {
         type: "transcribe_video_audio",
-        videoPath, assetId, assetDir, projectSlug,
+        videoPath: activeVideoPath, assetId, assetDir, projectSlug,
       } as unknown as Record<string, unknown>);
     }
 
