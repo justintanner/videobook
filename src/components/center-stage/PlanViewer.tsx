@@ -282,7 +282,13 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
     () => mediaItems.filter((m) => m.type === 'video' || m.type === 'audio'),
     [mediaItems],
   );
+  const characterCandidates = useMemo(
+    () => mediaItems.filter((m) => m.id.startsWith('char-')),
+    [mediaItems],
+  );
   const [selectedSource, setSelectedSource] = useState<string>('');
+  const [selectedCharA, setSelectedCharA] = useState<string>('');
+  const [selectedCharB, setSelectedCharB] = useState<string>('');
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -291,13 +297,29 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
     }
   }, [sourceCandidates, selectedSource]);
 
+  useEffect(() => {
+    if (!selectedCharA && characterCandidates.length > 0) {
+      setSelectedCharA(characterCandidates[0].id);
+    }
+    if (!selectedCharB && characterCandidates.length > 1) {
+      setSelectedCharB(characterCandidates[1].id);
+    }
+  }, [characterCandidates, selectedCharA, selectedCharB]);
+
+  const canGenerate =
+    Boolean(selectedSource) &&
+    Boolean(selectedCharA) &&
+    Boolean(selectedCharB) &&
+    selectedCharA !== selectedCharB;
+
   const handleGenerate = useCallback(async () => {
-    if (!selectedSource || !projectSlug) return;
+    if (!canGenerate || !projectSlug) return;
     setGenerating(true);
     try {
       const result = await callTool('plan_visualization', {
         source_asset_id: selectedSource,
         project_slug: projectSlug,
+        character_asset_ids: [selectedCharA, selectedCharB],
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
@@ -309,7 +331,14 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
     } finally {
       setGenerating(false);
     }
-  }, [selectedSource, projectSlug, callTool]);
+  }, [canGenerate, selectedSource, selectedCharA, selectedCharB, projectSlug, callTool]);
+
+  const blockingMessage =
+    sourceCandidates.length === 0
+      ? 'No video or audio assets in this project yet — upload one first.'
+      : characterCandidates.length < 2
+      ? `Need 2 character assets (have ${characterCandidates.length}) — create char-* assets first.`
+      : null;
 
   return (
     <PlanShell title="PLAN" slug="plan (not yet generated)" onClose={onClose}>
@@ -318,35 +347,70 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
         <div className="text-center space-y-1.5 max-w-md">
           <h2 className="text-base font-mono font-bold text-primary/90 uppercase tracking-wider">No plan yet</h2>
           <p className="text-sm text-primary/60">
-            Pick a transcribed video or audio source. We'll break it into per-scene cinematic prompts you can launch image/video gens from.
+            Pick a transcribed source and the two character assets to swap into every chunk. We'll even-split the clip into 10–15s chunks, edit the first/last frames with gpt-image-2 (2K), and assemble a Seedance 2 multimodal prompt per chunk.
           </p>
         </div>
-        {sourceCandidates.length === 0 ? (
-          <p className="text-xs text-muted-foreground/60 font-mono">
-            No video or audio assets in this project yet — upload one first.
-          </p>
+        {blockingMessage ? (
+          <p className="text-xs text-muted-foreground/60 font-mono">{blockingMessage}</p>
         ) : (
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
-              disabled={generating}
-              className={cn(
-                'h-8 px-2 rounded bg-black/60 border border-zinc-700 text-sm font-mono text-primary/90',
-                'focus:outline-none focus:border-primary/60',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-            >
-              {sourceCandidates.map((m) => (
-                <option key={m.id} value={m.id}>{m.slug}</option>
-              ))}
-            </select>
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono text-primary/50 w-16 text-right">source</span>
+              <select
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value)}
+                disabled={generating}
+                className={cn(
+                  'h-8 px-2 rounded bg-black/60 border border-zinc-700 text-sm font-mono text-primary/90 min-w-[14rem]',
+                  'focus:outline-none focus:border-primary/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              >
+                {sourceCandidates.map((m) => (
+                  <option key={m.id} value={m.id}>{m.slug}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono text-primary/50 w-16 text-right">char A</span>
+              <select
+                value={selectedCharA}
+                onChange={(e) => setSelectedCharA(e.target.value)}
+                disabled={generating}
+                className={cn(
+                  'h-8 px-2 rounded bg-black/60 border border-zinc-700 text-sm font-mono text-primary/90 min-w-[14rem]',
+                  'focus:outline-none focus:border-primary/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              >
+                {characterCandidates.map((m) => (
+                  <option key={m.id} value={m.id}>{m.slug}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono text-primary/50 w-16 text-right">char B</span>
+              <select
+                value={selectedCharB}
+                onChange={(e) => setSelectedCharB(e.target.value)}
+                disabled={generating}
+                className={cn(
+                  'h-8 px-2 rounded bg-black/60 border border-zinc-700 text-sm font-mono text-primary/90 min-w-[14rem]',
+                  'focus:outline-none focus:border-primary/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              >
+                {characterCandidates.map((m) => (
+                  <option key={m.id} value={m.id} disabled={m.id === selectedCharA}>{m.slug}</option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={generating || !selectedSource}
+              disabled={generating || !canGenerate}
               className={cn(
-                'h-8 px-3 flex items-center gap-1.5 rounded',
+                'mt-1 h-8 px-3 flex items-center gap-1.5 rounded',
                 'text-xs font-mono font-bold uppercase tracking-wider',
                 'text-violet-300/90 hover:text-violet-200',
                 'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',

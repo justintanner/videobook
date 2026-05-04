@@ -13,14 +13,20 @@ import {
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
-const DEFAULT_MAX_SCENE_S = 15;
-const CAP_TOLERANCE_S = 0.05;
-const MAX_INTER_SCENE_GAP_S = 3.0;
+const TARGET_CHUNK_S = 12;
+const MIN_CHUNK_S = 10;
+const MAX_CHUNK_S = 15;
+const REQUIRED_CHARACTERS = 2;
 
 type CharacterContext = {
   asset_id: string;
   name: string;
   description: string;
+};
+
+type Chunk = {
+  start: number;
+  end: number;
 };
 
 type Scene = {
@@ -33,30 +39,26 @@ type Plan = {
   scenes: Scene[];
 };
 
-const SceneSchema = z.object({
-  start: z.number().min(0),
-  end: z.number().min(0),
+const VisualSchema = z.object({
   visual: z.string().min(20),
 });
 
-const PlanSchema = z.object({
-  scenes: z.array(SceneSchema).min(1),
+const VisualsSchema = z.object({
+  visuals: z.array(VisualSchema).min(1),
 });
 
-const PLAN_JSON_SCHEMA = {
+const VISUALS_JSON_SCHEMA = {
   type: "object",
-  required: ["scenes"],
+  required: ["visuals"],
   additionalProperties: false,
   properties: {
-    scenes: {
+    visuals: {
       type: "array",
       items: {
         type: "object",
-        required: ["start", "end", "visual"],
+        required: ["visual"],
         additionalProperties: false,
         properties: {
-          start: { type: "number" },
-          end: { type: "number" },
           visual: { type: "string" },
         },
       },
@@ -64,52 +66,52 @@ const PLAN_JSON_SCHEMA = {
   },
 } as const;
 
-function buildSystemPrompt(maxSceneSeconds: number): string {
-  return `You produce a sequence of high-fidelity visual prompts that illustrate what is being DISCUSSED in a transcribed video. Your output drives image and video generation, so the prompts must be vivid, cinematic, and production-grade.
+function buildSystemPrompt(charA: CharacterContext, charB: CharacterContext): string {
+  return `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
 
 INPUTS YOU RECEIVE:
-- Up to 5 characters with names and short descriptions.
-- Total duration in seconds.
-- A list of words with start/end timestamps.
+- Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
+- A pre-computed list of chunks. Each chunk has a fixed start/end (10s–15s wide) and the transcript words spoken inside it.
 
-RULES:
-1. Coverage: scenes must cover the entire transcript end-to-end. First scene starts at the first word's start; last scene ends at the last word's end. Adjacent scenes touch (scenes[i].end === scenes[i+1].start). No gaps. No overlaps.
-2. Cap: each scene's duration (end - start) MUST be <= ${maxSceneSeconds}s. This is a HARD cap and is auto-validated; outputs that exceed it are rejected entirely. Internal target is ${(maxSceneSeconds - 1).toFixed(0)}s to leave margin.
-3. Picking each scene's end:
-   a. Look at all words whose \`end\` is within [scene_start, scene_start + ${maxSceneSeconds}s].
-   b. Among those, prefer ending at a sentence boundary (after .!?) or after a pause >= 0.4s to the next word.
-   c. If no such break exists in the window, end at the LAST word whose \`end\` <= scene_start + ${(maxSceneSeconds - 0.5).toFixed(1)}s. Splitting mid-sentence is acceptable when needed to honor the cap.
-4. Every scene's \`start\` and \`end\` MUST equal a value taken directly from the input word list. Never round to whole numbers. Never invent times. Never extend past the last word's \`end\`.
-5. The "visual" field is the WHOLE point. Each is a single rich paragraph (40-90 words) that describes — at high fidelity — a CINEMATIC SHOT of WHAT the speech is referring to in that window. Not the speaker talking unless the speech is explicitly self-referential.
-6. Reference characters by their @asset_id token (e.g. \`@char-foo-bar\`) — verbatim, including the leading @, exactly as listed in the Characters block. Do NOT use the human-readable name in the visual text. Downstream tools resolve @asset_id to the actual character likeness.
-7. Every visual MUST include: subject + action, environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Use stylized only if the speech demands it (e.g. "imagine a cartoon...").
-8. Concrete > abstract. If the speech says "AI is taking off," show what that LOOKS like — e.g., a glowing neural lattice rising from a black ocean at dawn — not a vague metaphor.
+YOUR JOB:
+For each chunk, return one "visual" — a single dense paragraph (60–110 words) that:
 
-Output JSON only, matching the provided schema.`;
+1. Names the two characters by their @asset_id token verbatim (e.g. \`@${charA.asset_id}\` and \`@${charB.asset_id}\`). Never use the human-readable name in the visual text. Downstream tools resolve @asset_id to the actual likeness.
+2. Describes the cinematic SHOT for the chunk — environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field.
+3. Describes the ACTION the two characters perform across the chunk — phrased so it reads as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). The Seedance call interpolates between two edited reference frames; your prompt must imply that motion arc explicitly.
+4. Locks character identity: include the phrase "lock the appearance of @${charA.asset_id} and @${charB.asset_id} to reference image 1 and reference image 2 respectively" (or the equivalent — the model needs the cue that frames are reference images, NOT first_frame_url/last_frame_url, since those are mutually exclusive with the multimodal reference fields).
+5. Honors the chunk's audio: dialogue, pacing, and any audible action cues from the transcript drive what the characters DO. Match the on-screen action to the words in this chunk's transcript.
+6. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
+
+OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
 }
 
 function buildUserContext(
-  totalDuration: number,
-  maxSceneSeconds: number,
   characters: CharacterContext[],
+  chunks: Chunk[],
   words: ElevenLabsWord[],
 ): string {
-  const charBlock = characters.length === 0
-    ? "Characters: none"
-    : "Characters (use the @asset_id token verbatim in visuals):\n" + characters.map((c) => `  - @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`).join("\n");
-
-  const wordLines = words
-    .filter((w) => w.type === "word")
-    .map((w) => `${w.start.toFixed(2)}|${w.end.toFixed(2)}|${w.text}`)
+  const charBlock = characters
+    .map((c, i) => `  ${i + 1}. @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`)
     .join("\n");
 
+  const wordsOnly = words.filter((w) => w.type === "word");
+  const chunkBlocks = chunks.map((c, i) => {
+    const inChunk = wordsOnly.filter((w) => w.start >= c.start && w.start < c.end);
+    const text = inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
+    return [
+      `Chunk ${i + 1}: ${c.start.toFixed(2)}s – ${c.end.toFixed(2)}s (${(c.end - c.start).toFixed(2)}s)`,
+      `Transcript: ${text}`,
+    ].join("\n");
+  });
+
   return [
-    `Total duration: ${totalDuration.toFixed(2)}s`,
-    `Max scene length: ${maxSceneSeconds}s`,
+    `Characters (use the @asset_id token verbatim in every visual):`,
     charBlock,
     "",
-    "Words (start|end|text):",
-    wordLines,
+    `Chunks (${chunks.length} total — produce one "visual" per chunk, in order):`,
+    "",
+    chunkBlocks.join("\n\n"),
   ].join("\n");
 }
 
@@ -159,98 +161,78 @@ async function loadCharacter(
   return { asset_id: cleanId, name, description };
 }
 
-function validatePlan(
-  plan: Plan,
-  words: ElevenLabsWord[],
-  maxSceneSeconds: number,
-): { ok: true; value: Plan } | { ok: false; error: string } {
+// Even-split the clip into chunks each in [MIN_CHUNK_S, MAX_CHUNK_S], snapping
+// internal boundaries to the nearest word start so audio extraction never cuts
+// mid-word. Single chunk if the clip is shorter than MAX_CHUNK_S.
+function computeChunks(words: ElevenLabsWord[]): Chunk[] {
   const wordsOnly = words.filter((w) => w.type === "word");
-  if (wordsOnly.length === 0) return { ok: false, error: "Transcript has no word entries" };
-  const firstWordStart = wordsOnly[0].start;
-  const lastWordEnd = wordsOnly[wordsOnly.length - 1].end;
+  if (wordsOnly.length === 0) return [];
 
-  const sorted = [...plan.scenes].sort((a, b) => a.start - b.start);
+  const firstStart = wordsOnly[0].start;
+  const lastEnd = wordsOnly[wordsOnly.length - 1].end;
+  const totalDuration = lastEnd - firstStart;
 
-  // Reject overlaps and large skipped regions; small inter-word gaps get snapped below.
-  for (let i = 0; i < sorted.length; i++) {
-    const s = sorted[i];
-    if (s.end <= s.start) {
-      return { ok: false, error: `Scene at ${s.start}: end (${s.end}) must be > start` };
-    }
-    if (i > 0) {
-      const prev = sorted[i - 1];
-      const gap = s.start - prev.end;
-      if (gap < -CAP_TOLERANCE_S) {
-        return { ok: false, error: `Overlapping scenes near ${prev.end} -> ${s.start}` };
+  if (totalDuration <= MAX_CHUNK_S) {
+    return [{ start: firstStart, end: lastEnd }];
+  }
+
+  const nLo = Math.ceil(totalDuration / MAX_CHUNK_S);
+  const nHi = Math.max(nLo, Math.floor(totalDuration / MIN_CHUNK_S));
+  const target = Math.round(totalDuration / TARGET_CHUNK_S);
+  const n = Math.max(nLo, Math.min(nHi, target));
+  const targetSpan = totalDuration / n;
+
+  const boundaries: number[] = [firstStart];
+  for (let i = 1; i < n; i++) {
+    const t = firstStart + i * targetSpan;
+    let bestT = t;
+    let bestDelta = Infinity;
+    for (const w of wordsOnly) {
+      const d = Math.abs(w.start - t);
+      if (d < bestDelta) {
+        bestDelta = d;
+        bestT = w.start;
       }
-      if (gap > MAX_INTER_SCENE_GAP_S) {
-        return { ok: false, error: `Scenes skip ${gap.toFixed(2)}s of audio near ${prev.end} -> ${s.start}` };
-      }
     }
+    boundaries.push(bestT);
   }
+  boundaries.push(lastEnd);
 
-  if (sorted[0].start - firstWordStart > MAX_INTER_SCENE_GAP_S) {
-    return { ok: false, error: `First scene starts at ${sorted[0].start}, after first word ${firstWordStart}` };
+  const chunks: Chunk[] = [];
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    chunks.push({ start: boundaries[i], end: boundaries[i + 1] });
   }
-  const lastSceneEnd = sorted[sorted.length - 1].end;
-  if (lastWordEnd - lastSceneEnd > MAX_INTER_SCENE_GAP_S) {
-    return { ok: false, error: `Last scene ends at ${lastSceneEnd}, before last word ${lastWordEnd}` };
-  }
-
-  // Auto-split any scene that exceeds the cap into N equal-duration chunks sharing the visual.
-  // This absorbs the model's occasional cap overshoot on long monologue stretches without losing content.
-  const split: Scene[] = [];
-  for (const s of sorted) {
-    const duration = s.end - s.start;
-    const chunks = Math.max(1, Math.ceil(duration / maxSceneSeconds));
-    if (chunks === 1) {
-      split.push(s);
-      continue;
-    }
-    const chunkDuration = duration / chunks;
-    for (let k = 0; k < chunks; k++) {
-      split.push({
-        start: s.start + k * chunkDuration,
-        end: k === chunks - 1 ? s.end : s.start + (k + 1) * chunkDuration,
-        visual: s.visual,
-      });
-    }
-  }
-
-  // Snap adjacent scenes so they touch exactly (absorb natural inter-word silence).
-  const snapped = split.map((s, i) => i === 0 ? s : { ...s, start: split[i - 1].end });
-  return { ok: true, value: { scenes: snapped } };
+  return chunks;
 }
 
 function renderMarkdown(
   sourceAssetId: string,
   totalDuration: number,
-  maxSceneSeconds: number,
   characters: CharacterContext[],
   model: string,
   plan: Plan,
 ): string {
-  const charLine = characters.length === 0
-    ? "none"
-    : characters.map((c) => c.name).join(", ");
+  const charLine = characters.map((c) => `@${c.asset_id} (${c.name})`).join(", ");
 
   const header = [
-    "# Plan: visualization",
+    "# Plan: gpt-image-2 + Seedance 2 remix",
     "",
     `**Source:** ${sourceAssetId}`,
     `**Duration:** ${totalDuration.toFixed(2)}s`,
-    `**Scenes:** ${plan.scenes.length} (≤${maxSceneSeconds}s each)`,
+    `**Chunks:** ${plan.scenes.length} (${MIN_CHUNK_S}–${MAX_CHUNK_S}s each, even-split)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
+    "",
+    "Per chunk: extract first/last frames → swap the two on-screen subjects with the two characters via gpt-image-2-image-to-image (2K, 16:9) → assemble bytedance/seedance-2 multimodal call (edited frames as `reference_image_urls`, chunk video as `reference_video_urls`, chunk audio as `reference_audio_urls`).",
     "",
     "---",
     "",
   ].join("\n");
 
-  const blocks = plan.scenes.map((s) => {
+  const blocks = plan.scenes.map((s, i) => {
     const duration = (s.end - s.start).toFixed(2);
     return [
-      `## ${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s (${duration}s)`,
+      `## Chunk ${i + 1} — ${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s (${duration}s)`,
       "",
       s.visual,
       "",
@@ -264,24 +246,17 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "plan_visualization",
     description:
-      "Generate a per-project visualization plan from a video/audio asset's elevenlabs.json. " +
-      "Each scene is a high-fidelity cinematic prompt describing what is being discussed, capped at 15s. " +
-      "Optionally accepts up to 5 character assets — characters appear in visuals by name. " +
-      "Writes plan/index.md (human-readable) and plan/.plan.json (structured) into the singleton plan asset, overwriting prior.",
+      `Generate a per-chunk remix plan from a video/audio asset's elevenlabs.json. ` +
+      `Even-splits the clip into ${MIN_CHUNK_S}–${MAX_CHUNK_S}s chunks, then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
+      `Requires exactly ${REQUIRED_CHARACTERS} character assets (the two on-screen subjects to swap). ` +
+      `Writes plan/index.md (human-readable) and plan/.plan.json (structured) into the singleton plan asset, overwriting prior.`,
     schema: {
       source_asset_id: z.string().describe("Asset ID with elevenlabs.json (vid-* or aud-*)"),
       project_slug: z.string().describe("Project slug"),
       character_asset_ids: z
         .array(z.string())
-        .max(5)
-        .optional()
-        .describe("Up to 5 char-* assets — visuals reference them by name"),
-      max_scene_seconds: z
-        .number()
-        .positive()
-        .max(60)
-        .optional()
-        .describe(`Hard cap per scene (default ${DEFAULT_MAX_SCENE_S}s)`),
+        .length(REQUIRED_CHARACTERS)
+        .describe(`Exactly ${REQUIRED_CHARACTERS} char-* assets — the two on-screen subjects to swap in each chunk`),
     },
     handler: async (args) => {
       const apiKey = process.env.OPENAI_API_KEY;
@@ -296,16 +271,23 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         source_asset_id,
         project_slug,
         character_asset_ids,
-        max_scene_seconds,
       } = args as {
         source_asset_id: string;
         project_slug: string;
-        character_asset_ids?: string[];
-        max_scene_seconds?: number;
+        character_asset_ids: string[];
       };
 
       const sourceAssetId = source_asset_id.replace(/^@/, "");
-      const maxSceneSeconds = max_scene_seconds ?? DEFAULT_MAX_SCENE_S;
+
+      if (character_asset_ids.length !== REQUIRED_CHARACTERS) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Exactly ${REQUIRED_CHARACTERS} character_asset_ids required (got ${character_asset_ids.length}). The pipeline swaps two on-screen subjects per chunk.`,
+          }],
+        };
+      }
 
       const projectResult = await fs.getProject(project_slug);
       if (!projectResult.ok) {
@@ -364,13 +346,37 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       const totalDuration = wordsOnly[wordsOnly.length - 1].end;
 
       const characters: CharacterContext[] = [];
-      for (const charId of character_asset_ids ?? []) {
+      for (const charId of character_asset_ids) {
         const ctx = await loadCharacter(fs, charId, project_slug);
-        if (ctx) characters.push(ctx);
+        if (!ctx) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Character asset not found: ${charId}` }],
+          };
+        }
+        characters.push(ctx);
+      }
+
+      if (characters.length !== REQUIRED_CHARACTERS) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Resolved ${characters.length}/${REQUIRED_CHARACTERS} characters; aborting`,
+          }],
+        };
+      }
+
+      const chunks = computeChunks(transcript.words);
+      if (chunks.length === 0) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Could not compute chunks from transcript" }],
+        };
       }
 
       const userContent: OpenAiContentPart[] = [
-        textPart(buildUserContext(totalDuration, maxSceneSeconds, characters, transcript.words)),
+        textPart(buildUserContext(characters, chunks, transcript.words)),
       ];
 
       const provider = openai({ apiKey, timeout: 240_000 });
@@ -382,14 +388,14 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           model: MODEL,
           stream: false,
           messages: [
-            { role: "system", content: buildSystemPrompt(maxSceneSeconds) },
+            { role: "system", content: buildSystemPrompt(characters[0], characters[1]) },
             { role: "user", content: userContent },
           ],
           response_format: {
             type: "json_schema",
             json_schema: {
-              name: "plan_visualization_result",
-              schema: PLAN_JSON_SCHEMA as unknown as Record<string, unknown>,
+              name: "plan_visualization_visuals",
+              schema: VISUALS_JSON_SCHEMA as unknown as Record<string, unknown>,
               strict: true,
             },
           },
@@ -405,10 +411,10 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      let parsed: Plan;
+      let visuals: { visual: string }[];
       try {
         const raw = JSON.parse(outputText);
-        parsed = PlanSchema.parse(raw);
+        visuals = VisualsSchema.parse(raw).visuals;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return {
@@ -417,19 +423,27 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const validated = validatePlan(parsed, transcript.words, maxSceneSeconds);
-      if (!validated.ok) {
+      if (visuals.length !== chunks.length) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Plan validation failed: ${validated.error}` }],
+          content: [{
+            type: "text" as const,
+            text: `Model returned ${visuals.length} visuals for ${chunks.length} chunks; expected one-to-one`,
+          }],
         };
       }
 
+      const scenes: Scene[] = chunks.map((c, i) => ({
+        start: c.start,
+        end: c.end,
+        visual: visuals[i].visual,
+      }));
+
       const sidecar = {
-        ...validated.value,
+        scenes,
         source_asset_id: sourceAssetId,
         total_duration_s: totalDuration,
-        max_scene_seconds: maxSceneSeconds,
+        max_scene_seconds: MAX_CHUNK_S,
         characters,
         model: MODEL,
       };
@@ -440,10 +454,9 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       const markdown = renderMarkdown(
         sourceAssetId,
         totalDuration,
-        maxSceneSeconds,
         characters,
         MODEL,
-        validated.value,
+        { scenes },
       );
 
       const writeMd = await fs.writeFile("plan", "index.md", markdown, project_slug);
@@ -472,9 +485,9 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           type: "text" as const,
           text: JSON.stringify({
             asset_id: "plan",
-            scenes: validated.value.scenes.length,
+            scenes: scenes.length,
             total_duration_s: totalDuration,
-            max_scene_seconds: maxSceneSeconds,
+            max_scene_seconds: MAX_CHUNK_S,
             model: MODEL,
           }),
         }],

@@ -293,8 +293,8 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan-vis",
-    description: "Generate a per-scene cinematic visualization plan from a video/audio asset's elevenlabs.json, optionally referencing up to 5 characters by name. Writes to plan/.",
-    example: "/plan-vis @vid-input @char-naval @char-nivi @char-claude",
+    description: "Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video/audio asset's elevenlabs.json. Even-splits into 10–15s chunks, requires exactly two character assets (the two on-screen subjects to swap). Writes to plan/.",
+    example: "/plan-vis @vid-input @char-naval @char-nivi",
     category: "context_menu",
     icon: "Clapperboard",
     size: "default",
@@ -302,7 +302,7 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "source_asset_id", type: "string", required: true, description: "Asset with elevenlabs.json (vid-* or aud-*)" },
-      { name: "character_asset_ids", type: "string[]", required: false, description: "Up to 5 char-* assets to reference by name" },
+      { name: "character_asset_ids", type: "string[]", required: true, description: "Exactly 2 char-* assets — the two on-screen subjects to swap" },
     ],
     mcpTool: { tool: "plan_visualization", autoInject: ["project_slug"] },
   },
