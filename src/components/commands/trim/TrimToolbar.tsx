@@ -65,7 +65,8 @@ export function TrimToolbar({
     <Scissors className="w-4 h-4" />;
 
   return (
-    <div className="grid grid-cols-[auto_1fr_auto] items-stretch gap-3">
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-[auto_1fr_auto] items-stretch gap-3">
       {/* Mode tiles */}
       <div className="flex rounded border border-zinc-700/70 bg-black/40 overflow-hidden">
         <ModeTile
@@ -126,9 +127,6 @@ export function TrimToolbar({
       {/* Actions */}
       <div className="flex items-center gap-2">
         <CommandButton command="/clear" icon={<Eraser className="w-4 h-4" />} size="default" onClick={onClear} />
-        {trimError && (
-          <span className="text-[11px] font-mono text-red-400 truncate max-w-[300px]">{trimError}</span>
-        )}
         <CommandButton
           command={actionCommand}
           icon={actionIcon}
@@ -143,6 +141,15 @@ export function TrimToolbar({
           onClick={onAction}
         />
       </div>
+      </div>
+      {trimError && (
+        <div
+          className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300 break-words whitespace-pre-wrap"
+          title={trimError}
+        >
+          {trimError}
+        </div>
+      )}
     </div>
   );
 }
