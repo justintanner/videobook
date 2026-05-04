@@ -218,14 +218,20 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
-  // Kick off audio extraction once on mount per (project, source) — the
-  // VIDEO button needs `aud-ext-${base}` to splice onto the silent r2v output.
-  // Skipped if the asset is already present.
+  // Kick off audio extraction once per (project, source) — the VIDEO button
+  // needs `aud-ext-${base}` to splice onto the silent r2v output. Skipped if
+  // the asset is already present.
+  //
+  // We deliberately wait until mediaItems has loaded (any item from this
+  // project's sidebar would do) before deciding. Firing while the sidebar is
+  // still empty would create a duplicate `aud-ext-*-2` whenever extraction
+  // had previously run.
   const audioBootstrapKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const expected = sourceAudioAssetId(data.source_asset_id);
     const key = `${projectSlug}/${data.source_asset_id}`;
     if (audioBootstrapKeyRef.current === key) return;
+    if (mediaItems.length === 0) return; // Sidebar not loaded yet — defer.
+    const expected = sourceAudioAssetId(data.source_asset_id);
     if (mediaItems.some((m) => m.id === expected)) {
       audioBootstrapKeyRef.current = key;
       return;
