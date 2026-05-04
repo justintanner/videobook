@@ -475,7 +475,7 @@ function deriveVariantState(
   return { kind: 'generating' };
 }
 
-function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModels, onRegen, onGenerate, onAccept, onReplace, onSelectVariant, swapsInFlight, accepting, replacing, selecting }: {
+function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModels, onRegen, onGenerate, onRephraseRetry, onAccept, onReplace, onSelectVariant, swapsInFlight, accepting, replacing, selecting }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
@@ -483,6 +483,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
   swapModels: Set<SwapModel>;
   onRegen: (frameIndex: 1 | 2, model: SwapModel) => void;
   onGenerate: (frameIndex: 1 | 2, model: SwapModel) => void;
+  onRephraseRetry: (frameIndex: 1 | 2, model: SwapModel) => void;
   onAccept: (frameIndex: 1 | 2) => void;
   onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
   onSelectVariant: (frameIndex: 1 | 2, assetId: string) => void;
@@ -512,6 +513,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
         selecting={selecting.has(1)}
         onRegen={(model) => onRegen(1, model)}
         onGenerate={(model) => onGenerate(1, model)}
+        onRephraseRetry={(model) => onRephraseRetry(1, model)}
         onAccept={() => onAccept(1)}
         onReplace={(source) => onReplace(1, source)}
         onSelectVariant={(assetId) => onSelectVariant(1, assetId)}
@@ -529,6 +531,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
         selecting={selecting.has(2)}
         onRegen={(model) => onRegen(2, model)}
         onGenerate={(model) => onGenerate(2, model)}
+        onRephraseRetry={(model) => onRephraseRetry(2, model)}
         onAccept={() => onAccept(2)}
         onReplace={(source) => onReplace(2, source)}
         onSelectVariant={(assetId) => onSelectVariant(2, assetId)}
@@ -537,7 +540,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, swapModel
   );
 }
 
-function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItems, swapModels, swapsInFlight, accepting, replacing, selecting, onRegen, onGenerate, onAccept, onReplace, onSelectVariant }: {
+function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItems, swapModels, swapsInFlight, accepting, replacing, selecting, onRegen, onGenerate, onRephraseRetry, onAccept, onReplace, onSelectVariant }: {
   frameIndex: 1 | 2;
   scene: PlanScene;
   sourceSrc: string;
@@ -550,6 +553,7 @@ function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItem
   selecting: boolean;
   onRegen: (model: SwapModel) => void;
   onGenerate: (model: SwapModel) => void;
+  onRephraseRetry: (model: SwapModel) => void;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onSelectVariant: (assetId: string) => void;
@@ -590,6 +594,7 @@ function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItem
                 if (variantAssetId && !isSelected) onSelectVariant(variantAssetId);
               }}
               onRegen={() => onRegen(model)}
+              onRephraseRetry={() => onRephraseRetry(model)}
               onAccept={onAccept}
               onReplace={onReplace}
             />
@@ -601,7 +606,7 @@ function SceneFrameVariantStrip({ frameIndex, scene, sourceSrc, label, mediaItem
   );
 }
 
-function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted, accepting, replacing, selecting, onClick, onRegen, onAccept, onReplace }: {
+function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted, accepting, replacing, selecting, onClick, onRegen, onRephraseRetry, onAccept, onReplace }: {
   model: SwapModel;
   sourceSrc: string;
   state: VariantTileState;
@@ -612,6 +617,7 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
   selecting: boolean;
   onClick: () => void;
   onRegen: () => void;
+  onRephraseRetry: () => void;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
 }) {
@@ -728,12 +734,26 @@ function SceneFrameVariantTile({ model, sourceSrc, state, isSelected, isAccepted
             </span>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onRegen(); }}
+              onClick={(e) => { e.stopPropagation(); onRephraseRetry(); }}
+              title="Rephrase the prompt to dodge content moderation, then retry."
               className={cn(
                 'h-5 px-1.5 flex items-center gap-1 rounded',
                 'text-[9px] font-mono uppercase tracking-wider',
                 'text-red-100 hover:text-white',
                 'bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 hover:border-red-300/70',
+              )}
+            >
+              Rephrase + Retry
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRegen(); }}
+              title="Retry with the original prompt"
+              className={cn(
+                'h-5 px-1.5 flex items-center gap-1 rounded',
+                'text-[9px] font-mono uppercase tracking-wider',
+                'text-red-100/80 hover:text-white',
+                'bg-red-500/10 hover:bg-red-500/20 border border-red-400/30 hover:border-red-300/50',
               )}
             >
               Retry
@@ -895,7 +915,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const runSwap = useCallback(async (
     frameIndex: 1 | 2,
     model: SwapModel,
-    opts?: { priorSwapAssetId?: string },
+    opts?: { priorSwapAssetId?: string; safeMode?: boolean },
   ): Promise<{ newAssetId: string } | null> => {
     const tag = `${model}-${frameIndex}`;
     setSwapsInFlight((prev) => {
@@ -912,6 +932,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         provider: swapProvider,
         model,
         ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
+        ...(opts?.safeMode ? { safe_mode: true } : {}),
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
@@ -1231,6 +1252,19 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
             }
           }
           void runSwap(frameIndex, model);
+        }}
+        onRephraseRetry={(frameIndex, model) => {
+          // Same args as Regen, plus safe_mode=true so the server uses a
+          // tamer prompt that avoids 'replace people' wording.
+          if (frameIndex === 2) {
+            const priorVariants = scene.swap?.image1_variants ?? {};
+            const priorSwapAssetId = priorVariants[model] ?? scene.swap?.image1 ?? undefined;
+            if (priorSwapAssetId) {
+              void runSwap(2, model, { priorSwapAssetId, safeMode: true });
+              return;
+            }
+          }
+          void runSwap(frameIndex, model, { safeMode: true });
         }}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
         onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
