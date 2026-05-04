@@ -57,9 +57,10 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
 
   const exportToProject = async (target: string) => {
     if (!callTool || !projectSlug) return;
+    const assetId = slug.replace(/^@/, '');
     try {
       const result = await callTool('export_asset_to_project', {
-        asset_id: slug,
+        asset_id: assetId,
         project_slug: projectSlug,
         target_project: target,
       });
@@ -75,7 +76,7 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
       })();
       toast({
         title: 'Exported',
-        description: `${slug} → ${target}${parsed?.new_asset_id ? ` (${parsed.new_asset_id})` : ''}`,
+        description: `${assetId} → ${target}${parsed?.new_asset_id ? ` (${parsed.new_asset_id})` : ''}`,
         duration: 3000,
       });
       onAfterExport?.(target);
