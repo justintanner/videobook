@@ -12,6 +12,7 @@ interface PlanScene {
   start: number;
   end: number;
   visual: string;
+  swap?: { image1: string | null; image2: string | null } | null;
 }
 
 interface PlanSidecar {
@@ -175,6 +176,7 @@ function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
             projectSlug={projectSlug}
             callTool={callTool}
             dispatch={dispatch}
+            onSidecarUpdate={(sidecar) => setLoadState({ kind: 'ready', data: sidecar })}
           />
         )}
       </div>
@@ -182,13 +184,29 @@ function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
   );
 }
 
-function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch }: {
+type SwapProvider = 'kie';
+type SwapModel = 'gpt-image-2';
+
+const PROVIDER_OPTIONS: { value: SwapProvider; label: string; disabled?: boolean }[] = [
+  { value: 'kie', label: 'kie' },
+  // Future: { value: 'fal', label: 'fal', disabled: true },
+];
+
+const MODEL_OPTIONS_BY_PROVIDER: Record<SwapProvider, { value: SwapModel; label: string }[]> = {
+  kie: [{ value: 'gpt-image-2', label: 'gpt-image-2' }],
+};
+
+function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   data: PlanSidecar;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
+  onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
+  const [swapProvider, setSwapProvider] = useState<SwapProvider>('kie');
+  const [swapModel, setSwapModel] = useState<SwapModel>('gpt-image-2');
+
   const sourceItem = useMemo(
     () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
     [mediaItems, data.source_asset_id],
@@ -231,6 +249,41 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch }: {
           </dd>
           <dt className="text-primary/60">Model</dt>
           <dd className="text-primary/90">{data.model}</dd>
+          <dt className="text-primary/60">Swap provider</dt>
+          <dd>
+            <select
+              value={swapProvider}
+              onChange={(e) => {
+                const next = e.target.value as SwapProvider;
+                setSwapProvider(next);
+                const firstModel = MODEL_OPTIONS_BY_PROVIDER[next][0]?.value;
+                if (firstModel) setSwapModel(firstModel);
+              }}
+              className={cn(
+                'h-7 px-2 rounded bg-black/60 border border-zinc-700 text-xs font-mono text-primary/90',
+                'focus:outline-none focus:border-primary/60',
+              )}
+            >
+              {PROVIDER_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value} disabled={p.disabled}>{p.label}</option>
+              ))}
+            </select>
+          </dd>
+          <dt className="text-primary/60">Swap model</dt>
+          <dd>
+            <select
+              value={swapModel}
+              onChange={(e) => setSwapModel(e.target.value as SwapModel)}
+              className={cn(
+                'h-7 px-2 rounded bg-black/60 border border-zinc-700 text-xs font-mono text-primary/90',
+                'focus:outline-none focus:border-primary/60',
+              )}
+            >
+              {MODEL_OPTIONS_BY_PROVIDER[swapProvider].map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </dd>
         </dl>
       </div>
       <div className="space-y-5">
@@ -240,9 +293,13 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch }: {
             scene={scene}
             index={idx}
             characters={data.characters}
+            mediaItems={mediaItems}
             projectSlug={projectSlug}
+            swapProvider={swapProvider}
+            swapModel={swapModel}
             callTool={callTool}
             dispatch={dispatch}
+            onSidecarUpdate={onSidecarUpdate}
           />
         ))}
       </div>
@@ -270,6 +327,127 @@ function AssetCard({ item, fallbackLabel }: {
   );
 }
 
+type FrameTileState =
+  | { kind: 'idle' }
+  | { kind: 'generating' }
+  | { kind: 'ready'; src: string }
+  | { kind: 'error'; message: string };
+
+function deriveTileState(
+  scene: PlanScene,
+  frameIndex: 1 | 2,
+  mediaItems: MediaItem[],
+): FrameTileState {
+  const swapId = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'];
+  if (!swapId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === swapId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') {
+    return { kind: 'error', message: item.failedMessage ?? 'swap failed' };
+  }
+  if (item.status === 'ready') {
+    const src = item.thumbnailSrc ?? item.filePath ?? null;
+    if (src) return { kind: 'ready', src };
+    return { kind: 'generating' };
+  }
+  return { kind: 'generating' };
+}
+
+function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRetry, swapsInFlight }: {
+  sceneIndex: number;
+  scene: PlanScene;
+  projectSlug: string;
+  mediaItems: MediaItem[];
+  onRetry: (frameIndex: 1 | 2) => void;
+  swapsInFlight: Set<1 | 2>;
+}) {
+  // Cache-bust the source-frame thumbnails on scene-boundary changes — when
+  // /plan-vis re-runs and produces different chunks, timestamps shift and the
+  // same filename now points at a different frame.
+  const v = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
+  const sourceUrl = (i: 1 | 2) =>
+    `/files/${projectSlug}/plan/scene-${sceneIndex}-image${i}-source.jpg?v=${v}`;
+  return (
+    <div className="flex gap-2 px-3 py-3 border-b border-zinc-800/40 bg-black/20">
+      <SceneFrameTile
+        sourceSrc={sourceUrl(1)}
+        state={deriveTileState(scene, 1, mediaItems)}
+        label={`image1 · first ${formatTimecode(scene.start)}`}
+        inFlight={swapsInFlight.has(1)}
+        onRetry={() => onRetry(1)}
+      />
+      <SceneFrameTile
+        sourceSrc={sourceUrl(2)}
+        state={deriveTileState(scene, 2, mediaItems)}
+        label={`image2 · last ${formatTimecode(scene.end)}`}
+        inFlight={swapsInFlight.has(2)}
+        onRetry={() => onRetry(2)}
+      />
+    </div>
+  );
+}
+
+function SceneFrameTile({ sourceSrc, state, label, inFlight, onRetry }: {
+  sourceSrc: string;
+  state: FrameTileState;
+  label: string;
+  inFlight: boolean;
+  onRetry: () => void;
+}) {
+  const [errored, setErrored] = useState(false);
+  const showSource = state.kind !== 'ready';
+  const showSpinner = inFlight || state.kind === 'generating';
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="relative w-40 aspect-video bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center">
+        {state.kind === 'ready' ? (
+          <img
+            src={state.src}
+            alt={label}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : showSource && !errored ? (
+          <img
+            src={sourceSrc}
+            alt={label}
+            className={cn('w-full h-full object-cover', state.kind === 'error' && 'opacity-50')}
+            loading="lazy"
+            onError={() => setErrored(true)}
+          />
+        ) : (
+          <span className="text-[10px] font-mono text-primary/40 px-2 text-center">missing</span>
+        )}
+        {showSpinner && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+          </div>
+        )}
+        {state.kind === 'error' && !inFlight && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/70">
+            <span className="text-[10px] font-mono text-red-200/90 px-2 text-center line-clamp-2">
+              {state.message}
+            </span>
+            <button
+              type="button"
+              onClick={onRetry}
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-red-100 hover:text-white',
+                'bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 hover:border-red-300/70',
+              )}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="text-[10px] font-mono text-primary/50">{label}</div>
+    </div>
+  );
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -286,15 +464,33 @@ function rewriteVisualWithImageTokens(
   return result;
 }
 
+function readySwapAssetIds(
+  scene: PlanScene,
+  mediaItems: MediaItem[],
+): [string, string] | null {
+  const a = scene.swap?.image1;
+  const b = scene.swap?.image2;
+  if (!a || !b) return null;
+  const itemA = mediaItems.find((m) => m.id === a);
+  const itemB = mediaItems.find((m) => m.id === b);
+  if (itemA?.status !== 'ready' || itemB?.status !== 'ready') return null;
+  return [a, b];
+}
+
 function buildSeedancePayload(
   scene: PlanScene,
   characters: PlanSidecar['characters'],
+  mediaItems: MediaItem[],
 ): unknown {
+  const swapped = readySwapAssetIds(scene, mediaItems);
+  const imageSlugs = swapped
+    ? swapped.map((id) => `@${id}`)
+    : characters.map((c) => `@${c.asset_id}`);
   return {
     tool: 'generate_seedance2_r2v_fal',
     args: {
       prompt: rewriteVisualWithImageTokens(scene.visual, characters),
-      image_slugs: characters.map((c) => `@${c.asset_id}`),
+      image_slugs: imageSlugs,
       resolution: '720p',
       aspect_ratio: '16:9',
       duration: 'auto',
@@ -303,27 +499,77 @@ function buildSeedancePayload(
   };
 }
 
-function SceneBlock({ scene, index, characters, projectSlug, callTool, dispatch }: {
+function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapProvider, swapModel, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
   characters: PlanSidecar['characters'];
+  mediaItems: MediaItem[];
   projectSlug: string;
+  swapProvider: SwapProvider;
+  swapModel: SwapModel;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
+  onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
+  void dispatch;
   const [view, setView] = useState<'prompt' | 'json'>('prompt');
   const [copied, setCopied] = useState(false);
   const [submittingVideo, setSubmittingVideo] = useState(false);
+  const [swapsInFlight, setSwapsInFlight] = useState<Set<1 | 2>>(new Set());
+
+  const tile1 = deriveTileState(scene, 1, mediaItems);
+  const tile2 = deriveTileState(scene, 2, mediaItems);
+  const isGenerating = (s: FrameTileState) => s.kind === 'generating';
+  const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
+  const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
+
+  const runSwap = useCallback(async (frameIndex: 1 | 2) => {
+    setSwapsInFlight((prev) => {
+      const next = new Set(prev);
+      next.add(frameIndex);
+      return next;
+    });
+    try {
+      const result = await callTool('swap_plan_scene_frame', {
+        project_slug: projectSlug,
+        scene_index: index,
+        frame_index: frameIndex,
+        character_asset_ids: characters.map((c) => `@${c.asset_id}`),
+        provider: swapProvider,
+        model: swapModel,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
+        toast({ title: `Scene ${index + 1} image${frameIndex} swap failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // The job is enqueued either way; sidecar will refresh next read_plan.
+      }
+    } finally {
+      setSwapsInFlight((prev) => {
+        const next = new Set(prev);
+        next.delete(frameIndex);
+        return next;
+      });
+    }
+  }, [callTool, projectSlug, index, characters, onSidecarUpdate, swapProvider, swapModel]);
 
   const handleImage = useCallback(() => {
-    void dispatch(`/image ${scene.visual}`);
-  }, [dispatch, scene.visual]);
+    if (anySwapInFlight) return;
+    void runSwap(1);
+    void runSwap(2);
+  }, [anySwapInFlight, runSwap]);
 
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
     setSubmittingVideo(true);
     try {
-      const payload = buildSeedancePayload(scene, characters) as { args: Record<string, unknown> };
+      const payload = buildSeedancePayload(scene, characters, mediaItems) as { args: Record<string, unknown> };
       const result = await callTool('generate_seedance2_r2v_fal', {
         project_slug: projectSlug,
         ...payload.args,
@@ -333,15 +579,16 @@ function SceneBlock({ scene, index, characters, projectSlug, callTool, dispatch 
         toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
         return;
       }
-      toast({ title: `Scene ${index + 1} enqueued`, description: 'Seedance 2 r2v · 720p · 16:9', duration: 2500 });
+      const note = swapsReady ? 'Seedance 2 r2v · 720p · swapped frames' : 'Seedance 2 r2v · 720p · char refs';
+      toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, scene, characters, callTool, projectSlug, index]);
+  }, [submittingVideo, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady]);
 
   const json = useMemo(
-    () => JSON.stringify(buildSeedancePayload(scene, characters), null, 2),
-    [scene, characters],
+    () => JSON.stringify(buildSeedancePayload(scene, characters, mediaItems), null, 2),
+    [scene, characters, mediaItems],
   );
 
   const handleCopy = useCallback(async () => {
@@ -370,23 +617,29 @@ function SceneBlock({ scene, index, characters, projectSlug, callTool, dispatch 
           <button
             type="button"
             onClick={handleImage}
-            title="Open the image gen panel pre-filled with this scene's visual"
+            disabled={anySwapInFlight}
+            title={anySwapInFlight
+              ? 'Swap in progress…'
+              : 'Run gpt-image-2 to swap the two on-screen subjects in both source frames with the two character refs'}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
               'text-primary/90 hover:text-primary',
               'bg-primary/5 hover:bg-primary/15 border border-primary/30 hover:border-primary/60',
               'transition-colors duration-150',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
-            <ImageIcon className="w-3.5 h-3.5" />
+            {anySwapInFlight ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
             Image
           </button>
           <button
             type="button"
             onClick={handleVideo}
-            disabled={submittingVideo}
-            title="Enqueue Seedance 2 r2v at 720p with the two character refs"
+            disabled={submittingVideo || anySwapInFlight}
+            title={swapsReady
+              ? 'Enqueue Seedance 2 r2v at 720p with the swapped frames as @Image1 / @Image2'
+              : 'Enqueue Seedance 2 r2v at 720p with the raw character refs (run Image first to use swapped frames)'}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
@@ -401,6 +654,14 @@ function SceneBlock({ scene, index, characters, projectSlug, callTool, dispatch 
           </button>
         </div>
       </header>
+      <SceneFrameTiles
+        sceneIndex={index}
+        scene={scene}
+        projectSlug={projectSlug}
+        mediaItems={mediaItems}
+        onRetry={(frameIndex) => { void runSwap(frameIndex); }}
+        swapsInFlight={swapsInFlight}
+      />
       <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
         <div className="flex">
           <TabButton active={view === 'prompt'} onClick={() => setView('prompt')} icon={<FileText className="w-3 h-3" />}>

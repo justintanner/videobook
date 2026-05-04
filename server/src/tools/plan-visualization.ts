@@ -3,12 +3,20 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { findAudioFile, findVideoFile } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { readFile as fsReadFile, mkdir } from "node:fs/promises";
+import { readFile as fsReadFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { createRequire } from "node:module";
 import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
+
+const execFileAsync = promisify(execFile);
+const planVisRequire = createRequire(import.meta.url);
+const FFMPEG: string = planVisRequire("ffmpeg-static");
 import {
   MODEL,
   decodeBuffer,
@@ -76,6 +84,57 @@ For each chunk, return one "visual" — a single dense paragraph (60–110 words
 6. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
 
 OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
+
+async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: string): Promise<Buffer> {
+  try {
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-ss", String(timestamp),
+      "-i", inputPath,
+      "-frames:v", "1",
+      "-q:v", "2",
+      outPath,
+    ]);
+  } catch (error) {
+    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
+    throw new Error(`ffmpeg failed at t=${timestamp}s: ${msg}`);
+  }
+  const outStat = await stat(outPath).catch(() => null);
+  if (!outStat || outStat.size === 0) {
+    throw new Error(`ffmpeg produced no output at t=${timestamp}s`);
+  }
+  return readFile(outPath);
+}
+
+// Per scene N, write plan/scene-N-image1-source.jpg (first frame) and
+// plan/scene-N-image2-source.jpg (last frame, ε before the boundary so we
+// don't fall off the end). The non-suffixed `scene-N-image{1,2}.jpg` slots
+// are reserved for phase-2 swap outputs that feed Seedance 2 r2v as @Image1
+// / @Image2.
+async function extractSceneSourceFrames(
+  fs: ClipfirstFs,
+  projectSlug: string,
+  videoPath: string,
+  scenes: Array<{ start: number; end: number }>,
+): Promise<void> {
+  for (let i = 0; i < scenes.length; i++) {
+    const { start, end } = scenes[i];
+    const lastTs = Math.max(0, end - 0.05);
+    const tempFirst = join(tmpdir(), `clipfirst-plan-${i}-1-${Date.now()}.jpg`);
+    const tempLast = join(tmpdir(), `clipfirst-plan-${i}-2-${Date.now()}.jpg`);
+    try {
+      const firstBuf = await extractFrameJpeg(videoPath, start, tempFirst);
+      const lastBuf = await extractFrameJpeg(videoPath, lastTs, tempLast);
+      const w1 = await fs.writeFile("plan", `scene-${i}-image1-source.jpg`, firstBuf, projectSlug);
+      if (!w1.ok) throw new Error(`scene ${i + 1} image1: ${w1.error.message}`);
+      const w2 = await fs.writeFile("plan", `scene-${i}-image2-source.jpg`, lastBuf, projectSlug);
+      if (!w2.ok) throw new Error(`scene ${i + 1} image2: ${w2.error.message}`);
+    } finally {
+      await rm(tempFirst, { force: true }).catch(() => {});
+      await rm(tempLast, { force: true }).catch(() => {});
+    }
+  }
+}
 
 async function loadCharacter(
   fs: ClipfirstFs,
@@ -488,6 +547,21 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      try {
+        await extractSceneSourceFrames(
+          fs,
+          project_slug,
+          join(videoManifest.value.path, videoFile.name),
+          scenes,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Plan written, but source-frame extraction failed: ${msg}` }],
+        };
+      }
+
       return {
         content: [{
           type: "text" as const,
@@ -498,6 +572,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
             max_scene_seconds: CHUNK_S,
             model: MODEL,
             sampled_frames: sampled.length,
+            extracted_source_frames: scenes.length * 2,
           }),
         }],
       };

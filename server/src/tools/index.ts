@@ -138,6 +138,7 @@ import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
 import { planVisualizationDef } from "./plan-visualization.js";
+import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 import { readPlanDef } from "./read-plan.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -300,6 +301,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
     planVisualizationDef(fs),
+    swapPlanSceneFrameDef(fs),
     readPlanDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
