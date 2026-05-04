@@ -28,9 +28,10 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     const probe = await probeVideo(videoPath);
     const { width, height, duration } = probe;
 
-    // Transcode non-mp4 uploads to original.mp4 so downstream consumers
-    // (browser <video>, ffmpeg jobs, transcribe) all get a single canonical
-    // container. Skip when already mp4 — re-encoding would be wasted work.
+    // Generate original.mp4 alongside non-mp4 uploads so downstream consumers
+    // (browser <video>, ffmpeg jobs, transcribe) get a canonical container.
+    // The source file (original.mkv / .mov / etc.) stays on disk as the
+    // archival truth — only the derived mp4 is fresh work.
     let activeVideoPath = videoPath;
     const sourceExt = extname(videoPath).toLowerCase();
     if (sourceExt !== ".mp4") {
@@ -72,11 +73,6 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
         }
       } finally {
         await rm(tempPath, { force: true });
-      }
-      const sourceFilename = `original${sourceExt}`;
-      const deleteResult = await fs.deleteFile(assetId, sourceFilename, projectSlug);
-      if (!deleteResult.ok) {
-        throw new Error(`deleteFile ${sourceFilename} failed for ${assetId}: ${deleteResult.error.message}`);
       }
       activeVideoPath = join(assetDir, "original.mp4");
     }

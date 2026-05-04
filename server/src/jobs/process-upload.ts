@@ -64,11 +64,15 @@ export async function findUnprocessedUploads(
       // hands a half-written file to process_video, producing a spurious
       // .generation-error.json before the real owner finishes.
       if (locked) return null;
-      // Skip assets in terminal 'error' state — a prior process_video/image
-      // failed and nothing has cleared the row. Re-enqueuing without recovery
-      // would just spin forever (the engine's lease guard rejects new work
-      // until the row is cleared via /clear-failed-tasks or equivalent).
-      if (work.ok && work.value?.status === "error") return null;
+      // Skip assets that already have a work row in any non-terminal-success
+      // state. 'pending' / 'working' = the upload's own process_video is
+      // already enqueued or in-flight — racing it produces duplicate jobs
+      // that re-run the full transcode pipeline (or, with the legacy delete-
+      // source flow, fail with "ffprobe missing original.mkv"). 'error' = a
+      // prior run failed and nothing has cleared the row; re-enqueuing without
+      // recovery just spins (the engine's lease guard rejects new work until
+      // the row is cleared via /clear-failed-tasks or equivalent).
+      if (work.ok && work.value && work.value.status !== "ready") return null;
 
       // Prefer a literal `original.{ext}` first — that's the canonical shape
       // produced by upload-file and processExternalUpload itself. Only fall
