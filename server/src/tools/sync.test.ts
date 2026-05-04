@@ -256,7 +256,7 @@ describe("buildAssetList", () => {
     expect(assets[0].status).toBe("processing");
   });
 
-  it("shows status analyzing for processed video without analysis", async () => {
+  it("shows status ready for processed video without analysis (analysis is lazy)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "analyzing-test", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
@@ -267,7 +267,7 @@ describe("buildAssetList", () => {
 
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
-    expect(assets[0].status).toBe("analyzing");
+    expect(assets[0].status).toBe("ready");
   });
 
   it("shows status ready for fully analyzed video", async () => {
