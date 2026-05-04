@@ -414,13 +414,21 @@ function deriveTileState(
   return { kind: 'generating' };
 }
 
-function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, anyInFlight1, anyInFlight2, accepting, replacing, onAccept, onReplace }: {
+// Extract the short model code from an auto-generated swap slug like
+// `img-scene-0-image2-nbp-swap`. Returns null for manual-upload assets etc.
+function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | null {
+  if (!assetId) return null;
+  const m = /-image\d+-(nbp|gpt|wan)-swap/.exec(assetId);
+  return m ? m[1] : null;
+}
+
+function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
   mediaItems: MediaItem[];
-  anyInFlight1: boolean;
-  anyInFlight2: boolean;
+  inFlightModels1: SwapModel[];
+  inFlightModels2: SwapModel[];
   accepting: Set<1 | 2>;
   replacing: Set<1 | 2>;
   onAccept: (frameIndex: 1 | 2) => void;
@@ -438,7 +446,8 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, anyInFligh
         frameIndex={1}
         sourceSrc={sourceUrl(1)}
         state={deriveTileState(scene, 1, mediaItems)}
-        anyInFlight={anyInFlight1}
+        inFlightModels={inFlightModels1}
+        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.image1)}
         label={`image1 · first ${formatTimecode(scene.start)}`}
         accepting={accepting.has(1)}
         replacing={replacing.has(1)}
@@ -449,7 +458,8 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, anyInFligh
         frameIndex={2}
         sourceSrc={sourceUrl(2)}
         state={deriveTileState(scene, 2, mediaItems)}
-        anyInFlight={anyInFlight2}
+        inFlightModels={inFlightModels2}
+        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.image2)}
         label={`image2 · last ${formatTimecode(scene.end)}`}
         accepting={accepting.has(2)}
         replacing={replacing.has(2)}
@@ -460,11 +470,12 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, anyInFligh
   );
 }
 
-function SourceSlotPair({ frameIndex, sourceSrc, state, anyInFlight, label, accepting, replacing, onAccept, onReplace }: {
+function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace }: {
   frameIndex: 1 | 2;
   sourceSrc: string;
   state: FrameTileState;
-  anyInFlight: boolean;
+  inFlightModels: SwapModel[];
+  currentModelCode: string | null;
   label: string;
   accepting: boolean;
   replacing: boolean;
@@ -479,7 +490,8 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, anyInFlight, label, acce
         <SwapSlot
           state={state}
           sourceSrc={sourceSrc}
-          anyInFlight={anyInFlight}
+          inFlightModels={inFlightModels}
+          currentModelCode={currentModelCode}
           accepting={accepting}
           replacing={replacing}
           onAccept={onAccept}
@@ -510,10 +522,11 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, anyInFlight, accepting, replacing, onAccept, onReplace }: {
+function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace }: {
   state: FrameTileState;
   sourceSrc: string;
-  anyInFlight: boolean;
+  inFlightModels: SwapModel[];
+  currentModelCode: string | null;
   accepting: boolean;
   replacing: boolean;
   onAccept: () => void;
@@ -521,7 +534,21 @@ function SwapSlot({ state, sourceSrc, anyInFlight, accepting, replacing, onAccep
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const anyInFlight = inFlightModels.length > 0;
   const showSpinner = state.kind === 'generating' || replacing || (anyInFlight && state.kind === 'idle');
+  // Caption inside the spinner overlay so the user knows what's running.
+  // Prefers the currently-selected slot's model (whose asset is in
+  // 'generating' status) and otherwise lists any in-flight model submissions.
+  const spinnerLabel = (() => {
+    if (replacing) return 'uploading…';
+    if (state.kind === 'generating' && currentModelCode) {
+      return `${currentModelCode}…`;
+    }
+    if (inFlightModels.length > 0) {
+      return inFlightModels.map((m) => SHORT_LABEL_BY_MODEL[m]).join(', ');
+    }
+    return null;
+  })();
   const showReadyActions = state.kind === 'ready' && !state.accepted && !accepting && !replacing;
   const showAcceptedBadge = state.kind === 'ready' && state.accepted && !accepting && !replacing;
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -579,8 +606,13 @@ function SwapSlot({ state, sourceSrc, anyInFlight, accepting, replacing, onAccep
         <span className="text-[10px] font-mono text-primary/40 px-2 text-center">missing</span>
       )}
       {showSpinner && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60">
           <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+          {spinnerLabel && (
+            <span className="text-[9px] font-mono uppercase tracking-wider text-primary/70 px-2 text-center line-clamp-2">
+              {spinnerLabel}
+            </span>
+          )}
         </div>
       )}
       {state.kind === 'error' && !showSpinner && (
@@ -795,8 +827,20 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const tile2 = deriveTileState(scene, 2, mediaItems);
   const isGenerating = (s: FrameTileState) => s.kind === 'generating';
   const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
-  const inFlight1 = isGenerating(tile1) || Array.from(swapsInFlight).some((t) => t.endsWith('-1'));
-  const inFlight2 = isGenerating(tile2) || Array.from(swapsInFlight).some((t) => t.endsWith('-2'));
+  const inFlightModels1 = useMemo(
+    () => Array.from(swapsInFlight)
+      .filter((t) => t.endsWith('-1'))
+      .map((t) => t.slice(0, -2))
+      .filter((m): m is SwapModel => (ALL_SWAP_MODELS as readonly string[]).includes(m)),
+    [swapsInFlight],
+  );
+  const inFlightModels2 = useMemo(
+    () => Array.from(swapsInFlight)
+      .filter((t) => t.endsWith('-2'))
+      .map((t) => t.slice(0, -2))
+      .filter((m): m is SwapModel => (ALL_SWAP_MODELS as readonly string[]).includes(m)),
+    [swapsInFlight],
+  );
   const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
   const togglePanelModel = useCallback((m: SwapModel) => {
     setPanelModels((prev) => {
@@ -1102,8 +1146,8 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         scene={scene}
         projectSlug={projectSlug}
         mediaItems={mediaItems}
-        anyInFlight1={inFlight1}
-        anyInFlight2={inFlight2}
+        inFlightModels1={inFlightModels1}
+        inFlightModels2={inFlightModels2}
         accepting={accepting}
         replacing={replacing}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
