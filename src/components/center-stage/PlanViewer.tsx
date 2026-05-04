@@ -192,7 +192,6 @@ function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
   );
 }
 
-type SwapProvider = 'kie';
 type SwapModel = 'nano-banana-pro' | 'gpt-image-2' | 'wan-2-7-image-pro';
 
 const ALL_SWAP_MODELS: SwapModel[] = ['nano-banana-pro', 'gpt-image-2', 'wan-2-7-image-pro'];
@@ -203,10 +202,13 @@ const SHORT_LABEL_BY_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': 'wan',
 };
 
-const PROVIDER_OPTIONS: { value: SwapProvider; label: string; disabled?: boolean }[] = [
-  { value: 'kie', label: 'kie' },
-  // Future: { value: 'fal', label: 'fal', disabled: true },
-];
+// Convention from extract-audio.ts: deriveAudioName(vid-X) = ext-X → asset id `aud-ext-X`.
+function sourceAudioAssetId(sourceVideoAssetId: string): string {
+  const base = sourceVideoAssetId.startsWith('vid-')
+    ? sourceVideoAssetId.slice(4)
+    : sourceVideoAssetId;
+  return `aud-ext-${base}`;
+}
 
 function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   data: PlanSidecar;
@@ -216,47 +218,6 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
-  const [swapProvider, setSwapProvider] = useState<SwapProvider>('kie');
-  const [submittingAll, setSubmittingAll] = useState(false);
-
-  const eligibleSceneIndices = useMemo(
-    () => data.scenes.flatMap((scene, idx) => (videoReadyForGen(scene).ok ? [idx] : [])),
-    [data.scenes],
-  );
-
-  const handleGenerateAll = useCallback(async () => {
-    if (submittingAll || eligibleSceneIndices.length === 0) return;
-    setSubmittingAll(true);
-    try {
-      let enqueued = 0;
-      let failed = 0;
-      // Sequential rather than parallel — keeps the toast log readable and
-      // gives the queue a chance to apply per-job concurrency caps.
-      for (const idx of eligibleSceneIndices) {
-        const scene = data.scenes[idx];
-        const payload = buildSeedancePayload(scene, data.characters, mediaItems) as { args: Record<string, unknown> };
-        const result = await callTool('generate_seedance2_r2v_fal', {
-          project_slug: projectSlug,
-          ...payload.args,
-        });
-        if (result.isError) {
-          failed += 1;
-          const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'enqueue failed';
-          toast({ title: `Scene ${idx + 1} failed`, description: msg, duration: 4000 });
-        } else {
-          enqueued += 1;
-        }
-      }
-      toast({
-        title: `Generate all videos: ${enqueued} enqueued${failed > 0 ? `, ${failed} failed` : ''}`,
-        description: 'Seedance 2 r2v · 720p',
-        duration: 3000,
-      });
-    } finally {
-      setSubmittingAll(false);
-    }
-  }, [submittingAll, eligibleSceneIndices, data.scenes, data.characters, mediaItems, callTool, projectSlug]);
-
   const sourceItem = useMemo(
     () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
     [mediaItems, data.source_asset_id],
@@ -274,25 +235,6 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <div className="flex items-center justify-between mb-3 gap-3">
           <h1 className="text-lg font-bold text-primary font-mono uppercase tracking-wider">Plan: visualization</h1>
-          <button
-            type="button"
-            onClick={handleGenerateAll}
-            disabled={submittingAll || eligibleSceneIndices.length === 0}
-            title={eligibleSceneIndices.length === 0
-              ? 'No scenes are ready — accept both swap frames per scene first'
-              : `Enqueue Seedance 2 r2v at 720p for ${eligibleSceneIndices.length} of ${data.scenes.length} scene${data.scenes.length === 1 ? '' : 's'}`}
-            className={cn(
-              'h-7 px-3 flex items-center gap-1.5 rounded shrink-0',
-              'text-[11px] font-mono font-bold uppercase tracking-wider',
-              'text-violet-300/90 hover:text-violet-200',
-              'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
-              'transition-colors duration-150',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
-            {submittingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Film className="w-3.5 h-3.5" />}
-            Generate all videos · {eligibleSceneIndices.length}/{data.scenes.length}
-          </button>
         </div>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs font-mono items-center">
           <dt className="text-primary/60">Source</dt>
@@ -320,21 +262,6 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           </dd>
           <dt className="text-primary/60">Model</dt>
           <dd className="text-primary/90">{data.model}</dd>
-          <dt className="text-primary/60">Swap provider</dt>
-          <dd>
-            <select
-              value={swapProvider}
-              onChange={(e) => setSwapProvider(e.target.value as SwapProvider)}
-              className={cn(
-                'h-7 px-2 rounded bg-black/60 border border-zinc-700 text-xs font-mono text-primary/90',
-                'focus:outline-none focus:border-primary/60',
-              )}
-            >
-              {PROVIDER_OPTIONS.map((p) => (
-                <option key={p.value} value={p.value} disabled={p.disabled}>{p.label}</option>
-              ))}
-            </select>
-          </dd>
         </dl>
       </div>
       <div className="space-y-5">
@@ -344,9 +271,9 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
             scene={scene}
             index={idx}
             characters={data.characters}
+            sourceVideoAssetId={data.source_asset_id}
             mediaItems={mediaItems}
             projectSlug={projectSlug}
-            swapProvider={swapProvider}
             callTool={callTool}
             dispatch={dispatch}
             onSidecarUpdate={onSidecarUpdate}
@@ -422,7 +349,7 @@ function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace }: {
+function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace, onIdleClick }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
@@ -433,6 +360,7 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
   replacing: Set<1 | 2>;
   onAccept: (frameIndex: 1 | 2) => void;
   onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
+  onIdleClick: () => void;
 }) {
   // Cache-bust the source-frame thumbnails on scene-boundary changes — when
   // /plan-vis re-runs and produces different chunks, timestamps shift and the
@@ -453,6 +381,7 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
         replacing={replacing.has(1)}
         onAccept={() => onAccept(1)}
         onReplace={(source) => onReplace(1, source)}
+        onIdleClick={onIdleClick}
       />
       <SourceSlotPair
         frameIndex={2}
@@ -465,12 +394,13 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
         replacing={replacing.has(2)}
         onAccept={() => onAccept(2)}
         onReplace={(source) => onReplace(2, source)}
+        onIdleClick={onIdleClick}
       />
     </div>
   );
 }
 
-function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace }: {
+function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick }: {
   frameIndex: 1 | 2;
   sourceSrc: string;
   state: FrameTileState;
@@ -481,6 +411,7 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
   replacing: boolean;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
+  onIdleClick: () => void;
 }) {
   void frameIndex;
   return (
@@ -496,6 +427,7 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
           replacing={replacing}
           onAccept={onAccept}
           onReplace={onReplace}
+          onIdleClick={onIdleClick}
         />
       </div>
       <div className="text-[10px] font-mono text-primary/50">{label}</div>
@@ -522,7 +454,7 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace }: {
+function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick }: {
   state: FrameTileState;
   sourceSrc: string;
   inFlightModels: SwapModel[];
@@ -531,6 +463,7 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
   replacing: boolean;
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
+  onIdleClick: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -593,7 +526,14 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
       {state.kind === 'ready' ? (
         <img src={state.src} alt="swap result" className="w-full h-full object-cover" loading="lazy" />
       ) : state.kind === 'idle' && !anyInFlight ? (
-        <span className="text-[10px] font-mono text-primary/30 px-2 text-center">drop image or run gen</span>
+        <button
+          type="button"
+          onClick={onIdleClick}
+          title="Click to pick models and generate · or drop an image"
+          className="w-full h-full flex items-center justify-center hover:bg-primary/5 transition-colors cursor-pointer"
+        >
+          <span className="text-[10px] font-mono text-primary/40 group-hover:text-primary/70 px-2 text-center">click to generate · or drop image</span>
+        </button>
       ) : !errored ? (
         <img
           src={sourceSrc}
@@ -788,18 +728,20 @@ function buildSeedancePayload(
       resolution: '720p',
       aspect_ratio: '16:9',
       duration: 'auto',
-      generate_audio: true,
+      // Silent video — we splice the source's extracted audio onto it
+      // afterwards via replace_video_audio (see SceneBlock.handleVideo).
+      generate_audio: false,
     },
   };
 }
 
-function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapProvider, callTool, dispatch, onSidecarUpdate }: {
+function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
   projectSlug: string;
-  swapProvider: SwapProvider;
+  sourceVideoAssetId: string;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
@@ -822,6 +764,10 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   // asset to reach 'ready', then dispatch image2 swap for that model with
   // image1 as the prior reference."
   const [pendingImage2Chains, setPendingImage2Chains] = useState<Array<{ model: SwapModel; image1AssetId: string; customPrompt: string }>>([]);
+  // Pending vid- assets waiting on Seedance to finish so we can splice the
+  // source's extracted audio onto them via replace_video_audio. Cleared once
+  // the asset reaches 'ready' and we dispatch the audio-replace tool.
+  const [pendingAudioReplace, setPendingAudioReplace] = useState<Array<{ vidAssetId: string; audioAssetId: string }>>([]);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -871,7 +817,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         scene_index: index,
         frame_index: frameIndex,
         character_asset_ids: characters.map((c) => `@${c.asset_id}`),
-        provider: swapProvider,
+        provider: 'kie',
         model,
         ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
         ...(opts?.safeMode ? { safe_mode: true } : {}),
@@ -898,7 +844,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         return next;
       });
     }
-  }, [callTool, projectSlug, index, characters, onSidecarUpdate, swapProvider]);
+  }, [callTool, projectSlug, index, characters, onSidecarUpdate]);
 
   const runImagePanel = useCallback(async () => {
     if (anySwapInFlight) return;
@@ -1042,6 +988,18 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
     if (!videoGate.ok) return;
+    // Resolve the source video's extracted audio (`aud-ext-${base}`). Without
+    // it we can't run the replace-audio follow-up, so fail loudly here.
+    const audioAssetId = sourceAudioAssetId(sourceVideoAssetId);
+    const audioItem = mediaItems.find((m) => m.id === audioAssetId);
+    if (!audioItem) {
+      toast({
+        title: `Scene ${index + 1} needs source audio`,
+        description: `Run /extract-audio @${sourceVideoAssetId} first — expected ${audioAssetId}.`,
+        duration: 5000,
+      });
+      return;
+    }
     setSubmittingVideo(true);
     try {
       const payload = buildSeedancePayload(scene, characters, mediaItems) as { args: Record<string, unknown> };
@@ -1054,12 +1012,66 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
         return;
       }
+      let newVidAssetId: string | null = null;
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { vid_asset_id?: string };
+        if (typeof parsed.vid_asset_id === 'string') newVidAssetId = parsed.vid_asset_id;
+      } catch {
+        // Tool always returns vid_asset_id; if parsing fails we fall back to
+        // a toast-only notification and skip the audio chain.
+      }
+      if (newVidAssetId) {
+        setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId }]);
+      }
       const note = swapsReady ? 'Seedance 2 r2v · 720p · swapped frames' : 'Seedance 2 r2v · 720p · char refs';
       toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady]);
+  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sourceVideoAssetId]);
+
+  // Walk pendingAudioReplace; when each vid- asset reaches 'ready', dispatch
+  // replace_video_audio with the source's extracted audio. Errors are toasted
+  // and the entry is dropped either way.
+  useEffect(() => {
+    if (pendingAudioReplace.length === 0) return;
+    const stillPending: typeof pendingAudioReplace = [];
+    const dispatch: typeof pendingAudioReplace = [];
+    for (const entry of pendingAudioReplace) {
+      const item = mediaItems.find((m) => m.id === entry.vidAssetId);
+      if (!item) {
+        stillPending.push(entry);
+      } else if (item.status === 'ready') {
+        dispatch.push(entry);
+      } else if (item.status === 'error') {
+        // vid errored — drop without dispatching.
+      } else {
+        stillPending.push(entry);
+      }
+    }
+    if (dispatch.length === 0) return;
+    setPendingAudioReplace(stillPending);
+    for (const entry of dispatch) {
+      void (async () => {
+        const result = await callTool('replace_video_audio', {
+          project_slug: projectSlug,
+          asset_id: entry.vidAssetId,
+          audio_asset_id: entry.audioAssetId,
+        });
+        if (result.isError) {
+          const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_video_audio failed';
+          toast({ title: `Scene ${index + 1} audio splice failed`, description: msg, duration: 5000 });
+          return;
+        }
+        toast({
+          title: `Scene ${index + 1} audio spliced`,
+          description: `${entry.vidAssetId} ← ${entry.audioAssetId}`,
+          duration: 2500,
+        });
+      })();
+    }
+  }, [pendingAudioReplace, mediaItems, callTool, projectSlug, index]);
 
   const json = useMemo(
     () => JSON.stringify(buildSeedancePayload(scene, characters, mediaItems), null, 2),
@@ -1089,24 +1101,6 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
           <span className="text-primary/40">({duration}s)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setImagePanelOpen((o) => !o)}
-            disabled={anySwapInFlight && !imagePanelOpen}
-            title={imagePanelOpen ? 'Close image panel' : 'Pick models / edit prompt for swap gen'}
-            className={cn(
-              'h-7 px-2.5 flex items-center gap-1.5 rounded',
-              'text-[11px] font-mono font-bold uppercase tracking-wider',
-              imagePanelOpen
-                ? 'text-primary bg-primary/15 border border-primary/60'
-                : 'text-primary/90 hover:text-primary bg-primary/5 hover:bg-primary/15 border border-primary/30 hover:border-primary/60',
-              'transition-colors duration-150',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
-            {anySwapInFlight ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            Image
-          </button>
           <button
             type="button"
             onClick={handleVideo}
@@ -1152,6 +1146,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         replacing={replacing}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
         onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
+        onIdleClick={() => setImagePanelOpen(true)}
       />
       <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
         <div className="flex">
