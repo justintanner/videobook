@@ -126,6 +126,12 @@ interface UploadLocalArgs {
   write: (assetId: string, writtenFilename: string, assetPath: string) => Promise<UploadWriteResult>;
 }
 
+// Long enough to cover slow streaming writes for large videos plus the
+// runner's 250ms poll. process_video writes .original.json a few seconds in,
+// so even if this lock expires mid-job, the sweep falls back to the metadata
+// presence check and still skips the asset.
+const UPLOAD_LOCK_MS = 5 * 60_000;
+
 async function uploadLocal(
   fs: ClipfirstFs,
   args: UploadLocalArgs,
@@ -152,54 +158,83 @@ async function uploadLocal(
 
   const { assetId, path: assetPath } = assetResult.value;
   const writtenFilename = `original${ext}`;
-  const writeResult = await args.write(assetId, writtenFilename, assetPath);
-  if (!writeResult.ok) {
+
+  // Hold an fs lock from before the bytes hit disk through the process_*
+  // enqueue. Without it, sync's findUnprocessedUploads sweep races the
+  // streaming write — sees `original.{ext}` with no metadata and no lock —
+  // and queues a duplicate process_video that re-extracts every frame after
+  // the real job finishes.
+  const lockResult = await fs.acquireLock(assetPath, {
+    durationMs: UPLOAD_LOCK_MS,
+    data: { state: "uploading" },
+  });
+  if (!lockResult.ok) {
     await fs.deleteAsset(assetId, args.projectSlug).catch(() => {});
     return {
       ok: false,
-      statusCode: writeResult.statusCode,
-      message: writeResult.message,
+      statusCode: statusCodeForFsError(lockResult.error),
+      message: lockResult.error.message,
     };
   }
 
-  const provenance = { origin: args.origin ?? "upload", processed_at: new Date().toISOString() };
-  if (assetId.startsWith("vid-")) {
-    const videoPath = path.join(assetPath, writtenFilename);
-    const jobId = `process-video-${assetId}-${Date.now()}`;
-    const payload = {
-      type: "process_video",
-      videoPath,
-      assetId,
-      assetDir: assetPath,
-      projectSlug: args.projectSlug,
-      provenance,
-      ...(args.waitForProcessing ? { skipDownstreamJobs: true } : {}),
-    } as unknown as Record<string, unknown>;
-    if (args.waitForProcessing) {
-      await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
+  let outcome: LocalUploadOutcome;
+  try {
+    const writeResult = await args.write(assetId, writtenFilename, assetPath);
+    if (!writeResult.ok) {
+      outcome = {
+        ok: false,
+        statusCode: writeResult.statusCode,
+        message: writeResult.message,
+      };
     } else {
-      await queue.enqueue(jobId, payload);
+      const provenance = { origin: args.origin ?? "upload", processed_at: new Date().toISOString() };
+      if (assetId.startsWith("vid-")) {
+        const videoPath = path.join(assetPath, writtenFilename);
+        const jobId = `process-video-${assetId}-${Date.now()}`;
+        const payload = {
+          type: "process_video",
+          videoPath,
+          assetId,
+          assetDir: assetPath,
+          projectSlug: args.projectSlug,
+          provenance,
+          ...(args.waitForProcessing ? { skipDownstreamJobs: true } : {}),
+        } as unknown as Record<string, unknown>;
+        if (args.waitForProcessing) {
+          await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
+        } else {
+          await queue.enqueue(jobId, payload);
+        }
+      } else if (assetId.startsWith("img-")) {
+        const jobId = `process-image-${assetId}-${Date.now()}`;
+        const payload = {
+          type: "process_image",
+          assetId,
+          projectSlug: args.projectSlug,
+          extension: ext,
+          provenance,
+        } as unknown as Record<string, unknown>;
+        if (args.waitForProcessing) {
+          await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
+        } else {
+          await queue.enqueue(jobId, payload);
+        }
+      } else {
+        await fs.writeMetadata(assetId, "original", provenance, args.projectSlug);
+      }
+      outcome = {
+        ok: true,
+        value: { assetId, path: assetPath, filename: writtenFilename },
+      };
     }
-  } else if (assetId.startsWith("img-")) {
-    const jobId = `process-image-${assetId}-${Date.now()}`;
-    const payload = {
-      type: "process_image",
-      assetId,
-      projectSlug: args.projectSlug,
-      extension: ext,
-      provenance,
-    } as unknown as Record<string, unknown>;
-    if (args.waitForProcessing) {
-      await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
-    } else {
-      await queue.enqueue(jobId, payload);
-    }
-  } else {
-    await fs.writeMetadata(assetId, "original", provenance, args.projectSlug);
+  } finally {
+    // deleteAsset refuses while the lock is held, so always release before
+    // any cleanup branch below runs.
+    await fs.releaseLock(assetPath).catch(() => {});
   }
 
-  return {
-    ok: true,
-    value: { assetId, path: assetPath, filename: writtenFilename },
-  };
+  if (!outcome.ok) {
+    await fs.deleteAsset(assetId, args.projectSlug).catch(() => {});
+  }
+  return outcome;
 }
