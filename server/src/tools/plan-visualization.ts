@@ -3,7 +3,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { findAudioFile } from "clipfirst-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { readFile as fsReadFile } from "node:fs/promises";
+import { readFile as fsReadFile, mkdir } from "node:fs/promises";
 import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import { queue } from "../queue.js";
@@ -472,6 +472,15 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       };
 
       const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, MODEL, scenes);
+
+      const projectResult = await fs.getProject(project_slug);
+      if (!projectResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: projectResult.error.message }],
+        };
+      }
+      await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
 
       const writeMd = await fs.writeFile("plan", "index.md", markdown, project_slug);
       if (!writeMd.ok) {
