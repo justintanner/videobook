@@ -40,8 +40,6 @@ describe("sync tool", () => {
     expect(data.external_uploads).toEqual([]);
     expect(data.auto_render).toEqual([]);
     expect(data.auto_transcribe).toEqual([]);
-    expect(data.auto_speech_to_text).toEqual([]);
-    expect(data.auto_analyze).toEqual([]);
   });
 
   it("sync after creating assets returns result with no errors", async () => {
@@ -373,8 +371,6 @@ describe("performSync", () => {
     expect(result.external_uploads).toEqual([]);
     expect(result.auto_render).toEqual([]);
     expect(result.auto_transcribe).toEqual([]);
-    expect(result.auto_speech_to_text).toEqual([]);
-    expect(result.auto_analyze).toEqual([]);
   });
 
   it("performSync skips KIE task polling when KIE_API_KEY is not set", async () => {
@@ -531,57 +527,6 @@ describe("performSync — never auto-renders from sync", () => {
 
     const result = await performSync(fs, "test-proj");
     expect(result.auto_render.length).toBe(0);
-  });
-
-  it("skips auto-stt when original.mp3 is missing (process_video still mid-flight)", async () => {
-    const { performSync } = await import("./sync.js");
-    const savedKey = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = "test-key";
-
-    try {
-      const createResult = await fs.createAsset("vid", "no-mp3-yet", "test-proj");
-      if (!createResult.ok) throw new Error(createResult.error.message);
-      const assetId = createResult.value.assetId;
-      const assetDir = createResult.value.path;
-
-      // Mid-flight state: process_video has written .original.json + frames
-      // and analyze_video has written .original.analysis.json from frames
-      // alone — but original.mp3 hasn't landed yet.
-      await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-        await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
-      await fs.writeMetadata(assetId, "original", { hasAudio: true }, "test-proj");
-
-      const result = await performSync(fs, "test-proj");
-      expect(result.auto_speech_to_text).toEqual([]);
-    } finally {
-      if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
-      else delete process.env.OPENAI_API_KEY;
-    }
-  });
-
-  it("enqueues auto-stt once original.mp3 is present", async () => {
-    const { performSync } = await import("./sync.js");
-    const savedKey = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = "test-key";
-
-    try {
-      const createResult = await fs.createAsset("vid", "has-mp3", "test-proj");
-      if (!createResult.ok) throw new Error(createResult.error.message);
-      const assetId = createResult.value.assetId;
-      const assetDir = createResult.value.path;
-
-      await writeFile(join(assetDir, "original.mp4"), "fake-video-data");
-      await writeFile(join(assetDir, "original.mp3"), "fake-audio-data");
-        await writeFile(join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
-      await fs.writeMetadata(assetId, "original", { hasAudio: true }, "test-proj");
-
-      const result = await performSync(fs, "test-proj");
-      expect(result.auto_speech_to_text.length).toBe(1);
-      expect(result.auto_speech_to_text[0].assetId).toBe(assetId);
-    } finally {
-      if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
-      else delete process.env.OPENAI_API_KEY;
-    }
   });
 
   it("skips auto-render when gpt4otrans is missing for audio video", async () => {

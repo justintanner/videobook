@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -179,5 +180,126 @@ describe("assign_slot tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.auto_render).toBeUndefined();
+  });
+});
+
+describe("assign_slot lazy analysis trigger", () => {
+  let client: Client;
+  let tempDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    client = await createTestClient(tempDir);
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "test-proj" },
+    });
+    savedKey = process.env.OPENAI_API_KEY;
+    // "test-" prefix is rejected by api-key.ts so any accidentally-dequeued job
+// fails closed before hitting the real provider.
+process.env.OPENAI_API_KEY = "test-key";
+  });
+
+  afterEach(async () => {
+    if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
+    else delete process.env.OPENAI_API_KEY;
+    await client?.close();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  type TextContent = Array<{ type: string; text: string }>;
+
+  async function uploadImage(filename: string): Promise<string> {
+    const data = Buffer.from("fake-image-data").toString("base64");
+    const result = await client.callTool({
+      name: "upload_file",
+      arguments: { project_slug: "test-proj", filename, data },
+    });
+    return JSON.parse((result.content as TextContent)[0].text).assetId;
+  }
+
+  it("enqueues describe_image when an unanalyzed img- is dropped into a slot", async () => {
+    const assetId = await uploadImage("photo.png");
+
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_analyze).toBeDefined();
+    expect(parsed.auto_analyze.kind).toBe("describe_image");
+    expect(typeof parsed.auto_analyze.jobId).toBe("string");
+  });
+
+  it("does not enqueue describe_image for svg uploads (vision unreliable on vector)", async () => {
+    const assetId = await uploadImage("logo.svg");
+
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_analyze).toBeUndefined();
+  });
+
+  it("does not enqueue analysis when OPENAI_API_KEY is missing", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const assetId = await uploadImage("photo.png");
+
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_analyze).toBeUndefined();
+  });
+
+  it("skips re-analysis when .original.analysis.json already exists", async () => {
+    const assetId = await uploadImage("photo.png");
+
+    // Drop the analysis sidecar in place by hand to simulate prior run.
+    const fs = createFsForTest(tempDir);
+    const writeRes = await fs.writeFile(
+      assetId,
+      ".original.analysis.json",
+      Buffer.from(JSON.stringify({ summary: "" })),
+      "test-proj",
+    );
+    if (!writeRes.ok) throw new Error(writeRes.error.message);
+
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_analyze).toBeUndefined();
+  });
+
+  it("enqueues analyze_video for an unanalyzed vid- dropped into a slot", async () => {
+    const fs = createFsForTest(tempDir);
+    const created = await fs.createAsset("vid", "fake-clip", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const assetId = created.value.assetId;
+    await writeFile(join(created.value.path, "original.mp4"), "fake-video-data");
+
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.auto_analyze).toBeDefined();
+    expect(parsed.auto_analyze.kind).toBe("analyze_video");
+    expect(typeof parsed.auto_analyze.jobId).toBe("string");
   });
 });

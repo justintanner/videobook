@@ -122,21 +122,14 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
 
     }
 
-    // Enqueue transcription and analysis for fresh assets (skip for re-processing)
-    if (!skipDownstreamJobs) {
-      if (probe.hasAudio) {
-        const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
-        await queue.enqueue(transcribeJobId, {
-          type: "transcribe_video_audio",
-          videoPath, assetId, assetDir, projectSlug,
-        } as unknown as Record<string, unknown>);
-      }
-
-      const analyzeJobId = `analyze-video-${assetId}-${Date.now()}`;
-      await queue.enqueue(analyzeJobId, {
-        type: "analyze_video",
-        assetId, assetDir, projectSlug,
-        hasTranscription: false,
+    // Speech-to-text stays eager: cheap (gpt-4o-mini-transcribe) and useful as
+    // a standalone artifact even if the asset never lands in a slot. Vision
+    // analysis (gpt-5.4) is gated to slot drop in tools/assign-slot.ts.
+    if (!skipDownstreamJobs && probe.hasAudio) {
+      const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
+      await queue.enqueue(transcribeJobId, {
+        type: "transcribe_video_audio",
+        videoPath, assetId, assetDir, projectSlug,
       } as unknown as Record<string, unknown>);
     }
 

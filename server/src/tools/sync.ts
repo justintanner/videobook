@@ -76,8 +76,6 @@ export type SyncResult = {
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
-  auto_speech_to_text: Array<{ assetId: string; jobId: string }>;
-  auto_analyze: Array<{ assetId: string; jobId: string }>;
 };
 
 function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
@@ -397,19 +395,17 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
 export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], auto_transcribe: [], auto_speech_to_text: [], auto_analyze: [],
+    external_uploads: [], auto_render: [], auto_transcribe: [],
   };
 
   // Single listAssets call, shared by all consumers
   const assets = await fs.listAssets(project_slug);
 
   // Run all discovery steps in parallel
-  const [uploads, tasksRes, transcribeActions, sttActions, analyzeActions, failuresRes] = await Promise.all([
+  const [uploads, tasksRes, transcribeActions, failuresRes] = await Promise.all([
     findUnprocessedUploads(fs, project_slug, assets),
     fs.pendingTasks.findAll(project_slug),
     findAutoTranscribeActions(fs, project_slug, assets),
-    findAutoSpeechToTextActions(fs, project_slug, assets),
-    findAutoAnalyzeActions(fs, project_slug, assets),
     fs.generationErrors.findAll(project_slug),
   ]);
   const tasks: PendingTask[] = tasksRes.ok ? tasksRes.value : [];
@@ -713,22 +709,13 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
     }
   }
 
-  // Auto-render is intentionally NOT performed here. Renders only fire from
-  // explicit /render or assign_slot (lazy render on slot drop). Sync should
-  // never enqueue render_project.
-
-  // Auto-pipeline: retry missing speech-to-text (gpt4otrans) for analyzed videos with audio
-  for (const action of sttActions) {
-    const jobId = `auto-stt-${action.assetId}-${Date.now()}`;
-    await queue.enqueue(jobId, {
-      type: "transcribe_video_audio",
-      videoPath: action.videoPath,
-      assetId: action.assetId,
-      assetDir: action.assetDir,
-      projectSlug: project_slug,
-    } as unknown as Record<string, unknown>);
-    result.auto_speech_to_text.push({ assetId: action.assetId, jobId });
-  }
+  // Auto-render and auto-analyze are intentionally NOT performed here.
+  // Renders fire from explicit /render or assign_slot (lazy on slot drop).
+  // gpt-5.4 analysis fires from assign_slot (lazy on slot drop) and
+  // gpt-4o-mini speech-to-text fires eagerly from process_video on upload.
+  // Sync only retries the ElevenLabs transcribe step (auto_transcribe), which
+  // is gated on .original.analysis.json already existing — i.e. only kicks in
+  // for assets the user has actually slotted.
 
   // Auto-pipeline: advance analyzed videos through transcription
   for (const action of transcribeActions) {
@@ -744,19 +731,6 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
       projectSlug: project_slug,
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
-  }
-
-  // Auto-pipeline: retry missing analysis for processed videos
-  for (const action of analyzeActions) {
-    const jobId = `auto-analyze-${action.assetId}-${Date.now()}`;
-    await queue.enqueue(jobId, {
-      type: "analyze_video",
-      assetId: action.assetId,
-      assetDir: action.assetDir,
-      projectSlug: project_slug,
-      hasTranscription: action.hasTranscription,
-    });
-    result.auto_analyze.push({ assetId: action.assetId, jobId });
   }
 
   return result;
@@ -973,101 +947,6 @@ async function findAutoTranscribeActions(
     })
   );
   return candidates.filter((c): c is TranscribeAction => c !== null);
-}
-
-type SpeechToTextAction = {
-  assetId: string;
-  assetDir: string;
-  videoPath: string;
-};
-
-async function findAutoSpeechToTextActions(
-  fs: ClipfirstFs,
-  projectSlug: string,
-  assets: AssetEntry[],
-): Promise<SpeechToTextAction[]> {
-  if (!process.env.OPENAI_API_KEY) return [];
-
-  const candidates = await Promise.all(
-    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<SpeechToTextAction | null> => {
-      const [manifestResult, locked, meta] = await Promise.all([
-        fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
-        fs.isLocked(asset.path),
-        fs.readMetadata<{ hasAudio?: boolean }>(asset.id, "original", projectSlug),
-      ]);
-      if (!manifestResult.ok) return null;
-
-      const manifest = manifestResult.value;
-      const files = manifest.files;
-      const fileNames = new Set(files.map((f) => f.name));
-
-      // Must have completed analysis
-      if (!fileNames.has(".original.analysis.json")) return null;
-      // Skip if already has speech-to-text
-      if (fileNames.has(".analysis.gpt4otrans.json")) return null;
-      // Skip if locked
-      if (locked) return null;
-
-      // Must have audio (check metadata)
-      if (!meta.ok || !meta.value.hasAudio) return null;
-
-      // Skip if process_video hasn't yet written original.mp3 — analyze_video can
-      // write .original.analysis.json from frames alone, so the analysis sidecar
-      // doesn't imply mp3 extraction is finished.
-      if (!fileNames.has("original.mp3")) return null;
-
-      // Must have a video file (needed to extract audio)
-      const videoFile = findVideoFile(files);
-      if (!videoFile) return null;
-
-      return {
-        assetId: asset.id,
-        assetDir: manifest.path,
-        videoPath: join(manifest.path, videoFile.name),
-      };
-    })
-  );
-  return candidates.filter((c): c is SpeechToTextAction => c !== null);
-}
-
-type AnalyzeAction = {
-  assetId: string;
-  assetDir: string;
-  hasTranscription: boolean;
-};
-
-async function findAutoAnalyzeActions(
-  fs: ClipfirstFs,
-  projectSlug: string,
-  assets: AssetEntry[],
-): Promise<AnalyzeAction[]> {
-  // Need at least one API provider for analysis
-  if (!getApiKey("OPENAI_API_KEY") && !getApiKey("KIE_API_KEY")) return [];
-
-  const candidates = await Promise.all(
-    assets.filter((a) => a.id.startsWith("vid-")).map(async (asset): Promise<AnalyzeAction | null> => {
-      const [manifest, locked] = await Promise.all([
-        fs.getManifest(asset.id, projectSlug, { includeDotfiles: true }),
-        fs.isLocked(asset.path),
-      ]);
-      if (!manifest.ok) return null;
-      const fileNames = new Set(manifest.value.files.map((f) => f.name));
-
-      // Skip: already has analysis
-      if (fileNames.has(".original.analysis.json")) return null;
-      // Skip: process_video hasn't completed (no metadata = no frames)
-      if (!fileNames.has(".original.json")) return null;
-      // Skip: locked
-      if (locked) return null;
-
-      return {
-        assetId: asset.id,
-        assetDir: manifest.value.path,
-        hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
-      };
-    })
-  );
-  return candidates.filter((c): c is AnalyzeAction => c !== null);
 }
 
 export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {

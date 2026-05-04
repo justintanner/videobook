@@ -1,9 +1,70 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs, AssetEntry } from "clipfirst-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
+import { SKIP_CROP_EXTENSIONS } from "../jobs/process-image.js";
 import { findAutoRenderActions, readStoredRenderDefaults } from "./sync.js";
+
+const IMAGE_ORIGINAL_RE = /^original\.(jpe?g|png|webp|gif|svg)$/i;
+
+type LazyAnalysisResult = {
+  jobId: string;
+  kind: "analyze_video" | "describe_image";
+};
+
+async function enqueueLazyAnalysis(
+  fs: ClipfirstFs,
+  asset: AssetEntry,
+  projectSlug: string,
+): Promise<LazyAnalysisResult | null> {
+  const isVideo = asset.id.startsWith("vid-");
+  const isImage = asset.id.startsWith("img-");
+  if (!isVideo && !isImage) return null;
+
+  // Skip if user clearly hasn't configured a vision provider. Truthy env
+  // check (not getApiKey) so the gate also lets through placeholder keys
+  // used in tests; the real placeholder defense lives at the actual API
+  // call inside analyze-video / describe-image (via requireApiKey/getApiKey).
+  if (isImage && !process.env.OPENAI_API_KEY) return null;
+  if (isVideo && !process.env.OPENAI_API_KEY && !process.env.KIE_API_KEY) return null;
+
+  const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+  if (!manifestResult.ok) return null;
+  const manifest = manifestResult.value;
+  const fileNames = new Set(manifest.files.map((f) => f.name));
+
+  // Already analyzed — nothing to do.
+  if (fileNames.has(".original.analysis.json")) return null;
+
+  if (isVideo) {
+    const jobId = `auto-analyze-${asset.id}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "analyze_video",
+      assetId: asset.id,
+      assetDir: manifest.path,
+      projectSlug,
+      hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
+    } as unknown as Record<string, unknown>);
+    return { jobId, kind: "analyze_video" };
+  }
+
+  // Image: find the original.<ext>, skip vector/animated formats where vision
+  // is unreliable.
+  const originalFile = manifest.files.find((f) => IMAGE_ORIGINAL_RE.test(f.name));
+  if (!originalFile) return null;
+  const ext = originalFile.name.slice(originalFile.name.lastIndexOf("."));
+  if (SKIP_CROP_EXTENSIONS.has(ext.toLowerCase())) return null;
+
+  const jobId = `auto-describe-${asset.id}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "describe_image",
+    sourceAssetId: asset.id,
+    sourceImageFilename: originalFile.name,
+    projectSlug,
+  } as unknown as Record<string, unknown>);
+  return { jobId, kind: "describe_image" };
+}
 
 type TimelineSlot = {
   slug: string;
@@ -103,6 +164,16 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
       // Write back
       const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
       if (writeResult.ok) {
+        // Lazy vision analysis: enqueue analyze_video (vid-) or describe_image
+        // (img-) when the asset has no .original.analysis.json yet. Failure
+        // here must not fail the slot assignment.
+        let autoAnalyze: LazyAnalysisResult | null = null;
+        try {
+          autoAnalyze = await enqueueLazyAnalysis(fs, asset, project_slug);
+        } catch {
+          // swallow — analysis is best-effort
+        }
+
         // Auto-render eligible videos after assignment
         let autoRenderJobId: string | undefined;
         if (asset_id.startsWith("vid-")) {
@@ -149,6 +220,9 @@ export function assignSlotDef(fs: ClipfirstFs): ToolDef {
         const response: Record<string, unknown> = { ...config };
         if (autoRenderJobId) {
           response.auto_render = { jobId: autoRenderJobId };
+        }
+        if (autoAnalyze) {
+          response.auto_analyze = autoAnalyze;
         }
 
         return {

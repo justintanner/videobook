@@ -1,10 +1,9 @@
 import type { ClipfirstFs } from "clipfirst-engine";
-import { queue, registerJobHandler } from "../queue.js";
-import { getApiKey } from "../api-key.js";
+import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";
 
-const SKIP_CROP_EXTENSIONS = new Set([".svg", ".gif"]);
+export const SKIP_CROP_EXTENSIONS = new Set([".svg", ".gif"]);
 
 type ProcessImagePayload = {
   type: "process_image";
@@ -43,21 +42,9 @@ export function registerProcessImageJob(fs: ClipfirstFs): void {
         ]);
       }
 
-      // Auto-enqueue analysis-only describe_image so the asset has
-      // `.original.analysis.json` cached for downstream pose/backdrop reads.
-      // The compose rail's `usePoseDescription` reads this file directly, and
-      // missing it forces the outfit prompt to fall back to skeleton-only.
-      // Skipped for SVG/GIF — vision is unreliable on vector/animated formats.
-      if (getApiKey("OPENAI_API_KEY") && !SKIP_CROP_EXTENSIONS.has(extension)) {
-        const jobId = `describe-image-auto-${assetId}-${Date.now()}`;
-        await queue.enqueue(jobId, {
-          type: "describe_image",
-          sourceAssetId: assetId,
-          sourceImageFilename: `original${extension}`,
-          projectSlug,
-        } as unknown as Record<string, unknown>);
-      }
-
+      // Vision analysis (describe_image) is gated to slot drop in
+      // tools/assign-slot.ts so we don't burn gpt-5.4 on uploads that never
+      // land in the timeline.
       return { success: true, width, height };
     });
   });
