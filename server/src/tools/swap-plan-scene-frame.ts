@@ -42,13 +42,46 @@ const schema = {
   model: z.enum(["gpt-image-2"]).optional().describe("Image-edit model (default: gpt-image-2)"),
 };
 
-function buildSwapPrompt(charA: string, charB: string): string {
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Translate the plan's `@<asset-id>` tokens to "the person from Image N"
+// before handing the prose to gpt-image-2. The model has no concept of asset
+// ids — it only sees three image byte streams labelled Image 1/2/3 by array
+// order. The Seedance-specific "lock the appearance of ... to reference image
+// 1 and reference image 2 respectively" trailer is also stripped because it
+// contradicts our 3-input layout (Image 1 is the source frame, not a
+// reference) and would mislead the model.
+function rewriteVisualForSwap(visual: string, charA: string, charB: string): string {
+  let out = visual
+    .replace(new RegExp(`@${escapeRegExp(charA)}\\b`, "g"), "the person from Image 2")
+    .replace(new RegExp(`@${escapeRegExp(charB)}\\b`, "g"), "the person from Image 3");
+  out = out.replace(/\s*lock the appearance of[^.]*respectively\.?\s*/gi, " ");
+  return out.replace(/\s+/g, " ").trim();
+}
+
+// Per OpenAI's gpt-image-2 prompting guide: label each input image by role
+// and reference inputs as "Image 1", "Image 2", "Image 3". The character refs
+// are FULL-appearance references — face + hair + body + wardrobe. We take
+// pose/composition/lighting from the source frame; we take the people
+// themselves (including wardrobe) from the references.
+function buildSwapPrompt(charA: string, charB: string, visual: string): string {
+  const context = rewriteVisualForSwap(visual, charA, charB);
   return [
-    `Replace the two on-screen subjects in image 1 with the appearance of image 2 (@${charA}) and image 3 (@${charB}).`,
-    "Match faces, hair, skin, and identifying features to those references.",
-    "Preserve image 1's composition, lighting, framing, camera angle, clothing positions, body language, and pose.",
-    "Photorealistic, 8k, high detail.",
-  ].join(" ");
+    "Image 1: source frame to edit. Image 2: full-appearance reference for one of the on-screen subjects (face, hair, body, AND wardrobe). Image 3: full-appearance reference for the other on-screen subject (face, hair, body, AND wardrobe).",
+    "",
+    "Scene context (describes which on-screen subject in Image 1 corresponds to which reference):",
+    `"${context}"`,
+    "",
+    "Replace each on-screen subject in Image 1 with the corresponding person from Image 2 or Image 3 as described in the scene context. For each replacement, copy across the reference's full appearance — face, hair, skin tone, body type, and the wardrobe as shown in the reference (same garments, same colors, same styling).",
+    "",
+    "Preserve from Image 1: composition, framing, camera angle, lens, depth of field, lighting direction and color palette, environment / set, and the body language, pose, and gesture of each subject (the action they're performing in the frame).",
+    "",
+    "Do NOT preserve the original subjects' clothing — replace it with the reference wardrobe. The pose stays; the wardrobe changes.",
+    "",
+    "Output: photorealistic, 8k, high detail.",
+  ].join("\n");
 }
 
 export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
@@ -154,7 +187,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       }
 
       const charIds = resolvedChars.sourceImageIds;
-      const prompt = buildSwapPrompt(charIds[0], charIds[1]);
+      const prompt = buildSwapPrompt(charIds[0], charIds[1], scene.visual);
 
       const imageInputs: ImageInput[] = [
         { assetId: "plan", filename: sourceFilename },
