@@ -344,6 +344,16 @@ type FrameTileState =
   | { kind: 'ready'; src: string; accepted: boolean }
   | { kind: 'error'; message: string };
 
+type ReplaceSource =
+  | { kind: 'file'; file: File }
+  | { kind: 'asset'; assetId: string };
+
+interface SidebarDragPayload {
+  slug?: string;
+  id?: string;
+  type?: string;
+}
+
 function deriveTileState(
   scene: PlanScene,
   frameIndex: 1 | 2,
@@ -372,7 +382,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, 
   mediaItems: MediaItem[];
   onRegen: (frameIndex: 1 | 2) => void;
   onAccept: (frameIndex: 1 | 2) => void;
-  onReplace: (frameIndex: 1 | 2, file: File) => void;
+  onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
   swapsInFlight: Set<1 | 2>;
   accepting: Set<1 | 2>;
   replacing: Set<1 | 2>;
@@ -394,7 +404,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, 
         replacing={replacing.has(1)}
         onRegen={() => onRegen(1)}
         onAccept={() => onAccept(1)}
-        onReplace={(file) => onReplace(1, file)}
+        onReplace={(source) => onReplace(1, source)}
       />
       <SceneFrameTile
         sourceSrc={sourceUrl(2)}
@@ -405,7 +415,7 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, 
         replacing={replacing.has(2)}
         onRegen={() => onRegen(2)}
         onAccept={() => onAccept(2)}
-        onReplace={(file) => onReplace(2, file)}
+        onReplace={(source) => onReplace(2, source)}
       />
     </div>
   );
@@ -420,7 +430,7 @@ function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, replacin
   replacing: boolean;
   onRegen: () => void;
   onAccept: () => void;
-  onReplace: (file: File) => void;
+  onReplace: (source: ReplaceSource) => void;
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -431,13 +441,31 @@ function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, replacin
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
+    // In-app sidebar drags carry the asset descriptor as application/json.
+    const json = e.dataTransfer.getData('application/json');
+    if (json) {
+      try {
+        const payload = JSON.parse(json) as SidebarDragPayload;
+        const assetId = payload.id;
+        if (typeof assetId === 'string' && assetId.startsWith('img-')) {
+          onReplace({ kind: 'asset', assetId });
+          return;
+        }
+        if (typeof assetId === 'string') {
+          toast({ title: 'Not an image asset', description: `${assetId} is not an img-* asset.`, duration: 3000 });
+          return;
+        }
+      } catch {
+        // Malformed payload — fall through to file-drop branch.
+      }
+    }
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast({ title: 'Not an image', description: `Got ${file.type || 'unknown'}; drop a PNG/JPG/WEBP.`, duration: 3000 });
       return;
     }
-    onReplace(file);
+    onReplace({ kind: 'file', file });
   };
   return (
     <div className="flex flex-col gap-1">
@@ -700,35 +728,41 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     }
   }, [callTool, projectSlug, index, onSidecarUpdate]);
 
-  const runReplace = useCallback(async (frameIndex: 1 | 2, file: File) => {
+  const runReplace = useCallback(async (frameIndex: 1 | 2, source: ReplaceSource) => {
     setReplacing((prev) => {
       const next = new Set(prev);
       next.add(frameIndex);
       return next;
     });
     try {
-      const ext = (() => {
-        const dot = file.name.lastIndexOf('.');
-        if (dot >= 0) return file.name.slice(dot).toLowerCase();
-        if (file.type === 'image/png') return '.png';
-        if (file.type === 'image/jpeg') return '.jpg';
-        if (file.type === 'image/webp') return '.webp';
-        return '.png';
-      })();
-      const filename = `scene-${index}-image${frameIndex}-user-${Date.now()}${ext}`;
-      let uploaded;
-      try {
-        uploaded = await uploadProjectFile(projectSlug, file, filename);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        toast({ title: `Scene ${index + 1} image${frameIndex} upload failed`, description: msg, duration: 5000 });
-        return;
+      let assetId: string;
+      if (source.kind === 'asset') {
+        assetId = source.assetId;
+      } else {
+        const file = source.file;
+        const ext = (() => {
+          const dot = file.name.lastIndexOf('.');
+          if (dot >= 0) return file.name.slice(dot).toLowerCase();
+          if (file.type === 'image/png') return '.png';
+          if (file.type === 'image/jpeg') return '.jpg';
+          if (file.type === 'image/webp') return '.webp';
+          return '.png';
+        })();
+        const filename = `scene-${index}-image${frameIndex}-user-${Date.now()}${ext}`;
+        try {
+          const uploaded = await uploadProjectFile(projectSlug, file, filename);
+          assetId = uploaded.assetId;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast({ title: `Scene ${index + 1} image${frameIndex} upload failed`, description: msg, duration: 5000 });
+          return;
+        }
       }
       const result = await callTool('replace_plan_scene_frame_swap', {
         project_slug: projectSlug,
         scene_index: index,
         frame_index: frameIndex,
-        asset_id: uploaded.assetId,
+        asset_id: assetId,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
@@ -847,7 +881,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         mediaItems={mediaItems}
         onRegen={(frameIndex) => { void runSwap(frameIndex); }}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
-        onReplace={(frameIndex, file) => { void runReplace(frameIndex, file); }}
+        onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
         swapsInFlight={swapsInFlight}
         accepting={accepting}
         replacing={replacing}
