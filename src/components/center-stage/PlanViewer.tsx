@@ -716,6 +716,9 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const [swapsInFlight, setSwapsInFlight] = useState<Set<1 | 2>>(new Set());
   const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
   const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
+  // image1 swap asset id we're waiting on so we can chain image2's gen against
+  // it. Cleared once image2 is dispatched. Survives across mediaItems polls.
+  const [chainImage2Against, setChainImage2Against] = useState<string | null>(null);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -723,7 +726,10 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
   const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
 
-  const runSwap = useCallback(async (frameIndex: 1 | 2) => {
+  const runSwap = useCallback(async (
+    frameIndex: 1 | 2,
+    opts?: { priorSwapAssetId?: string },
+  ): Promise<{ newAssetId: string } | null> => {
     setSwapsInFlight((prev) => {
       const next = new Set(prev);
       next.add(frameIndex);
@@ -737,19 +743,22 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         character_asset_ids: characters.map((c) => `@${c.asset_id}`),
         provider: swapProvider,
         model: swapModel,
+        ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
         toast({ title: `Scene ${index + 1} image${frameIndex} swap failed`, description: msg, duration: 5000 });
-        return;
+        return null;
       }
       try {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar; asset_id?: string };
         if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+        if (typeof parsed.asset_id === 'string') return { newAssetId: parsed.asset_id };
       } catch {
         // The job is enqueued either way; sidecar will refresh next read_plan.
       }
+      return null;
     } finally {
       setSwapsInFlight((prev) => {
         const next = new Set(prev);
@@ -759,11 +768,30 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
     }
   }, [callTool, projectSlug, index, characters, onSidecarUpdate, swapProvider, swapModel]);
 
-  const handleImage = useCallback(() => {
+  const handleImage = useCallback(async () => {
     if (anySwapInFlight) return;
-    void runSwap(1);
-    void runSwap(2);
+    // image1 first; image2 chains via the useEffect below once image1 is ready
+    // so it can use the swapped first frame as a continuity reference.
+    setChainImage2Against(null);
+    const r1 = await runSwap(1);
+    if (r1) setChainImage2Against(r1.newAssetId);
   }, [anySwapInFlight, runSwap]);
+
+  // Once image1's swap asset transitions to ready, kick off image2's swap
+  // with image1 as the prior_swap reference. Cleared after dispatch.
+  useEffect(() => {
+    if (!chainImage2Against) return;
+    const item = mediaItems.find((m) => m.id === chainImage2Against);
+    if (!item) return;
+    if (item.status === 'error') {
+      setChainImage2Against(null);
+      return;
+    }
+    if (item.status !== 'ready') return;
+    const target = chainImage2Against;
+    setChainImage2Against(null);
+    void runSwap(2, { priorSwapAssetId: target });
+  }, [chainImage2Against, mediaItems, runSwap]);
 
   const runAccept = useCallback(async (frameIndex: 1 | 2) => {
     setAccepting((prev) => {
@@ -955,7 +983,16 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         scene={scene}
         projectSlug={projectSlug}
         mediaItems={mediaItems}
-        onRegen={(frameIndex) => { void runSwap(frameIndex); }}
+        onRegen={(frameIndex) => {
+          // Per-tile Regen for image2 should re-use the current image1 swap as
+          // a continuity reference (the bulk handleImage path also passes one
+          // through chainImage2Against).
+          if (frameIndex === 2 && scene.swap?.image1) {
+            void runSwap(2, { priorSwapAssetId: scene.swap.image1 });
+          } else {
+            void runSwap(frameIndex);
+          }
+        }}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
         onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
         swapsInFlight={swapsInFlight}

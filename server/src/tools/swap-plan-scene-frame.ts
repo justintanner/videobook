@@ -53,6 +53,10 @@ const schema = {
     .describe(`Exactly ${REQUIRED_CHARACTERS} char-* or img-* slugs — the two on-screen subjects to swap in.`),
   provider: z.enum(SUPPORTED_PROVIDERS).optional().describe("Image-edit provider (default: kie)"),
   model: z.enum(SUPPORTED_MODELS).optional().describe(`Image-edit model (default: ${DEFAULT_MODEL})`),
+  prior_swap_asset_id: z
+    .string()
+    .optional()
+    .describe("Optional img-* slug of an already-swapped frame from this scene (typically image1's swap when generating image2). Appended as Image 4 so the model can match the visual identity / styling of the prior frame."),
 };
 
 // Short, neutral prompt. Earlier versions embedded scene prose plus identity
@@ -60,7 +64,10 @@ const schema = {
 // content filter (failures at 11–19s with 0 credits — the OpenAI moderation
 // signature). nano-banana-pro is more permissive but the same tight
 // instruction works well for both.
-function buildSwapPrompt(): string {
+function buildSwapPrompt(hasPriorSwap: boolean): string {
+  if (hasPriorSwap) {
+    return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to Image 4 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+  }
   return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
 }
 
@@ -71,13 +78,14 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       "Run an image-to-image model (nano-banana-pro by default; gpt-image-2 alternative) on a plan scene's source frame, swapping the two on-screen subjects with two character references. Creates a new img-* asset for the swapped frame and updates plan/.plan.json with that asset's id at scenes[N].swap.image{1|2}. Reuses the existing generate_nano_banana_image / generate_gpt_image job pipelines.",
     schema,
     handler: async (args) => {
-      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg } = args as {
+      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg, prior_swap_asset_id } = args as {
         project_slug: string;
         scene_index: number;
         frame_index: 1 | 2;
         character_asset_ids: string[];
         provider?: Provider;
         model?: Model;
+        prior_swap_asset_id?: string;
       };
 
       const provider: Provider = providerArg ?? "kie";
@@ -167,12 +175,27 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       }
 
       const charIds = resolvedChars.sourceImageIds;
-      const prompt = buildSwapPrompt();
 
       const imageInputs: ImageInput[] = [
         { assetId: "plan", filename: sourceFilename },
         ...resolvedChars.inputs,
       ];
+
+      if (prior_swap_asset_id) {
+        const priorAssetDir = await fs.resolveAssetDir(prior_swap_asset_id, project_slug);
+        if (!priorAssetDir.ok) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `prior_swap_asset_id ${prior_swap_asset_id} not found: ${priorAssetDir.error.message}`,
+            }],
+          };
+        }
+        imageInputs.push({ assetId: prior_swap_asset_id, filename: "original.png" });
+      }
+
+      const prompt = buildSwapPrompt(Boolean(prior_swap_asset_id));
 
       const newAssetResult = await fs.createAsset(
         "img",
