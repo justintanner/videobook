@@ -140,6 +140,7 @@ import { analyzeCharacterImageDef } from "./analyze-character-image.js";
 import { planVisualizationDef } from "./plan-visualization.js";
 import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 import { acceptPlanSceneFrameSwapDef } from "./accept-plan-scene-frame-swap.js";
+import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js";
 import { readPlanDef } from "./read-plan.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -304,6 +305,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     planVisualizationDef(fs),
     swapPlanSceneFrameDef(fs),
     acceptPlanSceneFrameSwapDef(fs),
+    replacePlanSceneFrameSwapDef(fs),
     readPlanDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),

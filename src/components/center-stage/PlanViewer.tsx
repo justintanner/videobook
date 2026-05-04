@@ -7,6 +7,7 @@ import type { UseMcpResult } from 'use-mcp/react';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
+import { uploadProjectFile } from '@/lib/upload';
 
 interface PlanScene {
   start: number;
@@ -364,15 +365,17 @@ function deriveTileState(
   return { kind: 'generating' };
 }
 
-function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, onAccept, swapsInFlight, accepting }: {
+function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, onAccept, onReplace, swapsInFlight, accepting, replacing }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
   mediaItems: MediaItem[];
   onRegen: (frameIndex: 1 | 2) => void;
   onAccept: (frameIndex: 1 | 2) => void;
+  onReplace: (frameIndex: 1 | 2, file: File) => void;
   swapsInFlight: Set<1 | 2>;
   accepting: Set<1 | 2>;
+  replacing: Set<1 | 2>;
 }) {
   // Cache-bust the source-frame thumbnails on scene-boundary changes — when
   // /plan-vis re-runs and produces different chunks, timestamps shift and the
@@ -388,8 +391,10 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, 
         label={`image1 · first ${formatTimecode(scene.start)}`}
         inFlight={swapsInFlight.has(1)}
         accepting={accepting.has(1)}
+        replacing={replacing.has(1)}
         onRegen={() => onRegen(1)}
         onAccept={() => onAccept(1)}
+        onReplace={(file) => onReplace(1, file)}
       />
       <SceneFrameTile
         sourceSrc={sourceUrl(2)}
@@ -397,30 +402,55 @@ function SceneFrameTiles({ sceneIndex, scene, projectSlug, mediaItems, onRegen, 
         label={`image2 · last ${formatTimecode(scene.end)}`}
         inFlight={swapsInFlight.has(2)}
         accepting={accepting.has(2)}
+        replacing={replacing.has(2)}
         onRegen={() => onRegen(2)}
         onAccept={() => onAccept(2)}
+        onReplace={(file) => onReplace(2, file)}
       />
     </div>
   );
 }
 
-function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, onRegen, onAccept }: {
+function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, replacing, onRegen, onAccept, onReplace }: {
   sourceSrc: string;
   state: FrameTileState;
   label: string;
   inFlight: boolean;
   accepting: boolean;
+  replacing: boolean;
   onRegen: () => void;
   onAccept: () => void;
+  onReplace: (file: File) => void;
 }) {
   const [errored, setErrored] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const showSource = state.kind !== 'ready';
-  const showSpinner = inFlight || state.kind === 'generating';
-  const showReadyActions = state.kind === 'ready' && !state.accepted && !inFlight;
-  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !inFlight;
+  const showSpinner = inFlight || state.kind === 'generating' || replacing;
+  const showReadyActions = state.kind === 'ready' && !state.accepted && !inFlight && !replacing;
+  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !inFlight && !replacing;
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Not an image', description: `Got ${file.type || 'unknown'}; drop a PNG/JPG/WEBP.`, duration: 3000 });
+      return;
+    }
+    onReplace(file);
+  };
   return (
     <div className="flex flex-col gap-1">
-      <div className="relative w-40 aspect-video bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center group">
+      <div
+        className={cn(
+          'relative w-40 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group',
+          dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
+        )}
+        onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+        onDrop={handleDrop}
+      >
         {state.kind === 'ready' ? (
           <img
             src={state.src}
@@ -506,6 +536,11 @@ function SceneFrameTile({ sourceSrc, state, label, inFlight, accepting, onRegen,
             Accepted
           </div>
         )}
+        {dragActive && !replacing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop to replace</span>
+          </div>
+        )}
       </div>
       <div className="text-[10px] font-mono text-primary/50">{label}</div>
     </div>
@@ -581,6 +616,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
   const [submittingVideo, setSubmittingVideo] = useState(false);
   const [swapsInFlight, setSwapsInFlight] = useState<Set<1 | 2>>(new Set());
   const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
+  const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -657,6 +693,57 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
       }
     } finally {
       setAccepting((prev) => {
+        const next = new Set(prev);
+        next.delete(frameIndex);
+        return next;
+      });
+    }
+  }, [callTool, projectSlug, index, onSidecarUpdate]);
+
+  const runReplace = useCallback(async (frameIndex: 1 | 2, file: File) => {
+    setReplacing((prev) => {
+      const next = new Set(prev);
+      next.add(frameIndex);
+      return next;
+    });
+    try {
+      const ext = (() => {
+        const dot = file.name.lastIndexOf('.');
+        if (dot >= 0) return file.name.slice(dot).toLowerCase();
+        if (file.type === 'image/png') return '.png';
+        if (file.type === 'image/jpeg') return '.jpg';
+        if (file.type === 'image/webp') return '.webp';
+        return '.png';
+      })();
+      const filename = `scene-${index}-image${frameIndex}-user-${Date.now()}${ext}`;
+      let uploaded;
+      try {
+        uploaded = await uploadProjectFile(projectSlug, file, filename);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast({ title: `Scene ${index + 1} image${frameIndex} upload failed`, description: msg, duration: 5000 });
+        return;
+      }
+      const result = await callTool('replace_plan_scene_frame_swap', {
+        project_slug: projectSlug,
+        scene_index: index,
+        frame_index: frameIndex,
+        asset_id: uploaded.assetId,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
+        toast({ title: `Scene ${index + 1} image${frameIndex} replace failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // Sidecar refreshes on next read_plan.
+      }
+    } finally {
+      setReplacing((prev) => {
         const next = new Set(prev);
         next.delete(frameIndex);
         return next;
@@ -760,8 +847,10 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
         mediaItems={mediaItems}
         onRegen={(frameIndex) => { void runSwap(frameIndex); }}
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
+        onReplace={(frameIndex, file) => { void runReplace(frameIndex, file); }}
         swapsInFlight={swapsInFlight}
         accepting={accepting}
+        replacing={replacing}
       />
       <div className="flex items-center justify-between px-3 pt-2 gap-2 border-b border-zinc-800/40">
         <div className="flex">
