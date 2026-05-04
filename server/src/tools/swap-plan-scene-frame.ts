@@ -8,11 +8,19 @@ import { type ImageInput, resolveImageSlugs } from "./_image-inputs.js";
 const REQUIRED_CHARACTERS = 2;
 
 const SUPPORTED_PROVIDERS = ["kie"] as const;
+const SUPPORTED_MODELS = ["nano-banana-pro", "gpt-image-2"] as const;
 const SUPPORTED_MODELS_BY_PROVIDER = {
-  kie: ["gpt-image-2"],
+  kie: SUPPORTED_MODELS,
 } as const;
 type Provider = typeof SUPPORTED_PROVIDERS[number];
-type Model = "gpt-image-2";
+type Model = typeof SUPPORTED_MODELS[number];
+
+const DEFAULT_MODEL: Model = "nano-banana-pro";
+
+const JOB_TYPE_BY_MODEL: Record<Model, "generate_gpt_image" | "generate_nano_banana_image"> = {
+  "gpt-image-2": "generate_gpt_image",
+  "nano-banana-pro": "generate_nano_banana_image",
+};
 
 type PlanScene = {
   start: number;
@@ -39,14 +47,14 @@ const schema = {
     .length(REQUIRED_CHARACTERS)
     .describe(`Exactly ${REQUIRED_CHARACTERS} char-* or img-* slugs — the two on-screen subjects to swap in.`),
   provider: z.enum(SUPPORTED_PROVIDERS).optional().describe("Image-edit provider (default: kie)"),
-  model: z.enum(["gpt-image-2"]).optional().describe("Image-edit model (default: gpt-image-2)"),
+  model: z.enum(SUPPORTED_MODELS).optional().describe(`Image-edit model (default: ${DEFAULT_MODEL})`),
 };
 
-// Short, neutral prompt. Detailed identity language ("face, hair, skin tone,
-// body type") and embedded scene prose were tripping gpt-image-2's content
-// filter — failures came back at 11–19s with 0 credits consumed (the OpenAI
-// moderation-reject signature). The model handles subject-swap reliably from
-// a tight instruction; the scene context isn't needed.
+// Short, neutral prompt. Earlier versions embedded scene prose plus identity
+// language ("face, hair, skin tone, body type") and tripped gpt-image-2's
+// content filter (failures at 11–19s with 0 credits — the OpenAI moderation
+// signature). nano-banana-pro is more permissive but the same tight
+// instruction works well for both.
 function buildSwapPrompt(): string {
   return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
 }
@@ -55,7 +63,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "swap_plan_scene_frame",
     description:
-      "Run gpt-image-2 image-to-image on a plan scene's source frame, swapping the two on-screen subjects with two character references. Creates a new img-* asset for the swapped frame and updates plan/.plan.json with that asset's id at scenes[N].swap.image{1|2}. Reuses the existing generate_gpt_image job pipeline.",
+      "Run an image-to-image model (nano-banana-pro by default; gpt-image-2 alternative) on a plan scene's source frame, swapping the two on-screen subjects with two character references. Creates a new img-* asset for the swapped frame and updates plan/.plan.json with that asset's id at scenes[N].swap.image{1|2}. Reuses the existing generate_nano_banana_image / generate_gpt_image job pipelines.",
     schema,
     handler: async (args) => {
       const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg } = args as {
@@ -68,7 +76,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       };
 
       const provider: Provider = providerArg ?? "kie";
-      const model: Model = modelArg ?? "gpt-image-2";
+      const model: Model = modelArg ?? DEFAULT_MODEL;
 
       const allowedModels = SUPPORTED_MODELS_BY_PROVIDER[provider];
       if (!allowedModels.includes(model as never)) {
@@ -197,11 +205,12 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Job-type routing by (provider, model). Today only kie+gpt-image-2 is
-      // wired; future fal models will branch here.
+      // Job-type routing by (provider, model). Both Kie pipelines accept the
+      // same payload shape (prompt + imageInputs + 16:9 + 2K).
+      const jobType = JOB_TYPE_BY_MODEL[model];
       const jobId = `swap-${provider}-${model}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
-        type: "generate_gpt_image",
+        type: jobType,
         prompt,
         imageInputs,
         imgAssetId,

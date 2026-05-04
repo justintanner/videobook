@@ -185,7 +185,9 @@ function PlanPopulated({ item, mediaItems, projectSlug, callTool, onClose }: {
 }
 
 type SwapProvider = 'kie';
-type SwapModel = 'gpt-image-2';
+type SwapModel = 'nano-banana-pro' | 'gpt-image-2';
+
+const DEFAULT_SWAP_MODEL: SwapModel = 'nano-banana-pro';
 
 const PROVIDER_OPTIONS: { value: SwapProvider; label: string; disabled?: boolean }[] = [
   { value: 'kie', label: 'kie' },
@@ -193,7 +195,10 @@ const PROVIDER_OPTIONS: { value: SwapProvider; label: string; disabled?: boolean
 ];
 
 const MODEL_OPTIONS_BY_PROVIDER: Record<SwapProvider, { value: SwapModel; label: string }[]> = {
-  kie: [{ value: 'gpt-image-2', label: 'gpt-image-2' }],
+  kie: [
+    { value: 'nano-banana-pro', label: 'nano-banana-pro' },
+    { value: 'gpt-image-2', label: 'gpt-image-2' },
+  ],
 };
 
 function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
@@ -205,7 +210,7 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
   const [swapProvider, setSwapProvider] = useState<SwapProvider>('kie');
-  const [swapModel, setSwapModel] = useState<SwapModel>('gpt-image-2');
+  const [swapModel, setSwapModel] = useState<SwapModel>(DEFAULT_SWAP_MODEL);
 
   const sourceItem = useMemo(
     () => mediaItems.find((m) => m.id === data.source_asset_id) ?? null,
@@ -620,7 +625,7 @@ function SceneBlock({ scene, index, characters, mediaItems, projectSlug, swapPro
             disabled={anySwapInFlight}
             title={anySwapInFlight
               ? 'Swap in progress…'
-              : 'Run gpt-image-2 to swap the two on-screen subjects in both source frames with the two character refs'}
+              : `Run ${swapModel} to swap the two on-screen subjects in both source frames with the two character refs`}
             className={cn(
               'h-7 px-2.5 flex items-center gap-1.5 rounded',
               'text-[11px] font-mono font-bold uppercase tracking-wider',
@@ -802,7 +807,7 @@ function PlanEmptyState({ mediaItems, projectSlug, callTool, onClose }: {
         <div className="text-center space-y-1.5 max-w-md">
           <h2 className="text-base font-mono font-bold text-primary/90 uppercase tracking-wider">No plan yet</h2>
           <p className="text-sm text-primary/60">
-            Pick a transcribed source and the two character assets to swap into every chunk. We'll even-split the clip into 10–15s chunks, edit the first/last frames with gpt-image-2 (2K), and assemble a Seedance 2 multimodal prompt per chunk.
+            Pick a transcribed source and the two character assets to swap into every chunk. We'll even-split the clip into 10–15s chunks, edit the first/last frames with nano-banana-pro (2K), and assemble a Seedance 2 multimodal prompt per chunk.
           </p>
         </div>
         {blockingMessage ? (
