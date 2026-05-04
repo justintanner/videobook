@@ -39,6 +39,7 @@ import { useWindowDropzone } from '@/hooks/useWindowDropzone';
 import { useSync } from '@/hooks/useSync';
 import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
+import { useListProjects } from '@/hooks/useListProjects';
 import { useMarkAssetSeen } from '@/hooks/useMarkAssetSeen';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
@@ -99,6 +100,7 @@ export function HomePage() {
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
+  const { projects, refresh: refreshProjects } = useListProjects(callTool);
   const { listAssets, assets: assetList, clearAssets, removeAsset, markAssetSeenLocal } = useListAssets(callTool);
   const markAssetSeen = useMarkAssetSeen(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
@@ -107,6 +109,12 @@ export function HomePage() {
   const { extract: extractSkeleton } = useExtractSkeleton(sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
+
+  // Load the project list once the MCP connection is ready so
+  // the "Export to Project" sub-menu has its options.
+  useEffect(() => {
+    if (state === 'ready') refreshProjects();
+  }, [state, refreshProjects]);
 
   // Fetch activity when status drawer opens
   useEffect(() => {
@@ -720,6 +728,9 @@ export function HomePage() {
                           ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
                           : undefined}
                         onMarkSeen={onMarkSeen}
+                        projectSlug={projectSlug}
+                        projects={projects}
+                        callTool={callTool}
                         MenuItem={ContextMenuItem}
                       />
                     );
@@ -844,6 +855,9 @@ export function HomePage() {
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
                         onMarkSeen={onMarkSeen}
+                        projectSlug={projectSlug}
+                        projects={projects}
+                        callTool={callTool}
                         MenuItem={ContextMenuItem}
                       />
                     );

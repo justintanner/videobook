@@ -1,4 +1,10 @@
 import type { ComponentType } from 'react';
+import type { UseMcpResult } from 'use-mcp/react';
+import {
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+} from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 
@@ -12,6 +18,13 @@ interface AssetMenuProps {
   /** When provided, renders a "Mark Seen" entry that dismisses the NEW badge.
    *  HomePage only supplies this for unseen assets. */
   onMarkSeen?: () => void;
+  /** Source project slug — required to wire the "Export to Project" sub-menu. */
+  projectSlug?: string;
+  /** All known projects; the source project is filtered out at render time. */
+  projects?: { slug: string }[];
+  callTool?: UseMcpResult['callTool'];
+  /** Called after a successful export so HomePage can refresh state. */
+  onAfterExport?: (targetProject: string) => void;
   MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
 }
 
@@ -38,7 +51,39 @@ function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect
   );
 }
 
-export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, onMarkSeen, MenuItem }: AssetMenuProps) {
+export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, onMarkSeen, projectSlug, projects, callTool, onAfterExport, MenuItem }: AssetMenuProps) {
+  const targetProjects = (projects ?? []).filter((p) => p.slug !== projectSlug);
+  const canExportToProject = !!projectSlug && !!callTool && targetProjects.length > 0;
+
+  const exportToProject = async (target: string) => {
+    if (!callTool || !projectSlug) return;
+    try {
+      const result = await callTool('export_asset_to_project', {
+        asset_id: slug,
+        project_slug: projectSlug,
+        target_project: target,
+      });
+      const isError = (result as { isError?: boolean }).isError === true;
+      const content = (result.content ?? []) as Array<{ type: string; text: string }>;
+      const text = content[0]?.text ?? '';
+      if (isError) {
+        toast({ title: 'Export failed', description: text || 'Unknown error', duration: 4000 });
+        return;
+      }
+      const parsed = (() => {
+        try { return JSON.parse(text) as { new_asset_id?: string }; } catch { return null; }
+      })();
+      toast({
+        title: 'Exported',
+        description: `${slug} → ${target}${parsed?.new_asset_id ? ` (${parsed.new_asset_id})` : ''}`,
+        duration: 3000,
+      });
+      onAfterExport?.(target);
+    } catch (e: unknown) {
+      toast({ title: 'Export failed', description: e instanceof Error ? e.message : String(e), duration: 4000 });
+    }
+  };
+
   return (
     <>
       {onMarkSeen && (
@@ -177,6 +222,35 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
         onSelect={() => onAnimateCommand?.(`/duplicate ${slug}`)}
         MenuItem={MenuItem}
       />
+      {canExportToProject && (
+        <>
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <ContextMenuSub>
+            <ContextMenuSubTrigger
+              className={cn(
+                '!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] data-[state=open]:!bg-white/[0.12]',
+                'border-l-cyan-500/30 focus:border-l-cyan-500/60 data-[state=open]:border-l-cyan-500/60',
+              )}
+            >
+              <span className="text-sm font-semibold leading-none text-foreground">Export to Project…</span>
+              <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">
+                {`/export-to-project ${slug}`}
+              </span>
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="min-w-[12rem] max-h-[60vh] overflow-y-auto">
+              {targetProjects.map((p) => (
+                <MenuItem
+                  key={p.slug}
+                  onSelect={() => { void exportToProject(p.slug); }}
+                  className="!flex !items-center py-2 px-3 text-sm font-mono"
+                >
+                  {p.slug}
+                </MenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </>
+      )}
       {itemType === 'video' && (
         <>
           <div className="-mx-1 my-1 h-px bg-border" />
