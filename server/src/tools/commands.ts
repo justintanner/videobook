@@ -511,6 +511,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "extract_audio", autoInject: ["project_slug"] },
   },
   {
+    command: "/audio-boost",
+    description: "Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.",
+    example: "/audio-boost @vid-clip 2",
+    category: "context_menu",
+    icon: "Volume2",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to boost (vid-* or aud-*)" },
+      { name: "boost", type: "number", required: true, description: "Volume multiplier (1.0–4.0). >1 = louder." },
+    ],
+    mcpTool: { tool: "audio_boost", autoInject: ["project_slug"] },
+  },
+  {
     command: "/replace-audio",
     description: "Replace the audio track of a video asset with an aud- asset's audio",
     example: "/replace-audio @vid-clip @aud-voice",
