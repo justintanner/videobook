@@ -1785,7 +1785,7 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
           <div className="self-end max-w-md w-full aspect-video rounded border border-zinc-700/60 bg-black/60 flex flex-col items-center justify-center gap-1.5">
             <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
             <span className="text-[10px] font-mono uppercase tracking-wider text-primary/60">
-              {previewItem?.status === 'generating' ? 'splicing audio…' : 'rendering…'}
+              {previewItem?.status === 'replacing-audio' ? 'splicing audio…' : 'generating…'}
             </span>
           </div>
         )
@@ -1800,16 +1800,58 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
 // doesn't get mis-matched as an asset reference.
 const SLUG_TOKEN_REGEX = /"(@(?:img-|vid-|aud-|char-|plan\/)[\w\-./]+)"/g;
 
+interface SlugThumb {
+  kind: 'image' | 'waveform';
+  src: string | null;
+  waveform: number[] | null;
+}
+
 function resolveSlugThumb(
   slug: string,
   mediaItems: MediaItem[],
   projectSlug: string,
-): string | null {
+): SlugThumb | null {
   const id = slug.startsWith('@') ? slug.slice(1) : slug;
   const planMatch = id.match(/^plan\/(scene-\d+-image\d+-source\.jpg)$/);
-  if (planMatch) return `/files/${projectSlug}/plan/${planMatch[1]}`;
+  if (planMatch) {
+    return { kind: 'image', src: `/files/${projectSlug}/plan/${planMatch[1]}`, waveform: null };
+  }
   const item = mediaItems.find((m) => m.id === id);
-  return item?.thumbnailSrc ?? null;
+  if (!item) return null;
+  // Audio assets show a mini-waveform strip in place of an image thumb. Prefer
+  // waveform over thumbnailSrc so audio with both falls through to the audible
+  // representation.
+  if (item.type === 'audio' && item.waveform && item.waveform.length > 0) {
+    return { kind: 'waveform', src: null, waveform: item.waveform };
+  }
+  return item.thumbnailSrc
+    ? { kind: 'image', src: item.thumbnailSrc, waveform: null }
+    : null;
+}
+
+// 16px-tall mini waveform — 24 bars max, downsampled if the source has more
+// samples. Matches the size of the inline image thumb so JSON-view tokens
+// align on a single baseline regardless of asset type.
+function InlineWaveformThumb({ peaks }: { peaks: number[] }) {
+  const BARS = 24;
+  const bars = peaks.length <= BARS
+    ? peaks
+    : Array.from({ length: BARS }, (_, i) => peaks[Math.floor((i * peaks.length) / BARS)]);
+  const max = Math.max(...bars, 1);
+  return (
+    <span
+      className="inline-flex items-end gap-[1px] align-middle h-4 w-8 rounded ring-1 ring-zinc-700/60 bg-black/40 px-[2px]"
+      aria-hidden
+    >
+      {bars.map((v, i) => (
+        <span
+          key={i}
+          className="flex-1 min-w-0 bg-cyan-500/70 rounded-[0.5px]"
+          style={{ height: `${Math.max((v / max) * 100, 12)}%` }}
+        />
+      ))}
+    </span>
+  );
 }
 
 function renderJsonLine(
@@ -1829,12 +1871,15 @@ function renderJsonLine(
     const thumb = resolveSlugThumb(slug, mediaItems, projectSlug);
     parts.push(
       <span key={`${lineKey}-${tokenKey++}`} className="inline-flex items-center gap-1 align-middle">
-        {thumb && (
+        {thumb?.kind === 'image' && thumb.src && (
           <img
-            src={thumb}
+            src={thumb.src}
             alt=""
             className="w-4 h-4 inline-block rounded object-cover ring-1 ring-zinc-700/60 align-middle"
           />
+        )}
+        {thumb?.kind === 'waveform' && thumb.waveform && (
+          <InlineWaveformThumb peaks={thumb.waveform} />
         )}
         <span>&quot;{slug}&quot;</span>
       </span>,
@@ -1910,12 +1955,15 @@ function renderPromptLine(
           palette.bg, palette.text, palette.ring,
         )}
       >
-        {thumb && (
+        {thumb?.kind === 'image' && thumb.src && (
           <img
-            src={thumb}
+            src={thumb.src}
             alt=""
             className="w-3.5 h-3.5 inline-block rounded object-cover align-middle"
           />
+        )}
+        {thumb?.kind === 'waveform' && thumb.waveform && (
+          <InlineWaveformThumb peaks={thumb.waveform} />
         )}
         <span>{slug}</span>
       </span>,
