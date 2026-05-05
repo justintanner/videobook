@@ -201,8 +201,20 @@ async function loadCharacter(
 // ends to guarantee the trailing chunk also lands in [MIN, MAX]:
 //   windowStart = max(cursor+MIN, duration-MAX)
 //   windowEnd   = min(cursor+MAX, duration-MIN)
-// Width is non-negative for any remaining > MAX, so a legal cut always
-// exists. This obsoletes the old "fold sub-min trailing into prior" hack.
+//
+// Cuts are snapped to integer seconds within the legal window so every
+// internal scene boundary lands on a whole-second marker — required for
+// even-split's trimRangeExact + seedance-2's integer duration field. Snap
+// picks the integer ≥ windowStart and ≤ windowEnd nearest to the raw cut.
+function snapCutToSecond(raw: number, lo: number, hi: number): number {
+  const ceilLo = Math.ceil(lo);
+  const floorHi = Math.floor(hi);
+  if (ceilLo > floorHi) return raw; // no integer in window — leave raw, ffmpeg snaps
+  const rounded = Math.round(raw);
+  if (rounded >= ceilLo && rounded <= floorHi) return rounded;
+  return rounded < ceilLo ? ceilLo : floorHi;
+}
+
 export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[] {
   if (duration <= 0) return [];
   if (duration <= MAX_SCENE_S) return [{ start: 0, end: duration }];
@@ -236,7 +248,7 @@ export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[
       }
     }
 
-    const cut = bestCut ?? windowEnd;
+    const cut = snapCutToSecond(bestCut ?? windowEnd, windowStart, windowEnd);
     chunks.push({ start: cursor, end: cut });
     cursor = cut;
   }

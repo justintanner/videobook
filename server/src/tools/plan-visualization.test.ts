@@ -29,19 +29,16 @@ describe("computeChunks", () => {
     ]);
   });
 
-  it("cuts at the midpoint of a silence gap inside the legal window", () => {
-    // 22s clip with a clean ~1.6s pause: word[9] ends at 9.9, next word starts at 11.5.
-    // Window for first cut: max(7, 22-14)=8, min(14, 22-7)=14 → [8,14].
-    // Gap midpoint = (9.9 + 11.5) / 2 = 10.7, inside [8,14] → cut there.
+  it("snaps the silence-midpoint cut to the nearest integer second inside the window", () => {
+    // 22s clip with a clean ~1.6s pause: word[9] ends at 9.9, next starts at 11.5.
+    // Window [8,14], midpoint 10.7 → snaps to 11.
     const words: ElevenLabsWord[] = [];
     for (let i = 0; i < 10; i++) words.push(w("x", i, i + 0.9));
     for (let i = 0; i < 11; i++) words.push(w("y", 11.5 + i, 11.5 + i + 0.5));
-    const chunks = computeChunks(22, words);
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].start).toBe(0);
-    expect(chunks[0].end).toBeCloseTo(10.7, 2);
-    expect(chunks[1].start).toBeCloseTo(10.7, 2);
-    expect(chunks[1].end).toBe(22);
+    expect(computeChunks(22, words)).toEqual([
+      { start: 0, end: 11 },
+      { start: 11, end: 22 },
+    ]);
   });
 
   it("ignores silences shorter than MIN_SILENCE_GAP_S (0.25s)", () => {
@@ -58,52 +55,46 @@ describe("computeChunks", () => {
     ]);
   });
 
-  it("picks the longest gap when multiple qualify", () => {
+  it("picks the longest gap when multiple qualify, then snaps to integer second", () => {
     // 22s clip with two silences both inside window [8, 14]:
-    //   0.4s gap at [9.0, 9.4]   midpoint 9.2
-    //   1.5s gap at [12.0, 13.5] midpoint 12.75
-    // Longest wins.
-    const words: ElevenLabsWord[] = [];
-    for (let i = 0; i < 9; i++) words.push(w("a", i, i + 0.9));
-    // 0.4s silence at [9.0, 9.4]
-    for (let i = 0; i < 3; i++) words.push(w("b", 9.4 + i, 9.4 + i + 0.7));
-    // 0.4 + 0.7*3 = 9.4 + 2.1 = 11.5, then need to fill until 12.0 with no gap
-    // Last "b" ends at 12.1. Adjust: instead start filler at 9.4 ending at 12.0.
-    // Simpler: just place words manually.
-    words.length = 0;
-    words.push(w("a", 0, 1), w("b", 1, 2), w("c", 2, 3), w("d", 3, 4),
-               w("e", 4, 5), w("f", 5, 6), w("g", 6, 7), w("h", 7, 8),
-               w("i", 8, 9));
-    // 0.4s gap [9, 9.4]
-    words.push(w("j", 9.4, 10), w("k", 10, 11), w("l", 11, 12));
-    // 1.5s gap [12, 13.5]
-    words.push(w("m", 13.5, 14.5), w("n", 14.5, 15.5), w("o", 15.5, 16.5),
-               w("p", 16.5, 17.5), w("q", 17.5, 18.5), w("r", 18.5, 19.5),
-               w("s", 19.5, 20.5), w("t", 20.5, 21.5), w("u", 21.5, 22));
-    const chunks = computeChunks(22, words);
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].end).toBeCloseTo(12.75, 2); // midpoint of [12, 13.5]
-  });
-
-  it("breaks ties on equal-length gaps by preferring the later position", () => {
-    // 22s clip with two 0.5s pauses both inside [8, 14]:
-    //   [9.0, 9.5]   midpoint 9.25
-    //   [12.5, 13.0] midpoint 12.75
-    // Tie on length → later wins (longer first chunk = fewer scenes).
+    //   0.4s gap [9.0, 9.4] midpoint 9.2  → would snap to 9
+    //   1.5s gap [12.0, 13.5] midpoint 12.75 → snaps to 13
+    // Longest wins → cut at 13.
     const words: ElevenLabsWord[] = [
       w("a", 0, 1), w("b", 1, 2), w("c", 2, 3), w("d", 3, 4),
       w("e", 4, 5), w("f", 5, 6), w("g", 6, 7), w("h", 7, 8),
       w("i", 8, 9),
-      // 0.5s gap [9, 9.5]
-      w("j", 9.5, 10.5), w("k", 10.5, 11.5), w("l", 11.5, 12.5),
-      // 0.5s gap [12.5, 13]
-      w("m", 13, 14), w("n", 14, 15), w("o", 15, 16),
-      w("p", 16, 17), w("q", 17, 18), w("r", 18, 19),
-      w("s", 19, 20), w("t", 20, 21), w("u", 21, 22),
+      w("j", 9.4, 10), w("k", 10, 11), w("l", 11, 12),
+      w("m", 13.5, 14.5), w("n", 14.5, 15.5), w("o", 15.5, 16.5),
+      w("p", 16.5, 17.5), w("q", 17.5, 18.5), w("r", 18.5, 19.5),
+      w("s", 19.5, 20.5), w("t", 20.5, 21.5), w("u", 21.5, 22),
     ];
-    const chunks = computeChunks(22, words);
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].end).toBeCloseTo(12.75, 2);
+    expect(computeChunks(22, words)).toEqual([
+      { start: 0, end: 13 },
+      { start: 13, end: 22 },
+    ]);
+  });
+
+  it("breaks ties on equal-length gaps by preferring the later position", () => {
+    // 22s clip with two 0.5s pauses inside [8, 14]:
+    //   [8.0, 8.5]    midpoint 8.25  → snaps to 8
+    //   [13.0, 13.5]  midpoint 13.25 → snaps to 13
+    // Tie on length → later wins → cut at 13 (longer first chunk).
+    const words: ElevenLabsWord[] = [
+      w("a", 0, 1), w("b", 1, 2), w("c", 2, 3), w("d", 3, 4),
+      w("e", 4, 5), w("f", 5, 6), w("g", 6, 7), w("h", 7, 8),
+      // 0.5s gap [8, 8.5]
+      w("i", 8.5, 9.5), w("j", 9.5, 10.5), w("k", 10.5, 11.5),
+      w("l", 11.5, 12.5), w("m", 12.5, 13),
+      // 0.5s gap [13, 13.5]
+      w("n", 13.5, 14.5), w("o", 14.5, 15.5), w("p", 15.5, 16.5),
+      w("q", 16.5, 17.5), w("r", 17.5, 18.5), w("s", 18.5, 19.5),
+      w("t", 19.5, 20.5), w("u", 20.5, 21.5), w("v", 21.5, 22),
+    ];
+    expect(computeChunks(22, words)).toEqual([
+      { start: 0, end: 13 },
+      { start: 13, end: 22 },
+    ]);
   });
 
   it("guarantees the trailing chunk is in [MIN, MAX] via end-constrained final cut", () => {
@@ -130,15 +121,16 @@ describe("computeChunks", () => {
     ]);
   });
 
-  it("treats words extending past duration as bounded", () => {
+  it("treats words extending past duration as bounded and snaps the cut", () => {
     // Transcription rounding: last word ends at 22.05 even though duration is 22.
-    // 0.6s pause at [10, 10.6] — midpoint 10.3 inside window [8, 14].
+    // 0.6s pause [10, 10.6], midpoint 10.3 → snaps to 10.
     const words: ElevenLabsWord[] = [
       w("a", 0, 5), w("b", 5, 10),
       w("c", 10.6, 22.05),
     ];
-    const chunks = computeChunks(22, words);
-    expect(chunks).toHaveLength(2);
-    expect(chunks[0].end).toBeCloseTo(10.3, 2);
+    expect(computeChunks(22, words)).toEqual([
+      { start: 0, end: 10 },
+      { start: 10, end: 22 },
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 import type { ClipfirstFs } from "clipfirst-engine";
 import { execFile } from "node:child_process";
-import { mkdir, writeFile as fsWriteFile, rm } from "node:fs/promises";
+import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
@@ -70,6 +70,11 @@ export async function assertSaneTrimOutput(
   }
 }
 
+// Write to `${outputPath}.tmp` then rename to outputPath, so a partial write
+// (process killed mid-encode, OOM, etc.) never leaves a moov-less file
+// sitting at the canonical asset path. `+faststart` puts moov at the front,
+// which means even a truncated mp4 is partially playable AND surfaces obvious
+// corruption to the user immediately rather than after first probe.
 export async function trimRange(
   inputPath: string,
   outputPath: string,
@@ -84,8 +89,15 @@ export async function trimRange(
     const safe = Math.max(0.01, requested - TRIM_DURATION_SAFETY_SECS);
     args.push("-t", String(safe));
   }
-  args.push(...H264_MEDIUM, ...AUDIO_OPTS, outputPath);
-  await runFfmpeg(args);
+  const tmpPath = `${outputPath}.tmp`;
+  args.push(...H264_MEDIUM, ...AUDIO_OPTS, "-movflags", "+faststart", "-f", "mp4", tmpPath);
+  try {
+    await runFfmpeg(args);
+    await rename(tmpPath, outputPath);
+  } catch (err) {
+    await rm(tmpPath, { force: true });
+    throw err;
+  }
 }
 
 /**
@@ -113,8 +125,15 @@ export async function trimRangeExact(
   args.push("-i", inputPath);
   args.push("-t", String(durationSec));
   args.push("-r", "24", "-vsync", "cfr");
-  args.push(...H264_MEDIUM, ...AUDIO_OPTS, outputPath);
-  await runFfmpeg(args);
+  const tmpPath = `${outputPath}.tmp`;
+  args.push(...H264_MEDIUM, ...AUDIO_OPTS, "-movflags", "+faststart", "-f", "mp4", tmpPath);
+  try {
+    await runFfmpeg(args);
+    await rename(tmpPath, outputPath);
+  } catch (err) {
+    await rm(tmpPath, { force: true });
+    throw err;
+  }
 }
 
 async function cutMiddle(
