@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check } from 'lucide-react';
+import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -367,7 +367,7 @@ function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace, onIdleClick }: {
+function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
   sceneIndex: number;
   scene: PlanScene;
   projectSlug: string;
@@ -379,6 +379,7 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
   onAccept: (frameIndex: 1 | 2) => void;
   onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
   onIdleClick: () => void;
+  onErrorRetry: (frameIndex: 1 | 2) => void;
 }) {
   // Cache-bust the source-frame thumbnails on scene-boundary changes — when
   // /plan-vis re-runs and produces different chunks, timestamps shift and the
@@ -400,6 +401,7 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
         onAccept={() => onAccept(1)}
         onReplace={(source) => onReplace(1, source)}
         onIdleClick={onIdleClick}
+        onErrorRetry={() => onErrorRetry(1)}
       />
       <SourceSlotPair
         frameIndex={2}
@@ -413,12 +415,13 @@ function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightMo
         onAccept={() => onAccept(2)}
         onReplace={(source) => onReplace(2, source)}
         onIdleClick={onIdleClick}
+        onErrorRetry={() => onErrorRetry(2)}
       />
     </div>
   );
 }
 
-function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick }: {
+function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
   frameIndex: 1 | 2;
   sourceSrc: string;
   state: FrameTileState;
@@ -430,6 +433,7 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
+  onErrorRetry?: () => void;
 }) {
   void frameIndex;
   return (
@@ -446,6 +450,7 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
           onAccept={onAccept}
           onReplace={onReplace}
           onIdleClick={onIdleClick}
+          onErrorRetry={onErrorRetry}
         />
       </div>
       <div className="text-[10px] font-mono text-primary/50">{label}</div>
@@ -472,7 +477,7 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick }: {
+function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
   state: FrameTileState;
   sourceSrc: string;
   inFlightModels: SwapModel[];
@@ -482,6 +487,7 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
   onAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
+  onErrorRetry?: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -574,10 +580,26 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
         </div>
       )}
       {state.kind === 'error' && !showSpinner && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/70 px-1.5">
-          <span className="text-[9px] font-mono text-red-200/90 text-center line-clamp-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-red-950/70 px-1.5">
+          <span className="text-[9px] font-mono text-red-200/90 text-center line-clamp-2">
             {state.message}
           </span>
+          {onErrorRetry && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onErrorRetry(); }}
+              title="Retry with a tamer prompt that avoids moderation triggers"
+              className={cn(
+                'h-5 px-1.5 flex items-center gap-1 rounded',
+                'text-[9px] font-mono uppercase tracking-wider',
+                'text-red-50 hover:text-white',
+                'bg-red-500/30 hover:bg-red-500/50 border border-red-300/50 hover:border-red-200/80',
+              )}
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+              Retry
+            </button>
+          )}
         </div>
       )}
       {showReadyActions && (
@@ -1003,6 +1025,29 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     }
   }, [pendingImage2Chains, mediaItems, runSwap]);
 
+  // Retry the currently-selected (failed) swap variant with safe_mode=true.
+  // safe_mode swaps the prompt for a tamer "restyle"-language version that
+  // avoids the moderation triggers in "replace people / swap subjects". The
+  // server ignores safe_mode if custom_prompt is set, so we deliberately omit
+  // customPrompt here to let the server's safe-mode default kick in.
+  const retryFailedSwap = useCallback((frameIndex: 1 | 2) => {
+    const swapId = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'];
+    if (!swapId) return;
+    const variantsKey = `image${frameIndex}_variants` as 'image1_variants' | 'image2_variants';
+    const variants = scene.swap?.[variantsKey];
+    if (!variants) return;
+    const matched = (Object.entries(variants) as Array<[string, string]>)
+      .find(([, id]) => id === swapId);
+    if (!matched) return;
+    const model = matched[0] as SwapModel;
+    if (!(ALL_SWAP_MODELS as readonly string[]).includes(model)) return;
+    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
+    void runSwap(frameIndex, model, {
+      safeMode: true,
+      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
+    });
+  }, [scene, runSwap]);
+
   const runAccept = useCallback(async (frameIndex: 1 | 2) => {
     setAccepting((prev) => {
       const next = new Set(prev);
@@ -1244,6 +1289,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         onAccept={(frameIndex) => { void runAccept(frameIndex); }}
         onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
         onIdleClick={() => { void runImagePanel(); }}
+        onErrorRetry={(frameIndex) => retryFailedSwap(frameIndex)}
       />
       {bothAccepted && (
         <VideoPanel
