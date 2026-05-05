@@ -293,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan-vis",
-    description: "Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a processed video asset (sampled frames + word-timed elevenlabs.json). Even-splits into 10–15s chunks, requires exactly two character assets (the two on-screen subjects to swap). Writes to plan/.",
+    description: "Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a processed video asset (sampled frames + word-timed elevenlabs.json). Splits into 7–14s scene chunks aligned to silence gaps in the transcript, requires exactly two character assets (the two on-screen subjects to swap). Writes to plan/.",
     example: "/plan-vis @vid-input @char-naval @char-nivi",
     category: "context_menu",
     icon: "Clapperboard",

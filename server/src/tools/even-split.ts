@@ -7,9 +7,11 @@ import { findVideoFile } from "clipfirst-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
-// Default first-chunk target. 7s mirrors plan_visualization's CHUNK_S so
-// "split this for plan-vis" is the no-arg path. Caller can override via
-// target_secs (e.g. [10] or [10, 15]) for ad-hoc slicing.
+// Default first-chunk target. 7s matches plan_visualization's MIN_SCENE_S
+// so "split this for plan-vis" is still a sensible no-arg path. Caller can
+// override via target_secs (e.g. [10] or [10, 15]) for ad-hoc slicing.
+// plan-vis itself now passes per-scene durations explicitly (silence-aligned,
+// 7–14s), so this default only governs ad-hoc CLI use.
 const DEFAULT_TARGET_SEC = 7;
 // ffmpeg can't reliably produce a usable mp4 below this. Mirrors split-video.ts.
 const MIN_CHUNK_SEC = 0.5;
@@ -137,7 +139,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         .array(z.union([z.number(), z.string()]))
         .optional()
         .describe(
-          "Ordered list of target chunk lengths in seconds (default [7], aligned with plan_visualization's 7s scene chunks). Each entry accepts '7', '7s', or 7. A leftover chunk holds whatever's left after these.",
+          "Ordered list of target chunk lengths in seconds (default [7]). Each entry accepts '7', '7s', or 7. A leftover chunk holds whatever's left after these. plan_visualization passes silence-aligned per-scene durations (7–14s) directly; this default only kicks in for ad-hoc CLI splits.",
         ),
     },
     handler: async (args) => {

@@ -98,7 +98,9 @@ function PlanShell({ title, slug, onClose, children }: {
   );
 }
 
-const SCENE_SECONDS = 7;
+// Rough pre-generation estimate only; the real chunker runs server-side and
+// produces variable 7–14s scenes aligned to silence gaps. 10s = midpoint.
+const APPROX_SCENE_SECONDS = 10;
 
 function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
   item: MediaItem | null;
@@ -152,7 +154,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
   );
   const duration = sourceItem?.duration ?? null;
   const scenesCount = duration && duration > 0
-    ? Math.max(1, Math.ceil(duration / SCENE_SECONDS))
+    ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS))
     : null;
 
   const slotsDifferFromSidecar = sidecar
@@ -2198,7 +2200,7 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
         <dd className="text-primary/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
         <dt className="text-primary/60">Scenes</dt>
         <dd className="text-primary/90">
-          {scenesCount != null ? `${scenesCount} (all ${SCENE_SECONDS}s, except last)` : '—'}
+          {scenesCount != null ? `~${scenesCount} (7–14s each, silence-aligned)` : '—'}
         </dd>
       </dl>
     </div>

@@ -25,7 +25,16 @@ import {
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
-const CHUNK_S = 7;
+// Scene length window. Floor stays at 7s (matches the prior fixed-chunk
+// default and the per-modality reference budget headroom on seedance-2);
+// ceiling 14s leaves 1s of safety under the kie/seedance ≤15s reference cap.
+// Cuts prefer the longest silence gap inside [cursor+MIN, cursor+MAX].
+const MIN_SCENE_S = 7;
+const MAX_SCENE_S = 14;
+// Silences shorter than this are word-boundary noise, not real pauses; we
+// won't cut on them. Falls back to a hard cut at MAX_SCENE_S when no real
+// pause shows up in the window.
+const MIN_SILENCE_GAP_S = 0.25;
 const REQUIRED_CHARACTERS = 2;
 
 type CharacterContext = {
@@ -70,7 +79,7 @@ const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed vi
 
 INPUTS YOU RECEIVE:
 - Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
-- A pre-computed list of chunks. Each chunk has a fixed start/end (${CHUNK_S}s wide; the final chunk may be shorter) and the transcript words spoken inside it.
+- A pre-computed list of chunks. Each chunk is ${MIN_SCENE_S}–${MAX_SCENE_S}s wide (variable, aligned to silence gaps in the transcript where possible) with explicit start/end and the transcript words spoken inside it.
 - Sampled frames from the source clip (image inputs). Each frame is labelled with its timestamp in the user message; map frames to chunks by timestamp to ground your descriptions in what actually appears on screen.
 
 YOUR JOB:
@@ -182,31 +191,57 @@ async function loadCharacter(
   return { asset_id: cleanId, name, description };
 }
 
-// Cover the whole clip in fixed CHUNK_S slabs from t=0. The final slab is the
-// remainder, so all but the last chunk are exactly CHUNK_S long.
+// Walk forward, picking each cut at the longest silence gap whose midpoint
+// lies inside the legal window [cursor+MIN, cursor+MAX]. Tie-breaker on equal
+// gap length: prefer later position (= longer first chunk → fewer scenes →
+// cheaper downstream gen). When no gap meets MIN_SILENCE_GAP_S, hard-cut at
+// cursor+MAX so we never emit a scene > MAX.
 //
-// Sub-MIN_TRAILING_SEC remainders get folded into the prior chunk — ffmpeg
-// can't reliably produce a usable mp4 below ~0.5s (mirrors even-split's
-// MIN_CHUNK_SEC), and even-split's `tryPlan` rejects sub-MIN leftovers, so a
-// 35.48s source would otherwise produce a 0.48s trailing chunk that breaks
-// the downstream even_split bootstrap. Last chunk becomes CHUNK_S + remainder
-// (≤ CHUNK_S + MIN_TRAILING_SEC).
-const MIN_TRAILING_SEC = 0.5;
-export function computeChunks(duration: number): Chunk[] {
+// On the final cut (remaining ≤ 2*MAX), the window is constrained on both
+// ends to guarantee the trailing chunk also lands in [MIN, MAX]:
+//   windowStart = max(cursor+MIN, duration-MAX)
+//   windowEnd   = min(cursor+MAX, duration-MIN)
+// Width is non-negative for any remaining > MAX, so a legal cut always
+// exists. This obsoletes the old "fold sub-min trailing into prior" hack.
+export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[] {
   if (duration <= 0) return [];
-  if (duration <= CHUNK_S) return [{ start: 0, end: duration }];
+  if (duration <= MAX_SCENE_S) return [{ start: 0, end: duration }];
+
+  const wordsOnly = words.filter((w) => w.type === "word");
   const chunks: Chunk[] = [];
-  let t = 0;
-  while (duration - t > CHUNK_S) {
-    chunks.push({ start: t, end: t + CHUNK_S });
-    t += CHUNK_S;
+  let cursor = 0;
+
+  while (duration - cursor > MAX_SCENE_S) {
+    const remaining = duration - cursor;
+    let windowStart = cursor + MIN_SCENE_S;
+    let windowEnd = cursor + MAX_SCENE_S;
+    if (remaining <= 2 * MAX_SCENE_S) {
+      windowStart = Math.max(windowStart, duration - MAX_SCENE_S);
+      windowEnd = Math.min(windowEnd, duration - MIN_SCENE_S);
+    }
+
+    let bestCut: number | null = null;
+    let bestGap = MIN_SILENCE_GAP_S;
+    for (let i = 0; i < wordsOnly.length - 1; i++) {
+      const gapStart = wordsOnly[i].end;
+      const gapEnd = wordsOnly[i + 1].start;
+      const mid = (gapStart + gapEnd) / 2;
+      if (mid < windowStart || mid > windowEnd) continue;
+      const gapLen = gapEnd - gapStart;
+      if (gapLen > bestGap) {
+        bestGap = gapLen;
+        bestCut = mid;
+      } else if (bestCut !== null && gapLen === bestGap && mid > bestCut) {
+        bestCut = mid;
+      }
+    }
+
+    const cut = bestCut ?? windowEnd;
+    chunks.push({ start: cursor, end: cut });
+    cursor = cut;
   }
-  const remainder = duration - t;
-  if (remainder >= MIN_TRAILING_SEC || chunks.length === 0) {
-    chunks.push({ start: t, end: duration });
-  } else {
-    chunks[chunks.length - 1].end = duration;
-  }
+
+  chunks.push({ start: cursor, end: duration });
   return chunks;
 }
 
@@ -260,7 +295,7 @@ function renderMarkdown(
     "",
     `**Source:** ${sourceAssetId}`,
     `**Duration:** ${totalDuration.toFixed(2)}s`,
-    `**Chunks:** ${scenes.length} (${CHUNK_S}s each except the last)`,
+    `**Chunks:** ${scenes.length} (${MIN_SCENE_S}–${MAX_SCENE_S}s each, silence-aligned)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
     "",
@@ -288,7 +323,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
     name: "plan_visualization",
     description:
       `Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video asset. ` +
-      `Splits the clip into fixed ${CHUNK_S}s chunks from the start (last chunk holds the remainder), samples frames + transcript across the clip, ` +
+      `Splits the clip into ${MIN_SCENE_S}–${MAX_SCENE_S}s chunks aligned to the longest silence gaps in the transcript (hard-cuts at ${MAX_SCENE_S}s when no real pause is available), samples frames + transcript across the clip, ` +
       `then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
       `Requires exactly ${REQUIRED_CHARACTERS} subject assets (char-* or img-*) and a transcribed video source (elevenlabs.json with word timings). ` +
       `Writes plan/index.md (human-readable) and plan/.plan.json (structured), overwriting prior.`,
@@ -439,7 +474,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         characters.push(ctx);
       }
 
-      const chunks = computeChunks(totalDuration);
+      const chunks = computeChunks(totalDuration, transcript.words);
       if (chunks.length === 0) {
         return {
           isError: true as const,
@@ -523,7 +558,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         scenes,
         source_asset_id: sourceAssetId,
         total_duration_s: totalDuration,
-        max_scene_seconds: CHUNK_S,
+        max_scene_seconds: MAX_SCENE_S,
         characters,
         model: MODEL,
       };
@@ -582,7 +617,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
             asset_id: "plan",
             scenes: scenes.length,
             total_duration_s: totalDuration,
-            max_scene_seconds: CHUNK_S,
+            max_scene_seconds: MAX_SCENE_S,
             model: MODEL,
             sampled_frames: sampled.length,
             extracted_source_frames: scenes.length * 2,
