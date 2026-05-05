@@ -502,7 +502,7 @@ function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, accepting, replacing, onAccept, onClearAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   sourceSrc: string;
   state: FrameTileState;
   inFlightCodes: string[];
@@ -511,6 +511,7 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
   accepting: boolean;
   replacing: boolean;
   onAccept: () => void;
+  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
@@ -529,6 +530,7 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
           accepting={accepting}
           replacing={replacing}
           onAccept={onAccept}
+          onClearAccept={onClearAccept}
           onReplace={onReplace}
           onIdleClick={onIdleClick}
           onErrorRetry={onErrorRetry}
@@ -559,7 +561,7 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting, replacing, onAccept, onClearAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   state: FrameTileState;
   sourceSrc: string;
   inFlightCodes: string[];
@@ -567,6 +569,7 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
   accepting: boolean;
   replacing: boolean;
   onAccept: () => void;
+  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
@@ -737,13 +740,17 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
         </div>
       )}
       {showAcceptedBadge && (
-        <div
-          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 border border-emerald-300/60 text-[9px] font-mono uppercase tracking-wider text-emerald-50"
-          title="Accepted"
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClearAccept(); }}
+          title="Clear acceptance — click to un-accept this swap and re-enable Regen"
+          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 hover:bg-rose-500/40 border border-emerald-300/60 hover:border-rose-300/70 text-[9px] font-mono uppercase tracking-wider text-emerald-50 hover:text-rose-50 transition-colors group/badge"
         >
-          <Check className="w-2.5 h-2.5" />
-          Accepted
-        </div>
+          <Check className="w-2.5 h-2.5 group-hover/badge:hidden" />
+          <X className="w-2.5 h-2.5 hidden group-hover/badge:inline" />
+          <span className="group-hover/badge:hidden">Accepted</span>
+          <span className="hidden group-hover/badge:inline">Clear</span>
+        </button>
       )}
       {dragActive && !replacing && (
         <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
@@ -1076,7 +1083,7 @@ function buildSeedanceToolArgs(
 // click and Regen both dispatch the selected (provider, model) for THAT frame
 // only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
 // prior_swap_asset_id so identity carries over from the prior frame.
-function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, accepting, replacing, runSwap, onAccept, onReplace, onErrorRetry }: {
+function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, accepting, replacing, runSwap, onAccept, onClearAccept, onReplace, onErrorRetry }: {
   ordinal: 1 | 2;
   frameIndex: 1 | 2;
   scene: PlanScene;
@@ -1096,6 +1103,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
     opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ) => Promise<{ newAssetId: string } | null>;
   onAccept: () => void;
+  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onErrorRetry: () => void;
 }) {
@@ -1178,6 +1186,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
         accepting={accepting}
         replacing={replacing}
         onAccept={onAccept}
+        onClearAccept={onClearAccept}
         onReplace={onReplace}
         onIdleClick={dispatchGen}
         onErrorRetry={onErrorRetry}
@@ -1336,7 +1345,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
     });
   }, [scene, runSwap]);
 
-  const runAccept = useCallback(async (frameIndex: 1 | 2) => {
+  const runAccept = useCallback(async (frameIndex: 1 | 2, accepted = true) => {
     setAccepting((prev) => {
       const next = new Set(prev);
       next.add(frameIndex);
@@ -1347,11 +1356,12 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         project_slug: projectSlug,
         scene_index: index,
         frame_index: frameIndex,
-        accepted: true,
+        accepted,
       });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Accept failed';
-        toast({ title: `Scene ${index + 1} image${frameIndex} accept failed`, description: msg, duration: 5000 });
+        const action = accepted ? 'accept' : 'clear';
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `${action} failed`;
+        toast({ title: `Scene ${index + 1} image${frameIndex} ${action} failed`, description: msg, duration: 5000 });
         return;
       }
       try {
@@ -1584,6 +1594,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         replacing={replacing.has(1)}
         runSwap={runSwap}
         onAccept={() => { void runAccept(1); }}
+        onClearAccept={() => { void runAccept(1, false); }}
         onReplace={(source) => { void runReplace(1, source); }}
         onErrorRetry={() => retryFailedSwap(1)}
       />
@@ -1602,6 +1613,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         replacing={replacing.has(2)}
         runSwap={runSwap}
         onAccept={() => { void runAccept(2); }}
+        onClearAccept={() => { void runAccept(2, false); }}
         onReplace={(source) => { void runReplace(2, source); }}
         onErrorRetry={() => retryFailedSwap(2)}
       />
@@ -1918,7 +1930,7 @@ function PayloadJsonView({ payload, mediaItems, projectSlug }: {
   const text = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
   const lines = useMemo(() => text.split('\n'), [text]);
   return (
-    <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-x-auto scrollbar-cyan max-h-72">
+    <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-auto scrollbar-cyan max-h-72">
       {lines.map((line, i) => (
         <span key={i}>
           {renderJsonLine(line, mediaItems, projectSlug, i)}
