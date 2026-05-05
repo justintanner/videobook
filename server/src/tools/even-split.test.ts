@@ -153,6 +153,33 @@ describe("planEvenSplit (pure)", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("7s default-style target: D=14, [7] → [7, 7]", () => {
+    const r = planEvenSplit(14, [7]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([7, 7]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, false]);
+    expect(r.usedTargets).toEqual([7]);
+    expect(r.hasLeftover).toBe(true);
+  });
+
+  it("7s per-scene plan-vis pattern: D=21, [7, 7, 7] → [7, 7, 7], no leftover", () => {
+    const r = planEvenSplit(21, [7, 7, 7]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([7, 7, 7]);
+    expect(r.chunks.map((c) => c.exact)).toEqual([true, true, true]);
+    expect(r.hasLeftover).toBe(false);
+  });
+
+  it("7s with short trailing scene: D=17, [7, 7, 3] → [7, 7, 3], no leftover", () => {
+    const r = planEvenSplit(17, [7, 7, 3]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chunks.map((c) => c.duration)).toEqual([7, 7, 3]);
+    expect(r.hasLeftover).toBe(false);
+  });
+
   it("three targets: D=35, [10, 10, 10] → [10, 10, 10, 5]", () => {
     const r = planEvenSplit(35, [10, 10, 10]);
     expect(r.ok).toBe(true);
@@ -216,8 +243,10 @@ describe("even_split tool (integration)", () => {
   }, 120_000);
 
   it("rejects sources too short for any split", async () => {
-    const videoPath = join(fixtureDir, "short-4s.mp4");
-    await generateTestVideo(videoPath, 4);
+    const videoPath = join(fixtureDir, "short-2s.mp4");
+    // Default target is 7s; a 2s source can't be split with the [7] backup
+    // (last - 1 = 6 still > 2). Sub-default-and-sub-backup → error path.
+    await generateTestVideo(videoPath, 2);
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
@@ -233,9 +262,9 @@ describe("even_split tool (integration)", () => {
     expect(content[0].text).toContain("too short");
   }, 60_000);
 
-  it("splits a 20s source into [10, 10] with default target", async () => {
-    const videoPath = join(fixtureDir, "twenty-20s.mp4");
-    await generateTestVideo(videoPath, 20);
+  it("splits a 14s source into [7, 7] with default target", async () => {
+    const videoPath = join(fixtureDir, "fourteen-14s.mp4");
+    await generateTestVideo(videoPath, 14);
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
@@ -249,9 +278,9 @@ describe("even_split tool (integration)", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.chunks).toHaveLength(2);
-    expect(parsed.chunks[0].duration).toBe(10);
-    expect(parsed.chunks[1].duration).toBe(10);
-    expect(parsed.used_target_secs).toEqual([10]);
+    expect(parsed.chunks[0].duration).toBe(7);
+    expect(parsed.chunks[1].duration).toBe(7);
+    expect(parsed.used_target_secs).toEqual([7]);
     expect(parsed.has_leftover).toBe(true);
 
     // Verify on-disk durations stay at or under the requested cap.
@@ -262,8 +291,8 @@ describe("even_split tool (integration)", () => {
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
-      expect(dur).toBeLessThanOrEqual(10);
-      expect(dur).toBeGreaterThan(9.5);
+      expect(dur).toBeLessThanOrEqual(7);
+      expect(dur).toBeGreaterThan(6.5);
     }
 
     // Source asset preserved.
@@ -273,6 +302,38 @@ describe("even_split tool (integration)", () => {
     });
     expect(sourceManifest.isError).toBeFalsy();
   }, 120_000);
+
+  it("splits a 21s source into [7, 7, 7] with explicit per-scene targets", async () => {
+    const videoPath = join(fixtureDir, "twenty-one-21s.mp4");
+    await generateTestVideo(videoPath, 21);
+    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
+
+    const result = await client.callTool({
+      name: "even_split",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "even-split-proj",
+        target_secs: [7, 7, 7],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.chunks).toHaveLength(3);
+    expect(parsed.chunks.map((c: { duration: number }) => c.duration)).toEqual([7, 7, 7]);
+    expect(parsed.has_leftover).toBe(false);
+
+    for (const chunk of parsed.chunks) {
+      const manifest = await client.callTool({
+        name: "asset_manifest",
+        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
+      });
+      const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
+      const dur = await probeDuration(path);
+      expect(dur).toBeLessThanOrEqual(7);
+      expect(dur).toBeGreaterThan(6.5);
+    }
+  }, 180_000);
 
   it("accepts target_secs as strings with 's' suffix (chat-style)", async () => {
     const videoPath = join(fixtureDir, "twenty-20s-string.mp4");

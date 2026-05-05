@@ -7,8 +7,10 @@ import { findVideoFile } from "clipfirst-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
-// Default first-chunk target. Caller can override via target_secs.
-const DEFAULT_TARGET_SEC = 10;
+// Default first-chunk target. 7s mirrors plan_visualization's CHUNK_S so
+// "split this for plan-vis" is the no-arg path. Caller can override via
+// target_secs (e.g. [10] or [10, 15]) for ad-hoc slicing.
+const DEFAULT_TARGET_SEC = 7;
 // ffmpeg can't reliably produce a usable mp4 below this. Mirrors split-video.ts.
 const MIN_CHUNK_SEC = 0.5;
 
@@ -135,7 +137,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         .array(z.union([z.number(), z.string()]))
         .optional()
         .describe(
-          "Ordered list of target chunk lengths in seconds (default [10]). Each entry accepts '10', '10s', or 10. A leftover chunk holds whatever's left after these.",
+          "Ordered list of target chunk lengths in seconds (default [7], aligned with plan_visualization's 7s scene chunks). Each entry accepts '7', '7s', or 7. A leftover chunk holds whatever's left after these.",
         ),
     },
     handler: async (args) => {
