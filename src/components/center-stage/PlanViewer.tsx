@@ -348,10 +348,14 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
         // even_split uses enqueueAndWait — by the time it returns, the chunks
         // are written to disk. Targets are exact per-scene durations; the
         // server backs off the last by 1s if the leftover would be sub-MIN.
+        // Use raw scene durations. plan_visualization's computeChunks merges
+        // sub-MIN_TRAILING_SEC trailings into the prior chunk, so each target
+        // here should be ≥ 0.5s. (An old plan with a sub-MIN trailing will
+        // make planEvenSplit reject the request — re-run /plan-vis.)
         const splitResult = await callTool('even_split', {
           project_slug: projectSlug,
           asset_id: data.source_asset_id,
-          target_secs: data.scenes.map((s) => Math.max(0.5, s.end - s.start)),
+          target_secs: data.scenes.map((s) => s.end - s.start),
         });
         if (splitResult.isError) {
           const msg = (splitResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'even_split failed';

@@ -184,7 +184,15 @@ async function loadCharacter(
 
 // Cover the whole clip in fixed CHUNK_S slabs from t=0. The final slab is the
 // remainder, so all but the last chunk are exactly CHUNK_S long.
-function computeChunks(duration: number): Chunk[] {
+//
+// Sub-MIN_TRAILING_SEC remainders get folded into the prior chunk — ffmpeg
+// can't reliably produce a usable mp4 below ~0.5s (mirrors even-split's
+// MIN_CHUNK_SEC), and even-split's `tryPlan` rejects sub-MIN leftovers, so a
+// 35.48s source would otherwise produce a 0.48s trailing chunk that breaks
+// the downstream even_split bootstrap. Last chunk becomes CHUNK_S + remainder
+// (≤ CHUNK_S + MIN_TRAILING_SEC).
+const MIN_TRAILING_SEC = 0.5;
+export function computeChunks(duration: number): Chunk[] {
   if (duration <= 0) return [];
   if (duration <= CHUNK_S) return [{ start: 0, end: duration }];
   const chunks: Chunk[] = [];
@@ -193,7 +201,12 @@ function computeChunks(duration: number): Chunk[] {
     chunks.push({ start: t, end: t + CHUNK_S });
     t += CHUNK_S;
   }
-  chunks.push({ start: t, end: duration });
+  const remainder = duration - t;
+  if (remainder >= MIN_TRAILING_SEC || chunks.length === 0) {
+    chunks.push({ start: t, end: duration });
+  } else {
+    chunks[chunks.length - 1].end = duration;
+  }
   return chunks;
 }
 
