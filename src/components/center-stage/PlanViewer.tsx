@@ -622,64 +622,64 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
-function buildImagePayloads(
-  models: SwapModel[],
-  modelPrompts: Record<SwapModel, string>,
+// Mirrors what server/src/payload-builders.ts produces for the corresponding
+// `generate_*_image` tools, but in slug form (no URL resolution). Keep aligned
+// with the swap-plan-scene-frame queue payload (always 16:9 / 2K) and the
+// per-model `input` shapes from @apicity/kie's model-schemas.
+const KIE_MODEL_NAME_BY_SWAP: Record<SwapModel, string> = {
+  'nano-banana-pro': 'nano-banana-pro',
+  'gpt-image-2': 'gpt-image-2-image-to-image',
+  'wan-2-7-image-pro': 'wan/2-7-image-pro',
+};
+
+function buildKieImagePayload(
+  model: SwapModel,
   characters: PlanSidecar['characters'],
-  projectSlug: string,
   sceneIndex: number,
-): unknown[] {
-  const characterIds = characters.map((c) => `@${c.asset_id}`);
-  return models.flatMap((model) => {
-    const trimmed = modelPrompts[model].trim();
-    return [
-      {
-        tool: 'swap_plan_scene_frame',
-        args: {
-          project_slug: projectSlug,
-          scene_index: sceneIndex,
-          frame_index: 1,
-          character_asset_ids: characterIds,
-          provider: 'kie',
-          model,
-          ...(trimmed ? { custom_prompt: trimmed } : {}),
-        },
-      },
-      {
-        tool: 'swap_plan_scene_frame',
-        args: {
-          project_slug: projectSlug,
-          scene_index: sceneIndex,
-          frame_index: 2,
-          character_asset_ids: characterIds,
-          provider: 'kie',
-          model,
-          prior_swap_asset_id: '<image1 asset id>',
-          ...(trimmed ? { custom_prompt: trimmed } : {}),
-        },
-      },
-    ];
-  });
+  frameIndex: 1 | 2,
+  customPrompt: string,
+  priorSwapAssetId?: string,
+): { model: string; input: Record<string, unknown> } {
+  const sourceFrameSlug = `@plan/scene-${sceneIndex}-image${frameIndex}-source.jpg`;
+  const inputs = [
+    sourceFrameSlug,
+    ...characters.map((c) => `@${c.asset_id}`),
+    ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
+  ];
+  const trimmed = customPrompt.trim();
+  const prompt = trimmed.length > 0 ? trimmed : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const inputKey = model === 'nano-banana-pro' ? 'image_input' : 'input_urls';
+  return {
+    model: KIE_MODEL_NAME_BY_SWAP[model],
+    input: {
+      prompt,
+      [inputKey]: inputs,
+      aspect_ratio: '16:9',
+      resolution: '2K',
+    },
+  };
 }
 
-function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, json }: {
+function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug }: {
   selectedModel: SwapModel;
   onSelectModel: (model: SwapModel) => void;
   prompt: string;
   onPromptChange: (next: string) => void;
-  json: string;
+  payload: unknown;
+  mediaItems: MediaItem[];
+  projectSlug: string;
 }) {
   const [view, setView] = useState<'prompt' | 'json'>('prompt');
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(json);
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore clipboard permission failures
     }
-  }, [json]);
+  }, [payload]);
   return (
     <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/30 flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800/60">
@@ -733,9 +733,7 @@ function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, json
           )}
         />
       ) : (
-        <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-x-auto scrollbar-cyan max-h-72">
-          {json}
-        </pre>
+        <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
       )}
     </div>
   );
@@ -781,37 +779,67 @@ function readySwapAssetIds(
   return [a, b];
 }
 
-function buildSeedancePayload(
-  toolName: string,
+const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
+  'seedance-2-ref': 'bytedance/seedance-2',
+  'seedance-2-fast': 'bytedance/seedance-2-fast',
+};
+
+function buildKieVideoPayload(
+  videoModel: VideoModel,
   scene: PlanScene,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
   sourceVideoAssetId: string,
-  customPrompt?: string,
-): { tool: string; args: Record<string, unknown> } {
+  customPrompt: string,
+): { model: string; input: Record<string, unknown> } {
+  const swapped = readySwapAssetIds(scene, mediaItems);
+  const referenceImages = swapped
+    ? swapped.map((id) => `@${id}`)
+    : characters.map((c) => `@${c.asset_id}`);
+  const trimmed = customPrompt.trim();
+  const prompt = trimmed.length > 0
+    ? trimmed
+    : rewriteVisualWithImageTokens(scene.visual, characters);
+  const duration = Math.min(15, Math.max(4, Math.round(scene.end - scene.start)));
+  return {
+    model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
+    input: {
+      prompt,
+      reference_image_urls: referenceImages,
+      reference_video_urls: [`@${sourceVideoAssetId}`],
+      reference_audio_urls: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
+      resolution: '720p',
+      aspect_ratio: '16:9',
+      duration,
+      generate_audio: false,
+    },
+  };
+}
+
+// Build the args for the actual generate_seedance2_video / _fast_video MCP
+// tool call. This is what handleVideo dispatches; the JSON view shows the
+// derived KIE REST shape via buildKieVideoPayload above.
+function buildSeedanceToolArgs(
+  scene: PlanScene,
+  characters: PlanSidecar['characters'],
+  mediaItems: MediaItem[],
+  sourceVideoAssetId: string,
+  customPrompt: string,
+): Record<string, unknown> {
   const swapped = readySwapAssetIds(scene, mediaItems);
   const imageSlugs = swapped
     ? swapped.map((id) => `@${id}`)
     : characters.map((c) => `@${c.asset_id}`);
-  const trimmed = customPrompt?.trim();
+  const trimmed = customPrompt.trim();
   return {
-    tool: toolName,
-    args: {
-      prompt: trimmed && trimmed.length > 0
-        ? trimmed
-        : rewriteVisualWithImageTokens(scene.visual, characters),
-      // Seedance 2 (kie) ref inputs: 2 swap frames + source vid + source aud.
-      image_slugs: imageSlugs,
-      video_slugs: [`@${sourceVideoAssetId}`],
-      audio_slugs: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
-      resolution: '720p',
-      aspect_ratio: '16:9',
-      // Kie seedance accepts 4–15s integers; clamp the scene length.
-      duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
-      // Silent video — we splice the source's extracted audio onto it
-      // afterwards via replace_video_audio (see SceneBlock.handleVideo).
-      generate_audio: false,
-    },
+    prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
+    image_slugs: imageSlugs,
+    video_slugs: [`@${sourceVideoAssetId}`],
+    audio_slugs: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
+    resolution: '720p',
+    aspect_ratio: '16:9',
+    duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
+    generate_audio: false,
   };
 }
 
@@ -1086,10 +1114,10 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     setSubmittingVideo(true);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const payload = buildSeedancePayload(toolName, scene, characters, mediaItems, sourceVideoAssetId, videoModelPrompts[selectedVideoModel]);
+      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sourceVideoAssetId, videoModelPrompts[selectedVideoModel]);
       const result = await callTool(toolName, {
         project_slug: projectSlug,
-        ...payload.args,
+        ...toolArgs,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
@@ -1157,25 +1185,27 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     }
   }, [pendingAudioReplace, mediaItems, callTool, projectSlug, index]);
 
-  const json = useMemo(
-    () => JSON.stringify(
-      buildSeedancePayload(
-        TOOL_BY_VIDEO_MODEL[selectedVideoModel],
-        scene,
-        characters,
-        mediaItems,
-        sourceVideoAssetId,
-        videoModelPrompts[selectedVideoModel],
-      ),
-      null,
-      2,
+  const videoPayload = useMemo(
+    () => buildKieVideoPayload(
+      selectedVideoModel,
+      scene,
+      characters,
+      mediaItems,
+      sourceVideoAssetId,
+      videoModelPrompts[selectedVideoModel],
     ),
     [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sourceVideoAssetId],
   );
 
-  const imageJson = useMemo(
-    () => JSON.stringify(buildImagePayloads([selectedPanelModel], modelPrompts, characters, projectSlug, index), null, 2),
-    [selectedPanelModel, modelPrompts, characters, projectSlug, index],
+  const imagePayload = useMemo(
+    () => buildKieImagePayload(
+      selectedPanelModel,
+      characters,
+      index,
+      1,
+      modelPrompts[selectedPanelModel],
+    ),
+    [selectedPanelModel, modelPrompts, characters, index],
   );
 
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
@@ -1198,7 +1228,9 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         onSelectModel={setSelectedPanelModel}
         prompt={modelPrompts[selectedPanelModel]}
         onPromptChange={setSelectedModelPrompt}
-        json={imageJson}
+        payload={imagePayload}
+        mediaItems={mediaItems}
+        projectSlug={projectSlug}
       />
       <SceneFrameRows
         sceneIndex={index}
@@ -1219,7 +1251,9 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
           onSelectModel={setSelectedVideoModel}
           prompt={videoModelPrompts[selectedVideoModel]}
           onPromptChange={setSelectedVideoPrompt}
-          json={json}
+          payload={videoPayload}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
           running={submittingVideo}
           disabled={!videoGate.ok || anySwapInFlight}
           disabledReason={!videoGate.ok ? videoGate.reason : anySwapInFlight ? 'Swap still running' : undefined}
@@ -1230,12 +1264,14 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, json, running, disabled, disabledReason, onRun }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
   onPromptChange: (next: string) => void;
-  json: string;
+  payload: unknown;
+  mediaItems: MediaItem[];
+  projectSlug: string;
   running: boolean;
   disabled: boolean;
   disabledReason?: string;
@@ -1245,13 +1281,13 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, json
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(json);
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore clipboard permission failures
     }
-  }, [json]);
+  }, [payload]);
   return (
     <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/30 flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800/60">
@@ -1305,9 +1341,7 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, json
           )}
         />
       ) : (
-        <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-x-auto scrollbar-cyan max-h-72">
-          {json}
-        </pre>
+        <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
       )}
       <div className="flex items-center justify-end">
         <button
@@ -1328,6 +1362,76 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, json
         </button>
       </div>
     </div>
+  );
+}
+
+// Slug pattern: `@<prefix><id>` where prefix is one of the known asset id
+// prefixes plus `plan/` for the synthetic source-frame slug. Restricted to
+// these so prompt text like `@Image1` (used by rewriteVisualWithImageTokens)
+// doesn't get mis-matched as an asset reference.
+const SLUG_TOKEN_REGEX = /"(@(?:img-|vid-|aud-|char-|plan\/)[\w\-./]+)"/g;
+
+function resolveSlugThumb(
+  slug: string,
+  mediaItems: MediaItem[],
+  projectSlug: string,
+): string | null {
+  const id = slug.startsWith('@') ? slug.slice(1) : slug;
+  const planMatch = id.match(/^plan\/(scene-\d+-image\d+-source\.jpg)$/);
+  if (planMatch) return `/files/${projectSlug}/plan/${planMatch[1]}`;
+  const item = mediaItems.find((m) => m.id === id);
+  return item?.thumbnailSrc ?? null;
+}
+
+function renderJsonLine(
+  line: string,
+  mediaItems: MediaItem[],
+  projectSlug: string,
+  lineKey: number,
+): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  SLUG_TOKEN_REGEX.lastIndex = 0;
+  let lastIndex = 0;
+  let tokenKey = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SLUG_TOKEN_REGEX.exec(line)) !== null) {
+    if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
+    const slug = match[1];
+    const thumb = resolveSlugThumb(slug, mediaItems, projectSlug);
+    parts.push(
+      <span key={`${lineKey}-${tokenKey++}`} className="inline-flex items-center gap-1 align-middle">
+        {thumb && (
+          <img
+            src={thumb}
+            alt=""
+            className="w-4 h-4 inline-block rounded object-cover ring-1 ring-zinc-700/60 align-middle"
+          />
+        )}
+        <span>&quot;{slug}&quot;</span>
+      </span>,
+    );
+    lastIndex = SLUG_TOKEN_REGEX.lastIndex;
+  }
+  if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+  return parts;
+}
+
+function PayloadJsonView({ payload, mediaItems, projectSlug }: {
+  payload: unknown;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+}) {
+  const text = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
+  const lines = useMemo(() => text.split('\n'), [text]);
+  return (
+    <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-x-auto scrollbar-cyan max-h-72">
+      {lines.map((line, i) => (
+        <span key={i}>
+          {renderJsonLine(line, mediaItems, projectSlug, i)}
+          {i < lines.length - 1 && '\n'}
+        </span>
+      ))}
+    </pre>
   );
 }
 
