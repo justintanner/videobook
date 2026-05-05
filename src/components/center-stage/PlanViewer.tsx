@@ -555,6 +555,23 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
               {spinnerLabel}
             </span>
           )}
+          {onRegen && state.kind === 'generating' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRegen(); }}
+              title="Re-fire this swap (use if generation is stuck)"
+              className={cn(
+                'absolute top-1 right-1',
+                'h-5 px-1.5 flex items-center gap-1 rounded',
+                'text-[9px] font-mono uppercase tracking-wider',
+                'text-primary/80 hover:text-primary',
+                'bg-black/60 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+              )}
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+              Retry
+            </button>
+          )}
         </div>
       )}
       {state.kind === 'error' && !showSpinner && (
