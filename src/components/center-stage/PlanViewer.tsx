@@ -237,14 +237,43 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 }
 
 type SwapModel = 'nano-banana-pro' | 'gpt-image-2' | 'wan-2-7-image-pro';
+type SwapProvider = 'kie' | 'fal';
 
 const ALL_SWAP_MODELS: SwapModel[] = ['nano-banana-pro', 'gpt-image-2', 'wan-2-7-image-pro'];
+const ALL_SWAP_PROVIDERS: SwapProvider[] = ['kie', 'fal'];
+
+// Mirror of server SUPPORTED_MODELS_BY_PROVIDER: fal doesn't host gpt-image-2.
+const MODELS_BY_PROVIDER: Record<SwapProvider, SwapModel[]> = {
+  kie: ['nano-banana-pro', 'gpt-image-2', 'wan-2-7-image-pro'],
+  fal: ['nano-banana-pro', 'wan-2-7-image-pro'],
+};
 
 const SHORT_LABEL_BY_MODEL: Record<SwapModel, string> = {
   'nano-banana-pro': 'nbp',
   'gpt-image-2': 'gpt',
   'wan-2-7-image-pro': 'wan',
 };
+
+// Variant key used in scene.swap.image{N}_variants. Bare model name = kie
+// (preserves backward compat with older plans). `fal:{model}` = fal variant.
+function variantKey(provider: SwapProvider, model: SwapModel): string {
+  return provider === 'fal' ? `fal:${model}` : model;
+}
+
+function parseVariantKey(key: string): { provider: SwapProvider; model: SwapModel } | null {
+  const falPrefix = 'fal:';
+  if (key.startsWith(falPrefix)) {
+    const m = key.slice(falPrefix.length);
+    if ((ALL_SWAP_MODELS as readonly string[]).includes(m)) {
+      return { provider: 'fal', model: m as SwapModel };
+    }
+    return null;
+  }
+  if ((ALL_SWAP_MODELS as readonly string[]).includes(key)) {
+    return { provider: 'kie', model: key as SwapModel };
+  }
+  return null;
+}
 
 type VideoModel = 'seedance-2-ref' | 'seedance-2-fast';
 
@@ -360,72 +389,18 @@ function deriveTileState(
 }
 
 // Extract the short model code from an auto-generated swap slug like
-// `img-scene-0-image2-nbp-swap`. Returns null for manual-upload assets etc.
+// `img-scene-0-image2-nbp-swap` or `img-scene-0-image1-nbp-fal-swap`. Returns
+// the code with optional `-fal` suffix, or null for manual-upload assets.
 function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | null {
   if (!assetId) return null;
-  const m = /-image\d+-(nbp|gpt|wan)-swap/.exec(assetId);
+  const m = /-image\d+-((?:nbp|gpt|wan)(?:-fal)?)-swap/.exec(assetId);
   return m ? m[1] : null;
 }
 
-function SceneFrameRows({ sceneIndex, scene, projectSlug, mediaItems, inFlightModels1, inFlightModels2, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
-  sceneIndex: number;
-  scene: PlanScene;
-  projectSlug: string;
-  mediaItems: MediaItem[];
-  inFlightModels1: SwapModel[];
-  inFlightModels2: SwapModel[];
-  accepting: Set<1 | 2>;
-  replacing: Set<1 | 2>;
-  onAccept: (frameIndex: 1 | 2) => void;
-  onReplace: (frameIndex: 1 | 2, source: ReplaceSource) => void;
-  onIdleClick: () => void;
-  onErrorRetry: (frameIndex: 1 | 2) => void;
-}) {
-  // Cache-bust the source-frame thumbnails on scene-boundary changes — when
-  // /plan-vis re-runs and produces different chunks, timestamps shift and the
-  // same filename now points at a different frame.
-  const v = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
-  const sourceUrl = (i: 1 | 2) =>
-    `/files/${projectSlug}/plan/scene-${sceneIndex}-image${i}-source.jpg?v=${v}`;
-  return (
-    <div className="flex flex-wrap gap-6 px-3 py-3 border-b border-zinc-800/40 bg-black/20">
-      <SourceSlotPair
-        frameIndex={1}
-        sourceSrc={sourceUrl(1)}
-        state={deriveTileState(scene, 1, mediaItems)}
-        inFlightModels={inFlightModels1}
-        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.image1)}
-        label={`image1 · first ${formatTimecode(scene.start)}`}
-        accepting={accepting.has(1)}
-        replacing={replacing.has(1)}
-        onAccept={() => onAccept(1)}
-        onReplace={(source) => onReplace(1, source)}
-        onIdleClick={onIdleClick}
-        onErrorRetry={() => onErrorRetry(1)}
-      />
-      <SourceSlotPair
-        frameIndex={2}
-        sourceSrc={sourceUrl(2)}
-        state={deriveTileState(scene, 2, mediaItems)}
-        inFlightModels={inFlightModels2}
-        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.image2)}
-        label={`image2 · last ${formatTimecode(scene.end)}`}
-        accepting={accepting.has(2)}
-        replacing={replacing.has(2)}
-        onAccept={() => onAccept(2)}
-        onReplace={(source) => onReplace(2, source)}
-        onIdleClick={onIdleClick}
-        onErrorRetry={() => onErrorRetry(2)}
-      />
-    </div>
-  );
-}
-
-function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
-  frameIndex: 1 | 2;
+function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   sourceSrc: string;
   state: FrameTileState;
-  inFlightModels: SwapModel[];
+  inFlightCodes: string[];
   currentModelCode: string | null;
   label: string;
   accepting: boolean;
@@ -434,16 +409,17 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
+  onRegen: () => void;
 }) {
-  void frameIndex;
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <SourceThumb src={sourceSrc} alt={`source ${label}`} />
+        <span className="text-primary/40 text-lg leading-none px-0.5 select-none">→</span>
         <SwapSlot
           state={state}
           sourceSrc={sourceSrc}
-          inFlightModels={inFlightModels}
+          inFlightCodes={inFlightCodes}
           currentModelCode={currentModelCode}
           accepting={accepting}
           replacing={replacing}
@@ -451,6 +427,7 @@ function SourceSlotPair({ frameIndex, sourceSrc, state, inFlightModels, currentM
           onReplace={onReplace}
           onIdleClick={onIdleClick}
           onErrorRetry={onErrorRetry}
+          onRegen={onRegen}
         />
       </div>
       <div className="text-[10px] font-mono text-primary/50">{label}</div>
@@ -477,10 +454,10 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry }: {
+function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting, replacing, onAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   state: FrameTileState;
   sourceSrc: string;
-  inFlightModels: SwapModel[];
+  inFlightCodes: string[];
   currentModelCode: string | null;
   accepting: boolean;
   replacing: boolean;
@@ -488,21 +465,22 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
+  onRegen?: () => void;
 }) {
   const [errored, setErrored] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const anyInFlight = inFlightModels.length > 0;
+  const anyInFlight = inFlightCodes.length > 0;
   const showSpinner = state.kind === 'generating' || replacing || (anyInFlight && state.kind === 'idle');
   // Caption inside the spinner overlay so the user knows what's running.
-  // Prefers the currently-selected slot's model (whose asset is in
-  // 'generating' status) and otherwise lists any in-flight model submissions.
+  // Prefers the currently-selected slot's code (whose asset is in 'generating'
+  // status) and otherwise lists any in-flight code submissions.
   const spinnerLabel = (() => {
     if (replacing) return 'uploading…';
     if (state.kind === 'generating' && currentModelCode) {
       return `${currentModelCode}…`;
     }
-    if (inFlightModels.length > 0) {
-      return inFlightModels.map((m) => SHORT_LABEL_BY_MODEL[m]).join(', ');
+    if (inFlightCodes.length > 0) {
+      return inFlightCodes.join(', ');
     }
     return null;
   })();
@@ -618,6 +596,22 @@ function SwapSlot({ state, sourceSrc, inFlightModels, currentModelCode, acceptin
             <Check className="w-3 h-3" />
             Accept
           </button>
+          {onRegen && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRegen(); }}
+              title="Re-generate with the current provider, model, and prompt"
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-primary/80 hover:text-primary',
+                'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+              )}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Regen
+            </button>
+          )}
         </div>
       )}
       {showAcceptedBadge && (
@@ -644,24 +638,43 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
+// Build a stable empty prompts map keyed by every (provider, model) combo.
+function makeEmptyModelPrompts(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const provider of ALL_SWAP_PROVIDERS) {
+    for (const model of MODELS_BY_PROVIDER[provider]) {
+      out[variantKey(provider, model)] = DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+    }
+  }
+  return out;
+}
+
 // Mirrors what server/src/payload-builders.ts produces for the corresponding
 // `generate_*_image` tools, but in slug form (no URL resolution). Keep aligned
-// with the swap-plan-scene-frame queue payload (always 16:9 / 2K) and the
-// per-model `input` shapes from @apicity/kie's model-schemas.
+// with the swap-plan-scene-frame queue payload and the per-model `input`
+// shapes from @apicity/kie's model-schemas.
 const KIE_MODEL_NAME_BY_SWAP: Record<SwapModel, string> = {
   'nano-banana-pro': 'nano-banana-pro',
   'gpt-image-2': 'gpt-image-2-image-to-image',
   'wan-2-7-image-pro': 'wan/2-7-image-pro',
 };
 
-function buildKieImagePayload(
+// Fal endpoint ids that the server's swap dispatch routes to (see
+// server/src/jobs/generate-{nano-banana-pro,wan27-pro}-edit-fal.ts).
+const FAL_ENDPOINT_BY_SWAP: Partial<Record<SwapModel, string>> = {
+  'nano-banana-pro': 'fal-ai/nano-banana-pro/edit',
+  'wan-2-7-image-pro': 'fal-ai/wan/v2.7/pro/edit',
+};
+
+function buildSwapPayload(
+  provider: SwapProvider,
   model: SwapModel,
   characters: PlanSidecar['characters'],
   sceneIndex: number,
   frameIndex: 1 | 2,
   customPrompt: string,
   priorSwapAssetId?: string,
-): { model: string; input: Record<string, unknown> } {
+): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
   const sourceFrameSlug = `@plan/scene-${sceneIndex}-image${frameIndex}-source.jpg`;
   const inputs = [
     sourceFrameSlug,
@@ -670,9 +683,30 @@ function buildKieImagePayload(
   ];
   const trimmed = customPrompt.trim();
   const prompt = trimmed.length > 0 ? trimmed : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  if (provider === 'fal') {
+    const endpoint = FAL_ENDPOINT_BY_SWAP[model];
+    if (!endpoint) {
+      // gpt-image-2 isn't on Fal — surface a placeholder payload so the JSON
+      // tab still renders something rather than crashing.
+      return { provider, endpoint: `(no fal endpoint for ${model})`, input: { prompt, image_urls: inputs } };
+    }
+    if (model === 'wan-2-7-image-pro') {
+      return {
+        provider,
+        endpoint,
+        input: { prompt, image_urls: inputs, image_size: 'landscape_16_9' },
+      };
+    }
+    return {
+      provider,
+      endpoint,
+      input: { prompt, image_urls: inputs, aspect_ratio: '16:9', resolution: '2K' },
+    };
+  }
   const inputKey = model === 'nano-banana-pro' ? 'image_input' : 'input_urls';
   return {
-    model: KIE_MODEL_NAME_BY_SWAP[model],
+    provider,
+    endpoint: KIE_MODEL_NAME_BY_SWAP[model],
     input: {
       prompt,
       [inputKey]: inputs,
@@ -682,9 +716,14 @@ function buildKieImagePayload(
   };
 }
 
-function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug }: {
-  selectedModel: SwapModel;
-  onSelectModel: (model: SwapModel) => void;
+// Per-frame block: provider/model dropdowns, prompt/JSON tabs (chip-aware
+// prompt view), and the source→slot row. Each frame is a self-contained unit;
+// idle slot click runs only the selected (provider, model) for THAT frame.
+function FrameImagePanel({ provider, onProviderChange, model, onModelChange, prompt, onPromptChange, payload, mediaItems, projectSlug }: {
+  provider: SwapProvider;
+  onProviderChange: (next: SwapProvider) => void;
+  model: SwapModel;
+  onModelChange: (next: SwapModel) => void;
   prompt: string;
   onPromptChange: (next: string) => void;
   payload: unknown;
@@ -702,8 +741,23 @@ function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
       // ignore clipboard permission failures
     }
   }, [payload]);
+  const allowedModels = MODELS_BY_PROVIDER[provider];
   return (
-    <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/30 flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-3 flex-wrap text-[11px] font-mono">
+        <ProviderModelSelect
+          label="Provider"
+          value={provider}
+          options={ALL_SWAP_PROVIDERS}
+          onChange={(next) => onProviderChange(next as SwapProvider)}
+        />
+        <ProviderModelSelect
+          label="Model"
+          value={model}
+          options={allowedModels}
+          onChange={(next) => onModelChange(next as SwapModel)}
+        />
+      </div>
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800/60">
         <div className="flex">
           <TabButton active={view === 'prompt'} onClick={() => setView('prompt')} icon={<FileText className="w-3 h-3" />}>
@@ -731,33 +785,42 @@ function ImagePanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
           </button>
         )}
       </div>
-      <div className="flex items-center gap-x-2">
-        {ALL_SWAP_MODELS.map((m) => (
-          <TabButton
-            key={m}
-            active={selectedModel === m}
-            onClick={() => onSelectModel(m)}
-            icon={null}
-          >
-            {m}
-          </TabButton>
-        ))}
-      </div>
       {view === 'prompt' ? (
-        <textarea
+        <PromptEditor
           value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
-          rows={4}
-          className={cn(
-            'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-primary/90 resize-y',
-            'focus:outline-none focus:border-primary/60',
-            'placeholder:text-primary/70',
-          )}
+          onChange={onPromptChange}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
         />
       ) : (
         <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
       )}
     </div>
+  );
+}
+
+function ProviderModelSelect({ label, value, options, onChange }: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="text-primary/50 uppercase tracking-wider">{label}:</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          'h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-primary/90',
+          'focus:outline-none focus:border-primary/60 cursor-pointer',
+        )}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -865,6 +928,120 @@ function buildSeedanceToolArgs(
   };
 }
 
+// Per-frame self-contained block: provider/model dropdowns + prompt/JSON tabs
+// + source→slot row. Owns its own (provider, model, prompt) state. Idle slot
+// click and Regen both dispatch the selected (provider, model) for THAT frame
+// only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
+// prior_swap_asset_id so identity carries over from the prior frame.
+function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, accepting, replacing, runSwap, onAccept, onReplace, onErrorRetry }: {
+  ordinal: 1 | 2;
+  frameIndex: 1 | 2;
+  scene: PlanScene;
+  sceneIndex: number;
+  characters: PlanSidecar['characters'];
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  sourceSrc: string;
+  tile: FrameTileState;
+  inFlightCodes: string[];
+  accepting: boolean;
+  replacing: boolean;
+  runSwap: (
+    frameIndex: 1 | 2,
+    provider: SwapProvider,
+    model: SwapModel,
+    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
+  ) => Promise<{ newAssetId: string } | null>;
+  onAccept: () => void;
+  onReplace: (source: ReplaceSource) => void;
+  onErrorRetry: () => void;
+}) {
+  const [selectedProvider, setSelectedProvider] = useState<SwapProvider>('kie');
+  const [selectedModel, setSelectedModel] = useState<SwapModel>('nano-banana-pro');
+  // One prompt per (provider, model) variant — switching the dropdown swaps
+  // which prompt the editor / JSON view reads from.
+  const [variantPrompts, setVariantPrompts] = useState<Record<string, string>>(
+    () => makeEmptyModelPrompts(),
+  );
+
+  const handleProviderChange = useCallback((next: SwapProvider) => {
+    setSelectedProvider(next);
+    // Snap model to one supported by the new provider — fal lacks gpt-image-2.
+    setSelectedModel((prev) => (
+      MODELS_BY_PROVIDER[next].includes(prev) ? prev : MODELS_BY_PROVIDER[next][0]
+    ));
+  }, []);
+
+  const currentKey = variantKey(selectedProvider, selectedModel);
+  const currentPrompt = variantPrompts[currentKey] ?? DEFAULT_PROMPT_BY_SWAP_MODEL[selectedModel];
+
+  const setCurrentPrompt = useCallback((next: string) => {
+    setVariantPrompts((prev) => ({ ...prev, [currentKey]: next }));
+  }, [currentKey]);
+
+  const payload = useMemo(
+    () => buildSwapPayload(
+      selectedProvider,
+      selectedModel,
+      characters,
+      sceneIndex,
+      frameIndex,
+      currentPrompt,
+      frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined,
+    ),
+    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, scene.swap?.image1],
+  );
+
+  const dispatchGen = useCallback(() => {
+    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
+    void runSwap(frameIndex, selectedProvider, selectedModel, {
+      customPrompt: currentPrompt,
+      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
+    });
+  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt, scene.swap?.image1]);
+
+  const titleText = ordinal === 1 ? 'Generate first frame' : 'Generate last frame';
+  const label = ordinal === 1
+    ? `image1 · first ${formatTimecode(scene.start)}`
+    : `image2 · last ${formatTimecode(scene.end)}`;
+
+  return (
+    <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/20 flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-[11px] font-mono">
+        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-primary/40 text-primary/80 text-[10px] font-bold">
+          {ordinal}
+        </span>
+        <span className="text-primary/70 uppercase tracking-wider">{titleText}</span>
+      </div>
+      <FrameImagePanel
+        provider={selectedProvider}
+        onProviderChange={handleProviderChange}
+        model={selectedModel}
+        onModelChange={setSelectedModel}
+        prompt={currentPrompt}
+        onPromptChange={setCurrentPrompt}
+        payload={payload}
+        mediaItems={mediaItems}
+        projectSlug={projectSlug}
+      />
+      <SourceSlotRow
+        sourceSrc={sourceSrc}
+        state={tile}
+        inFlightCodes={inFlightCodes}
+        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'])}
+        label={label}
+        accepting={accepting}
+        replacing={replacing}
+        onAccept={onAccept}
+        onReplace={onReplace}
+        onIdleClick={dispatchGen}
+        onErrorRetry={onErrorRetry}
+        onRegen={dispatchGen}
+      />
+    </div>
+  );
+}
+
 function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
@@ -878,22 +1055,12 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
 }) {
   void dispatch;
   const [submittingVideo, setSubmittingVideo] = useState(false);
-  // In-flight tags: `${model}-${frameIndex}` — a single model+frame can be
-  // mid-flight while others run in parallel.
+  // In-flight tags: `${variantKey}|${frameIndex}` (variantKey = bare model for
+  // kie, `fal:{model}` for fal). A single (provider, model, frame) tuple can
+  // be mid-flight while others run in parallel.
   const [swapsInFlight, setSwapsInFlight] = useState<Set<string>>(new Set());
   const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
   const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
-  // IMAGE panel state — per-model prompt overrides (per scene). The model
-  // selector switches which model's prompt the textarea/JSON view targets;
-  // every idle-thumb click still fans out to all three models in parallel,
-  // each carrying its own prompt.
-  const [modelPrompts, setModelPrompts] = useState<Record<SwapModel, string>>(
-    () => ({ ...DEFAULT_PROMPT_BY_SWAP_MODEL }),
-  );
-  const [selectedPanelModel, setSelectedPanelModel] = useState<SwapModel>('nano-banana-pro');
-  const setSelectedModelPrompt = useCallback((next: string) => {
-    setModelPrompts((prev) => ({ ...prev, [selectedPanelModel]: next }));
-  }, [selectedPanelModel]);
   // VIDEO panel state — per-model prompt overrides (per scene), seeded from
   // the rewritten scene visual so both seedance variants start populated. The
   // model selector switches which model's prompt the textarea/JSON view targets
@@ -906,10 +1073,6 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   const setSelectedVideoPrompt = useCallback((next: string) => {
     setVideoModelPrompts((prev) => ({ ...prev, [selectedVideoModel]: next }));
   }, [selectedVideoModel]);
-  // Per-model image1 → image2 chains. Each entry is "wait for this image1
-  // asset to reach 'ready', then dispatch image2 swap for that model with
-  // image1 as the prior reference."
-  const [pendingImage2Chains, setPendingImage2Chains] = useState<Array<{ model: SwapModel; image1AssetId: string; customPrompt: string }>>([]);
   // Pending vid- assets waiting on Seedance to finish so we can splice the
   // source's extracted audio onto them via replace_video_audio. Cleared once
   // the asset reaches 'ready' and we dispatch the audio-replace tool.
@@ -919,28 +1082,40 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   const tile2 = deriveTileState(scene, 2, mediaItems);
   const isGenerating = (s: FrameTileState) => s.kind === 'generating';
   const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
-  const inFlightModels1 = useMemo(
+  const inFlightCodes1 = useMemo(
     () => Array.from(swapsInFlight)
-      .filter((t) => t.endsWith('-1'))
-      .map((t) => t.slice(0, -2))
-      .filter((m): m is SwapModel => (ALL_SWAP_MODELS as readonly string[]).includes(m)),
+      .filter((t) => t.endsWith('|1'))
+      .map((t) => {
+        const key = t.slice(0, -2);
+        const parsed = parseVariantKey(key);
+        if (!parsed) return key;
+        const short = SHORT_LABEL_BY_MODEL[parsed.model];
+        return parsed.provider === 'fal' ? `${short}-fal` : short;
+      }),
     [swapsInFlight],
   );
-  const inFlightModels2 = useMemo(
+  const inFlightCodes2 = useMemo(
     () => Array.from(swapsInFlight)
-      .filter((t) => t.endsWith('-2'))
-      .map((t) => t.slice(0, -2))
-      .filter((m): m is SwapModel => (ALL_SWAP_MODELS as readonly string[]).includes(m)),
+      .filter((t) => t.endsWith('|2'))
+      .map((t) => {
+        const key = t.slice(0, -2);
+        const parsed = parseVariantKey(key);
+        if (!parsed) return key;
+        const short = SHORT_LABEL_BY_MODEL[parsed.model];
+        return parsed.provider === 'fal' ? `${short}-fal` : short;
+      }),
     [swapsInFlight],
   );
   const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
 
   const runSwap = useCallback(async (
     frameIndex: 1 | 2,
+    provider: SwapProvider,
     model: SwapModel,
     opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ): Promise<{ newAssetId: string } | null> => {
-    const tag = `${model}-${frameIndex}`;
+    const key = variantKey(provider, model);
+    const tag = `${key}|${frameIndex}`;
     setSwapsInFlight((prev) => {
       const next = new Set(prev);
       next.add(tag);
@@ -952,7 +1127,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         scene_index: index,
         frame_index: frameIndex,
         character_asset_ids: characters.map((c) => `@${c.asset_id}`),
-        provider: 'kie',
+        provider,
         model,
         ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
         ...(opts?.safeMode ? { safe_mode: true } : {}),
@@ -960,7 +1135,8 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
-        toast({ title: `Scene ${index + 1} ${SHORT_LABEL_BY_MODEL[model]} image${frameIndex} swap failed`, description: msg, duration: 5000 });
+        const code = provider === 'fal' ? `${SHORT_LABEL_BY_MODEL[model]}-fal` : SHORT_LABEL_BY_MODEL[model];
+        toast({ title: `Scene ${index + 1} ${code} image${frameIndex} swap failed`, description: msg, duration: 5000 });
         return null;
       }
       try {
@@ -981,50 +1157,6 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     }
   }, [callTool, projectSlug, index, characters, onSidecarUpdate]);
 
-  const runImagePanel = useCallback(async () => {
-    if (anySwapInFlight) return;
-    setPendingImage2Chains([]);
-    // Fan out image1 swaps across every model, each carrying its own prompt.
-    const results = await Promise.all(
-      ALL_SWAP_MODELS.map((m) => runSwap(1, m, { customPrompt: modelPrompts[m] })),
-    );
-    // Queue each successful image1 → image2 chain. The useEffect picks them
-    // up as the corresponding image1 assets reach 'ready'.
-    const nextChains = ALL_SWAP_MODELS
-      .map((m, i) => (results[i] ? { model: m, image1AssetId: results[i]!.newAssetId, customPrompt: modelPrompts[m] } : null))
-      .filter((x): x is { model: SwapModel; image1AssetId: string; customPrompt: string } => x !== null);
-    if (nextChains.length > 0) setPendingImage2Chains(nextChains);
-  }, [anySwapInFlight, runSwap, modelPrompts]);
-
-  // Walk the pending chains; for each entry whose image1 asset is now ready
-  // (or errored, in which case we drop the chain), dispatch the image2 swap
-  // for that model with image1 as the prior reference, then prune the entry.
-  useEffect(() => {
-    if (pendingImage2Chains.length === 0) return;
-    const stillPending: typeof pendingImage2Chains = [];
-    const dispatch: typeof pendingImage2Chains = [];
-    for (const entry of pendingImage2Chains) {
-      const item = mediaItems.find((m) => m.id === entry.image1AssetId);
-      if (!item) {
-        stillPending.push(entry);
-      } else if (item.status === 'ready') {
-        dispatch.push(entry);
-      } else if (item.status === 'error') {
-        // image1 errored — drop the chain entry without dispatching image2.
-      } else {
-        stillPending.push(entry);
-      }
-    }
-    if (dispatch.length === 0) return;
-    setPendingImage2Chains(stillPending);
-    for (const entry of dispatch) {
-      void runSwap(2, entry.model, {
-        priorSwapAssetId: entry.image1AssetId,
-        customPrompt: entry.customPrompt,
-      });
-    }
-  }, [pendingImage2Chains, mediaItems, runSwap]);
-
   // Retry the currently-selected (failed) swap variant with safe_mode=true.
   // safe_mode swaps the prompt for a tamer "restyle"-language version that
   // avoids the moderation triggers in "replace people / swap subjects". The
@@ -1039,10 +1171,10 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     const matched = (Object.entries(variants) as Array<[string, string]>)
       .find(([, id]) => id === swapId);
     if (!matched) return;
-    const model = matched[0] as SwapModel;
-    if (!(ALL_SWAP_MODELS as readonly string[]).includes(model)) return;
+    const parsed = parseVariantKey(matched[0]);
+    if (!parsed) return;
     const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
-    void runSwap(frameIndex, model, {
+    void runSwap(frameIndex, parsed.provider, parsed.model, {
       safeMode: true,
       ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
     });
@@ -1242,20 +1374,16 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sourceVideoAssetId],
   );
 
-  const imagePayload = useMemo(
-    () => buildKieImagePayload(
-      selectedPanelModel,
-      characters,
-      index,
-      1,
-      modelPrompts[selectedPanelModel],
-    ),
-    [selectedPanelModel, modelPrompts, characters, index],
-  );
-
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
 
   const duration = (scene.end - scene.start).toFixed(2);
+
+  // Cache-bust the source-frame thumbnails on scene-boundary changes — when
+  // /plan-vis re-runs and produces different chunks, timestamps shift and the
+  // same filename now points at a different frame.
+  const v = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
+  const sourceUrl = (i: 1 | 2) =>
+    `/files/${projectSlug}/plan/scene-${index}-image${i}-source.jpg?v=${v}`;
 
   return (
     <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
@@ -1268,28 +1396,41 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
           <span className="text-primary/40">({duration}s)</span>
         </div>
       </header>
-      <ImagePanel
-        selectedModel={selectedPanelModel}
-        onSelectModel={setSelectedPanelModel}
-        prompt={modelPrompts[selectedPanelModel]}
-        onPromptChange={setSelectedModelPrompt}
-        payload={imagePayload}
-        mediaItems={mediaItems}
-        projectSlug={projectSlug}
-      />
-      <SceneFrameRows
-        sceneIndex={index}
+      <FrameBlock
+        ordinal={1}
+        frameIndex={1}
         scene={scene}
-        projectSlug={projectSlug}
+        sceneIndex={index}
+        characters={characters}
         mediaItems={mediaItems}
-        inFlightModels1={inFlightModels1}
-        inFlightModels2={inFlightModels2}
-        accepting={accepting}
-        replacing={replacing}
-        onAccept={(frameIndex) => { void runAccept(frameIndex); }}
-        onReplace={(frameIndex, source) => { void runReplace(frameIndex, source); }}
-        onIdleClick={() => { void runImagePanel(); }}
-        onErrorRetry={(frameIndex) => retryFailedSwap(frameIndex)}
+        projectSlug={projectSlug}
+        sourceSrc={sourceUrl(1)}
+        tile={tile1}
+        inFlightCodes={inFlightCodes1}
+        accepting={accepting.has(1)}
+        replacing={replacing.has(1)}
+        runSwap={runSwap}
+        onAccept={() => { void runAccept(1); }}
+        onReplace={(source) => { void runReplace(1, source); }}
+        onErrorRetry={() => retryFailedSwap(1)}
+      />
+      <FrameBlock
+        ordinal={2}
+        frameIndex={2}
+        scene={scene}
+        sceneIndex={index}
+        characters={characters}
+        mediaItems={mediaItems}
+        projectSlug={projectSlug}
+        sourceSrc={sourceUrl(2)}
+        tile={tile2}
+        inFlightCodes={inFlightCodes2}
+        accepting={accepting.has(2)}
+        replacing={replacing.has(2)}
+        runSwap={runSwap}
+        onAccept={() => { void runAccept(2); }}
+        onReplace={(source) => { void runReplace(2, source); }}
+        onErrorRetry={() => retryFailedSwap(2)}
       />
       {bothAccepted && (
         <VideoPanel
@@ -1478,6 +1619,136 @@ function PayloadJsonView({ payload, mediaItems, projectSlug }: {
         </span>
       ))}
     </pre>
+  );
+}
+
+// Token regex for the prompt-text view — matches @<prefix><id> bare (no
+// surrounding quotes). Restricted to known asset prefixes plus `plan/` so
+// in-prose mentions like `@Image1` don't get spuriously chipped.
+const PROMPT_TOKEN_REGEX = /@(?:img-|vid-|aud-|char-|plan\/)[\w\-./]+/g;
+
+// Tab/color-coded chip palette — one stable color per distinct token in the
+// prompt, so re-mentions of the same asset always render in the same hue.
+const CHIP_PALETTE: Array<{ ring: string; text: string; bg: string }> = [
+  { ring: 'ring-emerald-400/50', text: 'text-emerald-200', bg: 'bg-emerald-500/15' },
+  { ring: 'ring-sky-400/50', text: 'text-sky-200', bg: 'bg-sky-500/15' },
+  { ring: 'ring-fuchsia-400/50', text: 'text-fuchsia-200', bg: 'bg-fuchsia-500/15' },
+  { ring: 'ring-amber-400/50', text: 'text-amber-200', bg: 'bg-amber-500/15' },
+  { ring: 'ring-violet-400/50', text: 'text-violet-200', bg: 'bg-violet-500/15' },
+  { ring: 'ring-rose-400/50', text: 'text-rose-200', bg: 'bg-rose-500/15' },
+];
+
+function paletteForIndex(i: number): typeof CHIP_PALETTE[number] {
+  return CHIP_PALETTE[i % CHIP_PALETTE.length];
+}
+
+function renderPromptLine(
+  line: string,
+  mediaItems: MediaItem[],
+  projectSlug: string,
+  colorByToken: Map<string, number>,
+  lineKey: number,
+): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  PROMPT_TOKEN_REGEX.lastIndex = 0;
+  let lastIndex = 0;
+  let tokenKey = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PROMPT_TOKEN_REGEX.exec(line)) !== null) {
+    if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
+    const slug = match[0];
+    const thumb = resolveSlugThumb(slug, mediaItems, projectSlug);
+    const idx = colorByToken.get(slug) ?? 0;
+    const palette = paletteForIndex(idx);
+    parts.push(
+      <span
+        key={`${lineKey}-${tokenKey++}`}
+        className={cn(
+          'inline-flex items-center gap-1 align-middle px-1 py-px rounded ring-1',
+          palette.bg, palette.text, palette.ring,
+        )}
+      >
+        {thumb && (
+          <img
+            src={thumb}
+            alt=""
+            className="w-3.5 h-3.5 inline-block rounded object-cover align-middle"
+          />
+        )}
+        <span>{slug}</span>
+      </span>,
+    );
+    lastIndex = PROMPT_TOKEN_REGEX.lastIndex;
+  }
+  if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+  return parts;
+}
+
+// Two-mode prompt input: chip-view (colored tokens with inline thumbs) when
+// not focused, plain textarea when focused. Click-to-edit, blur to view.
+function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
+  value: string;
+  onChange: (next: string) => void;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus();
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [editing]);
+  // Stable color assignment: first distinct token gets palette[0], second
+  // distinct token gets palette[1], and so on. Matches reads in renderPromptLine.
+  const colorByToken = useMemo(() => {
+    const map = new Map<string, number>();
+    let next = 0;
+    for (const m of value.matchAll(PROMPT_TOKEN_REGEX)) {
+      if (!map.has(m[0])) {
+        map.set(m[0], next++);
+      }
+    }
+    return map;
+  }, [value]);
+  const lines = useMemo(() => value.split('\n'), [value]);
+  if (editing) {
+    return (
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        rows={4}
+        className={cn(
+          'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-primary/90 resize-y',
+          'focus:outline-none focus:border-primary/60',
+          'placeholder:text-primary/40',
+        )}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      title="Click to edit prompt"
+      className={cn(
+        'w-full text-left p-2 rounded bg-black/60 border border-zinc-700',
+        'text-[11px] font-mono text-primary/90 leading-relaxed',
+        'whitespace-pre-wrap break-words',
+        'hover:border-primary/40 transition-colors cursor-text min-h-[5rem]',
+      )}
+    >
+      {lines.map((line, i) => (
+        <span key={i}>
+          {renderPromptLine(line, mediaItems, projectSlug, colorByToken, i)}
+          {i < lines.length - 1 && '\n'}
+        </span>
+      ))}
+    </button>
   );
 }
 

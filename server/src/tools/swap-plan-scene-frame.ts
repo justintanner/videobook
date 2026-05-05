@@ -7,26 +7,43 @@ import { type ImageInput, resolveImageSlugs } from "./_image-inputs.js";
 
 const REQUIRED_CHARACTERS = 2;
 
-const SUPPORTED_PROVIDERS = ["kie"] as const;
+const SUPPORTED_PROVIDERS = ["kie", "fal"] as const;
 const SUPPORTED_MODELS = ["nano-banana-pro", "gpt-image-2", "wan-2-7-image-pro"] as const;
+// Fal doesn't host gpt-image-2 (OpenAI exclusive). Other models are mirrored
+// via fal-ai/nano-banana-pro/edit and fal-ai/wan/v2.7/pro/edit.
 const SUPPORTED_MODELS_BY_PROVIDER = {
   kie: SUPPORTED_MODELS,
+  fal: ["nano-banana-pro", "wan-2-7-image-pro"] as const,
 } as const;
 type Provider = typeof SUPPORTED_PROVIDERS[number];
 type Model = typeof SUPPORTED_MODELS[number];
 
 const DEFAULT_MODEL: Model = "nano-banana-pro";
 
-type SwapJobType = "generate_gpt_image" | "generate_nano_banana_image" | "generate_wan27_image_pro";
+type SwapJobType =
+  | "generate_gpt_image"
+  | "generate_nano_banana_image"
+  | "generate_wan27_image_pro"
+  | "generate_nano_banana_pro_edit_fal"
+  | "generate_wan27_pro_edit_fal";
 
-const JOB_TYPE_BY_MODEL: Record<Model, SwapJobType> = {
+const KIE_JOB_TYPE_BY_MODEL: Record<Model, SwapJobType> = {
   "gpt-image-2": "generate_gpt_image",
   "nano-banana-pro": "generate_nano_banana_image",
   "wan-2-7-image-pro": "generate_wan27_image_pro",
 };
 
+// Fal job types — only the two models Fal hosts. gpt-image-2 is intentionally
+// absent and rejected upstream by SUPPORTED_MODELS_BY_PROVIDER.
+const FAL_JOB_TYPE_BY_MODEL: Partial<Record<Model, SwapJobType>> = {
+  "nano-banana-pro": "generate_nano_banana_pro_edit_fal",
+  "wan-2-7-image-pro": "generate_wan27_pro_edit_fal",
+};
+
 // Short model codes embedded in the swap asset slug so multiple models
 // running for the same scene/frame don't collide on slug-uniqueness retries.
+// Provider is appended (e.g. `nbp-fal`) so kie+fal variants of the same model
+// produce distinct asset slugs.
 const SLUG_CODE_BY_MODEL: Record<Model, string> = {
   "gpt-image-2": "gpt",
   "nano-banana-pro": "nbp",
@@ -146,6 +163,13 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
+      if (provider === "fal" && !process.env.FAL_API_KEY) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }],
+        };
+      }
+
       const planRead = await fs.readFile("plan", ".plan.json", project_slug);
       if (!planRead.ok) {
         return {
@@ -236,9 +260,12 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         ? custom_prompt.trim()
         : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true);
 
+      const slugCode = provider === "fal"
+        ? `${SLUG_CODE_BY_MODEL[model]}-fal`
+        : SLUG_CODE_BY_MODEL[model];
       const newAssetResult = await fs.createAsset(
         "img",
-        `scene-${scene_index}-image${frame_index}-${SLUG_CODE_BY_MODEL[model]}-swap`,
+        `scene-${scene_index}-image${frame_index}-${slugCode}-swap`,
         project_slug,
       );
       if (!newAssetResult.ok) {
@@ -257,9 +284,12 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       const variantsKey = `image${frame_index}_variants` as "image1_variants" | "image2_variants";
       const acceptedKey = `image${frame_index}_accepted` as "image1_accepted" | "image2_accepted";
 
+      // Variant key: bare `{model}` for kie (preserves backward-compat with
+      // older plans) and `fal:{model}` for fal — kie-nbp and fal-nbp coexist.
+      const variantKey = provider === "fal" ? `fal:${model}` : model;
       const variants: SwapVariants = { ...(swap[variantsKey] ?? {}) };
-      const previousForModel = variants[model];
-      variants[model] = imgAssetId;
+      const previousForModel = variants[variantKey];
+      variants[variantKey] = imgAssetId;
       swap[variantsKey] = variants;
 
       // Update the selected pointer to the new asset id when:
@@ -290,11 +320,25 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Job-type routing by (provider, model). Both Kie pipelines accept the
-      // same payload shape (prompt + imageInputs + 16:9 + 2K).
-      const jobType = JOB_TYPE_BY_MODEL[model];
+      // Job-type routing by (provider, model). Kie jobs use camelCase
+      // aspectRatio/resolution; the fal nano-banana-pro/edit job uses
+      // snake_case aspect_ratio/resolution; the fal wan/2.7/pro/edit job uses
+      // image_size instead — keep the per-job payload shape minimal.
       const jobId = `swap-${provider}-${model}-${imgAssetId}-${Date.now()}`;
-      await queue.enqueue(jobId, {
+      const jobType: SwapJobType | undefined = provider === "fal"
+        ? FAL_JOB_TYPE_BY_MODEL[model]
+        : KIE_JOB_TYPE_BY_MODEL[model];
+      if (!jobType) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `No job handler for provider=${provider} model=${model}`,
+          }],
+        };
+      }
+
+      const baseJob = {
         type: jobType,
         prompt,
         imageInputs,
@@ -302,8 +346,15 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         imgAssetDir,
         sourceImageIds: charIds,
         projectSlug: project_slug,
-        aspectRatio: "16:9",
-        resolution: "2K",
+      };
+      const providerSpecific: Record<string, unknown> = provider === "fal"
+        ? (model === "wan-2-7-image-pro"
+          ? { image_size: "landscape_16_9" }
+          : { aspect_ratio: "16:9", resolution: "2K" })
+        : { aspectRatio: "16:9", resolution: "2K" };
+      await queue.enqueue(jobId, {
+        ...baseJob,
+        ...providerSpecific,
       } as unknown as Record<string, unknown>);
 
       return {
