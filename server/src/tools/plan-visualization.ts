@@ -25,7 +25,7 @@ import {
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
-const CHUNK_S = 15;
+const CHUNK_S = 7;
 const REQUIRED_CHARACTERS = 2;
 
 type CharacterContext = {

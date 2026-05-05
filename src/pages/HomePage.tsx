@@ -789,7 +789,6 @@ export function HomePage() {
                 ) : planEmptyOverride ? (
                   <PlanViewer
                     item={planAssetForOverride}
-                    emptyOverride={!planAssetForOverride}
                     mediaItems={mediaItems}
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}

@@ -77,7 +77,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <PlanViewer
         item={item}
-        emptyOverride={false}
         mediaItems={mediaItems}
         projectSlug={projectSlug}
         callTool={callTool}
