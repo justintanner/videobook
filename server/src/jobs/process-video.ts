@@ -137,12 +137,18 @@ export function registerProcessVideoJob(fs: ClipfirstFs): void {
     }
 
     // Extract waveform and persist via the typed primitive (committed to git
-    // alongside metadata.sqlite + the per-asset canonical export).
+    // alongside metadata.sqlite + the per-asset canonical export). Failures
+    // here are non-fatal: the waveform is a timeline-UI nicety, not a
+    // load-bearing dependency. Marking the whole asset 'error' over a
+    // missing waveform was wiping out otherwise-good chunks (e.g. when
+    // even_split's parallel process_video jobs raced the git index).
     const waveform = await extractWaveform(activeVideoPath);
     if (waveform.length > 0) {
       const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
       if (!wavResult.ok) {
-        throw new Error(`writeAudioWaveform failed for ${assetId}: ${wavResult.error.message}`);
+        console.warn(
+          `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
+        );
       }
     }
 
