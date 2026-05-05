@@ -1473,6 +1473,15 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     [selectedVideoModel, videoModelPrompts, scene, index, characters, mediaItems, sourceVideoAssetId],
   );
 
+  // Both the per-scene clip and its extracted audio must reach 'ready' before
+  // RUN VIDEO can fire — otherwise seedance gets a half-written reference.
+  // Bootstrap in PlanScenes kicks these off; this gates the button.
+  const sceneSourceReady = useMemo(() => {
+    const clip = mediaItems.find((m) => m.id === sceneClipAssetId(sourceVideoAssetId, index));
+    const aud = mediaItems.find((m) => m.id === sceneAudioAssetId(sourceVideoAssetId, index));
+    return clip?.status === 'ready' && aud?.status === 'ready';
+  }, [mediaItems, sourceVideoAssetId, index]);
+
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
 
   const duration = (scene.end - scene.start).toFixed(2);
@@ -1541,7 +1550,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         mediaItems={mediaItems}
         projectSlug={projectSlug}
         running={submittingVideo}
-        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight}
+        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight || !sceneSourceReady}
         disabledReason={
           !bothAccepted
             ? 'Accept both frame swaps first (steps 1 and 2)'
@@ -1549,7 +1558,9 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
               ? videoGate.reason
               : anySwapInFlight
                 ? 'Swap still running'
-                : undefined
+                : !sceneSourceReady
+                  ? 'Source clip + audio still extracting…'
+                  : undefined
         }
         onRun={() => { void handleVideo(); }}
         previewVideoAssetId={lastVideoAssetId}
