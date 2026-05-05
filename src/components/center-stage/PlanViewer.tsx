@@ -1225,6 +1225,12 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
   // Session-only: cleared on RUN VIDEO click, set after seedance returns.
   // Reload loses it; the asset still lives in the sidebar.
   const [lastVideoAssetId, setLastVideoAssetId] = useState<string | null>(null);
+  // Bumped when replace_video_audio completes — appended to the inline-preview
+  // <video src> as a cache-buster so the browser refetches after the file is
+  // rewritten in place by the audio splice. Without this, the player keeps
+  // the pre-splice metadata (often scrubbed to end) and renders a blank
+  // canvas because the cached bytes no longer match the on-disk file.
+  const [previewSpliceVersion, setPreviewSpliceVersion] = useState(0);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -1437,6 +1443,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
     }
     setSubmittingVideo(true);
     setLastVideoAssetId(null);
+    setPreviewSpliceVersion(0);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
       const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipAssetId, sceneAudioAssetId, videoModelPrompts[selectedVideoModel]);
@@ -1502,6 +1509,10 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
           toast({ title: `Scene ${index + 1} audio splice failed`, description: msg, duration: 5000 });
           return;
         }
+        // File was rewritten in place — bump the preview's cache-buster so
+        // the <video> element refetches the new bytes instead of replaying
+        // the cached pre-splice copy.
+        setPreviewSpliceVersion((v) => v + 1);
         toast({
           title: `Scene ${index + 1} audio spliced`,
           description: `${entry.vidAssetId} ← ${entry.audioAssetId}`,
@@ -1616,6 +1627,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         }
         onRun={() => { void handleVideo(); }}
         previewVideoAssetId={lastVideoAssetId}
+        previewSpliceVersion={previewSpliceVersion}
       />
     </section>
   );
@@ -1638,6 +1650,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   disabledReason?: string;
   onRun: () => void;
   previewVideoAssetId: string | null;
+  previewSpliceVersion: number;
 }) {
   return (
     <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
@@ -1673,7 +1686,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId, previewSpliceVersion }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -1686,6 +1699,7 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   disabledReason?: string;
   onRun: () => void;
   previewVideoAssetId: string | null;
+  previewSpliceVersion: number;
 }) {
   const previewItem = previewVideoAssetId
     ? mediaItems.find((m) => m.id === previewVideoAssetId) ?? null
@@ -1772,9 +1786,13 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
       </div>
       {previewVideoAssetId && (
         previewItem?.status === 'ready' ? (
+          // `key` forces a fresh <video> element after the audio splice
+          // bumps the version — without it, the browser keeps the cached
+          // pre-splice metadata and the player renders blank.
           <video
+            key={`${previewVideoAssetId}-${previewSpliceVersion}`}
             controls
-            src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4`}
+            src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4?v=${previewSpliceVersion}`}
             className="w-full max-w-md aspect-video rounded border border-zinc-700/60 bg-black self-end"
           />
         ) : previewItem?.status === 'error' ? (
