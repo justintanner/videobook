@@ -284,11 +284,24 @@ const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-fast': 'generate_seedance2_fast_video',
 };
 
-// Convention from extract-audio.ts: deriveAudioName(vid-X) = ext-X → asset id `aud-ext-X`.
-function sourceAudioAssetId(sourceVideoAssetId: string): string {
-  const base = sourceVideoAssetId.startsWith('vid-')
-    ? sourceVideoAssetId.slice(4)
-    : sourceVideoAssetId;
+// Replicates server-side deriveChunkName from server/src/tools/even-split.ts:116
+// — strips the asset prefix, keeps last 2 hyphen-words, suffixes `-${index}`,
+// then re-attaches the original prefix (e.g., "vid"). One source clip per
+// scene; the sceneIndex is 0-based here but the server suffixes 1-based.
+function sceneClipAssetId(sourceVideoAssetId: string, sceneIndex: number): string {
+  const dashIdx = sourceVideoAssetId.indexOf('-');
+  const base = dashIdx >= 0 ? sourceVideoAssetId.slice(dashIdx + 1) : sourceVideoAssetId;
+  const words = base.split('-').filter((w) => w.length > 0);
+  const tail = words.slice(-2).join('-') || base;
+  const prefix = sourceVideoAssetId.split('-')[0];
+  return `${prefix}-${tail}-${sceneIndex + 1}`;
+}
+
+// Convention from extract-audio.ts deriveAudioName: input `vid-X` → output
+// `aud-ext-X`. We feed in a per-scene clip id, so we get a per-scene audio id.
+function sceneAudioAssetId(sourceVideoAssetId: string, sceneIndex: number): string {
+  const clipId = sceneClipAssetId(sourceVideoAssetId, sceneIndex);
+  const base = clipId.startsWith('vid-') ? clipId.slice(4) : clipId;
   return `aud-ext-${base}`;
 }
 
@@ -300,36 +313,72 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
-  // Kick off audio extraction once per (project, source) — the VIDEO button
-  // needs `aud-ext-${base}` to splice onto the silent r2v output. Skipped if
-  // the asset is already present.
-  //
-  // We deliberately wait until mediaItems has loaded (any item from this
-  // project's sidebar would do) before deciding. Firing while the sidebar is
-  // still empty would create a duplicate `aud-ext-*-2` whenever extraction
-  // had previously run.
-  const audioBootstrapKeyRef = useRef<string | null>(null);
+  // Bootstrap per-scene clip + audio assets once per (project, source). Two
+  // phases:
+  //   1. one even_split call splitting source into N scene-aligned clips
+  //      (`target_secs` = each scene's duration)
+  //   2. one extract_audio per clip, producing `aud-ext-${clipBase}`
+  // RUN VIDEO consumes those scene-bounded references instead of the full
+  // source. Guard prevents re-firing on every mediaItems update; we still
+  // wait for the sidebar to populate before deciding so an existing previous
+  // extraction isn't duplicated.
+  const splitBootstrapKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const key = `${projectSlug}/${data.source_asset_id}`;
-    if (audioBootstrapKeyRef.current === key) return;
+    if (splitBootstrapKeyRef.current === key) return;
     if (mediaItems.length === 0) return; // Sidebar not loaded yet — defer.
-    const expected = sourceAudioAssetId(data.source_asset_id);
-    if (mediaItems.some((m) => m.id === expected)) {
-      audioBootstrapKeyRef.current = key;
+    const sceneCount = data.scenes.length;
+    if (sceneCount === 0) {
+      splitBootstrapKeyRef.current = key;
       return;
     }
-    audioBootstrapKeyRef.current = key;
+    const allClipsExist = data.scenes.every((_, i) =>
+      mediaItems.some((m) => m.id === sceneClipAssetId(data.source_asset_id, i)),
+    );
+    const allAudioExist = data.scenes.every((_, i) =>
+      mediaItems.some((m) => m.id === sceneAudioAssetId(data.source_asset_id, i)),
+    );
+    if (allClipsExist && allAudioExist) {
+      splitBootstrapKeyRef.current = key;
+      return;
+    }
+    splitBootstrapKeyRef.current = key;
     void (async () => {
-      const result = await callTool('extract_audio', {
-        project_slug: projectSlug,
-        asset_id: data.source_asset_id,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_audio failed';
-        toast({ title: 'Source audio extract failed', description: msg, duration: 5000 });
+      if (!allClipsExist) {
+        // even_split uses enqueueAndWait — by the time it returns, the chunks
+        // are written to disk. Targets are exact per-scene durations; the
+        // server backs off the last by 1s if the leftover would be sub-MIN.
+        const splitResult = await callTool('even_split', {
+          project_slug: projectSlug,
+          asset_id: data.source_asset_id,
+          target_secs: data.scenes.map((s) => Math.max(0.5, s.end - s.start)),
+        });
+        if (splitResult.isError) {
+          const msg = (splitResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'even_split failed';
+          toast({ title: 'Source clip split failed', description: msg, duration: 5000 });
+          return;
+        }
       }
+      // Phase 2: kick off per-clip audio extraction in parallel. Each clip
+      // produces `aud-ext-${clipBase}`; skip clips whose audio already exists.
+      const audioJobs = data.scenes
+        .map((_, i) => ({
+          clipId: sceneClipAssetId(data.source_asset_id, i),
+          audId: sceneAudioAssetId(data.source_asset_id, i),
+        }))
+        .filter(({ audId }) => !mediaItems.some((m) => m.id === audId));
+      await Promise.all(audioJobs.map(async ({ clipId }) => {
+        const audResult = await callTool('extract_audio', {
+          project_slug: projectSlug,
+          asset_id: clipId,
+        });
+        if (audResult.isError) {
+          const msg = (audResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_audio failed';
+          toast({ title: `Audio extract failed for ${clipId}`, description: msg, duration: 5000 });
+        }
+      }));
     })();
-  }, [projectSlug, data.source_asset_id, mediaItems, callTool]);
+  }, [projectSlug, data.source_asset_id, data.scenes, mediaItems, callTool]);
 
   return (
     <div className="space-y-5">
@@ -908,6 +957,7 @@ const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
 function buildKieVideoPayload(
   videoModel: VideoModel,
   scene: PlanScene,
+  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
   sourceVideoAssetId: string,
@@ -927,8 +977,8 @@ function buildKieVideoPayload(
     input: {
       prompt,
       reference_image_urls: referenceImages,
-      reference_video_urls: [`@${sourceVideoAssetId}`],
-      reference_audio_urls: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
+      reference_video_urls: [`@${sceneClipAssetId(sourceVideoAssetId, sceneIndex)}`],
+      reference_audio_urls: [`@${sceneAudioAssetId(sourceVideoAssetId, sceneIndex)}`],
       resolution: '720p',
       aspect_ratio: '16:9',
       duration,
@@ -942,6 +992,7 @@ function buildKieVideoPayload(
 // derived KIE REST shape via buildKieVideoPayload above.
 function buildSeedanceToolArgs(
   scene: PlanScene,
+  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
   sourceVideoAssetId: string,
@@ -955,8 +1006,8 @@ function buildSeedanceToolArgs(
   return {
     prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
     image_slugs: imageSlugs,
-    video_slugs: [`@${sourceVideoAssetId}`],
-    audio_slugs: [`@${sourceAudioAssetId(sourceVideoAssetId)}`],
+    video_slugs: [`@${sceneClipAssetId(sourceVideoAssetId, sceneIndex)}`],
+    audio_slugs: [`@${sceneAudioAssetId(sourceVideoAssetId, sceneIndex)}`],
     resolution: '720p',
     aspect_ratio: '16:9',
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
@@ -1115,6 +1166,10 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   // source's extracted audio onto them via replace_video_audio. Cleared once
   // the asset reaches 'ready' and we dispatch the audio-replace tool.
   const [pendingAudioReplace, setPendingAudioReplace] = useState<Array<{ vidAssetId: string; audioAssetId: string }>>([]);
+  // Last RUN VIDEO output for this scene — used for inline preview in step 3.
+  // Session-only: cleared on RUN VIDEO click, set after seedance returns.
+  // Reload loses it; the asset still lives in the sidebar.
+  const [lastVideoAssetId, setLastVideoAssetId] = useState<string | null>(null);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -1314,22 +1369,26 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
     if (!videoGate.ok) return;
-    // Resolve the source video's extracted audio (`aud-ext-${base}`). Without
-    // it we can't run the replace-audio follow-up, so fail loudly here.
-    const audioAssetId = sourceAudioAssetId(sourceVideoAssetId);
+    // The bootstrap in PlanScenes runs even_split + extract_audio per scene;
+    // by the time the user clicks RUN VIDEO both should exist. If not, the
+    // user clicked too early — toast and let them retry.
+    const clipAssetId = sceneClipAssetId(sourceVideoAssetId, index);
+    const audioAssetId = sceneAudioAssetId(sourceVideoAssetId, index);
+    const clipItem = mediaItems.find((m) => m.id === clipAssetId);
     const audioItem = mediaItems.find((m) => m.id === audioAssetId);
-    if (!audioItem) {
+    if (!clipItem || !audioItem) {
       toast({
-        title: `Scene ${index + 1} needs source audio`,
-        description: `Run /extract-audio @${sourceVideoAssetId} first — expected ${audioAssetId}.`,
-        duration: 5000,
+        title: `Scene ${index + 1} not ready`,
+        description: 'Source clip + audio still extracting — try again in a moment.',
+        duration: 4000,
       });
       return;
     }
     setSubmittingVideo(true);
+    setLastVideoAssetId(null);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sourceVideoAssetId, videoModelPrompts[selectedVideoModel]);
+      const toolArgs = buildSeedanceToolArgs(scene, index, characters, mediaItems, sourceVideoAssetId, videoModelPrompts[selectedVideoModel]);
       const result = await callTool(toolName, {
         project_slug: projectSlug,
         ...toolArgs,
@@ -1350,6 +1409,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
       }
       if (newVidAssetId) {
         setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId }]);
+        setLastVideoAssetId(newVidAssetId);
       }
       const note = swapsReady ? 'Seedance 2 (kie) · 720p · swapped frames' : 'Seedance 2 (kie) · 720p · char refs';
       toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
@@ -1404,12 +1464,13 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     () => buildKieVideoPayload(
       selectedVideoModel,
       scene,
+      index,
       characters,
       mediaItems,
       sourceVideoAssetId,
       videoModelPrompts[selectedVideoModel],
     ),
-    [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sourceVideoAssetId],
+    [selectedVideoModel, videoModelPrompts, scene, index, characters, mediaItems, sourceVideoAssetId],
   );
 
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
@@ -1491,6 +1552,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
                 : undefined
         }
         onRun={() => { void handleVideo(); }}
+        previewVideoAssetId={lastVideoAssetId}
       />
     </section>
   );
@@ -1512,6 +1574,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   disabled: boolean;
   disabledReason?: string;
   onRun: () => void;
+  previewVideoAssetId: string | null;
 }) {
   return (
     <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
@@ -1547,7 +1610,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -1559,7 +1622,11 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   disabled: boolean;
   disabledReason?: string;
   onRun: () => void;
+  previewVideoAssetId: string | null;
 }) {
+  const previewItem = previewVideoAssetId
+    ? mediaItems.find((m) => m.id === previewVideoAssetId) ?? null
+    : null;
   const [view, setView] = useState<'prompt' | 'json'>('prompt');
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
@@ -1640,6 +1707,26 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
           {running ? 'Running…' : 'Run Video'}
         </button>
       </div>
+      {previewVideoAssetId && (
+        previewItem?.status === 'ready' ? (
+          <video
+            controls
+            src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4`}
+            className="w-full max-w-md aspect-video rounded border border-zinc-700/60 bg-black self-end"
+          />
+        ) : previewItem?.status === 'error' ? (
+          <div className="self-end max-w-md w-full p-2 rounded border border-red-500/40 bg-red-950/40 text-[10px] font-mono text-red-200/80">
+            {previewItem.failedMessage ?? 'gen failed'}
+          </div>
+        ) : (
+          <div className="self-end max-w-md w-full aspect-video rounded border border-zinc-700/60 bg-black/60 flex flex-col items-center justify-center gap-1.5">
+            <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-primary/60">
+              {previewItem?.status === 'generating' ? 'splicing audio…' : 'rendering…'}
+            </span>
+          </div>
+        )
+      )}
     </div>
   );
 }
