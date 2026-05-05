@@ -284,25 +284,60 @@ const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-fast': 'generate_seedance2_fast_video',
 };
 
-// Replicates server-side deriveChunkName from server/src/tools/even-split.ts:116
-// — strips the asset prefix, keeps last 2 hyphen-words, suffixes `-${index}`,
-// then re-attaches the original prefix (e.g., "vid"). One source clip per
-// scene; the sceneIndex is 0-based here but the server suffixes 1-based.
-function sceneClipAssetId(sourceVideoAssetId: string, sceneIndex: number): string {
+// Server-side deriveChunkName trims to last-two dash-words then suffixes the
+// scene index — so for source `vid-boost` we expect chunks named `vid-boost-1`
+// through `vid-boost-N`. But fs.createAsset checks git history and bumps to
+// `vid-boost-1-2` if `vid-boost-1` was ever used (even if since deleted), so a
+// reload after a successful split can find the live chunk under a
+// collision-suffixed slug. These helpers compute the prefix/baseTail server-
+// side derives, and findSceneAssets() reconciles per-scene clip+audio ids by
+// scanning mediaItems, accepting the bare slug or any `-N` collision tail.
+function sceneAssetBase(sourceVideoAssetId: string): { prefix: string; baseTail: string } {
   const dashIdx = sourceVideoAssetId.indexOf('-');
   const base = dashIdx >= 0 ? sourceVideoAssetId.slice(dashIdx + 1) : sourceVideoAssetId;
   const words = base.split('-').filter((w) => w.length > 0);
-  const tail = words.slice(-2).join('-') || base;
+  const baseTail = words.slice(-2).join('-') || base;
   const prefix = sourceVideoAssetId.split('-')[0];
-  return `${prefix}-${tail}-${sceneIndex + 1}`;
+  return { prefix, baseTail };
 }
 
-// Convention from extract-audio.ts deriveAudioName: input `vid-X` → output
-// `aud-ext-X`. We feed in a per-scene clip id, so we get a per-scene audio id.
-function sceneAudioAssetId(sourceVideoAssetId: string, sceneIndex: number): string {
-  const clipId = sceneClipAssetId(sourceVideoAssetId, sceneIndex);
-  const base = clipId.startsWith('vid-') ? clipId.slice(4) : clipId;
-  return `aud-ext-${base}`;
+interface SceneAssetIds {
+  clipId: string | null;
+  audioId: string | null;
+}
+
+// Walk mediaItems once and bucket per-scene clip/audio ids. `vid-boost-1` and
+// `vid-boost-1-2` (collision-suffixed) both map to scene index 0; same for
+// audio under `aud-ext-boost-1[-N]`. First match wins, which favors the bare
+// slug over collision-suffixed siblings when both are present.
+function findSceneAssets(
+  sourceVideoAssetId: string,
+  sceneCount: number,
+  mediaItems: MediaItem[],
+): SceneAssetIds[] {
+  const out: SceneAssetIds[] = Array.from({ length: sceneCount }, () => ({
+    clipId: null,
+    audioId: null,
+  }));
+  if (sceneCount === 0) return out;
+  const { prefix, baseTail } = sceneAssetBase(sourceVideoAssetId);
+  const escTail = baseTail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const clipRe = new RegExp(`^${prefix}-${escTail}-(\\d+)(?:-\\d+)*$`);
+  const audRe = new RegExp(`^aud-ext-${escTail}-(\\d+)(?:-\\d+)*$`);
+  for (const m of mediaItems) {
+    let match = clipRe.exec(m.id);
+    if (match) {
+      const idx = Number(match[1]) - 1;
+      if (idx >= 0 && idx < sceneCount && !out[idx].clipId) out[idx].clipId = m.id;
+      continue;
+    }
+    match = audRe.exec(m.id);
+    if (match) {
+      const idx = Number(match[1]) - 1;
+      if (idx >= 0 && idx < sceneCount && !out[idx].audioId) out[idx].audioId = m.id;
+    }
+  }
+  return out;
 }
 
 function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
@@ -313,15 +348,24 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
 }) {
+  // Reconcile per-scene clip+audio asset ids from the live sidebar. Tolerates
+  // collision-suffixed slugs (`vid-boost-1-2`) which fs.createAsset emits when
+  // the bare slug is in git history. Whatever survives in mediaItems is the
+  // truth — we never re-derive deterministic slugs and reference them blindly.
+  const sceneAssets = useMemo(
+    () => findSceneAssets(data.source_asset_id, data.scenes.length, mediaItems),
+    [data.source_asset_id, data.scenes.length, mediaItems],
+  );
+
   // Bootstrap per-scene clip + audio assets once per (project, source). Two
   // phases:
   //   1. one even_split call splitting source into N scene-aligned clips
   //      (`target_secs` = each scene's duration)
-  //   2. one extract_audio per clip, producing `aud-ext-${clipBase}`
-  // RUN VIDEO consumes those scene-bounded references instead of the full
-  // source. Guard prevents re-firing on every mediaItems update; we still
-  // wait for the sidebar to populate before deciding so an existing previous
-  // extraction isn't duplicated.
+  //   2. one extract_audio per *actual* clip id (sequential — concurrent
+  //      withGitLock writes race on commitOperation and surface as
+  //      "Failed to commit audio waveform" on losers)
+  // RUN VIDEO consumes the scene-bounded references via sceneAssets. Guard
+  // prevents re-firing on every mediaItems update.
   const splitBootstrapKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const key = `${projectSlug}/${data.source_asset_id}`;
@@ -332,26 +376,22 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
       splitBootstrapKeyRef.current = key;
       return;
     }
-    const allClipsExist = data.scenes.every((_, i) =>
-      mediaItems.some((m) => m.id === sceneClipAssetId(data.source_asset_id, i)),
-    );
-    const allAudioExist = data.scenes.every((_, i) =>
-      mediaItems.some((m) => m.id === sceneAudioAssetId(data.source_asset_id, i)),
-    );
+    const allClipsExist = sceneAssets.every((s) => s.clipId !== null);
+    const allAudioExist = sceneAssets.every((s) => s.audioId !== null);
     if (allClipsExist && allAudioExist) {
       splitBootstrapKeyRef.current = key;
       return;
     }
     splitBootstrapKeyRef.current = key;
     void (async () => {
+      // Phase 1: split. Carry forward whatever clip ids already exist; the
+      // even_split response provides the rest under the actual (possibly
+      // collision-suffixed) slugs the server picked.
+      let clipIds: (string | null)[] = sceneAssets.map((s) => s.clipId);
       if (!allClipsExist) {
-        // even_split uses enqueueAndWait — by the time it returns, the chunks
-        // are written to disk. Targets are exact per-scene durations; the
-        // server backs off the last by 1s if the leftover would be sub-MIN.
-        // Use raw scene durations. plan_visualization's computeChunks merges
-        // sub-MIN_TRAILING_SEC trailings into the prior chunk, so each target
-        // here should be ≥ 0.5s. (An old plan with a sub-MIN trailing will
-        // make planEvenSplit reject the request — re-run /plan-vis.)
+        // Targets are exact per-scene durations; computeChunks merges sub-MIN
+        // trailings, so each target here should be ≥ 0.5s. An old plan with a
+        // sub-MIN trailing will make planEvenSplit reject — re-run /plan-vis.
         const splitResult = await callTool('even_split', {
           project_slug: projectSlug,
           asset_id: data.source_asset_id,
@@ -362,16 +402,25 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           toast({ title: 'Source clip split failed', description: msg, duration: 5000 });
           return;
         }
+        try {
+          const text = (splitResult.content as Array<{ type: string; text: string }>)[0].text;
+          const parsed = JSON.parse(text) as { chunks?: Array<{ asset_id: string }> };
+          const returned = parsed.chunks ?? [];
+          // Server returns chunks in scene order; trust positional mapping.
+          clipIds = data.scenes.map((_, i) => returned[i]?.asset_id ?? clipIds[i] ?? null);
+        } catch {
+          toast({ title: 'even_split returned unparseable response', duration: 5000 });
+          return;
+        }
       }
-      // Phase 2: kick off per-clip audio extraction in parallel. Each clip
-      // produces `aud-ext-${clipBase}`; skip clips whose audio already exists.
-      const audioJobs = data.scenes
-        .map((_, i) => ({
-          clipId: sceneClipAssetId(data.source_asset_id, i),
-          audId: sceneAudioAssetId(data.source_asset_id, i),
-        }))
-        .filter(({ audId }) => !mediaItems.some((m) => m.id === audId));
-      await Promise.all(audioJobs.map(async ({ clipId }) => {
+      // Phase 2: extract audio per clip, sequentially. Each call commits to
+      // git; running them in parallel races commitOperation and surfaces as
+      // "Failed to commit audio waveform" on whichever workers lose. N is
+      // small (typically 2–5), so serial is fine.
+      for (let i = 0; i < clipIds.length; i++) {
+        if (sceneAssets[i]?.audioId) continue;
+        const clipId = clipIds[i];
+        if (!clipId) continue;
         const audResult = await callTool('extract_audio', {
           project_slug: projectSlug,
           asset_id: clipId,
@@ -380,9 +429,9 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           const msg = (audResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_audio failed';
           toast({ title: `Audio extract failed for ${clipId}`, description: msg, duration: 5000 });
         }
-      }));
+      }
     })();
-  }, [projectSlug, data.source_asset_id, data.scenes, mediaItems, callTool]);
+  }, [projectSlug, data.source_asset_id, data.scenes, mediaItems, callTool, sceneAssets]);
 
   return (
     <div className="space-y-5">
@@ -392,7 +441,8 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           scene={scene}
           index={idx}
           characters={data.characters}
-          sourceVideoAssetId={data.source_asset_id}
+          sceneClipAssetId={sceneAssets[idx]?.clipId ?? null}
+          sceneAudioAssetId={sceneAssets[idx]?.audioId ?? null}
           mediaItems={mediaItems}
           projectSlug={projectSlug}
           callTool={callTool}
@@ -961,10 +1011,10 @@ const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
 function buildKieVideoPayload(
   videoModel: VideoModel,
   scene: PlanScene,
-  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
-  sourceVideoAssetId: string,
+  sceneClipAssetId: string | null,
+  sceneAudioAssetId: string | null,
   customPrompt: string,
 ): { model: string; input: Record<string, unknown> } {
   const swapped = readySwapAssetIds(scene, mediaItems);
@@ -981,8 +1031,8 @@ function buildKieVideoPayload(
     input: {
       prompt,
       reference_image_urls: referenceImages,
-      reference_video_urls: [`@${sceneClipAssetId(sourceVideoAssetId, sceneIndex)}`],
-      reference_audio_urls: [`@${sceneAudioAssetId(sourceVideoAssetId, sceneIndex)}`],
+      reference_video_urls: sceneClipAssetId ? [`@${sceneClipAssetId}`] : [],
+      reference_audio_urls: sceneAudioAssetId ? [`@${sceneAudioAssetId}`] : [],
       resolution: '720p',
       aspect_ratio: '16:9',
       duration,
@@ -996,10 +1046,10 @@ function buildKieVideoPayload(
 // derived KIE REST shape via buildKieVideoPayload above.
 function buildSeedanceToolArgs(
   scene: PlanScene,
-  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
-  sourceVideoAssetId: string,
+  sceneClipAssetId: string,
+  sceneAudioAssetId: string,
   customPrompt: string,
 ): Record<string, unknown> {
   const swapped = readySwapAssetIds(scene, mediaItems);
@@ -1010,8 +1060,8 @@ function buildSeedanceToolArgs(
   return {
     prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
     image_slugs: imageSlugs,
-    video_slugs: [`@${sceneClipAssetId(sourceVideoAssetId, sceneIndex)}`],
-    audio_slugs: [`@${sceneAudioAssetId(sourceVideoAssetId, sceneIndex)}`],
+    video_slugs: [`@${sceneClipAssetId}`],
+    audio_slugs: [`@${sceneAudioAssetId}`],
     resolution: '720p',
     aspect_ratio: '16:9',
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
@@ -1135,13 +1185,14 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   );
 }
 
-function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
+function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
   projectSlug: string;
-  sourceVideoAssetId: string;
+  sceneClipAssetId: string | null;
+  sceneAudioAssetId: string | null;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
@@ -1374,13 +1425,9 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     if (submittingVideo) return;
     if (!videoGate.ok) return;
     // The bootstrap in PlanScenes runs even_split + extract_audio per scene;
-    // by the time the user clicks RUN VIDEO both should exist. If not, the
-    // user clicked too early — toast and let them retry.
-    const clipAssetId = sceneClipAssetId(sourceVideoAssetId, index);
-    const audioAssetId = sceneAudioAssetId(sourceVideoAssetId, index);
-    const clipItem = mediaItems.find((m) => m.id === clipAssetId);
-    const audioItem = mediaItems.find((m) => m.id === audioAssetId);
-    if (!clipItem || !audioItem) {
+    // by the time the user clicks RUN VIDEO both ids should be reconciled.
+    // If not, the user clicked too early — toast and let them retry.
+    if (!sceneClipAssetId || !sceneAudioAssetId) {
       toast({
         title: `Scene ${index + 1} not ready`,
         description: 'Source clip + audio still extracting — try again in a moment.',
@@ -1392,7 +1439,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     setLastVideoAssetId(null);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const toolArgs = buildSeedanceToolArgs(scene, index, characters, mediaItems, sourceVideoAssetId, videoModelPrompts[selectedVideoModel]);
+      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipAssetId, sceneAudioAssetId, videoModelPrompts[selectedVideoModel]);
       const result = await callTool(toolName, {
         project_slug: projectSlug,
         ...toolArgs,
@@ -1412,7 +1459,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         // a toast-only notification and skip the audio chain.
       }
       if (newVidAssetId) {
-        setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId }]);
+        setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId: sceneAudioAssetId }]);
         setLastVideoAssetId(newVidAssetId);
       }
       const note = swapsReady ? 'Seedance 2 (kie) · 720p · swapped frames' : 'Seedance 2 (kie) · 720p · char refs';
@@ -1420,7 +1467,7 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sourceVideoAssetId, selectedVideoModel, videoModelPrompts]);
+  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipAssetId, sceneAudioAssetId, selectedVideoModel, videoModelPrompts]);
 
   // Walk pendingAudioReplace; when each vid- asset reaches 'ready', dispatch
   // replace_video_audio with the source's extracted audio. Errors are toasted
@@ -1468,23 +1515,24 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
     () => buildKieVideoPayload(
       selectedVideoModel,
       scene,
-      index,
       characters,
       mediaItems,
-      sourceVideoAssetId,
+      sceneClipAssetId,
+      sceneAudioAssetId,
       videoModelPrompts[selectedVideoModel],
     ),
-    [selectedVideoModel, videoModelPrompts, scene, index, characters, mediaItems, sourceVideoAssetId],
+    [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sceneClipAssetId, sceneAudioAssetId],
   );
 
   // Both the per-scene clip and its extracted audio must reach 'ready' before
   // RUN VIDEO can fire — otherwise seedance gets a half-written reference.
   // Bootstrap in PlanScenes kicks these off; this gates the button.
   const sceneSourceReady = useMemo(() => {
-    const clip = mediaItems.find((m) => m.id === sceneClipAssetId(sourceVideoAssetId, index));
-    const aud = mediaItems.find((m) => m.id === sceneAudioAssetId(sourceVideoAssetId, index));
+    if (!sceneClipAssetId || !sceneAudioAssetId) return false;
+    const clip = mediaItems.find((m) => m.id === sceneClipAssetId);
+    const aud = mediaItems.find((m) => m.id === sceneAudioAssetId);
     return clip?.status === 'ready' && aud?.status === 'ready';
-  }, [mediaItems, sourceVideoAssetId, index]);
+  }, [mediaItems, sceneClipAssetId, sceneAudioAssetId]);
 
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
 
