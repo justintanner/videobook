@@ -638,12 +638,22 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
+// Frame 2 continuity prompt — used when generating the last frame against an
+// already-swapped first frame. Inputs are exactly [source last frame, first
+// frame swap], so the prompt must reference Image 2 (not Image 3) and skip
+// any char-ref language.
+const DEFAULT_PROMPT_FRAME2_CONTINUITY = "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Match face, hair, wardrobe, and color grade to Image 2 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+
 // Build a stable empty prompts map keyed by every (provider, model) combo.
-function makeEmptyModelPrompts(): Record<string, string> {
+// Frame 2 seeds with the continuity prompt; frame 1 seeds with the per-model
+// char-swap default.
+function makeEmptyModelPrompts(frameIndex: 1 | 2): Record<string, string> {
   const out: Record<string, string> = {};
   for (const provider of ALL_SWAP_PROVIDERS) {
     for (const model of MODELS_BY_PROVIDER[provider]) {
-      out[variantKey(provider, model)] = DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+      out[variantKey(provider, model)] = frameIndex === 2
+        ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+        : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
     }
   }
   return out;
@@ -676,13 +686,22 @@ function buildSwapPayload(
   priorSwapAssetId?: string,
 ): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
   const sourceFrameSlug = `@plan/scene-${sceneIndex}-image${frameIndex}-source.jpg`;
-  const inputs = [
-    sourceFrameSlug,
-    ...characters.map((c) => `@${c.asset_id}`),
-    ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
-  ];
+  // Frame 2 + prior swap = continuity mode. Drop the character refs; the
+  // prior swap is the canonical look reference. This mirrors the server's
+  // isFrame2Continuity branch in swap-plan-scene-frame.ts.
+  const isFrame2Continuity = frameIndex === 2 && Boolean(priorSwapAssetId);
+  const inputs = isFrame2Continuity
+    ? [sourceFrameSlug, `@${priorSwapAssetId as string}`]
+    : [
+      sourceFrameSlug,
+      ...characters.map((c) => `@${c.asset_id}`),
+      ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
+    ];
   const trimmed = customPrompt.trim();
-  const prompt = trimmed.length > 0 ? trimmed : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const defaultPrompt = isFrame2Continuity
+    ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+    : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const prompt = trimmed.length > 0 ? trimmed : defaultPrompt;
   if (provider === 'fal') {
     const endpoint = FAL_ENDPOINT_BY_SWAP[model];
     if (!endpoint) {
@@ -959,9 +978,11 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   const [selectedProvider, setSelectedProvider] = useState<SwapProvider>('kie');
   const [selectedModel, setSelectedModel] = useState<SwapModel>('nano-banana-pro');
   // One prompt per (provider, model) variant — switching the dropdown swaps
-  // which prompt the editor / JSON view reads from.
+  // which prompt the editor / JSON view reads from. Frame 2 seeds with the
+  // continuity prompt template since its inputs are [source last frame,
+  // first frame swap] (no char refs).
   const [variantPrompts, setVariantPrompts] = useState<Record<string, string>>(
-    () => makeEmptyModelPrompts(),
+    () => makeEmptyModelPrompts(frameIndex),
   );
 
   const handleProviderChange = useCallback((next: SwapProvider) => {
@@ -1432,22 +1453,80 @@ function SceneBlock({ scene, index, characters, sourceVideoAssetId, mediaItems, 
         onReplace={(source) => { void runReplace(2, source); }}
         onErrorRetry={() => retryFailedSwap(2)}
       />
-      {bothAccepted && (
-        <VideoPanel
-          selectedModel={selectedVideoModel}
-          onSelectModel={setSelectedVideoModel}
-          prompt={videoModelPrompts[selectedVideoModel]}
-          onPromptChange={setSelectedVideoPrompt}
-          payload={videoPayload}
-          mediaItems={mediaItems}
-          projectSlug={projectSlug}
-          running={submittingVideo}
-          disabled={!videoGate.ok || anySwapInFlight}
-          disabledReason={!videoGate.ok ? videoGate.reason : anySwapInFlight ? 'Swap still running' : undefined}
-          onRun={() => { void handleVideo(); }}
-        />
-      )}
+      <VideoStepBlock
+        bothAccepted={bothAccepted}
+        selectedModel={selectedVideoModel}
+        onSelectModel={setSelectedVideoModel}
+        prompt={videoModelPrompts[selectedVideoModel]}
+        onPromptChange={setSelectedVideoPrompt}
+        payload={videoPayload}
+        mediaItems={mediaItems}
+        projectSlug={projectSlug}
+        running={submittingVideo}
+        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight}
+        disabledReason={
+          !bothAccepted
+            ? 'Accept both frame swaps first (steps 1 and 2)'
+            : !videoGate.ok
+              ? videoGate.reason
+              : anySwapInFlight
+                ? 'Swap still running'
+                : undefined
+        }
+        onRun={() => { void handleVideo(); }}
+      />
     </section>
+  );
+}
+
+// Step-3 wrapper around the existing VideoPanel. Always visible — when both
+// frames aren't accepted yet, the contents are dimmed and Run Video stays
+// disabled with an explanatory tooltip.
+function VideoStepBlock({ bothAccepted, ...rest }: {
+  bothAccepted: boolean;
+  selectedModel: VideoModel;
+  onSelectModel: (model: VideoModel) => void;
+  prompt: string;
+  onPromptChange: (next: string) => void;
+  payload: unknown;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  running: boolean;
+  disabled: boolean;
+  disabledReason?: string;
+  onRun: () => void;
+}) {
+  return (
+    <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-[11px] font-mono">
+        <span
+          className={cn(
+            'inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold',
+            bothAccepted
+              ? 'border border-primary/40 text-primary/80'
+              : 'border border-primary/15 text-primary/30',
+          )}
+        >
+          3
+        </span>
+        <span
+          className={cn(
+            'uppercase tracking-wider',
+            bothAccepted ? 'text-primary/70' : 'text-primary/30',
+          )}
+        >
+          Generate scene video
+        </span>
+        {!bothAccepted && (
+          <span className="text-primary/40 text-[10px] italic">
+            (accept both frames first)
+          </span>
+        )}
+      </div>
+      <div className={cn(!bothAccepted && 'opacity-50 pointer-events-none')}>
+        <VideoPanel {...rest} />
+      </div>
+    </div>
   );
 }
 
@@ -1476,7 +1555,19 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
     }
   }, [payload]);
   return (
-    <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/30 flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-x-2">
+        {ALL_VIDEO_MODELS.map((m) => (
+          <TabButton
+            key={m}
+            active={selectedModel === m}
+            onClick={() => onSelectModel(m)}
+            icon={null}
+          >
+            {m}
+          </TabButton>
+        ))}
+      </div>
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800/60">
         <div className="flex">
           <TabButton active={view === 'prompt'} onClick={() => setView('prompt')} icon={<FileText className="w-3 h-3" />}>
@@ -1504,28 +1595,12 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
           </button>
         )}
       </div>
-      <div className="flex items-center gap-x-2">
-        {ALL_VIDEO_MODELS.map((m) => (
-          <TabButton
-            key={m}
-            active={selectedModel === m}
-            onClick={() => onSelectModel(m)}
-            icon={null}
-          >
-            {m}
-          </TabButton>
-        ))}
-      </div>
       {view === 'prompt' ? (
-        <textarea
+        <PromptEditor
           value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
-          rows={6}
-          className={cn(
-            'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-primary/90 resize-y',
-            'focus:outline-none focus:border-primary/60',
-            'placeholder:text-primary/40',
-          )}
+          onChange={onPromptChange}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
         />
       ) : (
         <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
