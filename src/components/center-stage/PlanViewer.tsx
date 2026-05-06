@@ -23,12 +23,9 @@ interface PlanScene {
   swap?: {
     image1: string | null;
     image2: string | null;
-    image1_accepted?: boolean;
-    image2_accepted?: boolean;
     image1_variants?: Record<string, string>;
     image2_variants?: Record<string, string>;
     video?: string | null;
-    video_accepted?: boolean;
   } | null;
 }
 
@@ -483,7 +480,7 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
 type FrameTileState =
   | { kind: 'idle' }
   | { kind: 'generating' }
-  | { kind: 'ready'; src: string; accepted: boolean }
+  | { kind: 'ready'; src: string }
   | { kind: 'error'; message: string };
 
 type ReplaceSource =
@@ -510,8 +507,7 @@ function deriveTileState(
   }
   if (item.status === 'ready') {
     const src = item.thumbnailSrc ?? item.filePath ?? null;
-    const accepted = scene.swap?.[`image${frameIndex}_accepted` as 'image1_accepted' | 'image2_accepted'] === true;
-    if (src) return { kind: 'ready', src, accepted };
+    if (src) return { kind: 'ready', src };
     return { kind: 'generating' };
   }
   return { kind: 'generating' };
@@ -527,16 +523,13 @@ function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, accepting, replacing, onAccept, onClearAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   sourceSrc: string;
   state: FrameTileState;
   inFlightCodes: string[];
   currentModelCode: string | null;
   label: string;
-  accepting: boolean;
   replacing: boolean;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
@@ -552,10 +545,7 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
           sourceSrc={sourceSrc}
           inFlightCodes={inFlightCodes}
           currentModelCode={currentModelCode}
-          accepting={accepting}
           replacing={replacing}
-          onAccept={onAccept}
-          onClearAccept={onClearAccept}
           onReplace={onReplace}
           onIdleClick={onIdleClick}
           onErrorRetry={onErrorRetry}
@@ -586,15 +576,12 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting, replacing, onAccept, onClearAccept, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   state: FrameTileState;
   sourceSrc: string;
   inFlightCodes: string[];
   currentModelCode: string | null;
-  accepting: boolean;
   replacing: boolean;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
@@ -617,8 +604,7 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
     }
     return null;
   })();
-  const showReadyActions = state.kind === 'ready' && !state.accepted && !accepting && !replacing;
-  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !accepting && !replacing;
+  const showReadyActions = state.kind === 'ready' && !replacing;
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
@@ -730,52 +716,23 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
           )}
         </div>
       )}
-      {showReadyActions && (
+      {showReadyActions && onRegen && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
-            onClick={onAccept}
-            title="Accept this swap"
+            onClick={(e) => { e.stopPropagation(); onRegen(); }}
+            title="Re-generate with the current provider, model, and prompt"
             className={cn(
               'h-6 px-2 flex items-center gap-1 rounded',
               'text-[10px] font-mono uppercase tracking-wider',
-              'text-emerald-100 hover:text-white',
-              'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
+              'text-primary/80 hover:text-primary',
+              'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
             )}
           >
-            <Check className="w-3 h-3" />
-            Accept
+            <RefreshCw className="w-3 h-3" />
+            Regen
           </button>
-          {onRegen && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRegen(); }}
-              title="Re-generate with the current provider, model, and prompt"
-              className={cn(
-                'h-6 px-2 flex items-center gap-1 rounded',
-                'text-[10px] font-mono uppercase tracking-wider',
-                'text-primary/80 hover:text-primary',
-                'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
-              )}
-            >
-              <RefreshCw className="w-3 h-3" />
-              Regen
-            </button>
-          )}
         </div>
-      )}
-      {showAcceptedBadge && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onClearAccept(); }}
-          title="Clear acceptance — click to un-accept this swap and re-enable Regen"
-          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 hover:bg-rose-500/40 border border-emerald-300/60 hover:border-rose-300/70 text-[9px] font-mono uppercase tracking-wider text-emerald-50 hover:text-rose-50 transition-colors group/badge"
-        >
-          <Check className="w-2.5 h-2.5 group-hover/badge:hidden" />
-          <X className="w-2.5 h-2.5 hidden group-hover/badge:inline" />
-          <span className="group-hover/badge:hidden">Accepted</span>
-          <span className="hidden group-hover/badge:inline">Clear</span>
-        </button>
       )}
       {dragActive && !replacing && (
         <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
@@ -789,7 +746,7 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
 type VideoTileState =
   | { kind: 'idle' }
   | { kind: 'generating'; label?: string }
-  | { kind: 'ready'; src: string; accepted: boolean }
+  | { kind: 'ready'; src: string }
   | { kind: 'error'; message: string };
 
 function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string, spliceVersion: number): VideoTileState {
@@ -800,7 +757,7 @@ function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], project
   if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
   if (item.status === 'ready') {
     const src = `/files/${projectSlug}/${vidId}/original.mp4?v=${spliceVersion}`;
-    return { kind: 'ready', src, accepted: scene.swap?.video_accepted === true };
+    return { kind: 'ready', src };
   }
   // 'generating', 'replacing-audio', etc.
   const label = item.status === 'replacing-audio' ? 'splicing audio…' : 'generating…';
@@ -811,12 +768,9 @@ function VideoSwapSlot({
   state,
   videoAssetId,
   spliceVersion,
-  accepting,
   replacing,
   disabled,
   disabledReason,
-  onAccept,
-  onClearAccept,
   onReplace,
   onIdleClick,
   onErrorRetry,
@@ -825,12 +779,9 @@ function VideoSwapSlot({
   state: VideoTileState;
   videoAssetId: string | null;
   spliceVersion: number;
-  accepting: boolean;
   replacing: boolean;
   disabled: boolean;
   disabledReason?: string;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (videoAssetId: string) => void;
   onIdleClick: () => void;
   onErrorRetry?: () => void;
@@ -843,8 +794,7 @@ function VideoSwapSlot({
     if (state.kind === 'generating' && state.label) return state.label;
     return null;
   })();
-  const showReadyActions = state.kind === 'ready' && !state.accepted && !accepting && !replacing;
-  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !accepting && !replacing;
+  const showReadyActions = state.kind === 'ready' && !replacing;
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -956,20 +906,6 @@ function VideoSwapSlot({
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
-            onClick={onAccept}
-            title="Accept this video — auto-extracts the last frame and seeds the next scene's first frame"
-            className={cn(
-              'h-6 px-2 flex items-center gap-1 rounded',
-              'text-[10px] font-mono uppercase tracking-wider',
-              'text-emerald-100 hover:text-white',
-              'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
-            )}
-          >
-            <Check className="w-3 h-3" />
-            Accept
-          </button>
-          <button
-            type="button"
             onClick={(e) => { e.stopPropagation(); onRegen(); }}
             title="Regenerate the scene video with the current model + prompt"
             className={cn(
@@ -983,20 +919,6 @@ function VideoSwapSlot({
             Regen
           </button>
         </div>
-      )}
-
-      {showAcceptedBadge && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onClearAccept(); }}
-          title="Clear acceptance — click to un-accept this video"
-          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 hover:bg-rose-500/40 border border-emerald-300/60 hover:border-rose-300/70 text-[9px] font-mono uppercase tracking-wider text-emerald-50 hover:text-rose-50 transition-colors group/badge"
-        >
-          <Check className="w-2.5 h-2.5 group-hover/badge:hidden" />
-          <X className="w-2.5 h-2.5 hidden group-hover/badge:inline" />
-          <span className="group-hover/badge:hidden">Accepted</span>
-          <span className="hidden group-hover/badge:inline">Clear</span>
-        </button>
       )}
 
       {dragActive && !replacing && (
@@ -1235,15 +1157,18 @@ function rewriteVisualWithImageTokens(
   return result;
 }
 
-function videoReadyForGen(scene: PlanScene): { ok: boolean; reason?: string } {
-  const swap = scene.swap;
-  const hasAny = !!(swap?.image1 || swap?.image2);
+// "Both swaps present" gate. Slot-presence is the new accepted: a swap that's
+// landed in the slot counts; a missing or in-flight swap blocks RUN VIDEO.
+// Char-refs-only mode (no swap on either side) is also fine.
+function videoReadyForGen(
+  scene: PlanScene,
+  tile1: FrameTileState,
+  tile2: FrameTileState,
+): { ok: boolean; reason?: string } {
+  const hasAny = !!(scene.swap?.image1 || scene.swap?.image2);
   if (!hasAny) return { ok: true };
-  const accepted1 = swap?.image1_accepted === true;
-  const accepted2 = swap?.image2_accepted === true;
-  if (accepted1 && accepted2) return { ok: true };
-  if (!accepted1 && !accepted2) return { ok: false, reason: 'Accept both swap frames first' };
-  return { ok: false, reason: `Accept image${accepted1 ? '2' : '1'} swap first` };
+  if (tile1.kind === 'ready' && tile2.kind === 'ready') return { ok: true };
+  return { ok: false, reason: 'Both swap frames must finish generating' };
 }
 
 function readySwapAssetIds(
@@ -1330,7 +1255,7 @@ function buildSeedanceToolArgs(
 // click and Regen both dispatch the selected (provider, model) for THAT frame
 // only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
 // prior_swap_asset_id so identity carries over from the prior frame.
-function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, accepting, replacing, runSwap, onAccept, onClearAccept, onReplace, onErrorRetry }: {
+function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, replacing, runSwap, onReplace, onErrorRetry }: {
   ordinal: 1 | 2;
   frameIndex: 1 | 2;
   scene: PlanScene;
@@ -1341,7 +1266,6 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   sourceSrc: string;
   tile: FrameTileState;
   inFlightCodes: string[];
-  accepting: boolean;
   replacing: boolean;
   runSwap: (
     frameIndex: 1 | 2,
@@ -1349,8 +1273,6 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
     model: SwapModel,
     opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ) => Promise<{ newAssetId: string } | null>;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (source: ReplaceSource) => void;
   onErrorRetry: () => void;
 }) {
@@ -1430,10 +1352,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
         inFlightCodes={inFlightCodes}
         currentModelCode={modelCodeFromSwapAssetId(scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'])}
         label={label}
-        accepting={accepting}
         replacing={replacing}
-        onAccept={onAccept}
-        onClearAccept={onClearAccept}
         onReplace={onReplace}
         onIdleClick={dispatchGen}
         onErrorRetry={onErrorRetry}
@@ -1468,7 +1387,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // kie, `fal:{model}` for fal). A single (provider, model, frame) tuple can
   // be mid-flight while others run in parallel.
   const [swapsInFlight, setSwapsInFlight] = useState<Set<string>>(new Set());
-  const [accepting, setAccepting] = useState<Set<1 | 2>>(new Set());
   const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
   // VIDEO panel state — per-model prompt overrides (per scene), seeded from
   // the rewritten scene visual so both seedance variants start populated. The
@@ -1492,8 +1410,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // the pre-splice metadata (often scrubbed to end) and renders a blank
   // canvas because the cached bytes no longer match the on-disk file.
   const [previewSpliceVersion, setPreviewSpliceVersion] = useState(0);
-  // Toggle flags for the video slot's accept/replace MCP calls.
-  const [acceptingVideo, setAcceptingVideo] = useState(false);
+  // In-flight flag for the video slot's drag-drop replacement.
   const [replacingVideo, setReplacingVideo] = useState(false);
   // Pending img- asset waiting on extract_last_frame to finish so we can
   // forward it as scene N+1's accepted first frame. Cleared once the asset
@@ -1602,41 +1519,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     });
   }, [scene, runSwap]);
 
-  const runAccept = useCallback(async (frameIndex: 1 | 2, accepted = true) => {
-    setAccepting((prev) => {
-      const next = new Set(prev);
-      next.add(frameIndex);
-      return next;
-    });
-    try {
-      const result = await callTool('accept_plan_scene_frame_swap', {
-        project_slug: projectSlug,
-        scene_index: index,
-        frame_index: frameIndex,
-        accepted,
-      });
-      if (result.isError) {
-        const action = accepted ? 'accept' : 'clear';
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `${action} failed`;
-        toast({ title: `Scene ${index + 1} image${frameIndex} ${action} failed`, description: msg, duration: 5000 });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        // The accept flag is persisted; sidecar refreshes on next read_plan.
-      }
-    } finally {
-      setAccepting((prev) => {
-        const next = new Set(prev);
-        next.delete(frameIndex);
-        return next;
-      });
-    }
-  }, [callTool, projectSlug, index, onSidecarUpdate]);
-
   const runReplace = useCallback(async (frameIndex: 1 | 2, source: ReplaceSource) => {
     setReplacing((prev) => {
       const next = new Set(prev);
@@ -1694,7 +1576,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     }
   }, [callTool, projectSlug, index, onSidecarUpdate]);
 
-  const videoGate = useMemo(() => videoReadyForGen(scene), [scene]);
+  const videoGate = useMemo(() => videoReadyForGen(scene, tile1, tile2), [scene, tile1, tile2]);
 
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
@@ -1736,13 +1618,11 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
       if (newVidAssetId) {
         setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioSlug: sceneAudioSlug }]);
         // Persist into scenes[N].swap.video so the slot survives reloads and
-        // re-generations supersede the prior pick. auto_accept stays false —
-        // the user reviews and clicks Accept explicitly.
+        // re-generations supersede the prior pick.
         const persistResult = await callTool('replace_plan_scene_video_swap', {
           project_slug: projectSlug,
           scene_index: index,
           asset_id: newVidAssetId,
-          auto_accept: false,
         });
         if (!persistResult.isError) {
           try {
@@ -1761,54 +1641,40 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     }
   }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipSlug, sceneAudioSlug, selectedVideoModel, videoModelPrompts, onSidecarUpdate]);
 
-  const runVideoAccept = useCallback(async (accepted: boolean) => {
-    setAcceptingVideo(true);
-    try {
-      const result = await callTool('accept_plan_scene_video_swap', {
+  // Slot-presence is acceptance: when a scene's video reaches 'ready', auto-fire
+  // extract_last_frame and seed the next scene's first frame. One-shot per
+  // (sceneIndex, videoAssetId) tuple — re-generations swap in a new asset id
+  // and re-trigger; mediaItems churn for an unchanged id is ignored.
+  const propagatedVideoIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const vidId = scene.swap?.video;
+    if (!vidId) return;
+    if (index + 1 >= sceneCount) return;
+    if (propagatedVideoIdRef.current === vidId) return;
+    const item = mediaItems.find((m) => m.id === vidId);
+    if (!item || item.status !== 'ready') return;
+    propagatedVideoIdRef.current = vidId;
+    void (async () => {
+      const extractResult = await callTool('extract_last_frame', {
         project_slug: projectSlug,
-        scene_index: index,
-        accepted,
+        asset_id: vidId,
       });
-      if (result.isError) {
-        const action = accepted ? 'accept' : 'clear';
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `${action} failed`;
-        toast({ title: `Scene ${index + 1} video ${action} failed`, description: msg, duration: 5000 });
+      if (extractResult.isError) {
+        const msg = (extractResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_last_frame failed';
+        toast({ title: `Scene ${index + 1} last-frame extract failed`, description: msg, duration: 5000 });
         return;
       }
       try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+        const text = (extractResult.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { image_asset_id?: string };
+        if (typeof parsed.image_asset_id === 'string') {
+          setPendingLastFrameProp({ imgAssetId: parsed.image_asset_id, targetSceneIndex: index + 1 });
+        }
       } catch {
-        // Sidecar refreshes on next read_plan.
+        // Couldn't parse — skip propagation, regen will retry.
       }
-      // On accept, fire extract_last_frame and queue propagation to scene N+1's
-      // first-frame swap once the resulting img-* asset reaches 'ready'.
-      // Skip the chain when there's no next scene.
-      if (accepted && scene.swap?.video && index + 1 < sceneCount) {
-        const extractResult = await callTool('extract_last_frame', {
-          project_slug: projectSlug,
-          asset_id: scene.swap.video,
-        });
-        if (extractResult.isError) {
-          const msg = (extractResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_last_frame failed';
-          toast({ title: `Scene ${index + 1} last-frame extract failed`, description: msg, duration: 5000 });
-          return;
-        }
-        try {
-          const text = (extractResult.content as Array<{ type: string; text: string }>)[0].text;
-          const parsed = JSON.parse(text) as { image_asset_id?: string };
-          if (typeof parsed.image_asset_id === 'string') {
-            setPendingLastFrameProp({ imgAssetId: parsed.image_asset_id, targetSceneIndex: index + 1 });
-          }
-        } catch {
-          // Couldn't parse — skip propagation, user can re-accept to retry.
-        }
-      }
-    } finally {
-      setAcceptingVideo(false);
-    }
-  }, [callTool, projectSlug, index, sceneCount, scene.swap?.video, onSidecarUpdate]);
+    })();
+  }, [scene.swap?.video, mediaItems, sceneCount, index, callTool, projectSlug]);
 
   const runVideoReplace = useCallback(async (vidAssetId: string) => {
     setReplacingVideo(true);
@@ -1817,7 +1683,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         project_slug: projectSlug,
         scene_index: index,
         asset_id: vidAssetId,
-        auto_accept: false,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
@@ -1858,7 +1723,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         scene_index: targetSceneIndex,
         frame_index: 1,
         asset_id: imgAssetId,
-        auto_accept: true,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_plan_scene_frame_swap failed';
@@ -1941,7 +1805,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug],
   );
 
-  const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
+  // Both swap slots are filled with ready images — slot-presence is acceptance.
+  // No-swap mode (char refs only) leaves bothReady false; videoGate.ok handles
+  // that path so the video step still unlocks when the user skipped swaps.
+  const bothReady = tile1.kind === 'ready' && tile2.kind === 'ready';
   const videoTileState = useMemo(
     () => deriveVideoTileState(scene, mediaItems, projectSlug, previewSpliceVersion),
     [scene, mediaItems, projectSlug, previewSpliceVersion],
@@ -1978,11 +1845,8 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         sourceSrc={sourceUrl(1)}
         tile={tile1}
         inFlightCodes={inFlightCodes1}
-        accepting={accepting.has(1)}
         replacing={replacing.has(1)}
         runSwap={runSwap}
-        onAccept={() => { void runAccept(1); }}
-        onClearAccept={() => { void runAccept(1, false); }}
         onReplace={(source) => { void runReplace(1, source); }}
         onErrorRetry={() => retryFailedSwap(1)}
       />
@@ -1997,16 +1861,13 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         sourceSrc={sourceUrl(2)}
         tile={tile2}
         inFlightCodes={inFlightCodes2}
-        accepting={accepting.has(2)}
         replacing={replacing.has(2)}
         runSwap={runSwap}
-        onAccept={() => { void runAccept(2); }}
-        onClearAccept={() => { void runAccept(2, false); }}
         onReplace={(source) => { void runReplace(2, source); }}
         onErrorRetry={() => retryFailedSwap(2)}
       />
       <VideoStepBlock
-        bothAccepted={bothAccepted}
+        bothReady={bothReady}
         selectedModel={selectedVideoModel}
         onSelectModel={setSelectedVideoModel}
         prompt={videoModelPrompts[selectedVideoModel]}
@@ -2014,10 +1875,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         payload={videoPayload}
         mediaItems={mediaItems}
         projectSlug={projectSlug}
-        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
+        disabled={!bothReady || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
         disabledReason={
-          !bothAccepted
-            ? 'Accept both frame swaps first (steps 1 and 2)'
+          !bothReady
+            ? 'Both swap frames must finish generating'
             : !videoGate.ok
               ? videoGate.reason
               : anySwapInFlight
@@ -2031,11 +1892,8 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         videoTileState={videoTileState}
         videoAssetId={scene.swap?.video ?? null}
         spliceVersion={previewSpliceVersion}
-        accepting={acceptingVideo}
         replacing={replacingVideo}
         onIdleClick={() => { void handleVideo(); }}
-        onAccept={() => { void runVideoAccept(true); }}
-        onClearAccept={() => { void runVideoAccept(false); }}
         onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
         onErrorRetry={() => { void handleVideo(); }}
         onRegen={() => { void handleVideo(); }}
@@ -2045,10 +1903,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
 }
 
 // Step-3 wrapper around the existing VideoPanel. Always visible — when both
-// frames aren't accepted yet, the contents are dimmed and Run Video stays
+// swap frames haven't landed yet, the contents are dimmed and Run Video stays
 // disabled with an explanatory tooltip.
-function VideoStepBlock({ bothAccepted, ...rest }: {
-  bothAccepted: boolean;
+function VideoStepBlock({ bothReady, ...rest }: {
+  bothReady: boolean;
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -2061,11 +1919,8 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   videoTileState: VideoTileState;
   videoAssetId: string | null;
   spliceVersion: number;
-  accepting: boolean;
   replacing: boolean;
   onIdleClick: () => void;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (videoAssetId: string) => void;
   onErrorRetry?: () => void;
   onRegen: () => void;
@@ -2076,7 +1931,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
         <span
           className={cn(
             'inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold',
-            bothAccepted
+            bothReady
               ? 'border border-primary/40 text-primary/80'
               : 'border border-primary/15 text-primary/30',
           )}
@@ -2086,25 +1941,25 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
         <span
           className={cn(
             'uppercase tracking-wider',
-            bothAccepted ? 'text-primary/70' : 'text-primary/30',
+            bothReady ? 'text-primary/70' : 'text-primary/30',
           )}
         >
           Generate scene video
         </span>
-        {!bothAccepted && (
+        {!bothReady && (
           <span className="text-primary/40 text-[10px] italic">
-            (accept both frames first)
+            (waiting for both swap frames)
           </span>
         )}
       </div>
-      <div className={cn(!bothAccepted && 'opacity-50 pointer-events-none')}>
+      <div className={cn(!bothReady && 'opacity-50 pointer-events-none')}>
         <VideoPanel {...rest} />
       </div>
     </div>
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, spliceVersion, accepting, replacing, onIdleClick, onAccept, onClearAccept, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, spliceVersion, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -2117,11 +1972,8 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   videoTileState: VideoTileState;
   videoAssetId: string | null;
   spliceVersion: number;
-  accepting: boolean;
   replacing: boolean;
   onIdleClick: () => void;
-  onAccept: () => void;
-  onClearAccept: () => void;
   onReplace: (videoAssetId: string) => void;
   onErrorRetry?: () => void;
   onRegen: () => void;
@@ -2192,12 +2044,9 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
         state={videoTileState}
         videoAssetId={videoAssetId}
         spliceVersion={spliceVersion}
-        accepting={accepting}
         replacing={replacing}
         disabled={disabled}
         disabledReason={disabledReason}
-        onAccept={onAccept}
-        onClearAccept={onClearAccept}
         onReplace={onReplace}
         onIdleClick={onIdleClick}
         onErrorRetry={onErrorRetry}
