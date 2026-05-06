@@ -20,6 +20,8 @@ interface PlanScene {
     image2_accepted?: boolean;
     image1_variants?: Record<string, string>;
     image2_variants?: Record<string, string>;
+    video?: string | null;
+    video_accepted?: boolean;
   } | null;
 }
 
@@ -442,6 +444,7 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           key={`${scene.start}-${scene.end}-${idx}`}
           scene={scene}
           index={idx}
+          sceneCount={data.scenes.length}
           characters={data.characters}
           sceneClipAssetId={sceneAssets[idx]?.clipId ?? null}
           sceneAudioAssetId={sceneAssets[idx]?.audioId ?? null}
@@ -755,6 +758,228 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, accepting
       {dragActive && !replacing && (
         <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
           <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop to replace</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type VideoTileState =
+  | { kind: 'idle' }
+  | { kind: 'generating'; label?: string }
+  | { kind: 'ready'; src: string; accepted: boolean }
+  | { kind: 'error'; message: string };
+
+function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string, spliceVersion: number): VideoTileState {
+  const vidId = scene.swap?.video;
+  if (!vidId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === vidId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
+  if (item.status === 'ready') {
+    const src = `/files/${projectSlug}/${vidId}/original.mp4?v=${spliceVersion}`;
+    return { kind: 'ready', src, accepted: scene.swap?.video_accepted === true };
+  }
+  // 'generating', 'replacing-audio', etc.
+  const label = item.status === 'replacing-audio' ? 'splicing audio…' : 'generating…';
+  return { kind: 'generating', label };
+}
+
+function VideoSwapSlot({
+  state,
+  videoAssetId,
+  spliceVersion,
+  accepting,
+  replacing,
+  disabled,
+  disabledReason,
+  onAccept,
+  onClearAccept,
+  onReplace,
+  onIdleClick,
+  onErrorRetry,
+  onRegen,
+}: {
+  state: VideoTileState;
+  videoAssetId: string | null;
+  spliceVersion: number;
+  accepting: boolean;
+  replacing: boolean;
+  disabled: boolean;
+  disabledReason?: string;
+  onAccept: () => void;
+  onClearAccept: () => void;
+  onReplace: (videoAssetId: string) => void;
+  onIdleClick: () => void;
+  onErrorRetry?: () => void;
+  onRegen: () => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const showSpinner = state.kind === 'generating' || replacing;
+  const spinnerLabel = (() => {
+    if (replacing) return 'updating…';
+    if (state.kind === 'generating' && state.label) return state.label;
+    return null;
+  })();
+  const showReadyActions = state.kind === 'ready' && !state.accepted && !accepting && !replacing;
+  const showAcceptedBadge = state.kind === 'ready' && state.accepted && !accepting && !replacing;
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const droppedId = payload.id;
+      if (typeof droppedId !== 'string') return;
+      if (!droppedId.startsWith('vid-')) {
+        toast({ title: 'Not a video asset', description: `${droppedId} is not a vid-* asset.`, duration: 3000 });
+        return;
+      }
+      if (droppedId === videoAssetId) return;
+      onReplace(droppedId);
+    } catch {
+      // Malformed payload — ignore.
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        'relative self-start max-w-md w-full aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
+        dragActive ? 'border-violet-300 ring-2 ring-violet-300/40' : 'border-zinc-700/60',
+        disabled && state.kind === 'idle' && 'opacity-50',
+      )}
+      onDragEnter={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      {state.kind === 'ready' ? (
+        <video
+          key={`${videoAssetId}-${spliceVersion}`}
+          controls
+          src={state.src}
+          className="w-full h-full object-cover bg-black"
+        />
+      ) : state.kind === 'idle' ? (
+        <button
+          type="button"
+          onClick={onIdleClick}
+          disabled={disabled}
+          title={disabled ? disabledReason : 'Click to generate scene video · or drop a video clip'}
+          className="w-full h-full flex flex-col items-center justify-center gap-1.5 hover:bg-violet-500/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+        >
+          <Film className="w-5 h-5 text-violet-400/50 group-hover:text-violet-300/80" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-violet-400/50 group-hover:text-violet-300/80 px-3 text-center">
+            click to generate · or drop video
+          </span>
+        </button>
+      ) : (
+        <div className="w-full h-full bg-black/60" />
+      )}
+
+      {showSpinner && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70">
+          <Loader2 className="w-6 h-6 animate-spin text-primary/80" />
+          {spinnerLabel && (
+            <span className="text-[10px] font-mono uppercase tracking-wider text-primary/70">
+              {spinnerLabel}
+            </span>
+          )}
+          {state.kind === 'generating' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRegen(); }}
+              title="Re-fire this video gen (use if it's stuck)"
+              className={cn(
+                'absolute top-1 right-1',
+                'h-5 px-1.5 flex items-center gap-1 rounded',
+                'text-[9px] font-mono uppercase tracking-wider',
+                'text-primary/80 hover:text-primary',
+                'bg-black/60 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+              )}
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
+      {state.kind === 'error' && !showSpinner && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-red-950/70 px-3">
+          <span className="text-[10px] font-mono text-red-200/90 text-center line-clamp-3">{state.message}</span>
+          {onErrorRetry && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onErrorRetry(); }}
+              title="Re-run the video generation"
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-red-50 hover:text-white',
+                'bg-red-500/30 hover:bg-red-500/50 border border-red-300/50 hover:border-red-200/80',
+              )}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
+      {showReadyActions && (
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={onAccept}
+            title="Accept this video — auto-extracts the last frame and seeds the next scene's first frame"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-emerald-100 hover:text-white',
+              'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 hover:border-emerald-300/70',
+            )}
+          >
+            <Check className="w-3 h-3" />
+            Accept
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRegen(); }}
+            title="Regenerate the scene video with the current model + prompt"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-primary/80 hover:text-primary',
+              'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+            )}
+          >
+            <RefreshCw className="w-3 h-3" />
+            Regen
+          </button>
+        </div>
+      )}
+
+      {showAcceptedBadge && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClearAccept(); }}
+          title="Clear acceptance — click to un-accept this video"
+          className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/30 hover:bg-rose-500/40 border border-emerald-300/60 hover:border-rose-300/70 text-[9px] font-mono uppercase tracking-wider text-emerald-50 hover:text-rose-50 transition-colors group/badge"
+        >
+          <Check className="w-2.5 h-2.5 group-hover/badge:hidden" />
+          <X className="w-2.5 h-2.5 hidden group-hover/badge:inline" />
+          <span className="group-hover/badge:hidden">Accepted</span>
+          <span className="hidden group-hover/badge:inline">Clear</span>
+        </button>
+      )}
+
+      {dragActive && !replacing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-violet-500/30 pointer-events-none">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-violet-50 font-bold">DROP TO REPLACE</span>
         </div>
       )}
     </div>
@@ -1196,9 +1421,10 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   );
 }
 
-function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
+function SceneBlock({ scene, index, sceneCount, characters, sceneClipAssetId, sceneAudioAssetId, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
+  sceneCount: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
   projectSlug: string;
@@ -1232,16 +1458,19 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
   // source's extracted audio onto them via replace_video_audio. Cleared once
   // the asset reaches 'ready' and we dispatch the audio-replace tool.
   const [pendingAudioReplace, setPendingAudioReplace] = useState<Array<{ vidAssetId: string; audioAssetId: string }>>([]);
-  // Last RUN VIDEO output for this scene — used for inline preview in step 3.
-  // Session-only: cleared on RUN VIDEO click, set after seedance returns.
-  // Reload loses it; the asset still lives in the sidebar.
-  const [lastVideoAssetId, setLastVideoAssetId] = useState<string | null>(null);
   // Bumped when replace_video_audio completes — appended to the inline-preview
   // <video src> as a cache-buster so the browser refetches after the file is
   // rewritten in place by the audio splice. Without this, the player keeps
   // the pre-splice metadata (often scrubbed to end) and renders a blank
   // canvas because the cached bytes no longer match the on-disk file.
   const [previewSpliceVersion, setPreviewSpliceVersion] = useState(0);
+  // Toggle flags for the video slot's accept/replace MCP calls.
+  const [acceptingVideo, setAcceptingVideo] = useState(false);
+  const [replacingVideo, setReplacingVideo] = useState(false);
+  // Pending img- asset waiting on extract_last_frame to finish so we can
+  // forward it as scene N+1's accepted first frame. Cleared once the asset
+  // reaches 'ready' and we dispatch replace_plan_scene_frame_swap.
+  const [pendingLastFrameProp, setPendingLastFrameProp] = useState<{ imgAssetId: string; targetSceneIndex: number } | null>(null);
 
   const tile1 = deriveTileState(scene, 1, mediaItems);
   const tile2 = deriveTileState(scene, 2, mediaItems);
@@ -1454,7 +1683,6 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
       return;
     }
     setSubmittingVideo(true);
-    setLastVideoAssetId(null);
     setPreviewSpliceVersion(0);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
@@ -1479,14 +1707,150 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
       }
       if (newVidAssetId) {
         setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioAssetId: sceneAudioAssetId }]);
-        setLastVideoAssetId(newVidAssetId);
+        // Persist into scenes[N].swap.video so the slot survives reloads and
+        // re-generations supersede the prior pick. auto_accept stays false —
+        // the user reviews and clicks Accept explicitly.
+        const persistResult = await callTool('replace_plan_scene_video_swap', {
+          project_slug: projectSlug,
+          scene_index: index,
+          asset_id: newVidAssetId,
+          auto_accept: false,
+        });
+        if (!persistResult.isError) {
+          try {
+            const text = (persistResult.content as Array<{ type: string; text: string }>)[0].text;
+            const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+            if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+          } catch {
+            // Sidecar refreshes on next read_plan.
+          }
+        }
       }
       const note = swapsReady ? 'Seedance 2 (kie) · 720p · swapped frames' : 'Seedance 2 (kie) · 720p · char refs';
       toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipAssetId, sceneAudioAssetId, selectedVideoModel, videoModelPrompts]);
+  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipAssetId, sceneAudioAssetId, selectedVideoModel, videoModelPrompts, onSidecarUpdate]);
+
+  const runVideoAccept = useCallback(async (accepted: boolean) => {
+    setAcceptingVideo(true);
+    try {
+      const result = await callTool('accept_plan_scene_video_swap', {
+        project_slug: projectSlug,
+        scene_index: index,
+        accepted,
+      });
+      if (result.isError) {
+        const action = accepted ? 'accept' : 'clear';
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `${action} failed`;
+        toast({ title: `Scene ${index + 1} video ${action} failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // Sidecar refreshes on next read_plan.
+      }
+      // On accept, fire extract_last_frame and queue propagation to scene N+1's
+      // first-frame swap once the resulting img-* asset reaches 'ready'.
+      // Skip the chain when there's no next scene.
+      if (accepted && scene.swap?.video && index + 1 < sceneCount) {
+        const extractResult = await callTool('extract_last_frame', {
+          project_slug: projectSlug,
+          asset_id: scene.swap.video,
+        });
+        if (extractResult.isError) {
+          const msg = (extractResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_last_frame failed';
+          toast({ title: `Scene ${index + 1} last-frame extract failed`, description: msg, duration: 5000 });
+          return;
+        }
+        try {
+          const text = (extractResult.content as Array<{ type: string; text: string }>)[0].text;
+          const parsed = JSON.parse(text) as { image_asset_id?: string };
+          if (typeof parsed.image_asset_id === 'string') {
+            setPendingLastFrameProp({ imgAssetId: parsed.image_asset_id, targetSceneIndex: index + 1 });
+          }
+        } catch {
+          // Couldn't parse — skip propagation, user can re-accept to retry.
+        }
+      }
+    } finally {
+      setAcceptingVideo(false);
+    }
+  }, [callTool, projectSlug, index, sceneCount, scene.swap?.video, onSidecarUpdate]);
+
+  const runVideoReplace = useCallback(async (vidAssetId: string) => {
+    setReplacingVideo(true);
+    try {
+      const result = await callTool('replace_plan_scene_video_swap', {
+        project_slug: projectSlug,
+        scene_index: index,
+        asset_id: vidAssetId,
+        auto_accept: false,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
+        toast({ title: `Scene ${index + 1} video replace failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // Sidecar refreshes on next read_plan.
+      }
+      // Reset the cache-buster — the new vid- has its own splice lifecycle.
+      setPreviewSpliceVersion(0);
+    } finally {
+      setReplacingVideo(false);
+    }
+  }, [callTool, projectSlug, index, onSidecarUpdate]);
+
+  // Once the extracted last-frame img- asset reaches 'ready', forward it as
+  // scene N+1's accepted first frame. One-shot per accept event.
+  useEffect(() => {
+    if (!pendingLastFrameProp) return;
+    const item = mediaItems.find((m) => m.id === pendingLastFrameProp.imgAssetId);
+    if (!item) return;
+    if (item.status === 'error') {
+      toast({ title: `Scene ${index + 1} last-frame extract errored`, description: item.failedMessage ?? 'extract failed', duration: 5000 });
+      setPendingLastFrameProp(null);
+      return;
+    }
+    if (item.status !== 'ready') return;
+    const { imgAssetId, targetSceneIndex } = pendingLastFrameProp;
+    setPendingLastFrameProp(null);
+    void (async () => {
+      const result = await callTool('replace_plan_scene_frame_swap', {
+        project_slug: projectSlug,
+        scene_index: targetSceneIndex,
+        frame_index: 1,
+        asset_id: imgAssetId,
+        auto_accept: true,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_plan_scene_frame_swap failed';
+        toast({ title: `Scene ${targetSceneIndex + 1} first-frame seed failed`, description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // Sidecar refreshes on next read_plan.
+      }
+      toast({
+        title: `Scene ${targetSceneIndex + 1} first frame seeded`,
+        description: `from ${imgAssetId}`,
+        duration: 2500,
+      });
+    })();
+  }, [pendingLastFrameProp, mediaItems, callTool, projectSlug, index, onSidecarUpdate]);
 
   // Walk pendingAudioReplace; when each vid- asset reaches 'ready', dispatch
   // replace_video_audio with the source's extracted audio. Errors are toasted
@@ -1558,6 +1922,10 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
   }, [mediaItems, sceneClipAssetId, sceneAudioAssetId]);
 
   const bothAccepted = scene.swap?.image1_accepted === true && scene.swap?.image2_accepted === true;
+  const videoTileState = useMemo(
+    () => deriveVideoTileState(scene, mediaItems, projectSlug, previewSpliceVersion),
+    [scene, mediaItems, projectSlug, previewSpliceVersion],
+  );
 
   const duration = (scene.end - scene.start).toFixed(2);
 
@@ -1626,8 +1994,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         payload={videoPayload}
         mediaItems={mediaItems}
         projectSlug={projectSlug}
-        running={submittingVideo}
-        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight || !sceneSourceReady}
+        disabled={!bothAccepted || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
         disabledReason={
           !bothAccepted
             ? 'Accept both frame swaps first (steps 1 and 2)'
@@ -1637,12 +2004,21 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
                 ? 'Swap still running'
                 : !sceneSourceReady
                   ? 'Source clip + audio still extracting…'
-                  : undefined
+                  : submittingVideo
+                    ? 'Video gen submitting…'
+                    : undefined
         }
-        onRun={() => { void handleVideo(); }}
-        previewVideoAssetId={lastVideoAssetId}
-        previewSpliceVersion={previewSpliceVersion}
-        onReplacePreviewVideo={setLastVideoAssetId}
+        videoTileState={videoTileState}
+        videoAssetId={scene.swap?.video ?? null}
+        spliceVersion={previewSpliceVersion}
+        accepting={acceptingVideo}
+        replacing={replacingVideo}
+        onIdleClick={() => { void handleVideo(); }}
+        onAccept={() => { void runVideoAccept(true); }}
+        onClearAccept={() => { void runVideoAccept(false); }}
+        onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
+        onErrorRetry={() => { void handleVideo(); }}
+        onRegen={() => { void handleVideo(); }}
       />
     </section>
   );
@@ -1660,13 +2036,19 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   payload: unknown;
   mediaItems: MediaItem[];
   projectSlug: string;
-  running: boolean;
   disabled: boolean;
   disabledReason?: string;
-  onRun: () => void;
-  previewVideoAssetId: string | null;
-  previewSpliceVersion: number;
-  onReplacePreviewVideo?: (videoAssetId: string) => void;
+  videoTileState: VideoTileState;
+  videoAssetId: string | null;
+  spliceVersion: number;
+  accepting: boolean;
+  replacing: boolean;
+  onIdleClick: () => void;
+  onAccept: () => void;
+  onClearAccept: () => void;
+  onReplace: (videoAssetId: string) => void;
+  onErrorRetry?: () => void;
+  onRegen: () => void;
 }) {
   return (
     <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
@@ -1702,7 +2084,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId, previewSpliceVersion, onReplacePreviewVideo }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, spliceVersion, accepting, replacing, onIdleClick, onAccept, onClearAccept, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -1710,46 +2092,22 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   payload: unknown;
   mediaItems: MediaItem[];
   projectSlug: string;
-  running: boolean;
   disabled: boolean;
   disabledReason?: string;
-  onRun: () => void;
-  previewVideoAssetId: string | null;
-  previewSpliceVersion: number;
-  onReplacePreviewVideo?: (videoAssetId: string) => void;
+  videoTileState: VideoTileState;
+  videoAssetId: string | null;
+  spliceVersion: number;
+  accepting: boolean;
+  replacing: boolean;
+  onIdleClick: () => void;
+  onAccept: () => void;
+  onClearAccept: () => void;
+  onReplace: (videoAssetId: string) => void;
+  onErrorRetry?: () => void;
+  onRegen: () => void;
 }) {
-  const previewItem = previewVideoAssetId
-    ? mediaItems.find((m) => m.id === previewVideoAssetId) ?? null
-    : null;
   const [view, setView] = useState<'prompt' | 'json'>('prompt');
   const [copied, setCopied] = useState(false);
-  const [videoDragOver, setVideoDragOver] = useState(false);
-
-  const previewDragHandlers = onReplacePreviewVideo
-    ? {
-        onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
-          if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'copy';
-          if (!videoDragOver) setVideoDragOver(true);
-        },
-        onDragLeave: (e: React.DragEvent<HTMLDivElement>) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setVideoDragOver(false);
-        },
-        onDrop: (e: React.DragEvent<HTMLDivElement>) => {
-          e.preventDefault();
-          setVideoDragOver(false);
-          try {
-            const data = JSON.parse(e.dataTransfer.getData('application/json')) as { type?: string; id?: string };
-            if (data.type === 'video' && data.id && data.id !== previewVideoAssetId) {
-              onReplacePreviewVideo(data.id);
-            }
-          } catch {
-            // Invalid drop payload — silently ignore.
-          }
-        },
-      }
-    : {};
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
@@ -1810,57 +2168,21 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
       ) : (
         <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
       )}
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={running || disabled}
-          title={disabled ? disabledReason : undefined}
-          className={cn(
-            'h-7 px-3 flex items-center gap-1.5 rounded',
-            'text-[11px] font-mono font-bold uppercase tracking-wider',
-            'text-violet-300/90 hover:text-violet-200',
-            'bg-violet-500/5 hover:bg-violet-500/15 border border-violet-500/30 hover:border-violet-400/60',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-          )}
-        >
-          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Film className="w-3.5 h-3.5" />}
-          {running ? 'Running…' : 'Run Video'}
-        </button>
-      </div>
-      {previewVideoAssetId && (
-        <div className="relative self-start max-w-md w-full" {...previewDragHandlers}>
-          {previewItem?.status === 'ready' ? (
-            // `key` forces a fresh <video> element after the audio splice
-            // bumps the version — without it, the browser keeps the cached
-            // pre-splice metadata and the player renders blank.
-            <video
-              key={`${previewVideoAssetId}-${previewSpliceVersion}`}
-              controls
-              src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4?v=${previewSpliceVersion}`}
-              className="w-full aspect-video rounded border border-zinc-700/60 bg-black"
-            />
-          ) : previewItem?.status === 'error' ? (
-            <div className="w-full p-2 rounded border border-red-500/40 bg-red-950/40 text-[10px] font-mono text-red-200/80">
-              {previewItem.failedMessage ?? 'gen failed'}
-            </div>
-          ) : (
-            <div className="w-full aspect-video rounded border border-zinc-700/60 bg-black/60 flex flex-col items-center justify-center gap-1.5">
-              <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
-              <span className="text-[10px] font-mono uppercase tracking-wider text-primary/60">
-                {previewItem?.status === 'replacing-audio' ? 'splicing audio…' : 'generating…'}
-              </span>
-            </div>
-          )}
-          {videoDragOver && (
-            <div className="absolute inset-0 z-10 pointer-events-none rounded flex items-center justify-center bg-violet-500/20 ring-2 ring-violet-400 ring-inset">
-              <span className="px-2 py-1 rounded-sm bg-black/85 backdrop-blur-md border border-violet-400/60 text-[10px] font-mono font-bold tracking-widest text-violet-300">
-                REPLACE VIDEO
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      <VideoSwapSlot
+        state={videoTileState}
+        videoAssetId={videoAssetId}
+        spliceVersion={spliceVersion}
+        accepting={accepting}
+        replacing={replacing}
+        disabled={disabled}
+        disabledReason={disabledReason}
+        onAccept={onAccept}
+        onClearAccept={onClearAccept}
+        onReplace={onReplace}
+        onIdleClick={onIdleClick}
+        onErrorRetry={onErrorRetry}
+        onRegen={onRegen}
+      />
     </div>
   );
 }
