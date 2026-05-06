@@ -414,6 +414,34 @@ async function completeSeedance2Video(
     await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
+  // When the caller asked us to splice a specific audio over the seedance
+  // output (PlanViewer's per-scene `plan/sN.mp3` flow), enqueue
+  // replace_video_audio instead of process_video — that job handles the splice
+  // and chains process_video itself. Doing this server-side means the asset
+  // only flips to 'ready' AFTER the splice, so a page reload between RUN
+  // VIDEO and seedance completion can no longer drop the audio replacement.
+  const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
+  if (replaceAudioWith) {
+    const audioManifest = await fs.getManifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    if (!audioManifest.ok) {
+      throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
+    }
+    const audioPath = join(audioManifest.value.path, replaceAudioWith.filename);
+    const audioAssetId = `${replaceAudioWith.assetId}/${replaceAudioWith.filename}`;
+    await queue.enqueue(`replace-audio-${assetId}-${Date.now()}`, {
+      type: "replace_video_audio",
+      inputPath: videoPath,
+      audioPath,
+      outputPath: join(assetDir, "original_audio_replaced.mp4"),
+      assetId,
+      assetDir,
+      audioAssetId,
+      projectSlug,
+      extraProvenance: provenance,
+    } as unknown as Record<string, unknown>);
+    return;
+  }
+
   const jobId = `process-video-${assetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "process_video",

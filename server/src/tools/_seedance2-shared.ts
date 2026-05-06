@@ -112,6 +112,7 @@ function buildSchema(resolutions: readonly Resolution[]) {
     generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
     web_search: z.boolean().optional().describe("Use web search for grounding (default false)"),
     nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+    replace_audio_with: z.string().optional().describe("After generation, splice this audio over the seedance output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
     _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
   } satisfies ZodRawShape;
 }
@@ -145,6 +146,7 @@ export function buildSeedance2ToolDef(
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
       const first_frame_slug = blank(raw.first_frame_slug) ? undefined : raw.first_frame_slug;
       const last_frame_slug = blank(raw.last_frame_slug) ? undefined : raw.last_frame_slug;
+      const replace_audio_with = blank(raw.replace_audio_with) ? undefined : raw.replace_audio_with;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -230,6 +232,13 @@ export function buildSeedance2ToolDef(
         audioInputs.push(r.value);
       }
 
+      let replaceAudioWith: RefInput | undefined;
+      if (replace_audio_with !== undefined) {
+        const r = await resolveAudioSlug(fs, replace_audio_with, project_slug);
+        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
+        replaceAudioWith = r.value;
+      }
+
       const videoName = `${modelSlug("kie", opts.apiModel)}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -270,6 +279,7 @@ export function buildSeedance2ToolDef(
         ...(generate_audio !== undefined ? { generate_audio } : {}),
         web_search: web_search ?? false,
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
+        ...(replaceAudioWith ? { replaceAudioWith } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

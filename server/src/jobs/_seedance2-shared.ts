@@ -28,6 +28,7 @@ export type Seedance2JobPayload = {
   generate_audio?: boolean;
   web_search?: boolean;
   nsfw_checker?: boolean;
+  replaceAudioWith?: RefInput;
 };
 
 async function uploadAll(
@@ -51,6 +52,7 @@ export function registerSeedance2Job(fs: ClipfirstFs, jobType: string): void {
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       aspect_ratio, resolution, duration,
       generate_audio, web_search, nsfw_checker,
+      replaceAudioWith,
     } = payload as unknown as Seedance2JobPayload;
 
     const apiKey = requireApiKey("KIE_API_KEY");
@@ -100,6 +102,7 @@ export function registerSeedance2Job(fs: ClipfirstFs, jobType: string): void {
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,
+        ...(replaceAudioWith ? { replaceAudioWith } : {}),
       },
     }, ctx.getOwnerId());
     if (!ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${ptResult.error.message}`);

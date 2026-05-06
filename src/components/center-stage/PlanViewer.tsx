@@ -756,14 +756,14 @@ type VideoTileState =
   | { kind: 'ready'; src: string }
   | { kind: 'error'; message: string };
 
-function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string, spliceVersion: number): VideoTileState {
+function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
   const vidId = scene.swap?.video;
   if (!vidId) return { kind: 'idle' };
   const item = mediaItems.find((m) => m.id === vidId);
   if (!item) return { kind: 'generating' };
   if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
   if (item.status === 'ready') {
-    const src = `/files/${projectSlug}/${vidId}/original.mp4?v=${spliceVersion}`;
+    const src = `/files/${projectSlug}/${vidId}/original.mp4`;
     return { kind: 'ready', src };
   }
   // 'generating', 'replacing-audio', etc.
@@ -774,7 +774,6 @@ function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], project
 function VideoSwapSlot({
   state,
   videoAssetId,
-  spliceVersion,
   replacing,
   disabled,
   disabledReason,
@@ -785,7 +784,6 @@ function VideoSwapSlot({
 }: {
   state: VideoTileState;
   videoAssetId: string | null;
-  spliceVersion: number;
   replacing: boolean;
   disabled: boolean;
   disabledReason?: string;
@@ -837,7 +835,7 @@ function VideoSwapSlot({
     >
       {state.kind === 'ready' ? (
         <video
-          key={`${videoAssetId}-${spliceVersion}`}
+          key={videoAssetId ?? 'no-video'}
           controls
           src={state.src}
           className="w-full h-full object-cover bg-black"
@@ -1250,6 +1248,10 @@ function buildSeedanceToolArgs(
     image_slugs: imageSlugs,
     video_slugs: [`@${sceneClipSlug}`],
     audio_slugs: [`@${sceneAudioSlug}`],
+    // Server splices this audio over the seedance output before the asset
+    // reaches 'ready'. Survives page reloads — the prior client-side
+    // pendingAudioReplace effect did not.
+    replace_audio_with: `@${sceneAudioSlug}`,
     resolution: '720p',
     aspect_ratio: '16:9',
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
@@ -1407,16 +1409,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   const setSelectedVideoPrompt = useCallback((next: string) => {
     setVideoModelPrompts((prev) => ({ ...prev, [selectedVideoModel]: next }));
   }, [selectedVideoModel]);
-  // Pending vid- assets waiting on Seedance to finish so we can splice the
-  // source's extracted audio onto them via replace_video_audio. Cleared once
-  // the asset reaches 'ready' and we dispatch the audio-replace tool.
-  const [pendingAudioReplace, setPendingAudioReplace] = useState<Array<{ vidAssetId: string; audioSlug: string }>>([]);
-  // Bumped when replace_video_audio completes — appended to the inline-preview
-  // <video src> as a cache-buster so the browser refetches after the file is
-  // rewritten in place by the audio splice. Without this, the player keeps
-  // the pre-splice metadata (often scrubbed to end) and renders a blank
-  // canvas because the cached bytes no longer match the on-disk file.
-  const [previewSpliceVersion, setPreviewSpliceVersion] = useState(0);
   // In-flight flag for the video slot's drag-drop replacement.
   const [replacingVideo, setReplacingVideo] = useState(false);
   // Pending img- asset waiting on extract_last_frame to finish so we can
@@ -1600,7 +1592,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
       return;
     }
     setSubmittingVideo(true);
-    setPreviewSpliceVersion(0);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
       const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel]);
@@ -1620,12 +1611,13 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         if (typeof parsed.vid_asset_id === 'string') newVidAssetId = parsed.vid_asset_id;
       } catch {
         // Tool always returns vid_asset_id; if parsing fails we fall back to
-        // a toast-only notification and skip the audio chain.
+        // a toast-only notification.
       }
       if (newVidAssetId) {
-        setPendingAudioReplace((prev) => [...prev, { vidAssetId: newVidAssetId!, audioSlug: sceneAudioSlug }]);
         // Persist into scenes[N].swap.video so the slot survives reloads and
-        // re-generations supersede the prior pick.
+        // re-generations supersede the prior pick. The audio splice is now
+        // server-driven (replace_audio_with arg above), so no client-side
+        // post-completion coordination is needed.
         const persistResult = await callTool('replace_plan_scene_video_swap', {
           project_slug: projectSlug,
           scene_index: index,
@@ -1703,8 +1695,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
       } catch {
         // Sidecar refreshes on next read_plan.
       }
-      // Reset the cache-buster — the new vid- has its own splice lifecycle.
-      setPreviewSpliceVersion(0);
     } finally {
       setReplacingVideo(false);
     }
@@ -1751,54 +1741,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     })();
   }, [pendingLastFrameProp, mediaItems, callTool, projectSlug, index, onSidecarUpdate]);
 
-  // Walk pendingAudioReplace; when each vid- asset reaches 'ready', dispatch
-  // replace_video_audio with the source's extracted audio. Errors are toasted
-  // and the entry is dropped either way.
-  useEffect(() => {
-    if (pendingAudioReplace.length === 0) return;
-    const stillPending: typeof pendingAudioReplace = [];
-    const dispatch: typeof pendingAudioReplace = [];
-    for (const entry of pendingAudioReplace) {
-      const item = mediaItems.find((m) => m.id === entry.vidAssetId);
-      if (!item) {
-        stillPending.push(entry);
-      } else if (item.status === 'ready') {
-        dispatch.push(entry);
-      } else if (item.status === 'error') {
-        // vid errored — drop without dispatching.
-      } else {
-        stillPending.push(entry);
-      }
-    }
-    if (dispatch.length === 0) return;
-    setPendingAudioReplace(stillPending);
-    for (const entry of dispatch) {
-      void (async () => {
-        const result = await callTool('replace_video_audio', {
-          project_slug: projectSlug,
-          asset_id: entry.vidAssetId,
-          // Server accepts both `aud-*` and `<assetId>/<filename>` here.
-          // PlanViewer always passes the slashed form (e.g. `plan/s1.mp3`).
-          audio_asset_id: entry.audioSlug,
-        });
-        if (result.isError) {
-          const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_video_audio failed';
-          toast({ title: `Scene ${index + 1} audio splice failed`, description: msg, duration: 5000 });
-          return;
-        }
-        // File was rewritten in place — bump the preview's cache-buster so
-        // the <video> element refetches the new bytes instead of replaying
-        // the cached pre-splice copy.
-        setPreviewSpliceVersion((v) => v + 1);
-        toast({
-          title: `Scene ${index + 1} audio spliced`,
-          description: `${entry.vidAssetId} ← ${entry.audioSlug}`,
-          duration: 2500,
-        });
-      })();
-    }
-  }, [pendingAudioReplace, mediaItems, callTool, projectSlug, index]);
-
   const videoPayload = useMemo(
     () => buildKieVideoPayload(
       selectedVideoModel,
@@ -1817,8 +1759,8 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // that path so the video step still unlocks when the user skipped swaps.
   const bothReady = tile1.kind === 'ready' && tile2.kind === 'ready';
   const videoTileState = useMemo(
-    () => deriveVideoTileState(scene, mediaItems, projectSlug, previewSpliceVersion),
-    [scene, mediaItems, projectSlug, previewSpliceVersion],
+    () => deriveVideoTileState(scene, mediaItems, projectSlug),
+    [scene, mediaItems, projectSlug],
   );
 
   const duration = (scene.end - scene.start).toFixed(2);
@@ -1898,7 +1840,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         }
         videoTileState={videoTileState}
         videoAssetId={scene.swap?.video ?? null}
-        spliceVersion={previewSpliceVersion}
         replacing={replacingVideo}
         onIdleClick={() => { void handleVideo(); }}
         onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
@@ -1925,7 +1866,6 @@ function VideoStepBlock({ bothReady, ...rest }: {
   disabledReason?: string;
   videoTileState: VideoTileState;
   videoAssetId: string | null;
-  spliceVersion: number;
   replacing: boolean;
   onIdleClick: () => void;
   onReplace: (videoAssetId: string) => void;
@@ -1966,7 +1906,7 @@ function VideoStepBlock({ bothReady, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, spliceVersion, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -1978,7 +1918,6 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   disabledReason?: string;
   videoTileState: VideoTileState;
   videoAssetId: string | null;
-  spliceVersion: number;
   replacing: boolean;
   onIdleClick: () => void;
   onReplace: (videoAssetId: string) => void;
@@ -2050,7 +1989,6 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
       <VideoSwapSlot
         state={videoTileState}
         videoAssetId={videoAssetId}
-        spliceVersion={spliceVersion}
         replacing={replacing}
         disabled={disabled}
         disabledReason={disabledReason}
