@@ -253,5 +253,42 @@ describe("extract_audio tool", () => {
       expect(result.isError).toBe(true);
       expect((result.content as TextContent)[0].text).toContain("not found");
     });
+
+    it("clips to range when provided so per-scene mp3s stay short", async () => {
+      // generateTestVideo produces a 2s source. Clip the middle 0.5s and
+      // verify the resulting mp3 reflects that, not the full source length.
+      const uploaded = await uploadVideo(client, "audio-proj", videoPath);
+      const result = await client.callTool({
+        name: "extract_audio",
+        arguments: {
+          asset_id: uploaded.assetId,
+          project_slug: "audio-proj",
+          destination: { asset_id: uploaded.assetId, filename: "s1-range.mp3" },
+          range: { start_s: 0.5, duration_s: 0.5 },
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+
+      const manifest = await client.callTool({
+        name: "asset_manifest",
+        arguments: { asset_id: uploaded.assetId, project_slug: "audio-proj" },
+      });
+      const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
+      const mp3Path = join(manifestData.path, "s1-range.mp3");
+
+      const FFPROBE: string = require("ffprobe-static").path;
+      const { stdout } = await execFileAsync(FFPROBE, [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1",
+        mp3Path,
+      ]);
+      const duration = Number(stdout.trim());
+      // mp3 framing slop adds a hair; the range is 0.5s, full source is 2s.
+      // Anything under 0.9s confirms the range clip took effect.
+      expect(duration).toBeLessThan(0.9);
+      expect(duration).toBeGreaterThan(0.3);
+    });
   });
 });

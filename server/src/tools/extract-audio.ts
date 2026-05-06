@@ -35,7 +35,7 @@ function deriveAudioName(videoAssetId: string): string {
 export function extractAudioDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "extract_audio",
-    description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3).",
+    description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
@@ -48,12 +48,22 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
         .describe(
           "When set, write the mp3 to <destination.asset_id>/<destination.filename> instead of minting a fresh aud-* asset.",
         ),
+      range: z
+        .object({
+          start_s: z.number().min(0).describe("Start offset in seconds (inclusive)"),
+          duration_s: z.number().positive().describe("Duration in seconds"),
+        })
+        .optional()
+        .describe(
+          "When set, extract only this time window from the source. Used by plan-vis bootstrap to produce per-scene mp3s ≤ seedance-2's 15.2s reference cap.",
+        ),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, destination } = args as {
+      const { asset_id, project_slug, destination, range } = args as {
         asset_id: string;
         project_slug: string;
         destination?: { asset_id: string; filename: string };
+        range?: { start_s: number; duration_s: number };
       };
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
@@ -142,6 +152,7 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
         sourceVideoId: asset_id,
         projectSlug: project_slug,
         destination: destinationMode ? { filename: destination!.filename } : undefined,
+        range,
       } as unknown as Record<string, unknown>;
 
       // Destination mode synchronously awaits the ffmpeg + commit so the

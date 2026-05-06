@@ -429,6 +429,13 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
             asset_id: PLAN_ASSET_ID,
             filename: scene.audio_filename,
           },
+          // Clip just this scene's window so the resulting mp3 stays under
+          // seedance-2's 15.2s reference cap. Without this the full source
+          // audio lands in plan/sN.mp3 and seedance rejects the call.
+          range: {
+            start_s: scene.start,
+            duration_s: scene.end - scene.start,
+          },
         });
         if (audResult.isError) {
           allAudioOk = false;

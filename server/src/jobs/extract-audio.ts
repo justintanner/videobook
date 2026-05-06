@@ -36,13 +36,19 @@ type ExtractAudioPayload = {
    * specific filename instead.
    */
   destination?: { filename: string };
+  /**
+   * When set, ffmpeg clips this time window out of the source via -ss/-t.
+   * Output-side seek (-ss after -i) is the accurate path; the small precision
+   * cost vs input-side seek is fine for sub-15s scene mp3s.
+   */
+  range?: { start_s: number; duration_s: number };
 };
 
 export function registerExtractAudioJob(fs: ClipfirstFs): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
-      audioAssetId, audioAssetDir, sourceVideoId, projectSlug, destination,
+      audioAssetId, audioAssetDir, sourceVideoId, projectSlug, destination, range,
     } = payload as ExtractAudioPayload;
     const destinationMode = destination !== undefined;
 
@@ -51,20 +57,26 @@ export function registerExtractAudioJob(fs: ClipfirstFs): void {
       if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
       try {
-        await runFfmpeg([
+        const ffmpegArgs = [
           "-y",
           "-i", inputPath,
           "-vn",
           "-acodec", "libmp3lame",
           "-q:a", "2",
+          ...(range ? ["-ss", String(range.start_s), "-t", String(range.duration_s)] : []),
           outputPath,
-        ]);
+        ];
+        await runFfmpeg(ffmpegArgs);
 
         if (destinationMode) {
           await fs.commitOperation(
             "extract_audio",
             audioAssetId,
-            { source_asset: sourceVideoId, filename: destination.filename },
+            {
+              source_asset: sourceVideoId,
+              filename: destination.filename,
+              ...(range ? { range } : {}),
+            },
             projectSlug,
           );
         } else {
