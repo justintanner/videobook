@@ -1,4 +1,4 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent, type DragEvent as ReactDragEvent } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
@@ -15,9 +15,12 @@ interface VideoCardProps {
   onClick?: () => void;
   onMarkSeen?: () => void;
   onDelete?: (item: MediaItem) => void;
+  /** Fires when an aud-* card is dropped onto this video. HomePage uses this
+   *  to surface a "replace audio?" confirm before invoking replace_video_audio. */
+  onAudioDropped?: (audioAssetId: string, audioSlug: string) => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onAudioDropped }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -40,8 +43,47 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
 
+  const [audioDragOver, setAudioDragOver] = useState(false);
+  const canAcceptAudioDrop = !!onAudioDropped && status === 'ready';
+
+  const handleDragOver = canAcceptAudioDrop
+    ? (e: ReactDragEvent<HTMLDivElement>) => {
+        if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-audio')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        if (!audioDragOver) setAudioDragOver(true);
+      }
+    : undefined;
+
+  const handleDragLeave = canAcceptAudioDrop
+    ? (e: ReactDragEvent<HTMLDivElement>) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setAudioDragOver(false);
+        }
+      }
+    : undefined;
+
+  const handleDrop = canAcceptAudioDrop
+    ? (e: ReactDragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setAudioDragOver(false);
+        try {
+          const data = JSON.parse(e.dataTransfer.getData('application/json')) as DragData;
+          if (data.type === 'audio' && data.id && onAudioDropped) onAudioDropped(data.id, data.slug);
+        } catch {
+          // Invalid drop payload — silently ignore.
+        }
+      }
+    : undefined;
+
   return (
-    <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
+    <div
+      className="relative w-full"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {showThumb && (
         <img
@@ -74,6 +116,14 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
           <X className="w-3 h-3" />
         </button>
       )}
-    </CardShell>
+      </CardShell>
+      {audioDragOver && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-amber-500/20 ring-2 ring-amber-400 ring-inset">
+          <span className="px-2 py-1 rounded-sm bg-black/85 backdrop-blur-md border border-amber-400/60 text-[10px] font-mono font-bold tracking-widest text-amber-300">
+            REPLACE AUDIO?
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

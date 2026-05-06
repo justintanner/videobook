@@ -1642,6 +1642,7 @@ function SceneBlock({ scene, index, characters, sceneClipAssetId, sceneAudioAsse
         onRun={() => { void handleVideo(); }}
         previewVideoAssetId={lastVideoAssetId}
         previewSpliceVersion={previewSpliceVersion}
+        onReplacePreviewVideo={setLastVideoAssetId}
       />
     </section>
   );
@@ -1665,6 +1666,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   onRun: () => void;
   previewVideoAssetId: string | null;
   previewSpliceVersion: number;
+  onReplacePreviewVideo?: (videoAssetId: string) => void;
 }) {
   return (
     <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
@@ -1700,7 +1702,7 @@ function VideoStepBlock({ bothAccepted, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId, previewSpliceVersion }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, running, disabled, disabledReason, onRun, previewVideoAssetId, previewSpliceVersion, onReplacePreviewVideo }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
@@ -1714,12 +1716,40 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   onRun: () => void;
   previewVideoAssetId: string | null;
   previewSpliceVersion: number;
+  onReplacePreviewVideo?: (videoAssetId: string) => void;
 }) {
   const previewItem = previewVideoAssetId
     ? mediaItems.find((m) => m.id === previewVideoAssetId) ?? null
     : null;
   const [view, setView] = useState<'prompt' | 'json'>('prompt');
   const [copied, setCopied] = useState(false);
+  const [videoDragOver, setVideoDragOver] = useState(false);
+
+  const previewDragHandlers = onReplacePreviewVideo
+    ? {
+        onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+          if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!videoDragOver) setVideoDragOver(true);
+        },
+        onDragLeave: (e: React.DragEvent<HTMLDivElement>) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setVideoDragOver(false);
+        },
+        onDrop: (e: React.DragEvent<HTMLDivElement>) => {
+          e.preventDefault();
+          setVideoDragOver(false);
+          try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json')) as { type?: string; id?: string };
+            if (data.type === 'video' && data.id && data.id !== previewVideoAssetId) {
+              onReplacePreviewVideo(data.id);
+            }
+          } catch {
+            // Invalid drop payload — silently ignore.
+          }
+        },
+      }
+    : {};
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
@@ -1799,28 +1829,37 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
         </button>
       </div>
       {previewVideoAssetId && (
-        previewItem?.status === 'ready' ? (
-          // `key` forces a fresh <video> element after the audio splice
-          // bumps the version — without it, the browser keeps the cached
-          // pre-splice metadata and the player renders blank.
-          <video
-            key={`${previewVideoAssetId}-${previewSpliceVersion}`}
-            controls
-            src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4?v=${previewSpliceVersion}`}
-            className="w-full max-w-md aspect-video rounded border border-zinc-700/60 bg-black self-end"
-          />
-        ) : previewItem?.status === 'error' ? (
-          <div className="self-end max-w-md w-full p-2 rounded border border-red-500/40 bg-red-950/40 text-[10px] font-mono text-red-200/80">
-            {previewItem.failedMessage ?? 'gen failed'}
-          </div>
-        ) : (
-          <div className="self-end max-w-md w-full aspect-video rounded border border-zinc-700/60 bg-black/60 flex flex-col items-center justify-center gap-1.5">
-            <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
-            <span className="text-[10px] font-mono uppercase tracking-wider text-primary/60">
-              {previewItem?.status === 'replacing-audio' ? 'splicing audio…' : 'generating…'}
-            </span>
-          </div>
-        )
+        <div className="relative self-start max-w-md w-full" {...previewDragHandlers}>
+          {previewItem?.status === 'ready' ? (
+            // `key` forces a fresh <video> element after the audio splice
+            // bumps the version — without it, the browser keeps the cached
+            // pre-splice metadata and the player renders blank.
+            <video
+              key={`${previewVideoAssetId}-${previewSpliceVersion}`}
+              controls
+              src={`/files/${projectSlug}/${previewVideoAssetId}/original.mp4?v=${previewSpliceVersion}`}
+              className="w-full aspect-video rounded border border-zinc-700/60 bg-black"
+            />
+          ) : previewItem?.status === 'error' ? (
+            <div className="w-full p-2 rounded border border-red-500/40 bg-red-950/40 text-[10px] font-mono text-red-200/80">
+              {previewItem.failedMessage ?? 'gen failed'}
+            </div>
+          ) : (
+            <div className="w-full aspect-video rounded border border-zinc-700/60 bg-black/60 flex flex-col items-center justify-center gap-1.5">
+              <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+              <span className="text-[10px] font-mono uppercase tracking-wider text-primary/60">
+                {previewItem?.status === 'replacing-audio' ? 'splicing audio…' : 'generating…'}
+              </span>
+            </div>
+          )}
+          {videoDragOver && (
+            <div className="absolute inset-0 z-10 pointer-events-none rounded flex items-center justify-center bg-violet-500/20 ring-2 ring-violet-400 ring-inset">
+              <span className="px-2 py-1 rounded-sm bg-black/85 backdrop-blur-md border border-violet-400/60 text-[10px] font-mono font-bold tracking-widest text-violet-300">
+                REPLACE VIDEO
+              </span>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -45,6 +45,7 @@ import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
 import { useRenderSettings } from '@/hooks/useRenderSettings';
 import type { Orientation } from '@/hooks/useTimeline';
+import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
@@ -90,6 +91,8 @@ export function HomePage() {
   const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
+  const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
+  const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -362,6 +365,32 @@ export function HomePage() {
     setDeletingIds((prev) => new Set(prev).add(video.id));
     callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
   }, [callTool, projectSlug]);
+
+  const handleAudioDroppedOnVideo = useCallback((video: MediaItem, audioId: string, audioSlug: string) => {
+    setAudioReplace({ videoId: video.id, videoSlug: video.slug, audioId, audioSlug });
+  }, []);
+
+  const handleConfirmAudioReplace = useCallback(async () => {
+    if (!audioReplace || !projectSlug) return;
+    setAudioReplaceSubmitting(true);
+    try {
+      const result = await callTool('replace_video_audio', {
+        project_slug: projectSlug,
+        asset_id: audioReplace.videoId,
+        audio_asset_id: audioReplace.audioId,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_video_audio failed';
+        toast({ title: 'Replace audio failed', description: msg, duration: 5000 });
+      } else {
+        toast({ title: 'Audio replaced', description: `${audioReplace.videoSlug} ← ${audioReplace.audioSlug}`, duration: 2500 });
+        sync(projectSlug);
+      }
+    } finally {
+      setAudioReplaceSubmitting(false);
+      setAudioReplace(null);
+    }
+  }, [audioReplace, projectSlug, callTool, sync]);
 
   const handleProjectChange = useCallback(async (slug: string) => {
     clearAssets();
@@ -862,7 +891,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} />}
                         {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
                       </div>
                     );
@@ -961,6 +990,37 @@ export function HomePage() {
         projectSlug={projectSlug}
         callTool={callTool}
       />
+      {audioReplace && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center"
+          onClick={() => { if (!audioReplaceSubmitting) setAudioReplace(null); }}
+        >
+          <div
+            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-amber-400/40 rounded p-4 shadow-[0_0_24px_rgba(251,191,36,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-[10px] font-mono font-bold tracking-widest text-amber-400 mb-2">REPLACE AUDIO?</div>
+            <div className="text-sm text-zinc-200 mb-3">
+              Replace the audio on <span className="font-mono text-amber-300">{audioReplace.videoSlug}</span> with <span className="font-mono text-amber-300">{audioReplace.audioSlug}</span>?
+            </div>
+            <div className="text-[11px] text-zinc-400 mb-4">The video file will be rewritten in place. Existing per-orientation renders become stale and need to be re-rendered.</div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={audioReplaceSubmitting}
+                onClick={() => setAudioReplace(null)}
+                className="px-3 py-1.5 text-xs font-mono tracking-widest border border-zinc-700 text-zinc-300 hover:bg-zinc-800 rounded disabled:opacity-50"
+              >CANCEL</button>
+              <button
+                type="button"
+                disabled={audioReplaceSubmitting}
+                onClick={handleConfirmAudioReplace}
+                className="px-3 py-1.5 text-xs font-mono tracking-widest border border-amber-400 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 rounded disabled:opacity-50"
+              >{audioReplaceSubmitting ? 'REPLACING…' : 'REPLACE'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </CommandRegistryProvider>
     </MountKeyProvider>
   );
