@@ -49,7 +49,31 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
+// `@<assetId>/<filename>` addresses a specific sibling file inside an
+// asset. Used by plan-driven render (e.g. `@plan/s1.mp4`); bypasses the
+// vid-/aud- prefix gate since the destination asset doesn't have to be
+// media-prefixed and may hold multiple media files.
+async function resolveSlashedSlug(
+  fs: ClipfirstFs,
+  raw: string,
+  projectSlug: string,
+): Promise<ResolveOk | ResolveErr | null> {
+  const stripped = raw.replace(/^@/, "");
+  const slashIdx = stripped.indexOf("/");
+  if (slashIdx < 0) return null;
+  const assetId = stripped.slice(0, slashIdx);
+  const filename = stripped.slice(slashIdx + 1);
+  if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
+  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if (!manifest.ok) return { ok: false, error: manifest.error.message };
+  const file = manifest.value.files.find((f) => f.name === filename);
+  if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
+  return { ok: true, value: { assetId, filename } };
+}
+
 async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
+  if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video slug must be vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -60,6 +84,8 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 }
 
 async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
+  if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio slug must be aud-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);

@@ -29,14 +29,22 @@ type ExtractAudioPayload = {
   audioAssetDir: string;
   sourceVideoId: string;
   projectSlug: string;
+  /**
+   * When set, the mp3 is being written as a sibling file inside an existing
+   * shared asset (e.g. `plan/`). Skip per-asset metadata (it would clobber
+   * across siblings) and emit a single commitOperation that references the
+   * specific filename instead.
+   */
+  destination?: { filename: string };
 };
 
 export function registerExtractAudioJob(fs: ClipfirstFs): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
-      audioAssetId, audioAssetDir, sourceVideoId, projectSlug,
+      audioAssetId, audioAssetDir, sourceVideoId, projectSlug, destination,
     } = payload as ExtractAudioPayload;
+    const destinationMode = destination !== undefined;
 
     return withLocalLease(fs, projectSlug, audioAssetId, ctx, "extract", async () => {
       const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
@@ -52,11 +60,20 @@ export function registerExtractAudioJob(fs: ClipfirstFs): void {
           outputPath,
         ]);
 
-        const origin = {
-          origin: "extract_audio",
-          source_asset: sourceVideoId,
-        };
-        await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
+        if (destinationMode) {
+          await fs.commitOperation(
+            "extract_audio",
+            audioAssetId,
+            { source_asset: sourceVideoId, filename: destination.filename },
+            projectSlug,
+          );
+        } else {
+          const origin = {
+            origin: "extract_audio",
+            source_asset: sourceVideoId,
+          };
+          await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
+        }
 
         return { success: true };
       } finally {

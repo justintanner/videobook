@@ -129,7 +129,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "even_split",
     description:
-      "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved.",
+      "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.",
     schema: {
       asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
       project_slug: z.string().describe("Project slug"),
@@ -141,15 +141,38 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         .describe(
           "Ordered list of target chunk lengths in seconds (default [7]). Each entry accepts '7', '7s', or 7. A leftover chunk holds whatever's left after these. plan_visualization passes silence-aligned per-scene durations (7–14s) directly; this default only kicks in for ad-hoc CLI splits.",
         ),
+      destination: z
+        .object({
+          asset_id: z.string().describe("Existing asset to write chunk files into (e.g. \"plan\")"),
+          filenames: z.array(z.string()).describe("One filename per target_secs entry; written as siblings inside the destination asset's directory"),
+        })
+        .optional()
+        .describe(
+          "When set, write each chunk to <destination.asset_id>/<filenames[i]> instead of minting fresh vid-* assets. filenames.length must equal target_secs.length; no leftover chunk is produced in destination mode.",
+        ),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, target_secs } = args as {
+      const { asset_id, project_slug, target_secs, destination } = args as {
         asset_id: string;
         project_slug: string;
         target_secs?: Array<number | string>;
+        destination?: { asset_id: string; filenames: string[] };
       };
 
       const targets = parseTargetSecs(target_secs);
+
+      // Destination-mode arity: one filename per target, and no leftover —
+      // the caller has named exactly which siblings to write inside the
+      // destination asset. Reject early so we don't probe ffmpeg for nothing.
+      if (destination !== undefined && destination.filenames.length !== targets.length) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `destination.filenames length (${destination.filenames.length}) must equal target_secs length (${targets.length})`,
+          }],
+        };
+      }
 
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
@@ -191,8 +214,21 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const prefix = asset_id.split("-")[0];
-      const created: Array<{
+      // Destination mode produces one output per target — no leftover —
+      // because the caller declared the exact set of filenames to write.
+      // The targets-only plan already enforces summing fits under D, so
+      // hasLeftover signals "leftover would have spilled" and we refuse.
+      if (destination !== undefined && plan.hasLeftover) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Destination mode does not support leftover chunks: targets sum to ${plan.usedTargets.reduce((a, b) => a + b, 0).toFixed(2)}s but source is ${sourceDurationSec.toFixed(2)}s`,
+          }],
+        };
+      }
+
+      let created: Array<{
         assetId: string;
         assetDir: string;
         outputPath: string;
@@ -200,26 +236,63 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
         end: number;
         duration: number;
         exact: boolean;
-      }> = [];
-      for (let i = 0; i < plan.chunks.length; i++) {
-        const chunk = plan.chunks[i];
-        const name = deriveChunkName(asset_id, i + 1);
-        const c = await fs.createAsset(prefix, name, project_slug);
-        if (!c.ok) {
+      }>;
+      let destinationMode = false;
+
+      if (destination !== undefined) {
+        destinationMode = true;
+        const destManifest = await fs.getManifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        if (!destManifest.ok) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `Failed to create chunk ${i + 1} asset: ${c.error.message}` }],
+            content: [{ type: "text" as const, text: `Destination asset ${destination.asset_id} not found: ${destManifest.error.message}` }],
           };
         }
-        created.push({
-          assetId: c.value.assetId,
-          assetDir: c.value.path,
-          outputPath: join(c.value.path, "original.mp4"),
+        const existingNames = new Set(destManifest.value.files.map((f) => f.name));
+        const collisions = destination.filenames.filter((n) => existingNames.has(n));
+        if (collisions.length > 0) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Destination already contains: ${collisions.join(", ")}. Refusing silent overwrite.`,
+            }],
+          };
+        }
+        // In destination mode `plan.chunks` has exactly N entries (no leftover);
+        // pair them with the caller's filenames positionally.
+        created = plan.chunks.map((chunk, i) => ({
+          assetId: destination.asset_id,
+          assetDir: destManifest.value.path,
+          outputPath: join(destManifest.value.path, destination.filenames[i]),
           start: chunk.start,
           end: chunk.end,
           duration: chunk.duration,
           exact: chunk.exact,
-        });
+        }));
+      } else {
+        const prefix = asset_id.split("-")[0];
+        created = [];
+        for (let i = 0; i < plan.chunks.length; i++) {
+          const chunk = plan.chunks[i];
+          const name = deriveChunkName(asset_id, i + 1);
+          const c = await fs.createAsset(prefix, name, project_slug);
+          if (!c.ok) {
+            return {
+              isError: true as const,
+              content: [{ type: "text" as const, text: `Failed to create chunk ${i + 1} asset: ${c.error.message}` }],
+            };
+          }
+          created.push({
+            assetId: c.value.assetId,
+            assetDir: c.value.path,
+            outputPath: join(c.value.path, "original.mp4"),
+            start: chunk.start,
+            end: chunk.end,
+            duration: chunk.duration,
+            exact: chunk.exact,
+          });
+        }
       }
 
       const jobId = `even-split-${asset_id}-${Date.now()}`;
@@ -230,6 +303,7 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
           sourceAssetId: asset_id,
           chunks: created,
           projectSlug: project_slug,
+          destination: destinationMode ? { assetId: destination!.asset_id } : undefined,
         });
       } catch (err) {
         return {
@@ -244,20 +318,35 @@ export function evenSplitDef(fs: ClipfirstFs): ToolDef {
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({
-            source_asset_id: asset_id,
-            source_duration_sec: sourceDurationSec,
-            target_secs: targets,
-            used_target_secs: plan.usedTargets,
-            has_leftover: plan.hasLeftover,
-            chunks: created.map((c) => ({
-              asset_id: c.assetId,
-              duration: c.duration,
-              exact: c.exact,
-            })),
-            job_id: jobId,
-            status: "completed",
-          }),
+          text: JSON.stringify(
+            destinationMode
+              ? {
+                  source_asset_id: asset_id,
+                  source_duration_sec: sourceDurationSec,
+                  target_secs: targets,
+                  used_target_secs: plan.usedTargets,
+                  destination: {
+                    asset_id: destination!.asset_id,
+                    filenames: destination!.filenames,
+                  },
+                  job_id: jobId,
+                  status: "completed",
+                }
+              : {
+                  source_asset_id: asset_id,
+                  source_duration_sec: sourceDurationSec,
+                  target_secs: targets,
+                  used_target_secs: plan.usedTargets,
+                  has_leftover: plan.hasLeftover,
+                  chunks: created.map((c) => ({
+                    asset_id: c.assetId,
+                    duration: c.duration,
+                    exact: c.exact,
+                  })),
+                  job_id: jobId,
+                  status: "completed",
+                },
+          ),
         }],
       };
     },

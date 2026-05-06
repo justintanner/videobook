@@ -20,7 +20,21 @@ type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
 async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
+  // `@<assetId>/<filename>` form: address a specific sibling file inside an
+  // asset (e.g. `@plan/s1.mp4`). Bypasses the vid- prefix gate.
+  const stripped = raw.replace(/^@/, "");
+  const slashIdx = stripped.indexOf("/");
+  if (slashIdx >= 0) {
+    const assetId = stripped.slice(0, slashIdx);
+    const filename = stripped.slice(slashIdx + 1);
+    if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
+    const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+    if (!manifest.ok) return { ok: false, error: manifest.error.message };
+    const file = manifest.value.files.find((f) => f.name === filename);
+    if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
+    return { ok: true, value: { assetId, filename } };
+  }
+  const assetId = stripped;
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };

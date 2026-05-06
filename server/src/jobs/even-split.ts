@@ -20,6 +20,13 @@ type EvenSplitPayload = {
   sourceAssetId: string;
   chunks: EvenSplitChunkPayload[];
   projectSlug: string;
+  /**
+   * When set, every chunk in `chunks` shares this destination asset and was
+   * written into it as a sibling file (no per-chunk asset minted). The job
+   * skips per-chunk metadata + process_video enqueue and emits a single
+   * commitOperation on the destination asset after all writes finish.
+   */
+  destination?: { assetId: string };
 };
 
 async function buildChunk(
@@ -38,9 +45,15 @@ async function buildChunk(
      * targeted chunk; false on the trailing leftover.
      */
     exact?: boolean;
+    /**
+     * Destination-mode chunks share their asset with siblings, so don't
+     * stamp `original.json` provenance — that file is per-asset, not
+     * per-file, and would clobber across chunks.
+     */
+    skipMetadata?: boolean;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance, exact } = args;
+  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance, exact, skipMetadata } = args;
   try {
     if (exact) {
       await trimRangeExact(sourcePath, outputPath, start, end - start);
@@ -52,13 +65,16 @@ async function buildChunk(
     await rm(outputPath, { force: true });
     throw err;
   }
-  await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+  if (!skipMetadata) {
+    await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+  }
 }
 
 export function registerEvenSplitJob(fs: ClipfirstFs): void {
   registerJobHandler("even_split", async (payload) => {
-    const { sourcePath, sourceAssetId, chunks, projectSlug } = payload as EvenSplitPayload;
+    const { sourcePath, sourceAssetId, chunks, projectSlug, destination } = payload as EvenSplitPayload;
     const splitAtIso = new Date().toISOString();
+    const destinationMode = destination !== undefined;
 
     const buildPromises = chunks.map((chunk, i) => {
       const provenance: Record<string, unknown> = {
@@ -82,9 +98,33 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
         projectSlug,
         provenance,
         exact: chunk.exact,
+        skipMetadata: destinationMode,
       });
     });
     await Promise.all(buildPromises);
+
+    if (destinationMode) {
+      // All chunks landed inside the same destination asset as sibling files.
+      // One commit captures the whole batch; no process_video pass (those exist
+      // to extract per-asset waveform/metadata for standalone vid-* assets,
+      // not for scratch siblings inside a shared asset like plan/).
+      await fs.commitOperation(
+        "even_split",
+        destination.assetId,
+        {
+          source_asset_id: sourceAssetId,
+          filenames: chunks.map((c) => c.outputPath.split("/").pop()),
+          chunk_count: chunks.length,
+          split_at_iso: splitAtIso,
+        },
+        projectSlug,
+      );
+      return {
+        success: true,
+        destination_asset_id: destination.assetId,
+        filenames: chunks.map((c) => c.outputPath.split("/").pop()),
+      };
+    }
 
     await Promise.all(chunks.map((chunk, i) =>
       queue.enqueue(`process-video-${chunk.assetId}-${Date.now() + i}`, {

@@ -191,4 +191,67 @@ describe("extract_audio tool", () => {
     expect(originJson.origin).toBe("extract_audio");
     expect(originJson.source_asset).toBe(uploaded.assetId);
   });
+
+  describe("destination mode", () => {
+    it("writes mp3 as a sibling file inside an existing asset", async () => {
+      const uploaded = await uploadVideo(client, "audio-proj", videoPath);
+      // Use the source asset itself as destination — `original.mp4` is a
+      // pre-existing file; the new sibling `s1.mp3` won't collide.
+      const result = await client.callTool({
+        name: "extract_audio",
+        arguments: {
+          asset_id: uploaded.assetId,
+          project_slug: "audio-proj",
+          destination: { asset_id: uploaded.assetId, filename: "s1.mp3" },
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse((result.content as TextContent)[0].text);
+      expect(parsed.status).toBe("completed");
+      expect(parsed.destination.asset_id).toBe(uploaded.assetId);
+      expect(parsed.destination.filename).toBe("s1.mp3");
+      expect(parsed.audio_asset_id).toBeUndefined();
+
+      const manifest = await client.callTool({
+        name: "asset_manifest",
+        arguments: { asset_id: uploaded.assetId, project_slug: "audio-proj" },
+      });
+      const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
+      const mp3 = (manifestData.files as Array<{ name: string }>).find((f) => f.name === "s1.mp3");
+      expect(mp3).toBeDefined();
+      const mp3Stat = await stat(join(manifestData.path, "s1.mp3"));
+      expect(mp3Stat.size).toBeGreaterThan(0);
+    });
+
+    it("rejects when destination filename already exists", async () => {
+      const uploaded = await uploadVideo(client, "audio-proj", videoPath);
+      const result = await client.callTool({
+        name: "extract_audio",
+        arguments: {
+          asset_id: uploaded.assetId,
+          project_slug: "audio-proj",
+          destination: { asset_id: uploaded.assetId, filename: "original.mp4" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toContain("Refusing silent overwrite");
+    });
+
+    it("rejects when destination asset does not exist", async () => {
+      const uploaded = await uploadVideo(client, "audio-proj", videoPath);
+      const result = await client.callTool({
+        name: "extract_audio",
+        arguments: {
+          asset_id: uploaded.assetId,
+          project_slug: "audio-proj",
+          destination: { asset_id: "vid-does-not-exist", filename: "s1.mp3" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toContain("not found");
+    });
+  });
 });

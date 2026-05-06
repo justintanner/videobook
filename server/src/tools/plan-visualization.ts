@@ -52,6 +52,11 @@ type Scene = {
   start: number;
   end: number;
   visual: string;
+  // Sibling files inside plan/ that hold the per-scene cut from the source
+  // video and its extracted audio. Stamped at plan-vis time so PlanViewer can
+  // address them as @plan/<filename> without ID reconciliation.
+  clip_filename: string;
+  audio_filename: string;
 };
 
 const VisualsSchema = z.object({
@@ -564,6 +569,8 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         start: c.start,
         end: c.end,
         visual: visuals[i].visual,
+        clip_filename: `s${i + 1}.mp4`,
+        audio_filename: `s${i + 1}.mp3`,
       }));
 
       const sidecar = {

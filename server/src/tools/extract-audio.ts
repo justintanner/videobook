@@ -35,13 +35,26 @@ function deriveAudioName(videoAssetId: string): string {
 export function extractAudioDef(fs: ClipfirstFs): ToolDef {
   return {
     name: "extract_audio",
-    description: "Extract the audio track from a video asset as a new audio asset (MP3). Creates an aud- asset with original.mp3.",
+    description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3).",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
+      destination: z
+        .object({
+          asset_id: z.string().describe("Existing asset to write the mp3 into (e.g. \"plan\")"),
+          filename: z.string().describe("Filename for the mp3 inside the destination asset (e.g. \"s1.mp3\")"),
+        })
+        .optional()
+        .describe(
+          "When set, write the mp3 to <destination.asset_id>/<destination.filename> instead of minting a fresh aud-* asset.",
+        ),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, project_slug, destination } = args as {
+        asset_id: string;
+        project_slug: string;
+        destination?: { asset_id: string; filename: string };
+      };
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
@@ -79,21 +92,48 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const audioName = deriveAudioName(asset_id);
-      const assetResult = await fs.createAsset("aud", audioName, project_slug);
-      if (!assetResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create audio asset: ${assetResult.error.message}` }],
-        };
+      let audioAssetId: string;
+      let audioAssetDir: string;
+      let outputPath: string;
+      const destinationMode = destination !== undefined;
+
+      if (destination !== undefined) {
+        const destManifest = await fs.getManifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        if (!destManifest.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Destination asset ${destination.asset_id} not found: ${destManifest.error.message}` }],
+          };
+        }
+        const exists = destManifest.value.files.some((f) => f.name === destination.filename);
+        if (exists) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Destination already contains ${destination.filename}. Refusing silent overwrite.`,
+            }],
+          };
+        }
+        audioAssetId = destination.asset_id;
+        audioAssetDir = destManifest.value.path;
+        outputPath = join(audioAssetDir, destination.filename);
+      } else {
+        const audioName = deriveAudioName(asset_id);
+        const assetResult = await fs.createAsset("aud", audioName, project_slug);
+        if (!assetResult.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Failed to create audio asset: ${assetResult.error.message}` }],
+          };
+        }
+        audioAssetId = assetResult.value.assetId;
+        audioAssetDir = assetResult.value.path;
+        outputPath = join(audioAssetDir, "original.mp3");
       }
 
-      const { assetId: audioAssetId, path: audioAssetDir } = assetResult.value;
-
-      const outputPath = join(audioAssetDir, "original.mp3");
       const jobId = `extract-audio-${audioAssetId}-${Date.now()}`;
-
-      await queue.enqueue(jobId, {
+      const payload = {
         type: "extract_audio",
         inputPath: videoPath,
         outputPath,
@@ -101,12 +141,48 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
         audioAssetDir,
         sourceVideoId: asset_id,
         projectSlug: project_slug,
-      } as unknown as Record<string, unknown>);
+        destination: destinationMode ? { filename: destination!.filename } : undefined,
+      } as unknown as Record<string, unknown>;
 
+      // Destination mode synchronously awaits the ffmpeg + commit so the
+      // caller (PlanViewer bootstrap) knows the file is on disk before
+      // gating RUN VIDEO. The auto-mint path keeps fire-and-forget so the
+      // sidebar shows a pending aud-* tile while the job runs.
+      if (destinationMode) {
+        try {
+          await queue.enqueueAndWait(jobId, payload);
+        } catch (err) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Audio extract failed: ${err instanceof Error ? err.message : String(err)}`,
+            }],
+          };
+        }
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              destination: { asset_id: audioAssetId, filename: destination!.filename },
+              source_video: asset_id,
+              job_id: jobId,
+              status: "completed",
+            }),
+          }],
+        };
+      }
+
+      await queue.enqueue(jobId, payload);
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ audio_asset_id: audioAssetId, source_video: asset_id, job_id: jobId, status: "enqueued" }),
+          text: JSON.stringify({
+            audio_asset_id: audioAssetId,
+            source_video: asset_id,
+            job_id: jobId,
+            status: "enqueued",
+          }),
         }],
       };
     },

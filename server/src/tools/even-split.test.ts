@@ -426,4 +426,114 @@ describe("even_split tool (integration)", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("No video file");
   });
+
+  describe("destination mode", () => {
+    it("writes chunks as sibling files inside an existing asset", async () => {
+      const videoPath = join(fixtureDir, "dest-21s.mp4");
+      await generateTestVideo(videoPath, 21);
+      const source = await uploadVideo(client, "even-split-proj", videoPath);
+      // Use a second uploaded asset as destination — `original.mp4` won't
+      // collide with `s1.mp4` / `s2.mp4` / `s3.mp4`.
+      const destVideoPath = join(fixtureDir, "dest-empty-3s.mp4");
+      await generateTestVideo(destVideoPath, 3);
+      const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
+
+      const result = await client.callTool({
+        name: "even_split",
+        arguments: {
+          asset_id: source.assetId,
+          project_slug: "even-split-proj",
+          target_secs: [7, 7, 7],
+          destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4", "s3.mp4"] },
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse((result.content as TextContent)[0].text);
+      expect(parsed.destination.asset_id).toBe(dest.assetId);
+      expect(parsed.destination.filenames).toEqual(["s1.mp4", "s2.mp4", "s3.mp4"]);
+      expect(parsed.chunks).toBeUndefined();
+
+      const manifest = await client.callTool({
+        name: "asset_manifest",
+        arguments: { asset_id: dest.assetId, project_slug: "even-split-proj" },
+      });
+      const data = JSON.parse((manifest.content as TextContent)[0].text);
+      const names = new Set((data.files as Array<{ name: string }>).map((f) => f.name));
+      expect(names.has("s1.mp4")).toBe(true);
+      expect(names.has("s2.mp4")).toBe(true);
+      expect(names.has("s3.mp4")).toBe(true);
+      expect(names.has("original.mp4")).toBe(true); // pre-existing untouched
+
+      for (const name of ["s1.mp4", "s2.mp4", "s3.mp4"]) {
+        const dur = await probeDuration(join(data.path, name));
+        expect(dur).toBeLessThanOrEqual(7.05);
+        expect(dur).toBeGreaterThan(6.5);
+      }
+    }, 180_000);
+
+    it("rejects filenames length mismatch with target_secs", async () => {
+      const videoPath = join(fixtureDir, "dest-mismatch-21s.mp4");
+      await generateTestVideo(videoPath, 21);
+      const source = await uploadVideo(client, "even-split-proj", videoPath);
+      const destVideoPath = join(fixtureDir, "dest-mismatch-empty-3s.mp4");
+      await generateTestVideo(destVideoPath, 3);
+      const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
+
+      const result = await client.callTool({
+        name: "even_split",
+        arguments: {
+          asset_id: source.assetId,
+          project_slug: "even-split-proj",
+          target_secs: [7, 7, 7],
+          destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4"] },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toContain("must equal target_secs length");
+    }, 60_000);
+
+    it("rejects when a destination filename already exists", async () => {
+      const videoPath = join(fixtureDir, "dest-collide-14s.mp4");
+      await generateTestVideo(videoPath, 14);
+      const source = await uploadVideo(client, "even-split-proj", videoPath);
+      const destVideoPath = join(fixtureDir, "dest-collide-empty-3s.mp4");
+      await generateTestVideo(destVideoPath, 3);
+      const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
+
+      // dest already has `original.mp4`; pick that as a collision filename.
+      const result = await client.callTool({
+        name: "even_split",
+        arguments: {
+          asset_id: source.assetId,
+          project_slug: "even-split-proj",
+          target_secs: [7, 7],
+          destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "original.mp4"] },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toContain("Refusing silent overwrite");
+    }, 60_000);
+
+    it("rejects when destination asset does not exist", async () => {
+      const videoPath = join(fixtureDir, "dest-missing-14s.mp4");
+      await generateTestVideo(videoPath, 14);
+      const source = await uploadVideo(client, "even-split-proj", videoPath);
+
+      const result = await client.callTool({
+        name: "even_split",
+        arguments: {
+          asset_id: source.assetId,
+          project_slug: "even-split-proj",
+          target_secs: [7, 7],
+          destination: { asset_id: "vid-does-not-exist", filenames: ["s1.mp4", "s2.mp4"] },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toContain("not found");
+    }, 60_000);
+  });
 });
