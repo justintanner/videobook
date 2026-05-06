@@ -120,11 +120,10 @@ async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: s
   return readFile(outPath);
 }
 
-// Per scene N, write plan/scene-N-image1-source.jpg (first frame) and
-// plan/scene-N-image2-source.jpg (last frame, ε before the boundary so we
-// don't fall off the end). The non-suffixed `scene-N-image{1,2}.jpg` slots
-// are reserved for phase-2 swap outputs that feed Seedance 2 r2v as @Image1
-// / @Image2.
+// Per scene N (1-based), write plan/sN-image1-source.jpg (first frame) and
+// plan/sN-image2-source.jpg (last frame, ε before the boundary so we don't
+// fall off the end). The PlanViewer scene blocks address these via
+// `@plan/sN-imageM-source.jpg`.
 async function extractSceneSourceFrames(
   fs: ClipfirstFs,
   projectSlug: string,
@@ -139,9 +138,9 @@ async function extractSceneSourceFrames(
     try {
       const firstBuf = await extractFrameJpeg(videoPath, start, tempFirst);
       const lastBuf = await extractFrameJpeg(videoPath, lastTs, tempLast);
-      const w1 = await fs.writeFile("plan", `scene-${i}-image1-source.jpg`, firstBuf, projectSlug);
+      const w1 = await fs.writeFile("plan", `s${i + 1}-image1-source.jpg`, firstBuf, projectSlug);
       if (!w1.ok) throw new Error(`scene ${i + 1} image1: ${w1.error.message}`);
-      const w2 = await fs.writeFile("plan", `scene-${i}-image2-source.jpg`, lastBuf, projectSlug);
+      const w2 = await fs.writeFile("plan", `s${i + 1}-image2-source.jpg`, lastBuf, projectSlug);
       if (!w2.ok) throw new Error(`scene ${i + 1} image2: ${w2.error.message}`);
     } finally {
       await rm(tempFirst, { force: true }).catch(() => {});

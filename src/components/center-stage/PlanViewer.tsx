@@ -261,7 +261,7 @@ const MODELS_BY_PROVIDER: Record<SwapProvider, SwapModel[]> = {
 
 const SHORT_LABEL_BY_MODEL: Record<SwapModel, string> = {
   'nano-banana-pro': 'nbp',
-  'gpt-image-2': 'gpt',
+  'gpt-image-2': 'gi2',
   'wan-2-7-image-pro': 'wan',
 };
 
@@ -518,11 +518,12 @@ function deriveTileState(
 }
 
 // Extract the short model code from an auto-generated swap slug like
-// `img-scene-0-image2-nbp-swap` or `img-scene-0-image1-nbp-fal-swap`. Returns
-// the code with optional `-fal` suffix, or null for manual-upload assets.
+// `img-nbp-s1-1` or `img-gi2-fal-s2-2`. Returns the code with optional `-fal`
+// suffix, or null for manual-upload assets and pre-rename legacy slugs.
+// Tail `(?:-\d+)*` tolerates collision-suffixed slugs from createAsset.
 function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | null {
   if (!assetId) return null;
-  const m = /-image\d+-((?:nbp|gpt|wan)(?:-fal)?)-swap/.exec(assetId);
+  const m = /^img-((?:nbp|gi2|wan)(?:-fal)?)-s\d+-\d+(?:-\d+)*$/.exec(assetId);
   return m ? m[1] : null;
 }
 
@@ -1060,7 +1061,7 @@ function buildSwapPayload(
   customPrompt: string,
   priorSwapAssetId?: string,
 ): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
-  const sourceFrameSlug = `@plan/scene-${sceneIndex}-image${frameIndex}-source.jpg`;
+  const sourceFrameSlug = `@plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
   // Frame 2 + prior swap = continuity mode. Drop the character refs; the
   // prior swap is the canonical look reference. This mirrors the server's
   // isFrame2Continuity branch in swap-plan-scene-frame.ts.
@@ -1656,7 +1657,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
           if (file.type === 'image/webp') return '.webp';
           return '.png';
         })();
-        const filename = `scene-${index}-image${frameIndex}-user-${Date.now()}${ext}`;
+        const filename = `s${index + 1}-image${frameIndex}-user-${Date.now()}${ext}`;
         try {
           const uploaded = await uploadProjectFile(projectSlug, file, filename);
           assetId = uploaded.assetId;
@@ -1953,7 +1954,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // same filename now points at a different frame.
   const v = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
   const sourceUrl = (i: 1 | 2) =>
-    `/files/${projectSlug}/plan/scene-${index}-image${i}-source.jpg?v=${v}`;
+    `/files/${projectSlug}/plan/s${index + 1}-image${i}-source.jpg?v=${v}`;
 
   return (
     <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">

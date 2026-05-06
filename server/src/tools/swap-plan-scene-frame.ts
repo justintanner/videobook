@@ -45,7 +45,7 @@ const FAL_JOB_TYPE_BY_MODEL: Partial<Record<Model, SwapJobType>> = {
 // Provider is appended (e.g. `nbp-fal`) so kie+fal variants of the same model
 // produce distinct asset slugs.
 const SLUG_CODE_BY_MODEL: Record<Model, string> = {
-  "gpt-image-2": "gpt",
+  "gpt-image-2": "gi2",
   "nano-banana-pro": "nbp",
   "wan-2-7-image-pro": "wan",
 };
@@ -210,7 +210,7 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      const sourceFilename = `scene-${scene_index}-image${frame_index}-source.jpg`;
+      const sourceFilename = `s${scene_index + 1}-image${frame_index}-source.jpg`;
       const planManifest = await fs.getManifest("plan", project_slug);
       if (!planManifest.ok) {
         return {
@@ -287,9 +287,12 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       const slugCode = provider === "fal"
         ? `${SLUG_CODE_BY_MODEL[model]}-fal`
         : SLUG_CODE_BY_MODEL[model];
+      // Asset slug shape: `img-<modelTag>[-fal]-s<sceneIdx1based>-<frameIdx>`
+      // (e.g. `img-gi2-s1-1`, `img-nbp-fal-s2-2`). Scene index is 1-based for
+      // user-facing readability — code internally keeps `scene_index` 0-based.
       const newAssetResult = await fs.createAsset(
         "img",
-        `scene-${scene_index}-image${frame_index}-${slugCode}-swap`,
+        `${slugCode}-s${scene_index + 1}-${frame_index}`,
         project_slug,
       );
       if (!newAssetResult.ok) {
