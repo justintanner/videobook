@@ -433,7 +433,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
           )}>
             <ViewerToolbar
               left={
-                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/90 drop-shadow-[0_0_4px_rgba(0,255,255,0.5)]">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-emerald-300/90 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]">
                   <FileText className="w-3.5 h-3.5" />
                   <span>MARKDOWN</span>
                   {saving && (
@@ -460,7 +460,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     tabIndex={-1}
                     onClick={handleFlipToBack}
                     title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -468,7 +468,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     tabIndex={-1}
                     onClick={onClose}
                     title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
                   >
                     <X className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -488,8 +488,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   className={cn(
                     'h-7 px-2.5 flex items-center gap-1.5 rounded',
                     'text-[11px] font-mono font-bold uppercase tracking-wider',
-                    'text-cyan-300/90 hover:text-cyan-200',
-                    'bg-cyan-500/5 hover:bg-cyan-500/15 border border-cyan-500/30 hover:border-cyan-400/60',
+                    'text-emerald-300/90 hover:text-emerald-200',
+                    'bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/30 hover:border-emerald-400/60',
                     'transition-colors duration-150',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
@@ -524,11 +524,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       className={cn(
                         'h-7 px-2.5 flex items-center gap-1.5 rounded',
                         'text-[11px] font-mono font-bold uppercase tracking-wider',
-                        'text-amber-300/90 hover:text-amber-200',
-                        'bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-400/60',
+                        'text-emerald-300/90 hover:text-emerald-200',
+                        'bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/30 hover:border-emerald-400/60',
                         'transition-colors duration-150',
                         'disabled:opacity-50 disabled:cursor-not-allowed',
-                        rewriteOpen && 'bg-amber-500/15 border-amber-400/60 text-amber-200',
+                        rewriteOpen && 'bg-emerald-500/15 border-emerald-400/60 text-emerald-200',
                       )}
                     >
                       {rewriting
@@ -548,7 +548,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
 
                 <div className="ml-auto flex items-center gap-1">
                   {/* PREV / NEXT — one click, instantly restore HEAD one step back/forward */}
-                  <div className="flex items-center rounded overflow-hidden border border-violet-500/30">
+                  <div className="flex items-center rounded overflow-hidden border border-emerald-500/30">
                     <button
                       type="button"
                       tabIndex={-1}
@@ -557,8 +557,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       title="Restore previous version"
                       className={cn(
                         'h-7 w-7 flex items-center justify-center',
-                        'text-violet-300/90 hover:text-violet-200',
-                        'bg-violet-500/5 hover:bg-violet-500/15',
+                        'text-emerald-300/90 hover:text-emerald-200',
+                        'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
                         'disabled:opacity-40 disabled:cursor-not-allowed',
                       )}
@@ -574,9 +574,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       disabled={!historyNav.canNext || historyNav.loading || isGenerating}
                       title="Restore next version"
                       className={cn(
-                        'h-7 w-7 flex items-center justify-center border-l border-violet-500/30',
-                        'text-violet-300/90 hover:text-violet-200',
-                        'bg-violet-500/5 hover:bg-violet-500/15',
+                        'h-7 w-7 flex items-center justify-center border-l border-emerald-500/30',
+                        'text-emerald-300/90 hover:text-emerald-200',
+                        'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
                         'disabled:opacity-40 disabled:cursor-not-allowed',
                       )}
@@ -623,13 +623,14 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   onBlur={() => { if (dirtyRef.current) void saveNow(draft, { showUndoToast: false }); }}
                   disabled={isGenerating}
                   placeholder="Write your script here..."
+                  style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
                   className={cn(
                     'relative z-10 w-full h-full resize-none px-8 py-6',
                     'bg-transparent',
                     'text-[15px] leading-7 tracking-[0.01em] text-sky-300 placeholder:text-sky-300/25 caret-sky-200',
                     'font-mono',
                     'focus:outline-none',
-                    'overflow-y-auto scrollbar-cyan',
+                    'overflow-y-auto scrollbar-domain',
                     isGenerating && 'opacity-40 cursor-not-allowed select-none',
                   )}
                 />

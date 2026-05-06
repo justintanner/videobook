@@ -187,7 +187,7 @@ export function TimelineAudioLane({
         ref={laneRef}
         className={cn(
           'absolute inset-0 rounded',
-          preview ? 'bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-white/[0.02]',
+          preview ? 'bg-violet-500/5 ring-1 ring-violet-500/30' : 'hover:bg-white/[0.02]',
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -226,8 +226,8 @@ export function TimelineAudioLane({
               className={cn(
                 'w-full h-full',
                 preview?.snapped
-                  ? 'bg-primary shadow-[0_0_10px_var(--color-primary),0_0_18px_var(--color-primary)]'
-                  : 'bg-primary/60',
+                  ? 'bg-violet-500 shadow-[0_0_10px_var(--clip-domain-video),0_0_18px_var(--clip-domain-video)]'
+                  : 'bg-violet-500/60',
               )}
             />
           </div>

@@ -124,10 +124,12 @@ export function DynamicField({
               disabled={disabled}
               className={cn(
                 'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
-                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-primary/20',
-                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer',
-                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-primary/20',
-                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full',
+                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer',
+                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full',
+                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                (theme ?? genThemes.image).sliderTrack,
+                (theme ?? genThemes.image).sliderThumb,
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
             />
@@ -155,7 +157,8 @@ export function DynamicField({
               className={cn(
                 'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
                 theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-                'focus:outline-none focus:border-primary/60',
+                'focus:outline-none',
+                theme?.focusBorder ?? 'focus:border-primary/60',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
             />
@@ -187,7 +190,8 @@ export function DynamicField({
           className={cn(
             'px-3 py-1.5 bg-black/60 rounded font-mono text-sm appearance-none cursor-pointer',
             theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-            'focus:outline-none focus:border-primary/60',
+            'focus:outline-none',
+            theme?.focusBorder ?? 'focus:border-primary/60',
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
         >
@@ -234,7 +238,8 @@ export function DynamicField({
           className={cn(
             'px-3 py-1.5 bg-black/60 rounded font-mono text-sm appearance-none cursor-pointer',
             theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-            'focus:outline-none focus:border-primary/60',
+            'focus:outline-none',
+            theme?.focusBorder ?? 'focus:border-primary/60',
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
         >
@@ -272,10 +277,12 @@ export function DynamicField({
               disabled={disabled}
               className={cn(
                 'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
-                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-primary/20',
-                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer',
-                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-primary/20',
-                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full',
+                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer',
+                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full',
+                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                (theme ?? genThemes.image).sliderTrack,
+                (theme ?? genThemes.image).sliderThumb,
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
             />
@@ -303,7 +310,8 @@ export function DynamicField({
               className={cn(
                 'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
                 theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-                'focus:outline-none focus:border-primary/60',
+                'focus:outline-none',
+                theme?.focusBorder ?? 'focus:border-primary/60',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
             />
@@ -333,7 +341,9 @@ export function DynamicField({
           className={cn(
             'w-24 px-3 py-1.5 bg-black/60 rounded font-mono text-sm text-right tabular-nums',
             theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-            'placeholder:text-primary/30 focus:outline-none focus:border-primary/60',
+            theme?.placeholderText ?? 'placeholder:text-primary/30',
+            'focus:outline-none',
+            theme?.focusBorder ?? 'focus:border-primary/60',
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
         />
@@ -366,7 +376,7 @@ export function DynamicField({
         { ratio: '1:1', dims: '1080×1080', value: '1080*1080' },
       ];
       const current = (value as string) ?? '';
-      const t = theme ?? genThemes.cyan;
+      const t = theme ?? genThemes.image;
       return (
         <GenField label={label} required={required} theme={theme} horizontal>
           <div className="flex items-center gap-1.5">
@@ -404,7 +414,8 @@ export function DynamicField({
               className={cn(
                 'h-8 w-28 px-2 bg-black/60 rounded font-mono text-sm tabular-nums',
                 theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-                'placeholder:text-primary/30 focus:outline-none',
+                theme?.placeholderText ?? 'placeholder:text-primary/30',
+                'focus:outline-none',
                 theme?.focusBorder ?? 'focus:border-primary/60',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}

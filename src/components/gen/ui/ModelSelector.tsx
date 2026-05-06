@@ -1,15 +1,17 @@
 import { Box, Globe } from 'lucide-react';
 import { CommandDropdown } from '@/components/commands/CommandDropdown';
 import type { ModelOption } from '../types';
+import type { Domain } from '@/theme/domains';
 
 interface ModelSelectorProps {
   selectedModelKey: string;
   modelOptions: ModelOption[];
   onChange: (modelKey: string) => void;
   disabled?: boolean;
+  variant?: Domain;
 }
 
-export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabled }: ModelSelectorProps) {
+export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabled, variant }: ModelSelectorProps) {
   return (
     <CommandDropdown
       command="/model"
@@ -18,6 +20,7 @@ export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabl
       onChange={onChange}
       disabled={disabled}
       icon={<Box className="w-3.5 h-3.5" />}
+      variant={variant}
     />
   );
 }
@@ -27,9 +30,10 @@ interface ProviderSelectorProps {
   providers: string[];
   onChange: (provider: string) => void;
   disabled?: boolean;
+  variant?: Domain;
 }
 
-export function ProviderSelector({ selectedProvider, providers, onChange, disabled }: ProviderSelectorProps) {
+export function ProviderSelector({ selectedProvider, providers, onChange, disabled, variant }: ProviderSelectorProps) {
   return (
     <CommandDropdown
       command="/provider"
@@ -38,6 +42,7 @@ export function ProviderSelector({ selectedProvider, providers, onChange, disabl
       onChange={onChange}
       disabled={disabled}
       icon={<Globe className="w-3.5 h-3.5" />}
+      variant={variant}
     />
   );
 }

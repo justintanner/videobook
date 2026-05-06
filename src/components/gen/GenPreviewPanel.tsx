@@ -21,6 +21,7 @@ import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
+import { genThemes } from '@/components/gen/ui/gen-themes';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -538,7 +539,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
-  const buttonVariant = category === 'video' ? 'violet' as const : 'default' as const;
+  const buttonVariant = category === 'video' ? 'video' as const : 'image' as const;
+  const panelDomain = category === 'video' ? 'video' as const : 'image' as const;
+  const panelTheme = genThemes[panelDomain];
 
   // -- Loading state --
   if (loading) {
@@ -547,6 +550,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         label={panelLabel}
         icon={panelIcon}
         onClose={onClose}
+        domain={panelDomain}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
           <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
@@ -563,6 +567,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         label={panelLabel}
         icon={panelIcon}
         onClose={onClose}
+        domain={panelDomain}
       >
         <ErrorPage message={error} />
       </GenPanel>
@@ -576,6 +581,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         label={panelLabel}
         icon={panelIcon}
         onClose={onClose}
+        domain={panelDomain}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
           <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
@@ -632,6 +638,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       icon={<Zap className="w-3.5 h-3.5" />}
       onClose={onClose}
       closeDisabled={isDisabled}
+      domain={panelDomain}
       headerExtra={
         <button
           tabIndex={-1}
@@ -654,6 +661,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               modelOptions={filteredModelOptions}
               onChange={handleModelChange}
               disabled={isDisabled}
+              variant={panelDomain}
             />
             <ProviderSelector
               selectedProvider={
@@ -663,6 +671,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               providers={allProviderLabels}
               onChange={handleProviderChange}
               disabled={isDisabled}
+              variant={panelDomain}
             />
           </div>
           <GenerateCommandButton
@@ -738,7 +747,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       required={schema?.required?.includes('prompt')}
                       warning={routedWarnings.prompt}
                       category={category}
-                      color={category === 'video' ? 'violet' : 'cyan'}
+                      color={category === 'video' ? 'video' : 'image'}
                       promptHistory={promptHistory}
                       callTool={callTool}
                       projectSlug={projectSlug}
@@ -752,7 +761,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                   );
                 })()}
                 {(regularFields.filter(([name]) => name !== 'prompt').length > 0 || settingsLevelWarnings.length > 0) && (
-                  <GenSection label="settings" color="cyan" warning={settingsLevelWarnings}>
+                  <GenSection label="settings" color={panelDomain} warning={settingsLevelWarnings}>
                     {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
                       <div className="flex flex-wrap gap-x-6 gap-y-3">
                         {regularFields
@@ -766,6 +775,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               onChange={(v) => handleFieldChange(name, v)}
                               required={schema?.required?.includes(name)}
                               disabled={isDisabled}
+                              theme={panelTheme}
                             />
                           ))}
                       </div>
@@ -786,6 +796,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       onChange={handleFieldChange}
                       disabled={isDisabled}
                       modelKey={selectedModelKey}
+                      domain={panelDomain}
                     />
                   )}
                   {sortedElementIndices.length > 0 && (
@@ -798,6 +809,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       assets={[]}
                       onChange={handleFieldChange}
                       disabled={isDisabled}
+                      domain={panelDomain}
                     />
                   )}
                 </div>

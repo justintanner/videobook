@@ -177,7 +177,7 @@ export function CharacterComposeRail({
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
 
   return (
-    <aside className="w-[34rem] shrink-0 border-l border-violet-500/20 overflow-y-auto bg-black/40 flex flex-col">
+    <aside className="w-[34rem] shrink-0 border-l border-cyan-500/20 overflow-y-auto bg-black/40 flex flex-col">
       <div className="px-4 py-3 grid grid-cols-4 gap-2.5">
         <SingleSlot
           label="Wardrobe"
@@ -209,8 +209,8 @@ export function CharacterComposeRail({
         />
       </div>
 
-      <div className="border-t border-violet-500/20 px-4 py-3">
-        <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
+      <div className="border-t border-cyan-500/20 px-4 py-3">
+        <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">
           Aspect ratio
         </div>
         <div className="flex gap-1">
@@ -224,8 +224,8 @@ export function CharacterComposeRail({
                 className={cn(
                   'flex-1 px-2 py-1 rounded border text-[10px] font-mono font-bold uppercase tracking-wider transition-colors',
                   active
-                    ? 'border-violet-300 bg-violet-500/20 text-violet-100'
-                    : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                    ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100'
+                    : 'border-cyan-500/20 text-cyan-300/60 hover:border-cyan-400/50',
                 )}
               >
                 {r}
@@ -235,13 +235,13 @@ export function CharacterComposeRail({
         </div>
       </div>
 
-      <div className="border-t border-violet-500/20 px-4 py-3">
+      <div className="border-t border-cyan-500/20 px-4 py-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/70">
             Prompt
           </span>
           {previewLoading ? (
-            <Loader2 className="w-3 h-3 animate-spin text-violet-300/60" />
+            <Loader2 className="w-3 h-3 animate-spin text-cyan-300/60" />
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2 mb-2">
@@ -254,10 +254,10 @@ export function CharacterComposeRail({
                 className={cn(
                   'flex items-stretch rounded border text-[9px] font-mono uppercase tracking-wider transition-colors overflow-hidden',
                   isPreviewing
-                    ? 'border-violet-200 bg-violet-500/30'
+                    ? 'border-cyan-200 bg-cyan-500/30'
                     : active
-                      ? 'border-violet-300 bg-violet-500/15'
-                      : 'border-violet-500/20',
+                      ? 'border-cyan-300 bg-cyan-500/15'
+                      : 'border-cyan-500/20',
                 )}
               >
                 <button
@@ -267,16 +267,16 @@ export function CharacterComposeRail({
                   className={cn(
                     'flex items-center justify-center px-2 border-r',
                     isPreviewing
-                      ? 'border-violet-200/50 hover:bg-violet-500/40'
+                      ? 'border-cyan-200/50 hover:bg-cyan-500/40'
                       : active
-                        ? 'border-violet-300/40 hover:bg-violet-500/25'
-                        : 'border-violet-500/20 hover:bg-violet-500/10',
+                        ? 'border-cyan-300/40 hover:bg-cyan-500/25'
+                        : 'border-cyan-500/20 hover:bg-cyan-500/10',
                   )}
                 >
                   <span
                     className={cn(
                       'w-3 h-3 rounded-sm border flex items-center justify-center shrink-0',
-                      active ? 'border-violet-200 bg-violet-400/30' : 'border-violet-500/40',
+                      active ? 'border-cyan-200 bg-cyan-400/30' : 'border-cyan-500/40',
                     )}
                   >
                     {active ? <Check className="w-2 h-2" strokeWidth={3} /> : null}
@@ -289,10 +289,10 @@ export function CharacterComposeRail({
                   className={cn(
                     'px-3 py-1.5',
                     isPreviewing
-                      ? 'text-violet-50'
+                      ? 'text-cyan-50'
                       : active
-                        ? 'text-violet-100 hover:bg-violet-500/20'
-                        : 'text-violet-300/50 hover:bg-violet-500/10',
+                        ? 'text-cyan-100 hover:bg-cyan-500/20'
+                        : 'text-cyan-300/50 hover:bg-cyan-500/10',
                   )}
                 >
                   {m.label}
@@ -306,13 +306,13 @@ export function CharacterComposeRail({
             <AlertTriangle className="w-3 h-3" /> {previewError}
           </div>
         ) : modelsArray.length === 0 ? (
-          <div className="text-[9px] font-mono text-violet-400/50">Select at least one model.</div>
+          <div className="text-[9px] font-mono text-cyan-400/50">Select at least one model.</div>
         ) : !activePreviewEntry ? (
-          <div className="text-[9px] font-mono text-violet-400/50">Computing…</div>
+          <div className="text-[9px] font-mono text-cyan-400/50">Computing…</div>
         ) : (
           <div
             className={cn(
-              'rounded border border-violet-500/20 bg-black/40 p-2 text-[12px] leading-snug font-mono text-violet-200/80 whitespace-pre-wrap break-words max-h-44 overflow-y-auto',
+              'rounded border border-cyan-500/20 bg-black/40 p-2 text-[12px] leading-snug font-mono text-cyan-200/80 whitespace-pre-wrap break-words max-h-44 overflow-y-auto',
               previewLoading && 'opacity-60',
             )}
           >
@@ -321,7 +321,7 @@ export function CharacterComposeRail({
         )}
       </div>
 
-      <div className="sticky bottom-0 border-t border-violet-500/30 px-4 py-3 mt-auto bg-violet-500/5 backdrop-blur">
+      <div className="sticky bottom-0 border-t border-cyan-500/30 px-4 py-3 mt-auto bg-cyan-500/5 backdrop-blur">
         <div className="flex items-center justify-end mb-2">
           <CostBadge
             estimate={cost.estimate}
@@ -338,7 +338,7 @@ export function CharacterComposeRail({
           className={cn(
             'w-full relative overflow-hidden flex items-center justify-center gap-2 px-3 py-3 rounded text-[12px] font-mono font-bold uppercase tracking-wider transition-colors',
             canSubmit
-              ? 'bg-violet-500 text-white hover:bg-violet-400 shadow-lg shadow-violet-500/30'
+              ? 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-lg shadow-cyan-500/30'
               : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
           )}
         >
@@ -364,7 +364,7 @@ interface SingleSlotProps {
 function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProps) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1">
+      <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1">
         {label}
       </div>
       {item ? (
@@ -373,7 +373,7 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProp
             type="button"
             onClick={onPick}
             title={item.slug}
-            className="w-full h-full rounded border border-violet-500/20 hover:border-violet-300 overflow-hidden bg-black transition-colors"
+            className="w-full h-full rounded border border-cyan-500/20 hover:border-cyan-300 overflow-hidden bg-black transition-colors"
           >
             {item.thumbnailSrc || item.filePath ? (
               <img
@@ -383,7 +383,7 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProp
                 draggable={false}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-violet-400/60 px-1 text-center">
+              <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-cyan-400/60 px-1 text-center">
                 {item.slug}
               </div>
             )}
@@ -396,7 +396,7 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProp
             }}
             aria-label={`Clear ${label.toLowerCase()}`}
             className={cn(
-              'absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200',
+              'absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-cyan-400/40 text-cyan-200',
               'opacity-0 group-hover:opacity-100 hover:bg-red-500/40 hover:border-red-400 transition-opacity',
               'flex items-center justify-center',
             )}
@@ -408,7 +408,7 @@ function SingleSlot({ label, item, emptyLabel, onPick, onUnpin }: SingleSlotProp
         <button
           type="button"
           onClick={onPick}
-          className="w-full aspect-square rounded border border-dashed border-violet-400/60 bg-violet-500/10 text-violet-100 hover:bg-violet-500/25 hover:border-violet-300 flex items-center justify-center gap-1.5 transition-colors"
+          className="w-full aspect-square rounded border border-dashed border-cyan-400/60 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/25 hover:border-cyan-300 flex items-center justify-center gap-1.5 transition-colors"
         >
           <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1 text-center leading-tight">
             {emptyLabel}
@@ -430,19 +430,19 @@ interface SkeletonSlotProps {
 function SkeletonSlot({ hasPose, loading, error, dataUrl, coverage }: SkeletonSlotProps) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] font-mono uppercase tracking-wider text-violet-300/70 mb-1">
+      <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1">
         Skeleton
       </div>
       <div
-        className="relative w-full aspect-square rounded border border-violet-500/20 bg-black/60 overflow-hidden flex items-center justify-center"
+        className="relative w-full aspect-square rounded border border-cyan-500/20 bg-black/60 overflow-hidden flex items-center justify-center"
         title={coverage ? `coverage: ${coverage}` : undefined}
       >
         {!hasPose ? (
-          <span className="text-[8px] font-mono text-violet-400/50 px-1 text-center leading-tight">
+          <span className="text-[8px] font-mono text-cyan-400/50 px-1 text-center leading-tight">
             Pin a pose
           </span>
         ) : loading ? (
-          <Loader2 className="w-4 h-4 animate-spin text-violet-300/60" />
+          <Loader2 className="w-4 h-4 animate-spin text-cyan-300/60" />
         ) : error ? (
           <div className="flex flex-col items-center gap-1 text-red-300/80 px-1">
             <AlertTriangle className="w-3 h-3" />
@@ -463,7 +463,7 @@ function SkeletonSlot({ hasPose, loading, error, dataUrl, coverage }: SkeletonSl
             ) : null}
           </>
         ) : (
-          <span className="text-[8px] font-mono text-violet-400/50">extracting…</span>
+          <span className="text-[8px] font-mono text-cyan-400/50">extracting…</span>
         )}
       </div>
     </div>

@@ -35,6 +35,15 @@
   --color-input: hsl(215 25% 20%);
   --color-ring: hsl(190 100% 50%);
 
+  /* Canonical 5-domain palette. See src/theme/domains.ts for the consumer-side
+     types and class-string lookups. CSS vars exist for inline styles, shadows,
+     and animation rgb() composition that can't be done via Tailwind classes. */
+  --clip-domain-projects: hsl(240 5% 65%);   /* zinc */
+  --clip-domain-image:    hsl(187 85% 53%);  /* cyan */
+  --clip-domain-video:    hsl(258 90% 76%);  /* violet */
+  --clip-domain-plan:     hsl(160 64% 52%);  /* emerald */
+  --clip-domain-final:    hsl(43 96% 56%);   /* amber */
+
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 8px;
@@ -117,26 +126,31 @@
     );
   }
 
-  /* Slim cyan scrollbar with generous top/bottom padding. Scoped to opt-in
-     containers (e.g. the script viewer textarea) so the global scrollbar
-     styling still applies everywhere else. */
+  /* Slim domain-tinted scrollbar with generous top/bottom padding. Reads
+     `--scrollbar-rgb` (e.g. `52, 211, 153` for plan-emerald) from the
+     container's inline style. Falls back to electric cyan for back-compat
+     with `.scrollbar-cyan`. */
+  .scrollbar-domain::-webkit-scrollbar,
   .scrollbar-cyan::-webkit-scrollbar {
     width: 14px;
   }
+  .scrollbar-domain::-webkit-scrollbar-track,
   .scrollbar-cyan::-webkit-scrollbar-track {
     margin: 32px 0;
     background: transparent;
   }
+  .scrollbar-domain::-webkit-scrollbar-thumb,
   .scrollbar-cyan::-webkit-scrollbar-thumb {
-    background: rgba(0, 240, 255, 0.35);
+    background: rgba(var(--scrollbar-rgb, 0, 240, 255), 0.35);
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
   }
+  .scrollbar-domain::-webkit-scrollbar-thumb:hover,
   .scrollbar-cyan::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 240, 255, 0.7);
+    background: rgba(var(--scrollbar-rgb, 0, 240, 255), 0.7);
     background-clip: padding-box;
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+    box-shadow: 0 0 10px rgba(var(--scrollbar-rgb, 0, 240, 255), 0.5);
   }
 
   /* ==================== CLIP STATE UTILITIES ==================== */

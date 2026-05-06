@@ -54,7 +54,7 @@ interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   className?: string;
 }
 
-export function CommandButton({ command, icon, chevron = 'right', size = 'default', variant = 'default', state, disabledReason, className, ...props }: CommandButtonProps) {
+export function CommandButton({ command, icon, chevron = 'right', size = 'default', variant = 'image', state, disabledReason, className, ...props }: CommandButtonProps) {
   const s = sizes[size];
   const v = variants[variant];
   const isDisabled = state === 'disabled';
@@ -81,10 +81,10 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         state && isLoading && 'opacity-80 cursor-wait',
         state && isSuccess && 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]',
         // Hover effects
-        !isDisabled && !isLoading && !isSuccess && 'hover:border-primary/40',
+        !isDisabled && !isLoading && !isSuccess && v.hoverBorder,
         state && !isDisabled && !isLoading && !isSuccess && 'hover:scale-[1.02] active:scale-[0.98]',
-        !state && size === 'lg' && 'hover:shadow-[0_0_25px_rgba(34,211,238,0.5)]',
-        'focus-visible:ring-2 focus-visible:ring-cyan-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        'focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        v.focusRing,
         className
       )}
       {...props}

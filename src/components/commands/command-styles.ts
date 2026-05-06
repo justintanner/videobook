@@ -1,3 +1,5 @@
+import { chipVariant, type ChipVariantStyle, type Domain } from '@/theme/domains';
+
 export const sizes = {
   sm: {
     button: 'h-5 border border-primary/25 text-[10px]',
@@ -37,93 +39,30 @@ export const sizes = {
   },
 } as const;
 
-export const variants = {
-  default: {
-    bg: 'bg-cyan-500/10',
-    shadow: 'rgba(34,211,238,0.5)',
-    chevron: 'text-primary/40 group-hover:text-primary/50',
-    chevronDown: 'text-primary/40 group-hover:text-primary/60',
-    cursorBg: 'bg-primary/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
-    text: 'text-primary/70 group-hover:text-primary/90',
-    icon: 'text-primary/80 group-hover:text-primary',
-  },
-  violet: {
-    bg: 'bg-violet-500/20 border-violet-500/30',
-    shadow: 'rgba(139,92,246,0.5)',
-    chevron: 'text-violet-400/40 group-hover:text-violet-400/50',
-    chevronDown: 'text-violet-400/40 group-hover:text-violet-400/60',
-    cursorBg: 'bg-violet-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(139,92,246,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.12)]',
-    text: 'text-violet-400/70 group-hover:text-violet-400/90',
-    icon: 'text-violet-400/80 group-hover:text-violet-400',
-  },
-  fuchsia: {
-    bg: 'bg-fuchsia-500/20 border-fuchsia-500/30',
-    shadow: 'rgba(217,70,239,0.5)',
-    chevron: 'text-fuchsia-400/40 group-hover:text-fuchsia-400/50',
-    chevronDown: 'text-fuchsia-400/40 group-hover:text-fuchsia-400/60',
-    cursorBg: 'bg-fuchsia-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(217,70,239,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(217,70,239,0.12)]',
-    text: 'text-fuchsia-400/70 group-hover:text-fuchsia-400/90',
-    icon: 'text-fuchsia-400/80 group-hover:text-fuchsia-400',
-  },
-  pink: {
-    bg: 'bg-pink-500/20 border-pink-500/30',
-    shadow: 'rgba(236,72,153,0.5)',
-    chevron: 'text-pink-400/40 group-hover:text-pink-400/50',
-    chevronDown: 'text-pink-400/40 group-hover:text-pink-400/60',
-    cursorBg: 'bg-pink-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(236,72,153,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(236,72,153,0.12)]',
-    text: 'text-pink-400/70 group-hover:text-pink-400/90',
-    icon: 'text-pink-400/80 group-hover:text-pink-400',
-  },
-  emerald: {
-    bg: 'bg-emerald-500/20 border-emerald-500/30',
-    shadow: 'rgba(16,185,129,0.5)',
-    chevron: 'text-emerald-400/40 group-hover:text-emerald-400/50',
-    chevronDown: 'text-emerald-400/40 group-hover:text-emerald-400/60',
-    cursorBg: 'bg-emerald-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(16,185,129,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(16,185,129,0.12)]',
-    text: 'text-emerald-400/70 group-hover:text-emerald-400/90',
-    icon: 'text-emerald-400/80 group-hover:text-emerald-400',
-  },
-  blue: {
-    bg: 'bg-blue-500/20 border-blue-500/30',
-    shadow: 'rgba(59,130,246,0.5)',
-    chevron: 'text-blue-400/40 group-hover:text-blue-400/50',
-    chevronDown: 'text-blue-400/40 group-hover:text-blue-400/60',
-    cursorBg: 'bg-blue-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(59,130,246,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(59,130,246,0.12)]',
-    text: 'text-blue-400/70 group-hover:text-blue-400/90',
-    icon: 'text-blue-400/80 group-hover:text-blue-400',
-  },
-  amber: {
-    bg: 'bg-amber-500/20 border-amber-500/30',
-    shadow: 'rgba(245,158,11,0.5)',
-    chevron: 'text-amber-400/40 group-hover:text-amber-400/50',
-    chevronDown: 'text-amber-400/40 group-hover:text-amber-400/60',
-    cursorBg: 'bg-amber-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(245,158,11,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(245,158,11,0.12)]',
-    text: 'text-amber-400/70 group-hover:text-amber-400/90',
-    icon: 'text-amber-400/80 group-hover:text-amber-400',
-  },
-  zinc: {
-    bg: 'bg-zinc-500/20 border-zinc-500/30',
-    shadow: 'rgba(161,161,170,0.5)',
-    chevron: 'text-zinc-400/40 group-hover:text-zinc-400/50',
-    chevronDown: 'text-zinc-400/40 group-hover:text-zinc-400/60',
-    cursorBg: 'bg-zinc-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(161,161,170,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(161,161,170,0.12)]',
-    text: 'text-zinc-400/70 group-hover:text-zinc-400/90',
-    icon: 'text-zinc-400/80 group-hover:text-zinc-400',
-  },
-} as const;
+// Chip variants — keyed by Domain. The `fuchsia` semantic variant is kept
+// for the trim editor's split-mode button until trim's mode-color scheme is
+// redesigned; it has no Domain mapping.
+
+const fuchsia: ChipVariantStyle = {
+  bg: 'bg-fuchsia-500/20 border-fuchsia-500/30',
+  shadow: 'rgba(217,70,239,0.5)',
+  chevron: 'text-fuchsia-400/40 group-hover:text-fuchsia-400/50',
+  chevronDown: 'text-fuchsia-400/40 group-hover:text-fuchsia-400/60',
+  cursorBg: 'bg-fuchsia-400/40',
+  promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(217,70,239,0.05)]',
+  promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(217,70,239,0.12)]',
+  text: 'text-fuchsia-400/70 group-hover:text-fuchsia-400/90',
+  icon: 'text-fuchsia-400/80 group-hover:text-fuchsia-400',
+  hoverBorder: 'hover:border-fuchsia-400/40',
+  focusRing: 'focus-visible:ring-fuchsia-400/80',
+  focusWithinRing: 'focus-within:ring-fuchsia-400/80',
+};
+
+export const variants: Record<Domain | 'fuchsia', ChipVariantStyle> = {
+  projects: chipVariant('projects'),
+  image: chipVariant('image'),
+  video: chipVariant('video'),
+  plan: chipVariant('plan'),
+  final: chipVariant('final'),
+  fuchsia,
+};

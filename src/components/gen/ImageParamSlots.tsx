@@ -4,6 +4,50 @@ import { cn } from '@/lib/utils';
 import { stripSlugPrefix } from '@/lib/slugs';
 import { slugFieldAssetType } from './ui/fieldHelpers';
 import { GenSection } from './ui/GenSection';
+import type { Domain } from '@/theme/domains';
+
+const SLOT_COUNT_TEXT: Record<Domain, string> = {
+  projects: 'text-zinc-400/50',
+  image: 'text-cyan-400/50',
+  video: 'text-violet-400/50',
+  plan: 'text-emerald-400/50',
+  final: 'text-amber-400/50',
+};
+
+// "needs more" indicator (count, required label, ring, dot) tinted with the
+// section's own domain hue. Brighter than the resting count to read as
+// a soft prompt without competing with semantic error colors.
+const NEEDS_MORE_TEXT: Record<Domain, string> = {
+  projects: 'text-zinc-300',
+  image: 'text-cyan-300',
+  video: 'text-violet-300',
+  plan: 'text-emerald-300',
+  final: 'text-amber-300',
+};
+
+const NEEDS_MORE_LABEL: Record<Domain, string> = {
+  projects: 'text-zinc-300/80',
+  image: 'text-cyan-300/80',
+  video: 'text-violet-300/80',
+  plan: 'text-emerald-300/80',
+  final: 'text-amber-300/80',
+};
+
+const NEEDS_MORE_RING: Record<Domain, string> = {
+  projects: 'ring-zinc-400/50',
+  image: 'ring-cyan-400/50',
+  video: 'ring-violet-400/50',
+  plan: 'ring-emerald-400/50',
+  final: 'ring-amber-400/50',
+};
+
+const NEEDS_MORE_DOT: Record<Domain, string> = {
+  projects: 'bg-zinc-400',
+  image: 'bg-cyan-400',
+  video: 'bg-violet-400',
+  plan: 'bg-emerald-400',
+  final: 'bg-amber-400',
+};
 
 type SlotAcceptType = 'image' | 'video' | 'audio' | 'character';
 
@@ -26,6 +70,7 @@ interface ImageParamSlotsProps {
   disabled?: boolean;
   inline?: boolean;
   modelKey?: string;
+  domain?: Domain;
 }
 
 function videoThumbFallback(asset: ResolvedAsset): string {
@@ -59,11 +104,11 @@ function findThumbnail(
 
 const SLUG_DISPLAY_LABELS: Record<string, string> = {
   first_clip: 'Continuation',
-  audio: 'Reference Voice',
+  audio: 'Voice',
   image_slugs: 'References',
-  video_slugs: 'Reference Videos',
-  character_image_slugs: 'Character Images',
-  motion_video_slugs: 'Motion Videos',
+  video_slugs: 'Ref Videos',
+  character_image_slugs: 'Characters',
+  motion_video_slugs: 'Motion',
 };
 
 function formatSlotCount(filled: number, min: number, max: number | null): string {
@@ -90,6 +135,7 @@ interface NamedSlotListProps {
   droppedAssets?: Map<string, ResolvedAsset>;
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
   disabled?: boolean;
+  domain: Domain;
 }
 
 function NamedSlotList({
@@ -99,6 +145,7 @@ function NamedSlotList({
   droppedAssets,
   onChange,
   disabled,
+  domain,
 }: NamedSlotListProps) {
   return (
     <div className="space-y-2">
@@ -111,7 +158,7 @@ function NamedSlotList({
           <GenSection
             key={field.name}
             label={label.toLowerCase().replace(/\s+/g, '-')}
-            color="cyan"
+            color={domain}
             required={field.required}
           >
             <AssetDropSlot
@@ -131,6 +178,7 @@ function NamedSlotList({
               }}
               disabled={disabled}
               acceptTypes={acceptsForImageType(acceptType)}
+              variant={domain === 'video' ? 'video' : 'image'}
             />
           </GenSection>
         );
@@ -147,6 +195,7 @@ interface ArraySlotSectionProps {
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
   disabled?: boolean;
   inline?: boolean;
+  domain: Domain;
 }
 
 function ArraySlotSection({
@@ -157,6 +206,7 @@ function ArraySlotSection({
   onChange,
   disabled,
   inline,
+  domain,
 }: ArraySlotSectionProps) {
   const fieldAssetType = slugFieldAssetType(field.name);
   const sectionLabel = `/${prettifySlugFieldName(field.name).toLowerCase().replace(/\s+/g, '-')}`;
@@ -202,21 +252,21 @@ function ArraySlotSection({
   return (
     <GenSection
       label={sectionLabel.replace(/^\//, '')}
-      color="cyan"
+      color={domain}
       required={field.required}
       rightSlot={
-        <span className={cn('text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-cyan-400/50')}>
+        <span className={cn('text-[10px] font-mono', needsMore ? NEEDS_MORE_TEXT[domain] : SLOT_COUNT_TEXT[domain])}>
           {slotCountLabel}
         </span>
       }
       bodyClassName="px-3 py-2.5 space-y-2"
     >
-      {needsMore && <p className="text-[10px] text-yellow-400/80 font-mono">{minSlots - filledCount} more required</p>}
+      {needsMore && <p className={cn('text-[10px] font-mono italic', NEEDS_MORE_LABEL[domain])}>{minSlots - filledCount} more required</p>}
       <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
         {slots.map(({ slug, index, required }) => (
           <div
             key={`slot-${index}`}
-            className={cn('relative', required && !slug && 'ring-1 ring-yellow-400/50 rounded')}
+            className={cn('relative', required && !slug && cn('ring-1 rounded', NEEDS_MORE_RING[domain]))}
           >
             <AssetDropSlot
               value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: fieldAssetType } : null}
@@ -235,9 +285,10 @@ function ArraySlotSection({
               }}
               disabled={disabled}
               acceptTypes={acceptsForImageType(fieldAssetType)}
+              variant={domain === 'video' ? 'video' : 'image'}
             />
             {required && !slug && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
+              <span className={cn('absolute -top-1 -right-1 w-2 h-2 rounded-full', NEEDS_MORE_DOT[domain])} title="Required" />
             )}
           </div>
         ))}
@@ -255,6 +306,7 @@ export function ImageParamSlots({
   disabled,
   inline,
   modelKey,
+  domain = 'image',
 }: ImageParamSlotsProps) {
   if (assetFields.length === 0) {
     return null;
@@ -287,6 +339,7 @@ export function ImageParamSlots({
         droppedAssets={droppedAssets}
         onChange={onChange}
         disabled={disabled}
+        domain={domain}
       />
     );
   }
@@ -302,6 +355,7 @@ export function ImageParamSlots({
             droppedAssets={droppedAssets}
             onChange={onChange}
             disabled={disabled}
+            domain={domain}
           />
         )}
         {arrayFields.map((af) => (
@@ -314,6 +368,7 @@ export function ImageParamSlots({
             onChange={onChange}
             disabled={disabled}
             inline={inline}
+            domain={domain}
           />
         ))}
       </div>
@@ -398,20 +453,20 @@ export function ImageParamSlots({
   return (
     <GenSection
       label={sectionLabel.replace(/^\//, '')}
-      color="cyan"
+      color={domain}
       rightSlot={
-        <span className={cn('text-[10px] font-mono', needsMore ? 'text-yellow-400' : 'text-cyan-400/50')}>
+        <span className={cn('text-[10px] font-mono', needsMore ? NEEDS_MORE_TEXT[domain] : SLOT_COUNT_TEXT[domain])}>
           {slotCountLabel}
         </span>
       }
       bodyClassName="px-3 py-2.5 space-y-2"
     >
-      {needsMore && <p className="text-[10px] text-yellow-400/80 font-mono">{minSlots - filledCount} more required</p>}
+      {needsMore && <p className={cn('text-[10px] font-mono italic', NEEDS_MORE_LABEL[domain])}>{minSlots - filledCount} more required</p>}
       <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
         {slots.map(({ slug, index, required }) => (
           <div
             key={`slot-${index}`}
-            className={cn('relative', required && !slug && 'ring-1 ring-yellow-400/50 rounded')}
+            className={cn('relative', required && !slug && cn('ring-1 rounded', NEEDS_MORE_RING[domain]))}
           >
             <AssetDropSlot
               value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: assetType } : null}
@@ -430,9 +485,10 @@ export function ImageParamSlots({
               }}
               disabled={disabled}
               acceptTypes={acceptsForImageType(assetType)}
+              variant={domain === 'video' ? 'video' : 'image'}
             />
             {required && !slug && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" title="Required" />
+              <span className={cn('absolute -top-1 -right-1 w-2 h-2 rounded-full', NEEDS_MORE_DOT[domain])} title="Required" />
             )}
           </div>
         ))}

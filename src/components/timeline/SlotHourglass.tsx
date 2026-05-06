@@ -15,7 +15,7 @@ export function SlotHourglass({ className, label = 'rendering' }: SlotHourglassP
     >
       <svg
         viewBox="0 0 16 24"
-        className="w-7 h-10 text-primary drop-shadow-[0_0_6px_rgba(0,255,255,0.55)]"
+        className="w-7 h-10 text-violet-300 drop-shadow-[0_0_6px_rgba(0,255,255,0.55)]"
         shapeRendering="crispEdges"
         aria-hidden="true"
       >
@@ -54,7 +54,7 @@ export function SlotHourglass({ className, label = 'rendering' }: SlotHourglassP
 
         <rect className="slot-hg-stream" x="7" y="11" width="2" height="3" fill="currentColor" />
       </svg>
-      <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-primary/70">
+      <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-violet-300/70">
         {label}
       </span>
     </div>

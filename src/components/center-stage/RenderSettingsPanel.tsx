@@ -4,6 +4,7 @@ import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, X } from 'lucide-react'
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import { sectionTheme, type SectionTheme as DomainSectionTheme } from '@/theme/domains';
 
 // ── Types ──
 
@@ -47,107 +48,19 @@ export interface RenderSettingsPanelProps {
 }
 
 // ── Color themes for sections ──
+//
+// Sourced from the canonical 5-domain palette. Keys stay as hue names during
+// Phase 1 (cyan/violet/amber/emerald); they get renamed to Domain keys in
+// Phase 3 when each section's domain assignment is decided.
 
-const sectionThemes = {
-  cyan: {
-    headerBg: 'bg-cyan-500/15',
-    headerBorder: 'border-cyan-500/30',
-    headerText: 'text-cyan-400',
-    headerIcon: 'text-cyan-400/70',
-    sectionBorder: 'border-cyan-500/15',
-    sectionBg: 'bg-cyan-500/[0.03]',
-    labelText: 'text-cyan-400/50',
-    activeBg: 'bg-cyan-500/20',
-    activeBorder: 'border-cyan-400',
-    activeText: 'text-cyan-300',
-    activeGlow: '0 0 12px rgba(34,211,238,0.25)',
-    inactiveBorder: 'border-cyan-500/15',
-    inactiveText: 'text-cyan-400/25',
-    inactiveHoverText: 'hover:text-cyan-300/50',
-    inactiveHoverBorder: 'hover:border-cyan-500/30',
-    controlBorder: 'border-cyan-500/15',
-    controlBg: 'bg-cyan-500/[0.04]',
-    controlText: 'text-cyan-400/40',
-    controlHover: 'hover:text-cyan-300/60 hover:bg-cyan-500/10',
-    valueText: 'text-cyan-200',
-    unitText: 'text-cyan-400/30',
-    hexText: 'text-cyan-400/40',
-  },
-  violet: {
-    headerBg: 'bg-violet-500/15',
-    headerBorder: 'border-violet-500/30',
-    headerText: 'text-violet-400',
-    headerIcon: 'text-violet-400/70',
-    sectionBorder: 'border-violet-500/15',
-    sectionBg: 'bg-violet-500/[0.03]',
-    labelText: 'text-violet-400/50',
-    activeBg: 'bg-violet-500/20',
-    activeBorder: 'border-violet-400',
-    activeText: 'text-violet-300',
-    activeGlow: '0 0 12px rgba(139,92,246,0.25)',
-    inactiveBorder: 'border-violet-500/15',
-    inactiveText: 'text-violet-400/25',
-    inactiveHoverText: 'hover:text-violet-300/50',
-    inactiveHoverBorder: 'hover:border-violet-500/30',
-    controlBorder: 'border-violet-500/15',
-    controlBg: 'bg-violet-500/[0.04]',
-    controlText: 'text-violet-400/40',
-    controlHover: 'hover:text-violet-300/60 hover:bg-violet-500/10',
-    valueText: 'text-violet-200',
-    unitText: 'text-violet-400/30',
-    hexText: 'text-violet-400/40',
-  },
-  amber: {
-    headerBg: 'bg-amber-500/15',
-    headerBorder: 'border-amber-500/30',
-    headerText: 'text-amber-400',
-    headerIcon: 'text-amber-400/70',
-    sectionBorder: 'border-amber-500/15',
-    sectionBg: 'bg-amber-500/[0.03]',
-    labelText: 'text-amber-400/50',
-    activeBg: 'bg-amber-500/20',
-    activeBorder: 'border-amber-400',
-    activeText: 'text-amber-300',
-    activeGlow: '0 0 12px rgba(245,158,11,0.25)',
-    inactiveBorder: 'border-amber-500/15',
-    inactiveText: 'text-amber-400/25',
-    inactiveHoverText: 'hover:text-amber-300/50',
-    inactiveHoverBorder: 'hover:border-amber-500/30',
-    controlBorder: 'border-amber-500/15',
-    controlBg: 'bg-amber-500/[0.04]',
-    controlText: 'text-amber-400/40',
-    controlHover: 'hover:text-amber-300/60 hover:bg-amber-500/10',
-    valueText: 'text-amber-200',
-    unitText: 'text-amber-400/30',
-    hexText: 'text-amber-400/40',
-  },
-  emerald: {
-    headerBg: 'bg-emerald-500/15',
-    headerBorder: 'border-emerald-500/30',
-    headerText: 'text-emerald-400',
-    headerIcon: 'text-emerald-400/70',
-    sectionBorder: 'border-emerald-500/15',
-    sectionBg: 'bg-emerald-500/[0.03]',
-    labelText: 'text-emerald-400/50',
-    activeBg: 'bg-emerald-500/20',
-    activeBorder: 'border-emerald-400',
-    activeText: 'text-emerald-300',
-    activeGlow: '0 0 12px rgba(16,185,129,0.25)',
-    inactiveBorder: 'border-emerald-500/15',
-    inactiveText: 'text-emerald-400/25',
-    inactiveHoverText: 'hover:text-emerald-300/50',
-    inactiveHoverBorder: 'hover:border-emerald-500/30',
-    controlBorder: 'border-emerald-500/15',
-    controlBg: 'bg-emerald-500/[0.04]',
-    controlText: 'text-emerald-400/40',
-    controlHover: 'hover:text-emerald-300/60 hover:bg-emerald-500/10',
-    valueText: 'text-emerald-200',
-    unitText: 'text-emerald-400/30',
-    hexText: 'text-emerald-400/40',
-  },
-} as const;
+const sectionThemes: Record<'cyan' | 'violet' | 'amber' | 'emerald', DomainSectionTheme> = {
+  cyan: sectionTheme('image'),
+  violet: sectionTheme('video'),
+  amber: sectionTheme('final'),
+  emerald: sectionTheme('plan'),
+};
 
-type SectionTheme = typeof sectionThemes[keyof typeof sectionThemes];
+type SectionTheme = DomainSectionTheme;
 
 const orientationCommands: Record<Orientation, string> = {
   landscape: '/landscape',

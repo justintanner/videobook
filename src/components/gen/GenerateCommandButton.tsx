@@ -53,7 +53,7 @@ function deriveSlotState(cost: UseEstimateCostResult): SlotState | null {
 }
 
 export function GenerateCommandButton({
-  variant = 'default',
+  variant = 'image',
   state,
   disabled,
   disabledReason,
@@ -95,8 +95,9 @@ export function GenerateCommandButton({
         isDisabledVisual && 'bg-zinc-800/30 text-zinc-600 border-zinc-700/50 shadow-none cursor-not-allowed',
         isLoading && 'opacity-90 cursor-wait',
         isSuccess && 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]',
-        !isDisabledVisual && !isLoading && !isSuccess && 'hover:scale-[1.02] active:scale-[0.98] hover:border-primary/40',
-        'focus-visible:ring-2 focus-visible:ring-cyan-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        !isDisabledVisual && !isLoading && !isSuccess && cn('hover:scale-[1.02] active:scale-[0.98]', v.hoverBorder),
+        'focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        v.focusRing,
         className,
       )}
     >

@@ -12,7 +12,7 @@ interface GenToggleProps<T extends string> {
 }
 
 export function GenToggle<T extends string>({ value, onChange, options, disabled, compact, theme }: GenToggleProps<T>) {
-  const t = theme ?? genThemes.cyan;
+  const t = theme ?? genThemes.image;
 
   return (
     <div className={cn('flex gap-1.5', disabled && 'opacity-30 pointer-events-none')}>

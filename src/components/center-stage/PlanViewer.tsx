@@ -78,7 +78,7 @@ function PlanShell({ title, slug, onClose, children }: {
         <div className="absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
           <ViewerToolbar
             left={
-              <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/90 drop-shadow-[0_0_4px_rgba(0,255,255,0.5)]">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-emerald-300/90 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]">
                 <MapPin className="w-3.5 h-3.5" />
                 <span>{title}</span>
               </span>
@@ -89,7 +89,7 @@ function PlanShell({ title, slug, onClose, children }: {
                 tabIndex={-1}
                 onClick={onClose}
                 title="Close"
-                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
               >
                 <X className="w-4 h-4 stroke-[2.5]" />
               </button>
@@ -212,7 +212,10 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   return (
     <PlanShell title="PLAN: CHAR SWAP" slug={slug} onClose={onClose}>
-      <div className="flex-1 overflow-y-auto scrollbar-cyan">
+      <div
+        className="flex-1 overflow-y-auto scrollbar-domain"
+        style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
+      >
         <div className="max-w-3xl mx-auto px-6 py-6">
           <PlanHeader
             sourceId={sourceId}
@@ -546,7 +549,7 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <SourceThumb src={sourceSrc} alt={`source ${label}`} />
-        <span className="text-primary/40 text-lg leading-none px-0.5 select-none">→</span>
+        <span className="text-emerald-300/40 text-lg leading-none px-0.5 select-none">→</span>
         <SwapSlot
           state={state}
           sourceSrc={sourceSrc}
@@ -559,7 +562,7 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
           onRegen={onRegen}
         />
       </div>
-      <div className="text-[10px] font-mono text-primary/50">{label}</div>
+      <div className="text-[10px] font-mono text-emerald-300/50">{label}</div>
     </div>
   );
 }
@@ -569,7 +572,7 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="w-40 aspect-video bg-zinc-900 border border-zinc-700/40 rounded overflow-hidden flex items-center justify-center">
       {errored ? (
-        <span className="text-[9px] font-mono text-primary/30 px-2 text-center">missing</span>
+        <span className="text-[9px] font-mono text-emerald-300/30 px-2 text-center">missing</span>
       ) : (
         <img
           src={src}
@@ -658,9 +661,9 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
           type="button"
           onClick={onIdleClick}
           title="Click to pick models and generate · or drop an image"
-          className="w-full h-full flex items-center justify-center hover:bg-primary/5 transition-colors cursor-pointer"
+          className="w-full h-full flex items-center justify-center hover:bg-emerald-500/5 transition-colors cursor-pointer"
         >
-          <span className="text-[10px] font-mono text-primary/40 group-hover:text-primary/70 px-2 text-center">click to generate · or drop image</span>
+          <span className="text-[10px] font-mono text-emerald-300/40 group-hover:text-emerald-300/70 px-2 text-center">click to generate · or drop image</span>
         </button>
       ) : !errored ? (
         <img
@@ -671,13 +674,13 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
           onError={() => setErrored(true)}
         />
       ) : (
-        <span className="text-[10px] font-mono text-primary/40 px-2 text-center">missing</span>
+        <span className="text-[10px] font-mono text-emerald-300/40 px-2 text-center">missing</span>
       )}
       {showSpinner && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60">
-          <Loader2 className="w-5 h-5 animate-spin text-primary/80" />
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-300/80" />
           {spinnerLabel && (
-            <span className="text-[9px] font-mono uppercase tracking-wider text-primary/70 px-2 text-center line-clamp-2">
+            <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/70 px-2 text-center line-clamp-2">
               {spinnerLabel}
             </span>
           )}
@@ -690,8 +693,8 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
                 'absolute top-1 right-1',
                 'h-5 px-1.5 flex items-center gap-1 rounded',
                 'text-[9px] font-mono uppercase tracking-wider',
-                'text-primary/80 hover:text-primary',
-                'bg-black/60 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+                'text-emerald-300/80 hover:text-emerald-300',
+                'bg-black/60 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
               )}
             >
               <RefreshCw className="w-2.5 h-2.5" />
@@ -732,8 +735,8 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
             className={cn(
               'h-6 px-2 flex items-center gap-1 rounded',
               'text-[10px] font-mono uppercase tracking-wider',
-              'text-primary/80 hover:text-primary',
-              'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+              'text-emerald-300/80 hover:text-emerald-300',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
             )}
           >
             <RefreshCw className="w-3 h-3" />
@@ -825,7 +828,7 @@ function VideoSwapSlot({
     <div
       className={cn(
         'relative self-start max-w-md w-full aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
-        dragActive ? 'border-violet-300 ring-2 ring-violet-300/40' : 'border-zinc-700/60',
+        dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
         disabled && state.kind === 'idle' && 'opacity-50',
       )}
       onDragEnter={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); setDragActive(true); }}
@@ -846,10 +849,10 @@ function VideoSwapSlot({
           onClick={onIdleClick}
           disabled={disabled}
           title={disabled ? disabledReason : 'Click to generate scene video · or drop a video clip'}
-          className="w-full h-full flex flex-col items-center justify-center gap-1.5 hover:bg-violet-500/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+          className="w-full h-full flex flex-col items-center justify-center gap-1.5 hover:bg-emerald-500/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
         >
-          <Film className="w-5 h-5 text-violet-400/50 group-hover:text-violet-300/80" />
-          <span className="text-[10px] font-mono uppercase tracking-wider text-violet-400/50 group-hover:text-violet-300/80 px-3 text-center">
+          <Film className="w-5 h-5 text-emerald-400/50 group-hover:text-emerald-300/80" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/50 group-hover:text-emerald-300/80 px-3 text-center">
             click to generate · or drop video
           </span>
         </button>
@@ -859,9 +862,9 @@ function VideoSwapSlot({
 
       {showSpinner && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70">
-          <Loader2 className="w-6 h-6 animate-spin text-primary/80" />
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-300/80" />
           {spinnerLabel && (
-            <span className="text-[10px] font-mono uppercase tracking-wider text-primary/70">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/70">
               {spinnerLabel}
             </span>
           )}
@@ -874,8 +877,8 @@ function VideoSwapSlot({
                 'absolute top-1 right-1',
                 'h-5 px-1.5 flex items-center gap-1 rounded',
                 'text-[9px] font-mono uppercase tracking-wider',
-                'text-primary/80 hover:text-primary',
-                'bg-black/60 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+                'text-emerald-300/80 hover:text-emerald-300',
+                'bg-black/60 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
               )}
             >
               <RefreshCw className="w-2.5 h-2.5" />
@@ -916,8 +919,8 @@ function VideoSwapSlot({
             className={cn(
               'h-6 px-2 flex items-center gap-1 rounded',
               'text-[10px] font-mono uppercase tracking-wider',
-              'text-primary/80 hover:text-primary',
-              'bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/60',
+              'text-emerald-300/80 hover:text-emerald-300',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
             )}
           >
             <RefreshCw className="w-3 h-3" />
@@ -927,8 +930,8 @@ function VideoSwapSlot({
       )}
 
       {dragActive && !replacing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-violet-500/30 pointer-events-none">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-violet-50 font-bold">DROP TO REPLACE</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">DROP TO REPLACE</span>
         </div>
       )}
     </div>
@@ -1097,8 +1100,8 @@ function FrameImagePanel({ provider, onProviderChange, model, onModelChange, pro
             className={cn(
               'h-6 px-2 flex items-center gap-1 rounded',
               'text-[10px] font-mono uppercase tracking-wider',
-              'text-primary/70 hover:text-primary',
-              'bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40',
+              'text-emerald-300/70 hover:text-emerald-300',
+              'bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40',
               'transition-colors duration-150',
             )}
           >
@@ -1129,13 +1132,13 @@ function ProviderModelSelect({ label, value, options, onChange }: {
 }) {
   return (
     <label className="flex items-center gap-1.5">
-      <span className="text-primary/50 uppercase tracking-wider">{label}:</span>
+      <span className="text-emerald-300/50 uppercase tracking-wider">{label}:</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-primary/90',
-          'focus:outline-none focus:border-primary/60 cursor-pointer',
+          'h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90',
+          'focus:outline-none focus:border-emerald-500/60 cursor-pointer',
         )}
       >
         {options.map((o) => (
@@ -1339,10 +1342,10 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   return (
     <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/20 flex flex-col gap-3">
       <div className="flex items-center gap-2 text-[11px] font-mono">
-        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-primary/40 text-primary/80 text-[10px] font-bold">
+        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">
           {ordinal}
         </span>
-        <span className="text-primary/70 uppercase tracking-wider">{titleText}</span>
+        <span className="text-emerald-300/70 uppercase tracking-wider">{titleText}</span>
       </div>
       <FrameImagePanel
         provider={selectedProvider}
@@ -1776,11 +1779,11 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
         <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="text-primary/50">Scene {index + 1}</span>
-          <span className="text-primary/90 font-bold">
+          <span className="text-emerald-300/50">Scene {index + 1}</span>
+          <span className="text-emerald-300/90 font-bold">
             {formatTimecode(scene.start)} – {formatTimecode(scene.end)}
           </span>
-          <span className="text-primary/40">({duration}s)</span>
+          <span className="text-emerald-300/40">({duration}s)</span>
         </div>
       </header>
       <FrameBlock
@@ -1879,8 +1882,8 @@ function VideoStepBlock({ bothReady, ...rest }: {
           className={cn(
             'inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold',
             bothReady
-              ? 'border border-primary/40 text-primary/80'
-              : 'border border-primary/15 text-primary/30',
+              ? 'border border-emerald-500/40 text-emerald-300/80'
+              : 'border border-emerald-500/15 text-emerald-300/30',
           )}
         >
           3
@@ -1888,13 +1891,13 @@ function VideoStepBlock({ bothReady, ...rest }: {
         <span
           className={cn(
             'uppercase tracking-wider',
-            bothReady ? 'text-primary/70' : 'text-primary/30',
+            bothReady ? 'text-emerald-300/70' : 'text-emerald-300/30',
           )}
         >
           Generate scene video
         </span>
         {!bothReady && (
-          <span className="text-primary/40 text-[10px] italic">
+          <span className="text-emerald-300/40 text-[10px] italic">
             (waiting for both swap frames)
           </span>
         )}
@@ -1966,8 +1969,8 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
             className={cn(
               'h-6 px-2 flex items-center gap-1 rounded',
               'text-[10px] font-mono uppercase tracking-wider',
-              'text-primary/70 hover:text-primary',
-              'bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40',
+              'text-emerald-300/70 hover:text-emerald-300',
+              'bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40',
               'transition-colors duration-150',
             )}
           >
@@ -2105,7 +2108,10 @@ function PayloadJsonView({ payload, mediaItems, projectSlug }: {
   const text = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
   const lines = useMemo(() => text.split('\n'), [text]);
   return (
-    <pre className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-primary/85 font-mono whitespace-pre overflow-auto scrollbar-cyan max-h-72">
+    <pre
+      className="p-2 rounded bg-black/60 border border-zinc-700 text-xs leading-relaxed text-emerald-300/85 font-mono whitespace-pre overflow-auto scrollbar-domain max-h-72"
+      style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
+    >
       {lines.map((line, i) => (
         <span key={i}>
           {renderJsonLine(line, mediaItems, projectSlug, i)}
@@ -2220,9 +2226,9 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
         onBlur={() => setEditing(false)}
         rows={4}
         className={cn(
-          'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-primary/90 resize-y',
-          'focus:outline-none focus:border-primary/60',
-          'placeholder:text-primary/40',
+          'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-emerald-300/90 resize-y',
+          'focus:outline-none focus:border-emerald-500/60',
+          'placeholder:text-emerald-300/40',
         )}
       />
     );
@@ -2234,9 +2240,9 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
       title="Click to edit prompt"
       className={cn(
         'w-full text-left p-2 rounded bg-black/60 border border-zinc-700',
-        'text-[11px] font-mono text-primary/90 leading-relaxed',
+        'text-[11px] font-mono text-emerald-300/90 leading-relaxed',
         'whitespace-pre-wrap break-words',
-        'hover:border-primary/40 transition-colors cursor-text min-h-[5rem]',
+        'hover:border-emerald-500/40 transition-colors cursor-text min-h-[5rem]',
       )}
     >
       {lines.map((line, i) => (
@@ -2264,8 +2270,8 @@ function TabButton({ active, onClick, icon, children }: {
         'text-[11px] font-mono font-bold uppercase tracking-wider',
         'border-b-2 transition-colors duration-150',
         active
-          ? 'text-primary border-primary'
-          : 'text-primary/40 border-transparent hover:text-primary/70',
+          ? 'text-emerald-300 border-emerald-400'
+          : 'text-emerald-300/40 border-transparent hover:text-emerald-300/70',
       )}
     >
       {icon}
@@ -2309,7 +2315,7 @@ function PlanHeaderSlot({ label, kind, item, onDrop }: {
   const src = item?.thumbnailSrc ?? item?.filePath ?? null;
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-mono uppercase tracking-wider text-primary/50">{label}</span>
+      <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">{label}</span>
       <div
         className={cn(
           'relative w-44 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
@@ -2323,9 +2329,9 @@ function PlanHeaderSlot({ label, kind, item, onDrop }: {
         {item && src ? (
           <img src={src} alt={item.slug} className="w-full h-full object-contain" loading="lazy" />
         ) : item ? (
-          <FileText className="w-6 h-6 text-primary/40" />
+          <FileText className="w-6 h-6 text-emerald-300/40" />
         ) : (
-          <span className="text-[11px] font-mono text-primary/50 px-2 text-center">drop {kind === 'source' ? 'video' : 'character'}</span>
+          <span className="text-[11px] font-mono text-emerald-300/50 px-2 text-center">drop {kind === 'source' ? 'video' : 'character'}</span>
         )}
         {dragActive && (
           <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
@@ -2333,7 +2339,7 @@ function PlanHeaderSlot({ label, kind, item, onDrop }: {
           </div>
         )}
       </div>
-      <div className="text-[10px] font-mono text-primary/60 truncate w-44">{item?.slug ?? '—'}</div>
+      <div className="text-[10px] font-mono text-emerald-300/60 truncate w-44">{item?.slug ?? '—'}</div>
     </div>
   );
 }
@@ -2358,7 +2364,7 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
   return (
     <div className="mb-6 pb-4 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-3 gap-3">
-        <h1 className="text-lg font-bold text-primary font-mono uppercase tracking-wider">Plan: char swap</h1>
+        <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: char swap</h1>
         <button
           type="button"
           onClick={onGenerate}
@@ -2367,8 +2373,8 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
           className={cn(
             'h-8 px-3 flex items-center gap-1.5 rounded',
             'text-xs font-mono font-bold uppercase tracking-wider',
-            'text-primary hover:text-white',
-            'bg-primary/10 hover:bg-primary/20 border border-primary/40 hover:border-primary/70',
+            'text-emerald-300 hover:text-white',
+            'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
             'transition-colors duration-150',
             'disabled:opacity-40 disabled:cursor-not-allowed',
           )}
@@ -2383,10 +2389,10 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
         <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={onCharBDrop} />
       </div>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
-        <dt className="text-primary/60">Duration</dt>
-        <dd className="text-primary/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
-        <dt className="text-primary/60">Scenes</dt>
-        <dd className="text-primary/90">
+        <dt className="text-emerald-300/60">Duration</dt>
+        <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
+        <dt className="text-emerald-300/60">Scenes</dt>
+        <dd className="text-emerald-300/90">
           {scenesCount != null ? `~${scenesCount} (7–14s each, silence-aligned)` : '—'}
         </dd>
       </dl>

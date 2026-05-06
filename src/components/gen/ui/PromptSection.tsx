@@ -27,34 +27,72 @@ export interface PromptSectionProps {
   rewriteDisabled?: boolean;
 }
 
+// Per-domain class strings. Sourced from the canonical 5-domain palette in
+// src/theme/domains.ts. Tailwind v4's JIT requires class names to be visible
+// as literals, so each string is written out per-domain rather than computed.
+// Legacy hue keys (cyan/violet/emerald) alias to their corresponding Domain;
+// `blue` and `fuchsia` have no Domain mapping yet and stay hardcoded.
+
+const TEXTAREA_PROJECTS = 'border-zinc-500/15 text-zinc-200 placeholder:text-zinc-400/30 focus:border-zinc-400/40';
+const TEXTAREA_IMAGE = 'border-cyan-500/15 text-cyan-200 placeholder:text-cyan-400/30 focus:border-cyan-400/40';
+const TEXTAREA_VIDEO = 'border-violet-500/15 text-violet-200 placeholder:text-violet-400/30 focus:border-violet-400/40';
+const TEXTAREA_PLAN = 'border-emerald-500/15 text-emerald-200 placeholder:text-emerald-400/30 focus:border-emerald-400/40';
+const TEXTAREA_FINAL = 'border-amber-500/15 text-amber-200 placeholder:text-amber-400/30 focus:border-amber-400/40';
+
 const TEXTAREA_COLOR: Record<GenSectionColor, string> = {
-  emerald: 'border-emerald-500/15 text-emerald-200 placeholder:text-emerald-400/30 focus:border-emerald-400/40',
-  cyan: 'border-cyan-500/15 text-cyan-200 placeholder:text-cyan-400/30 focus:border-cyan-400/40',
-  violet: 'border-violet-500/15 text-violet-200 placeholder:text-violet-400/30 focus:border-violet-400/40',
+  projects: TEXTAREA_PROJECTS,
+  image: TEXTAREA_IMAGE,
+  video: TEXTAREA_VIDEO,
+  plan: TEXTAREA_PLAN,
+  final: TEXTAREA_FINAL,
   blue: 'border-blue-500/15 text-blue-200 placeholder:text-blue-400/30 focus:border-blue-400/40',
   fuchsia: 'border-fuchsia-500/15 text-fuchsia-200 placeholder:text-fuchsia-400/30 focus:border-fuchsia-400/40',
 };
 
+const REWRITE_PROJECTS = 'text-zinc-300/90 hover:text-zinc-200 hover:bg-zinc-500/15 border-zinc-500/40 hover:border-zinc-400/70';
+const REWRITE_IMAGE = 'text-cyan-300/90 hover:text-cyan-200 hover:bg-cyan-500/15 border-cyan-500/40 hover:border-cyan-400/70';
+const REWRITE_VIDEO = 'text-violet-300/90 hover:text-violet-200 hover:bg-violet-500/15 border-violet-500/40 hover:border-violet-400/70';
+const REWRITE_PLAN = 'text-emerald-300/90 hover:text-emerald-200 hover:bg-emerald-500/15 border-emerald-500/40 hover:border-emerald-400/70';
+const REWRITE_FINAL = 'text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15 border-amber-500/40 hover:border-amber-400/70';
+
 const REWRITE_COLOR: Record<GenSectionColor, string> = {
-  emerald: 'text-emerald-300/90 hover:text-emerald-200 hover:bg-emerald-500/15 border-emerald-500/40 hover:border-emerald-400/70',
-  cyan: 'text-cyan-300/90 hover:text-cyan-200 hover:bg-cyan-500/15 border-cyan-500/40 hover:border-cyan-400/70',
-  violet: 'text-violet-300/90 hover:text-violet-200 hover:bg-violet-500/15 border-violet-500/40 hover:border-violet-400/70',
+  projects: REWRITE_PROJECTS,
+  image: REWRITE_IMAGE,
+  video: REWRITE_VIDEO,
+  plan: REWRITE_PLAN,
+  final: REWRITE_FINAL,
   blue: 'text-blue-300/90 hover:text-blue-200 hover:bg-blue-500/15 border-blue-500/40 hover:border-blue-400/70',
   fuchsia: 'text-fuchsia-300/90 hover:text-fuchsia-200 hover:bg-fuchsia-500/15 border-fuchsia-500/40 hover:border-fuchsia-400/70',
 };
 
+const REWRITE_OPEN_PROJECTS = 'bg-zinc-500/15 border-zinc-400/70 text-zinc-200';
+const REWRITE_OPEN_IMAGE = 'bg-cyan-500/15 border-cyan-400/70 text-cyan-200';
+const REWRITE_OPEN_VIDEO = 'bg-violet-500/15 border-violet-400/70 text-violet-200';
+const REWRITE_OPEN_PLAN = 'bg-emerald-500/15 border-emerald-400/70 text-emerald-200';
+const REWRITE_OPEN_FINAL = 'bg-amber-500/15 border-amber-400/70 text-amber-200';
+
 const REWRITE_OPEN_COLOR: Record<GenSectionColor, string> = {
-  emerald: 'bg-emerald-500/15 border-emerald-400/70 text-emerald-200',
-  cyan: 'bg-cyan-500/15 border-cyan-400/70 text-cyan-200',
-  violet: 'bg-violet-500/15 border-violet-400/70 text-violet-200',
+  projects: REWRITE_OPEN_PROJECTS,
+  image: REWRITE_OPEN_IMAGE,
+  video: REWRITE_OPEN_VIDEO,
+  plan: REWRITE_OPEN_PLAN,
+  final: REWRITE_OPEN_FINAL,
   blue: 'bg-blue-500/15 border-blue-400/70 text-blue-200',
   fuchsia: 'bg-fuchsia-500/15 border-fuchsia-400/70 text-fuchsia-200',
 };
 
+const ARROW_PROJECTS = 'text-zinc-400/70';
+const ARROW_IMAGE = 'text-cyan-400/70';
+const ARROW_VIDEO = 'text-violet-400/70';
+const ARROW_PLAN = 'text-emerald-400/70';
+const ARROW_FINAL = 'text-amber-400/70';
+
 const ARROW_COLOR: Record<GenSectionColor, string> = {
-  emerald: 'text-emerald-400/70',
-  cyan: 'text-cyan-400/70',
-  violet: 'text-violet-400/70',
+  projects: ARROW_PROJECTS,
+  image: ARROW_IMAGE,
+  video: ARROW_VIDEO,
+  plan: ARROW_PLAN,
+  final: ARROW_FINAL,
   blue: 'text-blue-400/70',
   fuchsia: 'text-fuchsia-400/70',
 };
@@ -66,7 +104,7 @@ export function PromptSection({
   required,
   warning,
   category,
-  color = 'emerald',
+  color = 'plan',
   promptHistory,
   callTool,
   projectSlug,

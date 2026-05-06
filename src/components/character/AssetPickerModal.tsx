@@ -40,23 +40,23 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[80vh] bg-zinc-950 border border-violet-500/40 rounded-lg shadow-xl flex flex-col overflow-hidden"
+        className="w-full max-w-3xl max-h-[80vh] bg-zinc-950 border border-cyan-500/40 rounded-lg shadow-xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-violet-500/30 shrink-0">
-          <div className="text-xs font-mono font-bold tracking-widest text-violet-200 uppercase">{title}</div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/30 shrink-0">
+          <div className="text-xs font-mono font-bold tracking-widest text-cyan-200 uppercase">{title}</div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close picker"
-            className="text-violet-300/70 hover:text-violet-100"
+            className="text-cyan-300/70 hover:text-cyan-100"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-4 py-2 border-b border-violet-500/20 shrink-0">
+        <div className="px-4 py-2 border-b border-cyan-500/20 shrink-0">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-violet-400/60" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-cyan-400/60" />
             <input
               type="text"
               autoFocus
@@ -64,15 +64,15 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search slugs, titles…"
               className={cn(
-                "w-full bg-black/60 border border-violet-500/20 rounded pl-7 pr-2 py-1.5 text-xs font-mono text-violet-100",
-                "focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40",
+                "w-full bg-black/60 border border-cyan-500/20 rounded pl-7 pr-2 py-1.5 text-xs font-mono text-cyan-100",
+                "focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40",
               )}
             />
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-3">
           {filtered.length === 0 ? (
-            <div className="text-violet-300/60 text-xs font-mono py-8 text-center">No matching assets.</div>
+            <div className="text-cyan-300/60 text-xs font-mono py-8 text-center">No matching assets.</div>
           ) : (
             <div className="grid grid-cols-4 gap-2">
               {filtered.map((it) => (
@@ -81,8 +81,8 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
                   type="button"
                   onClick={() => onPick(it.id)}
                   className={cn(
-                    "group relative aspect-square rounded border border-violet-500/20 overflow-hidden bg-black",
-                    "hover:border-violet-300 transition-colors",
+                    "group relative aspect-square rounded border border-cyan-500/20 overflow-hidden bg-black",
+                    "hover:border-cyan-300 transition-colors",
                   )}
                   title={it.slug}
                 >
@@ -94,11 +94,11 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
                       draggable={false}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-violet-400/60 px-2 text-center">
+                    <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-cyan-400/60 px-2 text-center">
                       {it.slug}
                     </div>
                   )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-[9px] font-mono text-violet-100 truncate">
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-[9px] font-mono text-cyan-100 truncate">
                     {it.slug}
                   </div>
                 </button>

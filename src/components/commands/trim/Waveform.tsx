@@ -127,7 +127,7 @@ export function Waveform({
           height: WAVEFORM_HEIGHT,
           marginLeft: -1,
           backgroundColor: 'rgb(34, 211, 238)',
-          filter: 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.7))',
+          filter: 'drop-shadow(0 0 6px rgba(167, 139, 250, 0.7))',
         }}
       />
     </div>
@@ -141,7 +141,7 @@ function WaveformBars({ data }: { data: number[] }) {
       {data.map((val, i) => (
         <div
           key={i}
-          className="flex-1 min-w-0 bg-cyan-500/50 rounded-t-[0.5px]"
+          className="flex-1 min-w-0 bg-violet-500/50 rounded-t-[0.5px]"
           style={{ height: `${Math.max((val / maxVal) * 100, 2)}%` }}
         />
       ))}
@@ -265,9 +265,9 @@ function SceneMarker({ marker, duration }: { marker: SnapMarker; duration: numbe
 function FrameBadgeMark({ badge }: { badge: FrameBadge }) {
   return (
     <div className="absolute z-20 group" style={{ left: `${badge.percent}%`, top: 0, bottom: 0 }}>
-      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-cyan-500/30" />
+      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-violet-500/30" />
       <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-6 rounded-sm border border-cyan-400/60 bg-cover bg-center cursor-pointer shadow-[0_0_6px_rgba(34,211,238,0.3)]"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-6 rounded-sm border border-violet-400/60 bg-cover bg-center cursor-pointer shadow-[0_0_6px_rgba(167,139,250,0.3)]"
         style={{ backgroundImage: `url(${badge.src})` }}
       />
       <div
@@ -275,10 +275,10 @@ function FrameBadgeMark({ badge }: { badge: FrameBadge }) {
         style={{ bottom: 'calc(100% + 8px)' }}
       >
         <div
-          className="w-[140px] h-[94px] rounded border border-cyan-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(34,211,238,0.5)]"
+          className="w-[140px] h-[94px] rounded border border-violet-400/60 bg-cover bg-center shadow-[0_0_12px_rgba(167,139,250,0.5)]"
           style={{ backgroundImage: `url(${badge.src})` }}
         />
-        <span className="text-[9px] font-mono text-cyan-400/80 whitespace-nowrap">{badge.time}</span>
+        <span className="text-[9px] font-mono text-violet-400/80 whitespace-nowrap">{badge.time}</span>
       </div>
     </div>
   );

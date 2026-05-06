@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ImageIcon, Video, Music, X, Plus } from 'lucide-react';
+import { sectionTheme } from '@/theme/domains';
 
 interface ResolvedAsset {
   id?: string;
@@ -19,36 +20,40 @@ interface AssetDropSlotProps {
   acceptTypes?: ('image' | 'video' | 'audio' | 'character')[];
   emptyIcon?: React.ReactNode;
   compact?: boolean;
-  variant?: 'default' | 'violet';
+  variant?: 'image' | 'video';
 }
 
-// Theme tokens matching RenderSettingsPanel's ThemedDropSlot
+// Theme tokens. Sourced from the canonical 5-domain palette in
+// src/theme/domains.ts.
+const imageTheme = sectionTheme('image');
+const videoTheme = sectionTheme('video');
+
 const themes = {
-  default: {
-    controlBorder: 'border-cyan-500/15',
-    controlBg: 'bg-cyan-500/[0.04]',
-    controlText: 'text-cyan-400/40',
-    activeBorder: 'border-cyan-400',
-    activeText: 'text-cyan-300',
-    activeGlow: '0 0 12px rgba(34,211,238,0.25)',
-    inactiveText: 'text-cyan-400/25',
-    inactiveHoverBorder: 'hover:border-cyan-500/30',
-    labelText: 'text-cyan-400/50',
+  image: {
+    controlBorder: imageTheme.controlBorder,
+    controlBg: imageTheme.controlBg,
+    controlText: imageTheme.controlText,
+    activeBorder: imageTheme.activeBorder,
+    activeText: imageTheme.activeText,
+    activeGlow: imageTheme.activeGlow,
+    inactiveText: imageTheme.inactiveText,
+    inactiveHoverBorder: imageTheme.inactiveHoverBorder,
+    labelText: imageTheme.labelText,
   },
-  violet: {
-    controlBorder: 'border-violet-500/15',
-    controlBg: 'bg-violet-500/[0.04]',
-    controlText: 'text-violet-400/40',
-    activeBorder: 'border-violet-400',
-    activeText: 'text-violet-300',
-    activeGlow: '0 0 12px rgba(139,92,246,0.25)',
-    inactiveText: 'text-violet-400/25',
-    inactiveHoverBorder: 'hover:border-violet-500/30',
-    labelText: 'text-violet-400/50',
+  video: {
+    controlBorder: videoTheme.controlBorder,
+    controlBg: videoTheme.controlBg,
+    controlText: videoTheme.controlText,
+    activeBorder: videoTheme.activeBorder,
+    activeText: videoTheme.activeText,
+    activeGlow: videoTheme.activeGlow,
+    inactiveText: videoTheme.inactiveText,
+    inactiveHoverBorder: videoTheme.inactiveHoverBorder,
+    labelText: videoTheme.labelText,
   },
 } as const;
 
-export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'default' }: AssetDropSlotProps) {
+export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'image' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
@@ -147,10 +152,10 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
                 <span className={cn(
                   'max-w-full text-[10px] font-mono font-bold truncate px-1.5 py-0.5 rounded',
                   'bg-black/85 backdrop-blur-md border',
-                  variant === 'violet' ? 'text-violet-300' : 'text-cyan-300',
+                  variant === 'video' ? 'text-violet-300' : 'text-cyan-300',
                 )}
                 style={{
-                  borderColor: variant === 'violet' ? 'rgba(139,92,246,0.4)' : 'rgba(0,255,255,0.2)',
+                  borderColor: variant === 'video' ? 'rgba(167,139,250,0.4)' : 'rgba(34,211,238,0.2)',
                 }}>
                   {value.slug}
                 </span>

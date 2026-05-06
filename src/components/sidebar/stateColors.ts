@@ -1,4 +1,5 @@
 import type { AssetType, ClipState, MediaItem } from './types';
+import { cardTone } from '@/theme/domains';
 
 export type CardTone =
   | 'ready'
@@ -75,14 +76,15 @@ const TONE_STYLES: Record<CardTone, {
     faint: 'rgba(239, 68, 68, 0.08)',
     dot: 'bg-red-500',
   },
+  // Final-state asset cards keep slightly stronger border/glow than the
+  // generic cardTone factory, since the gold treatment is the most visually
+  // significant in the app.
   final: {
-    color: FINAL_RAW,
-    rgb: '251, 191, 36',
+    ...cardTone('final'),
     border: 'rgba(251, 191, 36, 0.55)',
     glow: 'rgba(251, 191, 36, 0.45)',
     soft: 'rgba(251, 191, 36, 0.16)',
     faint: 'rgba(251, 191, 36, 0.08)',
-    dot: null,
   },
   uploading: {
     color: READY_RAW,
@@ -156,60 +158,15 @@ const TONE_STYLES: Record<CardTone, {
     faint: 'rgba(239, 68, 68, 0.06)',
     dot: null,
   },
-  video: {
-    color: '#8b5cf6',
-    rgb: '139, 92, 246',
-    border: 'rgba(139, 92, 246, 0.35)',
-    glow: 'rgba(139, 92, 246, 0.35)',
-    soft: 'rgba(139, 92, 246, 0.14)',
-    faint: 'rgba(139, 92, 246, 0.06)',
-    dot: null,
-  },
-  image: {
-    color: READY_RAW,
-    rgb: '0, 255, 255',
-    border: 'rgba(0, 255, 255, 0.35)',
-    glow: 'rgba(0, 255, 255, 0.35)',
-    soft: 'rgba(0, 255, 255, 0.14)',
-    faint: 'rgba(0, 255, 255, 0.06)',
-    dot: null,
-  },
-  character: {
-    color: '#ec4899',
-    rgb: '236, 72, 153',
-    border: 'rgba(236, 72, 153, 0.35)',
-    glow: 'rgba(236, 72, 153, 0.35)',
-    soft: 'rgba(236, 72, 153, 0.14)',
-    faint: 'rgba(236, 72, 153, 0.06)',
-    dot: null,
-  },
-  audio: {
-    color: '#10b981',
-    rgb: '16, 185, 129',
-    border: 'rgba(16, 185, 129, 0.35)',
-    glow: 'rgba(16, 185, 129, 0.35)',
-    soft: 'rgba(16, 185, 129, 0.14)',
-    faint: 'rgba(16, 185, 129, 0.06)',
-    dot: null,
-  },
-  script: {
-    color: '#facc15',
-    rgb: '250, 204, 21',
-    border: 'rgba(250, 204, 21, 0.35)',
-    glow: 'rgba(250, 204, 21, 0.35)',
-    soft: 'rgba(250, 204, 21, 0.14)',
-    faint: 'rgba(250, 204, 21, 0.06)',
-    dot: null,
-  },
-  plan: {
-    color: FINAL_RAW,
-    rgb: '251, 191, 36',
-    border: 'rgba(251, 191, 36, 0.35)',
-    glow: 'rgba(251, 191, 36, 0.35)',
-    soft: 'rgba(251, 191, 36, 0.14)',
-    faint: 'rgba(251, 191, 36, 0.06)',
-    dot: null,
-  },
+  video: cardTone('video'),
+  image: cardTone('image'),
+  // Character is a sub-domain of image (an image asset used as a reference).
+  character: cardTone('image'),
+  // Audio is a sub-domain of video (timeline audio lanes live with video).
+  audio: cardTone('video'),
+  // Script is a sub-domain of plan (text version of a plan).
+  script: cardTone('plan'),
+  plan: cardTone('plan'),
 };
 
 const TYPE_TO_TONE: Record<AssetType, CardTone> = {

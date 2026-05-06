@@ -6,7 +6,7 @@ export interface ModeClasses {
   text: string;
   border: string;
   soft: string;
-  buttonVariant: 'emerald' | 'fuchsia' | 'violet' | 'amber';
+  buttonVariant: 'plan' | 'fuchsia' | 'video' | 'final';
 }
 
 const KEEP: ModeClasses = {
@@ -15,7 +15,7 @@ const KEEP: ModeClasses = {
   text: 'text-emerald-300',
   border: 'border-emerald-400/60',
   soft: 'bg-emerald-500/10',
-  buttonVariant: 'emerald',
+  buttonVariant: 'plan',
 };
 
 const REMOVE: ModeClasses = {
@@ -33,7 +33,7 @@ const SPLIT: ModeClasses = {
   text: 'text-violet-300',
   border: 'border-violet-400/60',
   soft: 'bg-violet-500/10',
-  buttonVariant: 'violet',
+  buttonVariant: 'video',
 };
 
 const OVER_CAP: ModeClasses = {
@@ -42,7 +42,7 @@ const OVER_CAP: ModeClasses = {
   text: 'text-amber-300',
   border: 'border-amber-400/60',
   soft: 'bg-amber-500/10',
-  buttonVariant: 'amber',
+  buttonVariant: 'final',
 };
 
 export function getModeClasses(mode: TrimMode, overCap = false): ModeClasses {

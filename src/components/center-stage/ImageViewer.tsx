@@ -114,7 +114,7 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     tabIndex={-1}
                     onClick={bf.handleFlipToBack}
                     title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-cyan-300 transition-colors duration-150 rounded hover:bg-cyan-500/10"
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -122,7 +122,7 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     tabIndex={-1}
                     onClick={onClose}
                     title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-cyan-300 transition-colors duration-150 rounded hover:bg-cyan-500/10"
                   >
                     <X className="w-4 h-4 stroke-[2.5]" />
                   </button>

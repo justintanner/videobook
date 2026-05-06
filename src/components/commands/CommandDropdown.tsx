@@ -27,7 +27,7 @@ export function CommandDropdown({
   onChange,
   icon,
   size = 'default',
-  variant = 'default',
+  variant = 'image',
   disabled,
   className,
 }: CommandDropdownProps) {
@@ -43,8 +43,10 @@ export function CommandDropdown({
         v.bg,
         'transition-all duration-300',
         disabled && 'opacity-50 cursor-not-allowed',
-        !disabled && 'cursor-pointer hover:border-primary/40',
-        'focus-within:ring-2 focus-within:ring-cyan-400/80 focus-within:ring-offset-1 focus-within:ring-offset-black',
+        !disabled && cn('cursor-pointer', v.hoverBorder),
+        'focus-within:ring-2',
+        v.focusWithinRing,
+        'focus-within:ring-offset-1 focus-within:ring-offset-black',
         className,
       )}
     >

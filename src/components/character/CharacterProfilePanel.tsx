@@ -43,10 +43,10 @@ export function CharacterProfilePanel({ profile, loading, error, onEdit }: Chara
   if (!profile && !loading && !error) return null;
 
   return (
-    <div className="w-full bg-transparent text-xs font-mono text-violet-100">
-      <div className="flex items-center gap-2 px-2 py-2 border-b border-violet-500/30">
-        <User className="w-3 h-3 text-violet-300" />
-        <span className="font-bold uppercase tracking-wider text-[10px] text-violet-200">Character</span>
+    <div className="w-full bg-transparent text-xs font-mono text-cyan-100">
+      <div className="flex items-center gap-2 px-2 py-2 border-b border-cyan-500/30">
+        <User className="w-3 h-3 text-cyan-300" />
+        <span className="font-bold uppercase tracking-wider text-[10px] text-cyan-200">Character</span>
         {onEdit ? (
           <button
             type="button"
@@ -56,19 +56,19 @@ export function CharacterProfilePanel({ profile, loading, error, onEdit }: Chara
             className={cn(
               "flex items-center justify-center w-5 h-5 rounded transition-colors",
               profile
-                ? "text-violet-200 hover:bg-violet-500/20"
+                ? "text-cyan-200 hover:bg-cyan-500/20"
                 : "text-zinc-600 cursor-not-allowed",
             )}
           >
             <Pencil className="w-3 h-3" />
           </button>
         ) : null}
-        {loading && <Loader2 className="w-3 h-3 animate-spin ml-auto text-violet-300" />}
+        {loading && <Loader2 className="w-3 h-3 animate-spin ml-auto text-cyan-300" />}
       </div>
       <div className="p-2 space-y-2.5">
         {error && <div className="text-red-300/80 text-[10px]">{error}</div>}
         {loading && !profile && !error && (
-          <div className="text-violet-300/60 text-[10px]">Extracting profile…</div>
+          <div className="text-cyan-300/60 text-[10px]">Extracting profile…</div>
         )}
 
         {profile && (
@@ -83,14 +83,14 @@ export function CharacterProfilePanel({ profile, loading, error, onEdit }: Chara
 
             {isFreeformSubject(profile.subject_kind) ? (
               profile.other?.trim() ? (
-                <div className="border-t border-violet-500/20 pt-2 space-y-1.5">
+                <div className="border-t border-cyan-500/20 pt-2 space-y-1.5">
                   <Field label="Other" value={trimToHeadClause(profile.other)} title={profile.other} />
                 </div>
               ) : null
             ) : (
               <>
-                <div className="border-t border-violet-500/20 pt-2">
-                  <div className="text-[9px] uppercase tracking-wider text-violet-300/80 mb-1.5">Measurements</div>
+                <div className="border-t border-cyan-500/20 pt-2">
+                  <div className="text-[9px] uppercase tracking-wider text-cyan-300/80 mb-1.5">Measurements</div>
                   <div className="space-y-1.5">
                     {MEASUREMENT_FIELDS.map(({ key, label }) => (
                       <Field key={key} label={label} value={getStr(profile, key) || "—"} />
@@ -98,7 +98,7 @@ export function CharacterProfilePanel({ profile, loading, error, onEdit }: Chara
                   </div>
                 </div>
 
-                <div className="border-t border-violet-500/20 pt-2 space-y-1.5">
+                <div className="border-t border-cyan-500/20 pt-2 space-y-1.5">
                   {LONG_FIELDS.map(({ key, label }) => {
                     const value = getStr(profile, key);
                     if (!value.trim()) return null;
@@ -134,8 +134,8 @@ function Field({
 }) {
   return (
     <div className={cn("leading-tight", compact && "min-w-0")} title={title}>
-      <div className="text-[9px] uppercase tracking-wider text-violet-400/70">{label}</div>
-      <div className={cn("text-violet-100", compact ? "text-[10px] truncate" : "text-[11px]")}>
+      <div className="text-[9px] uppercase tracking-wider text-cyan-400/70">{label}</div>
+      <div className={cn("text-cyan-100", compact ? "text-[10px] truncate" : "text-[11px]")}>
         {value}
       </div>
     </div>

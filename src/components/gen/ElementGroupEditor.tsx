@@ -6,6 +6,107 @@ import type { JSONSchemaProperty, ResolvedAsset } from './types';
 import { MAX_ELEMENT_GROUPS } from './types';
 import { stripSlugPrefix } from '@/lib/slugs';
 import { GenSection } from './ui/GenSection';
+import type { Domain } from '@/theme/domains';
+
+interface ElementSkin {
+  cardBorder: string;
+  cardBg: string;
+  labelText: string;
+  countText: string;
+  inputBorder: string;
+  inputText: string;
+  inputPlaceholder: string;
+  inputFocus: string;
+  charCount: string;
+  addBorder: string;
+  addText: string;
+  addHover: string;
+  addFocus: string;
+  slotVariant: 'image' | 'video';
+}
+
+const ELEMENT_SKINS: Record<Domain, ElementSkin> = {
+  projects: {
+    cardBorder: 'border-zinc-400/30',
+    cardBg: 'bg-zinc-400/5',
+    labelText: 'text-zinc-400/50',
+    countText: 'text-zinc-400/50',
+    inputBorder: 'border-zinc-400/30',
+    inputText: 'text-zinc-300/90',
+    inputPlaceholder: 'placeholder:text-zinc-400/30',
+    inputFocus: 'focus:border-zinc-400/60',
+    charCount: 'text-zinc-400/40',
+    addBorder: 'border-zinc-400/40',
+    addText: 'text-zinc-400/50',
+    addHover: 'hover:border-zinc-400/60 hover:text-zinc-400/70 hover:bg-zinc-400/5',
+    addFocus: 'focus-visible:ring-zinc-400/60',
+    slotVariant: 'image',
+  },
+  image: {
+    cardBorder: 'border-cyan-400/30',
+    cardBg: 'bg-cyan-400/5',
+    labelText: 'text-cyan-400/50',
+    countText: 'text-cyan-400/50',
+    inputBorder: 'border-cyan-400/30',
+    inputText: 'text-cyan-300/90',
+    inputPlaceholder: 'placeholder:text-cyan-400/30',
+    inputFocus: 'focus:border-cyan-400/60',
+    charCount: 'text-cyan-400/40',
+    addBorder: 'border-cyan-400/40',
+    addText: 'text-cyan-400/50',
+    addHover: 'hover:border-cyan-400/60 hover:text-cyan-400/70 hover:bg-cyan-400/5',
+    addFocus: 'focus-visible:ring-cyan-400/60',
+    slotVariant: 'image',
+  },
+  video: {
+    cardBorder: 'border-violet-400/30',
+    cardBg: 'bg-violet-400/5',
+    labelText: 'text-violet-400/50',
+    countText: 'text-violet-400/50',
+    inputBorder: 'border-violet-400/30',
+    inputText: 'text-violet-300/90',
+    inputPlaceholder: 'placeholder:text-violet-400/30',
+    inputFocus: 'focus:border-violet-400/60',
+    charCount: 'text-violet-400/40',
+    addBorder: 'border-violet-400/40',
+    addText: 'text-violet-400/50',
+    addHover: 'hover:border-violet-400/60 hover:text-violet-400/70 hover:bg-violet-400/5',
+    addFocus: 'focus-visible:ring-violet-400/60',
+    slotVariant: 'video',
+  },
+  plan: {
+    cardBorder: 'border-emerald-400/30',
+    cardBg: 'bg-emerald-400/5',
+    labelText: 'text-emerald-400/50',
+    countText: 'text-emerald-400/50',
+    inputBorder: 'border-emerald-400/30',
+    inputText: 'text-emerald-300/90',
+    inputPlaceholder: 'placeholder:text-emerald-400/30',
+    inputFocus: 'focus:border-emerald-400/60',
+    charCount: 'text-emerald-400/40',
+    addBorder: 'border-emerald-400/40',
+    addText: 'text-emerald-400/50',
+    addHover: 'hover:border-emerald-400/60 hover:text-emerald-400/70 hover:bg-emerald-400/5',
+    addFocus: 'focus-visible:ring-emerald-400/60',
+    slotVariant: 'image',
+  },
+  final: {
+    cardBorder: 'border-amber-400/30',
+    cardBg: 'bg-amber-400/5',
+    labelText: 'text-amber-400/50',
+    countText: 'text-amber-400/50',
+    inputBorder: 'border-amber-400/30',
+    inputText: 'text-amber-300/90',
+    inputPlaceholder: 'placeholder:text-amber-400/30',
+    inputFocus: 'focus:border-amber-400/60',
+    charCount: 'text-amber-400/40',
+    addBorder: 'border-amber-400/40',
+    addText: 'text-amber-400/50',
+    addHover: 'hover:border-amber-400/60 hover:text-amber-400/70 hover:bg-amber-400/5',
+    addFocus: 'focus-visible:ring-amber-400/60',
+    slotVariant: 'image',
+  },
+};
 
 interface Asset {
   slug: string;
@@ -23,6 +124,7 @@ interface ElementGroupEditorProps {
   assets: Asset[];
   onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
   disabled?: boolean;
+  domain?: Domain;
 }
 
 function findThumbnail(
@@ -74,7 +176,9 @@ export function ElementGroupEditor({
   assets,
   onChange,
   disabled,
+  domain = 'video',
 }: ElementGroupEditorProps) {
+  const skin = ELEMENT_SKINS[domain];
   const populatedCount = elementGroupIndices.reduce((count, idx) => {
     const slugs = formValues[`element${idx}_slugs`];
     const name = formValues[`element${idx}_name`];
@@ -156,9 +260,9 @@ export function ElementGroupEditor({
   return (
     <GenSection
       label="elements"
-      color="violet"
+      color={domain}
       rightSlot={
-        <span className="text-[10px] font-mono text-violet-400/50">
+        <span className={cn('text-[10px] font-mono', skin.countText)}>
           {effectiveVisible}/{maxGroups}
         </span>
       }
@@ -181,14 +285,14 @@ export function ElementGroupEditor({
         if (canAddMore) slots.push({ slug: null, index: filledCount });
 
         return (
-          <div key={groupIdx} className={cn('border rounded p-2.5 space-y-2.5', 'border-violet-400/30 bg-violet-400/5')}>
+          <div key={groupIdx} className={cn('border rounded p-2.5 space-y-2.5', skin.cardBorder, skin.cardBg)}>
             {/* Header */}
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold tracking-[0.15em] text-violet-400/50 uppercase">
+              <span className={cn('text-[10px] font-bold tracking-[0.15em] uppercase', skin.labelText)}>
                 Element {groupIdx}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-violet-400/50">
+                <span className={cn('text-[10px] font-mono', skin.countText)}>
                   {filledCount}/{maxItems}
                 </span>
                 <button
@@ -232,7 +336,7 @@ export function ElementGroupEditor({
                       disabled={disabled}
                       acceptTypes={['image', 'video']}
                       emptyIcon={<Puzzle className="w-5 h-5" />}
-                      variant="violet"
+                      variant={skin.slotVariant}
                     />
                   </div>
                 );
@@ -250,10 +354,13 @@ export function ElementGroupEditor({
                 aria-label={`Element ${groupIdx} name`}
                 className={cn(
                   'w-full px-3 py-1.5',
-                  'bg-black/60 border border-violet-400/30 rounded',
-                  'text-violet-300/90 placeholder:text-violet-400/30',
+                  'bg-black/60 border rounded',
+                  skin.inputBorder,
+                  skin.inputText,
+                  skin.inputPlaceholder,
                   'font-mono text-xs',
-                  'focus:outline-none focus:border-violet-400/60',
+                  'focus:outline-none',
+                  skin.inputFocus,
                   'transition-all duration-200',
                   disabled && 'opacity-50 cursor-not-allowed'
                 )}
@@ -264,7 +371,7 @@ export function ElementGroupEditor({
             {(hasSlugs || currentName || currentDesc) && (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold tracking-[0.15em] text-violet-400/50 uppercase">desc</span>
+                  <span className={cn('text-[10px] font-bold tracking-[0.15em] uppercase', skin.labelText)}>desc</span>
                   <span className="text-[8px] font-bold text-red-400/80 tracking-wider">*REQ</span>
                 </div>
                 <textarea
@@ -277,15 +384,18 @@ export function ElementGroupEditor({
                   aria-label={`Element ${groupIdx} description`}
                   className={cn(
                     'w-full px-3 py-2 resize-none',
-                    'bg-black/60 border border-violet-400/30 rounded',
-                    'text-violet-300/90 placeholder:text-violet-400/30',
+                    'bg-black/60 border rounded',
+                    skin.inputBorder,
+                    skin.inputText,
+                    skin.inputPlaceholder,
                     'font-mono text-xs leading-relaxed',
-                    'focus:outline-none focus:border-violet-400/60',
+                    'focus:outline-none',
+                    skin.inputFocus,
                     'transition-all duration-200',
                     disabled && 'opacity-50 cursor-not-allowed'
                   )}
                 />
-                <div className="text-right text-[9px] font-mono text-violet-400/40 mt-0.5">
+                <div className={cn('text-right text-[9px] font-mono mt-0.5', skin.charCount)}>
                   {currentDesc.length}/100
                 </div>
               </div>
@@ -302,11 +412,14 @@ export function ElementGroupEditor({
           disabled={disabled}
           className={cn(
             'w-full h-8 flex items-center justify-center gap-1.5 rounded',
-            'border border-dashed border-violet-400/40',
-            'text-[10px] font-bold tracking-[0.15em] text-violet-400/50 uppercase',
-            'hover:border-violet-400/60 hover:text-violet-400/70 hover:bg-violet-400/5',
+            'border border-dashed',
+            skin.addBorder,
+            'text-[10px] font-bold tracking-[0.15em] uppercase',
+            skin.addText,
+            skin.addHover,
             'transition-all duration-200',
-            'focus-visible:ring-1 focus-visible:ring-violet-400/60 focus-visible:outline-none',
+            'focus-visible:ring-1 focus-visible:outline-none',
+            skin.addFocus,
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         >

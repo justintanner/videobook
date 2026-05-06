@@ -330,9 +330,9 @@ export function TrimEditor({
               onTimeUpdate={handleTimeUpdate}
             />
           </div>
-          <div className="relative w-[320px] shrink-0 flex flex-col border-l border-cyan-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
+          <div className="relative w-[320px] shrink-0 flex flex-col border-l border-violet-500/30 bg-gradient-to-b from-zinc-950 to-zinc-900/90">
             <div className="shrink-0 px-4 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80 flex items-center justify-between">
-              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-cyan-500/70">Transcript</span>
+              <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-violet-500/70">Transcript</span>
               <span className="text-[10px] font-mono text-zinc-500">
                 {words.length > 0
                   ? `${words.length} words · ${duration > 0 ? formatDurationMS(duration) : ''}`
@@ -349,7 +349,7 @@ export function TrimEditor({
                         <span
                           className={cn(
                             'inline-block text-base font-sans cursor-pointer select-none px-0.5 mx-0.5 my-0.5 rounded-sm',
-                            isActive ? 'text-cyan-300 bg-cyan-500/15' : 'text-zinc-300',
+                            isActive ? 'text-violet-300 bg-violet-500/15' : 'text-zinc-300',
                           )}
                           onClick={() => {
                             const video = videoRef.current;

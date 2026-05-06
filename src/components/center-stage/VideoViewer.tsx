@@ -327,8 +327,8 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     className={cn(
                       'w-6 h-6 flex items-center justify-center rounded transition-colors duration-150',
                       cropMode
-                        ? 'text-primary bg-primary/15'
-                        : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
+                        ? 'text-violet-300 bg-violet-500/15'
+                        : 'text-muted-foreground hover:text-violet-300 hover:bg-violet-500/10',
                     )}
                   >
                     <Crop className="w-4 h-4 stroke-[2.5]" />
@@ -337,7 +337,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     tabIndex={-1}
                     onClick={bf.handleFlipToBack}
                     title="/settings"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-violet-300 transition-colors duration-150 rounded hover:bg-violet-500/10"
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -345,7 +345,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     tabIndex={-1}
                     onClick={onClose}
                     title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-violet-300 transition-colors duration-150 rounded hover:bg-violet-500/10"
                   >
                     <X className="w-4 h-4 stroke-[2.5]" />
                   </button>

@@ -52,7 +52,7 @@ function SliderRow({ label, value, min, max, step, unit, onChange }: SliderRowPr
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-muted-foreground/70">
         <span>{label}</span>
-        <span className="tabular-nums text-cyan-200/90">{value}{unit}</span>
+        <span className="tabular-nums text-violet-200/90">{value}{unit}</span>
       </div>
       <input
         type="range"
@@ -61,7 +61,7 @@ function SliderRow({ label, value, min, max, step, unit, onChange }: SliderRowPr
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-cyan-400"
+        className="w-full accent-violet-400"
       />
     </div>
   );
@@ -111,8 +111,8 @@ export function TimelineAudioClip({
         <div
           className={cn(
             'absolute top-1 bottom-1 rounded',
-            'bg-cyan-500/15 border border-cyan-400/40',
-            'hover:border-cyan-300/70 hover:bg-cyan-500/20',
+            'bg-violet-500/15 border border-violet-400/40',
+            'hover:border-violet-300/70 hover:bg-violet-500/20',
             'cursor-grab active:cursor-grabbing transition-colors',
             'overflow-hidden group',
           )}
@@ -123,11 +123,11 @@ export function TimelineAudioClip({
           {waveform && waveform.length > 0 && (
             <Waveform
               data={waveform}
-              className="absolute inset-x-0 top-1 bottom-1 text-cyan-300"
+              className="absolute inset-x-0 top-1 bottom-1 text-violet-300"
             />
           )}
           <div className="absolute top-0.5 left-1.5 z-10">
-            <span className="text-[9px] font-mono font-bold text-cyan-100/90 truncate block leading-tight drop-shadow-sm">
+            <span className="text-[9px] font-mono font-bold text-violet-100/90 truncate block leading-tight drop-shadow-sm">
               @{slug}
             </span>
           </div>
@@ -139,14 +139,14 @@ export function TimelineAudioClip({
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onMouseDown={suppressChipDrag}
-                  className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-black/60 hover:text-white"
+                  className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-black/60 hover:text-white"
                   aria-label="Audio settings"
                 >
                   <Volume2 className="w-3 h-3" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-64 p-3 bg-card/95 border-cyan-500/30 backdrop-blur-md pointer-events-auto"
+                className="w-64 p-3 bg-card/95 border-violet-500/30 backdrop-blur-md pointer-events-auto"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="flex flex-col gap-3">
@@ -186,7 +186,7 @@ export function TimelineAudioClip({
               onDragStart={(e) => e.preventDefault()}
               onMouseDown={suppressChipDrag}
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-cyan-100 hover:bg-red-500/80 hover:text-white"
+              className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-red-500/80 hover:text-white"
               aria-label="Remove audio"
             >
               <X className="w-3 h-3" />
@@ -197,7 +197,7 @@ export function TimelineAudioClip({
       <ContextMenuContent>
         <ContextMenuItem
           onSelect={onRemove}
-          className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
+          className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-violet-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-violet-500/60"
         >
           <span className="text-sm font-semibold leading-none text-foreground">Remove audio</span>
           <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">@{slug}</span>

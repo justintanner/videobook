@@ -45,7 +45,7 @@ function MicroThumb({ url, pct }: { url: string; pct: number }) {
           className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[2px] pointer-events-none"
           style={{ height: '400%' }}
         >
-          <div className="w-full h-full bg-primary shadow-[0_0_8px_var(--color-primary),0_0_16px_var(--color-primary)]" />
+          <div className="w-full h-full bg-violet-500 shadow-[0_0_8px_var(--clip-domain-video),0_0_16px_var(--clip-domain-video)]" />
         </div>
       )}
       {/* Large preview — portalled to body to escape overflow-hidden */}
@@ -64,7 +64,7 @@ function MicroThumb({ url, pct }: { url: string; pct: number }) {
           <img
             src={url}
             alt=""
-            className="w-72 h-auto rounded-lg border-2 border-primary shadow-[0_0_24px_rgba(0,255,255,0.5),0_0_48px_rgba(0,255,255,0.2),0_8px_32px_rgba(0,0,0,0.6)]"
+            className="w-72 h-auto rounded-lg border-2 border-violet-500 shadow-[0_0_24px_rgba(0,255,255,0.5),0_0_48px_rgba(0,255,255,0.2),0_8px_32px_rgba(0,0,0,0.6)]"
           />
         </div>,
         document.body,
@@ -175,11 +175,11 @@ export function TimelineSlot({
       className={cn(
         'relative h-full rounded cursor-pointer transition-all duration-150 group',
         isDragOver
-          ? 'ring-2 ring-primary shadow-[0_0_20px_rgba(0,255,255,0.2)]'
+          ? 'ring-2 ring-violet-500 shadow-[0_0_20px_rgba(0,255,255,0.2)]'
           : isActive
-            ? 'ring-1 ring-primary'
+            ? 'ring-1 ring-violet-500'
             : hasContent
-              ? 'border border-white/[0.08] hover:border-primary/30'
+              ? 'border border-white/[0.08] hover:border-violet-500/30'
               : 'border border-dashed border-border/30 hover:border-border/50',
         hasContent && !isDragOver && !isRendering && 'cursor-grab active:cursor-grabbing',
         isRendering && 'clip-state-rendering',
@@ -193,13 +193,13 @@ export function TimelineSlot({
       {/* Clipped inner content */}
       <div className="absolute inset-0 rounded overflow-hidden">
         {isRendering ? (
-          <div className="absolute inset-0 bg-primary/5 flex items-center justify-center">
+          <div className="absolute inset-0 bg-violet-500/5 flex items-center justify-center">
             <SlotHourglass />
           </div>
         ) : hasContent ? (
           <>
             {/* Dark background base */}
-            <div className="absolute inset-0 bg-primary/5" />
+            <div className="absolute inset-0 bg-violet-500/5" />
 
             {/* Gradient overlay — lighter to not obscure waveform */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
@@ -208,7 +208,7 @@ export function TimelineSlot({
             {waveform && waveform.length > 0 && (
               <Waveform
                 data={waveform}
-                className="absolute inset-x-0 top-[15%] bottom-[15%] text-primary"
+                className="absolute inset-x-0 top-[15%] bottom-[15%] text-violet-300"
               />
             )}
 
@@ -269,13 +269,13 @@ export function TimelineSlot({
 
       {/* Active indicator */}
       {isActive && (
-        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary shadow-[0_0_8px_var(--color-primary)]" />
+        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-violet-500 shadow-[0_0_8px_var(--clip-domain-video)]" />
       )}
 
       {/* Drag overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 bg-primary/10 backdrop-blur-[1px] flex items-center justify-center">
-          <span className="text-xs font-mono text-primary font-bold">drop</span>
+        <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-[1px] flex items-center justify-center">
+          <span className="text-xs font-mono text-violet-300 font-bold">drop</span>
         </div>
       )}
     </div>

@@ -57,7 +57,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
           )}>
             <ViewerToolbar
               left={
-                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-primary/70">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-violet-300/70">
                   <AudioLines className="w-3.5 h-3.5" />
                   <span>AUDIO</span>
                 </span>
@@ -69,7 +69,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
                     tabIndex={-1}
                     onClick={bf.handleFlipToBack}
                     title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-violet-300 transition-colors duration-150 rounded hover:bg-violet-500/10"
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -77,7 +77,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
                     tabIndex={-1}
                     onClick={onClose}
                     title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-violet-300 transition-colors duration-150 rounded hover:bg-violet-500/10"
                   >
                     <X className="w-4 h-4 stroke-[2.5]" />
                   </button>
@@ -86,7 +86,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
             />
 
             <div className="flex-1 bg-black flex flex-col min-h-0 items-center justify-center gap-6 px-8">
-              <AudioLines className="w-16 h-16 text-primary/20" />
+              <AudioLines className="w-16 h-16 text-violet-300/20" />
               {item.filePath && (
                 <audio
                   src={item.filePath}

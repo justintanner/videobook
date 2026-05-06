@@ -53,19 +53,19 @@ function TimelinePlayerHeader({ previewData, onOrientationChange }: { previewDat
           sizes={timelineSizes}
         />
       ) : (
-        <span className="text-[11px] font-mono font-bold text-primary/70 tabular-nums">{w}&times;{h}</span>
+        <span className="text-[11px] font-mono font-bold text-violet-300/70 tabular-nums">{w}&times;{h}</span>
       )}
 
       {/* Center label */}
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="font-mono text-[11px] font-bold tracking-widest uppercase text-primary/40">
+        <span className="font-mono text-[11px] font-bold tracking-widest uppercase text-violet-300/40">
           TIMELINE &middot; {slots.length} SLOT{slots.length !== 1 ? 'S' : ''}
         </span>
       </span>
 
       {/* Right: duration readout */}
       <div className="flex items-center gap-1.5">
-        <Film className="w-3.5 h-3.5 text-primary/30" />
+        <Film className="w-3.5 h-3.5 text-violet-300/30" />
         <span className="text-[11px] font-mono tabular-nums text-muted-foreground/60">{formatTime(totalSeconds)}</span>
       </div>
     </div>

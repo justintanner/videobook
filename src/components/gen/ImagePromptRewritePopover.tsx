@@ -118,9 +118,9 @@ export function ImagePromptRewritePopover({
         sideOffset={6}
         className={cn(
           'w-96 p-0 rounded border',
-          'border-amber-500/30',
+          'border-cyan-500/30',
           'bg-black/95 backdrop-blur-sm',
-          'text-amber-200',
+          'text-cyan-200',
           'shadow-[0_0_24px_rgba(245,158,11,0.12)]',
         )}
         onOpenAutoFocus={(e) => {
@@ -129,13 +129,13 @@ export function ImagePromptRewritePopover({
         }}
       >
         <div className="flex flex-col gap-3 p-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-amber-300/90">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300/90">
             <Zap className="w-3.5 h-3.5" />
             Rewrite Image Prompt
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/70 w-14">Platform</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-500/70 w-14">Platform</span>
             <div className="relative flex-1">
               <select
                 value={platform}
@@ -143,25 +143,25 @@ export function ImagePromptRewritePopover({
                 disabled={disabled || rewriting}
                 className={cn(
                   'w-full h-7 pl-2.5 pr-7 rounded border appearance-none',
-                  'border-amber-500/30 bg-black/60',
-                  'text-[11px] font-mono font-bold uppercase tracking-wider text-amber-200',
-                  'hover:border-amber-400/60 focus:outline-none focus:ring-1 focus:ring-amber-400/60',
+                  'border-cyan-500/30 bg-black/60',
+                  'text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-200',
+                  'hover:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/60',
                   'disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer',
                 )}
               >
                 {PLATFORM_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-black text-amber-200">
+                  <option key={opt.value} value={opt.value} className="bg-black text-cyan-200">
                     {opt.label}
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-amber-400/70" />
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-cyan-400/70" />
             </div>
           </div>
 
           <div className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/70">Instruction (optional)</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-500/70">Instruction (optional)</span>
               <div className="flex items-center gap-2">
                 <PromptHistoryArrows
                   cursor={history.cursor}
@@ -174,9 +174,9 @@ export function ImagePromptRewritePopover({
                     const next = history.navigateForward();
                     if (next !== null) setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
                   }}
-                  colorClass="text-amber-400/70"
+                  colorClass="text-cyan-400/70"
                 />
-                <span className="text-[10px] font-mono text-amber-500/50 tabular-nums">
+                <span className="text-[10px] font-mono text-cyan-500/50 tabular-nums">
                   {customPrompt.length}/{CUSTOM_PROMPT_MAX}
                 </span>
               </div>
@@ -193,9 +193,9 @@ export function ImagePromptRewritePopover({
                 placeholder="e.g. keep the subject centered, remove the blue tint  (or /help)"
                 className={cn(
                   'w-full px-2.5 py-1.5 rounded border resize-none',
-                  'border-amber-500/30 bg-black/60',
-                  'text-[12px] font-mono text-amber-100 placeholder:text-amber-500/30',
-                  'hover:border-amber-400/60 focus:outline-none focus:ring-1 focus:ring-amber-400/60',
+                  'border-cyan-500/30 bg-black/60',
+                  'text-[12px] font-mono text-cyan-100 placeholder:text-cyan-500/30',
+                  'hover:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/60',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                 )}
               />
@@ -203,7 +203,7 @@ export function ImagePromptRewritePopover({
           </div>
 
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-[10px] font-mono text-amber-500/40">⌘↵ to submit · ↑/↓ history</span>
+            <span className="text-[10px] font-mono text-cyan-500/40">⌘↵ to submit · ↑/↓ history</span>
             <button
               type="button"
               onClick={submit}
@@ -211,8 +211,8 @@ export function ImagePromptRewritePopover({
               className={cn(
                 'h-7 px-3 flex items-center gap-1.5 rounded',
                 'text-[11px] font-mono font-bold uppercase tracking-wider',
-                'text-amber-200 hover:text-amber-100',
-                'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/50 hover:border-amber-300/80',
+                'text-cyan-200 hover:text-cyan-100',
+                'bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 hover:border-cyan-300/80',
                 'transition-colors duration-150',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}

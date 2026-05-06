@@ -14,10 +14,10 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
         tabIndex={-1}
         className={cn(
           'group flex items-center gap-0 rounded overflow-hidden relative',
-          'h-8 border border-emerald-500/25 bg-emerald-500/10',
+          'h-8 border border-zinc-500/25 bg-zinc-500/10',
           'transition-all duration-300 cursor-pointer',
-          'hover:border-emerald-500/40',
-          'focus-visible:ring-2 focus-visible:ring-emerald-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+          'hover:border-zinc-500/40',
+          'focus-visible:ring-2 focus-visible:ring-zinc-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
           className
         )}
         {...props}
@@ -25,33 +25,33 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
         {/* Chevron zone */}
         <div className={cn(
           'flex items-center justify-center h-full px-2 transition-colors',
-          'text-emerald-400/40 group-hover:text-emerald-400/60'
+          'text-zinc-400/40 group-hover:text-zinc-400/60'
         )}>
           <span className={cn(
             'font-mono select-none transition-all text-sm',
             '-translate-y-1 group-hover:animate-pulse'
           )}>
-            {'\u2304'}
+            {'⌄'}
           </span>
         </div>
 
         {/* Path zone */}
         <div className={cn(
           'flex-1 flex items-center h-full px-2.5 gap-0',
-          'bg-black/40 shadow-[inset_0_0_10px_rgba(52,211,153,0.05)]',
-          'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(52,211,153,0.12)]',
+          'bg-black/40 shadow-[inset_0_0_10px_rgba(161,161,170,0.05)]',
+          'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(161,161,170,0.12)]',
           'transition-all'
         )}>
-          <span className="font-mono font-bold text-xs tracking-widest text-emerald-400/40">
+          <span className="font-mono font-bold text-xs tracking-widest text-zinc-400/40">
             projects
           </span>
-          <span className="font-mono font-bold text-xs tracking-widest text-emerald-400/70 group-hover:text-emerald-400/90 transition-colors">
+          <span className="font-mono font-bold text-xs tracking-widest text-zinc-400/70 group-hover:text-zinc-400/90 transition-colors">
             /{projectSlug}
           </span>
         </div>
 
         {/* Icon zone */}
-        <div className="flex items-center justify-center h-full px-2 text-emerald-400/80 group-hover:text-emerald-400 transition-colors">
+        <div className="flex items-center justify-center h-full px-2 text-zinc-400/80 group-hover:text-zinc-400 transition-colors">
           <FolderOpen className="w-3.5 h-3.5" />
         </div>
       </button>

@@ -33,15 +33,15 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} onClick={() => onAnimateCommand('/image')} />
-        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="violet" onClick={() => onAnimateCommand('/video')} />
-        <CommandButton command="/plan" icon={<MapPin className="w-3.5 h-3.5" />} variant="emerald" onClick={() => onAnimateCommand('/plan')} />
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="amber" onClick={() => onAnimateCommand('/final')} />
+        <CommandButton command="/plan" icon={<MapPin className="w-3.5 h-3.5" />} variant="plan" onClick={() => onAnimateCommand('/plan')} />
+        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
+        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
+        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="zinc" onClick={onStatusClick} />
+        <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="projects" onClick={onStatusClick} />
 
         <button className="flex items-center justify-center w-8 h-8 rounded text-muted-foreground/60 hover:text-muted-foreground transition-colors">
           <Settings className="w-4 h-4" />

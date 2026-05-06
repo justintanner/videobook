@@ -330,7 +330,7 @@ export function CharacterDialog({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
-        <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-violet-300/80 uppercase">
+        <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-cyan-300/80 uppercase">
           <User className="w-3.5 h-3.5" />
           Character — Identity profile + 4-up reference sheet
         </div>
@@ -348,13 +348,13 @@ export function CharacterDialog({
       <div className="flex-1 min-h-0 overflow-hidden flex">
         <aside className="w-[340px] shrink-0 border-r border-border/50 overflow-y-auto px-4 py-4 space-y-4 bg-black/25">
           <section>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Source</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">Source</div>
             {source ? (
               <div className="flex gap-3 items-center">
-                <div className="w-28 h-28 rounded border border-violet-500/30 overflow-hidden bg-black shrink-0">
+                <div className="w-28 h-28 rounded border border-cyan-500/30 overflow-hidden bg-black shrink-0">
                   <img src={source.thumbUrl} alt={source.slug} className="w-full h-full object-cover" />
                 </div>
-                <div className="text-[11px] font-mono text-violet-100 truncate" title={source.slug}>
+                <div className="text-[11px] font-mono text-cyan-100 truncate" title={source.slug}>
                   {source.slug}
                 </div>
               </div>
@@ -366,8 +366,8 @@ export function CharacterDialog({
           {source && (
             <section>
               <div className="flex items-center justify-between mb-1.5">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Extra references</div>
-                <div className="text-[9px] font-mono text-violet-400/50">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70">Extra references</div>
+                <div className="text-[9px] font-mono text-cyan-400/50">
                   {additionalReferenceSlugs.length + 1}/3
                 </div>
               </div>
@@ -385,10 +385,10 @@ export function CharacterDialog({
                       className={cn(
                         'shrink-0 w-9 h-9 rounded border overflow-hidden bg-black transition-colors',
                         active
-                          ? 'border-violet-300'
+                          ? 'border-cyan-300'
                           : disabled
-                          ? 'border-violet-500/10 opacity-30 cursor-not-allowed'
-                          : 'border-violet-500/20 hover:border-violet-400/60',
+                          ? 'border-cyan-500/10 opacity-30 cursor-not-allowed'
+                          : 'border-cyan-500/20 hover:border-cyan-400/60',
                       )}
                     >
                       <img src={g.thumbUrl} alt={g.slug} className="w-full h-full object-cover" />
@@ -396,7 +396,7 @@ export function CharacterDialog({
                   );
                 })}
                 {additionalReferenceChoices.length === 0 && (
-                  <div className="text-[9px] font-mono text-violet-400/50">No other image assets available.</div>
+                  <div className="text-[9px] font-mono text-cyan-400/50">No other image assets available.</div>
                 )}
               </div>
             </section>
@@ -404,7 +404,7 @@ export function CharacterDialog({
 
           <section>
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Subject</div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70">Subject</div>
               <button
                 type="button"
                 onClick={handleReanalyze}
@@ -414,7 +414,7 @@ export function CharacterDialog({
                   'flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider rounded border transition-colors',
                   !source || !projectSlug || callState !== 'ready' || analyzing
                     ? 'border-zinc-700 text-zinc-500 cursor-not-allowed'
-                    : 'border-violet-500/30 text-violet-300/80 hover:border-violet-300 hover:text-violet-100',
+                    : 'border-cyan-500/30 text-cyan-300/80 hover:border-cyan-300 hover:text-cyan-100',
                 )}
               >
                 {analyzing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}
@@ -430,8 +430,8 @@ export function CharacterDialog({
                   className={cn(
                     'px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
                     subjectKind === kind
-                      ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                      : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                      ? 'border-cyan-300 bg-cyan-500/15 text-cyan-100'
+                      : 'border-cyan-500/20 text-cyan-300/60 hover:border-cyan-400/50',
                   )}
                 >
                   {kind}
@@ -441,7 +441,7 @@ export function CharacterDialog({
           </section>
 
           <section>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">
               {isFreeform ? 'Sheet accessory / costume' : 'Sheet outfit'}
             </div>
             <div className="flex gap-2 items-start">
@@ -451,18 +451,18 @@ export function CharacterDialog({
                 placeholder={isFreeform ? 'e.g. red collar or tiny cape' : 'e.g. plain white t-shirt and dark jeans'}
                 onChange={(e) => setOutfitText(e.target.value)}
                 className={cn(
-                  'flex-1 bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
-                  'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
+                  'flex-1 bg-black/40 border border-cyan-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-cyan-100',
+                  'focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40',
                 )}
               />
               {outfitImage ? (
-                <div className="relative w-12 h-12 rounded border border-violet-500/40 overflow-hidden bg-black shrink-0">
+                <div className="relative w-12 h-12 rounded border border-cyan-500/40 overflow-hidden bg-black shrink-0">
                   <img src={outfitImage.thumbUrl} alt={outfitImage.slug} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setOutfitImageSlug(null)}
                     aria-label="Remove garment reference"
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-violet-400/40 text-violet-200 hover:bg-red-500/40 hover:border-red-400 flex items-center justify-center"
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-cyan-400/40 text-cyan-200 hover:bg-red-500/40 hover:border-red-400 flex items-center justify-center"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -479,21 +479,21 @@ export function CharacterDialog({
                   className={cn(
                     'shrink-0 w-9 h-9 rounded border overflow-hidden bg-black transition-colors',
                     g.assetId === outfitImageSlug
-                      ? 'border-violet-300'
-                      : 'border-violet-500/20 hover:border-violet-400/60',
+                      ? 'border-cyan-300'
+                      : 'border-cyan-500/20 hover:border-cyan-400/60',
                   )}
                 >
                   <img src={g.thumbUrl} alt={g.slug} className="w-full h-full object-cover" />
                 </button>
               ))}
               {garmentChoices.length === 0 && (
-                <div className="text-[9px] font-mono text-violet-400/50">No image assets in this project yet.</div>
+                <div className="text-[9px] font-mono text-cyan-400/50">No image assets in this project yet.</div>
               )}
             </div>
           </section>
 
           <section>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Models</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">Models</div>
             <div className="flex flex-wrap gap-1.5">
               {OUTFIT_MODEL_OPTIONS.map((m) => {
                 const active = selectedModels.has(m.key);
@@ -505,8 +505,8 @@ export function CharacterDialog({
                     className={cn(
                       'px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
                       active
-                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                        ? 'border-cyan-300 bg-cyan-500/15 text-cyan-100'
+                        : 'border-cyan-500/20 text-cyan-300/60 hover:border-cyan-400/50',
                     )}
                   >
                     {m.label}
@@ -517,7 +517,7 @@ export function CharacterDialog({
           </section>
 
           <section>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">Provider</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">Provider</div>
             <div className="flex gap-1.5">
               {OUTFIT_PROVIDERS.map((p) => {
                 const active = selectedProvider === p.key;
@@ -529,8 +529,8 @@ export function CharacterDialog({
                     className={cn(
                       'px-3 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors',
                       active
-                        ? 'border-violet-300 bg-violet-500/15 text-violet-100'
-                        : 'border-violet-500/20 text-violet-300/60 hover:border-violet-400/50',
+                        ? 'border-cyan-300 bg-cyan-500/15 text-cyan-100'
+                        : 'border-cyan-500/20 text-cyan-300/60 hover:border-cyan-400/50',
                     )}
                   >
                     {p.label}
@@ -565,7 +565,7 @@ export function CharacterDialog({
             className={cn(
               'w-full flex items-center justify-center gap-2 px-4 py-2 rounded text-xs font-mono uppercase tracking-wider transition-colors',
               canSubmit
-                ? 'bg-violet-500/20 border border-violet-300 text-violet-100 hover:bg-violet-500/30'
+                ? 'bg-cyan-500/20 border border-cyan-300 text-cyan-100 hover:bg-cyan-500/30'
                 : 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed',
             )}
           >
@@ -582,8 +582,8 @@ export function CharacterDialog({
 
         <main className="flex-1 min-w-0 overflow-y-auto px-5 py-4">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70">Profile</div>
-            {analyzing && <Loader2 className="w-3 h-3 animate-spin text-violet-300" />}
+            <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70">Profile</div>
+            {analyzing && <Loader2 className="w-3 h-3 animate-spin text-cyan-300" />}
           </div>
           {analyzeError && (
             <div className="text-[10px] font-mono text-amber-400/80 mb-3">{analyzeError}</div>
@@ -591,7 +591,7 @@ export function CharacterDialog({
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             {activeFieldGroups.map((group) => (
               <section key={group.title} className="min-w-0">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-1.5">{group.title}</div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1.5">{group.title}</div>
                 <div className="grid grid-cols-2 gap-2">
                   {group.fields.map((key) => {
                     const f = fieldDef(key);
@@ -599,7 +599,7 @@ export function CharacterDialog({
                     const Tag = f.multiline ? 'textarea' : 'input';
                     return (
                       <label key={f.key} className={cn('block min-w-0', f.multiline && 'col-span-2')}>
-                        <div className="text-[9px] font-mono uppercase tracking-wider text-violet-400/60 mb-0.5">
+                        <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-400/60 mb-0.5">
                           {f.label}{f.required ? ' *' : ''}
                         </div>
                         <Tag
@@ -610,8 +610,8 @@ export function CharacterDialog({
                             setProfileField(f.key, e.target.value)
                           }
                           className={cn(
-                            'w-full bg-black/40 border border-violet-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-violet-100',
-                            'focus:border-violet-400/60 focus:outline-none focus:ring-1 focus:ring-violet-400/40',
+                            'w-full bg-black/40 border border-cyan-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-cyan-100',
+                            'focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40',
                             f.multiline ? 'min-h-[64px] resize-y' : '',
                           )}
                           rows={f.multiline ? 3 : undefined}
