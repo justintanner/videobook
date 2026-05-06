@@ -30,17 +30,17 @@ import {
 // ceiling 14s leaves 1s of safety under the kie/seedance ≤15s reference cap.
 // Cuts prefer the strongest visual break (camera cut > motion settle) inside
 // [cursor+MIN, cursor+MAX]; hard-cut at +MAX when no break qualifies.
-const MIN_SCENE_S = 7;
-const MAX_SCENE_S = 14;
-const REQUIRED_CHARACTERS = 2;
+export const MIN_SCENE_S = 7;
+export const MAX_SCENE_S = 14;
+export const REQUIRED_CHARACTERS = 2;
 
-type CharacterContext = {
+export type CharacterContext = {
   asset_id: string;
   name: string;
   description: string;
 };
 
-type Chunk = {
+export type Chunk = {
   start: number;
   end: number;
 };
@@ -54,6 +54,10 @@ type Scene = {
   // address them as @plan/<filename> without ID reconciliation.
   clip_filename: string;
   audio_filename: string;
+  // Per-scene frames sampled from the source's original_frames/ at plan-vis
+  // time. Persisted so the post-generation audit view can reproduce exactly
+  // what was sent to the vision model without re-running scene detection.
+  frames: Array<{ name: string; t: number }>;
 };
 
 const VisualsSchema = z.object({
@@ -77,7 +81,7 @@ const VISUALS_JSON_SCHEMA = {
   },
 } as const;
 
-const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
+export const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
 
 INPUTS YOU RECEIVE:
 - Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
@@ -146,7 +150,7 @@ async function extractSceneSourceFrames(
   }
 }
 
-async function loadCharacter(
+export async function loadCharacter(
   fs: ClipfirstFs,
   charId: string,
   projectSlug: string,
@@ -295,7 +299,7 @@ export function sampleFramesForScenes(
   return out;
 }
 
-function buildPlanContext(
+export function buildPlanContext(
   characters: CharacterContext[],
   chunks: Chunk[],
   words: ElevenLabsWord[],
@@ -546,8 +550,9 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
       }
 
+      const userContext = buildPlanContext(characters, chunks, transcript.words, sampled);
       const userContent: OpenAiContentPart[] = [
-        textPart(buildPlanContext(characters, chunks, transcript.words, sampled)),
+        textPart(userContext),
         ...frameParts,
       ];
 
@@ -611,6 +616,9 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         visual: visuals[i].visual,
         clip_filename: `s${i + 1}.mp4`,
         audio_filename: `s${i + 1}.mp3`,
+        frames: sampled
+          .filter((f) => f.sceneIdx === i)
+          .map((f) => ({ name: f.name, t: f.t })),
       }));
 
       const sidecar = {
@@ -621,6 +629,8 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         characters,
         model: MODEL,
         analysis_prompt: SYSTEM_PROMPT_PLAN,
+        user_context: userContext,
+        word_count: transcript.words.filter((w) => w.type === "word").length,
       };
 
       const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, MODEL, scenes);

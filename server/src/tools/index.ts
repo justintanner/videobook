@@ -138,6 +138,7 @@ import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
 import { planVisualizationDef } from "./plan-visualization.js";
+import { planPreviewDef } from "./plan-preview.js";
 import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 import { acceptPlanSceneFrameSwapDef } from "./accept-plan-scene-frame-swap.js";
 import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js";
@@ -306,6 +307,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
     planVisualizationDef(fs),
+    planPreviewDef(fs),
     swapPlanSceneFrameDef(fs),
     acceptPlanSceneFrameSwapDef(fs),
     replacePlanSceneFrameSwapDef(fs),

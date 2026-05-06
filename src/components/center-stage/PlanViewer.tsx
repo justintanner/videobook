@@ -20,6 +20,9 @@ interface PlanScene {
   // surface a "re-run /plan-vis" notice.
   clip_filename?: string;
   audio_filename?: string;
+  // Audit data: per-scene frames sampled and sent to the vision model at
+  // plan-vis time. Older plans pre-dating the audit feature lack this.
+  frames?: Array<{ name: string; t: number }>;
   swap?: {
     image1: string | null;
     image2: string | null;
@@ -37,6 +40,8 @@ interface PlanSidecar {
   characters: Array<{ asset_id: string; name: string; description: string }>;
   model: string;
   analysis_prompt?: string;
+  user_context?: string;
+  word_count?: number;
 }
 
 function formatTimecode(seconds: number): string {
@@ -233,8 +238,17 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
             onCharBDrop={setPendingCharB}
             onGenerate={() => { void handleGenerate(); }}
           />
-          {sidecar?.analysis_prompt && (
-            <AnalysisPromptDisclosure prompt={sidecar.analysis_prompt} />
+          {sidecar && (
+            <PlanAuditFromSidecar sidecar={sidecar} projectSlug={projectSlug} />
+          )}
+          {!sidecar && sourceId && charAId && charBId && charAId !== charBId && (
+            <PlanPreviewBlock
+              sourceId={sourceId}
+              charAId={charAId}
+              charBId={charBId}
+              projectSlug={projectSlug}
+              callTool={callTool}
+            />
           )}
           {sidecar && (
             <PlanScenes
@@ -2405,15 +2419,229 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
   );
 }
 
-function AnalysisPromptDisclosure({ prompt }: { prompt: string }) {
+interface VisionAuditScene {
+  start: number;
+  end: number;
+  frames: Array<{ name: string; t: number }>;
+}
+
+interface VisionAuditData {
+  headline: 'pre-flight' | 'post-gen';
+  sourceAssetId: string;
+  scenes: VisionAuditScene[];
+  totalFrames: number;
+  wordCount: number | null;
+  systemPrompt: string | null;
+  userContext: string | null;
+}
+
+function VisionAuditView({ data, projectSlug }: {
+  data: VisionAuditData;
+  projectSlug: string;
+}) {
+  const heading = data.headline === 'pre-flight' ? 'Pre-flight preview' : 'Vision input (sent to model)';
+  const wordsLine = data.wordCount != null
+    ? `${data.wordCount} transcribed words`
+    : 'no word-level transcript stored';
   return (
-    <details className="mb-6 group">
-      <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
-        Analysis prompt <span className="text-emerald-300/40">(system prompt sent to vision model)</span>
-      </summary>
-      <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
-        {prompt}
-      </pre>
-    </details>
+    <div className="mb-6 space-y-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-xs font-mono uppercase tracking-wider text-emerald-300/70">
+          {heading}
+        </div>
+        <div className="text-xs font-mono text-emerald-300/40">
+          {data.scenes.length} scenes · {data.totalFrames} frames · {wordsLine}
+        </div>
+      </div>
+      <div className="space-y-3">
+        {data.scenes.map((scene, i) => (
+          <PlanPreviewSceneRow
+            key={`${scene.start}-${scene.end}-${i}`}
+            scene={scene}
+            sceneIndex={i}
+            sourceId={data.sourceAssetId}
+            projectSlug={projectSlug}
+          />
+        ))}
+      </div>
+      {data.userContext && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
+            User message <span className="text-emerald-300/40">(per-chunk context sent alongside frames)</span>
+          </summary>
+          <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
+            {data.userContext}
+          </pre>
+        </details>
+      )}
+      {data.systemPrompt && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
+            System prompt <span className="text-emerald-300/40">(sent to vision model)</span>
+          </summary>
+          <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
+            {data.systemPrompt}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+interface PlanPreviewPayload {
+  source_asset_id: string;
+  scenes: VisionAuditScene[];
+  total_frames: number;
+  has_word_timings: boolean;
+  word_count: number;
+  system_prompt: string;
+  user_context: string;
+}
+
+type PreviewState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; data: PlanPreviewPayload }
+  | { kind: 'error'; message: string };
+
+function PlanPreviewBlock({ sourceId, charAId, charBId, projectSlug, callTool }: {
+  sourceId: string;
+  charAId: string;
+  charBId: string;
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+}) {
+  const [state, setState] = useState<PreviewState>({ kind: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // Defer the loading-state flip into the async closure so the synchronous
+      // effect body stays setState-free (react-hooks/set-state-in-effect).
+      setState({ kind: 'loading' });
+      const result = await callTool('plan_preview', {
+        source_asset_id: sourceId,
+        project_slug: projectSlug,
+        character_asset_ids: [charAId, charBId],
+      });
+      if (cancelled) return;
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'preview failed';
+        setState({ kind: 'error', message: msg });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed: PlanPreviewPayload = JSON.parse(text);
+        setState({ kind: 'ready', data: parsed });
+      } catch (err) {
+        setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sourceId, charAId, charBId, projectSlug, callTool]);
+
+  if (state.kind === 'loading') {
+    return (
+      <div className="mb-6 flex items-center gap-2 text-xs font-mono text-emerald-300/60">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>Computing scene boundaries and sampling frames…</span>
+      </div>
+    );
+  }
+  if (state.kind === 'error') {
+    return (
+      <div className="mb-6 rounded border border-amber-600/40 bg-amber-950/20 p-3 text-amber-200 text-xs font-mono">
+        Preview unavailable: {state.message}
+      </div>
+    );
+  }
+
+  const { data } = state;
+  return (
+    <VisionAuditView
+      data={{
+        headline: 'pre-flight',
+        sourceAssetId: data.source_asset_id,
+        scenes: data.scenes,
+        totalFrames: data.total_frames,
+        wordCount: data.has_word_timings ? data.word_count : null,
+        systemPrompt: data.system_prompt,
+        userContext: data.user_context,
+      }}
+      projectSlug={projectSlug}
+    />
+  );
+}
+
+function PlanAuditFromSidecar({ sidecar, projectSlug }: {
+  sidecar: PlanSidecar;
+  projectSlug: string;
+}) {
+  const scenes = useMemo<VisionAuditScene[]>(
+    () => sidecar.scenes.map((s) => ({
+      start: s.start,
+      end: s.end,
+      frames: s.frames ?? [],
+    })),
+    [sidecar.scenes],
+  );
+  const totalFrames = scenes.reduce((acc, s) => acc + s.frames.length, 0);
+  const hasAnyFrames = totalFrames > 0;
+  const hasAnyAuditData = hasAnyFrames || Boolean(sidecar.user_context) || Boolean(sidecar.analysis_prompt);
+  if (!hasAnyAuditData) return null;
+  return (
+    <VisionAuditView
+      data={{
+        headline: 'post-gen',
+        sourceAssetId: sidecar.source_asset_id,
+        scenes,
+        totalFrames,
+        wordCount: sidecar.word_count ?? null,
+        systemPrompt: sidecar.analysis_prompt ?? null,
+        userContext: sidecar.user_context ?? null,
+      }}
+      projectSlug={projectSlug}
+    />
+  );
+}
+
+function PlanPreviewSceneRow({ scene, sceneIndex, sourceId, projectSlug }: {
+  scene: VisionAuditScene;
+  sceneIndex: number;
+  sourceId: string;
+  projectSlug: string;
+}) {
+  const duration = (scene.end - scene.start).toFixed(2);
+  return (
+    <div className="rounded border border-zinc-800/60 bg-zinc-950/40 p-3">
+      <div className="flex items-center justify-between mb-2 text-xs font-mono">
+        <span className="text-emerald-300/90">
+          Scene {sceneIndex + 1} — {scene.start.toFixed(2)}s – {scene.end.toFixed(2)}s ({duration}s)
+        </span>
+        <span className="text-emerald-300/40">{scene.frames.length} frame{scene.frames.length === 1 ? '' : 's'}</span>
+      </div>
+      {scene.frames.length === 0 ? (
+        <div className="text-[11px] font-mono text-amber-300/60">No frames in window — vision model would receive no input for this scene.</div>
+      ) : (
+        <div
+          className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-domain"
+          style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
+        >
+          {scene.frames.map((frame) => (
+            <div key={frame.name} className="flex-none">
+              <img
+                src={`/files/${projectSlug}/${sourceId}/original_frames/${frame.name}`}
+                alt={`t=${frame.t.toFixed(2)}s`}
+                className="h-20 w-auto rounded border border-zinc-800/60 object-cover"
+                loading="lazy"
+              />
+              <div className="text-[9px] font-mono text-emerald-300/40 mt-0.5 text-center">
+                {frame.t.toFixed(2)}s
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

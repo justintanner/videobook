@@ -7,6 +7,10 @@ interface PlanScene {
   start: number;
   end: number;
   visual: string;
+  // Per-scene frames sampled from the source's original_frames/ at plan-vis
+  // time; persisted so the audit view can render exactly what was sent. Older
+  // plans pre-dating the audit feature lack this field.
+  frames?: Array<{ name: string; t: number }>;
 }
 
 interface PlanSidecar {
@@ -17,6 +21,8 @@ interface PlanSidecar {
   characters: Array<{ asset_id: string; name: string; description: string }>;
   model: string;
   analysis_prompt?: string;
+  user_context?: string;
+  word_count?: number;
 }
 
 export function readPlanDef(fs: ClipfirstFs): ToolDef {
