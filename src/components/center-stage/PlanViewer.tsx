@@ -36,6 +36,7 @@ interface PlanSidecar {
   source_asset_id: string;
   characters: Array<{ asset_id: string; name: string; description: string }>;
   model: string;
+  analysis_prompt?: string;
 }
 
 function formatTimecode(seconds: number): string {
@@ -105,7 +106,8 @@ function PlanShell({ title, slug, onClose, children }: {
 }
 
 // Rough pre-generation estimate only; the real chunker runs server-side and
-// produces variable 7–14s scenes aligned to silence gaps. 10s = midpoint.
+// produces variable 7–14s scenes aligned to camera cuts and motion-settle
+// points. 10s = midpoint.
 const APPROX_SCENE_SECONDS = 10;
 
 function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
@@ -231,6 +233,9 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
             onCharBDrop={setPendingCharB}
             onGenerate={() => { void handleGenerate(); }}
           />
+          {sidecar?.analysis_prompt && (
+            <AnalysisPromptDisclosure prompt={sidecar.analysis_prompt} />
+          )}
           {sidecar && (
             <PlanScenes
               data={sidecar}
@@ -2393,9 +2398,22 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
         <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
         <dt className="text-emerald-300/60">Scenes</dt>
         <dd className="text-emerald-300/90">
-          {scenesCount != null ? `~${scenesCount} (7–14s each, silence-aligned)` : '—'}
+          {scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}
         </dd>
       </dl>
     </div>
+  );
+}
+
+function AnalysisPromptDisclosure({ prompt }: { prompt: string }) {
+  return (
+    <details className="mb-6 group">
+      <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
+        Analysis prompt <span className="text-emerald-300/40">(system prompt sent to vision model)</span>
+      </summary>
+      <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
+        {prompt}
+      </pre>
+    </details>
   );
 }

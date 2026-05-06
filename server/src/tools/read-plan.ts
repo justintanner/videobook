@@ -16,6 +16,7 @@ interface PlanSidecar {
   source_asset_id: string;
   characters: Array<{ asset_id: string; name: string; description: string }>;
   model: string;
+  analysis_prompt?: string;
 }
 
 export function readPlanDef(fs: ClipfirstFs): ToolDef {

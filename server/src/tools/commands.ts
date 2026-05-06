@@ -293,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan-vis",
-    description: "Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a processed video asset (sampled frames + word-timed elevenlabs.json). Splits into 7–14s scene chunks aligned to silence gaps in the transcript, requires exactly two character assets (the two on-screen subjects to swap). Writes to plan/.",
+    description: "Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a processed video asset (sampled frames + word-timed elevenlabs.json). Splits into 7–14s scene chunks aligned to natural visual breaks — camera cuts and motion-settle points (hard-cuts at 14s when no break is available); requires exactly two character assets (the two on-screen subjects to swap). Writes to plan/.",
     example: "/plan-vis @vid-input @char-naval @char-nivi",
     category: "context_menu",
     icon: "Clapperboard",
@@ -305,6 +305,20 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "character_asset_ids", type: "string[]", required: true, description: "Exactly 2 char-* assets — the two on-screen subjects to swap" },
     ],
     mcpTool: { tool: "plan_visualization", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/detect-scenes",
+    description: "Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points). Read-only diagnostic — same detector /plan-vis uses to pick scene boundaries.",
+    example: "/detect-scenes @vid-input",
+    category: "context_menu",
+    icon: "Scissors",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "source_asset_id", type: "string", required: true, description: "Video asset id (vid-*) inside the project" },
+    ],
+    mcpTool: { tool: "detect_scenes", autoInject: ["project_slug"] },
   },
   {
     command: "/watermark",

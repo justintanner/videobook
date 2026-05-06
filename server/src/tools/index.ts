@@ -144,6 +144,7 @@ import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js
 import { acceptPlanSceneVideoSwapDef } from "./accept-plan-scene-video-swap.js";
 import { replacePlanSceneVideoSwapDef } from "./replace-plan-scene-video-swap.js";
 import { readPlanDef } from "./read-plan.js";
+import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { applyCutsDef } from "./apply-cuts.js";
@@ -311,6 +312,7 @@ export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
     acceptPlanSceneVideoSwapDef(fs),
     replacePlanSceneVideoSwapDef(fs),
     readPlanDef(fs),
+    detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
     applyCutsDef(fs),

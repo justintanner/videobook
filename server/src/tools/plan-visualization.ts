@@ -12,6 +12,7 @@ import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@api
 import type { OpenAiContentPart } from "@apicity/openai";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
+import { detectSceneCandidates, type Candidate } from "../scene-detect.js";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);
@@ -21,20 +22,16 @@ import {
   MODEL,
   decodeBuffer,
   loadAssetForAnalysis,
-  sampleFrames,
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
 // Scene length window. Floor stays at 7s (matches the prior fixed-chunk
 // default and the per-modality reference budget headroom on seedance-2);
 // ceiling 14s leaves 1s of safety under the kie/seedance ≤15s reference cap.
-// Cuts prefer the longest silence gap inside [cursor+MIN, cursor+MAX].
+// Cuts prefer the strongest visual break (camera cut > motion settle) inside
+// [cursor+MIN, cursor+MAX]; hard-cut at +MAX when no break qualifies.
 const MIN_SCENE_S = 7;
 const MAX_SCENE_S = 14;
-// Silences shorter than this are word-boundary noise, not real pauses; we
-// won't cut on them. Falls back to a hard cut at MAX_SCENE_S when no real
-// pause shows up in the window.
-const MIN_SILENCE_GAP_S = 0.25;
 const REQUIRED_CHARACTERS = 2;
 
 type CharacterContext = {
@@ -195,35 +192,43 @@ async function loadCharacter(
   return { asset_id: cleanId, name, description };
 }
 
-// Walk forward, picking each cut at the longest silence gap whose midpoint
-// lies inside the legal window [cursor+MIN, cursor+MAX]. Tie-breaker on equal
-// gap length: prefer later position (= longer first chunk → fewer scenes →
-// cheaper downstream gen). When no gap meets MIN_SILENCE_GAP_S, hard-cut at
-// cursor+MAX so we never emit a scene > MAX.
+// Cut snap: every internal scene boundary lands on a whole-second marker —
+// required for even-split's trimRangeExact and seedance-2's integer duration
+// field. Snap picks the integer ≥ windowStart and ≤ windowEnd nearest to the
+// raw cut. If no integer fits the window (only possible when MIN/MAX get
+// tight at the tail), fall through and ffmpeg snaps to the nearest keyframe.
+function snapCutToSecond(raw: number, lo: number, hi: number): number {
+  const ceilLo = Math.ceil(lo);
+  const floorHi = Math.floor(hi);
+  if (ceilLo > floorHi) return raw;
+  const rounded = Math.round(raw);
+  if (rounded >= ceilLo && rounded <= floorHi) return rounded;
+  return rounded < ceilLo ? ceilLo : floorHi;
+}
+
+// Walk forward, picking each cut at the strongest candidate inside the legal
+// window [cursor+MIN, cursor+MAX]. Camera cuts (kind="shot") rank ahead of
+// motion-settle candidates regardless of score; within a kind, higher score
+// wins; ties broken by later position (longer first chunk → fewer scenes →
+// cheaper downstream gen). When no candidate qualifies, hard-cut at +MAX so
+// we never emit a scene > MAX.
 //
 // On the final cut (remaining ≤ 2*MAX), the window is constrained on both
 // ends to guarantee the trailing chunk also lands in [MIN, MAX]:
 //   windowStart = max(cursor+MIN, duration-MAX)
 //   windowEnd   = min(cursor+MAX, duration-MIN)
 //
-// Cuts are snapped to integer seconds within the legal window so every
-// internal scene boundary lands on a whole-second marker — required for
-// even-split's trimRangeExact + seedance-2's integer duration field. Snap
-// picks the integer ≥ windowStart and ≤ windowEnd nearest to the raw cut.
-function snapCutToSecond(raw: number, lo: number, hi: number): number {
-  const ceilLo = Math.ceil(lo);
-  const floorHi = Math.floor(hi);
-  if (ceilLo > floorHi) return raw; // no integer in window — leave raw, ffmpeg snaps
-  const rounded = Math.round(raw);
-  if (rounded >= ceilLo && rounded <= floorHi) return rounded;
-  return rounded < ceilLo ? ceilLo : floorHi;
+// Cuts snap to integer seconds via snapCutToSecond.
+function rankBetter(a: Candidate, b: Candidate): boolean {
+  if (a.kind !== b.kind) return a.kind === "shot";
+  if (a.score !== b.score) return a.score > b.score;
+  return a.t > b.t;
 }
 
-export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[] {
+export function computeChunks(duration: number, candidates: Candidate[]): Chunk[] {
   if (duration <= 0) return [];
   if (duration <= MAX_SCENE_S) return [{ start: 0, end: duration }];
 
-  const wordsOnly = words.filter((w) => w.type === "word");
   const chunks: Chunk[] = [];
   let cursor = 0;
 
@@ -236,23 +241,13 @@ export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[
       windowEnd = Math.min(windowEnd, duration - MIN_SCENE_S);
     }
 
-    let bestCut: number | null = null;
-    let bestGap = MIN_SILENCE_GAP_S;
-    for (let i = 0; i < wordsOnly.length - 1; i++) {
-      const gapStart = wordsOnly[i].end;
-      const gapEnd = wordsOnly[i + 1].start;
-      const mid = (gapStart + gapEnd) / 2;
-      if (mid < windowStart || mid > windowEnd) continue;
-      const gapLen = gapEnd - gapStart;
-      if (gapLen > bestGap) {
-        bestGap = gapLen;
-        bestCut = mid;
-      } else if (bestCut !== null && gapLen === bestGap && mid > bestCut) {
-        bestCut = mid;
-      }
+    let best: Candidate | null = null;
+    for (const c of candidates) {
+      if (c.t < windowStart || c.t > windowEnd) continue;
+      if (best === null || rankBetter(c, best)) best = c;
     }
 
-    const cut = snapCutToSecond(bestCut ?? windowEnd, windowStart, windowEnd);
+    const cut = snapCutToSecond(best ? best.t : windowEnd, windowStart, windowEnd);
     chunks.push({ start: cursor, end: cut });
     cursor = cut;
   }
@@ -261,11 +256,50 @@ export function computeChunks(duration: number, words: ElevenLabsWord[]): Chunk[
   return chunks;
 }
 
+// Per-scene frame sampling. Pulls roughly ceil((end-start)/2) frames from the
+// pre-extracted original_frames/ directory whose timestamps fall in [start, end),
+// clamped to [SCENE_FRAMES_MIN, SCENE_FRAMES_MAX]. A 14s scene gets ~7 frames; a
+// 7s scene gets ~4. The vision model receives them in chunk order with a
+// per-chunk timestamp manifest so it can ground each frame to its scene.
+const SCENE_FRAMES_MIN = 3;
+const SCENE_FRAMES_MAX = 8;
+
+export function sampleFramesForScenes(
+  frameNames: string[],
+  scenes: Chunk[],
+): Array<{ name: string; sceneIdx: number; t: number }> {
+  const parsed = frameNames
+    .map((name) => ({ name, t: parseFloat(name) }))
+    .filter((f) => Number.isFinite(f.t))
+    .sort((a, b) => a.t - b.t);
+  const out: Array<{ name: string; sceneIdx: number; t: number }> = [];
+
+  scenes.forEach((scene, sceneIdx) => {
+    const inScene = parsed.filter((f) => f.t >= scene.start && f.t < scene.end);
+    if (inScene.length === 0) return;
+    const target = Math.min(
+      SCENE_FRAMES_MAX,
+      Math.max(SCENE_FRAMES_MIN, Math.ceil((scene.end - scene.start) / 2)),
+    );
+    if (inScene.length <= target) {
+      for (const f of inScene) out.push({ name: f.name, sceneIdx, t: f.t });
+      return;
+    }
+    const step = (inScene.length - 1) / (target - 1);
+    for (let i = 0; i < target; i++) {
+      const f = inScene[Math.round(i * step)];
+      out.push({ name: f.name, sceneIdx, t: f.t });
+    }
+  });
+
+  return out;
+}
+
 function buildPlanContext(
   characters: CharacterContext[],
   chunks: Chunk[],
   words: ElevenLabsWord[],
-  sampledFrameNames: string[],
+  sampledFrames: Array<{ name: string; sceneIdx: number; t: number }>,
 ): string {
   const charBlock = characters
     .map((c, i) => `  ${i + 1}. @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`)
@@ -275,14 +309,19 @@ function buildPlanContext(
   const chunkBlocks = chunks.map((c, i) => {
     const inChunk = wordsOnly.filter((w) => w.start >= c.start && w.start < c.end);
     const text = inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
+    const chunkFrameTs = sampledFrames
+      .filter((f) => f.sceneIdx === i)
+      .map((f) => `${f.t.toFixed(2)}s`)
+      .join(", ");
     return [
       `Chunk ${i + 1}: ${c.start.toFixed(2)}s – ${c.end.toFixed(2)}s (${(c.end - c.start).toFixed(2)}s)`,
       `Transcript: ${text}`,
+      `Frame timestamps for this chunk: ${chunkFrameTs || "(none)"}`,
     ].join("\n");
   });
 
-  const frameTimestamps = sampledFrameNames
-    .map((name) => parseFloat(name).toFixed(2))
+  const allTimestamps = sampledFrames
+    .map((f) => `s${f.sceneIdx + 1}@${f.t.toFixed(2)}s`)
     .join(", ");
 
   return [
@@ -293,7 +332,7 @@ function buildPlanContext(
     "",
     chunkBlocks.join("\n\n"),
     "",
-    `Frame timestamps (in seconds, in the same order as the image inputs that follow): ${frameTimestamps}`,
+    `Image inputs follow in this order (chunk-tagged): ${allTimestamps}`,
   ].join("\n");
 }
 
@@ -311,7 +350,7 @@ function renderMarkdown(
     "",
     `**Source:** ${sourceAssetId}`,
     `**Duration:** ${totalDuration.toFixed(2)}s`,
-    `**Chunks:** ${scenes.length} (${MIN_SCENE_S}–${MAX_SCENE_S}s each, silence-aligned)`,
+    `**Chunks:** ${scenes.length} (${MIN_SCENE_S}–${MAX_SCENE_S}s each, shot-aligned)`,
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
     "",
@@ -339,10 +378,10 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
     name: "plan_visualization",
     description:
       `Generate a per-chunk gpt-image-2 + Seedance 2 remix plan from a video asset. ` +
-      `Splits the clip into ${MIN_SCENE_S}–${MAX_SCENE_S}s chunks aligned to the longest silence gaps in the transcript (hard-cuts at ${MAX_SCENE_S}s when no real pause is available), samples frames + transcript across the clip, ` +
+      `Splits the clip into ${MIN_SCENE_S}–${MAX_SCENE_S}s chunks aligned to natural visual breaks — camera cuts and motion-settle points (hard-cuts at ${MAX_SCENE_S}s when no break is available), samples per-scene frames + transcript context, ` +
       `then asks an LLM to produce one cinematic Seedance 2 prompt per chunk that locks the two named characters to the chunk's first/last frame edits. ` +
       `Requires exactly ${REQUIRED_CHARACTERS} subject assets (char-* or img-*) and a transcribed video source (elevenlabs.json with word timings). ` +
-      `Writes plan/index.md (human-readable) and plan/.plan.json (structured), overwriting prior.`,
+      `Writes plan/index.md (human-readable) and plan/.plan.json (structured, includes analysis_prompt), overwriting prior.`,
     schema: {
       source_asset_id: z.string().describe("Video asset with elevenlabs.json (vid-* — word-level timings required)"),
       project_slug: z.string().describe("Project slug"),
@@ -475,7 +514,8 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
           content: [{ type: "text" as const, text: `No video file found in asset ${sourceAssetId}` }],
         };
       }
-      const probe = await probeVideo(join(videoManifest.value.path, videoFile.name));
+      const videoFsPath = join(videoManifest.value.path, videoFile.name);
+      const probe = await probeVideo(videoFsPath);
       const totalDuration = probe.duration;
 
       const characters: CharacterContext[] = [];
@@ -490,18 +530,19 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         characters.push(ctx);
       }
 
-      const chunks = computeChunks(totalDuration, transcript.words);
+      const candidates = await detectSceneCandidates(videoFsPath);
+      const chunks = computeChunks(totalDuration, candidates);
       if (chunks.length === 0) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "Could not compute chunks from transcript" }],
+          content: [{ type: "text" as const, text: "Could not compute chunks from source video" }],
         };
       }
 
-      const sampled = sampleFrames(frameNames);
+      const sampled = sampleFramesForScenes(frameNames, chunks);
       const frameParts: OpenAiContentPart[] = [];
-      for (const file of sampled) {
-        const buf = await fsReadFile(join(framesDir, file));
+      for (const f of sampled) {
+        const buf = await fsReadFile(join(framesDir, f.name));
         frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
       }
 
@@ -579,6 +620,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
         max_scene_seconds: MAX_SCENE_S,
         characters,
         model: MODEL,
+        analysis_prompt: SYSTEM_PROMPT_PLAN,
       };
 
       const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, MODEL, scenes);
@@ -614,12 +656,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
       }
 
       try {
-        await extractSceneSourceFrames(
-          fs,
-          project_slug,
-          join(videoManifest.value.path, videoFile.name),
-          scenes,
-        );
+        await extractSceneSourceFrames(fs, project_slug, videoFsPath, scenes);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return {

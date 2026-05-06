@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks } from "./plan-visualization.js";
-import type { ElevenLabsWord } from "./_suggest-shared.js";
+import { computeChunks, sampleFramesForScenes } from "./plan-visualization.js";
+import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
-function w(text: string, start: number, end: number): ElevenLabsWord {
-  return { text, start, end, type: "word" };
-}
+type Candidate = { t: number; score: number; kind: "shot" | "settle" };
+
+const shot = (t: number, score = 25): Candidate => ({ t, score, kind: "shot" });
+const settle = (t: number, score = 5): Candidate => ({ t, score, kind: "settle" });
 
 describe("computeChunks", () => {
   it("returns no chunks for non-positive duration", () => {
@@ -14,123 +15,161 @@ describe("computeChunks", () => {
 
   it("packs the entire clip into one chunk when duration ≤ MAX (14s)", () => {
     expect(computeChunks(5, [])).toEqual([{ start: 0, end: 5 }]);
-    expect(computeChunks(10, [])).toEqual([{ start: 0, end: 10 }]);
     expect(computeChunks(14, [])).toEqual([{ start: 0, end: 14 }]);
   });
 
-  it("hard-cuts at the constrained windowEnd when no qualifying silence is in the legal window", () => {
-    // 28s of solid speech (0.01s word boundaries) — no real pause anywhere.
-    // First cut: remaining=28, end-constraint kicks in → window=[14,14], cut at 14.
-    // Tail = 14s, in range. Two chunks of exactly 14s.
-    const words = Array.from({ length: 28 }, (_, i) => w("x", i, i + 0.99));
-    expect(computeChunks(28, words)).toEqual([
+  it("hard-cuts at the constrained windowEnd when no candidate is in the legal window", () => {
+    // 28s, no candidates → first cut hits the end-constrained window [14,14].
+    expect(computeChunks(28, [])).toEqual([
       { start: 0, end: 14 },
       { start: 14, end: 28 },
     ]);
   });
 
-  it("snaps the silence-midpoint cut to the nearest integer second inside the window", () => {
-    // 22s clip with a clean ~1.6s pause: word[9] ends at 9.9, next starts at 11.5.
-    // Window [8,14], midpoint 10.7 → snaps to 11.
-    const words: ElevenLabsWord[] = [];
-    for (let i = 0; i < 10; i++) words.push(w("x", i, i + 0.9));
-    for (let i = 0; i < 11; i++) words.push(w("y", 11.5 + i, 11.5 + i + 0.5));
-    expect(computeChunks(22, words)).toEqual([
+  it("cuts at a single shot candidate inside the window, snapped to integer", () => {
+    // 22s clip with one shot at 10.7s → snaps to 11.
+    expect(computeChunks(22, [shot(10.7)])).toEqual([
       { start: 0, end: 11 },
       { start: 11, end: 22 },
     ]);
   });
 
-  it("ignores silences shorter than MIN_SILENCE_GAP_S (0.25s)", () => {
-    // 22s of word-boundary spacing only (~50ms gaps). No real pause → falls
-    // back to hard cut at the constrained windowEnd (=14).
-    const words: ElevenLabsWord[] = [];
-    for (let i = 0; i < 110; i++) {
-      const start = i * 0.2;
-      words.push(w("x", start, start + 0.15)); // 50ms gap
-    }
-    expect(computeChunks(22, words)).toEqual([
+  it("prefers shot candidates over settle candidates regardless of score", () => {
+    // Window [7, 14]. settle@10 has higher numeric score than shot@12, but
+    // shot still wins.
+    const candidates: Candidate[] = [
+      { t: 10, score: 100, kind: "settle" },
+      { t: 12, score: 15, kind: "shot" },
+    ];
+    expect(computeChunks(22, candidates)).toEqual([
+      { start: 0, end: 12 },
+      { start: 12, end: 22 },
+    ]);
+  });
+
+  it("with multiple shot candidates, picks the highest score; ties go to later position", () => {
+    // 22s clip, window [7, 14]:
+    //   shot@8.0  score=12
+    //   shot@13.2 score=20  ← winner, snaps to 13
+    expect(computeChunks(22, [shot(8.0, 12), shot(13.2, 20)])).toEqual([
+      { start: 0, end: 13 },
+      { start: 13, end: 22 },
+    ]);
+    // Tie: same score → later wins.
+    expect(computeChunks(22, [shot(8.2, 15), shot(13.4, 15)])).toEqual([
+      { start: 0, end: 13 },
+      { start: 13, end: 22 },
+    ]);
+  });
+
+  it("ignores candidates outside the legal window", () => {
+    // Shot at 5s is before windowStart=7; shot at 16s is after windowEnd=14.
+    // Falls back to hard-cut at windowEnd, then trailing chunk.
+    const candidates = [shot(5, 50), shot(16, 50)];
+    expect(computeChunks(22, candidates)).toEqual([
       { start: 0, end: 14 },
       { start: 14, end: 22 },
     ]);
   });
 
-  it("picks the longest gap when multiple qualify, then snaps to integer second", () => {
-    // 22s clip with two silences both inside window [8, 14]:
-    //   0.4s gap [9.0, 9.4] midpoint 9.2  → would snap to 9
-    //   1.5s gap [12.0, 13.5] midpoint 12.75 → snaps to 13
-    // Longest wins → cut at 13.
-    const words: ElevenLabsWord[] = [
-      w("a", 0, 1), w("b", 1, 2), w("c", 2, 3), w("d", 3, 4),
-      w("e", 4, 5), w("f", 5, 6), w("g", 6, 7), w("h", 7, 8),
-      w("i", 8, 9),
-      w("j", 9.4, 10), w("k", 10, 11), w("l", 11, 12),
-      w("m", 13.5, 14.5), w("n", 14.5, 15.5), w("o", 15.5, 16.5),
-      w("p", 16.5, 17.5), w("q", 17.5, 18.5), w("r", 18.5, 19.5),
-      w("s", 19.5, 20.5), w("t", 20.5, 21.5), w("u", 21.5, 22),
-    ];
-    expect(computeChunks(22, words)).toEqual([
-      { start: 0, end: 13 },
-      { start: 13, end: 22 },
-    ]);
-  });
-
-  it("breaks ties on equal-length gaps by preferring the later position", () => {
-    // 22s clip with two 0.5s pauses inside [8, 14]:
-    //   [8.0, 8.5]    midpoint 8.25  → snaps to 8
-    //   [13.0, 13.5]  midpoint 13.25 → snaps to 13
-    // Tie on length → later wins → cut at 13 (longer first chunk).
-    const words: ElevenLabsWord[] = [
-      w("a", 0, 1), w("b", 1, 2), w("c", 2, 3), w("d", 3, 4),
-      w("e", 4, 5), w("f", 5, 6), w("g", 6, 7), w("h", 7, 8),
-      // 0.5s gap [8, 8.5]
-      w("i", 8.5, 9.5), w("j", 9.5, 10.5), w("k", 10.5, 11.5),
-      w("l", 11.5, 12.5), w("m", 12.5, 13),
-      // 0.5s gap [13, 13.5]
-      w("n", 13.5, 14.5), w("o", 14.5, 15.5), w("p", 15.5, 16.5),
-      w("q", 16.5, 17.5), w("r", 17.5, 18.5), w("s", 18.5, 19.5),
-      w("t", 19.5, 20.5), w("u", 20.5, 21.5), w("v", 21.5, 22),
-    ];
-    expect(computeChunks(22, words)).toEqual([
-      { start: 0, end: 13 },
-      { start: 13, end: 22 },
+  it("settle wins when no shot is present in the window", () => {
+    // 22s, window [7, 14]. Only a settle candidate at 9.8 → snaps to 10.
+    expect(computeChunks(22, [settle(9.8)])).toEqual([
+      { start: 0, end: 10 },
+      { start: 10, end: 22 },
     ]);
   });
 
   it("guarantees the trailing chunk is in [MIN, MAX] via end-constrained final cut", () => {
-    // 20s of solid speech. First cut: remaining=20, constrain.
-    //   windowStart = max(7, 20-14) = 7
-    //   windowEnd   = min(14, 20-7) = 13
-    // No silence → hard-cut at 13. Tail = 7s ≥ MIN. ✓
-    const words = Array.from({ length: 20 }, (_, i) => w("x", i, i + 0.99));
-    expect(computeChunks(20, words)).toEqual([
+    // 20s, no candidates: first cut window = [max(7,6), min(14,13)] = [7,13].
+    // Hard-cut at 13. Tail = 7s.
+    expect(computeChunks(20, [])).toEqual([
       { start: 0, end: 13 },
       { start: 13, end: 20 },
     ]);
   });
 
-  it("emits 3 chunks for ~30s sources with constrained final cut", () => {
-    // 30s of solid speech: cut 1 at 14 (remaining 30 > 28, unconstrained).
-    // Cut 2: cursor=14, remaining=16, constrain → window=[max(21,16), min(28,23)]=[21,23].
-    // No silence → hard-cut at 23. Tail = 7s.
-    const words = Array.from({ length: 30 }, (_, i) => w("x", i, i + 0.99));
-    expect(computeChunks(30, words)).toEqual([
+  it("emits 3 chunks for ~30s sources with end-constrained final cut", () => {
+    // 30s, no candidates: cut1=14, cut2 window=[max(21,16), min(28,23)]=[21,23].
+    // Hard-cut at 23. Tail = 7s.
+    expect(computeChunks(30, [])).toEqual([
       { start: 0, end: 14 },
       { start: 14, end: 23 },
       { start: 23, end: 30 },
     ]);
   });
+});
 
-  it("treats words extending past duration as bounded and snaps the cut", () => {
-    // Transcription rounding: last word ends at 22.05 even though duration is 22.
-    // 0.6s pause [10, 10.6], midpoint 10.3 → snaps to 10.
-    const words: ElevenLabsWord[] = [
-      w("a", 0, 5), w("b", 5, 10),
-      w("c", 10.6, 22.05),
-    ];
-    expect(computeChunks(22, words)).toEqual([
-      { start: 0, end: 10 },
-      { start: 10, end: 22 },
+describe("parseScdetOutput", () => {
+  it("parses ffmpeg scdet stderr lines into (t, score) pairs", () => {
+    const stderr = [
+      "[scdet @ 0x600000bb4680] lavfi.scd.score: 0.000, lavfi.scd.time: 0",
+      "[scdet @ 0x600000bb4680] lavfi.scd.score: 4.798, lavfi.scd.time: 0.25",
+      "frame=    1 fps=0.0 q=-0.0 size=       0kB",
+      "[scdet @ 0x600000bb4680] lavfi.scd.score: 16.054, lavfi.scd.time: 5.25",
+    ].join("\n");
+    expect(parseScdetOutput(stderr)).toEqual([
+      { t: 0, score: 0 },
+      { t: 0.25, score: 4.798 },
+      { t: 5.25, score: 16.054 },
     ]);
+  });
+
+  it("returns [] when no scdet lines present", () => {
+    expect(parseScdetOutput("ffmpeg version 6.0\nbuilt with...\n")).toEqual([]);
+  });
+});
+
+describe("deriveCandidates", () => {
+  it("emits a shot candidate per frame whose score crosses the threshold", () => {
+    const samples = [
+      { t: 0, score: 0 },
+      { t: 0.25, score: 1 },
+      { t: 0.5, score: 12 },   // shot
+      { t: 0.75, score: 0.5 },
+      { t: 1, score: 25 },     // shot
+    ];
+    const candidates = deriveCandidates(samples).filter((c) => c.kind === "shot");
+    expect(candidates.map((c) => c.t)).toEqual([0.5, 1]);
+    expect(candidates.map((c) => c.score)).toEqual([12, 25]);
+  });
+
+  it("emits a settle candidate when motion drops sustained-low after sustained-high", () => {
+    // 4s of high motion, then 2s of low motion (no shot cuts). Settle should
+    // land at the start of the low-motion run.
+    const samples: Array<{ t: number; score: number }> = [];
+    for (let i = 0; i < 16; i++) samples.push({ t: i * 0.25, score: 5 });   // 0..3.75 high
+    for (let i = 0; i < 8; i++) samples.push({ t: 4 + i * 0.25, score: 0.2 }); // 4..5.75 low
+    const settles = deriveCandidates(samples).filter((c) => c.kind === "settle");
+    expect(settles.length).toBeGreaterThan(0);
+    expect(settles[0].t).toBeCloseTo(4, 1);
+  });
+
+  it("emits no settle candidates when the segment never sustains low motion", () => {
+    const samples = Array.from({ length: 20 }, (_, i) => ({ t: i * 0.25, score: 5 + (i % 2) }));
+    expect(deriveCandidates(samples).filter((c) => c.kind === "settle")).toEqual([]);
+  });
+});
+
+describe("sampleFramesForScenes", () => {
+  it("samples ceil(duration/2) frames per scene, clamped to [3, 8]", () => {
+    const frameNames = Array.from({ length: 50 }, (_, i) => `${(i * 0.5).toFixed(2)}.jpg`);
+    const scenes = [
+      { start: 0, end: 7 },   // duration 7 → ceil(7/2)=4
+      { start: 7, end: 21 },  // duration 14 → ceil(14/2)=7
+    ];
+    const sampled = sampleFramesForScenes(frameNames, scenes);
+    const perScene = [0, 1].map((idx) => sampled.filter((s) => s.sceneIdx === idx));
+    expect(perScene[0].length).toBe(4);
+    expect(perScene[1].length).toBe(7);
+    expect(perScene[0].every((s) => s.t >= 0 && s.t < 7)).toBe(true);
+    expect(perScene[1].every((s) => s.t >= 7 && s.t < 21)).toBe(true);
+  });
+
+  it("returns all in-range frames when fewer than the target are available", () => {
+    const frameNames = ["0.00.jpg", "5.00.jpg"];
+    const scenes = [{ start: 0, end: 14 }];
+    const sampled = sampleFramesForScenes(frameNames, scenes);
+    expect(sampled.map((s) => s.name)).toEqual(["0.00.jpg", "5.00.jpg"]);
   });
 });
