@@ -3,6 +3,7 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
+import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {
@@ -19,7 +20,7 @@ const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shap
 const generateGrokImagineTextImageSchema = {
   prompt: z.string().describe("Text prompt for image generation"),
   project_slug: z.string().describe("Project slug"),
-  aspect_ratio: z.enum(grokTextToImageInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  aspect_ratio: z.enum(enumOptions(grokTextToImageInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
   enable_pro: z.boolean().optional().describe("Quality mode when true, speed mode when false"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),

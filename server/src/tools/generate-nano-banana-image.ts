@@ -4,6 +4,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
+import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
@@ -23,7 +24,7 @@ const generateNanoBananaImageSchema = {
   prompt: z.string().describe("Text prompt for image generation"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(nanoBananaProInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
+  aspect_ratio: z.enum(enumOptions(nanoBananaProInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
   resolution: z.enum(NanoBananaResolutionSchema.options).optional().describe("Output resolution"),
   output_format: z.enum(NanoBananaOutputFormatSchema.options).optional().describe("Output image format"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),

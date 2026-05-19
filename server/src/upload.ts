@@ -1,4 +1,4 @@
-import { free, uploadToAnyHost } from "@apicity/free";
+import { freeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
 import type { ClipfirstFs } from "clipfirst-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
@@ -33,7 +33,7 @@ export function inferMimeType(filename: string): string {
 }
 
 // Upload bytes to a free file host and return a publicly accessible download
-// URL. Delegates rotation to @apicity/free's `uploadToAnyHost` across
+// URL. Delegates rotation to @apicity/free-media-upload's `uploadToAnyHost` across
 // litterbox/uguu/tflink.
 //
 // Host selection matters: Alibaba/Kie workers run in China and synchronously
@@ -50,7 +50,7 @@ export async function uploadBytesToFreeHost(
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
 
-  return uploadToAnyHost(free(), {
+  return uploadToAnyHost(freeMediaUpload(), {
     file,
     filename,
     hosts: ["litterbox", "uguu", "tflink"],

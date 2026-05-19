@@ -32,7 +32,7 @@ import {
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoEditVideoRequestSchema,
 } from "@apicity/fal/zod";
-import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
+import { readSlotConstraints, enumOptions, type SlotConstraints } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -448,56 +448,56 @@ type ParamSchema = {
   maxLength?: number;
 };
 
-const KLING_MODES = [...KlingModeSchema.options];
-const KLING_DURATIONS = [...KlingDurationSchema.options];
-const KLING_ASPECT_RATIOS = [...KlingAspectRatioSchema.options];
-const KLING_MOTION_CONTROL_MODES = [...KlingMotionControlRequestSchema.shape.input.shape.mode.unwrap().options];
-const KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS = [...KlingMotionControlRequestSchema.shape.input.shape.character_orientation.unwrap().options];
-const KLING_MOTION_CONTROL_BACKGROUND_SOURCES = [...KlingMotionControlRequestSchema.shape.input.shape.background_source.unwrap().options];
+const KLING_MODES = enumOptions(KlingModeSchema);
+const KLING_DURATIONS = enumOptions(KlingDurationSchema);
+const KLING_ASPECT_RATIOS = enumOptions(KlingAspectRatioSchema);
+const KLING_MOTION_CONTROL_MODES = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.mode);
+const KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.character_orientation);
+const KLING_MOTION_CONTROL_BACKGROUND_SOURCES = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.background_source);
 
-const SEEDANCE2_ASPECT_RATIOS = [...Seedance2FastInputSchema.shape.aspect_ratio.unwrap().options];
-const SEEDANCE2_FAST_RESOLUTIONS = [...Seedance2FastInputSchema.shape.resolution.unwrap().options];
-const SEEDANCE2_RESOLUTIONS = [...Seedance2InputSchema.shape.resolution.unwrap().options];
+const SEEDANCE2_ASPECT_RATIOS = enumOptions(Seedance2FastInputSchema.shape.aspect_ratio);
+const SEEDANCE2_FAST_RESOLUTIONS = enumOptions(Seedance2FastInputSchema.shape.resolution);
+const SEEDANCE2_RESOLUTIONS = enumOptions(Seedance2InputSchema.shape.resolution);
 
 const SEEDANCE2_TOOL_NAMES = [
   "generate_seedance2_video",
   "generate_seedance2_fast_video",
 ];
 
-const GROK_IMAGINE_MODES = [...GrokImagineModeSchema.options];
-const GROK_IMAGINE_DURATIONS = [...GrokImagineDurationSchema.options];
+const GROK_IMAGINE_MODES = enumOptions(GrokImagineModeSchema);
+const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
 // Mirror of GrokImageToVideoDurationSchema (regex: 6-30 string).
 const GROK_I2V_DURATIONS = Array.from({ length: 25 }, (_, i) => String(i + 6));
-const GROK_IMAGINE_RESOLUTIONS = [...GrokImagineResolutionSchema.options];
-const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = [...GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
-const GROK_TEXT_TO_VIDEO_ASPECT_RATIOS = [...GrokTextToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options];
+const GROK_IMAGINE_RESOLUTIONS = enumOptions(GrokImagineResolutionSchema);
+const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio);
+const GROK_TEXT_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokTextToVideoRequestSchema.shape.input.shape.aspect_ratio);
 
-const XAI_VIDEO_ASPECT_RATIOS = [...XaiVideoGenerateRequestSchema.shape.aspect_ratio.unwrap().options];
+const XAI_VIDEO_ASPECT_RATIOS = enumOptions(XaiVideoGenerateRequestSchema.shape.aspect_ratio);
 
-const WAN27_RESOLUTIONS = [...Wan27ResolutionSchema.options];
-const WAN27_ASPECT_RATIOS = [...Wan27AspectRatioSchema.options];
-const WAN27_AUDIO_SETTINGS = [...Wan27AudioSettingSchema.options];
+const WAN27_RESOLUTIONS = enumOptions(Wan27ResolutionSchema);
+const WAN27_ASPECT_RATIOS = enumOptions(Wan27AspectRatioSchema);
+const WAN27_AUDIO_SETTINGS = enumOptions(Wan27AudioSettingSchema);
 
-const HAPPYHORSE_RESOLUTIONS = [...HappyHorseResolutionSchema.options];
-const HAPPYHORSE_ASPECT_RATIOS = [...HappyHorseAspectRatioSchema.options];
-const HAPPYHORSE_AUDIO_SETTINGS = [...HappyHorseAudioSettingSchema.options];
+const HAPPYHORSE_RESOLUTIONS = enumOptions(HappyHorseResolutionSchema);
+const HAPPYHORSE_ASPECT_RATIOS = enumOptions(HappyHorseAspectRatioSchema);
+const HAPPYHORSE_AUDIO_SETTINGS = enumOptions(HappyHorseAudioSettingSchema);
 const HAPPYHORSE_DURATIONS = ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
 
-const ALIBABA_VIDEO_RESOLUTIONS = [...AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options];
-const ALIBABA_VIDEO_AUDIO_SETTINGS = [...AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options];
+const ALIBABA_VIDEO_RESOLUTIONS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.resolution);
+const ALIBABA_VIDEO_AUDIO_SETTINGS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.audio_setting);
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
 
-const FAL_WAN27_ASPECT_RATIOS = [...FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio.unwrap().options];
-const FAL_WAN27_RESOLUTIONS = [...FalWanV2p7EditVideoRequestSchema.shape.resolution.unwrap().options];
-const FAL_WAN27_AUDIO_SETTINGS = [...FalWanV2p7EditVideoRequestSchema.shape.audio_setting.unwrap().options];
+const FAL_WAN27_ASPECT_RATIOS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio);
+const FAL_WAN27_RESOLUTIONS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.resolution);
+const FAL_WAN27_AUDIO_SETTINGS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.audio_setting);
 
-const FAL_SEEDANCE2_REF_RESOLUTIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
-const FAL_SEEDANCE2_REF_DURATIONS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration.unwrap().options];
-const FAL_SEEDANCE2_REF_ASPECT_RATIOS = [...FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
+const FAL_SEEDANCE2_REF_RESOLUTIONS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution);
+const FAL_SEEDANCE2_REF_DURATIONS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration);
+const FAL_SEEDANCE2_REF_ASPECT_RATIOS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio);
 
-const FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS = [...FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio.unwrap().options];
-const FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS = [...FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution.unwrap().options];
-const FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS = [...FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution.unwrap().options];
+const FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS = enumOptions(FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio);
+const FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS = enumOptions(FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution);
+const FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS = enumOptions(FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution);
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },

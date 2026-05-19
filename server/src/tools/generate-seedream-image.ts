@@ -4,6 +4,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
+import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
@@ -23,7 +24,7 @@ const generateSeedreamImageSchema = {
   prompt: z.string().describe("Modification prompt (3-3000 chars)"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).describe("1-14 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(seedreamInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (default 1:1)"),
+  aspect_ratio: z.enum(enumOptions(seedreamInputSchema.aspect_ratio)).optional().describe("Output aspect ratio (default 1:1)"),
   quality: z.enum(seedreamInputSchema.quality.options).optional().describe("Output quality (basic=2K, high=4K). Defaults to basic."),
   nsfw_checker: z.boolean().optional().describe("Content safety filter"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),

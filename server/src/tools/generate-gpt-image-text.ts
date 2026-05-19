@@ -3,6 +3,7 @@ import type { ClipfirstFs } from "clipfirst-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2TextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
+import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 
@@ -20,8 +21,8 @@ const gptImageTextInputSchema = GptImage2TextToImageRequestSchema.shape.input.sh
 const generateGptImageTextSchema = {
   prompt: z.string().describe("Text prompt for image generation (1-20000 chars)"),
   project_slug: z.string().describe("Project slug"),
-  aspect_ratio: z.enum(gptImageTextInputSchema.aspect_ratio.unwrap().options).optional().describe("Aspect ratio"),
-  resolution: z.enum(gptImageTextInputSchema.resolution.unwrap().options).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
+  aspect_ratio: z.enum(enumOptions(gptImageTextInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
+  resolution: z.enum(enumOptions(gptImageTextInputSchema.resolution)).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;

@@ -23,6 +23,8 @@ type ZodDef = {
   maxLength?: { value: number } | null;
   checks?: ZodCheckV4[];
   items?: unknown[];
+  values?: unknown;
+  entries?: unknown;
 };
 
 type ZodLike = { _def?: unknown; unwrap?: () => unknown };
@@ -108,4 +110,70 @@ export function readSlotConstraints(schema: ZodLike | null | undefined): SlotCon
   }
 
   return null;
+}
+
+/**
+ * A non-empty list of enum string values, shaped for `z.enum(...)`.
+ */
+export type EnumValues = [string, ...string[]];
+
+/**
+ * Strip Optional/Nullable/Default/Effects/Pipe wrappers down to the inner schema.
+ *
+ * Unlike `readSlotConstraints`'s unwrap, this also peels `ZodDefault` — the
+ * @apicity npm packages wrap several enum fields in `.default(...)` where the
+ * local build used `.optional()`.
+ */
+function unwrapToCore(schema: unknown): unknown {
+  let cur: unknown = schema;
+  let def = defOf(cur);
+  while (
+    def &&
+    (isType(cur, "ZodOptional", "optional") ||
+      isType(cur, "ZodNullable", "nullable") ||
+      isType(cur, "ZodDefault", "default") ||
+      isType(cur, "ZodEffects", "effects") ||
+      isType(cur, "ZodPipe", "pipe"))
+  ) {
+    const isEffectsLike = isType(cur, "ZodEffects", "effects") || isType(cur, "ZodPipe", "pipe");
+    const next = isEffectsLike ? (def.schema ?? def.innerType) : def.innerType;
+    if (!next) break;
+    cur = next;
+    def = defOf(cur);
+  }
+  return cur;
+}
+
+function toStringList(raw: unknown): string[] {
+  const arr = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object"
+      ? Object.values(raw as Record<string, unknown>)
+      : [];
+  return arr.filter((v): v is string => typeof v === "string");
+}
+
+/**
+ * Read the string values of a (possibly wrapped) `ZodEnum`.
+ *
+ * Handles both internals the @apicity workspace straddles: Zod 3 exposes the
+ * values as an array (`.options` / `_def.values`), Zod 4 as an object map
+ * (`_def.entries`). The published `.d.ts` files are Zod-4-shaped while the
+ * runtime resolves Zod 3, so this normalizes both to a plain string tuple.
+ *
+ * Throws if `schema` does not resolve to an enum — these feed MCP tool input
+ * schemas, so a silent empty list would be a worse failure than a loud one.
+ */
+export function enumOptions(schema: ZodLike | null | undefined): EnumValues {
+  const inner = unwrapToCore(schema);
+  const optionsHolder = inner as { options?: unknown };
+  const def = defOf(inner);
+  const values =
+    toStringList(optionsHolder?.options).length > 0
+      ? toStringList(optionsHolder.options)
+      : toStringList(def?.values ?? def?.entries);
+  if (values.length === 0) {
+    throw new Error("enumOptions: schema did not resolve to a non-empty ZodEnum");
+  }
+  return values as EnumValues;
 }
