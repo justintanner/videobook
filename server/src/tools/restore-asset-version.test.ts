@@ -67,6 +67,23 @@ describe("restore_asset_version tool", () => {
     expect(parsed.asset_id).toBe(uploaded.assetId);
     expect(parsed.from_commit).toBe(firstCommit);
     expect(parsed.new_commit).toBeDefined();
+
+    const repeatResult = await client.callTool({
+      name: "restore_asset_version",
+      arguments: {
+        asset_id: uploaded.assetId,
+        commit_hash: firstCommit,
+        project_slug: "test-proj",
+      },
+    });
+    expect(repeatResult.isError).toBeFalsy();
+    const repeatParsed = JSON.parse(
+      (repeatResult.content as Array<{ type: string; text: string }>)[0].text
+    );
+    expect(repeatParsed.status).toBe("restored");
+    expect(repeatParsed.asset_id).toBe(uploaded.assetId);
+    expect(repeatParsed.from_commit).toBe(firstCommit);
+    expect(repeatParsed.new_commit).toBeDefined();
   });
 
   it("returns error for invalid commit hash", async () => {

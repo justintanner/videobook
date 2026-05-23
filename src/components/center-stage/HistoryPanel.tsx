@@ -47,6 +47,19 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function fileChangeClass(status: string): string {
+  switch (status) {
+    case 'A':
+      return 'text-emerald-400';
+    case 'D':
+      return 'text-red-400 line-through decoration-red-400/70';
+    case 'M':
+      return 'text-zinc-500';
+    default:
+      return 'text-zinc-500';
+  }
+}
+
 export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefresh, loading }: {
   commits: GitCommit[];
   selectedHash: string | null;
@@ -204,13 +217,20 @@ export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: 
       </div>
 
       {/* Files changed */}
-      {commit.files && commit.files.length > 0 && (
+      {((commit.fileChanges && commit.fileChanges.length > 0) || (commit.files && commit.files.length > 0)) && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-mono uppercase tracking-wider text-zinc-600">Files changed</span>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {commit.files.map((file) => (
-              <span key={file} className="text-sm font-mono text-zinc-500">{file}</span>
-            ))}
+            {commit.fileChanges && commit.fileChanges.length > 0
+              ? commit.fileChanges.map((change) => (
+                <span key={`${change.status}:${change.file}`} className={cn('text-sm font-mono', fileChangeClass(change.status))}>
+                  <span className="mr-1 text-[10px] font-bold">{change.status}</span>
+                  {change.file}
+                </span>
+              ))
+              : commit.files?.map((file) => (
+                <span key={file} className="text-sm font-mono text-zinc-500">{file}</span>
+              ))}
           </div>
         </div>
       )}

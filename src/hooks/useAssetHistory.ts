@@ -18,6 +18,11 @@ export interface GitCommit {
   date: string;
   author?: string;
   files?: string[];
+  fileChanges?: Array<{
+    status: string;
+    file: string;
+    oldFile?: string;
+  }>;
   rewrite?: RewriteMeta;
 }
 
