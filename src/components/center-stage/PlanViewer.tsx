@@ -8,6 +8,13 @@ import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
 import { uploadProjectFile } from '@/lib/upload';
+import {
+  falWanImageSizeForDimensions,
+  kieImageAspectRatioForDimensions,
+  seedanceAspectRatioForDimensions,
+  sourceAspectFromDimensions,
+  type SourceAspect,
+} from '@/lib/plan-aspect';
 
 interface PlanScene {
   start: number;
@@ -165,6 +172,10 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
     () => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null),
     [sourceId, mediaItems],
   );
+  const sourceAspect = useMemo(
+    () => sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height),
+    [sourceItem?.width, sourceItem?.height],
+  );
   const duration = sourceItem?.duration ?? null;
   const scenesCount = duration && duration > 0
     ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS))
@@ -229,6 +240,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
             charAId={charAId}
             charBId={charBId}
             mediaItems={mediaItems}
+            sourceAspect={sourceAspect}
             duration={duration}
             scenesCount={scenesCount}
             canGenerate={canGenerate}
@@ -254,6 +266,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
             <PlanScenes
               data={sidecar}
               mediaItems={mediaItems}
+              sourceAspect={sourceAspect}
               projectSlug={projectSlug}
               callTool={callTool}
               dispatch={dispatch}
@@ -325,9 +338,10 @@ interface SceneAssetSlugs {
   audioSlug: string; // e.g. "plan/s1.mp3"
 }
 
-function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
+function PlanScenes({ data, mediaItems, sourceAspect, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   data: PlanSidecar;
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   dispatch: (input: string) => Promise<boolean>;
@@ -496,6 +510,7 @@ function PlanScenes({ data, mediaItems, projectSlug, callTool, dispatch, onSidec
           sceneAudioSlug={sceneAssets[idx]?.audioSlug ?? null}
           sceneSourceReady={sceneFilesReady}
           mediaItems={mediaItems}
+          sourceAspect={sourceAspect}
           projectSlug={projectSlug}
           callTool={callTool}
           dispatch={dispatch}
@@ -552,8 +567,9 @@ function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, label, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SourceSlotRow({ sourceSrc, sourceAspect, state, inFlightCodes, currentModelCode, label, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   sourceSrc: string;
+  sourceAspect: SourceAspect;
   state: FrameTileState;
   inFlightCodes: string[];
   currentModelCode: string | null;
@@ -567,11 +583,12 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <SourceThumb src={sourceSrc} alt={`source ${label}`} />
+        <SourceThumb src={sourceSrc} sourceAspect={sourceAspect} alt={`source ${label}`} />
         <span className="text-emerald-300/40 text-lg leading-none px-0.5 select-none">→</span>
         <SwapSlot
           state={state}
           sourceSrc={sourceSrc}
+          sourceAspect={sourceAspect}
           inFlightCodes={inFlightCodes}
           currentModelCode={currentModelCode}
           replacing={replacing}
@@ -586,17 +603,20 @@ function SourceSlotRow({ sourceSrc, state, inFlightCodes, currentModelCode, labe
   );
 }
 
-function SourceThumb({ src, alt }: { src: string; alt: string }) {
+function SourceThumb({ src, sourceAspect, alt }: { src: string; sourceAspect: SourceAspect; alt: string }) {
   const [errored, setErrored] = useState(false);
   return (
-    <div className="w-40 aspect-video bg-zinc-900 border border-zinc-700/40 rounded overflow-hidden flex items-center justify-center">
+    <div
+      className="w-40 bg-zinc-900 border border-zinc-700/40 rounded overflow-hidden flex items-center justify-center"
+      style={{ aspectRatio: sourceAspect.css }}
+    >
       {errored ? (
         <span className="text-[9px] font-mono text-emerald-300/30 px-2 text-center">missing</span>
       ) : (
         <img
           src={src}
           alt={alt}
-          className="w-full h-full object-cover opacity-80"
+          className="w-full h-full object-contain opacity-80"
           loading="lazy"
           onError={() => setErrored(true)}
         />
@@ -605,9 +625,10 @@ function SourceThumb({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+function SwapSlot({ state, sourceSrc, sourceAspect, inFlightCodes, currentModelCode, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
   state: FrameTileState;
   sourceSrc: string;
+  sourceAspect: SourceAspect;
   inFlightCodes: string[];
   currentModelCode: string | null;
   replacing: boolean;
@@ -665,16 +686,17 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
   return (
     <div
       className={cn(
-        'relative w-40 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
+        'relative w-40 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
         dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
       )}
+      style={{ aspectRatio: sourceAspect.css }}
       onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
       onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
       onDrop={handleDrop}
     >
       {state.kind === 'ready' ? (
-        <img src={state.src} alt="swap result" className="w-full h-full object-cover" loading="lazy" />
+        <img src={state.src} alt="swap result" className="w-full h-full object-contain" loading="lazy" />
       ) : state.kind === 'idle' && !anyInFlight ? (
         <button
           type="button"
@@ -688,7 +710,7 @@ function SwapSlot({ state, sourceSrc, inFlightCodes, currentModelCode, replacing
         <img
           src={sourceSrc}
           alt="working"
-          className="w-full h-full object-cover opacity-40"
+          className="w-full h-full object-contain opacity-40"
           loading="lazy"
           onError={() => setErrored(true)}
         />
@@ -795,6 +817,7 @@ function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], project
 
 function VideoSwapSlot({
   state,
+  sourceAspect,
   videoAssetId,
   replacing,
   disabled,
@@ -805,6 +828,7 @@ function VideoSwapSlot({
   onRegen,
 }: {
   state: VideoTileState;
+  sourceAspect: SourceAspect;
   videoAssetId: string | null;
   replacing: boolean;
   disabled: boolean;
@@ -846,10 +870,11 @@ function VideoSwapSlot({
   return (
     <div
       className={cn(
-        'relative self-start max-w-md w-full aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
+        'relative self-start max-w-md w-full bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
         dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
         disabled && state.kind === 'idle' && 'opacity-50',
       )}
+      style={{ aspectRatio: sourceAspect.css }}
       onDragEnter={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); setDragActive(true); }}
       onDragOver={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }}
@@ -860,7 +885,7 @@ function VideoSwapSlot({
           key={videoAssetId ?? 'no-video'}
           controls
           src={state.src}
-          className="w-full h-full object-cover bg-black"
+          className="w-full h-full object-contain bg-black"
         />
       ) : state.kind === 'idle' ? (
         <button
@@ -963,22 +988,12 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
-// Frame 2 continuity prompt — used when generating the last frame against an
-// already-swapped first frame. Inputs are exactly [source last frame, first
-// frame swap], so the prompt must reference Image 2 (not Image 3) and skip
-// any char-ref language.
-const DEFAULT_PROMPT_FRAME2_CONTINUITY = "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Match face, hair, wardrobe, and color grade to Image 2 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
-
 // Build a stable empty prompts map keyed by every (provider, model) combo.
-// Frame 2 seeds with the continuity prompt; frame 1 seeds with the per-model
-// char-swap default.
-function makeEmptyModelPrompts(frameIndex: 1 | 2): Record<string, string> {
+function makeEmptyModelPrompts(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const provider of ALL_SWAP_PROVIDERS) {
     for (const model of MODELS_BY_PROVIDER[provider]) {
-      out[variantKey(provider, model)] = frameIndex === 2
-        ? DEFAULT_PROMPT_FRAME2_CONTINUITY
-        : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+      out[variantKey(provider, model)] = DEFAULT_PROMPT_BY_SWAP_MODEL[model];
     }
   }
   return out;
@@ -1008,25 +1023,16 @@ function buildSwapPayload(
   sceneIndex: number,
   frameIndex: 1 | 2,
   customPrompt: string,
-  priorSwapAssetId?: string,
+  sourceAspect: SourceAspect,
 ): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
   const sourceFrameSlug = `@plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
-  // Frame 2 + prior swap = continuity mode. Drop the character refs; the
-  // prior swap is the canonical look reference. This mirrors the server's
-  // isFrame2Continuity branch in swap-plan-scene-frame.ts.
-  const isFrame2Continuity = frameIndex === 2 && Boolean(priorSwapAssetId);
-  const inputs = isFrame2Continuity
-    ? [sourceFrameSlug, `@${priorSwapAssetId as string}`]
-    : [
-      sourceFrameSlug,
-      ...characters.map((c) => `@${c.asset_id}`),
-      ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
-    ];
+  const inputs = [
+    sourceFrameSlug,
+    ...characters.map((c) => `@${c.asset_id}`),
+  ];
   const trimmed = customPrompt.trim();
-  const defaultPrompt = isFrame2Continuity
-    ? DEFAULT_PROMPT_FRAME2_CONTINUITY
-    : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
-  const prompt = trimmed.length > 0 ? trimmed : defaultPrompt;
+  const prompt = trimmed.length > 0 ? trimmed : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const imageAspectRatio = kieImageAspectRatioForDimensions(model, sourceAspect.width, sourceAspect.height);
   if (provider === 'fal') {
     const endpoint = FAL_ENDPOINT_BY_SWAP[model];
     if (!endpoint) {
@@ -1038,13 +1044,13 @@ function buildSwapPayload(
       return {
         provider,
         endpoint,
-        input: { prompt, image_urls: inputs, image_size: 'landscape_16_9' },
+        input: { prompt, image_urls: inputs, image_size: falWanImageSizeForDimensions(sourceAspect.width, sourceAspect.height) },
       };
     }
     return {
       provider,
       endpoint,
-      input: { prompt, image_urls: inputs, aspect_ratio: '16:9', resolution: '2K' },
+      input: { prompt, image_urls: inputs, aspect_ratio: imageAspectRatio, resolution: '2K' },
     };
   }
   const inputKey = model === 'nano-banana-pro' ? 'image_input' : 'input_urls';
@@ -1054,7 +1060,7 @@ function buildSwapPayload(
     input: {
       prompt,
       [inputKey]: inputs,
-      aspect_ratio: '16:9',
+      aspect_ratio: imageAspectRatio,
       resolution: '2K',
     },
   };
@@ -1224,6 +1230,7 @@ function buildKieVideoPayload(
   sceneClipSlug: string | null,
   sceneAudioSlug: string | null,
   customPrompt: string,
+  sourceAspect: SourceAspect,
 ): { model: string; input: Record<string, unknown> } {
   const swapped = readySwapAssetIds(scene, mediaItems);
   const referenceImages = swapped
@@ -1242,7 +1249,7 @@ function buildKieVideoPayload(
       reference_video_urls: sceneClipSlug ? [`@${sceneClipSlug}`] : [],
       reference_audio_urls: sceneAudioSlug ? [`@${sceneAudioSlug}`] : [],
       resolution: '720p',
-      aspect_ratio: '16:9',
+      aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
       duration,
       generate_audio: false,
     },
@@ -1259,6 +1266,7 @@ function buildSeedanceToolArgs(
   sceneClipSlug: string,
   sceneAudioSlug: string,
   customPrompt: string,
+  sourceAspect: SourceAspect,
 ): Record<string, unknown> {
   const swapped = readySwapAssetIds(scene, mediaItems);
   const imageSlugs = swapped
@@ -1275,7 +1283,7 @@ function buildSeedanceToolArgs(
     // pendingAudioReplace effect did not.
     replace_audio_with: `@${sceneAudioSlug}`,
     resolution: '720p',
-    aspect_ratio: '16:9',
+    aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
     generate_audio: false,
   };
@@ -1284,15 +1292,15 @@ function buildSeedanceToolArgs(
 // Per-frame self-contained block: provider/model dropdowns + prompt/JSON tabs
 // + source→slot row. Owns its own (provider, model, prompt) state. Idle slot
 // click and Regen both dispatch the selected (provider, model) for THAT frame
-// only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
-// prior_swap_asset_id so identity carries over from the prior frame.
-function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, projectSlug, sourceSrc, tile, inFlightCodes, replacing, runSwap, onReplace, onErrorRetry }: {
+// only; both frames swap against their own source frame plus the two char refs.
+function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, sourceAspect, projectSlug, sourceSrc, tile, inFlightCodes, replacing, runSwap, onReplace, onErrorRetry }: {
   ordinal: 1 | 2;
   frameIndex: 1 | 2;
   scene: PlanScene;
   sceneIndex: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   projectSlug: string;
   sourceSrc: string;
   tile: FrameTileState;
@@ -1302,7 +1310,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
     frameIndex: 1 | 2,
     provider: SwapProvider,
     model: SwapModel,
-    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
+    opts?: { safeMode?: boolean; customPrompt?: string },
   ) => Promise<{ newAssetId: string } | null>;
   onReplace: (source: ReplaceSource) => void;
   onErrorRetry: () => void;
@@ -1310,11 +1318,9 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   const [selectedProvider, setSelectedProvider] = useState<SwapProvider>('kie');
   const [selectedModel, setSelectedModel] = useState<SwapModel>('nano-banana-pro');
   // One prompt per (provider, model) variant — switching the dropdown swaps
-  // which prompt the editor / JSON view reads from. Frame 2 seeds with the
-  // continuity prompt template since its inputs are [source last frame,
-  // first frame swap] (no char refs).
+  // which prompt the editor / JSON view reads from.
   const [variantPrompts, setVariantPrompts] = useState<Record<string, string>>(
-    () => makeEmptyModelPrompts(frameIndex),
+    () => makeEmptyModelPrompts(),
   );
 
   const handleProviderChange = useCallback((next: SwapProvider) => {
@@ -1340,18 +1346,16 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
       sceneIndex,
       frameIndex,
       currentPrompt,
-      frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined,
+      sourceAspect,
     ),
-    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, scene.swap?.image1],
+    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, sourceAspect],
   );
 
   const dispatchGen = useCallback(() => {
-    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
     void runSwap(frameIndex, selectedProvider, selectedModel, {
       customPrompt: currentPrompt,
-      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
     });
-  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt, scene.swap?.image1]);
+  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt]);
 
   const titleText = ordinal === 1 ? 'Generate first frame' : 'Generate last frame';
   const label = ordinal === 1
@@ -1379,6 +1383,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
       />
       <SourceSlotRow
         sourceSrc={sourceSrc}
+        sourceAspect={sourceAspect}
         state={tile}
         inFlightCodes={inFlightCodes}
         currentModelCode={modelCodeFromSwapAssetId(scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'])}
@@ -1393,12 +1398,13 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   );
 }
 
-function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, sceneAudioSlug, sceneSourceReady, mediaItems, projectSlug, callTool, dispatch, onSidecarUpdate }: {
+function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, sceneAudioSlug, sceneSourceReady, mediaItems, sourceAspect, projectSlug, callTool, dispatch, onSidecarUpdate }: {
   scene: PlanScene;
   index: number;
   sceneCount: number;
   characters: PlanSidecar['characters'];
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   projectSlug: string;
   // Slugs in `<assetId>/<filename>` form, e.g. "plan/s1.mp4" — resolve via
   // the seedance/kie video+audio resolvers' slashed branch.
@@ -1472,7 +1478,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     frameIndex: 1 | 2,
     provider: SwapProvider,
     model: SwapModel,
-    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
+    opts?: { safeMode?: boolean; customPrompt?: string },
   ): Promise<{ newAssetId: string } | null> => {
     const key = variantKey(provider, model);
     const tag = `${key}|${frameIndex}`;
@@ -1489,7 +1495,6 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         character_asset_ids: characters.map((c) => `@${c.asset_id}`),
         provider,
         model,
-        ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
         ...(opts?.safeMode ? { safe_mode: true } : {}),
         ...(opts?.customPrompt && opts.customPrompt.trim().length > 0 ? { custom_prompt: opts.customPrompt.trim() } : {}),
       });
@@ -1533,10 +1538,8 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     if (!matched) return;
     const parsed = parseVariantKey(matched[0]);
     if (!parsed) return;
-    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
     void runSwap(frameIndex, parsed.provider, parsed.model, {
       safeMode: true,
-      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
     });
   }, [scene, runSwap]);
 
@@ -1616,7 +1619,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     setSubmittingVideo(true);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel]);
+      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect);
       const result = await callTool(toolName, {
         project_slug: projectSlug,
         ...toolArgs,
@@ -1660,7 +1663,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     } finally {
       setSubmittingVideo(false);
     }
-  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipSlug, sceneAudioSlug, selectedVideoModel, videoModelPrompts, onSidecarUpdate]);
+  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipSlug, sceneAudioSlug, selectedVideoModel, videoModelPrompts, sourceAspect, onSidecarUpdate]);
 
   // Slot-presence is acceptance: when a scene's video reaches 'ready', auto-fire
   // extract_last_frame and seed the next scene's first frame. One-shot per
@@ -1772,8 +1775,9 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
       sceneClipSlug,
       sceneAudioSlug,
       videoModelPrompts[selectedVideoModel],
+      sourceAspect,
     ),
-    [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug],
+    [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, sourceAspect],
   );
 
   // Both swap slots are filled with ready images — slot-presence is acceptance.
@@ -1812,6 +1816,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         sceneIndex={index}
         characters={characters}
         mediaItems={mediaItems}
+        sourceAspect={sourceAspect}
         projectSlug={projectSlug}
         sourceSrc={sourceUrl(1)}
         tile={tile1}
@@ -1828,6 +1833,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         sceneIndex={index}
         characters={characters}
         mediaItems={mediaItems}
+        sourceAspect={sourceAspect}
         projectSlug={projectSlug}
         sourceSrc={sourceUrl(2)}
         tile={tile2}
@@ -1845,6 +1851,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         onPromptChange={setSelectedVideoPrompt}
         payload={videoPayload}
         mediaItems={mediaItems}
+        sourceAspect={sourceAspect}
         projectSlug={projectSlug}
         disabled={!bothReady || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
         disabledReason={
@@ -1883,6 +1890,7 @@ function VideoStepBlock({ bothReady, ...rest }: {
   onPromptChange: (next: string) => void;
   payload: unknown;
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   projectSlug: string;
   disabled: boolean;
   disabledReason?: string;
@@ -1928,13 +1936,14 @@ function VideoStepBlock({ bothReady, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   prompt: string;
   onPromptChange: (next: string) => void;
   payload: unknown;
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   projectSlug: string;
   disabled: boolean;
   disabledReason?: string;
@@ -2010,6 +2019,7 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
       )}
       <VideoSwapSlot
         state={videoTileState}
+        sourceAspect={sourceAspect}
         videoAssetId={videoAssetId}
         replacing={replacing}
         disabled={disabled}
@@ -2041,7 +2051,7 @@ function resolveSlugThumb(
   projectSlug: string,
 ): SlugThumb | null {
   const id = slug.startsWith('@') ? slug.slice(1) : slug;
-  const planMatch = id.match(/^plan\/(scene-\d+-image\d+-source\.jpg)$/);
+  const planMatch = id.match(/^plan\/((?:scene-\d+|s\d+)-image\d+-source\.jpg)$/);
   if (planMatch) {
     return { kind: 'image', src: `/files/${projectSlug}/plan/${planMatch[1]}`, waveform: null };
   }
@@ -2307,10 +2317,11 @@ function isAcceptableForSlot(payload: SidebarDragPayload, kind: PlanSlotKind): b
   return payload.id.startsWith('char-') || payload.id.startsWith('img-');
 }
 
-function PlanHeaderSlot({ label, kind, item, onDrop }: {
+function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   label: string;
   kind: PlanSlotKind;
   item: MediaItem | null;
+  sourceAspect?: SourceAspect;
   onDrop: (assetId: string) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
@@ -2332,14 +2343,17 @@ function PlanHeaderSlot({ label, kind, item, onDrop }: {
     }
   };
   const src = item?.thumbnailSrc ?? item?.filePath ?? null;
+  const slotStyle = kind === 'source' && sourceAspect ? { aspectRatio: sourceAspect.css } : undefined;
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">{label}</span>
       <div
         className={cn(
-          'relative w-44 aspect-video bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
+          'relative w-44 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
+          kind !== 'source' && 'aspect-video',
           dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
         )}
+        style={slotStyle}
         onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
         onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
@@ -2363,11 +2377,12 @@ function PlanHeaderSlot({ label, kind, item, onDrop }: {
   );
 }
 
-function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCount, canGenerate, generating, onSourceDrop, onCharADrop, onCharBDrop, onGenerate }: {
+function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, duration, scenesCount, canGenerate, generating, onSourceDrop, onCharADrop, onCharBDrop, onGenerate }: {
   sourceId: string | null;
   charAId: string | null;
   charBId: string | null;
   mediaItems: MediaItem[];
+  sourceAspect: SourceAspect;
   duration: number | null;
   scenesCount: number | null;
   canGenerate: boolean;
@@ -2403,7 +2418,7 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, duration, scenesCo
         </button>
       </div>
       <div className="flex flex-wrap gap-4 mb-4">
-        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} onDrop={onSourceDrop} />
+        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={onSourceDrop} />
         <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={onCharADrop} />
         <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={onCharBDrop} />
       </div>

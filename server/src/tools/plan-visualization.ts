@@ -81,7 +81,7 @@ const VISUALS_JSON_SCHEMA = {
   },
 } as const;
 
-export const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) gpt-image-2-image-to-image at 2K, 16:9 swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
+export const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) image-to-image at 2K using the source video's aspect ratio swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
 
 INPUTS YOU RECEIVE:
 - Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
@@ -358,7 +358,7 @@ function renderMarkdown(
     `**Characters:** ${charLine}`,
     `**Model:** ${model}`,
     "",
-    "Per chunk: extract first/last frames → swap the two on-screen subjects with the two characters via gpt-image-2-image-to-image (2K, 16:9) → assemble bytedance/seedance-2 multimodal call (edited frames as `reference_image_urls`, chunk video as `reference_video_urls`, chunk audio as `reference_audio_urls`).",
+    "Per chunk: extract first/last frames → swap the two on-screen subjects with the two characters via image-to-image (2K, source aspect) → assemble bytedance/seedance-2 multimodal call (edited frames as `reference_image_urls`, chunk video as `reference_video_urls`, chunk audio as `reference_audio_urls`).",
     "",
     "---",
     "",

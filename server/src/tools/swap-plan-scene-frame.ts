@@ -4,6 +4,8 @@ import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { type ImageInput, resolveImageSlugs } from "./_image-inputs.js";
+import { falWanImageSizeForDimensions, kieImageAspectRatioForDimensions } from "./_plan-aspect.js";
+import type { PlanSwapModel } from "./_plan-aspect.js";
 
 const REQUIRED_CHARACTERS = 2;
 
@@ -75,6 +77,11 @@ type PlanSidecar = {
   model: string;
 };
 
+type SourceDimensions = {
+  width: number | null;
+  height: number | null;
+};
+
 const schema = {
   project_slug: z.string().describe("Project slug"),
   scene_index: z.number().int().nonnegative().describe("Zero-based scene index in plan/.plan.json"),
@@ -85,10 +92,6 @@ const schema = {
     .describe(`Exactly ${REQUIRED_CHARACTERS} char-* or img-* slugs — the two on-screen subjects to swap in.`),
   provider: z.enum(SUPPORTED_PROVIDERS).optional().describe("Image-edit provider (default: kie)"),
   model: z.enum(SUPPORTED_MODELS).optional().describe(`Image-edit model (default: ${DEFAULT_MODEL})`),
-  prior_swap_asset_id: z
-    .string()
-    .optional()
-    .describe("Optional img-* slug of an already-swapped frame from this scene (typically image1's swap when generating image2). Appended as Image 4 so the model can match the visual identity / styling of the prior frame."),
   safe_mode: z
     .boolean()
     .optional()
@@ -99,39 +102,42 @@ const schema = {
     .describe("If provided, used verbatim as the prompt. Overrides the built-in default and ignores safe_mode."),
 };
 
-// The default prompt — exposed so the client can prefill the inline editor.
-export const DEFAULT_SWAP_PROMPT = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
-
 // Short, neutral prompt. Earlier versions embedded scene prose plus identity
 // language ("face, hair, skin tone, body type") and tripped gpt-image-2's
 // content filter (failures at 11–19s with 0 credits — the OpenAI moderation
 // signature). nano-banana-pro is more permissive but the same tight
 // instruction works well for both.
-//
-// frame2Continuity: when true, the prompt assumes inputs are exactly
-// [source last frame, prior swap of first frame] — no character refs. Used
-// when the prior frame is already swapped, since char identity already lives
-// in Image 2 and re-passing the original char crops adds noise.
-function buildSwapPrompt(hasPriorSwap: boolean, safeMode: boolean, frame2Continuity: boolean): string {
-  if (frame2Continuity) {
-    if (safeMode) {
-      return "Re-style Image 1 (the last frame of this scene) so the people in it look like the people in Image 2 (the first frame of this scene). Match their face, hair, wardrobe, and color grade to Image 2 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and poses unchanged.";
-    }
-    return "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Match face, hair, wardrobe, and color grade to Image 2 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
-  }
+function buildSwapPrompt(safeMode: boolean): string {
   if (safeMode) {
     // Reframed without "replace people" / "swap subjects" wording — these
     // phrases trigger Kie/OpenAI moderation. Talk in styling / matching
     // terms instead. The references still drive the result.
-    if (hasPriorSwap) {
-      return "Re-style Image 1 so the people in it look like the people in Image 2 and Image 3. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look to Image 4 for continuity. Keep Image 1's composition, framing, lighting, camera angle, and poses unchanged.";
-    }
     return "Re-style Image 1 so the people in it look like the people in Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and poses unchanged.";
   }
-  if (hasPriorSwap) {
-    return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to Image 4 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
-  }
   return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+}
+
+function metadataNumber(value: unknown): number | null {
+  if (typeof value !== "number") return null;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+async function readSourceDimensions(
+  fs: ClipfirstFs,
+  sourceAssetId: string,
+  projectSlug: string,
+): Promise<SourceDimensions> {
+  const metadata = await fs.readMetadata<Record<string, unknown>>(
+    sourceAssetId.replace(/^@/, ""),
+    "original",
+    projectSlug,
+  );
+  if (!metadata.ok) return { width: null, height: null };
+  return {
+    width: metadataNumber(metadata.value.width),
+    height: metadataNumber(metadata.value.height),
+  };
 }
 
 export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
@@ -141,14 +147,13 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
       "Run an image-to-image model (nano-banana-pro by default; gpt-image-2 alternative) on a plan scene's source frame, swapping the two on-screen subjects with two character references. Creates a new img-* asset for the swapped frame and updates plan/.plan.json with that asset's id at scenes[N].swap.image{1|2}. Reuses the existing generate_nano_banana_image / generate_gpt_image job pipelines.",
     schema,
     handler: async (args) => {
-      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg, prior_swap_asset_id, safe_mode, custom_prompt } = args as {
+      const { project_slug, scene_index, frame_index, character_asset_ids, provider: providerArg, model: modelArg, safe_mode, custom_prompt } = args as {
         project_slug: string;
         scene_index: number;
         frame_index: 1 | 2;
         character_asset_ids: string[];
         provider?: Provider;
         model?: Model;
-        prior_swap_asset_id?: string;
         safe_mode?: boolean;
         custom_prompt?: string;
       };
@@ -246,43 +251,16 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Frame-2 continuity: when generating the last frame and we already
-      // have a swapped first frame, drop the character refs entirely — the
-      // prior swap is the canonical look reference, and re-passing the char
-      // crops just adds noise.
-      const isFrame2Continuity = frame_index === 2 && Boolean(prior_swap_asset_id);
+      const imageInputs: ImageInput[] = [
+        { assetId: "plan", filename: sourceFilename },
+        ...resolvedChars.inputs,
+      ];
 
-      let priorPushed = false;
-      if (prior_swap_asset_id) {
-        const priorAssetDir = await fs.resolveAssetDir(prior_swap_asset_id, project_slug);
-        if (!priorAssetDir.ok) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `prior_swap_asset_id ${prior_swap_asset_id} not found: ${priorAssetDir.error.message}`,
-            }],
-          };
-        }
-        priorPushed = true;
-      }
-
-      const imageInputs: ImageInput[] = isFrame2Continuity
-        ? [
-          { assetId: "plan", filename: sourceFilename },
-          { assetId: prior_swap_asset_id as string, filename: "original.png" },
-        ]
-        : [
-          { assetId: "plan", filename: sourceFilename },
-          ...resolvedChars.inputs,
-          ...(priorPushed ? [{ assetId: prior_swap_asset_id as string, filename: "original.png" }] : []),
-        ];
-
-      const charIds = isFrame2Continuity ? [] : resolvedChars.sourceImageIds;
+      const charIds = resolvedChars.sourceImageIds;
 
       const prompt = custom_prompt && custom_prompt.trim().length > 0
         ? custom_prompt.trim()
-        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true, isFrame2Continuity);
+        : buildSwapPrompt(safe_mode === true);
 
       const slugCode = provider === "fal"
         ? `${SLUG_CODE_BY_MODEL[model]}-fal`
@@ -374,11 +352,21 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         sourceImageIds: charIds,
         projectSlug: project_slug,
       };
+      const sourceDimensions = await readSourceDimensions(fs, plan.source_asset_id, project_slug);
+      const kieAspectRatio = kieImageAspectRatioForDimensions(
+        model as PlanSwapModel,
+        sourceDimensions.width,
+        sourceDimensions.height,
+      );
+      const falWanImageSize = falWanImageSizeForDimensions(
+        sourceDimensions.width,
+        sourceDimensions.height,
+      );
       const providerSpecific: Record<string, unknown> = provider === "fal"
         ? (model === "wan-2-7-image-pro"
-          ? { image_size: "landscape_16_9" }
-          : { aspect_ratio: "16:9", resolution: "2K" })
-        : { aspectRatio: "16:9", resolution: "2K" };
+          ? { image_size: falWanImageSize }
+          : { aspect_ratio: kieAspectRatio, resolution: "2K" })
+        : { aspectRatio: kieAspectRatio, resolution: "2K" };
       await queue.enqueue(jobId, {
         ...baseJob,
         ...providerSpecific,
@@ -395,6 +383,12 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
             model,
             job_id: jobId,
             status: "enqueued",
+            aspect: {
+              source_width: sourceDimensions.width,
+              source_height: sourceDimensions.height,
+              image_aspect_ratio: providerSpecific.aspectRatio ?? providerSpecific.aspect_ratio,
+              image_size: providerSpecific.image_size,
+            },
             sidecar: plan,
           }),
         }],
