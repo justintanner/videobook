@@ -988,12 +988,22 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
+// Frame 2 continuity prompt — used when generating the last frame against an
+// already-swapped first frame. Inputs are exactly [source last frame, first
+// frame swap], so the prompt must reference Image 2 (not Image 3) and skip
+// any char-ref language.
+const DEFAULT_PROMPT_FRAME2_CONTINUITY = "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Use Image 2 only as a look reference for face, hair, wardrobe, and color grade. Do not copy Image 2's composition, framing, background, camera position, crop, or pose. Preserve Image 1's source-frame composition, framing, crop, camera angle, background, lighting, and original poses unchanged.";
+
 // Build a stable empty prompts map keyed by every (provider, model) combo.
-function makeEmptyModelPrompts(): Record<string, string> {
+// Frame 2 seeds with the continuity prompt; frame 1 seeds with the per-model
+// char-swap default.
+function makeEmptyModelPrompts(frameIndex: 1 | 2): Record<string, string> {
   const out: Record<string, string> = {};
   for (const provider of ALL_SWAP_PROVIDERS) {
     for (const model of MODELS_BY_PROVIDER[provider]) {
-      out[variantKey(provider, model)] = DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+      out[variantKey(provider, model)] = frameIndex === 2
+        ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+        : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
     }
   }
   return out;
@@ -1024,14 +1034,25 @@ function buildSwapPayload(
   frameIndex: 1 | 2,
   customPrompt: string,
   sourceAspect: SourceAspect,
+  priorSwapAssetId?: string,
 ): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
   const sourceFrameSlug = `@plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
-  const inputs = [
-    sourceFrameSlug,
-    ...characters.map((c) => `@${c.asset_id}`),
-  ];
+  // Frame 2 + prior swap = continuity mode. Drop the character refs; the
+  // prior swap is the canonical look reference. This mirrors the server's
+  // isFrame2Continuity branch in swap-plan-scene-frame.ts.
+  const isFrame2Continuity = frameIndex === 2 && Boolean(priorSwapAssetId);
+  const inputs = isFrame2Continuity
+    ? [sourceFrameSlug, `@${priorSwapAssetId as string}`]
+    : [
+      sourceFrameSlug,
+      ...characters.map((c) => `@${c.asset_id}`),
+      ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
+    ];
   const trimmed = customPrompt.trim();
-  const prompt = trimmed.length > 0 ? trimmed : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const defaultPrompt = isFrame2Continuity
+    ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+    : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
+  const prompt = trimmed.length > 0 ? trimmed : defaultPrompt;
   const imageAspectRatio = kieImageAspectRatioForDimensions(model, sourceAspect.width, sourceAspect.height);
   if (provider === 'fal') {
     const endpoint = FAL_ENDPOINT_BY_SWAP[model];
@@ -1292,7 +1313,8 @@ function buildSeedanceToolArgs(
 // Per-frame self-contained block: provider/model dropdowns + prompt/JSON tabs
 // + source→slot row. Owns its own (provider, model, prompt) state. Idle slot
 // click and Regen both dispatch the selected (provider, model) for THAT frame
-// only; both frames swap against their own source frame plus the two char refs.
+// only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
+// prior_swap_asset_id so identity carries over from the prior frame.
 function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, sourceAspect, projectSlug, sourceSrc, tile, inFlightCodes, replacing, runSwap, onReplace, onErrorRetry }: {
   ordinal: 1 | 2;
   frameIndex: 1 | 2;
@@ -1310,7 +1332,7 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
     frameIndex: 1 | 2,
     provider: SwapProvider,
     model: SwapModel,
-    opts?: { safeMode?: boolean; customPrompt?: string },
+    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ) => Promise<{ newAssetId: string } | null>;
   onReplace: (source: ReplaceSource) => void;
   onErrorRetry: () => void;
@@ -1318,9 +1340,11 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
   const [selectedProvider, setSelectedProvider] = useState<SwapProvider>('kie');
   const [selectedModel, setSelectedModel] = useState<SwapModel>('nano-banana-pro');
   // One prompt per (provider, model) variant — switching the dropdown swaps
-  // which prompt the editor / JSON view reads from.
+  // which prompt the editor / JSON view reads from. Frame 2 seeds with the
+  // continuity prompt template since its inputs are [source last frame,
+  // first frame swap] (no char refs).
   const [variantPrompts, setVariantPrompts] = useState<Record<string, string>>(
-    () => makeEmptyModelPrompts(),
+    () => makeEmptyModelPrompts(frameIndex),
   );
 
   const handleProviderChange = useCallback((next: SwapProvider) => {
@@ -1347,15 +1371,18 @@ function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaI
       frameIndex,
       currentPrompt,
       sourceAspect,
+      frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined,
     ),
-    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, sourceAspect],
+    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, sourceAspect, scene.swap?.image1],
   );
 
   const dispatchGen = useCallback(() => {
+    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
     void runSwap(frameIndex, selectedProvider, selectedModel, {
       customPrompt: currentPrompt,
+      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
     });
-  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt]);
+  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt, scene.swap?.image1]);
 
   const titleText = ordinal === 1 ? 'Generate first frame' : 'Generate last frame';
   const label = ordinal === 1
@@ -1478,7 +1505,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     frameIndex: 1 | 2,
     provider: SwapProvider,
     model: SwapModel,
-    opts?: { safeMode?: boolean; customPrompt?: string },
+    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
   ): Promise<{ newAssetId: string } | null> => {
     const key = variantKey(provider, model);
     const tag = `${key}|${frameIndex}`;
@@ -1495,6 +1522,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         character_asset_ids: characters.map((c) => `@${c.asset_id}`),
         provider,
         model,
+        ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
         ...(opts?.safeMode ? { safe_mode: true } : {}),
         ...(opts?.customPrompt && opts.customPrompt.trim().length > 0 ? { custom_prompt: opts.customPrompt.trim() } : {}),
       });
@@ -1538,8 +1566,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     if (!matched) return;
     const parsed = parseVariantKey(matched[0]);
     if (!parsed) return;
+    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
     void runSwap(frameIndex, parsed.provider, parsed.model, {
       safeMode: true,
+      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
     });
   }, [scene, runSwap]);
 
