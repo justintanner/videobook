@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFs } from "clipfirst-engine";
+import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { parseCommandArgs, filterCommandsByMountKeys } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
@@ -37,6 +38,8 @@ describe("slash commands e2e", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "clipfirst-slash-e2e-"));
     client = await createTestClient(tempDir);
+    registerJobHandler("download_video", async () => ({ stubbed: true }));
+    registerJobHandler("render_project", async () => ({ stubbed: true }));
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
@@ -59,7 +62,8 @@ describe("slash commands e2e", () => {
   // Helper: simulate frontend dispatch for a slash command string
   // -----------------------------------------------------------------------
   function findCommand(name: string): ServerCommand {
-    const cmd = commands.find((c) => c.command === name);
+    const matches = commands.filter((c) => c.command === name);
+    const cmd = matches.find((c) => c.category === "action") ?? matches[0];
     if (!cmd) throw new Error(`Command ${name} not found`);
     return cmd;
   }
@@ -528,7 +532,7 @@ describe("slash commands e2e", () => {
           arguments: { model: "nano_banana", project_slug: "test-proj" },
         });
         expect(result.isError).toBe(true);
-        expect((result.content as TextContent)[0].text).toContain("prompt is required");
+        expect((result.content as TextContent)[0].text).toContain("Provide a prompt");
       } finally {
         if (origKey) process.env.OPENAI_API_KEY = origKey;
         else delete process.env.OPENAI_API_KEY;
@@ -613,12 +617,13 @@ describe("slash commands e2e", () => {
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
+          orientation: "landscape",
         },
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
       expect(parsed.status).toBe("enqueued");
-      expect(parsed.orientation).toBe("landscape");
+      expect(parsed.orientations).toEqual(["landscape"]);
     });
 
     it("errors for osg_asset_id with non-img prefix", async () => {
@@ -764,8 +769,8 @@ describe("slash commands e2e", () => {
       // In production, chat fallback commands bypass parseCommandArgs entirely — the
       // full input is sent to the chat tool. This test documents the parse behavior.
       const args = simulateParse("/generate", "video of a dog on a skateboard");
-      expect(args.prompt).toBe("video");
-      expect(args.model).toBe("of a dog on a skateboard");
+      expect(args.type).toBe("video");
+      expect(args.prompt).toBe("of a dog on a skateboard");
     });
 
     it("parses '/trim @hero-intro 0:05 0:12'", () => {
@@ -916,9 +921,8 @@ describe("slash commands e2e", () => {
 
     it("/generate with multi-word input: prompt gets first token, model gets rest", () => {
       const args = simulateParse("/generate", "video of @hero-intro dancing");
-      expect(args.prompt).toBe("video");
-      // model is the last string param, gets all remaining tokens joined
-      expect(args.model).toBe("of @hero-intro dancing");
+      expect(args.type).toBe("video");
+      expect(args.prompt).toBe("of @hero-intro dancing");
     });
 
     it("/rename strips @ from new_name when it is the last string param", () => {
@@ -1371,11 +1375,12 @@ describe("slash commands e2e", () => {
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
+          orientation: "portrait",
         },
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.orientation).toBe("portrait");
+      expect(parsed.orientations).toEqual(["portrait"]);
     });
 
     it("errors when osg_asset_id is nonexistent", async () => {
@@ -3241,10 +3246,11 @@ describe("slash commands e2e", () => {
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
+          orientation: "square",
         },
       });
       expect(result.isError).toBeFalsy();
-      expect(parseResult(result).orientation).toBe("square");
+      expect(parseResult(result).orientations).toEqual(["square"]);
     });
 
     it("renders with large audio_fade_in and audio_fade_out values", async () => {
@@ -3459,7 +3465,7 @@ describe("slash commands e2e", () => {
           },
         });
         expect(result.isError).toBe(true);
-        expect((result.content as TextContent)[0].text).toContain("prompt is required");
+        expect((result.content as TextContent)[0].text).toContain("Provide a prompt");
       } finally {
         if (origKey) process.env.OPENAI_API_KEY = origKey;
         else delete process.env.OPENAI_API_KEY;

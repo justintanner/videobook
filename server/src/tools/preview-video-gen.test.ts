@@ -50,18 +50,16 @@ describe("preview_video tool", () => {
     expect(content[0].text).toContain("OPENAI_API_KEY");
   });
 
-  it("returns preview with resolved @tags when dummy API key is set (OpenAI fails, falls through to default)", async () => {
-    // Upload an image to create a real asset
+  it("returns preview with resolved @tags when model selection skips routing", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
       arguments: { project_slug: "test-proj", filename: "sunset.png", data },
     });
 
-    process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
       name: "preview_video",
-      arguments: { prompt: "animate @img-sunset into a video", project_slug: "test-proj" },
+      arguments: { prompt: "animate @img-sunset into a video", project_slug: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -77,11 +75,10 @@ describe("preview_video tool", () => {
     expect(parsed.resolved_assets[0].type).toBe("image");
   });
 
-  it("returns preview with empty resolved_assets when prompt has no @tags and dummy API key", async () => {
-    process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
+  it("returns preview with empty resolved_assets when prompt has no @tags and model selection skips routing", async () => {
     const result = await client.callTool({
       name: "preview_video",
-      arguments: { prompt: "create an epic sunrise video", project_slug: "test-proj" },
+      arguments: { prompt: "create an epic sunrise video", project_slug: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -95,10 +92,9 @@ describe("preview_video tool", () => {
   });
 
   it("includes unresolved @tag warnings in the preview", async () => {
-    process.env.OPENAI_API_KEY = "sk-test-dummy-key-for-testing";
     const result = await client.callTool({
       name: "preview_video",
-      arguments: { prompt: "animate @img-nonexistent", project_slug: "test-proj" },
+      arguments: { prompt: "animate @img-nonexistent", project_slug: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();

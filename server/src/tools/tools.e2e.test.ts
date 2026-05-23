@@ -497,8 +497,7 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.status).toBe("enqueued");
-    await waitForJob(parsed.job_id as string);
+    expect(parsed.status).toBe("completed");
     const trimStat = await stat(join(tempDir, PROJECT, vidAssetId, "original.mp4"));
     expect(trimStat.isFile()).toBe(true);
     expect(trimStat.size).toBeGreaterThan(0);
@@ -642,7 +641,7 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.asset_id).toBe(vidAssetId);
-    expect(parsed.orientation).toBe("landscape");
+    expect(parsed.orientations).toEqual(["landscape", "portrait", "square"]);
     // Don't waitForJob — Remotion rendering not available in test env
   });
 
@@ -686,10 +685,9 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIMI_CODING_API_KEY");
   });
 
-  // ── Section 14: Transcribe (requires KIE_API_KEY) ──────────────
+  // ── Section 14: Transcribe (requires ELEVENLABS_API_KEY) ─────────
 
-  it("transcribe returns error without KIE_API_KEY", async () => {
-    if (hasKieKey) return;
+  it("transcribe returns error without ELEVENLABS_API_KEY", async () => {
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
@@ -698,7 +696,7 @@ describe("MCP tools e2e", () => {
       },
     });
     expect(result.isError).toBe(true);
-    expect(parseText(result)).toContain("KIE_API_KEY");
+    expect(parseText(result)).toContain("ELEVENLABS_API_KEY");
   });
 
   // ── Section 15: Generation tools (require KIE_API_KEY) ─────────
@@ -771,8 +769,7 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("OPENAI_API_KEY");
   });
 
-  it("preview_image returns error without OPENAI_API_KEY", async () => {
-    if (hasOpenAiKey) return;
+  it("preview_image returns model options without OPENAI_API_KEY", async () => {
     const result = await client.callTool({
       name: "preview_image",
       arguments: {
@@ -780,8 +777,8 @@ describe("MCP tools e2e", () => {
         project_slug: PROJECT,
       },
     });
-    expect(result.isError).toBe(true);
-    expect(parseText(result)).toContain("OPENAI_API_KEY");
+    expect(result.isError).toBeFalsy();
+    expect(parse(result).category).toBe("image");
   });
 
   it("chat returns error without OPENAI_API_KEY", async () => {

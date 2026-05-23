@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { kimicoding } from "@apicity/kimicoding";
+import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function apiStatusDef(): ToolDef {
@@ -13,6 +14,12 @@ export function apiStatusDef(): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "KIMI_CODING_API_KEY environment variable is not set" }],
+        };
+      }
+      if (isPlaceholderApiKey(apiKey)) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "KIMI_CODING_API_KEY is a placeholder; refusing to call the real API" }],
         };
       }
 

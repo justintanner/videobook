@@ -91,7 +91,7 @@ describe("download_video tool", () => {
     const result = await client.callTool({
       name: "download_video",
       arguments: {
-        url: "https://example.com/not-a-real-video-url-12345",
+        url: "http://127.0.0.1:9/not-a-real-video-url-12345",
         project_slug: "test-proj",
       },
     });

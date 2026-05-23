@@ -630,15 +630,15 @@ const HARDCODED_COMMANDS: Command[] = [
   {
     command: "/render",
     description: "Render video asset",
-    example: "/render portrait @hero-intro",
+    example: "/render @hero-intro portrait",
     category: "action",
     icon: "Film",
     size: "lg",
     variant: "violet",
     chevron: "right",
     params: [
-      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
       { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
+      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
     ],
     mcpTool: { tool: "render", autoInject: ["project_slug"] },
   },

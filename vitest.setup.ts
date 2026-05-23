@@ -1,3 +1,5 @@
+import { afterEach } from "vitest";
+
 /**
  * Test guardrails: zero real API keys, zero outbound network.
  *
@@ -56,11 +58,21 @@ function extractFetchHost(input: RequestInfo | URL): string {
 }
 
 const realFetch = globalThis.fetch;
+let blockedFetchAttempts: string[] = [];
+
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const host = extractFetchHost(input);
   if (isLocalHost(host)) return realFetch(input, init);
+  blockedFetchAttempts.push(host || String(input));
   throw new Error(
     `[test guard] fetch to "${host}" blocked: tests must not make outbound API calls. ` +
       `Use PollyJS for recorded provider responses.`,
   );
 }) as typeof fetch;
+
+afterEach(() => {
+  if (blockedFetchAttempts.length === 0) return;
+  const hosts = [...new Set(blockedFetchAttempts)].join(", ");
+  blockedFetchAttempts = [];
+  throw new Error(`[test guard] outbound API fetch attempted during test: ${hosts}`);
+});

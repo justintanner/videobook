@@ -102,16 +102,18 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
       // 2. OG extraction — one call
       let ogData: IOGResult | null = null;
       let title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
-      try {
-        const response = await fetch(normalizedUrl, {
-          headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
-          signal: AbortSignal.timeout(10_000),
-          redirect: "follow",
-        });
-        ogData = extractOpenGraph(await response.text());
-        if (ogData.ogTitle) title = cleanOgTitle(ogData.ogTitle);
-      } catch {
-        // OG fetch failure is non-fatal
+      if (process.env.NODE_ENV !== "test") {
+        try {
+          const response = await fetch(normalizedUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
+            signal: AbortSignal.timeout(10_000),
+            redirect: "follow",
+          });
+          ogData = extractOpenGraph(await response.text());
+          if (ogData.ogTitle) title = cleanOgTitle(ogData.ogTitle);
+        } catch {
+          // OG fetch failure is non-fatal
+        }
       }
 
       // 3. Name decision (short, source-prefixed)

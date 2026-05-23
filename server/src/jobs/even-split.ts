@@ -127,12 +127,13 @@ export function registerEvenSplitJob(fs: ClipfirstFs): void {
     }
 
     await Promise.all(chunks.map((chunk, i) =>
-      queue.enqueue(`process-video-${chunk.assetId}-${Date.now() + i}`, {
+      queue.enqueueAndWait(`process-video-${chunk.assetId}-${Date.now() + i}`, {
         type: "process_video",
         videoPath: chunk.outputPath,
         assetId: chunk.assetId,
         assetDir: chunk.assetDir,
         projectSlug,
+        skipDownstreamJobs: true,
         provenance: {
           origin: "even_split",
           source_asset_id: sourceAssetId,
