@@ -115,17 +115,10 @@ export const DEFAULT_SWAP_PROMPT = "Edit Image 1: replace the people with the pe
 // signature). nano-banana-pro is more permissive but the same tight
 // instruction works well for both.
 //
-// frame2Continuity: when true, the prompt assumes inputs are exactly
-// [source last frame, prior swap of first frame] — no character refs. Used
-// when the prior frame is already swapped, since char identity already lives
-// in Image 2 and re-passing the original char crops adds noise.
-function buildSwapPrompt(hasPriorSwap: boolean, safeMode: boolean, frame2Continuity: boolean): string {
-  if (frame2Continuity) {
-    if (safeMode) {
-      return "Re-style Image 1 (the last frame of this scene) so the people in it look like the people in Image 2 (the first frame of this scene). Use Image 2 only as a look reference for face, hair, wardrobe, and color grade. Do not copy Image 2's composition, framing, background, camera position, crop, or pose. Preserve Image 1's source-frame composition, framing, crop, camera angle, background, lighting, and original poses unchanged.";
-    }
-    return "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Use Image 2 only as a look reference for face, hair, wardrobe, and color grade. Do not copy Image 2's composition, framing, background, camera position, crop, or pose. Preserve Image 1's source-frame composition, framing, crop, camera angle, background, lighting, and original poses unchanged.";
-  }
+// hasPriorSwap: when true, an extra Image 4 (a previously-swapped frame from
+// this scene — typically image1's swap when generating image2) is appended
+// for look continuity. Char refs (Image 2, Image 3) still drive identity.
+function buildSwapPrompt(hasPriorSwap: boolean, safeMode: boolean): string {
   if (safeMode) {
     // Reframed without "replace people" / "swap subjects" wording — these
     // phrases trigger Kie/OpenAI moderation. Talk in styling / matching
@@ -276,12 +269,6 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         };
       }
 
-      // Frame-2 continuity: when generating the last frame and we already
-      // have a swapped first frame, drop the character refs entirely — the
-      // prior swap is the canonical look reference, and re-passing the char
-      // crops just adds noise.
-      const isFrame2Continuity = frame_index === 2 && Boolean(prior_swap_asset_id);
-
       let priorPushed = false;
       if (prior_swap_asset_id) {
         const priorAssetDir = await fs.resolveAssetDir(prior_swap_asset_id, project_slug);
@@ -297,22 +284,19 @@ export function swapPlanSceneFrameDef(fs: ClipfirstFs): ToolDef {
         priorPushed = true;
       }
 
-      const imageInputs: ImageInput[] = isFrame2Continuity
-        ? [
-          { assetId: "plan", filename: sourceFilename },
-          { assetId: prior_swap_asset_id as string, filename: "original.png" },
-        ]
-        : [
-          { assetId: "plan", filename: sourceFilename },
-          ...resolvedChars.inputs,
-          ...(priorPushed ? [{ assetId: prior_swap_asset_id as string, filename: "original.png" }] : []),
-        ];
+      // 4-image input when prior_swap_asset_id is set:
+      //   1 = source frame, 2 = char A, 3 = char B, 4 = prior swap (look ref).
+      const imageInputs: ImageInput[] = [
+        { assetId: "plan", filename: sourceFilename },
+        ...resolvedChars.inputs,
+        ...(priorPushed ? [{ assetId: prior_swap_asset_id as string, filename: "original.png" }] : []),
+      ];
 
-      const charIds = isFrame2Continuity ? [] : resolvedChars.sourceImageIds;
+      const charIds = resolvedChars.sourceImageIds;
 
       const prompt = custom_prompt && custom_prompt.trim().length > 0
         ? custom_prompt.trim()
-        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true, isFrame2Continuity);
+        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true);
 
       const slugCode = provider === "fal"
         ? `${SLUG_CODE_BY_MODEL[model]}-fal`

@@ -988,21 +988,21 @@ const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
   'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
 };
 
-// Frame 2 continuity prompt — used when generating the last frame against an
-// already-swapped first frame. Inputs are exactly [source last frame, first
-// frame swap], so the prompt must reference Image 2 (not Image 3) and skip
-// any char-ref language.
-const DEFAULT_PROMPT_FRAME2_CONTINUITY = "Edit Image 1 (the last frame of this scene): match the people's appearance to Image 2 (the first frame of this scene). Use Image 2 only as a look reference for face, hair, wardrobe, and color grade. Do not copy Image 2's composition, framing, background, camera position, crop, or pose. Preserve Image 1's source-frame composition, framing, crop, camera angle, background, lighting, and original poses unchanged.";
+// Frame 2 prompt — used when generating the last frame and a previously
+// swapped first frame is available. Inputs are [source last frame, char A,
+// char B, prior image1 swap]. Char refs drive identity; Image 4 is only a
+// look-continuity reference (face/hair/wardrobe/color grade).
+const DEFAULT_PROMPT_FRAME2_PRIOR_SWAP = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to Image 4 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
 
 // Build a stable empty prompts map keyed by every (provider, model) combo.
-// Frame 2 seeds with the continuity prompt; frame 1 seeds with the per-model
-// char-swap default.
+// Frame 2 seeds with the prior-swap continuity prompt (mentions Image 4);
+// frame 1 seeds with the per-model char-swap default.
 function makeEmptyModelPrompts(frameIndex: 1 | 2): Record<string, string> {
   const out: Record<string, string> = {};
   for (const provider of ALL_SWAP_PROVIDERS) {
     for (const model of MODELS_BY_PROVIDER[provider]) {
       out[variantKey(provider, model)] = frameIndex === 2
-        ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+        ? DEFAULT_PROMPT_FRAME2_PRIOR_SWAP
         : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
     }
   }
@@ -1037,20 +1037,17 @@ function buildSwapPayload(
   priorSwapAssetId?: string,
 ): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
   const sourceFrameSlug = `@plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
-  // Frame 2 + prior swap = continuity mode. Drop the character refs; the
-  // prior swap is the canonical look reference. This mirrors the server's
-  // isFrame2Continuity branch in swap-plan-scene-frame.ts.
-  const isFrame2Continuity = frameIndex === 2 && Boolean(priorSwapAssetId);
-  const inputs = isFrame2Continuity
-    ? [sourceFrameSlug, `@${priorSwapAssetId as string}`]
-    : [
-      sourceFrameSlug,
-      ...characters.map((c) => `@${c.asset_id}`),
-      ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
-    ];
+  // 4-image input when priorSwapAssetId is set (frame 2 against an
+  // already-swapped frame 1): [source, char A, char B, prior swap].
+  // Mirrors the server's priorPushed branch in swap-plan-scene-frame.ts.
+  const inputs = [
+    sourceFrameSlug,
+    ...characters.map((c) => `@${c.asset_id}`),
+    ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
+  ];
   const trimmed = customPrompt.trim();
-  const defaultPrompt = isFrame2Continuity
-    ? DEFAULT_PROMPT_FRAME2_CONTINUITY
+  const defaultPrompt = priorSwapAssetId
+    ? DEFAULT_PROMPT_FRAME2_PRIOR_SWAP
     : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
   const prompt = trimmed.length > 0 ? trimmed : defaultPrompt;
   const imageAspectRatio = kieImageAspectRatioForDimensions(model, sourceAspect.width, sourceAspect.height);
