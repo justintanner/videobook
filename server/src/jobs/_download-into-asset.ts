@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 
 // Fetch `url`, write the response bytes to the given asset file, and return
 // the buffer for callers that need it (e.g. for content-hash provenance).

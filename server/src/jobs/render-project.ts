@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";

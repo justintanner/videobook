@@ -1,10 +1,10 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "clipfirst-engine";
+import { findVideoFile } from "vc-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 

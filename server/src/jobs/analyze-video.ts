@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
@@ -7,7 +7,7 @@ import { kie } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
-import { findAudioFile } from "clipfirst-engine";
+import { findAudioFile } from "vc-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 
 type AnalyzeVideoPayload = {
@@ -73,7 +73,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
           .filter((f) => f.endsWith(".jpg"))
           .sort((a, b) => parseFloat(a) - parseFloat(b))
       : [];
-    // clipfirst-engine doesn't yet expose a typed read for asset subdir files,
+    // vc-engine doesn't yet expose a typed read for asset subdir files,
     // so frame bytes are read via node:fs below.
     const framesDir = join(assetDir, "original_frames");
 

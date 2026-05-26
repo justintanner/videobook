@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";

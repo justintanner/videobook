@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";

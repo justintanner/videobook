@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";

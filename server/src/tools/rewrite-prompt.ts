@@ -2,14 +2,14 @@
  * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
  * prompting guides via GPT-5.2.
  */
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openai, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
+import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 

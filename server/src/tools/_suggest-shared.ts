@@ -1,6 +1,6 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
-import { findVideoFile } from "clipfirst-engine";
+import { findVideoFile } from "vc-engine";
 
 export const MODEL = "gpt-5.4";
 export const MAX_FRAMES = 15;

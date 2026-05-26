@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { createProjectDef } from "./create-project.js";

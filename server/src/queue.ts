@@ -21,7 +21,7 @@ import {
   isValidProjectSlug,
   queueApi,
   closeStateDb,
-} from "clipfirst-engine";
+} from "vc-engine";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
 

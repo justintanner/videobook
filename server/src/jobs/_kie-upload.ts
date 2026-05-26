@@ -1,5 +1,5 @@
 import { kie, uploadFile } from "@apicity/kie";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,

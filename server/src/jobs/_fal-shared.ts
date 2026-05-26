@@ -1,6 +1,6 @@
 import { fal } from "@apicity/fal";
-import type { ClipfirstFs } from "clipfirst-engine";
-import { type PendingTask } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
+import { type PendingTask } from "vc-engine";
 import { requireApiKey } from "../api-key.js";
 export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
 

@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";

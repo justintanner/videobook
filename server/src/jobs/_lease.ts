@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import type { JobHandlerContext } from "../queue.js";
 
 type AssetWorkKind =

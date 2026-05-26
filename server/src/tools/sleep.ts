@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { syncDef } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";

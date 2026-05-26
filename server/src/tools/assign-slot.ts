@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetEntry } from "clipfirst-engine";
+import type { ClipfirstFs, AssetEntry } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

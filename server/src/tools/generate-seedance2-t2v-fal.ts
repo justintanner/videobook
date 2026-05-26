@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0TextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";

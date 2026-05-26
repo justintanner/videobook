@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { createFs, type ClipfirstFs } from 'clipfirst-engine';
+import { createFs, type ClipfirstFs } from 'vc-engine';
 
 const execFileAsync = promisify(execFile);
 

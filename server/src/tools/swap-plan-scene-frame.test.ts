@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { createFs } from "clipfirst-engine";
-import type { ClipfirstFs } from "clipfirst-engine";
+import { createFs } from "vc-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { queue } from "../queue.js";
 import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 

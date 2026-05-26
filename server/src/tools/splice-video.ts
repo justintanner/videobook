@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { probeVideo, type ProbeResult } from "../ffmpeg.js";
-import { findVideoFile } from "clipfirst-engine";
+import { findVideoFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 function stripVidPrefix(id: string): string {

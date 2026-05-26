@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import type { GrokImageToVideoDuration } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";

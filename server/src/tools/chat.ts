@@ -2,12 +2,12 @@
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { openai, firstContent } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
+import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
-import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "clipfirst-engine";
+import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "vc-engine";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

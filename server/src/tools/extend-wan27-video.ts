@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "clipfirst-engine";
+import { findVideoFile } from "vc-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {

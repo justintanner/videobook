@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { postToX, type PostToXResult } from "../x/post-to-x.js";
 

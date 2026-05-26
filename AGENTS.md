@@ -25,7 +25,7 @@ Guidance for AI coding agents working in the Clipfirst repository.
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `use-mcp` to connect to MCP server at `/mcp`.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. Tools in `server/src/tools/*.ts` registered via `server/src/tools/index.ts`.
-- **Filesystem (`clipfirst-engine`)**: Local dep at `../clipfirst-engine`. All project/asset ops MUST use `createFs()` — never `node:fs` directly.
+- **Filesystem (`vc-engine`)**: Local dep at `../vc-engine`. All project/asset ops MUST use `createFs()` — never `node:fs` directly.
 
 ## Code Style
 
@@ -74,9 +74,9 @@ Guidance for AI coding agents working in the Clipfirst repository.
 ## Key Rules
 
 ### Filesystem Operations
-**ALWAYS use `clipfirst-engine`** — never `node:fs` for projects/assets:
+**ALWAYS use `vc-engine`** — never `node:fs` for projects/assets:
 ```typescript
-import { createFs } from "clipfirst-engine";
+import { createFs } from "vc-engine";
 const fs = createFs({ projectsDir: "/path/to/projects" });
 const project = await fs.createProject("my-project");
 const asset = await fs.createAsset("vid", "intro clip", "my-project");
@@ -164,7 +164,7 @@ Always build client before server if both change: `npm run build && npm run buil
 | MCP Server | @modelcontextprotocol/sdk |
 | Server | Express |
 | Validation | Zod |
-| Filesystem | clipfirst-engine |
+| Filesystem | vc-engine |
 | Job Queue | @platformatic/job-queue |
 | Linting | ESLint 9 |
 | Testing | Vitest |

@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "clipfirst-engine";
+import { findVideoFile } from "vc-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const upscaleGrokImagineVideoSchema = {

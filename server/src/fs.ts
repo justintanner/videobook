@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createFs } from "clipfirst-engine";
+import { createFs } from "vc-engine";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PROJECTS_DIR = resolve(__dirname, "../../projects");

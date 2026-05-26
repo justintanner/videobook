@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";

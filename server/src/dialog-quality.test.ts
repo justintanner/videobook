@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assessDialogQuality, readAndAssessDialog } from "./dialog-quality.js";
 import { createFsForTest } from "./fs.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 
 describe("assessDialogQuality", () => {
   it("returns hasDialog=false with reason 'empty' for empty text", () => {

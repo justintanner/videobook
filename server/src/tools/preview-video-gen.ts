@@ -4,10 +4,10 @@
  * render a dynamic parameter form.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { openai, firstContent } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
+import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import {
   VIDEO_MODELS,
   buildVideoRoutingPrompt,

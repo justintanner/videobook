@@ -1,6 +1,6 @@
 import { freeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {

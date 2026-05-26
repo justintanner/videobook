@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { execFile } from "node:child_process";
 import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";

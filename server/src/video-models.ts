@@ -1,7 +1,7 @@
 /**
  * Video model registry, schemas, validation, and routing prompt.
  */
-import type { ResolvedAsset } from "clipfirst-engine";
+import type { ResolvedAsset } from "vc-engine";
 import {
   GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,

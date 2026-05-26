@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";

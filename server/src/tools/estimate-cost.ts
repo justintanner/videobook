@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";

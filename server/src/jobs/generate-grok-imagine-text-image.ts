@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 
 /**
  * Asserts the gen-start red-flash bug stays fixed: after a tool calls

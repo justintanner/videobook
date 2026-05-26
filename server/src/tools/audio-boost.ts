@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "clipfirst-engine";
+import { findAudioFile, findVideoFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const BOOST_MIN = 1.0;

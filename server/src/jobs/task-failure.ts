@@ -1,4 +1,4 @@
-import type { ClipfirstFs, FailureInfo } from "clipfirst-engine";
+import type { ClipfirstFs, FailureInfo } from "vc-engine";
 
 /**
  * CAS-fail a pending task by (asset_id, task_id) and log to the project's

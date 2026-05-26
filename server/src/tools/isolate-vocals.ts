@@ -2,11 +2,11 @@
  * isolate_vocals MCP tool — isolates vocals from video/audio assets
  * via ElevenLabs cloud API through KIE.
  */
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile } from "clipfirst-engine";
+import { findAudioFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function isolateVocalsDef(fs: ClipfirstFs): ToolDef {

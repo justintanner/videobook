@@ -1,5 +1,5 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
-import { findAudioFile, findVideoFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import { findAudioFile, findVideoFile } from "vc-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";

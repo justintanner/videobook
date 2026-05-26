@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { trimRange, assertSaneTrimOutput } from "./trim-video.js";

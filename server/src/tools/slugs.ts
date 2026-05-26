@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function slugsDef(fs: ClipfirstFs): ToolDef {

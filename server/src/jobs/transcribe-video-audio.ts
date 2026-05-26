@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { openai } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";

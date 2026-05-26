@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { extname } from "node:path";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -12,7 +12,7 @@ export function findImageFile(files: AssetManifestFile[]): AssetManifestFile | n
 }
 
 // Reference to an image for provider upload. Either a real project asset
-// (read from clipfirst-engine at upload time) or a pre-uploaded URL that the
+// (read from vc-engine at upload time) or a pre-uploaded URL that the
 // provider can fetch directly — used for ephemeral inputs like pose
 // skeletons that never get persisted as assets.
 export type ImageInput =

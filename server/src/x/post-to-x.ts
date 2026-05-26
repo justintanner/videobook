@@ -1,5 +1,5 @@
-import type { ClipfirstFs } from "clipfirst-engine";
-import { findPrimaryMediaFile } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
+import { findPrimaryMediaFile } from "vc-engine";
 import { x as createX } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
 import { extname, join } from "node:path";

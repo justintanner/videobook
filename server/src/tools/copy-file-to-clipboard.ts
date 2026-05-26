@@ -1,8 +1,8 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
-import { findPrimaryMediaFile } from "clipfirst-engine";
+import { findPrimaryMediaFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function copyFileToClipboardDef(fs: ClipfirstFs): ToolDef {

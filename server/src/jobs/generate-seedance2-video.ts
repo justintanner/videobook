@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { registerSeedance2Job } from "./_seedance2-shared.js";
 
 export function registerGenerateSeedance2VideoJob(fs: ClipfirstFs): void {

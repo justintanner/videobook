@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "clipfirst-engine";
-import { computeAssetStatus } from "clipfirst-engine";
+import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "vc-engine";
+import { computeAssetStatus } from "vc-engine";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -16,10 +16,10 @@ import {
   findAudioFile,
   findPrimaryMediaFile,
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
-} from "clipfirst-engine";
+} from "vc-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
-import type { PendingTask } from "clipfirst-engine";
+import type { PendingTask } from "vc-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
@@ -316,7 +316,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
         ? `/files/${project_slug}/${a.id}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
-      // Status derivation lives in clipfirst-engine (`computeAssetStatus`). We pass
+      // Status derivation lives in vc-engine (`computeAssetStatus`). We pass
       // the asset-type-aware primary media name we already computed so the
       // engine doesn't have to redo media-type heuristics.
       const status = computeAssetStatus({

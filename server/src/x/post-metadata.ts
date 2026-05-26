@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 
 export const POST_METADATA_FILE = ".post.x.json";
 export const POST_METADATA_VERSION = 1;

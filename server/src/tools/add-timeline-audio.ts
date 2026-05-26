@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { findAudioFile } from "clipfirst-engine";
+import { findAudioFile } from "vc-engine";
 import { probeVideo } from "../ffmpeg.js";
 
 const TIMELINE_FPS = 30;

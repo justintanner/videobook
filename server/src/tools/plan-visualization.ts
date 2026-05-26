@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
-import { findAudioFile, findVideoFile } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
+import { findAudioFile, findVideoFile } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile, mkdir, readFile, rm, stat } from "node:fs/promises";

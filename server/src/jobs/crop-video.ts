@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";

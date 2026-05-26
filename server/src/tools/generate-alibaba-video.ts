@@ -1,9 +1,9 @@
-import type { ClipfirstFs, AssetManifestFile } from "clipfirst-engine";
+import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "clipfirst-engine";
+import { findVideoFile, findAudioFile } from "vc-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);

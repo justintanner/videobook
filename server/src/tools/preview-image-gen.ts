@@ -6,9 +6,9 @@
  * models via the dropdown in the UI.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { z } from "zod";
-import { resolveAllAssets, expandSlotRefs } from "clipfirst-engine";
+import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import {
   getImageModels,
   buildImageModelOption,

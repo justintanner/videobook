@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { mkdir, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import sharp from "sharp";

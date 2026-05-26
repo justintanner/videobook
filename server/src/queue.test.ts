@@ -3,7 +3,7 @@ import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import { createFs } from "clipfirst-engine";
+import { createFs } from "vc-engine";
 import {
   queue as appQueue,
   registerJobHandler,

@@ -7,7 +7,7 @@
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
-import type { ResolvedAsset } from "clipfirst-engine";
+import type { ResolvedAsset } from "vc-engine";
 import { kie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import {

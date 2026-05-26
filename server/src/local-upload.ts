@@ -1,4 +1,4 @@
-import type { ClipfirstFs, FsError } from "clipfirst-engine";
+import type { ClipfirstFs, FsError } from "vc-engine";
 import { createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as path from "node:path";

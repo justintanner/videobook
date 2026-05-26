@@ -46,7 +46,7 @@ Build programs like you build math and systems like you manage reality — immut
 ## MCP-Specific Rules
 
 - **Tools return errors as content** — `{ isError: true, content: [...] }` rather than throwing.
-- **Use clipfirst-engine, not node:fs** — All project/asset/file operations go through `createFs()`.
+- **Use vc-engine, not node:fs** — All project/asset/file operations go through `createFs()`.
 - **Use @apicity providers** — Never call third-party APIs directly with fetch.
 - **Use the job queue** — Long-running operations go through `queue` from `server/src/queue.ts`.
 

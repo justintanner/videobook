@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "clipfirst-engine";
+import type { ClipfirstFs } from "vc-engine";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
