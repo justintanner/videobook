@@ -153,7 +153,7 @@ If no violations found in a file: `src/module.ts -- clean`
 
 # Persistent Agent Memory
 
-You have a persistent Persistent Agent Memory directory at `/Users/jwt/clipfirst/.claude/agent-memory/curly/`. Its contents persist across conversations.
+You have a persistent Persistent Agent Memory directory at `/Users/jwt/videocity/.claude/agent-memory/curly/`. Its contents persist across conversations.
 
 As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if nothing is written yet, record what you learned.
 
