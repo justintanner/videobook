@@ -20,8 +20,8 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         <div className="flex items-center gap-2 px-3 h-full">
           <div key={pulseKey} className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 logo-dot-pulse" />
           <span className="font-mono font-bold text-sm uppercase tracking-wider">
-            <span className="text-foreground">CLIP</span>
-            <span className="text-primary">FIRST</span>
+            <span className="text-foreground">VIDEO</span>
+            <span className="text-primary">CITY</span>
           </span>
         </div>
 
