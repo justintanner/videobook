@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -43,7 +43,7 @@ function inferAudioMime(filename: string): string {
   }
 }
 
-export function registerTranscribeJob(fs: ClipfirstFs): void {
+export function registerTranscribeJob(fs: VideocityFs): void {
   registerJobHandler("transcribe", async (payload, ctx) => {
     const {
       audioFilename,

@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function exportAssetDef(fs: ClipfirstFs): ToolDef {
+export function exportAssetDef(fs: VideocityFs): ToolDef {
   return {
     name: "export_asset_to_project",
     description: "Export an asset from one project to a different project",
@@ -81,7 +81,7 @@ export function exportAssetDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerExportAssetTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerExportAssetTool(server: McpServer, fs: VideocityFs): void {
   const def = exportAssetDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

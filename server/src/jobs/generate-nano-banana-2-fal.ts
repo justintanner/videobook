@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
@@ -19,7 +19,7 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateNanoBanana2FalJob(fs: ClipfirstFs): void {
+export function registerGenerateNanoBanana2FalJob(fs: VideocityFs): void {
   registerJobHandler("generate_nano_banana_2_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {

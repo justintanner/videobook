@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mint an X (Twitter) OAuth 2.0 user-context access token + refresh token,
- * and write them to ~/.clipfirst/x-tokens.json (override via X_TOKENS_PATH)
+ * and write them to ~/.videocity/x-tokens.json (override via X_TOKENS_PATH)
  * so the running server picks them up automatically and refreshes on its own.
  *
  * Adapted from @apicity/x README. Run once after configuring your X app:
@@ -38,7 +38,7 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 }
 
 const STATE_PATH =
-  process.env.X_TOKENS_PATH ?? join(homedir(), ".clipfirst", "x-tokens.json");
+  process.env.X_TOKENS_PATH ?? join(homedir(), ".videocity", "x-tokens.json");
 
 const verifier = crypto.randomBytes(32).toString("base64url");
 const challenge = crypto

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -37,7 +37,7 @@ type ExtractFramePayload = {
   mode: "first" | "last" | "custom";
 };
 
-export function registerExtractFrameJob(fs: ClipfirstFs): void {
+export function registerExtractFrameJob(fs: VideocityFs): void {
   registerJobHandler("extract_frame", async (payload, ctx) => {
     const {
       inputPath, timestamp,
@@ -53,7 +53,7 @@ export function registerExtractFrameJob(fs: ClipfirstFs): void {
     // versioning silently breaks for that file.
     const tempPath = join(
       tmpdir(),
-      `clipfirst-extract-frame-${imageAssetId}-${Date.now()}.jpg`,
+      `videocity-extract-frame-${imageAssetId}-${Date.now()}.jpg`,
     );
 
     try {

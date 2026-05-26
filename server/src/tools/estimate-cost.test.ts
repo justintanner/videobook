@@ -33,7 +33,7 @@ describe("estimate_cost tool", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-estimate-cost-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-estimate-cost-test-"));
     client = await createTestClient(tempDir);
   });
 

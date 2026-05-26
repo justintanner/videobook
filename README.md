@@ -1,4 +1,4 @@
-# Clipfirst
+# Videocity
 
 Video-first content management SPA built with React 19 + TypeScript + Vite 7, using MCP (Model Context Protocol) as the API layer.
 

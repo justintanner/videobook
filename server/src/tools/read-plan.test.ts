@@ -43,7 +43,7 @@ describe("read_plan tool", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-read-plan-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-read-plan-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -15,7 +15,7 @@ type GenerateSeedreamTextImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateSeedreamTextImageJob(fs: ClipfirstFs): void {
+export function registerGenerateSeedreamTextImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_seedream_text_image", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug,

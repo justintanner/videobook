@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { mkdir, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import sharp from "sharp";
@@ -108,7 +108,7 @@ type WatermarkVideoPayload = {
   projectSlug: string;
 };
 
-export function registerWatermarkVideoJob(fs: ClipfirstFs): void {
+export function registerWatermarkVideoJob(fs: VideocityFs): void {
   registerJobHandler("watermark_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, url, label,

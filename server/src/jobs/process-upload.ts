@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetEntry, AssetType } from "vc-engine";
+import type { VideocityFs, AssetEntry, AssetType } from "vc-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 
@@ -39,7 +39,7 @@ function uploadShapeFor(type: AssetType): { mediaType: UploadMediaType; extensio
 }
 
 export async function findUnprocessedUploads(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assets: AssetEntry[],
 ): Promise<UnprocessedUpload[]> {
@@ -119,7 +119,7 @@ export async function findUnprocessedUploads(
 }
 
 export async function processExternalUpload(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   upload: UnprocessedUpload,
   projectSlug: string,
 ): Promise<void> {

@@ -55,7 +55,7 @@ describe('vc-engine integration', () => {
     if (!asset.ok) throw new Error(asset.error.message);
     const assetId = asset.value.assetId;
 
-    const content = 'Hello from clipfirst tests!';
+    const content = 'Hello from videocity tests!';
     const write = await sandbox.fs.writeFile(assetId, 'notes.txt', content, 'text-test');
     expect(write.ok).toBe(true);
 

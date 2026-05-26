@@ -8,7 +8,7 @@ describe("fs module", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
   });
 
   afterEach(async () => {
@@ -21,7 +21,7 @@ describe("fs module", () => {
     expect(typeof defaultFs.listAssets).toBe("function");
   });
 
-  it("createFsForTest returns a ClipfirstFs instance", () => {
+  it("createFsForTest returns a VideocityFs instance", () => {
     const testFs = createFsForTest(tempDir);
     expect(testFs).toBeDefined();
     expect(typeof testFs.createProject).toBe("function");

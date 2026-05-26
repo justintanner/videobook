@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";
@@ -19,7 +19,7 @@ type GenerateGrokImagineTextImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineTextImageJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_text_image", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, enablePro, nsfwChecker, _provider,

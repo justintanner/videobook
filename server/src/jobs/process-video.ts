@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { extname, join } from "node:path";
 import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
@@ -17,7 +17,7 @@ type ProcessVideoPayload = {
   skipDownstreamJobs?: boolean;
 };
 
-export function registerProcessVideoJob(fs: ClipfirstFs): void {
+export function registerProcessVideoJob(fs: VideocityFs): void {
   registerJobHandler("process_video", async (payload, ctx) => {
     const {
       videoPath, assetId, assetDir, projectSlug, provenance,

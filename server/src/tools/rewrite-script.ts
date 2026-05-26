@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -18,7 +18,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
+export function rewriteScriptDef(fs: VideocityFs): ToolDef {
   return {
     name: "rewrite_script",
     description:
@@ -99,7 +99,7 @@ export function rewriteScriptDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerRewriteScriptTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerRewriteScriptTool(server: McpServer, fs: VideocityFs): void {
   const def = rewriteScriptDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

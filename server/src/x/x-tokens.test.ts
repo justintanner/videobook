@@ -66,7 +66,7 @@ describe("x-tokens", () => {
   };
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-xtok-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-xtok-"));
     tokensFile = join(tempDir, "x-tokens.json");
     process.env.X_TOKENS_PATH = tokensFile;
     delete process.env.X_ACCESS_TOKEN;

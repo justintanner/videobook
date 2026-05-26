@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -32,7 +32,7 @@ const generateGptImageSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageSchema>;
 
-export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
+export function generateGptImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_gpt_image",
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
@@ -109,7 +109,7 @@ export function generateGptImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateGptImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateGptImageTool(server: McpServer, fs: VideocityFs): void {
   const def = generateGptImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

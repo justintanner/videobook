@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 export type DialogQuality = {
   hasDialog: boolean;
@@ -36,7 +36,7 @@ export function assessDialogQuality(data: { text?: string }): DialogQuality {
 }
 
 export async function readAndAssessDialog(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<DialogQuality> {

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { extractOpenGraph } from "@devmehq/open-graph-extractor";
@@ -43,10 +43,10 @@ function sourcePrefix(url: string): string {
   }
 }
 
-export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
+export function downloadVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "download_video",
-    description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a clipfirst project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
+    description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a videocity project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
     schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
       start_time: z.string().optional().describe("Start time (e.g. '30', '1:30', '2m20s')"),
@@ -105,7 +105,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
       if (process.env.NODE_ENV !== "test") {
         try {
           const response = await fetch(normalizedUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipfirstBot/1.0)" },
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; VideocityBot/1.0)" },
             signal: AbortSignal.timeout(10_000),
             redirect: "follow",
           });
@@ -158,7 +158,7 @@ export function downloadVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerDownloadVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerDownloadVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = downloadVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
@@ -22,7 +22,7 @@ void findImageFile;
 type VideoInput = { assetId: string; filename: string };
 
 async function resolveVideoSlugs(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: VideoInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
@@ -61,7 +61,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27R2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_r2v_fal",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job.",

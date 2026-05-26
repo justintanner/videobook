@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { extractCharacterFromBytes } from "../jobs/extract-character.js";
@@ -17,7 +17,7 @@ const schema = {
     ),
 };
 
-export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
+export function analyzeCharacterImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "analyze_character_image",
     description:
@@ -85,7 +85,7 @@ export function analyzeCharacterImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerAnalyzeCharacterImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerAnalyzeCharacterImageTool(server: McpServer, fs: VideocityFs): void {
   const def = analyzeCharacterImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

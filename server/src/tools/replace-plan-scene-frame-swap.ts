@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -34,7 +34,7 @@ const schema = {
   auto_accept: z.boolean().optional().describe("Default true. Set false to switch the selected variant without auto-accepting (e.g. while comparing model outputs)."),
 };
 
-export function replacePlanSceneFrameSwapDef(fs: ClipfirstFs): ToolDef {
+export function replacePlanSceneFrameSwapDef(fs: VideocityFs): ToolDef {
   return {
     name: "replace_plan_scene_frame_swap",
     description:
@@ -126,7 +126,7 @@ export function replacePlanSceneFrameSwapDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReplacePlanSceneFrameSwapTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReplacePlanSceneFrameSwapTool(server: McpServer, fs: VideocityFs): void {
   const def = replacePlanSceneFrameSwapDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

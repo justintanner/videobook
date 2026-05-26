@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { uploadAssetFile } from "../upload.js";
 import { xai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
@@ -22,7 +22,7 @@ type GenerateGrokImagineRefVideoPayload = {
   aspectRatio?: string;
 };
 
-export function registerGenerateGrokImagineRefVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_ref_video", async (payload, ctx) => {
     const {
       prompt, vidAssetId, vidAssetDir, projectSlug,

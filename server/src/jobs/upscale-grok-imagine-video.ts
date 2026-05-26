@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -11,7 +11,7 @@ type UpscaleGrokImagineVideoPayload = {
   projectSlug: string;
 };
 
-export function registerUpscaleGrokImagineVideoJob(fs: ClipfirstFs): void {
+export function registerUpscaleGrokImagineVideoJob(fs: VideocityFs): void {
   registerJobHandler("upscale_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir, projectSlug,

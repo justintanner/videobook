@@ -6,16 +6,16 @@ import { createFsForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
-async function createImageAsset(fs: ClipfirstFs, projectSlug: string, name: string): Promise<string> {
+async function createImageAsset(fs: VideocityFs, projectSlug: string, name: string): Promise<string> {
   const result = await fs.createAsset("img", name, projectSlug);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
   return result.value.assetId;
 }
 
 async function writeSyntheticPendingTask(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   taskId: string,
@@ -44,10 +44,10 @@ async function writeSyntheticPendingTask(
 describe("clear_failed_tasks tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     fs = createFsForTest(tempDir);
     await client.callTool({

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { KlingElement, MultiShotPrompt } from "@apicity/kie";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -31,7 +31,7 @@ type GenerateKling30VideoPayload = {
   multi_prompt?: MultiShotPrompt[];
 };
 
-export function registerGenerateKling30VideoJob(fs: ClipfirstFs): void {
+export function registerGenerateKling30VideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_kling30_video", async (payload, ctx) => {
     const {
       imageInputs, elementInputs, sourceImageIds,

@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function transcribeDef(fs: ClipfirstFs): ToolDef {
+export function transcribeDef(fs: VideocityFs): ToolDef {
   return {
     name: "transcribe",
     description: "Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.",
@@ -76,7 +76,7 @@ export function transcribeDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerTranscribeTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerTranscribeTool(server: McpServer, fs: VideocityFs): void {
   const def = transcribeDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

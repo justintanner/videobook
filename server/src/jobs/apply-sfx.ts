@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join, basename } from "node:path";
 import { elevenlabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
@@ -39,7 +39,7 @@ type ApplySfxPayload = {
 
 async function generateAndWriteSfx(
   provider: ReturnType<typeof elevenlabs>,
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   entry: SfxEntry,
   index: number,
   assetId: string,
@@ -88,7 +88,7 @@ function buildMixFilter(sfx: SfxEntry[], hasAudio: boolean): string {
   return parts.join(";");
 }
 
-export function registerApplySfxJob(fs: ClipfirstFs): void {
+export function registerApplySfxJob(fs: VideocityFs): void {
   registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
       videoPath, outputPath, sfx, hasAudio,

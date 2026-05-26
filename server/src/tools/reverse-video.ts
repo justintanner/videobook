@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -21,7 +21,7 @@ async function getVideoDuration(filePath: string): Promise<number> {
   return parseFloat(probe.format.duration);
 }
 
-export function reverseVideoDef(fs: ClipfirstFs): ToolDef {
+export function reverseVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "reverse_video",
     description: "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
@@ -86,7 +86,7 @@ export function reverseVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReverseVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReverseVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = reverseVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

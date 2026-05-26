@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -23,7 +23,7 @@ function validateRect(
   return null;
 }
 
-export function cropVideoDef(fs: ClipfirstFs): ToolDef {
+export function cropVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "crop_video",
     description:
@@ -107,7 +107,7 @@ export function cropVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerCropVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerCropVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = cropVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

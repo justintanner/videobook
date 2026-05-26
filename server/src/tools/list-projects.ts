@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function listProjectsDef(fs: ClipfirstFs): ToolDef {
+export function listProjectsDef(fs: VideocityFs): ToolDef {
   return {
     name: "list_projects",
-    description: "List all clipfirst projects",
+    description: "List all videocity projects",
     schema: {
       sort: z.enum(["newest", "oldest"]).optional().describe("Sort order by creation date"),
     },
@@ -20,7 +20,7 @@ export function listProjectsDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerListProjectsTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerListProjectsTool(server: McpServer, fs: VideocityFs): void {
   const def = listProjectsDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

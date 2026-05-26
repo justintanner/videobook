@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
@@ -30,7 +30,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedreamV5LiteEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateSeedreamV5LiteEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_seedream_v5_lite_edit_fal",
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",

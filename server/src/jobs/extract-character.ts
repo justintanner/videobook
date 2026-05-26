@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
@@ -239,7 +239,7 @@ export async function extractCharacterFromBytes(
   return validateCharacter(parsed, sourceAssetId);
 }
 
-export function registerExtractCharacterJob(fs: ClipfirstFs): void {
+export function registerExtractCharacterJob(fs: VideocityFs): void {
   registerJobHandler("extract_character", async (payload, ctx) => {
     const {
       charAssetId,

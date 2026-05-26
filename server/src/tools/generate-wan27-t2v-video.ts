@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
@@ -19,7 +19,7 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -46,7 +46,7 @@ const generateWan27T2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27T2vVideoSchema>;
 
-export function generateWan27T2vVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27T2vVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_t2v_video",
     description: "Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new vid- asset and enqueues a background job.",

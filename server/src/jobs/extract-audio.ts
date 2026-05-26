@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -44,7 +44,7 @@ type ExtractAudioPayload = {
   range?: { start_s: number; duration_s: number };
 };
 
-export function registerExtractAudioJob(fs: ClipfirstFs): void {
+export function registerExtractAudioJob(fs: VideocityFs): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,

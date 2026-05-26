@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function readFileAtCommitDef(fs: ClipfirstFs): ToolDef {
+export function readFileAtCommitDef(fs: VideocityFs): ToolDef {
   return {
     name: "read_file_at_commit",
     description:
@@ -37,7 +37,7 @@ export function readFileAtCommitDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReadFileAtCommitTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReadFileAtCommitTool(server: McpServer, fs: VideocityFs): void {
   const def = readFileAtCommitDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

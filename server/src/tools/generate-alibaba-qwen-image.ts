@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
@@ -43,7 +43,7 @@ const generateAlibabaQwenImageSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaQwenImageSchema>;
 
-export function generateAlibabaQwenImageDef(fs: ClipfirstFs): ToolDef {
+export function generateAlibabaQwenImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_alibaba_qwen_image",
     description: "Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.",

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 export const POST_METADATA_FILE = ".post.x.json";
 export const POST_METADATA_VERSION = 1;
@@ -24,7 +24,7 @@ function emptyMetadata(assetId: string): XPostMetadata {
 }
 
 async function readMetadata(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<XPostMetadata> {
@@ -51,7 +51,7 @@ async function readMetadata(
 }
 
 export async function appendXPostMetadata(args: {
-  fs: ClipfirstFs;
+  fs: VideocityFs;
   assetId: string;
   projectSlug: string;
   entry: XPostEntry;
@@ -78,7 +78,7 @@ export async function appendXPostMetadata(args: {
 }
 
 export async function readXPostMetadata(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<XPostMetadata> {

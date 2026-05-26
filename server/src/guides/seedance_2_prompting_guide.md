@@ -33,7 +33,7 @@ Keep prompts under ~150 words. Place subject and action first.
 
 ## @ Tag Reference Syntax (r2v)
 
-Reference uploaded files inline using `@Image1`, `@Video1`, `@Audio1`. Numbers correspond to upload order. The clipfirst r2v tools accept `image_slugs` / `video_slugs` / `audio_slugs` arrays — index 0 is `@Image1`, index 1 is `@Image2`, etc.
+Reference uploaded files inline using `@Image1`, `@Video1`, `@Audio1`. Numbers correspond to upload order. The videocity r2v tools accept `image_slugs` / `video_slugs` / `audio_slugs` arrays — index 0 is `@Image1`, index 1 is `@Image2`, etc.
 
 Limits per request:
 - Images: `@Image1` … `@Image9` (max 9)

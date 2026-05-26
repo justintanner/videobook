@@ -4,7 +4,7 @@ import { createFs } from "vc-engine";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PROJECTS_DIR = resolve(__dirname, "../../projects");
-export const PROJECTS_DIR = process.env.CLIPFIRST_PROJECTS_DIR ?? DEFAULT_PROJECTS_DIR;
+export const PROJECTS_DIR = process.env.VIDEOCITY_PROJECTS_DIR ?? DEFAULT_PROJECTS_DIR;
 export const fs = createFs({ projectsDir: PROJECTS_DIR });
 
 export function createFsForTest(projectsDir: string) {

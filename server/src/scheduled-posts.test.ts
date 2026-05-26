@@ -15,7 +15,7 @@ describe("scheduled-posts persistence", () => {
   let stateFile: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-sched-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-sched-"));
     stateFile = join(tempDir, "scheduled-posts.json");
     process.env.SCHEDULED_POSTS_PATH = stateFile;
   });

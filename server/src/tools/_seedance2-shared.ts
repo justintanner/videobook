@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { findAudioFile, findVideoFile } from "vc-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
@@ -39,7 +39,7 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image slug must be img-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -54,7 +54,7 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 // vid-/aud- prefix gate since the destination asset doesn't have to be
 // media-prefixed and may hold multiple media files.
 async function resolveSlashedSlug(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   raw: string,
   projectSlug: string,
 ): Promise<ResolveOk | ResolveErr | null> {
@@ -71,7 +71,7 @@ async function resolveSlashedSlug(
   return { ok: true, value: { assetId, filename } };
 }
 
-async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
@@ -83,7 +83,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
@@ -125,7 +125,7 @@ type Seedance2ToolFactoryOpts = {
 };
 
 export function buildSeedance2ToolDef(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   opts: Seedance2ToolFactoryOpts,
 ): ToolDef {
   const schema = buildSchema(opts.resolutions);

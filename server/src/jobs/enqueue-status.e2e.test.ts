@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 /**
  * Asserts the gen-start red-flash bug stays fixed: after a tool calls
@@ -18,11 +18,11 @@ import type { ClipfirstFs } from "vc-engine";
  */
 describe("enqueue status (no red-flash window)", () => {
   let tempDir: string;
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   const slug = "test-proj";
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-enqstatus-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-enqstatus-"));
     await setProjectsDir(tempDir);
     fs = createFsForTest(tempDir);
     const created = await fs.createProject(slug);

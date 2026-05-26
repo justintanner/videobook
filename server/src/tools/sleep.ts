@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { syncDef } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";
@@ -7,7 +7,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function sleepDef(fs: ClipfirstFs): ToolDef {
+export function sleepDef(fs: VideocityFs): ToolDef {
   return {
     name: "sleep",
     description:

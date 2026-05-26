@@ -63,7 +63,7 @@ describe("extract_audio tool", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-extract-audio-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-extract-audio-test-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);

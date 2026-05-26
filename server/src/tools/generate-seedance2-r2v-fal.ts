@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
@@ -10,7 +10,7 @@ import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 type MediaInput = { assetId: string; filename: string };
 
 async function resolveVideoSlugs(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
@@ -30,7 +30,7 @@ async function resolveVideoSlugs(
 }
 
 async function resolveAudioSlugs(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
@@ -69,7 +69,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedance2R2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateSeedance2R2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_seedance2_r2v_fal",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job.",

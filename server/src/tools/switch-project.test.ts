@@ -10,7 +10,7 @@ describe("switch_project tool", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
   });
 

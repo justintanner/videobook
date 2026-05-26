@@ -24,7 +24,7 @@ describe("pin_character_slot / unpin_character_slot tools", () => {
   let charAssetId: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-pin-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-pin-"));
     client = await createTestClient(tempDir);
     await client.callTool({ name: "create_project", arguments: { project_slug: PROJECT } });
 

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { JobHandlerContext } from "../queue.js";
 
 type AssetWorkKind =
@@ -38,7 +38,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function beginLocalLease(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   kind: AssetWorkKind,
@@ -70,7 +70,7 @@ async function beginLocalLease(
  * provider returned.
  */
 export async function withProviderHandoff<T>(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   ctx: JobHandlerContext,
@@ -119,7 +119,7 @@ export async function withProviderHandoff<T>(
  * handler doesn't need to touch pending_tasks at all.
  */
 export async function withLocalLease<T>(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   ctx: JobHandlerContext,
@@ -152,7 +152,7 @@ export async function withLocalLease<T>(
 }
 
 export async function withLockedLocalLease<T>(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   assetDir: string,

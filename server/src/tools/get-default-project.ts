@@ -1,10 +1,10 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function getDefaultProjectDef(fs: ClipfirstFs): ToolDef {
+export function getDefaultProjectDef(fs: VideocityFs): ToolDef {
   return {
     name: "get_default_project",
-    description: "Get the default clipfirst project",
+    description: "Get the default videocity project",
     schema: {},
     handler: async () => {
       const result = await fs.getProject();

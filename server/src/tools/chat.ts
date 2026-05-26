@@ -2,7 +2,7 @@
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { openai, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
@@ -18,7 +18,7 @@ type ChatDecision = {
   message: string;
 };
 
-export function chatDef(fs: ClipfirstFs): ToolDef {
+export function chatDef(fs: VideocityFs): ToolDef {
   return {
     name: "chat",
     description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",
@@ -194,7 +194,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function registerChatTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerChatTool(server: McpServer, fs: VideocityFs): void {
   const def = chatDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

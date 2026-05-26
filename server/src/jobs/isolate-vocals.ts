@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
@@ -20,7 +20,7 @@ type IsolateVocalsPayload = {
   isAudioAsset: boolean;
 };
 
-export function registerIsolateVocalsJob(fs: ClipfirstFs): void {
+export function registerIsolateVocalsJob(fs: VideocityFs): void {
   registerJobHandler("isolate_vocals", async (payload, ctx) => {
     const {
       audioFilename, assetId, assetDir, projectSlug, isAudioAsset,

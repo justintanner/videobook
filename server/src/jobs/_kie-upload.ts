@@ -1,5 +1,5 @@
 import { kie, uploadFile } from "@apicity/kie";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,
@@ -36,7 +36,7 @@ async function uploadPreparedToKie(
 
 // Upload an asset to Kie's native storage.
 export async function uploadAssetToKie(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   filename: string,
   projectSlug: string,

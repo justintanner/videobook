@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -27,7 +27,7 @@ const EXCLUDED_ACTIONS = new Set([
   "tool-update-script",
 ]);
 
-export function projectActivityDef(fs: ClipfirstFs): ToolDef {
+export function projectActivityDef(fs: VideocityFs): ToolDef {
   return {
     name: "project_activity",
     description: "Get the action log for a project (user-initiated actions like generate, render, upload, etc.)",

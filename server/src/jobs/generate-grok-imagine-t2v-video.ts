@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -17,7 +17,7 @@ type GenerateGrokImagineT2vVideoPayload = {
   nsfw_checker?: boolean;
 };
 
-export function registerGenerateGrokImagineT2vVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineT2vVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,

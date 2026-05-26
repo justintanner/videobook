@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
@@ -137,7 +137,7 @@ export async function describeImageBytes(
   return parsed;
 }
 
-export function registerDescribeImageJob(fs: ClipfirstFs): void {
+export function registerDescribeImageJob(fs: VideocityFs): void {
   registerJobHandler("describe_image", async (payload, ctx) => {
     const {
       sourceAssetId,

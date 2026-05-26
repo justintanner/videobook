@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -146,7 +146,7 @@ function formatTldrMarkdown(r: DescribeImageResult): string {
   return `${r.prompt.trim()}\n`;
 }
 
-export function registerRewriteScriptJob(fs: ClipfirstFs): void {
+export function registerRewriteScriptJob(fs: VideocityFs): void {
   registerJobHandler("rewrite_script", async (payload, ctx) => {
     const {
       assetId: scriptAssetId,

@@ -127,7 +127,7 @@ function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
     ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
     : "";
 
-  return `You are a routing assistant for the clipfirst media system.
+  return `You are a routing assistant for the videocity media system.
 
 Available tools:
 ${toolLines}

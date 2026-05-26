@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -32,7 +32,7 @@ export type Seedance2JobPayload = {
 };
 
 async function uploadAll(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   inputs: RefInput[],
   projectSlug: string,
 ): Promise<string[]> {
@@ -43,7 +43,7 @@ async function uploadAll(
   return urls;
 }
 
-export function registerSeedance2Job(fs: ClipfirstFs, jobType: string): void {
+export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
   registerJobHandler(jobType, async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, apiModel,

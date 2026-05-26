@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineImageEditRequestSchema } from "@apicity/fal/zod";
@@ -21,7 +21,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineImageEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineImageEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_image_edit_fal",
     description: "Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",

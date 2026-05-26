@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function renameAssetDef(fs: ClipfirstFs): ToolDef {
+export function renameAssetDef(fs: VideocityFs): ToolDef {
   return {
     name: "rename_asset",
     description: "Rename an asset with a new name",
@@ -35,7 +35,7 @@ export function renameAssetDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerRenameAssetTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerRenameAssetTool(server: McpServer, fs: VideocityFs): void {
   const def = renameAssetDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

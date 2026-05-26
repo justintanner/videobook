@@ -114,7 +114,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
         // Type-specific marker so drop targets can discriminate during
         // `dragover` — the JSON payload isn't readable then, only the type
         // list is.
-        e.dataTransfer.setData(`application/x-clipfirst-asset-${dragData.type}`, '1');
+        e.dataTransfer.setData(`application/x-videocity-asset-${dragData.type}`, '1');
         e.dataTransfer.effectAllowed = 'copy';
       }
     : undefined;

@@ -106,7 +106,7 @@ const kieTieredImage = (model: string, defaultResolution: string): CostAdapter =
 
 // kie flat per-image adapter for models that price one rate regardless of
 // shape (qwen2, seedream/5-lite). The rate table reads input.n (defaulting
-// to 1) — clipfirst tools never expose n, so we just leave it out.
+// to 1) — videocity tools never expose n, so we just leave it out.
 const kieFlatImage = (model: string): CostAdapter => () => ({
   provider: "kie",
   payload: { model, input: {} },
@@ -114,7 +114,7 @@ const kieFlatImage = (model: string): CostAdapter => () => ({
 
 // kie flat per-second video adapter (wan/2-7-* video family — all priced at
 // $0.10/s regardless of resolution). The rate table reads input.duration in
-// seconds; clipfirst tools pass duration as a numeric string we coerce here.
+// seconds; videocity tools pass duration as a numeric string we coerce here.
 const kieFlatVideo = (model: string, defaultSeconds = 5): CostAdapter => (input) => ({
   provider: "kie",
   payload: {
@@ -127,7 +127,7 @@ const kieFlatVideo = (model: string, defaultSeconds = 5): CostAdapter => (input)
 
 // kie resolution-tiered video adapter (grok-imagine + happyhorse). Both
 // families key per-second rates off input.resolution. happyhorse/video-edit
-// has no duration field upstream — clipfirst's tool also omits it — so we
+// has no duration field upstream — videocity's tool also omits it — so we
 // fall back to defaultSeconds for a nonzero estimate.
 const kieResolutionVideo = (
   model: string,

@@ -12,7 +12,7 @@ export const FFPROBE: string = require("ffprobe-static").path;
 export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-profile:v", "high", "-level:v", "4.0"];
 // `-ac 2` downmixes any source to stereo. The native `aac` encoder rejects
 // >2-channel layouts (e.g. 5.1 sources fail with "Unsupported channel layout
-// '6 channels'"), and stereo is the right delivery format for clipfirst's
+// '6 channels'"), and stereo is the right delivery format for videocity's
 // web/social targets anyway.
 export const AUDIO_OPTS = ["-c:a", "aac", "-b:a", "192k", "-ac", "2"];
 

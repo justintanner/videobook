@@ -6,7 +6,7 @@
  * models via the dropdown in the UI.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import {
@@ -17,7 +17,7 @@ import {
 import type { ActionLogEntry } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
+export function previewImageGenDef(fs: VideocityFs): ToolDef {
   return {
     name: "preview_image",
     description:
@@ -125,7 +125,7 @@ export function previewImageGenDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerPreviewImageGenTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerPreviewImageGenTool(server: McpServer, fs: VideocityFs): void {
   const def = previewImageGenDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

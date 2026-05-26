@@ -20,7 +20,7 @@ describe("validateDownloadOutput (RC1)", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-dl-validate-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-dl-validate-"));
   });
 
   afterEach(async () => {

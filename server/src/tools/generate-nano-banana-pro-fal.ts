@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalNanoBananaProTextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -24,7 +24,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateNanoBananaProFalDef(fs: ClipfirstFs): ToolDef {
+export function generateNanoBananaProFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_nano_banana_pro_fal",
     description: "Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new img- asset and enqueues a background job.",

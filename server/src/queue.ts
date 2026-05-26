@@ -1,7 +1,7 @@
 /**
  * SQLite-backed persistent queue.
  *
- * Storage is per-project: each project's `.clipfirst/state.sqlite` holds its
+ * Storage is per-project: each project's `.videocity/state.sqlite` holds its
  * own pending_jobs rows. The queue routes enqueue calls to the right project's
  * state DB by joining `projectsDir` (settable for tests via setProjectsDir)
  * with the payload's `projectSlug`.
@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as fsp from "node:fs/promises";
 
 import {
-  type ClipfirstFs,
+  type VideocityFs,
   type AssetWorkKind,
   type Job,
   type JobHandler,
@@ -90,7 +90,7 @@ function extractType(payload: Record<string, unknown>): string {
 }
 
 let activeProjectsDir: string = PROJECTS_DIR;
-const fsRef: { current: ClipfirstFs } = { current: defaultFs };
+const fsRef: { current: VideocityFs } = { current: defaultFs };
 
 interface RunnerInfo {
   projectsDir: string;
@@ -311,7 +311,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
 }
 
 async function dispatchFailure(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   lease: LeaseToken | null,

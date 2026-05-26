@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -25,7 +25,7 @@ interface PlanSidecar {
   word_count?: number;
 }
 
-export function readPlanDef(fs: ClipfirstFs): ToolDef {
+export function readPlanDef(fs: VideocityFs): ToolDef {
   return {
     name: "read_plan",
     description:
@@ -50,7 +50,7 @@ export function readPlanDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReadPlanTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReadPlanTool(server: McpServer, fs: VideocityFs): void {
   const def = readPlanDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function updateTimelineAudioDef(fs: ClipfirstFs): ToolDef {
+export function updateTimelineAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "update_timeline_audio",
     description: "Update an overlay audio clip's volume / fade-in / fade-out by id",

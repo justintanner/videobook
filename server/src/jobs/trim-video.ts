@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { execFile } from "node:child_process";
 import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -217,7 +217,7 @@ type TrimVideoPayload = {
   commitParams: Record<string, unknown>;
 };
 
-export function registerTrimVideoJob(fs: ClipfirstFs): void {
+export function registerTrimVideoJob(fs: VideocityFs): void {
   registerJobHandler("trim_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,

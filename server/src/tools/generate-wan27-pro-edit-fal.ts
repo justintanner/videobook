@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
@@ -20,7 +20,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27ProEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27ProEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_pro_edit_fal",
     description: "Edit images via fal.ai using Wan 2.7 Pro edit (higher quality image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",

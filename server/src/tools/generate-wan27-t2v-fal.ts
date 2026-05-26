@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7TextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -24,7 +24,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27T2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27T2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_t2v_fal",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new vid- asset and enqueues a background job.",

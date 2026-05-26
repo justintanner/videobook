@@ -220,7 +220,7 @@ describe("even_split tool (integration)", () => {
 
   beforeAll(async () => {
     await queue.start();
-    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-even-split-fixture-"));
+    fixtureDir = await mkdtemp(join(tmpdir(), "videocity-even-split-fixture-"));
   }, 60_000);
 
   afterAll(async () => {
@@ -229,7 +229,7 @@ describe("even_split tool (integration)", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-even-split-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-even-split-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

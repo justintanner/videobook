@@ -48,7 +48,7 @@ describe("apply_sfx tool", () => {
 
   beforeAll(async () => {
     await queue.start();
-    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-apply-sfx-fixture-"));
+    fixtureDir = await mkdtemp(join(tmpdir(), "videocity-apply-sfx-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
   }, 60_000);
@@ -60,7 +60,7 @@ describe("apply_sfx tool", () => {
 
   beforeEach(async () => {
     delete process.env.ELEVENLABS_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-apply-sfx-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-apply-sfx-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

@@ -24,7 +24,7 @@ describe("suggest_cuts tool", () => {
 
   beforeEach(async () => {
     delete process.env.OPENAI_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-suggest-cuts-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-suggest-cuts-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

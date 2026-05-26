@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";
@@ -13,7 +13,7 @@ type ProcessImagePayload = {
   provenance: Record<string, unknown>;
 };
 
-export function registerProcessImageJob(fs: ClipfirstFs): void {
+export function registerProcessImageJob(fs: VideocityFs): void {
   registerJobHandler("process_image", async (payload, ctx) => {
     const {
       assetId, projectSlug, extension, provenance,

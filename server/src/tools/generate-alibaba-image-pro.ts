@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
@@ -38,7 +38,7 @@ const generateAlibabaImageProSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaImageProSchema>;
 
-export function generateAlibabaImageProDef(fs: ClipfirstFs): ToolDef {
+export function generateAlibabaImageProDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_alibaba_image_pro",
     description: "Generate a pro image using Alibaba Cloud Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",

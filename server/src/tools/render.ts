@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
@@ -34,7 +34,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function renderDef(fs: ClipfirstFs): ToolDef {
+export function renderDef(fs: VideocityFs): ToolDef {
   return {
     name: "render",
     description:

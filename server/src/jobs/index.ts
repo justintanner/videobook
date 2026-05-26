@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerTrimVideoJob } from "./trim-video.js";
@@ -93,7 +93,7 @@ import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imag
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerWatermarkVideoJob } from "./watermark-video.js";
 
-export function registerAllJobHandlers(fs: ClipfirstFs): void {
+export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTranscribeJob(fs);
   registerDownloadVideoJob(fs);
   registerTrimVideoJob(fs);

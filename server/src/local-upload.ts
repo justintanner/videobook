@@ -1,4 +1,4 @@
-import type { ClipfirstFs, FsError } from "vc-engine";
+import type { VideocityFs, FsError } from "vc-engine";
 import { createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as path from "node:path";
@@ -60,7 +60,7 @@ function statusCodeForFsError(error: FsError): number {
 }
 
 export async function uploadLocalBytes(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   args: UploadLocalBytesArgs,
 ): Promise<LocalUploadOutcome> {
   return uploadLocal(fs, {
@@ -88,7 +88,7 @@ export async function uploadLocalBytes(
 }
 
 export async function uploadLocalStream(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   args: UploadLocalStreamArgs,
 ): Promise<LocalUploadOutcome> {
   return uploadLocal(fs, {
@@ -133,7 +133,7 @@ interface UploadLocalArgs {
 const UPLOAD_LOCK_MS = 5 * 60_000;
 
 async function uploadLocal(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   args: UploadLocalArgs,
 ): Promise<LocalUploadOutcome> {
   const ext = path.extname(args.filename).toLowerCase();

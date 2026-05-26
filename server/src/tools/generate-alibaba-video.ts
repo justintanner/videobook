@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
@@ -29,7 +29,7 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `Frame slugs must be img-* assets, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -42,7 +42,7 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
 // `@<assetId>/<filename>` addresses a specific sibling file inside an asset
 // (e.g. `@plan/s1.mp4`). Bypasses the prefix gate so plan-driven slugs work.
 async function resolveSlashedSlug(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   raw: string,
   projectSlug: string,
 ): Promise<ResolveOk | ResolveErr | null> {
@@ -59,7 +59,7 @@ async function resolveSlashedSlug(
   return { ok: true, value: { assetId, filename } };
 }
 
-async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
@@ -71,7 +71,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
@@ -104,7 +104,7 @@ const generateAlibabaVideoSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaVideoSchema>;
 
-export function generateAlibabaVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_alibaba_video",
     description: "Generate a video using Alibaba Cloud DashScope Video Synthesis. Requires at least one media input (first/last frame, reference video, driving audio, or clip continuation). Creates a new vid- asset and enqueues a background job.",

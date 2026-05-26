@@ -1,4 +1,4 @@
-import type { ClipfirstFs, FailureInfo } from "vc-engine";
+import type { VideocityFs, FailureInfo } from "vc-engine";
 
 /**
  * CAS-fail a pending task by (asset_id, task_id) and log to the project's
@@ -7,7 +7,7 @@ import type { ClipfirstFs, FailureInfo } from "vc-engine";
  * retry that already replaced the row.
  */
 export async function failPendingTaskAndLog(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assetId: string,
   taskId: string,

@@ -54,7 +54,7 @@ describe("process_video persists audio waveform via vc-engine primitive", () => 
 
   beforeAll(async () => {
     await queue.start();
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-e2e-pv-wave-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-e2e-pv-wave-"));
     const videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
@@ -101,7 +101,7 @@ describe("process_video persists audio waveform via vc-engine primitive", () => 
     const exportPath = join(
       tempDir,
       PROJECT,
-      ".clipfirst",
+      ".videocity",
       "export",
       "audio_waveforms",
       `${assetId}.json`,

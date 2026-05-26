@@ -4,7 +4,7 @@ type ToolErrorResult = {
 };
 
 // Structural subset of a ZodError — keeps us decoupled from which zod version
-// the caller imports (apicity packages pin zod@3.x; clipfirst uses zod@4.x).
+// the caller imports (apicity packages pin zod@3.x; videocity uses zod@4.x).
 type ZodLikeError = {
   issues: ReadonlyArray<{
     path: ReadonlyArray<PropertyKey>;

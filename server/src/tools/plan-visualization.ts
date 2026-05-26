@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { findAudioFile, findVideoFile } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
@@ -126,7 +126,7 @@ async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: s
 // fall off the end). The PlanViewer scene blocks address these via
 // `@plan/sN-imageM-source.jpg`.
 async function extractSceneSourceFrames(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   videoPath: string,
   scenes: Array<{ start: number; end: number }>,
@@ -134,8 +134,8 @@ async function extractSceneSourceFrames(
   for (let i = 0; i < scenes.length; i++) {
     const { start, end } = scenes[i];
     const lastTs = Math.max(0, end - 0.05);
-    const tempFirst = join(tmpdir(), `clipfirst-plan-${i}-1-${Date.now()}.jpg`);
-    const tempLast = join(tmpdir(), `clipfirst-plan-${i}-2-${Date.now()}.jpg`);
+    const tempFirst = join(tmpdir(), `videocity-plan-${i}-1-${Date.now()}.jpg`);
+    const tempLast = join(tmpdir(), `videocity-plan-${i}-2-${Date.now()}.jpg`);
     try {
       const firstBuf = await extractFrameJpeg(videoPath, start, tempFirst);
       const lastBuf = await extractFrameJpeg(videoPath, lastTs, tempLast);
@@ -151,7 +151,7 @@ async function extractSceneSourceFrames(
 }
 
 export async function loadCharacter(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   charId: string,
   projectSlug: string,
 ): Promise<CharacterContext | null> {
@@ -377,7 +377,7 @@ function renderMarkdown(
   return header + blocks.join("\n");
 }
 
-export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
+export function planVisualizationDef(fs: VideocityFs): ToolDef {
   return {
     name: "plan_visualization",
     description:
@@ -693,7 +693,7 @@ export function planVisualizationDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerPlanVisualizationTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerPlanVisualizationTool(server: McpServer, fs: VideocityFs): void {
   const def = planVisualizationDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

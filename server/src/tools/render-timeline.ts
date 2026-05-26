@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -56,7 +56,7 @@ const PORTRAIT_RENDER = "portrait.mp4";
 const SQUARE_RENDER = "square.mp4";
 
 export async function runRenderTimeline(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   orientationOverride?: Orientation,
 ): Promise<RenderTimelineOutcome> {
@@ -178,7 +178,7 @@ export async function runRenderTimeline(
   return { status: "enqueued", jobId, slotCount: resolvedSlots.length, orientation };
 }
 
-export function renderTimelineDef(fs: ClipfirstFs): ToolDef {
+export function renderTimelineDef(fs: VideocityFs): ToolDef {
   return {
     name: "render_timeline",
     description:

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoEditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -19,7 +19,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineVideoEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineVideoEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video_edit_fal",
     description: "Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new vid- asset and enqueues a background job.",

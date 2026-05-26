@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function updateScriptDef(fs: ClipfirstFs): ToolDef {
+export function updateScriptDef(fs: VideocityFs): ToolDef {
   return {
     name: "update_script",
     description: "Update a script asset's markdown content (original.md).",

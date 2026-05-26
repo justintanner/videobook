@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -19,7 +19,7 @@ type GenerateNanoBananaImagePayload = {
   outputFormat?: string;
 };
 
-export function registerGenerateNanoBananaImageJob(fs: ClipfirstFs): void {
+export function registerGenerateNanoBananaImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_nano_banana_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

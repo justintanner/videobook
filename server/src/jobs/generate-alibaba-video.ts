@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -32,7 +32,7 @@ type GenerateAlibabaVideoPayload = {
 };
 
 async function uploadInput(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   input: RefInput,
   projectSlug: string,
   model: string,
@@ -40,7 +40,7 @@ async function uploadInput(
   return uploadAssetToAlibaba(fs, input.assetId, input.filename, projectSlug, model);
 }
 
-export function registerGenerateAlibabaVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateAlibabaVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_alibaba_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt, model,

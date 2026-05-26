@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
@@ -155,7 +155,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
+type ToolDefFactory = (fs: VideocityFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
 
 const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFactory>>> = {
   kie: {
@@ -540,7 +540,7 @@ interface PreviewEntry {
 }
 
 async function loadCharacterIfChar(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string | undefined,
   modelImageSlug: string | undefined,
 ): Promise<Character | undefined> {
@@ -551,7 +551,7 @@ async function loadCharacterIfChar(
   return read.ok ? read.value : undefined;
 }
 
-export function previewOutfitPromptsDef(fs: ClipfirstFs): ToolDef {
+export function previewOutfitPromptsDef(fs: VideocityFs): ToolDef {
   return {
     name: "preview_outfit_prompts",
     description:
@@ -616,7 +616,7 @@ export function previewOutfitPromptsDef(fs: ClipfirstFs): ToolDef {
 }
 
 async function readCachedAnalysis(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<DescribeImageResult | undefined> {
@@ -647,7 +647,7 @@ async function readCachedAnalysis(
  *   2. Fall back to a slug-derived hint so Qwen still references the backdrop.
  */
 async function tryDescribe(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   filename: string,
   projectSlug: string,
@@ -688,7 +688,7 @@ function slugFallbackHint(assetId: string): string {
 }
 
 async function describeBackdropAsset(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   rawSlug: string,
 ): Promise<string | undefined> {
@@ -718,7 +718,7 @@ async function describeBackdropAsset(
   return hint;
 }
 
-export function generateOutfitDef(fs: ClipfirstFs): ToolDef {
+export function generateOutfitDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_outfit",
     description:

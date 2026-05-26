@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";
@@ -82,7 +82,7 @@ type RenderProjectPayload = {
   shadowOpacity: number;
 };
 
-export function registerRenderProjectJob(fs: ClipfirstFs): void {
+export function registerRenderProjectJob(fs: VideocityFs): void {
   registerJobHandler("render_project", async (payload, _ctx) => {
     void _ctx;
     const {

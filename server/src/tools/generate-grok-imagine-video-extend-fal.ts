@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "vc-engine";
@@ -15,7 +15,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineVideoExtendFalDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineVideoExtendFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video_extend_fal",
     description: "Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new vid- asset and enqueues a background job.",

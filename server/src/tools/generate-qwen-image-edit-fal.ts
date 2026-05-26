@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
@@ -62,7 +62,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateQwenImageEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateQwenImageEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_qwen_image_edit_fal",
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",

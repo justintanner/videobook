@@ -1,9 +1,9 @@
 import { exec } from "node:child_process";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function showFolderDef(fs: ClipfirstFs): ToolDef {
+export function showFolderDef(fs: VideocityFs): ToolDef {
   return {
     name: "show_folder",
     description: "Reveal an asset's folder in Finder",

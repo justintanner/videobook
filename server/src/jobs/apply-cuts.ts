@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
@@ -57,7 +57,7 @@ function buildFilterGraph(keeps: Array<[number, number]>, hasAudio: boolean): st
   return parts.join(";");
 }
 
-export function registerApplyCutsJob(fs: ClipfirstFs): void {
+export function registerApplyCutsJob(fs: VideocityFs): void {
   registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
       inputPath, outputPath, cuts, duration, hasAudio,

@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function renameProjectDef(fs: ClipfirstFs): ToolDef {
+export function renameProjectDef(fs: VideocityFs): ToolDef {
   return {
     name: "rename_project",
     description:

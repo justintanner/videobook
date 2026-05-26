@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
@@ -17,7 +17,7 @@ type Payload = {
   cfg_scale?: number;
 };
 
-export function registerGenerateKlingV3ProT2vFalJob(fs: ClipfirstFs): void {
+export function registerGenerateKlingV3ProT2vFalJob(fs: VideocityFs): void {
   registerJobHandler("generate_kling_v3_pro_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {

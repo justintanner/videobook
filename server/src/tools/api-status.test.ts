@@ -22,7 +22,7 @@ describe("api_status tool", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-api-status-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-api-status-test-"));
     client = await createTestClient(tempDir);
   });
 

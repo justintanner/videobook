@@ -14,7 +14,7 @@ describe("asset_history tool", () => {
   let tempDir: string;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

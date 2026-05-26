@@ -1,11 +1,11 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function copyFileToClipboardDef(fs: ClipfirstFs): ToolDef {
+export function copyFileToClipboardDef(fs: VideocityFs): ToolDef {
   return {
     name: "copy_file_to_clipboard",
     description: "Copy an asset's original media file to the macOS pasteboard as a file reference",

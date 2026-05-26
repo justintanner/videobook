@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
@@ -52,7 +52,7 @@ type CropVideoPayload = {
   projectSlug: string;
 };
 
-export function registerCropVideoJob(fs: ClipfirstFs): void {
+export function registerCropVideoJob(fs: VideocityFs): void {
   registerJobHandler("crop_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, ratio, rect,

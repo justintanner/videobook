@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -32,7 +32,7 @@ function deriveAudioName(videoAssetId: string): string {
   return `ext-${baseName}`;
 }
 
-export function extractAudioDef(fs: ClipfirstFs): ToolDef {
+export function extractAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "extract_audio",
     description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
@@ -200,7 +200,7 @@ export function extractAudioDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerExtractAudioTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerExtractAudioTool(server: McpServer, fs: VideocityFs): void {
   const def = extractAudioDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

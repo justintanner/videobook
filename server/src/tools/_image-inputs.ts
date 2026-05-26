@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { extname } from "node:path";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -28,7 +28,7 @@ function isHttpUrl(s: string): boolean {
 }
 
 export async function resolveImageSlugs(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<SlugResolution> {

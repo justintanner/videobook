@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
@@ -28,7 +28,7 @@ const generateGrokImagineTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineTextImageSchema>;
 
-export function generateGrokImagineTextImageDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineTextImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_text_image",
     description:

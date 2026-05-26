@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -27,7 +27,7 @@ const generateQwen2ImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 
-export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
+export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_qwen2_image_edit",
     description: "Edit images using Qwen2 image-edit on Kie. Requires 1-3 reference images. Creates a new img- asset and enqueues a background job.",
@@ -109,7 +109,7 @@ export function generateQwen2ImageEditDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateQwen2ImageEditTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateQwen2ImageEditTool(server: McpServer, fs: VideocityFs): void {
   const def = generateQwen2ImageEditDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

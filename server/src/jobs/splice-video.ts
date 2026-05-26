@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
@@ -158,7 +158,7 @@ async function spliceConcat(
   await runFfmpeg(args);
 }
 
-export function registerSpliceVideoJob(fs: ClipfirstFs): void {
+export function registerSpliceVideoJob(fs: VideocityFs): void {
   registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,

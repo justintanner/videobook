@@ -11,7 +11,7 @@ export async function createTestClient(projectsDir?: string): Promise<Client> {
   registerAllJobHandlers(fs!);
   const server = createServer(fs);
   const client = new Client(
-    { name: "clipfirst-test", version: "0.0.1" },
+    { name: "videocity-test", version: "0.0.1" },
     { capabilities: {} },
   );
   const [clientTransport, serverTransport] =

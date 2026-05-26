@@ -52,10 +52,10 @@ describe("change_video_speed tool", () => {
 
   beforeAll(async () => {
     await queue.start();
-    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-fixture-"));
+    fixtureDir = await mkdtemp(join(tmpdir(), "videocity-speed-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-speed-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-speed-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

@@ -30,7 +30,7 @@ export interface XTokenState {
 function stateFilePath(): string {
   return (
     process.env.X_TOKENS_PATH
-    ?? join(homedir(), ".clipfirst", "x-tokens.json")
+    ?? join(homedir(), ".videocity", "x-tokens.json")
   );
 }
 

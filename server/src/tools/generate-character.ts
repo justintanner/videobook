@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
@@ -79,7 +79,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-type ToolDefFactory = (fs: ClipfirstFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
+type ToolDefFactory = (fs: VideocityFs) => { handler: (args: Record<string, unknown>) => Promise<ToolResult> };
 
 const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFactory>>> = {
   kie: {
@@ -420,7 +420,7 @@ function aspectRatioArgs(provider: OutfitProvider, model: OutfitModelKey): Recor
 
 export { isHumanSubject };
 
-export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
+export function generateCharacterDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_character",
     description:
@@ -552,7 +552,7 @@ export function generateCharacterDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateCharacterTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateCharacterTool(server: McpServer, fs: VideocityFs): void {
   const def = generateCharacterDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

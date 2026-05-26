@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
@@ -38,7 +38,7 @@ function unknown(toolName: string): CostEstimate {
 // reads `input.duration`, so we enrich the input here (for the estimate only —
 // the actual generation payload doesn't carry a duration field).
 async function enrichInput(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
@@ -60,7 +60,7 @@ async function enrichInput(
 }
 
 async function estimateOne(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
@@ -89,7 +89,7 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
   };
 }
 
-export function estimateCostDef(fs: ClipfirstFs): ToolDef {
+export function estimateCostDef(fs: VideocityFs): ToolDef {
   return {
     name: "estimate_cost",
     description:

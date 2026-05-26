@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -52,7 +52,7 @@ function validateTrimParams(
   return { mode: "keep", trimStart, trimEnd };
 }
 
-export function trimVideoDef(fs: ClipfirstFs): ToolDef {
+export function trimVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "trim_video",
     description: "Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.",
@@ -136,7 +136,7 @@ export function trimVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerTrimVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerTrimVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = trimVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

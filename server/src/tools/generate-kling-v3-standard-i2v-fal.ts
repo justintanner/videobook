@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3StandardImageToVideoRequestSchema } from "@apicity/fal/zod";
@@ -23,7 +23,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateKlingV3StandardI2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateKlingV3StandardI2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_kling_v3_standard_i2v_fal",
     description: "Generate a video via fal.ai using Kling Video v3 Standard from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",

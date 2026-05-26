@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -15,7 +15,7 @@ function deriveSpliceName(firstId: string, secondId: string): string {
   return `splice-${stripVidPrefix(firstId)}-${stripVidPrefix(secondId)}`;
 }
 
-export function spliceVideoDef(fs: ClipfirstFs): ToolDef {
+export function spliceVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "splice_video",
     description: "Splice two videos by finding the frame in the first video that best matches the first frame of the second video, then concatenating the second video onto the trimmed first at that point. Creates a new vid- asset.",
@@ -131,7 +131,7 @@ export function spliceVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerSpliceVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerSpliceVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = spliceVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

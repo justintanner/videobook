@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function clearFailedTasksDef(fs: ClipfirstFs): ToolDef {
+export function clearFailedTasksDef(fs: VideocityFs): ToolDef {
   return {
     name: "clear_failed_tasks",
     description: "Delete all assets in the project that have a persisted generation-error.json. Returns the list of cleared asset ids.",

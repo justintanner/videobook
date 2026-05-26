@@ -1,7 +1,7 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function slugsDef(fs: ClipfirstFs): ToolDef {
+export function slugsDef(fs: VideocityFs): ToolDef {
   return {
     name: "slugs",
     description: "Return all project slugs.",

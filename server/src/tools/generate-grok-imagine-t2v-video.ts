@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -33,7 +33,7 @@ const generateGrokImagineT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineT2vVideoSchema>;
 
-export function generateGrokImagineT2vVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineT2vVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_t2v_video",
     description: "Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new vid- asset and enqueues a background job.",

@@ -6,14 +6,14 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 describe("sync tool", () => {
   let client: Client;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -73,7 +73,7 @@ describe("list_assets tool", () => {
   let tempDir: string;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
   });
 
@@ -128,11 +128,11 @@ describe("list_assets tool", () => {
 });
 
 describe("buildAssetList", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
@@ -348,11 +348,11 @@ describe("buildAssetList", () => {
 });
 
 describe("performSync", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-sync-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-sync-test-"));
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
@@ -396,11 +396,11 @@ describe("performSync", () => {
 });
 
 describe("buildAssetList — failed download detection (RC3)", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc3-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-rc3-test-"));
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
@@ -462,7 +462,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 // the invariant that auto_render is always empty from sync, regardless of
 // whether the asset would otherwise have qualified.
 describe("performSync — never auto-renders from sync", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
   let savedKieKey: string | undefined;
 
@@ -475,7 +475,7 @@ describe("performSync — never auto-renders from sync", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-rc2-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-rc2-test-"));
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");
@@ -603,7 +603,7 @@ describe("performSync — never auto-renders from sync", () => {
 });
 
 describe("performSync — auto-transcribe", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
   let savedKey: string | undefined;
 
@@ -616,7 +616,7 @@ describe("performSync — auto-transcribe", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-autotranscribe-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-autotranscribe-test-"));
     fs = createFsForTest(tempDir);
     await setProjectsDir(tempDir);
     await fs.createProject("test-proj");

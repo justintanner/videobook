@@ -6,14 +6,14 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { sleepDef } from "./sleep.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 describe("sleep tool", () => {
   let client: Client;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -66,11 +66,11 @@ describe("sleep tool", () => {
 });
 
 describe("sleepDef handler", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-sleep-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-sleep-test-"));
     fs = createFsForTest(tempDir);
     await fs.createProject("test-proj");
   });

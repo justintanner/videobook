@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -84,7 +84,7 @@ function buildOverlayAudioFilter(inputIndex: number, overlay: ResolvedAudioOverl
   return `[${inputIndex}:a:0]${filters.join(",")}[${label}]`;
 }
 
-export function registerRenderTimelineJob(fs: ClipfirstFs): void {
+export function registerRenderTimelineJob(fs: VideocityFs): void {
   registerJobHandler("render_timeline", async (payload, ctx) => {
     const {
       projectSlug,
@@ -136,7 +136,7 @@ export function registerRenderTimelineJob(fs: ClipfirstFs): void {
       const hasOverlays = resolvedAudio.length > 0;
       const needsAudioFilter = needsSlotAudioFilter || hasOverlays;
 
-      const concatListDir = await mkdtemp(join(tmpdir(), "clipfirst-concat-"));
+      const concatListDir = await mkdtemp(join(tmpdir(), "videocity-concat-"));
       const concatListPath = join(concatListDir, "list.txt");
       try {
         // concat demuxer list: one `file '<path>'` per line, single-quotes

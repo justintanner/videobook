@@ -20,7 +20,7 @@ describe("list_assets tool", () => {
   let tempDir: string;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     await queue.start();
   });

@@ -1,11 +1,11 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { findVideoFile } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { detectSceneCandidates } from "../scene-detect.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function detectScenesDef(fs: ClipfirstFs): ToolDef {
+export function detectScenesDef(fs: VideocityFs): ToolDef {
   return {
     name: "detect_scenes",
     description:

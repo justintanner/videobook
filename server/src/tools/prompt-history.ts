@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { PROMPT_SURFACES, isPromptSurface } from "../prompt-surfaces.js";
@@ -17,7 +17,7 @@ function invalidSurface(value: unknown) {
   };
 }
 
-export function recordPromptDef(fs: ClipfirstFs): ToolDef {
+export function recordPromptDef(fs: VideocityFs): ToolDef {
   return {
     name: "record_prompt",
     description:
@@ -75,7 +75,7 @@ export function recordPromptDef(fs: ClipfirstFs): ToolDef {
 }
 
 async function maybeImportChatJsonl(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   slug: string,
 ): Promise<void> {
   const existing = await fs.countPromptHistory("chat", slug);
@@ -89,7 +89,7 @@ async function maybeImportChatJsonl(
   }
 }
 
-export function listPromptHistoryDef(fs: ClipfirstFs): ToolDef {
+export function listPromptHistoryDef(fs: VideocityFs): ToolDef {
   return {
     name: "list_prompt_history",
     description:

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
@@ -27,7 +27,7 @@ type ReverseVideoPayload = {
   projectSlug: string;
 };
 
-export function registerReverseVideoJob(fs: ClipfirstFs): void {
+export function registerReverseVideoJob(fs: VideocityFs): void {
   registerJobHandler("reverse_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, hasAudio,

@@ -21,7 +21,7 @@ describe("download_video tool", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-download-video-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-download-video-test-"));
     client = await createTestClient(tempDir);
     // Stub the real handler: these tests cover the tool's enqueue-time
     // validation, not the download. The real handler shells out to yt-dlp,

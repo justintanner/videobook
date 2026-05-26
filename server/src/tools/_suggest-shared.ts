@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { findVideoFile } from "vc-engine";
 
@@ -142,7 +142,7 @@ export function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
 }
 
 export async function loadTranscript(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<TranscriptResult | null> {
@@ -172,7 +172,7 @@ export async function loadTranscript(
 }
 
 export async function loadPriorAnalysis(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<PriorAnalysis | null> {
@@ -324,7 +324,7 @@ export type AssetForAnalysisError =
   | { kind: "no-transcript"; message: string };
 
 export async function loadAssetForAnalysis(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<{ ok: true; value: AssetForAnalysis } | { ok: false; error: AssetForAnalysisError }> {

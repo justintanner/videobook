@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function removeTimelineAudioDef(fs: ClipfirstFs): ToolDef {
+export function removeTimelineAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "remove_timeline_audio",
     description: "Remove an overlay audio clip from the timeline by its id",

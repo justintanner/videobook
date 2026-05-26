@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -34,7 +34,7 @@ const schema = {
   accepted: z.boolean().describe("True to mark the scene's video swap as accepted, false to clear acceptance"),
 };
 
-export function acceptPlanSceneVideoSwapDef(fs: ClipfirstFs): ToolDef {
+export function acceptPlanSceneVideoSwapDef(fs: VideocityFs): ToolDef {
   return {
     name: "accept_plan_scene_video_swap",
     description:
@@ -119,7 +119,7 @@ export function acceptPlanSceneVideoSwapDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerAcceptPlanSceneVideoSwapTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerAcceptPlanSceneVideoSwapTool(server: McpServer, fs: VideocityFs): void {
   const def = acceptPlanSceneVideoSwapDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

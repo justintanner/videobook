@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
 interface CommandParam {
@@ -984,7 +984,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
 ];
 
-export function commandsDef(fs: ClipfirstFs): ToolDef {
+export function commandsDef(fs: VideocityFs): ToolDef {
   return {
     name: "slash_commands",
     description: "List all available UI commands with scope metadata",

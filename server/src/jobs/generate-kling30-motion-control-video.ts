@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -22,7 +22,7 @@ type GenerateKling30MotionControlPayload = {
   background_source?: "input_video" | "input_image";
 };
 
-async function uploadInputs(fs: ClipfirstFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadInputs(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
     urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
@@ -30,7 +30,7 @@ async function uploadInputs(fs: ClipfirstFs, inputs: RefInput[], projectSlug: st
   return urls;
 }
 
-export function registerGenerateKling30MotionControlVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateKling30MotionControlVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_kling30_motion_control_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,

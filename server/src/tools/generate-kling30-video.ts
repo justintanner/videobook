@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingAspectRatioSchema, KlingDurationSchema, KlingModeSchema } from "@apicity/kie/zod";
@@ -66,7 +66,7 @@ const generateKling30VideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30VideoSchema>;
 
-export function generateKling30VideoDef(fs: ClipfirstFs): ToolDef {
+export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_kling30_video",
     description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new vid- asset and enqueues a background job.",

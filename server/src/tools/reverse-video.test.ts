@@ -53,7 +53,7 @@ describe("reverse_video tool", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-reverse-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-reverse-test-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);

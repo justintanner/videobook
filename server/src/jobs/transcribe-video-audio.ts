@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { openai } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
@@ -12,7 +12,7 @@ type TranscribeVideoAudioPayload = {
   projectSlug: string;
 };
 
-export function registerTranscribeVideoAudioJob(fs: ClipfirstFs): void {
+export function registerTranscribeVideoAudioJob(fs: VideocityFs): void {
   registerJobHandler("transcribe_video_audio", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as TranscribeVideoAudioPayload;
 

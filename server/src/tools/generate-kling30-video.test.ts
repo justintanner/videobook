@@ -31,7 +31,7 @@ describe("generate_kling30_video tool", () => {
 
   beforeEach(async () => {
     delete process.env.KIE_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-kling30-video-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-kling30-video-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
@@ -12,7 +12,7 @@ function stripAt(slug: string): string {
 }
 
 async function readCharacter(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   charAssetId: string,
   projectSlug: string,
 ): Promise<{ ok: true; value: Character } | { ok: false; error: string }> {
@@ -22,7 +22,7 @@ async function readCharacter(
 }
 
 async function writeCharacter(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   charAssetId: string,
   projectSlug: string,
   character: Character,
@@ -49,7 +49,7 @@ const pinSchema = {
 
 const unpinSchema = pinSchema;
 
-export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
+export function pinCharacterSlotDef(fs: VideocityFs): ToolDef {
   return {
     name: "pin_character_slot",
     description:
@@ -107,7 +107,7 @@ export function pinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function unpinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
+export function unpinCharacterSlotDef(fs: VideocityFs): ToolDef {
   return {
     name: "unpin_character_slot",
     description:
@@ -164,7 +164,7 @@ export function unpinCharacterSlotDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerCharacterSlotTools(server: McpServer, fs: ClipfirstFs): void {
+export function registerCharacterSlotTools(server: McpServer, fs: VideocityFs): void {
   for (const def of [pinCharacterSlotDef(fs), unpinCharacterSlotDef(fs)]) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }

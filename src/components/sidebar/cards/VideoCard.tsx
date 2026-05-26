@@ -48,7 +48,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
 
   const handleDragOver = canAcceptAudioDrop
     ? (e: ReactDragEvent<HTMLDivElement>) => {
-        if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-audio')) return;
+        if (!e.dataTransfer.types.includes('application/x-videocity-asset-audio')) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
         if (!audioDragOver) setAudioDragOver(true);

@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
@@ -48,7 +48,7 @@ const generateGrokImagineRefVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineRefVideoSchema>;
 
-export function generateGrokImagineRefVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_ref_video",
     description:

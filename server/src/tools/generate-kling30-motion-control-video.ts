@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingMotionControlRequestSchema } from "@apicity/kie/zod";
@@ -43,7 +43,7 @@ const generateKling30MotionControlVideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30MotionControlVideoSchema>;
 
-export function generateKling30MotionControlVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_kling30_motion_control_video",
     description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new vid- asset and enqueues a background job.",

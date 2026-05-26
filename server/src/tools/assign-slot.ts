@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetEntry } from "vc-engine";
+import type { VideocityFs, AssetEntry } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -14,7 +14,7 @@ type LazyAnalysisResult = {
 };
 
 async function enqueueLazyAnalysis(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   asset: AssetEntry,
   projectSlug: string,
 ): Promise<LazyAnalysisResult | null> {
@@ -106,7 +106,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function assignSlotDef(fs: ClipfirstFs): ToolDef {
+export function assignSlotDef(fs: VideocityFs): ToolDef {
   return {
     name: "assign_slot",
     description: "Assign an asset to a timeline slot (e.g. slot 's02' = index 1)",

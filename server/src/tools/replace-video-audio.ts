@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function replaceVideoAudioDef(fs: ClipfirstFs): ToolDef {
+export function replaceVideoAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "replace_video_audio",
     description: "Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
@@ -120,7 +120,7 @@ export function replaceVideoAudioDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReplaceVideoAudioTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReplaceVideoAudioTool(server: McpServer, fs: VideocityFs): void {
   const def = replaceVideoAudioDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

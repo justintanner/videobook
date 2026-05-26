@@ -1,5 +1,5 @@
 import { fal, uploadFile } from "@apicity/fal";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,
@@ -39,7 +39,7 @@ async function uploadPreparedToFal(
 // Returns a stable https://v3.fal.media/... URL that fal's own model endpoints
 // can fetch directly — no third-party free-host dependency.
 export async function uploadAssetToFal(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   filename: string,
   projectSlug: string,

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
@@ -29,7 +29,7 @@ type TimelineConfig = {
   currentOrientation?: ViewerSize;
 };
 
-export function editTimelineDef(fs: ClipfirstFs): ToolDef {
+export function editTimelineDef(fs: VideocityFs): ToolDef {
   return {
     name: "edit_timeline",
     description: "Set the timeline for a project (replaces all slots and render orientation)",

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -19,7 +19,7 @@ type GenerateWan27ImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateWan27ImageJob(fs: ClipfirstFs): void {
+export function registerGenerateWan27ImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_wan27_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

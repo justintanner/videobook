@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAudioSettingSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
@@ -41,7 +41,7 @@ const generateHappyhorseVideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseVideoeditVideoSchema>;
 
-export function generateHappyhorseVideoeditVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_happyhorse_videoedit_video",
     description: "Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new vid- asset and enqueues a background job.",

@@ -5,15 +5,15 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 describe("duplicate_asset tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
     fs = createFsForTest(tempDir);
     await client.callTool({

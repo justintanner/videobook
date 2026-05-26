@@ -36,7 +36,7 @@ describe("slash commands e2e", () => {
   let commands: ServerCommand[];
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-slash-e2e-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-slash-e2e-"));
     client = await createTestClient(tempDir);
     registerJobHandler("download_video", async () => ({ stubbed: true }));
     registerJobHandler("render_project", async () => ({ stubbed: true }));

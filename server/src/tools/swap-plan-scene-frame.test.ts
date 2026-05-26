@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { createFs } from "vc-engine";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { queue } from "../queue.js";
 import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 
@@ -26,14 +26,14 @@ async function testPng(width = 10, height = 10): Promise<Buffer> {
 
 describe("swap_plan_scene_frame aspect payloads", () => {
   let tempDir: string;
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   const originalKieKey = process.env.KIE_API_KEY;
   const originalFalKey = process.env.FAL_API_KEY;
 
   beforeEach(async () => {
     process.env.KIE_API_KEY = "test-kie-key";
     process.env.FAL_API_KEY = "test-fal-key";
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-swap-plan-scene-frame-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-swap-plan-scene-frame-test-"));
     fs = createFs({ projectsDir: tempDir });
     unwrap(await fs.createProject(PROJECT));
     vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);

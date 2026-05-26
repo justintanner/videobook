@@ -25,7 +25,7 @@ describe("generate_grok_imagine_image tool", () => {
 
   beforeEach(async () => {
     delete process.env.KIE_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-grok-imagine-image-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-grok-imagine-image-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

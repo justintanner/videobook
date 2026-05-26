@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -20,7 +20,7 @@ type GenerateHappyhorseI2vVideoPayload = {
   seed?: number;
 };
 
-export function registerGenerateHappyhorseI2vVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateHappyhorseI2vVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_happyhorse_i2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
@@ -29,7 +29,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27VideoeditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27VideoeditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_videoedit_fal",
     description: "Edit a video via fal.ai using Alibaba Wan v2.7 Edit-Video, optionally guided by a reference image. Creates a new vid- asset and enqueues a background job.",

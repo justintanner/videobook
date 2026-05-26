@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -33,7 +33,7 @@ function validateCuts(
   return { ok: true, sorted };
 }
 
-export function applyCutsDef(fs: ClipfirstFs): ToolDef {
+export function applyCutsDef(fs: VideocityFs): ToolDef {
   return {
     name: "apply_cuts",
     description:
@@ -129,7 +129,7 @@ export function applyCutsDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerApplyCutsTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerApplyCutsTool(server: McpServer, fs: VideocityFs): void {
   const def = applyCutsDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

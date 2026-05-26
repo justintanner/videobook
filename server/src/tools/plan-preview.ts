@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { findVideoFile } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
@@ -38,7 +38,7 @@ type PreviewPayload = {
   user_context: string;
 };
 
-export function planPreviewDef(fs: ClipfirstFs): ToolDef {
+export function planPreviewDef(fs: VideocityFs): ToolDef {
   return {
     name: "plan_preview",
     description:

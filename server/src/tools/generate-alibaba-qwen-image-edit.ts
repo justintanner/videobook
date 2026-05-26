@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
@@ -43,7 +43,7 @@ const generateAlibabaQwenImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaQwenImageEditSchema>;
 
-export function generateAlibabaQwenImageEditDef(fs: ClipfirstFs): ToolDef {
+export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_alibaba_qwen_image_edit",
     description: "Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.",

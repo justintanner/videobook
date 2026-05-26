@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -23,7 +23,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedance2FastT2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateSeedance2FastT2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_seedance2_fast_t2v_fal",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a text prompt only. Creates a new vid- asset and enqueues a background job.",

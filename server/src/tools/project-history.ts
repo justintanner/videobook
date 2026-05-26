@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function projectHistoryDef(fs: ClipfirstFs): ToolDef {
+export function projectHistoryDef(fs: VideocityFs): ToolDef {
   return {
     name: "project_history",
     description: "Get git commit history for a project",
@@ -24,7 +24,7 @@ export function projectHistoryDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerProjectHistoryTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerProjectHistoryTool(server: McpServer, fs: VideocityFs): void {
   const def = projectHistoryDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

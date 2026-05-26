@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetEntry, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetEntry, AssetManifestFile } from "vc-engine";
 import { computeAssetStatus } from "vc-engine";
 import { z } from "zod";
 import { createHash } from "node:crypto";
@@ -102,7 +102,7 @@ function buildFrameDirs(
 }
 
 async function readOrExtractWaveform(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   assetDir: string,
@@ -133,7 +133,7 @@ const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
 export async function readRenderSettings(
-  fs: ClipfirstFs, assetId: string, projectSlug: string, orientations: string[],
+  fs: VideocityFs, assetId: string, projectSlug: string, orientations: string[],
 ): Promise<Record<string, Record<string, unknown>>> {
   const result: Record<string, Record<string, unknown>> = {};
   await Promise.all(orientations.map(async (orient) => {
@@ -179,7 +179,7 @@ const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
 };
 
 export async function readStoredRenderDefaults(
-  fs: ClipfirstFs, assetId: string, projectSlug: string, targetOrientation: string,
+  fs: VideocityFs, assetId: string, projectSlug: string, targetOrientation: string,
 ): Promise<Record<string, unknown>> {
   const defaults = { ...BASE_DEFAULTS, ...(ORIENTATION_OVERRIDES[targetOrientation] ?? ORIENTATION_OVERRIDES.landscape) };
   // Read every orientation's render metadata in parallel, then pick the
@@ -201,7 +201,7 @@ const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
 const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 
 export async function readAnalysisRecommendations(
-  fs: ClipfirstFs, assetId: string, projectSlug: string,
+  fs: VideocityFs, assetId: string, projectSlug: string,
 ): Promise<Record<string, unknown>> {
   const result = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
   if (!result.ok) return {};
@@ -262,7 +262,7 @@ function renderedOrientationsFor(
   return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
 }
 
-export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
+export async function buildAssetList(fs: VideocityFs, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
@@ -392,7 +392,7 @@ export async function buildAssetList(fs: ClipfirstFs, project_slug: string, sort
   );
 }
 
-export async function performSync(fs: ClipfirstFs, project_slug: string): Promise<SyncResult> {
+export async function performSync(fs: VideocityFs, project_slug: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
     external_uploads: [], auto_render: [], auto_transcribe: [],
@@ -736,7 +736,7 @@ export async function performSync(fs: ClipfirstFs, project_slug: string): Promis
   return result;
 }
 
-export function syncDef(fs: ClipfirstFs): ToolDef {
+export function syncDef(fs: VideocityFs): ToolDef {
   return {
     name: "sync",
     description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
@@ -754,7 +754,7 @@ export function syncDef(fs: ClipfirstFs): ToolDef {
 }
 
 async function processSyncedTask(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   task: PendingTask,
   taskInfo: KieTaskInfo,
   result: SyncResult,
@@ -843,7 +843,7 @@ export type RenderAction = {
 };
 
 export async function findAutoRenderActions(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assets: AssetEntry[],
   orientation: string,
@@ -901,7 +901,7 @@ type TranscribeAction = {
 };
 
 async function findAutoTranscribeActions(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   assets: AssetEntry[],
 ): Promise<TranscribeAction[]> {
@@ -949,7 +949,7 @@ async function findAutoTranscribeActions(
   return candidates.filter((c): c is TranscribeAction => c !== null);
 }
 
-export function registerSyncTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerSyncTool(server: McpServer, fs: VideocityFs): void {
   const def = syncDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

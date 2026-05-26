@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { queue } from "../queue.js";
@@ -16,7 +16,7 @@ function validateBoost(boost: number): string | null {
   return null;
 }
 
-export function audioBoostDef(fs: ClipfirstFs): ToolDef {
+export function audioBoostDef(fs: VideocityFs): ToolDef {
   return {
     name: "audio_boost",
     description:
@@ -102,7 +102,7 @@ export function audioBoostDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerAudioBoostTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerAudioBoostTool(server: McpServer, fs: VideocityFs): void {
   const def = audioBoostDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

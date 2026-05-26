@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
@@ -21,7 +21,7 @@ type CompleteKieTaskPayload = {
   resultObject?: Record<string, unknown>;
 };
 
-export function registerCompleteKieTaskJob(fs: ClipfirstFs): void {
+export function registerCompleteKieTaskJob(fs: VideocityFs): void {
   registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
       taskId, taskType, assetId, projectSlug, meta,
@@ -161,7 +161,7 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
 }
 
 async function completeSeedreamImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -197,7 +197,7 @@ async function completeSeedreamImage(
 }
 
 async function completeSeedreamV5LiteImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -230,7 +230,7 @@ async function completeSeedreamV5LiteImage(
 }
 
 async function completeNanoBananaImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -264,7 +264,7 @@ async function completeNanoBananaImage(
 }
 
 async function completeWan27Image(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -298,7 +298,7 @@ async function completeWan27Image(
 }
 
 async function completeQwen2ImageEdit(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -332,7 +332,7 @@ async function completeQwen2ImageEdit(
 }
 
 async function completeKling30Video(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -373,7 +373,7 @@ async function completeKling30Video(
 }
 
 async function completeSeedance2Video(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -454,7 +454,7 @@ async function completeSeedance2Video(
 }
 
 async function completeWan27Video(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -501,7 +501,7 @@ async function completeWan27Video(
 }
 
 async function completeGrokImagineVideo(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -552,7 +552,7 @@ async function completeGrokImagineVideo(
 }
 
 async function completeGrokImagineImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -582,7 +582,7 @@ async function completeGrokImagineImage(
 }
 
 async function completeGptImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -615,7 +615,7 @@ async function completeGptImage(
 }
 
 async function completeIsolateVocals(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -692,7 +692,7 @@ function extensionFromUrl(url: string, fallback: string): string {
 }
 
 async function readPayloadModel(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
 ): Promise<string | undefined> {
@@ -702,7 +702,7 @@ async function readPayloadModel(
 }
 
 async function completeAlibabaVideo(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -745,7 +745,7 @@ async function completeAlibabaVideo(
 }
 
 async function completeAlibabaQwenImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -790,7 +790,7 @@ async function completeAlibabaQwenImage(
 }
 
 async function completeHappyHorseVideo(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -838,7 +838,7 @@ async function completeHappyHorseVideo(
 }
 
 async function completeAlibabaImage(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -35,7 +35,7 @@ const schema = {
   auto_accept: z.boolean().optional().describe("Default false. Set true to auto-accept the swap (e.g. when the user explicitly drops a known-good clip)."),
 };
 
-export function replacePlanSceneVideoSwapDef(fs: ClipfirstFs): ToolDef {
+export function replacePlanSceneVideoSwapDef(fs: VideocityFs): ToolDef {
   return {
     name: "replace_plan_scene_video_swap",
     description:
@@ -132,7 +132,7 @@ export function replacePlanSceneVideoSwapDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReplacePlanSceneVideoSwapTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReplacePlanSceneVideoSwapTool(server: McpServer, fs: VideocityFs): void {
   const def = replacePlanSceneVideoSwapDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

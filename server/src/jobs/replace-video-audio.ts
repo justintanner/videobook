@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
@@ -28,7 +28,7 @@ type ReplaceVideoAudioPayload = {
   extraProvenance?: Record<string, unknown>;
 };
 
-export function registerReplaceVideoAudioJob(fs: ClipfirstFs): void {
+export function registerReplaceVideoAudioJob(fs: VideocityFs): void {
   registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
       inputPath, audioPath, outputPath,

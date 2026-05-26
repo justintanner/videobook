@@ -875,8 +875,8 @@ function VideoSwapSlot({
         disabled && state.kind === 'idle' && 'opacity-50',
       )}
       style={{ aspectRatio: sourceAspect.css }}
-      onDragEnter={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); setDragActive(true); }}
-      onDragOver={(e) => { if (!e.dataTransfer.types.includes('application/x-clipfirst-asset-video')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragEnter={(e) => { if (!e.dataTransfer.types.includes('application/x-videocity-asset-video')) return; e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { if (!e.dataTransfer.types.includes('application/x-videocity-asset-video')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }}
       onDrop={handleDrop}
     >

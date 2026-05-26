@@ -38,7 +38,7 @@ describe("freeform chat commands", () => {
   const origKey = process.env.OPENAI_API_KEY;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-freeform-chat-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-freeform-chat-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

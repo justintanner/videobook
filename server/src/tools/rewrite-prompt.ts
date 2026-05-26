@@ -2,7 +2,7 @@
  * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
  * prompting guides via GPT-5.2.
  */
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -242,7 +242,7 @@ function buildSceneResult(
 
 async function resolveImageDataUris(
   imageSlugs: string[],
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
 ): Promise<string[]> {
   const tagText = imageSlugs.map((s) => `@${s.replace(/^@/, "")}`).join(" ");
@@ -263,7 +263,7 @@ async function resolveImageDataUris(
 
 // --- Tool definition ---
 
-export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
+export function rewritePromptDef(fs: VideocityFs): ToolDef {
   return {
     name: "rewrite_prompt",
     description:
@@ -348,7 +348,7 @@ export function rewritePromptDef(fs: ClipfirstFs): ToolDef {
 }
 
 async function handleStandardRewrite(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   apiKey: string,
   prompt: string,
   model: string,
@@ -401,7 +401,7 @@ async function handleStandardRewrite(
 }
 
 async function handleSceneRewrite(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   apiKey: string,
   assetSlug: string,
   sceneIndex: number,

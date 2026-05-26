@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -33,7 +33,7 @@ const generateNanoBananaImageSchema = {
 
 type Args = SchemaArgs<typeof generateNanoBananaImageSchema>;
 
-export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
+export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_nano_banana_image",
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
@@ -110,7 +110,7 @@ export function generateNanoBananaImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateNanoBananaImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateNanoBananaImageTool(server: McpServer, fs: VideocityFs): void {
   const def = generateNanoBananaImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

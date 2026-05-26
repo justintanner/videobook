@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -16,7 +16,7 @@ type GenerationPayloadResponse = {
   taskType: string | null;
 };
 
-export function generationPayloadDef(fs: ClipfirstFs): ToolDef {
+export function generationPayloadDef(fs: VideocityFs): ToolDef {
   return {
     name: "generation_payload",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",

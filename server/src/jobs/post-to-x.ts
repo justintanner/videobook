@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { postToX, type PostToXResult } from "../x/post-to-x.js";
 
@@ -12,7 +12,7 @@ interface PostToXJobPayload {
   scheduledFor?: string;
 }
 
-export function registerPostToXJob(fs: ClipfirstFs): void {
+export function registerPostToXJob(fs: VideocityFs): void {
   registerJobHandler("post_to_x", async (payload): Promise<PostToXResult> => {
     const { assetId, projectSlug, text, orientation, scheduleId, scheduledFor } =
       payload as unknown as PostToXJobPayload;

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -19,7 +19,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function describeImageDef(fs: ClipfirstFs): ToolDef {
+export function describeImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "describe_image",
     description:
@@ -83,7 +83,7 @@ export function describeImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerDescribeImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerDescribeImageTool(server: McpServer, fs: VideocityFs): void {
   const def = describeImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

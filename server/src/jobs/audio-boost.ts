@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { basename, extname, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, AUDIO_OPTS } from "../ffmpeg.js";
@@ -29,7 +29,7 @@ type AudioBoostPayload = {
   projectSlug: string;
 };
 
-export function registerAudioBoostJob(fs: ClipfirstFs): void {
+export function registerAudioBoostJob(fs: VideocityFs): void {
   registerJobHandler("audio_boost", async (payload, ctx) => {
     const {
       inputPath, outputPath, boost, isVideo,

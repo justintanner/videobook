@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs, GitCommit } from "vc-engine";
+import type { VideocityFs, GitCommit } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -23,7 +23,7 @@ type OriginalJson = {
 };
 
 async function enrichCommitsWithRewrite(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   commits: GitCommit[],
   assetId: string,
   projectSlug: string,
@@ -59,7 +59,7 @@ async function enrichCommitsWithRewrite(
   return enriched;
 }
 
-export function assetHistoryDef(fs: ClipfirstFs): ToolDef {
+export function assetHistoryDef(fs: VideocityFs): ToolDef {
   return {
     name: "asset_history",
     description: "Get git commit history for a specific asset",
@@ -82,7 +82,7 @@ export function assetHistoryDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerAssetHistoryTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerAssetHistoryTool(server: McpServer, fs: VideocityFs): void {
   const def = assetHistoryDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

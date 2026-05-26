@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
 import { findUnprocessedUploads } from "./process-upload.js";
 import { queue } from "../queue.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 describe("findUnprocessedUploads", () => {
   let tempDir: string;
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
 
   beforeAll(async () => {
     await queue.start();
@@ -20,7 +20,7 @@ describe("findUnprocessedUploads", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-upload-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-upload-test-"));
     fs = createFsForTest(tempDir);
   });
 

@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -15,7 +15,7 @@ type GenerateGptImageTextPayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateGptImageTextJob(fs: ClipfirstFs): void {
+export function registerGenerateGptImageTextJob(fs: VideocityFs): void {
   registerJobHandler("generate_gpt_image_text", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, resolution, nsfwChecker,

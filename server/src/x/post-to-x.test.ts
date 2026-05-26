@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { x as createX } from "@apicity/x";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { createFsForTest } from "../fs.js";
 import { postToX } from "./post-to-x.js";
 import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";
@@ -57,7 +57,7 @@ function makeStubFetch(plan: StubResponse[]): { fetch: typeof fetch; calls: Reco
 }
 
 async function uploadFakeAsset(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   projectSlug: string,
   prefix: string,
   ext: string,
@@ -76,12 +76,12 @@ async function uploadFakeAsset(
 }
 
 describe("postToX helper", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
   const projectSlug = "post-test";
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-postx-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-postx-"));
     fs = createFsForTest(tempDir);
     const created = await fs.createProject(projectSlug);
     if (!created.ok) throw new Error(created.error.message);

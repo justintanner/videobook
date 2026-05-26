@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import { type PendingTask } from "vc-engine";
@@ -52,7 +52,7 @@ type EnqueueOutcome =
   | { model: string; error: string };
 
 async function enqueueModel(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   spec: ModelSpec,
   prompt: string,
   projectSlug: string,
@@ -81,7 +81,7 @@ async function enqueueModel(
   return { model: spec.toolType, img_asset_id: imgAssetId, job_id: jobId };
 }
 
-export function genImagesAllDef(fs: ClipfirstFs): ToolDef {
+export function genImagesAllDef(fs: VideocityFs): ToolDef {
   return {
     name: "gen_images_all_models",
     description:

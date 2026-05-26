@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
@@ -21,7 +21,7 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateQwenImageFalJob(fs: ClipfirstFs): void {
+export function registerGenerateQwenImageFalJob(fs: VideocityFs): void {
   registerJobHandler("generate_qwen_image_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {

@@ -54,7 +54,7 @@ describe("render_timeline tool", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-render-timeline-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-render-timeline-test-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);

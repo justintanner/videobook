@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ResolutionSchema } from "@apicity/kie/zod";
@@ -19,7 +19,7 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   // `@<assetId>/<filename>` form: address a specific sibling file inside an
   // asset (e.g. `@plan/s1.mp4`). Bypasses the vid- prefix gate.
   const stripped = raw.replace(/^@/, "");
@@ -59,7 +59,7 @@ const extendWan27VideoSchema = {
 
 type Args = SchemaArgs<typeof extendWan27VideoSchema>;
 
-export function extendWan27VideoDef(fs: ClipfirstFs): ToolDef {
+export function extendWan27VideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "extend_wan27_video",
     description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new vid- asset and enqueues a background job.",

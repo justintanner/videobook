@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
@@ -42,7 +42,7 @@ type ChangeVideoSpeedPayload = {
   projectSlug: string;
 };
 
-export function registerChangeVideoSpeedJob(fs: ClipfirstFs): void {
+export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
   registerJobHandler("change_video_speed", async (payload, ctx) => {
     const {
       inputPath, outputPath, speed, hasAudio,

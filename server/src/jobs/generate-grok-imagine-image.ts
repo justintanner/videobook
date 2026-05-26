@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -22,7 +22,7 @@ type GenerateGrokImagineImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineImageJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_image", async (payload, ctx) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,

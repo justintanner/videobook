@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -21,7 +21,7 @@ type GenerateAlibabaImagePayload = {
   seed?: number;
 };
 
-export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
+export function registerGenerateAlibabaImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_alibaba_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -69,7 +69,7 @@ export function registerGenerateAlibabaImageJob(fs: ClipfirstFs): void {
   });
 }
 
-export function registerGenerateAlibabaImageProJob(fs: ClipfirstFs): void {
+export function registerGenerateAlibabaImageProJob(fs: VideocityFs): void {
   registerJobHandler("generate_alibaba_image_pro", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

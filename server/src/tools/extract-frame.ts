@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -47,7 +47,7 @@ async function extractFrame(
   videoAssetId: string,
   projectSlug: string,
   mode: "first" | "last" | "custom",
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   customTimestamp?: number,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const manifestResult = await fs.getManifest(videoAssetId, projectSlug);
@@ -127,7 +127,7 @@ const extractFrameSchema = {
   project_slug: z.string().describe("Project slug"),
 };
 
-export function extractFrameDefs(fs: ClipfirstFs): ToolDef[] {
+export function extractFrameDefs(fs: VideocityFs): ToolDef[] {
   return [
     {
       name: "extract_first_frame",
@@ -167,7 +167,7 @@ export function extractFrameDefs(fs: ClipfirstFs): ToolDef[] {
   ];
 }
 
-export function registerExtractFrameTools(server: McpServer, fs: ClipfirstFs): void {
+export function registerExtractFrameTools(server: McpServer, fs: VideocityFs): void {
   for (const def of extractFrameDefs(fs)) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }

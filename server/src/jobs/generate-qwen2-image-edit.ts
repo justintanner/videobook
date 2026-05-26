@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -19,7 +19,7 @@ type GenerateQwen2ImageEditPayload = {
   seed?: number;
 };
 
-export function registerGenerateQwen2ImageEditJob(fs: ClipfirstFs): void {
+export function registerGenerateQwen2ImageEditJob(fs: VideocityFs): void {
   registerJobHandler("generate_qwen2_image_edit", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

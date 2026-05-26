@@ -82,7 +82,7 @@ describe("MCP tools e2e", () => {
 
   beforeAll(async () => {
     await queue.start();
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-e2e-tools-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-e2e-tools-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);

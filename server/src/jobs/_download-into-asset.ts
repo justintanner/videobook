@@ -1,10 +1,10 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 // Fetch `url`, write the response bytes to the given asset file, and return
 // the buffer for callers that need it (e.g. for content-hash provenance).
 // `options.kind` only changes the error-message wording.
 export async function downloadUrlIntoAsset(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   url: string,
   assetId: string,
   filename: string,

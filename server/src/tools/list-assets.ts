@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { buildAssetList } from "./sync.js";
 
-export function listAssetsDef(fs: ClipfirstFs): ToolDef {
+export function listAssetsDef(fs: VideocityFs): ToolDef {
   return {
     name: "list_assets",
     description:

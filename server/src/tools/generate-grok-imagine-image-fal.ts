@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -22,7 +22,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineImageFalDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineImageFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_image_fal",
     description: "Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new img- asset and enqueues a background job.",

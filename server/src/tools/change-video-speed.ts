@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -22,7 +22,7 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
   return probe.streams.some((s) => s.codec_type === "audio");
 }
 
-export function changeVideoSpeedDef(fs: ClipfirstFs): ToolDef {
+export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
   return {
     name: "change_video_speed",
     description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
@@ -86,7 +86,7 @@ export function changeVideoSpeedDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerChangeVideoSpeedTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerChangeVideoSpeedTool(server: McpServer, fs: VideocityFs): void {
   const def = changeVideoSpeedDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

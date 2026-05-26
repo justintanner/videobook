@@ -51,7 +51,7 @@ describe("timeline audio tools", () => {
   });
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-timeline-audio-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-timeline-audio-test-"));
     audioPath = join(tempDir, "tone.mp3");
     await generateTestAudio(audioPath, 2);
     client = await createTestClient(tempDir);

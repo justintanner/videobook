@@ -23,7 +23,20 @@ export function McpStatus({ state, tools, error, retry }: McpStatusProps) {
 
   return (
     <div>
-      <h1>Clipfirst</h1>
+      <h1 style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-block",
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            background: "#00D4FF",
+            boxShadow: "0 0 0 4px rgba(0, 212, 255, 0.25)",
+          }}
+        />
+        VIDEOCITY
+      </h1>
 
       <div style={{
         display: "flex",

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -49,7 +49,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function addTimelineAudioDef(fs: ClipfirstFs): ToolDef {
+export function addTimelineAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "add_timeline_audio",
     description: "Add an overlay audio clip to the timeline at a given frame offset",

@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImagineDurationSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -18,7 +18,7 @@ const extendGrokImagineVideoSchema = {
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
 
-export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
+export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "extend_grok_imagine_video",
     description: "Extend an existing video asset using Kie's grok-imagine/extend. Creates a new vid- asset and enqueues a background job.",
@@ -118,7 +118,7 @@ export function extendGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerExtendGrokImagineVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerExtendGrokImagineVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = extendGrokImagineVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

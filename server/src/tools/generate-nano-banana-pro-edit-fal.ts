@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalNanoBananaProEditRequestSchema } from "@apicity/fal/zod";
@@ -26,7 +26,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateNanoBananaProEditFalDef(fs: ClipfirstFs): ToolDef {
+export function generateNanoBananaProEditFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_nano_banana_pro_edit_fal",
     description: "Edit or compose images via fal.ai using Google Nano Banana Pro with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",

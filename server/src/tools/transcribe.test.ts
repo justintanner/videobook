@@ -24,7 +24,7 @@ describe("transcribe tool", () => {
 
   beforeEach(async () => {
     delete process.env.ELEVENLABS_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-transcribe-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-transcribe-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

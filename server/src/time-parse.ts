@@ -1,4 +1,4 @@
-// --- Time parsing (port of ~/clipfirst-mcp/src/time_parse.py) ---
+// --- Time parsing (port of ~/videocity-mcp/src/time_parse.py) ---
 
 const COLON_SUFFIX_RE = /\s*(?:s|sec|secs|second|seconds)\s*$/i;
 const H = "(?:h|hr|hrs|hour|hours)";

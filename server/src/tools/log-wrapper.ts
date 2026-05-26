@@ -1,7 +1,7 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 
-function withLogging(def: ToolDef, fs: ClipfirstFs): ToolDef {
+function withLogging(def: ToolDef, fs: VideocityFs): ToolDef {
   return {
     ...def,
     handler: async (args) => {

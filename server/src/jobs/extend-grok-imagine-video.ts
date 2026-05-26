@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -14,7 +14,7 @@ type ExtendGrokImagineVideoPayload = {
   extend_times?: "6" | "10";
 };
 
-export function registerExtendGrokImagineVideoJob(fs: ClipfirstFs): void {
+export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
   registerJobHandler("extend_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir,

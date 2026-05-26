@@ -1,11 +1,11 @@
 import { fal } from "@apicity/fal";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { type PendingTask } from "vc-engine";
 import { requireApiKey } from "../api-key.js";
 export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
 
 export type FalSubmitArgs = {
-  fs: ClipfirstFs;
+  fs: VideocityFs;
   projectSlug: string;
   assetId: string;
   assetDir: string;

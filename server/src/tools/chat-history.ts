@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function pushChatHistoryDef(fs: ClipfirstFs): ToolDef {
+export function pushChatHistoryDef(fs: VideocityFs): ToolDef {
   return {
     name: "push_chat_history",
     description: "Append a message to the chat input history log.",
@@ -35,7 +35,7 @@ export function pushChatHistoryDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function listChatHistoryDef(fs: ClipfirstFs): ToolDef {
+export function listChatHistoryDef(fs: VideocityFs): ToolDef {
   return {
     name: "list_chat_history",
     description: "List recent chat input history entries.",

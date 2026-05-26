@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
@@ -26,7 +26,7 @@ const generateHappyhorseT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseT2vVideoSchema>;
 
-export function generateHappyhorseT2vVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_happyhorse_t2v_video",
     description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.",

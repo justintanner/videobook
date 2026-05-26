@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in the Clipfirst repository.
+Guidance for AI coding agents working in the Videocity repository.
 
 ## Build Commands
 

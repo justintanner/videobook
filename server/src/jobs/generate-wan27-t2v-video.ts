@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -25,7 +25,7 @@ type GenerateWan27T2vVideoPayload = {
   seed?: number;
 };
 
-export function registerGenerateWan27T2vVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateWan27T2vVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_wan27_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,

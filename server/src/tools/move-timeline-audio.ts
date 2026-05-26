@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function moveTimelineAudioDef(fs: ClipfirstFs): ToolDef {
+export function moveTimelineAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "move_timeline_audio",
     description: "Move a timeline audio clip to a new start frame",

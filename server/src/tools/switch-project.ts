@@ -1,8 +1,8 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function switchProjectDef(fs: ClipfirstFs): ToolDef {
+export function switchProjectDef(fs: VideocityFs): ToolDef {
   return {
     name: "switch_project",
     description:

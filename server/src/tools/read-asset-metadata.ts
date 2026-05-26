@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function readAssetMetadataDef(fs: ClipfirstFs): ToolDef {
+export function readAssetMetadataDef(fs: VideocityFs): ToolDef {
   return {
     name: "read_asset_metadata",
     description:
@@ -34,7 +34,7 @@ export function readAssetMetadataDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerReadAssetMetadataTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerReadAssetMetadataTool(server: McpServer, fs: VideocityFs): void {
   const def = readAssetMetadataDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

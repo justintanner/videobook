@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
@@ -29,7 +29,7 @@ type TimelineConfig = {
   currentOrientation?: ViewerSize;
 };
 
-export function getTimelineDef(fs: ClipfirstFs): ToolDef {
+export function getTimelineDef(fs: VideocityFs): ToolDef {
   return {
     name: "get_timeline",
     description: "Get the timeline config for a project: { slots, render } where render is the orientation to produce",

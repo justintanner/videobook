@@ -91,7 +91,7 @@ describe("trim video in place and re-render e2e", () => {
 
   beforeAll(async () => {
     await queue.start();
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-e2e-trim-render-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-e2e-trim-render-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);

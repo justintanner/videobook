@@ -68,7 +68,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   beforeAll(async () => {
     await queue.start();
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-extract-frame-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-extract-frame-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

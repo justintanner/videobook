@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoReferenceToVideoRequestSchema } from "@apicity/fal/zod";
@@ -21,7 +21,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineVideoR2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineVideoR2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video_r2v_fal",
     description: "Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new vid- asset and enqueues a background job.",

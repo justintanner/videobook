@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { trimRange, trimRangeExact, assertSaneTrimOutput } from "./trim-video.js";
@@ -30,7 +30,7 @@ type EvenSplitPayload = {
 };
 
 async function buildChunk(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -70,7 +70,7 @@ async function buildChunk(
   }
 }
 
-export function registerEvenSplitJob(fs: ClipfirstFs): void {
+export function registerEvenSplitJob(fs: VideocityFs): void {
   registerJobHandler("even_split", async (payload) => {
     const { sourcePath, sourceAssetId, chunks, projectSlug, destination } = payload as EvenSplitPayload;
     const splitAtIso = new Date().toISOString();

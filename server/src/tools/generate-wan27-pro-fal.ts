@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -18,7 +18,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27ProFalDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27ProFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_pro_fal",
     description: "Generate an image via fal.ai using Wan 2.7 Pro text-to-image (higher quality variant). Creates a new img- asset and enqueues a background job.",

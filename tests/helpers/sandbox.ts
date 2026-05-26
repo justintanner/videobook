@@ -4,24 +4,24 @@ import * as os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { createFs, type ClipfirstFs } from 'vc-engine';
+import { createFs, type VideocityFs } from 'vc-engine';
 
 const execFileAsync = promisify(execFile);
 
 export interface Sandbox {
   dir: string;
   projectsDir: string;
-  fs: ClipfirstFs;
+  fs: VideocityFs;
   cleanup: () => Promise<void>;
 }
 
 export async function createSandbox(): Promise<Sandbox> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'clipfirst-test-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'videocity-test-'));
   const projectsDir = path.join(dir, 'projects');
   await fs.mkdir(projectsDir, { recursive: true });
 
   // Configure git for test environment
-  await execFileAsync('git', ['config', '--global', 'user.email', 'test@clipfirst.test'], {
+  await execFileAsync('git', ['config', '--global', 'user.email', 'test@videocity.test'], {
     env: { ...process.env, HOME: dir },
   }).catch(() => {});
   await execFileAsync('git', ['config', '--global', 'user.name', 'Test User'], {

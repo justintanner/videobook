@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -46,7 +46,7 @@ const generateGrokImagineVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 
-export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video",
     description: "Generate a video from 1-7 image asset(s) using Grok Imagine image-to-video. Multiple images act as references. Creates a new vid- asset and enqueues a background job.",
@@ -150,7 +150,7 @@ export function generateGrokImagineVideoDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateGrokImagineVideoTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineVideoTool(server: McpServer, fs: VideocityFs): void {
   const def = generateGrokImagineVideoDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

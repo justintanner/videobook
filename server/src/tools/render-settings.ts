@@ -1,9 +1,9 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { readRenderSettings, RENDER_ORIENTATIONS } from "./sync.js";
 
-export function renderSettingsDef(fs: ClipfirstFs): ToolDef {
+export function renderSettingsDef(fs: VideocityFs): ToolDef {
   return {
     name: "render_settings",
     description: "Fetch stored render settings for a single asset across all orientations",

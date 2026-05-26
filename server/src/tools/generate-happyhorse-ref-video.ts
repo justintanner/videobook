@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
@@ -40,7 +40,7 @@ const generateHappyhorseRefVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseRefVideoSchema>;
 
-export function generateHappyhorseRefVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateHappyhorseRefVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_happyhorse_ref_video",
     description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new vid- asset and enqueues a background job.",

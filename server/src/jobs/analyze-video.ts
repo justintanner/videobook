@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
@@ -53,7 +53,7 @@ function sampleFrames(frames: string[]): string[] {
   );
 }
 
-export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
+export function registerAnalyzeVideoJob(fs: VideocityFs): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
       assetId, assetDir, projectSlug, hasTranscription,
@@ -169,7 +169,7 @@ export function registerAnalyzeVideoJob(fs: ClipfirstFs): void {
 }
 
 async function maybeEnqueueAutoTranscribe(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   assetDir: string,
   projectSlug: string,

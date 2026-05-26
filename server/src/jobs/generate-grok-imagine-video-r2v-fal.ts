@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
@@ -19,7 +19,7 @@ type Payload = {
   resolution?: string;
 };
 
-export function registerGenerateGrokImagineVideoR2vFalJob(fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineVideoR2vFalJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_video_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {

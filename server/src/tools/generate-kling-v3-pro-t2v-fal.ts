@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3ProTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -23,7 +23,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateKlingV3ProT2vFalDef(fs: ClipfirstFs): ToolDef {
+export function generateKlingV3ProT2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_kling_v3_pro_t2v_fal",
     description: "Generate a video via fal.ai using Kling Video v3 Pro from a text prompt. Creates a new vid- asset and enqueues a background job.",

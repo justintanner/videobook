@@ -2,7 +2,7 @@ import { copyFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
@@ -27,7 +27,7 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-export function exportToDownloadsDef(fs: ClipfirstFs): ToolDef {
+export function exportToDownloadsDef(fs: VideocityFs): ToolDef {
   return {
     name: "export_to_downloads",
     description: "Copy an asset's original media file to the user's Downloads folder",

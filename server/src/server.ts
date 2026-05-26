@@ -1,11 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { registerAllTools } from "./tools/index.js";
 import { fs as defaultFs } from "./fs.js";
 
-export function createServer(fs?: ClipfirstFs): McpServer {
+export function createServer(fs?: VideocityFs): McpServer {
   const server = new McpServer({
-    name: "clipfirst",
+    name: "videocity",
     version: "0.0.1",
   });
 

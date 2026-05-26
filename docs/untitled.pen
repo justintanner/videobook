@@ -6,7 +6,7 @@
       "id": "uKRaH",
       "x": -50,
       "y": 2946,
-      "name": "ClipFirst: Design System",
+      "name": "Videocity: Design System",
       "width": 4800,
       "fill": "$--cf-background",
       "cornerRadius": 12,
@@ -9316,7 +9316,7 @@
                       "id": "3CAfq",
                       "name": "heroTitle",
                       "fill": "$--cf-foreground",
-                      "content": "CLIPFIRST",
+                      "content": "VIDEOCITY",
                       "fontFamily": "JetBrains Mono",
                       "fontSize": 28,
                       "fontWeight": "700",
@@ -11971,7 +11971,7 @@
                                       "name": "emailInput",
                                       "descendants": {
                                         "wLwNg": {
-                                          "content": "user@clipfirst.io"
+                                          "content": "user@videocity.io"
                                         }
                                       }
                                     }

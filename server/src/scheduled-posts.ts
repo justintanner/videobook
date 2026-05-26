@@ -35,7 +35,7 @@ const SAFE_TIMEOUT_MS = 2_147_483_000;
 function defaultStateFile(): string {
   return (
     process.env.SCHEDULED_POSTS_PATH
-    ?? join(homedir(), ".clipfirst", "scheduled-posts.json")
+    ?? join(homedir(), ".videocity", "scheduled-posts.json")
   );
 }
 

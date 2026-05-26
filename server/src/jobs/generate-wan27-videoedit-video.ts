@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -30,7 +30,7 @@ type GenerateWan27VideoeditVideoPayload = {
 };
 
 async function uploadSingle(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   provider: ReturnType<typeof kie>,
   input: RefInput,
   projectSlug: string,
@@ -38,7 +38,7 @@ async function uploadSingle(
   return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 }
 
-export function registerGenerateWan27VideoeditVideoJob(fs: ClipfirstFs): void {
+export function registerGenerateWan27VideoeditVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_wan27_videoedit_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,

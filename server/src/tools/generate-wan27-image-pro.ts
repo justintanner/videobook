@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -30,7 +30,7 @@ const generateWan27ImageProSchema = {
 
 type Args = SchemaArgs<typeof generateWan27ImageProSchema>;
 
-export function generateWan27ImageProDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27ImageProDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_image_pro",
     description: "Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
@@ -102,7 +102,7 @@ export function generateWan27ImageProDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateWan27ImageProTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateWan27ImageProTool(server: McpServer, fs: VideocityFs): void {
   const def = generateWan27ImageProDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

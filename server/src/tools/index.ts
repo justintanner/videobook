@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { createProjectDef } from "./create-project.js";
@@ -157,14 +157,14 @@ import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { watermarkVideoDef } from "./watermark-video.js";
 import { withLogging } from "./log-wrapper.js";
 
-export function registerAllTools(server: McpServer, fs: ClipfirstFs): void {
+export function registerAllTools(server: McpServer, fs: VideocityFs): void {
   const defs = getAllToolDefs(fs).map((def) => withLogging(def, fs));
   for (const def of defs) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }
 }
 
-export function getAllToolDefs(fs: ClipfirstFs): ToolDef[] {
+export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
   return [
     apiStatusDef(),
     estimateCostDef(fs),

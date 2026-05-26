@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2TextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -29,7 +29,7 @@ const generateGptImageTextSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageTextSchema>;
 
-export function generateGptImageTextDef(fs: ClipfirstFs): ToolDef {
+export function generateGptImageTextDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_gpt_image_text",
     description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.",
@@ -93,7 +93,7 @@ export function generateGptImageTextDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateGptImageTextTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateGptImageTextTool(server: McpServer, fs: VideocityFs): void {
   const def = generateGptImageTextDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

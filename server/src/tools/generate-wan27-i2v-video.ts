@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageToVideoRequestSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
@@ -31,7 +31,7 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `Frame slugs must be img-* assets, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -41,7 +41,7 @@ async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `first_clip_slug must be a vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -51,7 +51,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `driving_audio_slug must be an aud-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -80,7 +80,7 @@ const generateWan27I2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27I2vVideoSchema>;
 
-export function generateWan27I2vVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27I2vVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_i2v_video",
     description: "Generate a video using Wan 2.7 Image to Video with first/last frame image control, clip continuation, or driving audio. Creates a new vid- asset and enqueues a background job.",

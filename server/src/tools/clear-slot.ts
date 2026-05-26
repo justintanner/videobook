@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function clearSlotDef(fs: ClipfirstFs): ToolDef {
+export function clearSlotDef(fs: VideocityFs): ToolDef {
   return {
     name: "unassign_slot",
     description: "Clear an asset from a timeline slot (e.g. slot 's02' = index 1)",

@@ -67,8 +67,8 @@ interface SavedGenSettings {
 
 function genSettingsKey(category: string, projectSlug?: string): string {
   return projectSlug
-    ? `clipfirst:gen:${category}:${projectSlug}`
-    : `clipfirst:gen:${category}`;
+    ? `videocity:gen:${category}:${projectSlug}`
+    : `videocity:gen:${category}`;
 }
 
 function loadGenSettings(category: string, projectSlug?: string): SavedGenSettings | null {

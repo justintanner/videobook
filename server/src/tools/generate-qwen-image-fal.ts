@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -26,7 +26,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateQwenImageFalDef(fs: ClipfirstFs): ToolDef {
+export function generateQwenImageFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_qwen_image_fal",
     description: "Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new img- asset and enqueues a background job.",

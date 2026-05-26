@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { trimRange, assertSaneTrimOutput } from "./trim-video.js";
@@ -19,7 +19,7 @@ type SplitVideoPayload = {
 };
 
 async function buildChunk(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -41,7 +41,7 @@ async function buildChunk(
   await fs.writeMetadata(assetId, "original", provenance, projectSlug);
 }
 
-export function registerSplitVideoJob(fs: ClipfirstFs): void {
+export function registerSplitVideoJob(fs: VideocityFs): void {
   // The destination assets are brand-new, so no other job can hold a lease on
   // them; we run the two chunks in parallel against the read-only source.
   registerJobHandler("split_video", async (payload) => {

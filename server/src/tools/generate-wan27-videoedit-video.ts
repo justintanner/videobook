@@ -1,4 +1,4 @@
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
@@ -30,7 +30,7 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -40,7 +40,7 @@ async function resolveVideoSlug(fs: ClipfirstFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveImageSlug(fs: ClipfirstFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
   const manifest = await fs.getManifest(assetId, projectSlug);
@@ -69,7 +69,7 @@ const generateWan27VideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
 
-export function generateWan27VideoeditVideoDef(fs: ClipfirstFs): ToolDef {
+export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_videoedit_video",
     description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",

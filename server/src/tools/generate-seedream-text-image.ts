@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -30,7 +30,7 @@ const generateSeedreamTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateSeedreamTextImageSchema>;
 
-export function generateSeedreamTextImageDef(fs: ClipfirstFs): ToolDef {
+export function generateSeedreamTextImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_seedream_text_image",
     description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new img- asset and enqueues a background job.",
@@ -94,7 +94,7 @@ export function generateSeedreamTextImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateSeedreamTextImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateSeedreamTextImageTool(server: McpServer, fs: VideocityFs): void {
   const def = generateSeedreamTextImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

@@ -1,5 +1,5 @@
 import { alibaba, uploadFile } from "@apicity/alibaba";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 import { getApiKey } from "../api-key.js";
 
@@ -7,7 +7,7 @@ import { getApiKey } from "../api-key.js";
 // helper. Falls back to the free-host rotation if the policy fetch or OSS
 // POST fails.
 export async function uploadAssetToAlibaba(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   assetId: string,
   filename: string,
   projectSlug: string,

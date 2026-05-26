@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assessDialogQuality, readAndAssessDialog } from "./dialog-quality.js";
 import { createFsForTest } from "./fs.js";
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 
 describe("assessDialogQuality", () => {
   it("returns hasDialog=false with reason 'empty' for empty text", () => {
@@ -97,11 +97,11 @@ describe("assessDialogQuality", () => {
 });
 
 describe("readAndAssessDialog", () => {
-  let fs: ClipfirstFs;
+  let fs: VideocityFs;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-dialog-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-dialog-test-"));
     fs = createFsForTest(tempDir);
     await fs.createProject("test-proj");
   });

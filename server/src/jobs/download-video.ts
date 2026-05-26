@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
@@ -134,7 +134,7 @@ export function imageExtension(info: InfoResult): string {
   return IMAGE_EXTENSIONS.has(ext) ? `.${ext}` : ".jpg";
 }
 
-export function registerDownloadVideoJob(fs: ClipfirstFs): void {
+export function registerDownloadVideoJob(fs: VideocityFs): void {
   const ytdlp = new YtDlp();
 
   registerJobHandler("download_video", async (payload, ctx) => {

@@ -25,7 +25,7 @@ describe("generate_nano_banana_image tool", () => {
 
   beforeEach(async () => {
     delete process.env.KIE_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-nano-banana-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-nano-banana-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

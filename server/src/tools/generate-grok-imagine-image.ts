@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
-import type { ClipfirstFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
@@ -32,7 +32,7 @@ const generateGrokImagineImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 
-export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
+export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job.",
@@ -125,7 +125,7 @@ export function generateGrokImagineImageDef(fs: ClipfirstFs): ToolDef {
   };
 }
 
-export function registerGenerateGrokImagineImageTool(server: McpServer, fs: ClipfirstFs): void {
+export function registerGenerateGrokImagineImageTool(server: McpServer, fs: VideocityFs): void {
   const def = generateGrokImagineImageDef(fs);
   server.tool(def.name, def.description, def.schema, def.handler);
 }

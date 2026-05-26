@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { findPrimaryMediaFile } from "vc-engine";
 import { x as createX } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
@@ -49,7 +49,7 @@ function inferMediaType(filename: string): MediaTypeInfo | null {
 export type PostOrientation = "portrait" | "landscape";
 
 export interface PostToXArgs {
-  fs: ClipfirstFs;
+  fs: VideocityFs;
   assetId: string;
   projectSlug: string;
   text?: string;
@@ -84,7 +84,7 @@ async function maybeReorientVideo(
   const filter
     = `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,`
     + `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
-  const tempPath = join(tmpdir(), `clipfirst-orient-${randomUUID()}.mp4`);
+  const tempPath = join(tmpdir(), `videocity-orient-${randomUUID()}.mp4`);
   const args = [
     "-y",
     "-i",

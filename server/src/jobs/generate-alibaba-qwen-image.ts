@@ -1,4 +1,4 @@
-import type { ClipfirstFs } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { alibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
@@ -24,7 +24,7 @@ type GenerateAlibabaQwenImagePayload = {
 };
 
 async function runQwenImageJob(
-  fs: ClipfirstFs,
+  fs: VideocityFs,
   payload: GenerateAlibabaQwenImagePayload,
   taskType: "alibaba_qwen_image" | "alibaba_qwen_image_edit",
   ctx: import("../queue.js").JobHandlerContext,
@@ -108,13 +108,13 @@ async function runQwenImageJob(
   return { success: true, requestId: response.request_id };
 }
 
-export function registerGenerateAlibabaQwenImageJob(fs: ClipfirstFs): void {
+export function registerGenerateAlibabaQwenImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_alibaba_qwen_image", async (payload, ctx) => {
     return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image", ctx);
   });
 }
 
-export function registerGenerateAlibabaQwenImageEditJob(fs: ClipfirstFs): void {
+export function registerGenerateAlibabaQwenImageEditJob(fs: VideocityFs): void {
   registerJobHandler("generate_alibaba_qwen_image_edit", async (payload, ctx) => {
     return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image_edit", ctx);
   });

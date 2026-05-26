@@ -70,7 +70,7 @@ describe("crop_video tool", () => {
 
   beforeAll(async () => {
     await queue.start();
-    fixtureDir = await mkdtemp(join(tmpdir(), "clipfirst-crop-fixture-"));
+    fixtureDir = await mkdtemp(join(tmpdir(), "videocity-crop-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
   }, 60_000);
@@ -81,7 +81,7 @@ describe("crop_video tool", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "clipfirst-crop-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-crop-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
