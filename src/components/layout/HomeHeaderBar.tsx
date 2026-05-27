@@ -6,13 +6,14 @@ import type { UseMcpResult } from 'use-mcp/react';
 interface HomeHeaderBarProps {
   pulseKey: number;
   projectSlug: string | undefined;
+  assetCount: number | undefined;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
   onStatusClick: () => void;
   onAnimateCommand: (text: string) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -28,6 +29,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, callTool, onProjectChange
         {/* Project selector */}
         <ProjectDropdown
           projectSlug={projectSlug}
+          assetCount={assetCount}
           callTool={callTool}
           onProjectChange={onProjectChange}
         />

@@ -70,4 +70,36 @@ describe("list_projects tool", () => {
     const slugs = data.map((p: { slug: string }) => p.slug).sort();
     expect(slugs).toEqual(["alpha", "beta"]);
   });
+
+  it("returns asset counts for each project", async () => {
+    client = await createTestClient(tempDir);
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "empty" },
+    });
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "with-assets" },
+    });
+    await client.callTool({
+      name: "upload_file",
+      arguments: {
+        project_slug: "with-assets",
+        filename: "note.md",
+        data: Buffer.from("hello").toString("base64"),
+      },
+    });
+    const result = await client.callTool({
+      name: "list_projects",
+      arguments: {},
+    });
+    const content = result.content as Array<{ type: string; text: string }>;
+    const data = JSON.parse(content[0].text) as Array<{
+      slug: string;
+      asset_count: number;
+    }>;
+    const counts = new Map(data.map((project) => [project.slug, project.asset_count]));
+    expect(counts.get("empty")).toBe(0);
+    expect(counts.get("with-assets")).toBe(1);
+  });
 });

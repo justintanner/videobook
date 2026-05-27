@@ -4,6 +4,7 @@ import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { createProjectDef } from "./create-project.js";
 import { renameProjectDef } from "./rename-project.js";
+import { deleteProjectDef } from "./delete-project.js";
 import { switchProjectDef } from "./switch-project.js";
 import { listProjectsDef } from "./list-projects.js";
 import { getDefaultProjectDef } from "./get-default-project.js";
@@ -170,6 +171,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     estimateCostDef(fs),
     createProjectDef(fs),
     renameProjectDef(fs),
+    deleteProjectDef(fs),
     switchProjectDef(fs),
     listProjectsDef(fs),
     getDefaultProjectDef(fs),

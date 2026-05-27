@@ -13,8 +13,14 @@ export function listProjectsDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { sort } = args as { sort?: "newest" | "oldest" };
       const projects = await fs.listProjects({ sort });
+      const projectsWithAssetCounts = await Promise.all(
+        projects.map(async (project) => {
+          const assets = await fs.listAssets(project.slug);
+          return { ...project, asset_count: assets.length };
+        }),
+      );
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(projects) }],
+        content: [{ type: "text" as const, text: JSON.stringify(projectsWithAssetCounts) }],
       };
     },
   };

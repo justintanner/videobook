@@ -4,6 +4,7 @@ import type { UseMcpResult } from "use-mcp/react";
 export interface Project {
   slug: string;
   path: string;
+  asset_count: number;
 }
 
 interface UseListProjectsResult {
@@ -22,7 +23,7 @@ let cachedProjects: Project[] = [];
 export function reduceProjectsState(prev: Project[], parsed: Project[]): Project[] {
   const same =
     parsed.length === prev.length &&
-    parsed.every((p, i) => p.slug === prev[i]?.slug);
+    parsed.every((p, i) => p.slug === prev[i]?.slug && p.asset_count === prev[i]?.asset_count);
   return same ? prev : parsed;
 }
 

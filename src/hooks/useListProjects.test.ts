@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { reduceProjectsState, type Project } from "./useListProjects.js";
 
-const p = (slug: string): Project => ({ slug, path: `/projects/${slug}` });
+const p = (slug: string, assetCount = 0): Project => ({ slug, path: `/projects/${slug}`, asset_count: assetCount });
 
 describe("reduceProjectsState", () => {
   it("adopts parsed when prev is empty", () => {
@@ -31,6 +31,12 @@ describe("reduceProjectsState", () => {
   it("adopts parsed when order differs", () => {
     const prev = [p("inject"), p("nails")];
     const parsed = [p("nails"), p("inject")];
+    expect(reduceProjectsState(prev, parsed)).toBe(parsed);
+  });
+
+  it("adopts parsed when an asset count differs", () => {
+    const prev = [p("inject", 0), p("nails", 1)];
+    const parsed = [p("inject", 1), p("nails", 1)];
     expect(reduceProjectsState(prev, parsed)).toBe(parsed);
   });
 

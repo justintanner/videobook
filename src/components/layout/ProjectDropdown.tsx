@@ -1,39 +1,60 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Pencil, Check, X, Plus } from 'lucide-react'
+import { Pencil, Check, X, Plus, Trash2, Loader2 } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { ProjectButton } from './ProjectButton'
 import { useListProjects } from '@/hooks/useListProjects'
 import { useRenameProject } from '@/hooks/useRenameProject'
 import { useCreateProject } from '@/hooks/useCreateProject'
+import { useDeleteProject } from '@/hooks/useDeleteProject'
 import { cn } from '@/lib/utils'
 import type { UseMcpResult } from 'use-mcp/react'
+
 interface ProjectDropdownProps {
   projectSlug: string | undefined
+  assetCount: number | undefined
   callTool: UseMcpResult['callTool']
   onProjectChange: (slug: string) => void
 }
 
-export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: ProjectDropdownProps) {
+function formatAssetCount(count: number): string {
+  return count === 1 ? '1 asset' : `${count} assets`
+}
+
+export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectChange }: ProjectDropdownProps) {
   const [open, setOpen] = useState(false)
   const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
   const [newSlugValue, setNewSlugValue] = useState('')
   const [snapshotSlug, setSnapshotSlug] = useState(projectSlug)
+  const [confirmingDeleteSlug, setConfirmingDeleteSlug] = useState<string | null>(null)
+  const [deletingSlug, setDeletingSlug] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const editInputRef = useRef<HTMLInputElement>(null)
   const newInputRef = useRef<HTMLInputElement>(null)
 
-  const { projects, refresh } = useListProjects(callTool)
+  const { projects, loading, refresh } = useListProjects(callTool)
   const { renameProject } = useRenameProject(callTool)
   const { createProject } = useCreateProject(callTool)
+  const { deleteProject } = useDeleteProject(callTool)
+
+  const activeProject = projects.find((project) => project.slug === projectSlug)
+  const displayedAssetCount = assetCount ?? activeProject?.asset_count
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
     if (nextOpen) {
       setSnapshotSlug(projectSlug)
       refresh()
+    } else {
+      setEditingSlug(null)
+      setEditValue('')
+      setCreatingNew(false)
+      setNewSlugValue('')
+      setConfirmingDeleteSlug(null)
+      setDeleteError(null)
     }
   }, [projectSlug, refresh])
 
@@ -55,7 +76,13 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
     setNewSlugValue('')
   }
 
+  function cancelDelete() {
+    setConfirmingDeleteSlug(null)
+    setDeleteError(null)
+  }
+
   function handleSwitch(slug: string) {
+    if (deletingSlug) return
     onProjectChange(slug)
     setOpen(false)
   }
@@ -87,27 +114,65 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
     }
   }
 
+  async function handleDeleteConfirm(slug: string) {
+    setDeletingSlug(slug)
+    setDeleteError(null)
+    const result = await deleteProject(slug)
+    setDeletingSlug(null)
+    if (!result.ok) {
+      setDeleteError(result.error)
+      return
+    }
+
+    const nextSlug = result.value.default_project_slug ?? projects.find((project) => project.slug !== slug)?.slug
+    cancelDelete()
+    refresh()
+    if (slug === projectSlug && nextSlug) {
+      onProjectChange(nextSlug)
+      setOpen(false)
+    }
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <ProjectButton projectSlug={projectSlug} />
+        <ProjectButton projectSlug={projectSlug} assetCount={displayedAssetCount} />
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-64 p-0 bg-card border-zinc-500/25"
+        className="w-80 p-0 bg-card border-zinc-500/25"
         onEscapeKeyDown={(e) => {
-          if (editingSlug || creatingNew) {
+          if (editingSlug || creatingNew || confirmingDeleteSlug) {
             e.preventDefault()
             if (editingSlug) cancelEdit()
             if (creatingNew) cancelCreate()
+            if (confirmingDeleteSlug) cancelDelete()
           }
         }}
       >
-        {/* Project list */}
-        <div className="max-h-60 overflow-y-auto py-1">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-500/20">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            Projects
+          </span>
+          <span className="font-mono text-[10px] text-zinc-500">
+            {projects.length} total
+          </span>
+        </div>
+
+        <div className="max-h-72 overflow-y-auto py-1">
+          {loading && projects.length === 0 ? (
+            <div className="flex items-center gap-2 px-3 py-3 text-zinc-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span className="font-mono text-xs">Loading projects</span>
+            </div>
+          ) : null}
           {projects.map((project) => {
             const isActive = project.slug === snapshotSlug
             const isEditing = editingSlug === project.slug
+            const isConfirmingDelete = confirmingDeleteSlug === project.slug
+            const isDeleting = deletingSlug === project.slug
+            const canDelete = projects.length > 1
+            const countLabel = formatAssetCount(project.asset_count)
 
             if (isEditing) {
               return (
@@ -123,17 +188,66 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                     className="h-7 text-xs font-mono flex-1"
                   />
                   <button
+                    type="button"
                     onClick={handleRenameConfirm}
                     className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                    aria-label="Save project name"
                   >
                     <Check className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    type="button"
                     onClick={cancelEdit}
                     className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                    aria-label="Cancel rename"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                </div>
+              )
+            }
+
+            if (isConfirmingDelete) {
+              return (
+                <div
+                  key={project.slug}
+                  className="px-3 py-2 bg-red-950/20 border-y border-red-500/15"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="w-3.5 h-3.5 text-red-300 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs text-red-100 truncate">
+                        Delete {project.slug}?
+                      </div>
+                      <div className="font-mono text-[10px] text-red-200/60">
+                        {countLabel} will be removed
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteConfirm(project.slug)}
+                      disabled={isDeleting}
+                      className="p-1 text-red-300 hover:text-red-100 disabled:opacity-50 transition-colors"
+                      aria-label="Confirm delete project"
+                    >
+                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelDelete}
+                      disabled={isDeleting}
+                      className="p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors"
+                      aria-label="Cancel delete project"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {deleteError ? (
+                    <div className="mt-1 font-mono text-[10px] text-red-200/80 truncate">
+                      {deleteError}
+                    </div>
+                  ) : null}
                 </div>
               )
             }
@@ -142,9 +256,10 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
               <div
                 key={project.slug}
                 className={cn(
-                  'group/row flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
+                  'group/row flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors',
                   'hover:bg-zinc-500/10',
-                  isActive && 'bg-zinc-500/5'
+                  isActive && 'bg-zinc-500/5',
+                  isDeleting && 'pointer-events-none opacity-60'
                 )}
                 onClick={() => handleSwitch(project.slug)}
               >
@@ -157,25 +272,58 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                 <span className="font-mono text-xs tracking-wide text-zinc-400/80 flex-1 truncate">
                   {project.slug}
                 </span>
+                <span
+                  className={cn(
+                    'shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none',
+                    project.asset_count === 0
+                      ? 'border-amber-400/20 bg-amber-400/10 text-amber-200/80'
+                      : 'border-zinc-500/20 bg-zinc-500/10 text-zinc-400/80'
+                  )}
+                  title={countLabel}
+                >
+                  {project.asset_count}
+                </span>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
+                    cancelDelete()
                     setEditingSlug(project.slug)
                     setEditValue(project.slug)
                   }}
                   className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all"
+                  aria-label={`Rename ${project.slug}`}
                 >
                   <Pencil className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!canDelete) return
+                    cancelEdit()
+                    cancelCreate()
+                    setConfirmingDeleteSlug(project.slug)
+                  }}
+                  disabled={!canDelete}
+                  className={cn(
+                    'p-1 opacity-0 group-hover/row:opacity-100 transition-all',
+                    canDelete
+                      ? 'text-muted-foreground hover:text-red-300'
+                      : 'text-muted-foreground/30 cursor-not-allowed'
+                  )}
+                  title={canDelete ? `Delete ${project.slug}` : 'Create another project before deleting this one'}
+                  aria-label={`Delete ${project.slug}`}
+                >
+                  <Trash2 className="w-3 h-3" />
                 </button>
               </div>
             )
           })}
         </div>
 
-        {/* Separator */}
         <div className="border-t border-zinc-500/20" />
 
-        {/* New project */}
         <div className="py-1">
           {creatingNew ? (
             <div className="flex items-center gap-1 px-2 py-1">
@@ -191,14 +339,18 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
                 className="h-7 text-xs font-mono flex-1"
               />
               <button
+                type="button"
                 onClick={handleCreateConfirm}
                 className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                aria-label="Create project"
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
               <button
+                type="button"
                 onClick={cancelCreate}
                 className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                aria-label="Cancel new project"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -206,7 +358,10 @@ export function ProjectDropdown({ projectSlug, callTool, onProjectChange }: Proj
           ) : (
             <div
               className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-zinc-500/10 transition-colors"
-              onClick={() => setCreatingNew(true)}
+              onClick={() => {
+                cancelDelete()
+                setCreatingNew(true)
+              }}
             >
               <Plus className="w-3.5 h-3.5 text-zinc-400/60" />
               <span className="font-mono text-xs tracking-wide text-zinc-400/60">

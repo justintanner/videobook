@@ -707,6 +707,7 @@ export function HomePage() {
           <HomeHeaderBar
             pulseKey={syncCount}
             projectSlug={projectSlug}
+            assetCount={assetList?.length}
             callTool={callTool}
             onProjectChange={handleProjectChange}
             onStatusClick={() => setStatusOpen(true)}
