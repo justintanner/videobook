@@ -72,7 +72,7 @@ describe("generate_gpt_image tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("at least 1 element");
+    expect(content[0].text).toMatch(/at least 1 element|>=1 items/);
   });
 
   it("returns error with more than 16 images", async () => {
@@ -89,7 +89,7 @@ describe("generate_gpt_image tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("at most 16 element");
+    expect(content[0].text).toMatch(/at most 16 element|<=16 items/);
   });
 
   it("returns error when image_slugs entry does not start with img-", async () => {

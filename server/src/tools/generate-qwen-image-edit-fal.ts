@@ -3,20 +3,35 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
+import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
 
-// `image_size` upstream is a union of (enum | {width,height}). Only the enum branch is
-// exposed here; custom width/height isn't wired through the UI.
-// `instanceof z.ZodEnum` fails because @apicity/fal bundles its own Zod instance,
-// so branch detection uses `_def.typeName` instead.
-type ZodEnumLike = { _def: { typeName: "ZodEnum" }; options: readonly string[] };
-const falImageSizeEnum = (base.image_size.unwrap().options as readonly unknown[])
-  .find((opt): opt is ZodEnumLike => (opt as { _def?: { typeName?: string } })._def?.typeName === "ZodEnum");
+type ZodBranchLike = {
+  _def?: { typeName?: string; type?: string; options?: readonly unknown[] };
+  options?: readonly unknown[];
+  unwrap?: () => unknown;
+  constructor?: { name?: string };
+};
+
+function isEnumBranch(schema: unknown): boolean {
+  const branch = schema as ZodBranchLike;
+  return branch._def?.typeName === "ZodEnum" ||
+    branch._def?.type === "enum" ||
+    branch.constructor?.name === "ZodEnum";
+}
+
+function unionBranches(schema: ZodBranchLike): readonly unknown[] {
+  const inner = schema.unwrap?.() ?? schema;
+  const branch = inner as ZodBranchLike;
+  return branch.options ?? branch._def?.options ?? [];
+}
+
+const falImageSizeEnum = unionBranches(base.image_size).find(isEnumBranch);
 if (!falImageSizeEnum) throw new Error("FalQwenImageEditRequestSchema.image_size changed shape");
-const falImageSizeOptions = falImageSizeEnum.options as readonly [string, ...string[]];
+const falImageSizeOptions = enumOptions(falImageSizeEnum);
 type FalImageSize = typeof falImageSizeOptions[number];
 
 const outputFormatOptions = base.output_format.unwrap().options as readonly [string, ...string[]];

@@ -74,7 +74,7 @@ describe("generate_nano_banana_image tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("at most 8 element");
+    expect(content[0].text).toMatch(/at most 8 element|<=8 items/);
   });
 
   it("returns error when image_slugs entry does not start with img-", async () => {
