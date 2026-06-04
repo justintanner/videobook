@@ -61,4 +61,50 @@ describe("kie paygate", () => {
     expect(parsed.payload.maxSpendUsd).toBeGreaterThan(0);
     expect(parsed.payload.exp - parsed.payload.iat).toBe(60);
   });
+
+  it("rejects a grok-imagine/extend request with no resolution hint as unbounded", () => {
+    // grok-imagine/extend keys its rate off (extend_times, resolution). The kie
+    // input schema carries only task_id + extend_times, so without a resolution
+    // hint the lookup misses ("variant '6'") and the estimate is unbounded.
+    const request = {
+      model: "grok-imagine/extend" as const,
+      input: {
+        task_id: "task-123",
+        prompt: "extend it",
+        extend_at: "4",
+        extend_times: "6" as const,
+      },
+    };
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  });
+
+  it("mints a bounded OTP for a grok-imagine/extend request with a top-level resolution hint", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const privatePath = join(tempDir, "paygate-private.pem");
+    await writeFile(privatePath, privateKey, "utf8");
+    process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH = privatePath;
+    ensurePaygateKeyPaths();
+
+    const request = {
+      model: "grok-imagine/extend" as const,
+      resolution: "480p" as const,
+      input: {
+        task_id: "task-123",
+        prompt: "extend it",
+        extend_at: "4",
+        extend_times: "6" as const,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    // 6|480p is a flat per-generation rate of $0.05 in the kie rate table.
+    expect(parsed.payload.maxSpendUsd).toBe(0.05);
+    // The resolution hint must be part of the hashed request so the paygate
+    // verifies against the same payload that gets submitted.
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
 });

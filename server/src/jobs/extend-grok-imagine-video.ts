@@ -1,4 +1,5 @@
 import type { VideocityFs } from "vc-engine";
+import type { GrokImagineResolution, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -29,8 +30,23 @@ export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
     }
     const kieTaskId = kieTaskIdResult.value.taskId;
 
-    const request = {
-      model: "grok-imagine/extend" as const,
+    // grok-imagine/extend inherits its resolution from the source video — the
+    // kie input schema only carries task_id + extend_times. The cost estimator
+    // (and the paygate OTP minted from this request) keys the rate off
+    // (extend_times, resolution); without a resolution the lookup misses and
+    // the estimate is rejected as unbounded. Surface the source video's
+    // resolution as a top-level hint (mirrors veo3's top-level `duration` hint;
+    // kie's createTask ignores unknown top-level fields), defaulting to the
+    // grok-imagine default when the source predates resolution metadata.
+    const sourcePayloadResult = await fs.readMetadata<{ input?: { resolution?: GrokImagineResolution } }>(
+      sourceVideoId, "generation-payload", projectSlug,
+    );
+    const resolution: GrokImagineResolution =
+      (sourcePayloadResult.ok && sourcePayloadResult.value?.input?.resolution) || "480p";
+
+    const request: MediaGenerationRequest & { resolution: GrokImagineResolution } = {
+      model: "grok-imagine/extend",
+      resolution,
       input: {
         task_id: kieTaskId,
         prompt,
