@@ -718,3 +718,29 @@ describe("performSync — auto-transcribe", () => {
     expect(result.auto_transcribe.length).toBe(0);
   });
 });
+
+describe("isTransientKieFailure", () => {
+  it("treats a 500 still in flight (no completeTime) as transient", async () => {
+    const { isTransientKieFailure } = await import("./sync.js");
+    expect(isTransientKieFailure({ state: "fail", failCode: "500", failMsg: "Internal Error, Please try again later." })).toBe(true);
+  });
+
+  it("treats a 500 that has terminally completed as a real failure", async () => {
+    const { isTransientKieFailure } = await import("./sync.js");
+    // Mirrors the actual KIE recordInfo for a failed grok-imagine/extend task:
+    // state "fail" with failCode 500 but a completeTime stamped — re-polling
+    // can never flip it to success, so it must not be left pending.
+    expect(isTransientKieFailure({ state: "fail", failCode: "500", completeTime: 1780581979924, costTime: 0 })).toBe(false);
+  });
+
+  it("treats a completeTime of 0 as not-yet-completed", async () => {
+    const { isTransientKieFailure } = await import("./sync.js");
+    expect(isTransientKieFailure({ state: "fail", failCode: "500", completeTime: 0 })).toBe(true);
+  });
+
+  it("never treats a non-500 failure as transient", async () => {
+    const { isTransientKieFailure } = await import("./sync.js");
+    expect(isTransientKieFailure({ state: "fail", failCode: "400", failMsg: "bad request" })).toBe(false);
+    expect(isTransientKieFailure({ state: "fail" })).toBe(false);
+  });
+});

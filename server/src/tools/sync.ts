@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { kie, KieError } from "@apicity/kie";
-import type { KieTaskInfo } from "@apicity/kie";
+import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
 import { xai, XaiError } from "@apicity/xai";
 import { alibaba, AlibabaError } from "@apicity/alibaba";
 import { fal, FalError } from "@apicity/fal";
@@ -91,6 +91,18 @@ function isKiePendingTask(task: PendingTask): boolean {
 
 function isQueuedKiePendingTask(task: PendingTask): boolean {
   return task.taskId === QUEUED_TASK_ID && isKiePendingTask(task);
+}
+
+/** failCode "500" is kie's transient internal error ("please try again
+ *  later"). It's only worth leaving the task pending for a re-poll while the
+ *  job is still in flight — once kie stamps a `completeTime`, the task record
+ *  is final and re-polling the same taskId can never flip to success. Treating
+ *  a completed 500 as transient strands the asset in "working" until the 30m
+ *  sync timeout (PENDING_TASK_TIMEOUT_MS) and buries the real failure message,
+ *  so only a 500 with no completeTime is considered retryable. */
+export function isTransientKieFailure(data: KieTaskInfoData): boolean {
+  if (data.failCode !== "500") return false;
+  return !(typeof data.completeTime === "number" && data.completeTime > 0);
 }
 
 function buildFrameDirs(
@@ -813,11 +825,10 @@ async function processSyncedTask(
     result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
   } else if (data?.state === "fail") {
     const failMsg = data.failMsg ?? "unknown error";
-    // failCode "500" is kie's transient internal error ("please try again
-    // later") — the task may still complete on their side. Stay pending so
-    // subsequent polls can pick it up; the 30m sync timeout (PENDING_TASK_TIMEOUT_MS)
-    // ages it out if it really stays dead.
-    if (data.failCode === "500") {
+    // A kie 500 is only retryable while the task is still in flight; once it
+    // has terminally completed, surface the failure instead of stranding the
+    // asset as "working" until the 30m sync timeout. See isTransientKieFailure.
+    if (isTransientKieFailure(data)) {
       result.pending.push({
         assetId: task.assetId,
         taskType: task.taskType,
