@@ -2,7 +2,7 @@ import type { VideocityFs } from "vc-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadBytesToFreeHost, contentHash } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -26,9 +26,7 @@ export function registerIsolateVocalsJob(fs: VideocityFs): void {
       audioFilename, assetId, assetDir, projectSlug, isAudioAsset,
     } = payload as IsolateVocalsPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     // Read audio file from asset
     const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
@@ -74,24 +72,17 @@ export function registerIsolateVocalsJob(fs: VideocityFs): void {
         audio_url: downloadUrl,
       },
     };
-    const taskId = await submitMediaJob(provider, request);
-
-    // Write pending task
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "isolate_vocals",
-        assetId,
-        assetDir,
-        meta: {
-          isAudioAsset,
-          ...(originalDuration !== undefined ? { originalDuration } : {}),
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "isolate_vocals",
+      assetId,
+      assetDir,
+      projectSlug,
+      meta: {
+        isAudioAsset,
+        ...(originalDuration !== undefined ? { originalDuration } : {}),
+      },
+    });
 
     return { success: true, taskId };
   });

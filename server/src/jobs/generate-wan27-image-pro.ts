@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -27,9 +27,7 @@ export function registerGenerateWan27ImageProJob(fs: VideocityFs): void {
       sourceImageIds, projectSlug, aspectRatio, resolution, seed, nsfwChecker,
     } = payload as GenerateWan27ImageProPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const input of imageInputs) {
@@ -44,27 +42,21 @@ export function registerGenerateWan27ImageProJob(fs: VideocityFs): void {
       { prompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_image_pro",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
-        meta: {
-          sourceImageIds,
-          prompt,
-          ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-          ...(seed !== undefined ? { seed } : {}),
-          ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_image_pro",
+      assetId: imgAssetId,
+      assetDir: imgAssetDir,
+      projectSlug,
+      meta: {
+        sourceImageIds,
+        prompt,
+        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+        ...(nsfwChecker !== undefined ? { nsfwChecker } : {}),
+      },
+    });
 
     return { success: true, taskId };
   });

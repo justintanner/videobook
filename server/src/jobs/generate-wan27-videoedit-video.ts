@@ -1,5 +1,6 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -31,7 +32,6 @@ type GenerateWan27VideoeditVideoPayload = {
 
 async function uploadSingle(
   fs: VideocityFs,
-  provider: ReturnType<typeof kie>,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
@@ -47,37 +47,29 @@ export function registerGenerateWan27VideoeditVideoJob(fs: VideocityFs): void {
       resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27VideoeditVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
+    requireApiKey("KIE_API_KEY");
 
-    const provider = kie({ apiKey, timeout: 60_000 });
-
-    const videoUrl = await uploadSingle(fs, provider, videoInput, projectSlug);
-    const referenceImageUrl = imageInput ? await uploadSingle(fs, provider, imageInput, projectSlug) : undefined;
+    const videoUrl = await uploadSingle(fs, videoInput, projectSlug);
+    const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput, projectSlug) : undefined;
 
     const request = buildWan27VideoEditPayload(
       { prompt, negative_prompt, resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed },
       { videoUrl, referenceImageUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_videoedit_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          prompt: prompt ?? "",
-          mode: "videoedit",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_videoedit_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        prompt: prompt ?? "",
+        mode: "videoedit",
+        sourceImageIds,
+        sourceVideoIds,
+        sourceAudioIds,
+      },
+    });
 
     return { success: true, taskId };
   });

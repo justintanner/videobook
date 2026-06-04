@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import type { GrokImageToVideoDuration } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -81,9 +81,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
     }
 
     // Kie path — async task-based generation
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const downloadUrls: string[] = [];
     for (let i = 0; i < sourceImageIds.length; i++) {
@@ -94,27 +92,20 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
       { prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker },
       downloadUrls,
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    await fs.writeMetadata(vidAssetId, "kie-task-id", { taskId }, projectSlug);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "grok_imagine_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          sourceImageIds,
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(mode !== undefined ? { mode } : {}),
-          ...(duration !== undefined ? { duration } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "grok_imagine_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        sourceImageIds,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(mode !== undefined ? { mode } : {}),
+        ...(duration !== undefined ? { duration } : {}),
+        ...(resolution !== undefined ? { resolution } : {}),
+      },
+    });
 
     return { success: true, taskId };
   });

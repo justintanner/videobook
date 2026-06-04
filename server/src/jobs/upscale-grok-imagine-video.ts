@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 type UpscaleGrokImagineVideoPayload = {
@@ -17,15 +17,13 @@ export function registerUpscaleGrokImagineVideoJob(fs: VideocityFs): void {
       sourceVideoId, vidAssetId, vidAssetDir, projectSlug,
     } = payload as UpscaleGrokImagineVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
+    requireApiKey("KIE_API_KEY");
 
     const kieTaskIdResult = await fs.readMetadata<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
     const kieTaskId = kieTaskIdResult.value.taskId;
-
-    const provider = kie({ apiKey, timeout: 120_000 });
 
     const request = {
       model: "grok-imagine/upscale" as const,
@@ -34,23 +32,17 @@ export function registerUpscaleGrokImagineVideoJob(fs: VideocityFs): void {
       },
     };
 
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "grok_imagine_upscale_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          sourceVideoId,
-          upscale: true,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "grok_imagine_upscale_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        sourceVideoId,
+        upscale: true,
+      },
+    });
 
     return { success: true, taskId };
   });

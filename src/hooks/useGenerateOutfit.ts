@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
-import { modelDisplay } from "@apicity/cost";
+import { modelDisplay } from "@/lib/model-display";
 import { toast } from "@/hooks/useToast";
 
 export const OUTFIT_CUSTOM_PROMPT_MAX = 500;

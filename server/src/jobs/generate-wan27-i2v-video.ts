@@ -1,5 +1,6 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -31,7 +32,6 @@ type GenerateWan27I2vVideoPayload = {
 
 async function uploadInput(
   fs: VideocityFs,
-  provider: ReturnType<typeof kie>,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
@@ -47,39 +47,31 @@ export function registerGenerateWan27I2vVideoJob(fs: VideocityFs): void {
       resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27I2vVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
+    requireApiKey("KIE_API_KEY");
 
-    const provider = kie({ apiKey, timeout: 60_000 });
-
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, provider, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, provider, lastFrame, projectSlug) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, provider, firstClip, projectSlug) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, provider, drivingAudio, projectSlug) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug) : undefined;
 
     const request = buildWan27FramesVideoPayload(
       { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_i2v_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          prompt,
-          mode: "i2v",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_i2v_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        prompt,
+        mode: "i2v",
+        sourceImageIds,
+        sourceVideoIds,
+        sourceAudioIds,
+      },
+    });
 
     return { success: true, taskId };
   });

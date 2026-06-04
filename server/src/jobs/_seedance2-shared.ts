@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -55,8 +55,7 @@ export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
       replaceAudioWith,
     } = payload as unknown as Seedance2JobPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
       ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug)
@@ -88,14 +87,12 @@ export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
       },
     );
 
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-
-    const ptResult = await fs.pendingTasks.write(projectSlug, {
-      taskId,
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
       taskType: "seedance2_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
+      projectSlug,
       meta: {
         prompt,
         mode: "all",
@@ -104,11 +101,8 @@ export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
         sourceAudioIds,
         ...(replaceAudioWith ? { replaceAudioWith } : {}),
       },
-    }, ctx.getOwnerId());
-    if (!ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${ptResult.error.message}`);
-    if (ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
+    });
 
-    ctx.setLease({ kind: "task", taskId });
     return { success: true, taskId };
   });
 }

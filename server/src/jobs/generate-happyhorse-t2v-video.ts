@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseT2vPayload } from "../payload-builders.js";
@@ -20,25 +20,17 @@ export function registerGenerateHappyhorseT2vVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_happyhorse_t2v_video", async (payload, ctx) => {
     const { vidAssetId, vidAssetDir, projectSlug, prompt, resolution, aspect_ratio, duration, seed } = payload as GenerateHappyhorseT2vVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const request = buildHappyHorseT2vPayload({ prompt, resolution, aspect_ratio, duration, seed });
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "happyhorse_t2v_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: { prompt, mode: "t2v" },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "happyhorse_t2v_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: { prompt, mode: "t2v" },
+    });
 
     return { success: true, taskId };
   });

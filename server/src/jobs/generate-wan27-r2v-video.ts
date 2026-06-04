@@ -1,5 +1,6 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -32,7 +33,6 @@ type GenerateWan27R2vVideoPayload = {
 
 async function uploadInputs(
   fs: VideocityFs,
-  provider: ReturnType<typeof kie>,
   inputs: RefInput[],
   projectSlug: string,
 ): Promise<string[]> {
@@ -45,7 +45,6 @@ async function uploadInputs(
 
 async function uploadSingle(
   fs: VideocityFs,
-  provider: ReturnType<typeof kie>,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
@@ -61,39 +60,31 @@ export function registerGenerateWan27R2vVideoJob(fs: VideocityFs): void {
       resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27R2vVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
+    requireApiKey("KIE_API_KEY");
 
-    const provider = kie({ apiKey, timeout: 60_000 });
-
-    const referenceImageUrls = await uploadInputs(fs, provider, imageInputs, projectSlug);
-    const referenceVideoUrls = await uploadInputs(fs, provider, videoInputs, projectSlug);
-    const firstFrameUrl = firstFrame ? await uploadSingle(fs, provider, firstFrame, projectSlug) : undefined;
-    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, provider, voiceRef, projectSlug) : undefined;
+    const referenceImageUrls = await uploadInputs(fs, imageInputs, projectSlug);
+    const referenceVideoUrls = await uploadInputs(fs, videoInputs, projectSlug);
+    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame, projectSlug) : undefined;
+    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef, projectSlug) : undefined;
 
     const request = buildWan27ReferenceVideoPayload(
       { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { referenceImageUrls, referenceVideoUrls, firstFrameUrl, referenceVoiceUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_r2v_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          prompt,
-          mode: "reference",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_r2v_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        prompt,
+        mode: "reference",
+        sourceImageIds,
+        sourceVideoIds,
+        sourceAudioIds,
+      },
+    });
 
     return { success: true, taskId };
   });

@@ -1,5 +1,6 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -35,9 +36,7 @@ export function registerExtendWan27VideoJob(fs: VideocityFs): void {
       resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as ExtendWan27VideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
 
@@ -45,26 +44,20 @@ export function registerExtendWan27VideoJob(fs: VideocityFs): void {
       { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstClipUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_extend_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          prompt,
-          mode: "extend",
-          sourceImageIds,
-          sourceVideoIds,
-          sourceAudioIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_extend_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        prompt,
+        mode: "extend",
+        sourceImageIds,
+        sourceVideoIds,
+        sourceAudioIds,
+      },
+    });
 
     return { success: true, taskId };
   });

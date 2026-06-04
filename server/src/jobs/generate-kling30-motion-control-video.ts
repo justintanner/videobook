@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -38,9 +38,7 @@ export function registerGenerateKling30MotionControlVideoJob(fs: VideocityFs): v
       prompt, mode, character_orientation, background_source,
     } = payload as GenerateKling30MotionControlPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const inputUrls = await uploadInputs(fs, imageInputs, projectSlug);
     const videoUrls = await uploadInputs(fs, videoInputs, projectSlug);
@@ -50,25 +48,19 @@ export function registerGenerateKling30MotionControlVideoJob(fs: VideocityFs): v
       inputUrls,
       videoUrls,
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "kling30_motion_control_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(mode !== undefined ? { mode } : {}),
-          sourceImageIds,
-          sourceVideoIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "kling30_motion_control_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(mode !== undefined ? { mode } : {}),
+        sourceImageIds,
+        sourceVideoIds,
+      },
+    });
 
     return { success: true, taskId };
   });

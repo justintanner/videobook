@@ -1,0 +1,30 @@
+const MODEL_DISPLAY: Record<string, Record<string, string>> = {
+  kie: {
+    'nano-banana': 'Nano Banana',
+    'nano-banana-pro': 'Nano Banana Pro',
+    'qwen2/image-edit': 'Qwen2 Image Edit',
+    'gpt-image-2-image-to-image': 'GPT Image 2',
+    'gpt-image-2-text-to-image': 'GPT Image 2',
+    'wan/2-7-image': 'Wan 2.7',
+    'wan/2-7-image-pro': 'Wan 2.7 Pro',
+    'seedream/5-lite-image-to-image': 'Seedream 5 Lite',
+    'grok-imagine/text-to-image': 'Grok Imagine',
+    'grok-imagine/text-to-video': 'Grok Imagine',
+    'grok-imagine/image-to-video': 'Grok Imagine',
+    'grok-imagine/extend': 'Grok Extend',
+    'kling-3.0/video': 'Kling 3.0',
+    'bytedance/seedance-2': 'Seedance 2',
+    'wan/2-7-image-to-video': 'Wan 2.7',
+    'wan/2-7-videoedit': 'Wan 2.7 Edit',
+    'wan/2-7-r2v': 'Wan 2.7',
+  },
+  alibaba: {
+    'wan2.7-image-pro': 'Wan 2.7 Pro',
+    'qwen-image-2.0': 'Qwen Image 2.0',
+    'qwen-image-edit': 'Qwen Image Edit',
+  },
+}
+
+export function modelDisplay(provider: string, model: string): string {
+  return MODEL_DISPLAY[provider]?.[model] ?? model
+}

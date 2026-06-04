@@ -408,7 +408,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     providers.push({
       key: "kie",
       label: "Kie",
-      provider_path: "kie.post.api.v1.jobs.createTask()",
+      provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
       envKey: "KIE_API_KEY",
     });
   }

@@ -1,5 +1,6 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob, type Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -33,9 +34,7 @@ export function registerGenerateWan27T2vVideoJob(fs: VideocityFs): void {
       resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27T2vVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename, projectSlug) : undefined;
 
@@ -43,24 +42,18 @@ export function registerGenerateWan27T2vVideoJob(fs: VideocityFs): void {
       { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { audioUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "wan27_t2v_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          prompt,
-          mode: "t2v",
-          sourceAudioIds,
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "wan27_t2v_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        prompt,
+        mode: "t2v",
+        sourceAudioIds,
+      },
+    });
 
     return { success: true, taskId };
   });

@@ -77,7 +77,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { mode: "std", duration: "8", sound: true, aspect_ratio: "16:9" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   kling30_motion_control: {
@@ -90,7 +90,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { mode: "720p", character_orientation: "video", background_source: "input_video" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   seedance2: {
@@ -109,7 +109,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       generate_audio: true, web_search: false, nsfw_checker: false,
     },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   seedance2_fast: {
@@ -128,7 +128,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       generate_audio: true, web_search: false, nsfw_checker: false,
     },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_t2v: {
@@ -141,7 +141,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_i2v: {
@@ -156,7 +156,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { resolution: "1080p", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_videoedit: {
@@ -170,7 +170,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { resolution: "1080p", duration: "0", audio_setting: "auto", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_r2v: {
@@ -185,7 +185,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_extend: {
@@ -198,7 +198,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: { resolution: "1080p", duration: "5", prompt_extend: true, watermark: false, nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   grok_imagine: {
@@ -208,7 +208,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "task_id", "index", "nsfw_checker"],
     defaults: { mode: "normal", duration: "6", resolution: "720p", aspect_ratio: "16:9", nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
     ],
     falToolNames: { withRefs: "generate_grok_imagine_video_i2v_fal" },
@@ -220,7 +220,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
     defaults: { mode: "normal", duration: 6, resolution: "480p", aspect_ratio: "2:3", nsfw_checker: false },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   grok_imagine_ref: {
@@ -240,7 +240,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["video_slug", "prompt", "extend_at", "extend_times"],
     defaults: { extend_times: "6" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_t2v: {
@@ -250,7 +250,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "resolution", "aspect_ratio", "duration", "seed"],
     defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_i2v: {
@@ -260,7 +260,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "first_frame_slug", "resolution", "duration", "seed"],
     defaults: { resolution: "1080p", duration: "5" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_ref: {
@@ -270,7 +270,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "image_slugs", "resolution", "aspect_ratio", "duration", "seed"],
     defaults: { resolution: "1080p", aspect_ratio: "16:9", duration: "5" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_videoedit: {
@@ -280,7 +280,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "video_slug", "image_slugs", "resolution", "audio_setting", "seed"],
     defaults: { resolution: "1080p", audio_setting: "auto" },
     providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask()", envKey: "KIE_API_KEY" },
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   alibaba_video: {

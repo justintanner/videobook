@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { xai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
@@ -68,9 +68,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
     }
 
     // Kie path — async task-based generation
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const request = buildGrokImagineTextPayload({
       prompt,
@@ -78,20 +76,14 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
       ...(enablePro !== undefined ? { enable_pro: enablePro } : {}),
       ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
     });
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "grok_imagine_text",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
-        meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "grok_imagine_text",
+      assetId: imgAssetId,
+      assetDir: imgAssetDir,
+      projectSlug,
+      meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
+    });
 
     return { success: true, taskId };
   });

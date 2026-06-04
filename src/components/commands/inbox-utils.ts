@@ -1,4 +1,4 @@
-import { modelDisplay } from '@apicity/cost';
+import { modelDisplay } from '@/lib/model-display';
 import type { MediaItem } from '@/components/sidebar/types';
 
 type Orientation = 'portrait' | 'square' | 'landscape';

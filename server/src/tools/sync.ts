@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs, AssetEntry, AssetManifestFile } from "vc-engine";
-import { computeAssetStatus } from "vc-engine";
+import { computeAssetStatus, QUEUED_TASK_ID } from "vc-engine";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -23,6 +23,7 @@ import type { PendingTask } from "vc-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
+import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
  *  before sync ages it out. Guards against providers leaving jobs in an
@@ -82,6 +83,14 @@ function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
   if (!meta) return null;
   const p = meta.prompt;
   return typeof p === "string" ? p : null;
+}
+
+function isKiePendingTask(task: PendingTask): boolean {
+  return !task.taskType.startsWith("xai_") && !task.taskType.startsWith("fal_") && !task.taskType.startsWith("alibaba_");
+}
+
+function isQueuedKiePendingTask(task: PendingTask): boolean {
+  return task.taskId === QUEUED_TASK_ID && isKiePendingTask(task);
 }
 
 function buildFrameDirs(
@@ -423,7 +432,19 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   // on server restart by clearing the completing flag and refreshing owner_id.
   const nowMs = Date.now();
   const activeTasks: PendingTask[] = [];
-  for (const t of tasks) {
+  for (const originalTask of tasks) {
+    let t = originalTask;
+    if (isQueuedKiePendingTask(t)) {
+      try {
+        t = await submitQueuedKieTask(fs, project_slug, t);
+      } catch (e) {
+        const failMsg = e instanceof Error ? e.message : "Queued KIE submit failed";
+        const prompt = metaPrompt(t.meta);
+        result.failed.push({ assetId: t.assetId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        await failPendingTaskAndLog(fs, project_slug, t.assetId, t.taskId, { message: failMsg, prompt });
+        continue;
+      }
+    }
     const ageMs = nowMs - t.createdAt * 1000;
     if (t.completing !== true && Number.isFinite(ageMs) && ageMs > PENDING_TASK_TIMEOUT_MS) {
       const ageMinutes = Math.round(ageMs / 60000);
@@ -447,9 +468,6 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
 
   const pollableTasks = activeTasks.filter((t) => t.completing !== true);
 
-  // Renew the assets-row deadline for every still-alive provider task so the
-  // reaper does not flip them to error while sync is actively polling them.
-  // CAS via the row's owner_id (per-task lease).
   await Promise.all(
     pollableTasks.map(async (task) => {
       const ownerId = await fs.pendingTasks.getOwner(project_slug, task.assetId, task.taskId);
@@ -460,7 +478,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   );
 
   // Poll KIE tasks (only if API key is set)
-  const kieTasks = pollableTasks.filter((t) => !t.taskType.startsWith("xai_") && !t.taskType.startsWith("fal_") && !t.taskType.startsWith("alibaba_"));
+  const kieTasks = pollableTasks.filter(isKiePendingTask);
   const kieApiKey = getApiKey("KIE_API_KEY");
   if (kieApiKey && kieTasks.length > 0) {
     const provider = kie({ apiKey: kieApiKey, timeout: 30_000 });

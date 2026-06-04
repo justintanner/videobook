@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import type { GrokImageToImageRequest } from "@apicity/kie";
@@ -73,31 +73,23 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
     }
 
     // Kie path — async task-based generation
-    const apiKey = requireApiKey("KIE_API_KEY");
-
-    const provider = kie({ apiKey, timeout: 60_000 });
+    requireApiKey("KIE_API_KEY");
 
     const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
 
     const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "grok_imagine_image",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
-        meta: {
-          sourceImageId,
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${imgAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "grok_imagine_image",
+      assetId: imgAssetId,
+      assetDir: imgAssetDir,
+      projectSlug,
+      meta: {
+        sourceImageId,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+      },
+    });
 
     return { success: true, taskId };
   });

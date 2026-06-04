@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { kie, submitMediaJob } from "@apicity/kie";
+import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 type ExtendGrokImagineVideoPayload = {
@@ -21,15 +21,13 @@ export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
       projectSlug, prompt, extend_at, extend_times,
     } = payload as ExtendGrokImagineVideoPayload;
 
-    const apiKey = requireApiKey("KIE_API_KEY");
+    requireApiKey("KIE_API_KEY");
 
     const kieTaskIdResult = await fs.readMetadata<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
     const kieTaskId = kieTaskIdResult.value.taskId;
-
-    const provider = kie({ apiKey, timeout: 120_000 });
 
     const request = {
       model: "grok-imagine/extend" as const,
@@ -41,25 +39,19 @@ export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
       },
     };
 
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const taskId = await submitMediaJob(provider, request);
-    {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
-        taskId,
-        taskType: "grok_imagine_extend_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
-        meta: {
-          sourceVideoId,
-          prompt,
-          ...(extend_at !== undefined ? { extend_at } : {}),
-          ...(extend_times !== undefined ? { extend_times } : {}),
-        },
-    }, ctx.getOwnerId());
-      if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
-      if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-    }
-    ctx.setLease({ kind: "task", taskId });
+    const taskId = await submitKieTask(fs, ctx, {
+      request,
+      taskType: "grok_imagine_extend_video",
+      assetId: vidAssetId,
+      assetDir: vidAssetDir,
+      projectSlug,
+      meta: {
+        sourceVideoId,
+        prompt,
+        ...(extend_at !== undefined ? { extend_at } : {}),
+        ...(extend_times !== undefined ? { extend_times } : {}),
+      },
+    });
 
     return { success: true, taskId };
   });

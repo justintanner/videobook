@@ -940,7 +940,7 @@ function translateToolPayload(
     case "generate_kling30_video": {
       const elements = extractKlingElements(args);
       const payload = buildKling30VideoPayload(args as Kling30Args, imageSlugs, elements);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kling30_motion_control_video": {
       const characterImageUrls = (args.character_image_slugs as string[] | undefined) ?? [];
@@ -950,7 +950,7 @@ function translateToolPayload(
         characterImageUrls,
         motionVideoUrls,
       );
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_video": {
       if (isXaiProvider(provider)) {
@@ -958,11 +958,11 @@ function translateToolPayload(
         return { provider_path: "xai.post.v1.videos.generations()", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_t2v_video": {
       const payload = buildGrokImagineT2vVideoPayload(args as GrokImagineT2vArgs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_image": {
       if (isXaiProvider(provider)) {
@@ -970,7 +970,7 @@ function translateToolPayload(
         return { provider_path: "xai.post.v1.images.edits()", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_seedance2_video":
     case "generate_seedance2_fast_video": {
@@ -992,7 +992,7 @@ function translateToolPayload(
           ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
         },
       );
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {
       if (isXaiProvider(provider)) {
@@ -1005,7 +1005,7 @@ function translateToolPayload(
         return { provider_path: "xai.post.v1.images.generations()", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_ref_video": {
       const payload = buildXaiGrokImagineRefVideoPayload(args as GrokImagineRefVideoArgs, imageSlugs);
@@ -1013,40 +1013,40 @@ function translateToolPayload(
     }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_seedream_text_image": {
       const payload = buildSeedreamTextImagePayload(args as SeedreamImageArgs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_seedream_image": {
       const payload = buildSeedreamImageEditPayload(args as SeedreamImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_qwen2_image_edit": {
       const payload = buildQwen2ImageEditPayload(args as Qwen2ImageEditArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_gpt_image": {
       const payload = buildGptImagePayload(args as GptImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_gpt_image_text": {
       const payload = buildGptImageTextPayload(args as GptImageTextArgs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_image": {
       const payload = buildWan27ImagePayload(args as Wan27ImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_image_pro": {
       const payload = buildWan27ImageProPayload(args as Wan27ImageArgs, imageSlugs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_t2v_video": {
       const audioUrl = (args.audio_url as string | undefined) ?? (args.driving_audio_slug as string | undefined) ?? undefined;
       const payload = buildWan27TextToVideoPayload(args as Wan27TextToVideoArgs, { audioUrl });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_i2v_video": {
       const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
@@ -1059,7 +1059,7 @@ function translateToolPayload(
         firstClipUrl: firstClipSlug,
         drivingAudioUrl: drivingAudioSlug,
       });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_videoedit_video": {
       const videoSlug = (args.video_slug as string) ?? "";
@@ -1068,7 +1068,7 @@ function translateToolPayload(
         videoUrl: videoSlug,
         referenceImageUrl: imageSlug,
       });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_wan27_r2v_video": {
       const referenceImageUrls = imageSlugs;
@@ -1081,34 +1081,34 @@ function translateToolPayload(
         firstFrameUrl,
         referenceVoiceUrl,
       });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_wan27_video": {
       const firstClipSlug = (args.video_slug as string) ?? "";
       const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
         firstClipUrl: firstClipSlug,
       });
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_happyhorse_t2v_video": {
       const payload = buildHappyHorseT2vPayload(args as HappyHorseT2vArgs);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_happyhorse_i2v_video": {
       const imageUrl = (args.first_frame_slug as string | undefined) ?? "";
       const payload = buildHappyHorseI2vPayload(args as HappyHorseI2vArgs, imageUrl);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_happyhorse_ref_video": {
       const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
       const payload = buildHappyHorseRefPayload(args as HappyHorseRefArgs, referenceImages);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_happyhorse_videoedit_video": {
       const videoUrl = (args.video_slug as string | undefined) ?? "";
       const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
       const payload = buildHappyHorseVideoEditPayload(args as HappyHorseVideoEditArgs, videoUrl, referenceImages);
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_grok_imagine_video": {
       const payload = {
@@ -1120,7 +1120,7 @@ function translateToolPayload(
           extend_times: (args.extend_times as "6" | "10" | undefined) ?? "6",
         },
       };
-      return { provider_path: "kie.post.api.v1.jobs.createTask()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_alibaba_image": {
       const imageUrls = imageSlugs;
