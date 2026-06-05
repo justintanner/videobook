@@ -175,7 +175,7 @@ function imageDimensions(image: HTMLImageElement | HTMLCanvasElement): { w: numb
 // with chroma noise lands ~40, even desaturated color shots clear 70+.
 const GRAYSCALE_CHROMA_THRESHOLD = 60;
 
-export function isLikelyGrayscale(image: HTMLImageElement | HTMLCanvasElement): boolean {
+function isLikelyGrayscale(image: HTMLImageElement | HTMLCanvasElement): boolean {
   const c = document.createElement("canvas");
   c.width = 32;
   c.height = 32;
@@ -197,7 +197,7 @@ export function isLikelyGrayscale(image: HTMLImageElement | HTMLCanvasElement): 
 // then maps luminance into a warm skin-tone palette so the detector sees
 // chroma in the range it was trained on. The colorization is for detection
 // only; landmarks are normalized coords that still apply to the original.
-export function colorizeForPose(image: HTMLImageElement | HTMLCanvasElement): HTMLCanvasElement {
+function colorizeForPose(image: HTMLImageElement | HTMLCanvasElement): HTMLCanvasElement {
   const { w, h } = imageDimensions(image);
   const c = document.createElement("canvas");
   c.width = w;
@@ -300,4 +300,3 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 export type { NormalizedLandmark };
-

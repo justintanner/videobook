@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
@@ -105,9 +104,6 @@ const schema = {
     .optional()
     .describe("If provided, used verbatim as the prompt. Overrides the built-in default and ignores safe_mode."),
 };
-
-// The default prompt — exposed so the client can prefill the inline editor.
-export const DEFAULT_SWAP_PROMPT = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
 
 // Short, neutral prompt. Earlier versions embedded scene prose plus identity
 // language ("face, hair, skin tone, body type") and tripped gpt-image-2's
@@ -431,9 +427,4 @@ export function swapPlanSceneFrameDef(fs: VideocityFs): ToolDef {
       };
     },
   };
-}
-
-export function registerSwapPlanSceneFrameTool(server: McpServer, fs: VideocityFs): void {
-  const def = swapPlanSceneFrameDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
 }

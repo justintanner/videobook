@@ -3,7 +3,6 @@
  * video generation tool and returns a rich preview JSON for the frontend to
  * render a dynamic parameter form.
  */
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
@@ -204,7 +203,3 @@ Determine which video generation tool to use and what parameters to pass.`;
   };
 }
 
-export function registerPreviewVideoGenTool(server: McpServer, fs: VideocityFs): void {
-  const def = previewVideoGenDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

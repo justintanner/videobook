@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
@@ -167,8 +166,3 @@ export function extractFrameDefs(fs: VideocityFs): ToolDef[] {
   ];
 }
 
-export function registerExtractFrameTools(server: McpServer, fs: VideocityFs): void {
-  for (const def of extractFrameDefs(fs)) {
-    server.tool(def.name, def.description, def.schema, def.handler);
-  }
-}

@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
@@ -118,7 +117,3 @@ export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerExtendGrokImagineVideoTool(server: McpServer, fs: VideocityFs): void {
-  const def = extendGrokImagineVideoDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

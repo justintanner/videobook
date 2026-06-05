@@ -3,10 +3,7 @@ import type { UseMcpResult } from "use-mcp/react";
 import { modelDisplay } from "@/lib/model-display";
 import { toast } from "@/hooks/useToast";
 
-export const OUTFIT_CUSTOM_PROMPT_MAX = 500;
-
-export const OUTFIT_PLATFORMS = ["ig", "tiktok", "youtube"] as const;
-export type OutfitPlatform = typeof OUTFIT_PLATFORMS[number];
+export type OutfitPlatform = "ig" | "tiktok" | "youtube";
 
 export type OutfitModelKey =
   | "nano_banana_pro"
@@ -32,8 +29,7 @@ export type OutfitProvider = typeof OUTFIT_PROVIDERS[number]["key"];
 export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
 
-export const OUTFIT_POSE_COVERAGE = ["face", "upper", "full"] as const;
-export type OutfitPoseCoverage = typeof OUTFIT_POSE_COVERAGE[number];
+export type OutfitPoseCoverage = "face" | "upper" | "full";
 
 export interface GenerateOutfitArgs {
   projectSlug: string;

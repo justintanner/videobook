@@ -1,7 +1,7 @@
 import type { VideocityFs } from "vc-engine";
 
 export const POST_METADATA_FILE = ".post.x.json";
-export const POST_METADATA_VERSION = 1;
+const POST_METADATA_VERSION = 1;
 
 export interface XPostEntry {
   tweet_id: string;

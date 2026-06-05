@@ -52,11 +52,11 @@ export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
 export const OUTFIT_PROVIDERS = ["kie", "fal"] as const;
 export type OutfitProvider = typeof OUTFIT_PROVIDERS[number];
 
-export const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
-export type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
+const OUTFIT_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
+type OutfitAspectRatio = typeof OUTFIT_ASPECT_RATIOS[number];
 
-export const OUTFIT_POSE_COVERAGE = ["face", "upper", "full"] as const;
-export type OutfitPoseCoverage = typeof OUTFIT_POSE_COVERAGE[number];
+const OUTFIT_POSE_COVERAGE = ["face", "upper", "full"] as const;
+type OutfitPoseCoverage = typeof OUTFIT_POSE_COVERAGE[number];
 
 const IMAGE_SIZE_MAP: Record<OutfitAspectRatio, "portrait_16_9" | "landscape_16_9" | "square_hd"> = {
   "9:16": "portrait_16_9",

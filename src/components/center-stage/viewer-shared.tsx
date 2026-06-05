@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ChevronDown, RotateCcw, RefreshCw, FileText, Check, VideoOff, Zap, Copy, X } from 'lucide-react';
+import { ChevronDown, RotateCcw, RefreshCw, Check, VideoOff, Zap, Copy, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
@@ -16,8 +16,6 @@ import { useAssetHistory } from '@/hooks/useAssetHistory';
 import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './HistoryPanel';
 import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
 import { JsonNode } from '@/components/ui/JsonNode';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
   type ViewerSize,
   type BackTab,
@@ -28,8 +26,6 @@ import {
   ratioLabel,
   ratioIcons,
 } from './viewer-types';
-
-export type { ViewerSize, BackTab, ManifestFile } from './viewer-types';
 
 // ── Leaf Components ──
 
@@ -50,45 +46,6 @@ export function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fall
         }
       }}
     />
-  );
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const mdComponents = {
-  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-bold text-primary mt-4 mb-2 font-mono uppercase tracking-wider">{children}</h1>,
-  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-bold text-primary/90 mt-3 mb-1.5 font-mono">{children}</h2>,
-  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-bold text-primary/80 mt-2 mb-1 font-mono">{children}</h3>,
-  p: ({ children }: { children?: React.ReactNode }) => <p className="text-sm leading-relaxed text-primary/70 mb-3">{children}</p>,
-  strong: ({ children }: { children?: React.ReactNode }) => <strong className="text-primary font-bold">{children}</strong>,
-  em: ({ children }: { children?: React.ReactNode }) => <em className="text-primary/80 italic">{children}</em>,
-  ul: ({ children }: { children?: React.ReactNode }) => <ul className="text-sm text-primary/70 pl-5 mb-2 list-disc">{children}</ul>,
-  ol: ({ children }: { children?: React.ReactNode }) => <ol className="text-sm text-primary/70 pl-5 mb-2 list-decimal">{children}</ol>,
-  li: ({ children }: { children?: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
-  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="border-l-2 border-primary/40 pl-3 text-primary/60 italic my-2">{children}</blockquote>,
-  code: ({ children, className }: { children?: React.ReactNode; className?: string }) =>
-    className
-      ? <code className="block font-mono text-xs bg-black/60 text-primary/80 p-3 rounded border border-zinc-800/40 overflow-x-auto mb-3">{children}</code>
-      : <code className="font-mono text-xs bg-primary/10 text-primary/90 px-1 py-0.5 rounded">{children}</code>,
-  hr: () => <hr className="border-zinc-700/50 my-4" />,
-};
-
-export function ScriptContent({ item }: { item: MediaItem }) {
-  if (!item.prompt) {
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <FileText className="w-16 h-16 text-primary/20" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full h-full overflow-y-auto p-6">
-      <div className="max-w-lg mx-auto">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-          {item.prompt}
-        </ReactMarkdown>
-      </div>
-    </div>
   );
 }
 
@@ -185,7 +142,7 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
   );
 }
 
-export function JsonTerminal({ data, loading }: { data: string | null; loading: boolean }) {
+function JsonTerminal({ data, loading }: { data: string | null; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8">
@@ -215,7 +172,7 @@ export function JsonTerminal({ data, loading }: { data: string | null; loading: 
   );
 }
 
-export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }: {
+function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }: {
   files: ManifestFile[];
   selectedFile: string;
   onSelectFile: (name: string) => void;
@@ -257,7 +214,7 @@ export function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loa
   );
 }
 
-export function FileContentPane({ content, loading, fileName, fileUrl }: {
+function FileContentPane({ content, loading, fileName, fileUrl }: {
   content: string | null;
   loading: boolean;
   fileName: string;

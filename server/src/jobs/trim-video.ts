@@ -25,7 +25,7 @@ interface StreamDurations {
   audio: number | null;
 }
 
-export async function probeStreamDurations(filePath: string): Promise<StreamDurations> {
+async function probeStreamDurations(filePath: string): Promise<StreamDurations> {
   const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "error",
     "-print_format", "json",

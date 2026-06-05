@@ -1,7 +1,7 @@
 // Mirrors server/src/tools/generate-wan27-videoedit-video.ts:102-106.
 // Source videos longer than (MAX + TOLERANCE) are rejected by Wan 2.7 Video Edit.
 export const VIDEO_EDIT_MAX_SEC = 10.0;
-export const VIDEO_EDIT_TOLERANCE_SEC = 0.05;
+const VIDEO_EDIT_TOLERANCE_SEC = 0.05;
 
 export function isOverEditCap(durationSec: number): boolean {
   return durationSec > VIDEO_EDIT_MAX_SEC + VIDEO_EDIT_TOLERANCE_SEC;

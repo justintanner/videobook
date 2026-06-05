@@ -1233,7 +1233,6 @@ export {
   buildAlibabaImagePayload,
   buildAlibabaQwenImagePayload,
   buildAlibabaVideoPayload,
-  extractKlingElements,
   translateToolPayload,
   getValidationWarnings,
 };

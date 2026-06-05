@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
@@ -110,7 +109,3 @@ export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerGenerateNanoBananaImageTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateNanoBananaImageDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

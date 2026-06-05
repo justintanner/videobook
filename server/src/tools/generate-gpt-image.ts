@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
@@ -109,7 +108,3 @@ export function generateGptImageDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerGenerateGptImageTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateGptImageDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

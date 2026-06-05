@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createKimiCoding } from "@apicity/kimicoding";
 import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
@@ -44,7 +43,3 @@ export function apiStatusDef(): ToolDef {
   };
 }
 
-export function registerApiStatusTool(server: McpServer): void {
-  const def = apiStatusDef();
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

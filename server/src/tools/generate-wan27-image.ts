@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
@@ -138,7 +137,3 @@ export function generateWan27ImageDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerGenerateWan27ImageTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateWan27ImageDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

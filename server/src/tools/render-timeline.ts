@@ -55,7 +55,7 @@ const LANDSCAPE_RENDER = "landscape.mp4";
 const PORTRAIT_RENDER = "portrait.mp4";
 const SQUARE_RENDER = "square.mp4";
 
-export async function runRenderTimeline(
+async function runRenderTimeline(
   fs: VideocityFs,
   projectSlug: string,
   orientationOverride?: Orientation,

@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
@@ -69,7 +68,3 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerDuplicateAssetTool(server: McpServer, fs: VideocityFs): void {
-  const def = duplicateAssetDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

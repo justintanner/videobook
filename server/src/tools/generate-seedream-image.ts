@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
@@ -112,7 +111,3 @@ export function generateSeedreamImageDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerGenerateSeedreamImageTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateSeedreamImageDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

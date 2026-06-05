@@ -27,13 +27,13 @@ export interface CharacterProfile {
   outfits?: string[];
 }
 
-export const FREEFORM_SUBJECT_KINDS: ReadonlySet<CharacterSubjectKind> = new Set(["animal", "other"]);
+const FREEFORM_SUBJECT_KINDS: ReadonlySet<CharacterSubjectKind> = new Set(["animal", "other"]);
 
 export function isFreeformSubject(kind: CharacterSubjectKind): boolean {
   return FREEFORM_SUBJECT_KINDS.has(kind);
 }
 
-export function normalizeCharacterProfile(raw: unknown): CharacterProfile {
+function normalizeCharacterProfile(raw: unknown): CharacterProfile {
   const obj: Record<string, unknown> = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const rawKind = (typeof obj.subject_kind === "string" ? obj.subject_kind : "").trim().toLowerCase();
   const subjectKind: CharacterSubjectKind =

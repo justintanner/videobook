@@ -1,5 +1,3 @@
-import type { AssetType } from '@/components/sidebar/types';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical 5-domain palette
 //
@@ -19,17 +17,9 @@ import type { AssetType } from '@/components/sidebar/types';
 
 export type Domain = 'projects' | 'image' | 'video' | 'plan' | 'final';
 
-export const DOMAINS: readonly Domain[] = [
-  'projects',
-  'image',
-  'video',
-  'plan',
-  'final',
-] as const;
-
 // ── Raw values (hex / rgb / CSS var) ──
 
-export const domainHex: Record<Domain, string> = {
+const domainHex: Record<Domain, string> = {
   projects: '#a1a1aa',
   image: '#22d3ee',
   video: '#a78bfa',
@@ -37,7 +27,7 @@ export const domainHex: Record<Domain, string> = {
   final: '#fbbf24',
 };
 
-export const domainRgb: Record<Domain, string> = {
+const domainRgb: Record<Domain, string> = {
   projects: '161, 161, 170',
   image: '34, 211, 238',
   video: '167, 139, 250',
@@ -45,108 +35,6 @@ export const domainRgb: Record<Domain, string> = {
   final: '251, 191, 36',
 };
 
-export const domainCssVar: Record<Domain, string> = {
-  projects: 'var(--clip-domain-projects)',
-  image: 'var(--clip-domain-image)',
-  video: 'var(--clip-domain-video)',
-  plan: 'var(--clip-domain-plan)',
-  final: 'var(--clip-domain-final)',
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DomainColor — low-level Tailwind class slots used by ad-hoc consumers.
-// Larger components use chipVariant() / sectionTheme() / cardTone() instead.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface DomainColor {
-  hex: string;
-  rgb: string;
-  cssVar: string;
-  text: string;
-  textMuted: string;
-  textFaint: string;
-  bg: string;
-  bgActive: string;
-  border: string;
-  borderHover: string;
-  ring: string;
-  glow: string;
-}
-
-export const domains: Record<Domain, DomainColor> = {
-  projects: {
-    hex: '#a1a1aa',
-    rgb: '161, 161, 170',
-    cssVar: 'var(--clip-domain-projects)',
-    text: 'text-zinc-300',
-    textMuted: 'text-zinc-300/60',
-    textFaint: 'text-zinc-300/30',
-    bg: 'bg-zinc-500/10',
-    bgActive: 'bg-zinc-500/20',
-    border: 'border-zinc-500/30',
-    borderHover: 'hover:border-zinc-400/60',
-    ring: 'focus:ring-zinc-400/40',
-    glow: 'rgba(161,161,170,0.45)',
-  },
-  image: {
-    hex: '#22d3ee',
-    rgb: '34, 211, 238',
-    cssVar: 'var(--clip-domain-image)',
-    text: 'text-cyan-300',
-    textMuted: 'text-cyan-300/60',
-    textFaint: 'text-cyan-300/30',
-    bg: 'bg-cyan-500/10',
-    bgActive: 'bg-cyan-500/20',
-    border: 'border-cyan-500/30',
-    borderHover: 'hover:border-cyan-400/60',
-    ring: 'focus:ring-cyan-400/40',
-    glow: 'rgba(34,211,238,0.45)',
-  },
-  video: {
-    hex: '#a78bfa',
-    rgb: '167, 139, 250',
-    cssVar: 'var(--clip-domain-video)',
-    text: 'text-violet-300',
-    textMuted: 'text-violet-300/60',
-    textFaint: 'text-violet-300/30',
-    bg: 'bg-violet-500/10',
-    bgActive: 'bg-violet-500/20',
-    border: 'border-violet-500/30',
-    borderHover: 'hover:border-violet-400/60',
-    ring: 'focus:ring-violet-400/40',
-    glow: 'rgba(167,139,250,0.45)',
-  },
-  plan: {
-    hex: '#34d399',
-    rgb: '52, 211, 153',
-    cssVar: 'var(--clip-domain-plan)',
-    text: 'text-emerald-300',
-    textMuted: 'text-emerald-300/60',
-    textFaint: 'text-emerald-300/30',
-    bg: 'bg-emerald-500/10',
-    bgActive: 'bg-emerald-500/20',
-    border: 'border-emerald-500/30',
-    borderHover: 'hover:border-emerald-400/60',
-    ring: 'focus:ring-emerald-400/40',
-    glow: 'rgba(52,211,153,0.45)',
-  },
-  final: {
-    hex: '#fbbf24',
-    rgb: '251, 191, 36',
-    cssVar: 'var(--clip-domain-final)',
-    text: 'text-amber-300',
-    textMuted: 'text-amber-300/60',
-    textFaint: 'text-amber-300/30',
-    bg: 'bg-amber-500/10',
-    bgActive: 'bg-amber-500/20',
-    border: 'border-amber-500/30',
-    borderHover: 'hover:border-amber-400/60',
-    ring: 'focus:ring-amber-400/40',
-    glow: 'rgba(251,191,36,0.45)',
-  },
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 // chipVariant — matches the per-variant shape used by command-styles.ts
 // (CommandButton chips). 9 fields per variant.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,38 +348,4 @@ export function cardTone(d: Domain): CardToneStyle {
     faint: `rgba(${rgb}, 0.06)`,
     dot: null,
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Asset type → Domain mapping.
-//
-// character/audio/script are sub-domains of image/video/plan respectively.
-// Their per-surface adoption happens in Phase 3 PRs. Until then, stateColors.ts
-// keeps character/audio/script tones hardcoded and does not call this helper
-// for those types.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function domainForAssetType(type: AssetType): Domain {
-  switch (type) {
-    case 'image':
-    case 'character':
-      return 'image';
-    case 'video':
-    case 'audio':
-      return 'video';
-    case 'plan':
-    case 'script':
-      return 'plan';
-    case 'final':
-      return 'final';
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Generic alpha helper. Returns an rgba() string for inline styles or
-// shadow templates.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function withAlpha(d: Domain, alpha: number): string {
-  return `rgba(${domainRgb[d]}, ${alpha})`;
 }

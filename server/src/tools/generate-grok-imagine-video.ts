@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
@@ -137,7 +136,3 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerGenerateGrokImagineVideoTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateGrokImagineVideoDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

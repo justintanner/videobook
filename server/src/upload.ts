@@ -27,7 +27,7 @@ const MIME_TYPES: Record<string, string> = {
   m4a: "audio/mp4",
 };
 
-export function inferMimeType(filename: string): string {
+function inferMimeType(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase();
   return (ext && MIME_TYPES[ext]) ?? "application/octet-stream";
 }

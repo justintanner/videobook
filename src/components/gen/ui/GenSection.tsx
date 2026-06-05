@@ -105,27 +105,6 @@ export function GenSection({
   );
 }
 
-interface WarningStripProps {
-  messages: string[];
-  className?: string;
-}
-
-export function WarningStrip({ messages, className }: WarningStripProps) {
-  if (messages.length === 0) return null;
-  return (
-    <div className={cn('rounded border border-yellow-500/20 overflow-hidden', className)}>
-      {messages.map((m, i) => (
-        <div
-          key={i}
-          className="px-3 py-1.5 text-[10px] font-mono text-yellow-300/90 bg-yellow-500/[0.06]"
-        >
-          {m}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function normalizeWarnings(w: string | string[] | null | undefined): string[] {
   if (!w) return [];
   if (Array.isArray(w)) return w.filter(Boolean);

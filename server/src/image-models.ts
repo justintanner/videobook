@@ -3,7 +3,6 @@
  *
  * Parameter schemas and enums come from @apicity provider packages:
  *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
- *   - xAI: xai.get.v1.imageGenerationModels() (live API, model discovery)
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
@@ -18,8 +17,6 @@ import {
   SeedreamImageToImageRequestSchema,
   Wan27ImageInputSchema,
 } from "@apicity/kie/zod";
-import { createXai } from "@apicity/xai";
-import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
 import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
 import { z } from "zod";
 import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
@@ -227,24 +224,6 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
 // ---------------------------------------------------------------------------
 
 const kieModelSchemas = createKie({ apiKey: "" }).modelInputSchemas;
-
-// xAI discovered models (populated async by initImageModels)
-let xaiImageModels: XaiImageGenerationModel[] | null = null;
-
-// ---------------------------------------------------------------------------
-// Async init — call once at server startup for xAI discovery
-// ---------------------------------------------------------------------------
-
-async function initImageModels(): Promise<void> {
-  if (!process.env.XAI_API_KEY) return;
-  try {
-    const xaiProvider = createXai({ apiKey: process.env.XAI_API_KEY });
-    const result = await xaiProvider.get.v1.imageGenerationModels() as XaiImageGenerationModelListResponse;
-    xaiImageModels = result.models;
-  } catch {
-    // xAI discovery failed — xAI providers still listed via config, filtered by env var
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Schema types describing each tool's input parameters.
@@ -708,14 +687,11 @@ function buildImageModelOption(
 // ---------------------------------------------------------------------------
 
 export {
-  IMAGE_MODEL_CONFIGS,
   getImageModels,
   getImageToolSchema,
   validateImageParams,
   buildImageModelOption,
   extractLastImageSettingsPerModel,
   extractLastUsedImageModel,
-  initImageModels,
-  xaiImageModels,
 };
 export type { ImageModelInfo, ImageModelConfig, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };

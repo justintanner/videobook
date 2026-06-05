@@ -5,7 +5,6 @@
  * Always defaults to nano_banana (richest settings). The user can switch
  * models via the dropdown in the UI.
  */
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
@@ -125,7 +124,3 @@ export function previewImageGenDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerPreviewImageGenTool(server: McpServer, fs: VideocityFs): void {
-  const def = previewImageGenDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

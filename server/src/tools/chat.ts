@@ -1,7 +1,6 @@
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
@@ -194,7 +193,3 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function registerChatTool(server: McpServer, fs: VideocityFs): void {
-  const def = chatDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

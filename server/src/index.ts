@@ -9,7 +9,6 @@ import { createServer } from "./server.js";
 import { queue, reconcileQueueOnStartup } from "./queue.js";
 import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
-import { initImageModels } from "./image-models.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { uploadLocalStream } from "./local-upload.js";
 
@@ -126,7 +125,6 @@ app.get("/mcp", (_req, res) => {
 async function start(): Promise<void> {
   await migrateLegacyUserDir();
   registerAllJobHandlers(fs);
-  await initImageModels();
   await queue.start();
   for (const project of await fs.listProjects()) {
     const check = await fs.checkSchemaVersion(project.slug);

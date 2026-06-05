@@ -78,10 +78,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/character_schema_guide.md");
 
 export const CHARACTER_METADATA_KEY = "character";
-export const VISION_MODEL = "gpt-5.4";
-
-export const isHumanSubject = (k: CharacterSubjectKind): boolean =>
-  k === "female" || k === "male";
+const VISION_MODEL = "gpt-5.4";
 
 export const isAnimalSubject = (k: CharacterSubjectKind): boolean =>
   k === "animal";

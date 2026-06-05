@@ -1,5 +1,4 @@
-export { findImageFile, resolveImageSlugs } from "./_image-inputs.js";
-export type { ImageInput, SlugResolution } from "./_image-inputs.js";
+export { resolveImageSlugs } from "./_image-inputs.js";
 
 export function slugify(text: string): string {
   return text

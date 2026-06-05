@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
@@ -22,7 +21,6 @@ import {
   CHARACTER_METADATA_KEY,
   isAnimalSubject,
   isFreeformSubject,
-  isHumanSubject,
   isOtherSubject,
   normalizeCharacterProfile,
   type Character,
@@ -418,8 +416,6 @@ function aspectRatioArgs(provider: OutfitProvider, model: OutfitModelKey): Recor
   return {};
 }
 
-export { isHumanSubject };
-
 export function generateCharacterDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_character",
@@ -550,9 +546,4 @@ export function generateCharacterDef(fs: VideocityFs): ToolDef {
       };
     },
   };
-}
-
-export function registerGenerateCharacterTool(server: McpServer, fs: VideocityFs): void {
-  const def = generateCharacterDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
 }

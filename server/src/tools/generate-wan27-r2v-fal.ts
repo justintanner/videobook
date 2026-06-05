@@ -1,23 +1,11 @@
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs } from "vc-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { extname } from "node:path";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "vc-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-void findImageFile;
 
 type VideoInput = { assetId: string; filename: string };
 

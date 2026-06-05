@@ -142,13 +142,6 @@ export function CommandRegistryProvider({
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function useCommandRegistry(): CommandRegistryContextValue {
-  const ctx = useContext(CommandRegistryContext);
-  if (!ctx) throw new Error('useCommandRegistry must be used within CommandRegistryProvider');
-  return ctx;
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
 export function useOptionalCommandRegistry(): CommandRegistryContextValue | null {
   return useContext(CommandRegistryContext);
 }

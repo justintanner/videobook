@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs, AssetEntry, AssetManifestFile } from "vc-engine";
 import { computeAssetStatus, QUEUED_TASK_ID } from "vc-engine";
 import { z } from "zod";
@@ -221,7 +220,7 @@ export async function readStoredRenderDefaults(
 const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
 const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 
-export async function readAnalysisRecommendations(
+async function readAnalysisRecommendations(
   fs: VideocityFs, assetId: string, projectSlug: string,
 ): Promise<Record<string, unknown>> {
   const result = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
@@ -976,9 +975,4 @@ async function findAutoTranscribeActions(
     })
   );
   return candidates.filter((c): c is TranscribeAction => c !== null);
-}
-
-export function registerSyncTool(server: McpServer, fs: VideocityFs): void {
-  const def = syncDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
 }

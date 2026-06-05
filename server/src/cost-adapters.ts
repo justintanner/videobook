@@ -223,5 +223,3 @@ const ADAPTERS: Record<string, CostAdapter> = {
 export function getCostAdapter(toolName: string): CostAdapter | null {
   return ADAPTERS[toolName] ?? null;
 }
-
-export const SUPPORTED_TOOL_NAMES: readonly string[] = Object.keys(ADAPTERS);

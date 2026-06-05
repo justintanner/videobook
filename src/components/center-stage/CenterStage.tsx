@@ -12,10 +12,6 @@ import { PlanViewer } from './PlanViewer';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 
-// Re-export shared types and components so existing imports keep working
-export type { ViewerSize, ManifestFile, BackTab } from './viewer-types';
-export { RatioToggle, FileListPane, FileContentPane, RenderPrompt, BackFaceTabBar } from './viewer-shared';
-
 // ── AssetViewer Dispatcher ──
 
 export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
@@ -159,7 +155,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
 // ── Shells ──
 
-export function AssetViewShell({ fillParent, children }: { fillParent: boolean; children: React.ReactNode }) {
+function AssetViewShell({ fillParent, children }: { fillParent: boolean; children: React.ReactNode }) {
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
       <div

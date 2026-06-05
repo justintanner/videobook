@@ -3,11 +3,11 @@ import { z } from "zod";
 import { findVideoFile } from "vc-engine";
 
 export const MODEL = "gpt-5.4";
-export const MAX_FRAMES = 15;
-export const SILENCE_MARKER_THRESHOLD_S = 0.5;
+const MAX_FRAMES = 15;
+const SILENCE_MARKER_THRESHOLD_S = 0.5;
 export const DEAD_AIR_THRESHOLD_S = 1.5;
 export const TRIM_BUDGET_FRACTION = 0.4;
-export const CANDIDATE_TOLERANCE_S = 0.3;
+const CANDIDATE_TOLERANCE_S = 0.3;
 
 export type ElevenLabsWord = {
   text: string;
@@ -93,7 +93,7 @@ export function extractSilenceCandidates(
   return out;
 }
 
-export function formatCandidatesBlock(candidates: SilenceCandidate[]): string {
+function formatCandidatesBlock(candidates: SilenceCandidate[]): string {
   if (candidates.length === 0) return "Silence candidates: none (transcript has no gaps >= 1.5s)";
   const lines = candidates.map(
     (c, i) =>
@@ -102,7 +102,7 @@ export function formatCandidatesBlock(candidates: SilenceCandidate[]): string {
   return `Silence candidates (the only valid sources for severity "high" trims):\n${lines.join("\n")}`;
 }
 
-export function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
+function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
   const wordEntries = words.filter((w) => w.type === "word");
   if (wordEntries.length === 0) return "(no words)";
 
@@ -141,7 +141,7 @@ export function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
   return lines.join("\n");
 }
 
-export async function loadTranscript(
+async function loadTranscript(
   fs: VideocityFs,
   assetId: string,
   projectSlug: string,
@@ -171,7 +171,7 @@ export async function loadTranscript(
   return null;
 }
 
-export async function loadPriorAnalysis(
+async function loadPriorAnalysis(
   fs: VideocityFs,
   assetId: string,
   projectSlug: string,
@@ -185,7 +185,7 @@ export async function loadPriorAnalysis(
   }
 }
 
-export function isWithinCandidate(
+function isWithinCandidate(
   cutStart: number,
   cutEnd: number,
   candidates: SilenceCandidate[],

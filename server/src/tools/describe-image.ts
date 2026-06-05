@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z } from "zod";
 import { extname } from "node:path";
@@ -83,7 +82,3 @@ export function describeImageDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerDescribeImageTool(server: McpServer, fs: VideocityFs): void {
-  const def = describeImageDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

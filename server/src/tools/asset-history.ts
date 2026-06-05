@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs, GitCommit } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
@@ -82,7 +81,3 @@ export function assetHistoryDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerAssetHistoryTool(server: McpServer, fs: VideocityFs): void {
-  const def = assetHistoryDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

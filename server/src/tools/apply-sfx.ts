@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
@@ -181,7 +180,3 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function registerApplySfxTool(server: McpServer, fs: VideocityFs): void {
-  const def = applySfxDef(fs);
-  server.tool(def.name, def.description, def.schema, def.handler);
-}

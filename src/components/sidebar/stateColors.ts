@@ -44,10 +44,9 @@ const PROCESSING_DOT = 'bg-primary animate-pulse';
 const GENERATING_DOT = 'bg-green-500 animate-pulse';
 const IMAGE_GENERATING_DOT = 'bg-blue-500 animate-pulse';
 
-export const READY_RAW = 'var(--color-primary)';
-export const FINAL_RAW = '#fbbf24';
-export const ERROR_RAW = '#ef4444';
-export const DELETING_RAW = 'rgba(239, 68, 68, 0.4)';
+const READY_RAW = 'var(--color-primary)';
+const ERROR_RAW = '#ef4444';
+const DELETING_RAW = 'rgba(239, 68, 68, 0.4)';
 
 const TONE_STYLES: Record<CardTone, {
   color: string;
@@ -191,7 +190,7 @@ const PIPELINE_STATES = new Set<ClipState>([
   'isolating',
 ]);
 
-export function isPipelineState(status: ClipState): boolean {
+function isPipelineState(status: ClipState): boolean {
   return PIPELINE_STATES.has(status);
 }
 
