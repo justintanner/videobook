@@ -8,7 +8,7 @@ import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
-import { stripSlugPrefix } from '@/lib/slugs';
+import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
@@ -153,10 +153,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const currentValues = formValuesRef.current;
       const currentPrompt = isRefresh ? currentValues.prompt : undefined;
       const prefilled = option?.prefilled_values ?? {};
+      const prefilledPrompt = (prefilled as { prompt?: unknown }).prompt;
       const seededPrompt = currentPrompt
-        ?? (prefilled as { prompt?: unknown }).prompt
-        ?? prompt
-        ?? '';
+        ?? (typeof prefilledPrompt === 'string' ? stripAssetTagsFromText(prefilledPrompt) : undefined)
+        ?? stripAssetTagsFromText(prompt ?? '');
       const preservedSlugFields: Record<string, unknown> = {};
       if (isRefresh) {
         for (const [k, v] of Object.entries(currentValues)) {
