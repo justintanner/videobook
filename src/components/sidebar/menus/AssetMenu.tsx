@@ -1,89 +1,382 @@
-import type { ComponentType } from 'react';
-import type { UseMcpResult } from 'use-mcp/react';
+import { Fragment, type ComponentType, type ReactNode } from 'react'
+import type { UseMcpResult } from 'use-mcp/react'
 import {
+  ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from '@/components/ui/context-menu';
-import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/useToast';
+} from '@/components/ui/context-menu'
+import { cn } from '@/lib/utils'
+import { toast } from '@/hooks/useToast'
+
+type MenuItemComponent = ComponentType<{ onSelect: () => void; children: ReactNode; className?: string }>
 
 interface AssetMenuProps {
-  slug: string;
-  filePath?: string;
-  itemType?: string;
-  onAnimateCommand?: (text: string) => void;
-  onAnimateEdit?: (text: string) => void;
-  onExtractSkeleton?: () => void;
-  /** When provided, renders a "Mark Seen" entry that dismisses the NEW badge.
-   *  HomePage only supplies this for unseen assets. */
-  onMarkSeen?: () => void;
-  /** Source project slug — required to wire the "Export to Project" sub-menu. */
-  projectSlug?: string;
-  /** All known projects; the source project is filtered out at render time. */
-  projects?: { slug: string }[];
-  callTool?: UseMcpResult['callTool'];
-  /** Called after a successful export so HomePage can refresh state. */
-  onAfterExport?: (targetProject: string) => void;
-  MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
+  slug: string
+  filePath?: string
+  itemType?: string
+  onAnimateCommand?: (text: string) => void
+  onAnimateEdit?: (text: string) => void
+  onExtractSkeleton?: () => void
+  onMarkSeen?: () => void
+  projectSlug?: string
+  projects?: { slug: string }[]
+  callTool?: UseMcpResult['callTool']
+  onAfterExport?: (targetProject: string) => void
+  MenuItem: MenuItemComponent
 }
 
-function CommandMenuItem({ command, title, titleClassName, accentColor, onSelect, MenuItem, className }: {
-  command: string;
-  title?: string;
-  titleClassName?: string;
-  accentColor?: string;
-  onSelect: () => void;
-  MenuItem: ComponentType<{ onSelect: () => void; children: React.ReactNode; className?: string }>;
-  className?: string;
-}) {
+interface CommandAction {
+  command: string
+  title: string
+  titleClassName?: string
+  accentColor?: string
+  onSelect: () => void
+  className?: string
+}
+
+interface CommandMenuItemProps extends CommandAction {
+  MenuItem: MenuItemComponent
+  showCommand?: boolean
+}
+
+interface CommandSubMenuProps {
+  title: string
+  command?: string
+  titleClassName?: string
+  accentColor?: string
+  contentClassName?: string
+  children: ReactNode
+}
+
+const defaultAccentColor = 'border-l-cyan-500/30 focus:border-l-cyan-500/60'
+
+function commandItemClassName(accentColor?: string, className?: string) {
+  return cn(
+    '!flex !items-center gap-3 py-2 px-2.5 border-l-[3px] bg-white/[0.02] focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px]',
+    accentColor ?? defaultAccentColor,
+    className,
+  )
+}
+
+function CommandMenuItem({
+  command,
+  title,
+  titleClassName,
+  accentColor,
+  onSelect,
+  MenuItem,
+  className,
+  showCommand = true,
+}: CommandMenuItemProps) {
   return (
-    <MenuItem onSelect={onSelect} className={cn(
-      '!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px]',
-      accentColor ?? 'border-l-cyan-500/30 focus:border-l-cyan-500/60',
-      className,
-    )}>
-      <span className={cn('text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>{title ?? command}</span>
-      {title && (
-        <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">{command}</span>
+    <MenuItem onSelect={onSelect} className={commandItemClassName(accentColor, className)}>
+      <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>
+        {title}
+      </span>
+      {showCommand && (
+        <span className="max-w-[8rem] truncate font-mono text-[11px] leading-none tracking-wide text-muted-foreground">
+          {command}
+        </span>
       )}
     </MenuItem>
-  );
+  )
 }
 
-export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimateEdit, onExtractSkeleton, onMarkSeen, projectSlug, projects, callTool, onAfterExport, MenuItem }: AssetMenuProps) {
-  const targetProjects = (projects ?? []).filter((p) => p.slug !== projectSlug);
-  const canExportToProject = !!projectSlug && !!callTool && targetProjects.length > 0;
+function CommandActionList({ actions, MenuItem }: { actions: CommandAction[]; MenuItem: MenuItemComponent }) {
+  return (
+    <>
+      {actions.map((action, index) => (
+        <Fragment key={`${action.command}-${action.title}`}>
+          {index > 0 && <ContextMenuSeparator />}
+          <CommandMenuItem {...action} MenuItem={MenuItem} />
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+function CommandSubMenu({ title, command, titleClassName, accentColor, contentClassName, children }: CommandSubMenuProps) {
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger
+        className={cn(
+          commandItemClassName(accentColor),
+          'data-[state=open]:!bg-white/[0.12]',
+        )}
+      >
+        <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>
+          {title}
+        </span>
+        {command && (
+          <span className="max-w-[8rem] truncate font-mono text-[11px] leading-none tracking-wide text-muted-foreground">
+            {command}
+          </span>
+        )}
+      </ContextMenuSubTrigger>
+      <ContextMenuSubContent className={cn('min-w-[13rem] max-h-[60vh] overflow-y-auto', contentClassName)}>
+        {children}
+      </ContextMenuSubContent>
+    </ContextMenuSub>
+  )
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = src
+  })
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+        return
+      }
+      reject(new Error('Failed to convert image'))
+    }, 'image/png')
+  })
+}
+
+async function copyImageToClipboard(filePath: string) {
+  const imgUrl = filePath.replace(/\?.*$/, '')
+  let objectUrl: string | undefined
+
+  try {
+    const response = await fetch(imgUrl)
+    if (!response.ok) throw new Error('Failed to fetch image')
+
+    const blob = await response.blob()
+    objectUrl = URL.createObjectURL(blob)
+    const img = await loadImage(objectUrl)
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Failed to prepare image')
+
+    context.drawImage(img, 0, 0)
+    const pngBlob = await canvasToPngBlob(canvas)
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
+    toast({ title: 'Copied', description: 'Image copied to clipboard', duration: 2000 })
+  } catch {
+    toast({ title: 'Error', description: 'Failed to copy image', duration: 3000 })
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+  }
+}
+
+function copySlugToClipboard(slug: string) {
+  void navigator.clipboard.writeText(slug)
+  toast({ title: 'Copied', description: slug, duration: 2000 })
+}
+
+export function AssetMenu({
+  slug,
+  filePath,
+  itemType,
+  onAnimateCommand,
+  onAnimateEdit,
+  onExtractSkeleton,
+  onMarkSeen,
+  projectSlug,
+  projects,
+  callTool,
+  onAfterExport,
+  MenuItem,
+}: AssetMenuProps) {
+  const targetProjects = (projects ?? []).filter((p) => p.slug !== projectSlug)
+  const canExportToProject = !!projectSlug && !!callTool && targetProjects.length > 0
 
   const exportToProject = async (target: string) => {
-    if (!callTool || !projectSlug) return;
-    const assetId = slug.replace(/^@/, '');
+    if (!callTool || !projectSlug) return
+    const assetId = slug.replace(/^@/, '')
+
     try {
       const result = await callTool('export_asset_to_project', {
         asset_id: assetId,
         project_slug: projectSlug,
         target_project: target,
-      });
-      const isError = (result as { isError?: boolean }).isError === true;
-      const content = (result.content ?? []) as Array<{ type: string; text: string }>;
-      const text = content[0]?.text ?? '';
+      })
+      const isError = (result as { isError?: boolean }).isError === true
+      const content = (result.content ?? []) as Array<{ type: string; text: string }>
+      const text = content[0]?.text ?? ''
+
       if (isError) {
-        toast({ title: 'Export failed', description: text || 'Unknown error', duration: 4000 });
-        return;
+        toast({ title: 'Export failed', description: text || 'Unknown error', duration: 4000 })
+        return
       }
+
       const parsed = (() => {
-        try { return JSON.parse(text) as { new_asset_id?: string }; } catch { return null; }
-      })();
+        try {
+          return JSON.parse(text) as { new_asset_id?: string }
+        } catch {
+          return null
+        }
+      })()
+
       toast({
         title: 'Exported',
         description: `${assetId} → ${target}${parsed?.new_asset_id ? ` (${parsed.new_asset_id})` : ''}`,
         duration: 3000,
-      });
-      onAfterExport?.(target);
+      })
+      onAfterExport?.(target)
     } catch (e: unknown) {
-      toast({ title: 'Export failed', description: e instanceof Error ? e.message : String(e), duration: 4000 });
+      toast({ title: 'Export failed', description: e instanceof Error ? e.message : String(e), duration: 4000 })
     }
-  };
+  }
+
+  const imageActions: CommandAction[] = itemType === 'image'
+    ? [
+        {
+          command: `/image ${slug}`,
+          title: 'Generate Image',
+          titleClassName: 'text-primary',
+          accentColor: 'border-l-primary/50 focus:border-l-primary/80',
+          onSelect: () => onAnimateCommand?.(`/image ${slug}`),
+        },
+        {
+          command: `/video ${slug}`,
+          title: 'Generate Video',
+          titleClassName: 'text-violet-400',
+          accentColor: 'border-l-violet-500/50 focus:border-l-violet-500/80',
+          onSelect: () => onAnimateCommand?.(`/video ${slug}`),
+        },
+        {
+          command: `/describe ${slug}`,
+          title: 'Describe Image',
+          titleClassName: 'text-emerald-400',
+          accentColor: 'border-l-emerald-500/50 focus:border-l-emerald-500/80',
+          onSelect: () => onAnimateCommand?.(`/describe ${slug}`),
+        },
+        {
+          command: `/character ${slug}`,
+          title: 'Character',
+          titleClassName: 'text-violet-300',
+          accentColor: 'border-l-violet-400/50 focus:border-l-violet-400/80',
+          onSelect: () => onAnimateCommand?.(`/character ${slug}`),
+        },
+        ...(onExtractSkeleton
+          ? [{
+              command: `extract pose ${slug}`,
+              title: 'Extract Pose Skeleton',
+              titleClassName: 'text-amber-400',
+              accentColor: 'border-l-amber-500/50 focus:border-l-amber-500/80',
+              onSelect: onExtractSkeleton,
+            }]
+          : []),
+      ]
+    : []
+
+  const videoActions: CommandAction[] = itemType === 'video'
+    ? [
+        {
+          command: `/video ${slug}`,
+          title: 'Extend Video',
+          titleClassName: 'text-violet-400',
+          accentColor: 'border-l-violet-500/50 focus:border-l-violet-500/80',
+          onSelect: () => onAnimateCommand?.(`/video ${slug}`),
+        },
+        {
+          command: `/trim ${slug}`,
+          title: 'Trim Video',
+          onSelect: () => onAnimateCommand?.(`/trim ${slug}`),
+        },
+        {
+          command: `/extract-first-frame ${slug}`,
+          title: 'Extract First Frame',
+          titleClassName: 'text-primary',
+          accentColor: 'border-l-primary/50 focus:border-l-primary/80',
+          onSelect: () => onAnimateCommand?.(`/extract-first-frame ${slug}`),
+        },
+        {
+          command: `/extract-last-frame ${slug}`,
+          title: 'Extract Last Frame',
+          titleClassName: 'text-primary',
+          accentColor: 'border-l-primary/50 focus:border-l-primary/80',
+          onSelect: () => onAnimateCommand?.(`/extract-last-frame ${slug}`),
+        },
+        {
+          command: `/extract-audio ${slug}`,
+          title: 'Extract Audio',
+          titleClassName: 'text-emerald-400',
+          accentColor: 'border-l-emerald-500/50 focus:border-l-emerald-500/80',
+          onSelect: () => onAnimateCommand?.(`/extract-audio ${slug}`),
+        },
+        {
+          command: `/splice ${slug} ...`,
+          title: 'Splice with...',
+          titleClassName: 'text-amber-400',
+          accentColor: 'border-l-amber-500/50 focus:border-l-amber-500/80',
+          onSelect: () => onAnimateEdit?.(`/splice ${slug} `),
+        },
+        {
+          command: `/watermark ${slug}`,
+          title: 'Watermark (last 2s)',
+          onSelect: () => onAnimateCommand?.(`/watermark ${slug}`),
+        },
+      ]
+    : []
+
+  const copyActions: CommandAction[] = [
+    {
+      command: '/copy',
+      title: 'Copy Slug',
+      onSelect: () => copySlugToClipboard(slug),
+    },
+    ...((itemType === 'image' || itemType === 'character') && filePath
+      ? [{
+          command: '/copy-image',
+          title: 'Copy Image',
+          onSelect: () => { void copyImageToClipboard(filePath) },
+        }]
+      : []),
+    ...(itemType === 'video'
+      ? [{
+          command: `/copy-video ${slug}`,
+          title: 'Copy Video',
+          onSelect: () => onAnimateCommand?.(`/copy-video ${slug}`),
+        }]
+      : []),
+  ]
+
+  const exportActions: CommandAction[] = itemType === 'video' || itemType === 'image'
+    ? [
+        {
+          command: `/export ${slug}`,
+          title: 'Export to Downloads',
+          onSelect: () => onAnimateCommand?.(`/export ${slug}`),
+        },
+      ]
+    : []
+
+  const fileActions: CommandAction[] = [
+    {
+      command: '/folder',
+      title: 'Show in Folder',
+      onSelect: () => onAnimateCommand?.(`/folder ${slug}`),
+    },
+    {
+      command: `/duplicate ${slug}`,
+      title: 'Duplicate',
+      onSelect: () => onAnimateCommand?.(`/duplicate ${slug}`),
+    },
+    {
+      command: `/rename ${slug}`,
+      title: 'Rename',
+      onSelect: () => onAnimateEdit?.(`/rename ${slug} `),
+    },
+  ]
+
+  const hasImageActions = imageActions.length > 0
+  const hasVideoActions = videoActions.length > 0
+  const hasExportActions = exportActions.length > 0 || canExportToProject
 
   return (
     <>
@@ -97,239 +390,66 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
             onSelect={onMarkSeen}
             MenuItem={MenuItem}
           />
-          <div className="-mx-1 my-1 h-px bg-border" />
+          <ContextMenuSeparator />
         </>
       )}
-      {itemType === 'image' && (
+      {hasImageActions && (
         <>
-          <CommandMenuItem
+          <CommandSubMenu
+            title="Image Tools"
             command={`/image ${slug}`}
-            title="Generate Image"
             titleClassName="text-primary"
             accentColor="border-l-primary/50 focus:border-l-primary/80"
-            onSelect={() => onAnimateCommand?.(`/image ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
+          >
+            <CommandActionList actions={imageActions} MenuItem={MenuItem} />
+          </CommandSubMenu>
+          <ContextMenuSeparator />
+        </>
+      )}
+      {hasVideoActions && (
+        <>
+          <CommandSubMenu
+            title="Video Tools"
             command={`/video ${slug}`}
-            title="Generate Video"
             titleClassName="text-violet-400"
             accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
-            onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/describe ${slug}`}
-            title="Describe Image"
-            titleClassName="text-emerald-400"
-            accentColor="border-l-emerald-500/50 focus:border-l-emerald-500/80"
-            onSelect={() => onAnimateCommand?.(`/describe ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/character ${slug}`}
-            title="Character"
-            titleClassName="text-violet-300"
-            accentColor="border-l-violet-400/50 focus:border-l-violet-400/80"
-            onSelect={() => onAnimateCommand?.(`/character ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          {onExtractSkeleton && (
-            <>
-              <div className="-mx-1 my-1 h-px bg-border" />
-              <CommandMenuItem
-                command={`extract pose ${slug}`}
-                title="Extract Pose Skeleton"
-                titleClassName="text-amber-400"
-                accentColor="border-l-amber-500/50 focus:border-l-amber-500/80"
-                onSelect={onExtractSkeleton}
-                MenuItem={MenuItem}
-              />
-            </>
-          )}
-          <div className="-mx-1 my-1 h-px bg-border" />
+          >
+            <CommandActionList actions={videoActions} MenuItem={MenuItem} />
+          </CommandSubMenu>
+          <ContextMenuSeparator />
         </>
       )}
-      {(itemType === 'image' || itemType === 'character') && filePath && (
+      <CommandSubMenu title="Copy" command="/copy">
+        <CommandActionList actions={copyActions} MenuItem={MenuItem} />
+      </CommandSubMenu>
+      {hasExportActions && (
         <>
-          <CommandMenuItem
-            command="/copy-image"
-            title="Copy Image"
-            onSelect={() => {
-              const imgUrl = filePath.replace(/\?.*$/, '');
-              fetch(imgUrl)
-                .then((res) => res.blob())
-                .then((blob) => {
-                  const img = new Image();
-                  img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.naturalWidth;
-                    canvas.height = img.naturalHeight;
-                    canvas.getContext('2d')!.drawImage(img, 0, 0);
-                    canvas.toBlob((pngBlob) => {
-                      if (!pngBlob) {
-                        toast({ title: 'Error', description: 'Failed to convert image', duration: 3000 });
-                        return;
-                      }
-                      navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]).then(
-                        () => toast({ title: 'Copied', description: 'Image copied to clipboard', duration: 2000 }),
-                        () => toast({ title: 'Error', description: 'Failed to copy image', duration: 3000 }),
-                      );
-                    }, 'image/png');
-                  };
-                  img.src = URL.createObjectURL(blob);
-                })
-                .catch(() => toast({ title: 'Error', description: 'Failed to fetch image', duration: 3000 }));
-            }}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
+          <ContextMenuSeparator />
+          <CommandSubMenu title="Export" command={exportActions[0]?.command ?? `/export-to-project ${slug}`}>
+            {exportActions.length > 0 && <CommandActionList actions={exportActions} MenuItem={MenuItem} />}
+            {canExportToProject && exportActions.length > 0 && <ContextMenuSeparator />}
+            {canExportToProject && (
+              <>
+                <ContextMenuLabel className="px-2 py-1 text-xs text-muted-foreground">Projects</ContextMenuLabel>
+                {targetProjects.map((p) => (
+                  <MenuItem
+                    key={p.slug}
+                    onSelect={() => { void exportToProject(p.slug) }}
+                    className="!flex !items-center py-2 px-3 text-sm font-mono"
+                  >
+                    {p.slug}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </CommandSubMenu>
         </>
       )}
-      <CommandMenuItem
-        command="/copy"
-        title="Copy Slug"
-        onSelect={() => {
-          navigator.clipboard.writeText(slug);
-          toast({ title: 'Copied', description: slug, duration: 2000 });
-        }}
-        MenuItem={MenuItem}
-      />
-      {(itemType === 'video' || itemType === 'image') && (
-        <>
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/export ${slug}`}
-            title="Export to Downloads"
-            onSelect={() => onAnimateCommand?.(`/export ${slug}`)}
-            MenuItem={MenuItem}
-          />
-        </>
-      )}
-      <div className="-mx-1 my-1 h-px bg-border" />
-      <CommandMenuItem
-        command="/folder"
-        title="Show in Folder"
-        onSelect={() => onAnimateCommand?.(`/folder ${slug}`)}
-        MenuItem={MenuItem}
-      />
-      <div className="-mx-1 my-1 h-px bg-border" />
-      <CommandMenuItem
-        command={`/duplicate ${slug}`}
-        title="Duplicate"
-        onSelect={() => onAnimateCommand?.(`/duplicate ${slug}`)}
-        MenuItem={MenuItem}
-      />
-      {canExportToProject && (
-        <>
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <ContextMenuSub>
-            <ContextMenuSubTrigger
-              className={cn(
-                '!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] data-[state=open]:!bg-white/[0.12]',
-                'border-l-cyan-500/30 focus:border-l-cyan-500/60 data-[state=open]:border-l-cyan-500/60',
-              )}
-            >
-              <span className="text-sm font-semibold leading-none text-foreground">Export to Project…</span>
-              <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">
-                {`/export-to-project ${slug}`}
-              </span>
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="min-w-[12rem] max-h-[60vh] overflow-y-auto">
-              {targetProjects.map((p) => (
-                <MenuItem
-                  key={p.slug}
-                  onSelect={() => { void exportToProject(p.slug); }}
-                  className="!flex !items-center py-2 px-3 text-sm font-mono"
-                >
-                  {p.slug}
-                </MenuItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-        </>
-      )}
-      {itemType === 'video' && (
-        <>
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/copy-video ${slug}`}
-            title="Copy Video"
-            onSelect={() => onAnimateCommand?.(`/copy-video ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/video ${slug}`}
-            title="Extend Video"
-            titleClassName="text-violet-400"
-            accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
-            onSelect={() => onAnimateCommand?.(`/video ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/trim ${slug}`}
-            title="Trim Video"
-            onSelect={() => onAnimateCommand?.(`/trim ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/extract-first-frame ${slug}`}
-            title="Extract First Frame"
-            titleClassName="text-primary"
-            accentColor="border-l-primary/50 focus:border-l-primary/80"
-            onSelect={() => onAnimateCommand?.(`/extract-first-frame ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/extract-last-frame ${slug}`}
-            title="Extract Last Frame"
-            titleClassName="text-primary"
-            accentColor="border-l-primary/50 focus:border-l-primary/80"
-            onSelect={() => onAnimateCommand?.(`/extract-last-frame ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/extract-audio ${slug}`}
-            title="Extract Audio"
-            titleClassName="text-emerald-400"
-            accentColor="border-l-emerald-500/50 focus:border-l-emerald-500/80"
-            onSelect={() => onAnimateCommand?.(`/extract-audio ${slug}`)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/splice ${slug} ...`}
-            title="Splice with..."
-            titleClassName="text-amber-400"
-            accentColor="border-l-amber-500/50 focus:border-l-amber-500/80"
-            onSelect={() => onAnimateEdit?.(`/splice ${slug} `)}
-            MenuItem={MenuItem}
-          />
-          <div className="-mx-1 my-1 h-px bg-border" />
-          <CommandMenuItem
-            command={`/watermark ${slug}`}
-            title="Watermark (last 2s)"
-            onSelect={() => onAnimateCommand?.(`/watermark ${slug}`)}
-            MenuItem={MenuItem}
-          />
-        </>
-      )}
-      <div className="-mx-1 my-1 h-px bg-border" />
-      <CommandMenuItem
-        command={`/rename ${slug}`}
-        title="Rename"
-        onSelect={() => onAnimateEdit?.(`/rename ${slug} `)}
-        MenuItem={MenuItem}
-      />
-      <div className="-mx-1 my-1 h-px bg-border" />
+      <ContextMenuSeparator />
+      <CommandSubMenu title="File" command="/folder">
+        <CommandActionList actions={fileActions} MenuItem={MenuItem} />
+      </CommandSubMenu>
+      <ContextMenuSeparator />
       <CommandMenuItem
         command={`/delete ${slug}`}
         title="Delete"
@@ -339,5 +459,5 @@ export function AssetMenu({ slug, filePath, itemType, onAnimateCommand, onAnimat
         MenuItem={MenuItem}
       />
     </>
-  );
+  )
 }
