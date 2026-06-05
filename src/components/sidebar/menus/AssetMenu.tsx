@@ -1,12 +1,6 @@
 import { Fragment, type ComponentType, type ReactNode } from 'react'
 import type { UseMcpResult } from 'use-mcp/react'
-import {
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-} from '@/components/ui/context-menu'
+import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/useToast'
 
@@ -39,15 +33,6 @@ interface CommandAction {
 interface CommandMenuItemProps extends CommandAction {
   MenuItem: MenuItemComponent
   showCommand?: boolean
-}
-
-interface CommandSubMenuProps {
-  title: string
-  command?: string
-  titleClassName?: string
-  accentColor?: string
-  contentClassName?: string
-  children: ReactNode
 }
 
 const defaultAccentColor = 'border-l-cyan-500/30 focus:border-l-cyan-500/60'
@@ -94,31 +79,6 @@ function CommandActionList({ actions, MenuItem }: { actions: CommandAction[]; Me
         </Fragment>
       ))}
     </>
-  )
-}
-
-function CommandSubMenu({ title, command, titleClassName, accentColor, contentClassName, children }: CommandSubMenuProps) {
-  return (
-    <ContextMenuSub>
-      <ContextMenuSubTrigger
-        className={cn(
-          commandItemClassName(accentColor),
-          'data-[state=open]:!bg-white/[0.12]',
-        )}
-      >
-        <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>
-          {title}
-        </span>
-        {command && (
-          <span className="max-w-[8rem] truncate font-mono text-[11px] leading-none tracking-wide text-muted-foreground">
-            {command}
-          </span>
-        )}
-      </ContextMenuSubTrigger>
-      <ContextMenuSubContent className={cn('min-w-[13rem] max-h-[60vh] overflow-y-auto', contentClassName)}>
-        {children}
-      </ContextMenuSubContent>
-    </ContextMenuSub>
   )
 }
 
@@ -356,6 +316,14 @@ export function AssetMenu({
       ]
     : []
 
+  const projectExportActions: CommandAction[] = canExportToProject
+    ? targetProjects.map((p) => ({
+        command: `/export-to-project ${slug} ${p.slug}`,
+        title: `Export to ${p.slug}`,
+        onSelect: () => { void exportToProject(p.slug) },
+      }))
+    : []
+
   const fileActions: CommandAction[] = [
     {
       command: '/folder',
@@ -376,7 +344,8 @@ export function AssetMenu({
 
   const hasImageActions = imageActions.length > 0
   const hasVideoActions = videoActions.length > 0
-  const hasExportActions = exportActions.length > 0 || canExportToProject
+  const combinedExportActions = [...exportActions, ...projectExportActions]
+  const hasExportActions = combinedExportActions.length > 0
 
   return (
     <>
@@ -395,60 +364,25 @@ export function AssetMenu({
       )}
       {hasImageActions && (
         <>
-          <CommandSubMenu
-            title="Image Tools"
-            command={`/image ${slug}`}
-            titleClassName="text-primary"
-            accentColor="border-l-primary/50 focus:border-l-primary/80"
-          >
-            <CommandActionList actions={imageActions} MenuItem={MenuItem} />
-          </CommandSubMenu>
+          <CommandActionList actions={imageActions} MenuItem={MenuItem} />
           <ContextMenuSeparator />
         </>
       )}
       {hasVideoActions && (
         <>
-          <CommandSubMenu
-            title="Video Tools"
-            command={`/video ${slug}`}
-            titleClassName="text-violet-400"
-            accentColor="border-l-violet-500/50 focus:border-l-violet-500/80"
-          >
-            <CommandActionList actions={videoActions} MenuItem={MenuItem} />
-          </CommandSubMenu>
+          <CommandActionList actions={videoActions} MenuItem={MenuItem} />
           <ContextMenuSeparator />
         </>
       )}
-      <CommandSubMenu title="Copy" command="/copy">
-        <CommandActionList actions={copyActions} MenuItem={MenuItem} />
-      </CommandSubMenu>
+      <CommandActionList actions={copyActions} MenuItem={MenuItem} />
       {hasExportActions && (
         <>
           <ContextMenuSeparator />
-          <CommandSubMenu title="Export" command={exportActions[0]?.command ?? `/export-to-project ${slug}`}>
-            {exportActions.length > 0 && <CommandActionList actions={exportActions} MenuItem={MenuItem} />}
-            {canExportToProject && exportActions.length > 0 && <ContextMenuSeparator />}
-            {canExportToProject && (
-              <>
-                <ContextMenuLabel className="px-2 py-1 text-xs text-muted-foreground">Projects</ContextMenuLabel>
-                {targetProjects.map((p) => (
-                  <MenuItem
-                    key={p.slug}
-                    onSelect={() => { void exportToProject(p.slug) }}
-                    className="!flex !items-center py-2 px-3 text-sm font-mono"
-                  >
-                    {p.slug}
-                  </MenuItem>
-                ))}
-              </>
-            )}
-          </CommandSubMenu>
+          <CommandActionList actions={combinedExportActions} MenuItem={MenuItem} />
         </>
       )}
       <ContextMenuSeparator />
-      <CommandSubMenu title="File" command="/folder">
-        <CommandActionList actions={fileActions} MenuItem={MenuItem} />
-      </CommandSubMenu>
+      <CommandActionList actions={fileActions} MenuItem={MenuItem} />
       <ContextMenuSeparator />
       <CommandMenuItem
         command={`/delete ${slug}`}

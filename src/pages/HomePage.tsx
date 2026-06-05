@@ -113,8 +113,6 @@ export function HomePage() {
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
 
-  // Load the project list once the MCP connection is ready so
-  // the "Export to Project" sub-menu has its options.
   useEffect(() => {
     if (state === 'ready') refreshProjects();
   }, [state, refreshProjects]);
