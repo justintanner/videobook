@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { x as createX } from "@apicity/x";
+import { createX } from "@apicity/x";
 import type { VideocityFs } from "vc-engine";
 import { createFsForTest } from "../fs.js";
 import { postToX } from "./post-to-x.js";

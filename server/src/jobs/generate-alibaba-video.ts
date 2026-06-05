@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { alibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
+import { createAlibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -58,7 +58,7 @@ export function registerGenerateAlibabaVideoJob(fs: VideocityFs): void {
     const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug, uploadModel) : undefined;
     const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug, uploadModel) : undefined;
 
-    const provider = alibaba({ apiKey, timeout: 120_000 });
+    const provider = createAlibaba({ apiKey, timeout: 120_000 });
 
     const request = buildAlibabaVideoPayload(
       {

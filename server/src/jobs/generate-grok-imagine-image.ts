@@ -3,7 +3,7 @@ import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import type { GrokImageToImageRequest } from "@apicity/kie";
-import { xai } from "@apicity/xai";
+import { createXai } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
@@ -35,7 +35,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
       // xAI path — synchronous image generation
       const apiKey = requireApiKey("XAI_API_KEY");
 
-      const provider = xai({ apiKey, timeout: 120_000 });
+      const provider = createXai({ apiKey, timeout: 120_000 });
 
       const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 

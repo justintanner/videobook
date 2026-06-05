@@ -44,7 +44,7 @@ const TASK_INFO: Record<string, TaskInfo> = {
   nano_banana_image:             { model: modelDisplay('kie', 'nano-banana'),                       provider: 'Kie' },
   qwen2_image_edit:              { model: modelDisplay('kie', 'qwen2/image-edit'),                  provider: 'Kie' },
   grok_imagine_image:            { model: modelDisplay('kie', 'grok-imagine/text-to-image'),        provider: 'Kie' },
-  grok_imagine_video:            { model: modelDisplay('kie', 'grok-imagine/text-to-video'),        provider: 'Kie' },
+  grok_imagine_video:            { model: modelDisplay('kie', 'grok-imagine-video-1-5-preview'),    provider: 'Kie' },
   grok_imagine_text:             { model: modelDisplay('kie', 'grok-imagine/text-to-image'),        provider: 'Kie' },
   grok_imagine_extend_video:     { model: modelDisplay('kie', 'grok-imagine/extend'),               provider: 'Kie' },
   gpt_image:                     { model: modelDisplay('kie', 'gpt-image-2-image-to-image'),        provider: 'Kie' },

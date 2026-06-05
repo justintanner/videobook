@@ -11,12 +11,12 @@ type ActionCategory =
   | 'render'
   | 'upload'
   | 'transcribe'
-  | 'sync'
   | 'trim'
   | 'edit'
   | 'create'
   | 'delete'
   | 'fail'
+  | 'rewind'
   | 'other';
 
 interface CategoryStyle {
@@ -30,26 +30,26 @@ const CATEGORY_STYLES: Record<ActionCategory, CategoryStyle> = {
   render:     { label: 'text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.55)]',    accent: 'border-l-amber-500/70',   glow: 'shadow-[inset_3px_0_10px_-2px_rgba(251,191,36,0.35)]' },
   upload:     { label: 'text-blue-300 drop-shadow-[0_0_6px_rgba(96,165,250,0.55)]',     accent: 'border-l-blue-500/70',    glow: 'shadow-[inset_3px_0_10px_-2px_rgba(96,165,250,0.35)]' },
   transcribe: { label: 'text-sky-300 drop-shadow-[0_0_6px_rgba(56,189,248,0.55)]',      accent: 'border-l-sky-500/70',     glow: 'shadow-[inset_3px_0_10px_-2px_rgba(56,189,248,0.35)]' },
-  sync:       { label: 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.55)]',  accent: 'border-l-emerald-500/60', glow: 'shadow-[inset_3px_0_10px_-2px_rgba(16,185,129,0.3)]' },
   trim:       { label: 'text-teal-300 drop-shadow-[0_0_6px_rgba(45,212,191,0.55)]',     accent: 'border-l-teal-500/70',    glow: 'shadow-[inset_3px_0_10px_-2px_rgba(45,212,191,0.35)]' },
   edit:       { label: 'text-zinc-300 drop-shadow-[0_0_4px_rgba(161,161,170,0.4)]',     accent: 'border-l-zinc-500/60',    glow: 'shadow-[inset_3px_0_8px_-2px_rgba(161,161,170,0.25)]' },
   create:     { label: 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.55)]',  accent: 'border-l-emerald-500/70', glow: 'shadow-[inset_3px_0_10px_-2px_rgba(16,185,129,0.35)]' },
   delete:     { label: 'text-red-300 drop-shadow-[0_0_6px_rgba(239,68,68,0.55)]',       accent: 'border-l-red-500/70',     glow: 'shadow-[inset_3px_0_10px_-2px_rgba(239,68,68,0.35)]' },
   fail:       { label: 'text-red-300 drop-shadow-[0_0_8px_rgba(239,68,68,0.75)]',       accent: 'border-l-red-500/80',     glow: 'activity-fail-pulse' },
+  rewind:     { label: 'text-violet-300 drop-shadow-[0_0_6px_rgba(167,139,250,0.55)]',  accent: 'border-l-violet-500/70',  glow: 'shadow-[inset_3px_0_10px_-2px_rgba(167,139,250,0.35)]' },
   other:      { label: 'text-zinc-400/70',                                               accent: 'border-l-zinc-600/40',    glow: '' },
 };
 
-function hasError(payload: string | Record<string, unknown>): boolean {
+function hasError(payload: string | Record<string, unknown> | undefined): boolean {
   return typeof payload === 'object' && payload !== null && '_error' in payload;
 }
 
-function categorize(action: string, payload: string | Record<string, unknown>): ActionCategory {
+function categorize(action: string, payload: string | Record<string, unknown> | undefined): ActionCategory {
   if (action === 'job-error' || hasError(payload)) return 'fail';
+  if (action.includes('rewind') || action.includes('restore')) return 'rewind';
   if (action.includes('generate') || action.includes('grok') || action.includes('kling') || action.includes('nano-banana') || action.includes('gpt-image')) return 'generate';
   if (action.includes('render')) return 'render';
   if (action.includes('upload') || action.includes('download')) return 'upload';
   if (action.includes('transcribe') || action.includes('isolate')) return 'transcribe';
-  if (action.includes('sync')) return 'sync';
   if (action.includes('trim')) return 'trim';
   if (action.includes('edit') || action.includes('assign') || action.includes('clear') || action.includes('speed') || action.includes('reverse')) return 'edit';
   if (action.includes('create')) return 'create';
@@ -61,17 +61,17 @@ function shortAction(action: string): string {
   return action.replace(/^tool-/, '').replace(/-/g, ' ');
 }
 
-function extractAssetId(payload: string | Record<string, unknown>): string | null {
+function extractAssetId(payload: string | Record<string, unknown> | undefined): string | null {
   if (typeof payload !== 'object' || payload === null) return null;
   return (payload.assetId as string) ?? (payload.asset_id as string) ?? (payload.vid_asset_id as string) ?? (payload.img_asset_id as string) ?? null;
 }
 
-function extractPrompt(payload: string | Record<string, unknown>): string | null {
+function extractPrompt(payload: string | Record<string, unknown> | undefined): string | null {
   if (typeof payload !== 'object' || payload === null) return null;
   return (payload.prompt as string) ?? null;
 }
 
-function extractError(payload: string | Record<string, unknown>): string | null {
+function extractError(payload: string | Record<string, unknown> | undefined): string | null {
   if (typeof payload !== 'object' || payload === null) return null;
   return (payload._error as string) ?? (payload.error as string) ?? null;
 }
@@ -97,7 +97,8 @@ function formatAbsolute(dateStr: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function formatPayload(payload: string | Record<string, unknown>): string {
+function formatPayload(payload: string | Record<string, unknown> | undefined): string {
+  if (payload === undefined) return 'snapshot';
   if (typeof payload === 'string') return payload;
   if (payload === null || payload === undefined) return String(payload);
   try {
@@ -127,6 +128,7 @@ interface ActivityLogDrawerProps {
   assetSlugs: string[];
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
+  onRewound?: () => void | Promise<void>;
 }
 
 export function ActivityLogDrawer({
@@ -137,10 +139,13 @@ export function ActivityLogDrawer({
   assetSlugs,
   callTool,
   projectSlug,
+  onRewound,
 }: ActivityLogDrawerProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [rewindingHash, setRewindingHash] = useState<string | null>(null);
+  const [rewindError, setRewindError] = useState<string | null>(null);
 
   const sortedEntries = useMemo(
     () => [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -202,6 +207,30 @@ export function ActivityLogDrawer({
     return contextDispatch(message);
   };
 
+  const handleRewind = useCallback(async (entry: ActionLogEntry) => {
+    if (!projectSlug || rewindingHash) return;
+    const ok = window.confirm(`Rewind project to #${shortHash(entry.hash)}? Active jobs for this project will be stopped.`);
+    if (!ok) return;
+    setRewindingHash(entry.hash);
+    setRewindError(null);
+    try {
+      const result = await callTool('rewind_project', {
+        project_slug: projectSlug,
+        commit_hash: entry.hash,
+      });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }>;
+        setRewindError(content[0]?.text ?? 'Rewind failed');
+        return;
+      }
+      await onRewound?.();
+    } catch (error) {
+      setRewindError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRewindingHash(null);
+    }
+  }, [callTool, onRewound, projectSlug, rewindingHash]);
+
   if (!open) return null;
 
   return (
@@ -243,6 +272,11 @@ export function ActivityLogDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
+          {rewindError && (
+            <div className="mb-3 border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-[11px] font-mono text-red-200">
+              {rewindError}
+            </div>
+          )}
           {loading && sortedEntries.length === 0 ? (
             <div className="flex items-center justify-center py-24">
               <span className="text-xs font-mono tracking-widest text-emerald-400/80 uppercase activity-loading-blocks">
@@ -258,13 +292,16 @@ export function ActivityLogDrawer({
           ) : (
             <div className="flex flex-col">
               {sortedEntries.map((entry, i) => {
-                const cat = categorize(entry.action, entry.payload);
+                const cat = entry.category ?? categorize(entry.action, entry.payload);
                 const style = CATEGORY_STYLES[cat];
-                const assetId = extractAssetId(entry.payload);
+                const assetId = entry.assetId ?? extractAssetId(entry.payload);
                 const prompt = extractPrompt(entry.payload);
                 const errorMsg = cat === 'fail' ? extractError(entry.payload) : null;
                 const isFail = cat === 'fail';
                 const isExpanded = expanded.has(entry.hash);
+                const isRewinding = rewindingHash === entry.hash;
+                const canRewind = entry.rewindable !== false && projectSlug !== undefined;
+                const title = entry.title ?? shortAction(entry.action);
                 const delay = Math.min(i, 20) * 20;
                 return (
                   <div
@@ -272,49 +309,67 @@ export function ActivityLogDrawer({
                     className="activity-row-boot"
                     style={{ animationDelay: `${delay}ms` }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(entry.hash)}
+                    <div
                       className={cn(
-                        'group w-full text-left flex items-start gap-4 px-4 py-3 text-sm font-mono',
+                        'group w-full flex items-stretch gap-0 text-sm font-mono',
                         'border-b border-l-2 border-emerald-500/5',
                         'hover:bg-emerald-500/[0.04] transition-colors',
                         style.accent,
                         style.glow,
                         isFail && 'bg-red-500/[0.03]',
                       )}
-                      aria-expanded={isExpanded}
                     >
-                      <span className={cn('shrink-0 w-32 uppercase text-[10px] tracking-[0.15em] pt-0.5 font-bold', style.label)}>
-                        [{cat}]
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        {isFail && errorMsg ? (
-                          <div className="text-red-300/90 truncate">{errorMsg}</div>
-                        ) : (
-                          <div className="text-emerald-100/80 uppercase tracking-wider text-xs">{shortAction(entry.action)}</div>
-                        )}
-                        {assetId && (
-                          <div className="text-emerald-400/50 text-[10px] mt-0.5 tracking-wider">› {assetId}</div>
-                        )}
-                        {!isFail && prompt && (
-                          <div className="text-emerald-400/40 text-[10px] mt-0.5 italic truncate">"{prompt}"</div>
-                        )}
-                      </div>
-                      <span className="shrink-0 text-[10px] pt-0.5 text-emerald-400/50 tracking-wider tabular-nums">
-                        {formatRelative(entry.date)}
-                      </span>
-                      <span className={cn(
-                        'shrink-0 pt-0.5 text-emerald-400/60 font-mono text-xs transition-transform',
-                        isExpanded ? 'rotate-90' : 'group-hover:translate-x-0.5',
-                      )}>
-                        ▸
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(entry.hash)}
+                        className="flex-1 min-w-0 text-left flex items-start gap-4 px-4 py-3"
+                        aria-expanded={isExpanded}
+                      >
+                        <span className={cn('shrink-0 w-32 uppercase text-[10px] tracking-[0.15em] pt-0.5 font-bold', style.label)}>
+                          [{cat}]
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          {isFail && errorMsg ? (
+                            <div className="text-red-300/90 truncate">{errorMsg}</div>
+                          ) : (
+                            <div className="text-emerald-100/80 uppercase tracking-wider text-xs">{title}</div>
+                          )}
+                          {assetId && (
+                            <div className="text-emerald-400/50 text-[10px] mt-0.5 tracking-wider">› {assetId}</div>
+                          )}
+                          {!isFail && prompt && (
+                            <div className="text-emerald-400/40 text-[10px] mt-0.5 italic truncate">"{prompt}"</div>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[10px] pt-0.5 text-emerald-400/50 tracking-wider tabular-nums">
+                          {formatRelative(entry.date)}
+                        </span>
+                        <span className={cn(
+                          'shrink-0 pt-0.5 text-emerald-400/60 font-mono text-xs transition-transform',
+                          isExpanded ? 'rotate-90' : 'group-hover:translate-x-0.5',
+                        )}>
+                          ▸
+                        </span>
+                      </button>
+                      {canRewind && (
+                        <button
+                          type="button"
+                          onClick={() => handleRewind(entry)}
+                          disabled={rewindingHash !== null}
+                          className={cn(
+                            'shrink-0 px-3 border-l border-emerald-500/10 text-[10px] tracking-[0.16em] uppercase',
+                            'text-violet-300/75 hover:text-violet-200 hover:bg-violet-500/[0.08] transition-colors',
+                            'disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-violet-300/75',
+                          )}
+                        >
+                          {isRewinding ? 'rewinding' : 'rewind'}
+                        </button>
+                      )}
+                    </div>
                     {isExpanded && (
                       <div className="px-4 pb-4 pt-1 bg-black/40">
                         <div className="text-[10px] font-mono text-emerald-400/70 tracking-wider mb-1">
-                          ┌─ {formatAbsolute(entry.date)} · #{shortHash(entry.hash)} ─ {entry.action} ─┐
+                          ┌─ {formatAbsolute(entry.date)} · #{shortHash(entry.hash)} ─ {entry.source ?? 'action'}:{entry.action} ─┐
                         </div>
                         <pre className="font-mono text-[11px] leading-5 whitespace-pre-wrap break-all text-emerald-200/80 bg-black/70 border border-emerald-500/25 px-3 py-2 shadow-[inset_0_0_32px_rgba(16,185,129,0.06)] max-h-[480px] overflow-y-auto">
 {formatPayload(entry.payload)}

@@ -1,45 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { generateKeyPairSync } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { canonicalHash, parseOtp, verifyOtpSignature } from "@apicity/cost";
-import { ensurePaygateKeyPaths, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
+import { canonicalHash, parseOtp, verifyOtp } from "@apicity/cost";
+import { ensurePaygateSecret, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
 
 describe("kie paygate", () => {
   let tempDir: string;
-  let previousPrivate: string | undefined;
-  let previousPublic: string | undefined;
+  let previousSecret: string | undefined;
+  let previousSecretPath: string | undefined;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-kie-paygate-test-"));
-    previousPrivate = process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH;
-    previousPublic = process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH;
-    delete process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH;
-    delete process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH;
+    previousSecret = process.env.APICITY_PAYGATE_SECRET;
+    previousSecretPath = process.env.APICITY_PAYGATE_SECRET_PATH;
+    delete process.env.APICITY_PAYGATE_SECRET;
+    delete process.env.APICITY_PAYGATE_SECRET_PATH;
   });
 
   afterEach(async () => {
-    if (previousPrivate === undefined) delete process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH;
-    else process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH = previousPrivate;
-    if (previousPublic === undefined) delete process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH;
-    else process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH = previousPublic;
+    if (previousSecret === undefined) delete process.env.APICITY_PAYGATE_SECRET;
+    else process.env.APICITY_PAYGATE_SECRET = previousSecret;
+    if (previousSecretPath === undefined) delete process.env.APICITY_PAYGATE_SECRET_PATH;
+    else process.env.APICITY_PAYGATE_SECRET_PATH = previousSecretPath;
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("derives a public key next to a configured private key and mints a request-bound OTP", async () => {
-    const { privateKey } = generateKeyPairSync("ed25519", {
-      publicKeyEncoding: { type: "spki", format: "pem" },
-      privateKeyEncoding: { type: "pkcs8", format: "pem" },
-    });
-    const privatePath = join(tempDir, "paygate-private.pem");
-    await writeFile(privatePath, privateKey, "utf8");
-    process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH = privatePath;
+  it("creates a configured secret and mints a request-bound OTP", async () => {
+    const secretPath = join(tempDir, "paygate-secret");
+    process.env.APICITY_PAYGATE_SECRET_PATH = secretPath;
 
-    const paths = ensurePaygateKeyPaths();
-    expect(paths.privateKeyPath).toBe(privatePath);
-    expect(paths.publicKeyPath).toBe(`${privatePath}.pub`);
-    expect(process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH).toBe(`${privatePath}.pub`);
+    const secret = ensurePaygateSecret();
+    const persistedSecret = await readFile(secretPath, "utf8");
+    expect(persistedSecret.trim()).toBe(secret);
+    expect(process.env.APICITY_PAYGATE_SECRET_PATH).toBe(secretPath);
 
     const request = {
       model: "grok-imagine/text-to-image" as const,
@@ -47,10 +41,20 @@ describe("kie paygate", () => {
     };
     const otp = mintKieOtp(request, 60);
     const parsed = parseOtp(otp);
-    const publicKeyPem = await readFile(paths.publicKeyPath, "utf8");
-    const payloadSegment = otp.split(".")[0] ?? "";
+    const result = verifyOtp({
+      nowSeconds: Math.floor(Date.now() / 1000),
+      secret,
+      expected: {
+        provider: "kie",
+        method: "POST",
+        dotPath: KIE_PAYGATE_DOT_PATH,
+      },
+      payloadHash: canonicalHash(request),
+      otp,
+      isJtiConsumed: () => false,
+    });
 
-    expect(verifyOtpSignature(payloadSegment, parsed.signature, publicKeyPem)).toBe(true);
+    expect(result.ok).toBe(true);
     expect(parsed.payload).toMatchObject({
       v: 1,
       provider: "kie",
@@ -58,7 +62,6 @@ describe("kie paygate", () => {
       dotPath: KIE_PAYGATE_DOT_PATH,
       requestHash: canonicalHash(request),
     });
-    expect(parsed.payload.maxSpendUsd).toBeGreaterThan(0);
     expect(parsed.payload.exp - parsed.payload.iat).toBe(60);
   });
 
@@ -79,14 +82,7 @@ describe("kie paygate", () => {
   });
 
   it("mints a bounded OTP for a grok-imagine/extend request with a top-level resolution hint", async () => {
-    const { privateKey } = generateKeyPairSync("ed25519", {
-      publicKeyEncoding: { type: "spki", format: "pem" },
-      privateKeyEncoding: { type: "pkcs8", format: "pem" },
-    });
-    const privatePath = join(tempDir, "paygate-private.pem");
-    await writeFile(privatePath, privateKey, "utf8");
-    process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH = privatePath;
-    ensurePaygateKeyPaths();
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {
       model: "grok-imagine/extend" as const,
@@ -101,10 +97,6 @@ describe("kie paygate", () => {
     const otp = mintKieOtp(request, 60);
     const parsed = parseOtp(otp);
 
-    // 6|480p is a flat per-generation rate of $0.05 in the kie rate table.
-    expect(parsed.payload.maxSpendUsd).toBe(0.05);
-    // The resolution hint must be part of the hashed request so the paygate
-    // verifies against the same payload that gets submitted.
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 });

@@ -1,4 +1,4 @@
-import { kie, uploadFile } from "@apicity/kie";
+import { createKie, uploadFile } from "@apicity/kie";
 import type { VideocityFs } from "vc-engine";
 import {
   prepareAssetForUpload,
@@ -20,7 +20,7 @@ async function uploadPreparedToKie(
   const apiKey = getApiKey("KIE_API_KEY");
   if (apiKey) {
     try {
-      const provider = kie({ apiKey, timeout: 120_000 });
+      const provider = createKie({ apiKey, timeout: 120_000 });
       const blob = new Blob([new Uint8Array(data)], { type: contentType });
       return await uploadFile(provider, blob, hashedFilename);
     } catch (err) {

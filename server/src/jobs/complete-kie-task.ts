@@ -521,6 +521,8 @@ async function completeGrokImagineVideo(
       ? "grok-imagine/video-upscale"
       : taskType === "grok_imagine_t2v_video"
         ? "grok-imagine/text-to-video"
+        : taskType === "grok_imagine_video"
+          ? "grok-imagine-video-1-5-preview"
         : meta.sourceVideoId
           ? "grok-imagine/video-extension"
           : "grok-imagine/image-to-video",

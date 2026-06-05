@@ -4,11 +4,11 @@ import { computeAssetStatus, QUEUED_TASK_ID } from "vc-engine";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { kie, KieError } from "@apicity/kie";
+import { createKie, KieError } from "@apicity/kie";
 import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
-import { xai, XaiError } from "@apicity/xai";
-import { alibaba, AlibabaError } from "@apicity/alibaba";
-import { fal, FalError } from "@apicity/fal";
+import { createXai, XaiError } from "@apicity/xai";
+import { createAlibaba, AlibabaError } from "@apicity/alibaba";
+import { createFal, FalError } from "@apicity/fal";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -493,7 +493,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   const kieTasks = pollableTasks.filter(isKiePendingTask);
   const kieApiKey = getApiKey("KIE_API_KEY");
   if (kieApiKey && kieTasks.length > 0) {
-    const provider = kie({ apiKey: kieApiKey, timeout: 30_000 });
+    const provider = createKie({ apiKey: kieApiKey, timeout: 30_000 });
 
     await Promise.all(kieTasks.map(async (task) => {
       try {
@@ -517,7 +517,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   // Poll xAI tasks (only if API key is set)
   const xaiTasks = pollableTasks.filter((t) => t.taskType.startsWith("xai_"));
   if (process.env.XAI_API_KEY && xaiTasks.length > 0) {
-    const provider = xai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
+    const provider = createXai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
 
     await Promise.all(xaiTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
@@ -572,7 +572,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   // Poll Alibaba tasks (only if API key is set)
   const alibabaTasks = pollableTasks.filter((t) => t.taskType.startsWith("alibaba_"));
   if (process.env.DASHSCOPE_API_KEY && alibabaTasks.length > 0) {
-    const provider = alibaba({ apiKey: process.env.DASHSCOPE_API_KEY, timeout: 30_000 });
+    const provider = createAlibaba({ apiKey: process.env.DASHSCOPE_API_KEY, timeout: 30_000 });
 
     await Promise.all(alibabaTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
@@ -650,7 +650,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   // Poll FAL tasks (only if API key is set)
   const falTasks = pollableTasks.filter((t) => t.taskType.startsWith("fal_"));
   if (process.env.FAL_API_KEY && falTasks.length > 0) {
-    const provider = fal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000 });
+    const provider = createFal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000 });
 
     // FAL's queue status/result endpoints live under the app namespace
     // (first 2 path segments). Hitting them with the full nested endpoint id

@@ -3,7 +3,7 @@ import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
 } from "@apicity/elevenlabs";
-import { elevenlabs } from "@apicity/elevenlabs";
+import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -70,7 +70,7 @@ export function registerTranscribeJob(fs: VideocityFs): void {
         const audioBytes = new Uint8Array(readResult.value);
         const audioBlob = new Blob([audioBytes], { type: inferAudioMime(audioFilename) });
 
-        const provider = elevenlabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS });
+        const provider = createElevenLabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS });
         const request: ElevenLabsSpeechToTextRequest = {
           model_id: "scribe_v2",
           file: audioBlob,

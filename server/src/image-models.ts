@@ -8,7 +8,7 @@
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
 import type { ResolvedAsset } from "vc-engine";
-import { kie } from "@apicity/kie";
+import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import {
   GptImage2ImageToImageRequestSchema,
@@ -18,7 +18,7 @@ import {
   SeedreamImageToImageRequestSchema,
   Wan27ImageInputSchema,
 } from "@apicity/kie/zod";
-import { xai } from "@apicity/xai";
+import { createXai } from "@apicity/xai";
 import type { XaiImageGenerationModel, XaiImageGenerationModelListResponse } from "@apicity/xai";
 import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
 import { z } from "zod";
@@ -226,7 +226,7 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
 // Provider schemas (read once at module load — no API calls)
 // ---------------------------------------------------------------------------
 
-const kieModelSchemas = kie({ apiKey: "" }).modelInputSchemas;
+const kieModelSchemas = createKie({ apiKey: "" }).modelInputSchemas;
 
 // xAI discovered models (populated async by initImageModels)
 let xaiImageModels: XaiImageGenerationModel[] | null = null;
@@ -238,7 +238,7 @@ let xaiImageModels: XaiImageGenerationModel[] | null = null;
 async function initImageModels(): Promise<void> {
   if (!process.env.XAI_API_KEY) return;
   try {
-    const xaiProvider = xai({ apiKey: process.env.XAI_API_KEY });
+    const xaiProvider = createXai({ apiKey: process.env.XAI_API_KEY });
     const result = await xaiProvider.get.v1.imageGenerationModels() as XaiImageGenerationModelListResponse;
     xaiImageModels = result.models;
   } catch {

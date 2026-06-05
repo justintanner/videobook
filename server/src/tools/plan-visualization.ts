@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
+import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
@@ -556,7 +556,7 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
         ...frameParts,
       ];
 
-      const provider = openai({ apiKey, timeout: 240_000 });
+      const provider = createOpenAi({ apiKey, timeout: 240_000 });
       const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
       let outputText: string;

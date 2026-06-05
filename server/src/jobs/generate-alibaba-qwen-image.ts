@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { alibaba } from "@apicity/alibaba";
+import { createAlibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { queue, registerJobHandler } from "../queue.js";
@@ -41,7 +41,7 @@ async function runQwenImageJob(
     uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
   }
 
-  const provider = alibaba({ apiKey, timeout: 120_000 });
+  const provider = createAlibaba({ apiKey, timeout: 120_000 });
 
   const request = buildAlibabaQwenImagePayload(
     {

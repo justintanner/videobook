@@ -275,7 +275,7 @@ describe("getImageToolSchema", () => {
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).toContain("image_slugs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "9:16", "16:9", "4:3", "3:4"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "5:4", "9:16", "21:9", "16:9", "4:3", "3:2", "4:5", "3:4", "2:3"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
     expect(schema!.properties).not.toHaveProperty("quality");
   });
@@ -285,7 +285,7 @@ describe("getImageToolSchema", () => {
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("image_slugs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "9:16", "16:9", "4:3", "3:4"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "9:16", "16:9", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
   });
 });

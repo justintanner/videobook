@@ -1,8 +1,8 @@
 import type { MediaGenerationRequest } from "@apicity/kie";
-import { kie, submitMediaJob } from "@apicity/kie";
-import { canonicalHash, computeEstimate } from "@apicity/cost";
+import { createKie, submitMediaJob } from "@apicity/kie";
+import { computeEstimate, mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { JobHandlerContext } from "../queue.js";
@@ -21,25 +21,8 @@ type SubmitKieTaskArgs = {
   meta: Record<string, unknown>;
 };
 
-type KeyPaths = {
-  privateKeyPath: string;
-  publicKeyPath: string;
-};
-
-function base64urlEncode(data: Buffer): string {
-  return data
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function defaultPrivateKeyPath(): string {
-  return join(homedir(), ".videocity", "paygate-private.pem");
-}
-
-function defaultPublicKeyPath(): string {
-  return join(homedir(), ".videocity", "paygate-public.pem");
+function defaultSecretPath(): string {
+  return join(homedir(), ".videocity", "paygate-secret");
 }
 
 function writeKey(path: string, content: string, mode: number): void {
@@ -52,69 +35,45 @@ function writeKey(path: string, content: string, mode: number): void {
   }
 }
 
-function derivePublicKey(privateKeyPem: string): string {
-  const privateKey = createPrivateKey(privateKeyPem);
-  return createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
-}
+export function ensurePaygateSecret(): string {
+  const configuredSecret = process.env.APICITY_PAYGATE_SECRET?.trim();
+  if (configuredSecret) return configuredSecret;
 
-export function ensurePaygateKeyPaths(): KeyPaths {
-  const configuredPrivate = process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH;
-  const configuredPublic = process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH;
-  if (configuredPrivate && configuredPublic) {
-    return { privateKeyPath: configuredPrivate, publicKeyPath: configuredPublic };
-  }
-  if (!configuredPrivate && configuredPublic) {
-    throw new Error("APICITY_PAYGATE_PRIVATE_KEY_PATH is required when APICITY_PAYGATE_PUBLIC_KEY_PATH is set");
+  const secretPath = process.env.APICITY_PAYGATE_SECRET_PATH ?? defaultSecretPath();
+  if (!existsSync(secretPath)) {
+    writeKey(secretPath, `${randomBytes(32).toString("base64url")}\n`, 0o600);
   }
 
-  const privateKeyPath = configuredPrivate ?? defaultPrivateKeyPath();
-  const publicKeyPath = configuredPublic ?? (configuredPrivate ? `${privateKeyPath}.pub` : defaultPublicKeyPath());
-
-  if (configuredPrivate) {
-    const privateKeyPem = readFileSync(privateKeyPath, "utf8");
-    writeKey(publicKeyPath, derivePublicKey(privateKeyPem), 0o644);
-    process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH = publicKeyPath;
-    return { privateKeyPath, publicKeyPath };
+  const secret = readFileSync(secretPath, "utf8").trim();
+  if (!secret) {
+    throw new Error(`APICITY paygate secret is empty: ${secretPath}`);
   }
-
-  if (!existsSync(privateKeyPath) || !existsSync(publicKeyPath)) {
-    const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
-      publicKeyEncoding: { type: "spki", format: "pem" },
-      privateKeyEncoding: { type: "pkcs8", format: "pem" },
-    });
-    writeKey(privateKeyPath, privateKey, 0o600);
-    writeKey(publicKeyPath, publicKey, 0o644);
-  }
-
-  process.env.APICITY_PAYGATE_PRIVATE_KEY_PATH = privateKeyPath;
-  process.env.APICITY_PAYGATE_PUBLIC_KEY_PATH = publicKeyPath;
-  return { privateKeyPath, publicKeyPath };
+  process.env.APICITY_PAYGATE_SECRET_PATH = secretPath;
+  return secret;
 }
 
 export function mintKieOtp(request: MediaGenerationRequest, ttlSeconds = 10 * 60): string {
-  const { privateKeyPath } = ensurePaygateKeyPaths();
   const payload = request as unknown as Record<string, unknown>;
   const estimate = computeEstimate({ provider: "kie", payload });
   if (estimate.warnings.length > 0) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
-  const iat = Math.floor(Date.now() / 1000);
-  const otpPayload = {
-    v: 1,
-    jti: randomBytes(16).toString("hex"),
+  return mintOtp(ensurePaygateSecret(), {
     provider: "kie",
     method: "POST",
     dotPath: KIE_PAYGATE_DOT_PATH,
-    requestHash: canonicalHash(request),
-    maxSpendUsd: estimate.usd,
-    iat,
-    exp: iat + ttlSeconds,
-  };
-  const payloadSegment = base64urlEncode(Buffer.from(JSON.stringify(otpPayload), "utf8"));
-  const privateKeyPem = readFileSync(privateKeyPath, "utf8");
-  const signatureSegment = base64urlEncode(sign(null, Buffer.from(payloadSegment, "utf8"), privateKeyPem));
-  return `${payloadSegment}.${signatureSegment}`;
+    request: payload,
+    ttl: ttlSeconds,
+  });
+}
+
+function createKieProvider(apiKey: string) {
+  return createKie({
+    apiKey,
+    timeout: 60_000,
+    paygate: { secret: ensurePaygateSecret() },
+  });
 }
 
 export async function submitKieTask(
@@ -124,7 +83,7 @@ export async function submitKieTask(
 ): Promise<string> {
   const apiKey = requireApiKey("KIE_API_KEY");
   await fs.writeMetadata(args.assetId, "generation-payload", args.request, args.projectSlug);
-  const provider = kie({ apiKey, timeout: 60_000 });
+  const provider = createKieProvider(apiKey);
   const taskId = await submitMediaJob(provider, args.request, { otp: mintKieOtp(args.request) });
 
   const pendingResult = await fs.pendingTasks.write(args.projectSlug, {
@@ -155,7 +114,7 @@ export async function submitQueuedKieTask(
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.assetId}`);
 
   const apiKey = requireApiKey("KIE_API_KEY");
-  const provider = kie({ apiKey, timeout: 60_000 });
+  const provider = createKieProvider(apiKey);
   const taskId = await submitMediaJob(provider, payloadResult.value, { otp: mintKieOtp(payloadResult.value) });
   const meta = { ...task.meta };
   delete meta.kiePaygate;

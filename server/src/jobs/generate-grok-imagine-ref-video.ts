@@ -1,6 +1,6 @@
 import type { VideocityFs } from "vc-engine";
 import { uploadAssetFile } from "../upload.js";
-import { xai } from "@apicity/xai";
+import { createXai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
@@ -36,7 +36,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
       imageUrls.push(await uploadAssetFile(fs, ref.assetId, ref.filename, projectSlug));
     }
 
-    const provider = xai({ apiKey, timeout: 120_000 });
+    const provider = createXai({ apiKey, timeout: 120_000 });
 
     const request = buildXaiGrokImagineRefVideoPayload(
       { prompt, duration, resolution, aspect_ratio: aspectRatio },

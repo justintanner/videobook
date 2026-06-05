@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
-import { GrokImageToVideoRequestSchema, GrokImagineModeSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
+import { GrokVideo15AspectRatioSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -22,25 +22,15 @@ function deriveVideoName(firstAssetId: string): string {
   return `grok-${baseName}`;
 }
 
-const grokImageToVideoInputSchema = GrokImageToVideoRequestSchema.shape.input.shape;
-
-// Mirror of GrokImageToVideoDurationSchema (z.string().regex(/^([6-9]|[12][0-9]|30)$/)) —
-// materialized as a contiguous 6-30 string enum so the MCP JSON schema can drive a
-// snap-to-enum slider in the client.
-const GROK_I2V_DURATIONS = Array.from({ length: 25 }, (_, i) => String(i + 6)) as [string, ...string[]];
-
 const generateGrokImagineVideoSchema = {
-  image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
+  image_slugs: z.array(z.string()).min(1).optional().describe("Reference image asset slugs (e.g., ['@img-sunset'])"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().max(5000).optional().describe("Optional prompt to guide video generation (max 5000 chars)"),
-  mode: z.enum(GrokImagineModeSchema.options).optional().describe("Generation mode: fun / normal / spicy. Spicy is only available via task_id; external images force normal."),
-  duration: z.enum(GROK_I2V_DURATIONS).optional().describe("Video duration in seconds (6-30)"),
+  prompt: z.string().max(4096).optional().describe("Optional prompt to guide video generation (max 4096 chars)"),
+  duration: z.number().int().min(1).max(15).optional().describe("Video duration in seconds (1-15)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: z.enum(grokImageToVideoInputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio (ignored for single-image input)"),
-  task_id: z.string().max(100).optional().describe("Reference task ID for spicy mode without external images (kie only)"),
-  index: z.number().int().min(0).max(5).optional().describe("Frame index (0-5) when reusing a prior task_id (kie only)"),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
+  aspect_ratio: z.enum(GrokVideo15AspectRatioSchema.options).optional().describe("Output aspect ratio"),
+  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -49,10 +39,10 @@ type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video",
-    description: "Generate a video from 1-7 image asset(s) using Grok Imagine image-to-video. Multiple images act as references. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5 Preview. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, duration, resolution, aspect_ratio, nsfw_checker, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -68,10 +58,10 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         ? image_slugs.map((s) => s.replace(/^@/, ""))
         : (rawAssetId ? [rawAssetId.replace(/^@/, "")] : []);
 
-      if (slugs.length === 0 && !task_id) {
+      if (slugs.length === 0) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "image_slugs (1-7), asset_id, or task_id is required" }],
+          content: [{ type: "text" as const, text: "image_slugs or asset_id is required" }],
         };
       }
 
@@ -104,7 +94,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         imageFilenames.push(imageFile.name);
       }
 
-      const videoName = assetIds.length > 0 ? deriveVideoName(assetIds[0]) : `grok-task-${task_id?.slice(0, 12) ?? Date.now()}`;
+      const videoName = deriveVideoName(assetIds[0]);
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -115,7 +105,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `${modelSlug("kie", "grok-imagine/text-to-video")}-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine-video-1-5-preview")}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video",
@@ -125,12 +115,9 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         vidAssetDir,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-        ...(task_id !== undefined ? { task_id } : {}),
-        ...(index !== undefined ? { index } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);

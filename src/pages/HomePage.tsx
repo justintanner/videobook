@@ -440,6 +440,24 @@ export function HomePage() {
     }
   }, [projectSlug, fetchTimeline, listAssets, sortOrder, sync, removeAsset]);
 
+  const handleActivityRewound = useCallback(async () => {
+    if (!projectSlug) return;
+    clearAssets();
+    setSelectedItem(null);
+    setTimelineSlotIndex(null);
+    setGenPanel(null);
+    setPlanEmptyOverride(false);
+    setRenderingOverrides(new Map());
+    setDeletingIds(new Set());
+    sync(projectSlug);
+    refreshProjects();
+    await Promise.all([
+      listAssets(projectSlug, sortOrder),
+      fetchTimeline(projectSlug),
+      fetchActivity(projectSlug),
+    ]);
+  }, [projectSlug, clearAssets, sync, refreshProjects, listAssets, sortOrder, fetchTimeline, fetchActivity]);
+
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
   const slotRefs = useMemo(() => {
@@ -693,6 +711,7 @@ export function HomePage() {
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}
+          onRewound={handleActivityRewound}
         />
         <TrimEditor
           open={trimAssetId != null}

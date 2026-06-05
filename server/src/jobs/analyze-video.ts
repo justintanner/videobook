@@ -1,9 +1,9 @@
 import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { openai, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
+import { createOpenAi, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
-import { kie } from "@apicity/kie";
+import { createKie } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -123,11 +123,11 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
 
     const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
     if (openaiKey) {
-      const p = openai({ apiKey: openaiKey, timeout: 180_000 });
+      const p = createOpenAi({ apiKey: openaiKey, timeout: 180_000 });
       providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
     }
     if (kieKey) {
-      const p = kie({ apiKey: kieKey, timeout: 180_000 });
+      const p = createKie({ apiKey: kieKey, timeout: 180_000 });
       providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
     }
 

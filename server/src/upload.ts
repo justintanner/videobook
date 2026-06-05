@@ -1,4 +1,4 @@
-import { freeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
+import { createFreeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
 import type { VideocityFs } from "vc-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
@@ -50,7 +50,7 @@ export async function uploadBytesToFreeHost(
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
 
-  return uploadToAnyHost(freeMediaUpload(), {
+  return uploadToAnyHost(createFreeMediaUpload(), {
     file,
     filename,
     hosts: ["litterbox", "uguu", "tflink"],

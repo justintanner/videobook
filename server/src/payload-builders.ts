@@ -9,8 +9,8 @@ import type {
   KlingMotionControlRequest,
   KlingElement,
   MultiShotPrompt,
-  GrokImageToVideoRequest,
   GrokTextToVideoRequest,
+  GrokVideo15PreviewRequest,
   GrokImageToImageRequest,
   GrokTextToImageRequest,
   Seedance2FastRequest,
@@ -43,8 +43,8 @@ import type {
   KlingDuration,
   KlingAspectRatio,
   GrokImagineMode,
-  GrokImageToVideoDuration,
   GrokImagineResolution,
+  GrokVideo15AspectRatio,
   NanoBananaResolution,
   NanoBananaOutputFormat,
   Wan27Resolution,
@@ -126,7 +126,7 @@ function buildKling30MotionControlPayload(
 type GrokImagineVideoArgs = {
   prompt?: string;
   mode?: GrokImagineMode;
-  duration?: GrokImageToVideoDuration;
+  duration?: number | string;
   resolution?: GrokImagineResolution;
   aspect_ratio?: string;
   task_id?: string;
@@ -134,24 +134,28 @@ type GrokImagineVideoArgs = {
   nsfw_checker?: boolean;
 };
 
+function numericDuration(value: number | string | undefined): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
 function buildGrokImagineVideoPayload(
   args: GrokImagineVideoArgs,
   imageUrls: string[],
-): GrokImageToVideoRequest {
+): GrokVideo15PreviewRequest {
   return {
-    model: "grok-imagine/image-to-video",
+    model: "grok-imagine-video-1-5-preview",
     input: {
-      ...(args.task_id !== undefined
-        ? { task_id: args.task_id, ...(args.index !== undefined ? { index: args.index } : {}) }
-        : imageUrls.length > 0
-          ? { image_urls: imageUrls }
-          : {}),
+      image_urls: imageUrls,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      ...(args.mode !== undefined ? { mode: args.mode } : {}),
-      ...(args.duration !== undefined ? { duration: args.duration } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokImageToVideoRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+      aspect_ratio: (args.aspect_ratio ?? "auto") as GrokVideo15AspectRatio,
+      resolution: args.resolution ?? "480p",
+      duration: numericDuration(args.duration) ?? 8,
+      nsfw_checker: args.nsfw_checker ?? true,
     },
   };
 }
@@ -756,9 +760,9 @@ function buildXaiGrokImagineVideoPayload(
       : imageUrls.length > 1
         ? { reference_images: imageUrls.map((url) => ({ url })) }
         : {}),
-    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(numericDuration(args.duration) !== undefined ? { duration: numericDuration(args.duration) } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
+    ...(args.aspect_ratio !== undefined && args.aspect_ratio !== "auto" ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
 

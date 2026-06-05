@@ -1,4 +1,4 @@
-import { fal } from "@apicity/fal";
+import { createFal } from "@apicity/fal";
 import type { VideocityFs } from "vc-engine";
 import { type PendingTask } from "vc-engine";
 import { requireApiKey } from "../api-key.js";
@@ -20,7 +20,7 @@ export type FalSubmitArgs = {
 export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
   const apiKey = requireApiKey("FAL_API_KEY");
 
-  const provider = fal({ apiKey, timeout: 60_000 });
+  const provider = createFal({ apiKey, timeout: 60_000 });
 
   await args.fs.writeMetadata(
     args.assetId,

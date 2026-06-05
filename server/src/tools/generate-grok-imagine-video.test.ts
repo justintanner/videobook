@@ -157,7 +157,7 @@ describe("generate_grok_imagine_video tool", () => {
       arguments: {
         image_slugs: ids,
         project_slug: "test-proj",
-        duration: "12",
+        duration: 12,
       },
     });
 

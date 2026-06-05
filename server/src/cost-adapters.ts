@@ -190,7 +190,7 @@ const ADAPTERS: Record<string, CostAdapter> = {
   extend_wan27_video: kieFlatVideo("wan/2-7-image-to-video"),
 
   // --- KIE Grok Imagine video (resolution-tiered, $0.008/$0.015 per sec) ---
-  generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", "720p", 6),
+  generate_grok_imagine_video: kieResolutionVideo("grok-imagine-video-1-5-preview", "480p", 8),
   generate_grok_imagine_t2v_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
 
   // --- KIE HappyHorse video (resolution-tiered, $0.155/$0.265 per sec) ---

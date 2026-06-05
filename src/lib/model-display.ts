@@ -11,6 +11,7 @@ const MODEL_DISPLAY: Record<string, Record<string, string>> = {
     'grok-imagine/text-to-image': 'Grok Imagine',
     'grok-imagine/text-to-video': 'Grok Imagine',
     'grok-imagine/image-to-video': 'Grok Imagine',
+    'grok-imagine-video-1-5-preview': 'Grok Imagine 1.5',
     'grok-imagine/extend': 'Grok Extend',
     'kling-3.0/video': 'Kling 3.0',
     'bytedance/seedance-2': 'Seedance 2',

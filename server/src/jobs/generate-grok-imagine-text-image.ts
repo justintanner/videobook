@@ -1,6 +1,6 @@
 import type { VideocityFs } from "vc-engine";
 import { submitKieTask } from "./kie-paygate.js";
-import { xai } from "@apicity/xai";
+import { createXai } from "@apicity/xai";
 import type { XaiImageGenerateRequest } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -31,7 +31,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
       // xAI path — synchronous image generation
       const apiKey = requireApiKey("XAI_API_KEY");
 
-      const provider = xai({ apiKey, timeout: 120_000 });
+      const provider = createXai({ apiKey, timeout: 120_000 });
 
       const request: XaiImageGenerateRequest = {
         prompt,

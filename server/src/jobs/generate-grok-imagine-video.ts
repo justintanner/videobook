@@ -1,9 +1,9 @@
 import type { VideocityFs } from "vc-engine";
 import { submitKieTask } from "./kie-paygate.js";
-import type { GrokImageToVideoDuration } from "@apicity/kie";
+import type { GrokVideo15AspectRatio } from "@apicity/kie";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
-import { xai } from "@apicity/xai";
+import { createXai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
@@ -16,12 +16,9 @@ type GenerateGrokImagineVideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt?: string;
-  mode?: "fun" | "normal" | "spicy";
-  duration?: GrokImageToVideoDuration;
+  duration?: number;
   resolution?: "480p" | "720p";
-  aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
-  task_id?: string;
-  index?: number;
+  aspect_ratio?: GrokVideo15AspectRatio;
   nsfw_checker?: boolean;
   _provider?: string;
 };
@@ -30,11 +27,11 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
-      projectSlug, prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker, _provider,
+      projectSlug, prompt, duration, resolution, aspect_ratio, nsfw_checker, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
-    if (sourceImageIds.length === 0 && !task_id) {
-      throw new Error("generate_grok_imagine_video requires at least one source image or a task_id");
+    if (sourceImageIds.length === 0) {
+      throw new Error("generate_grok_imagine_video requires at least one source image");
     }
     if (sourceImageIds.length !== imageFilenames.length) {
       throw new Error("sourceImageIds / imageFilenames length mismatch");
@@ -51,9 +48,9 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
         imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
       }
 
-      const provider = xai({ apiKey, timeout: 120_000 });
+      const provider = createXai({ apiKey, timeout: 120_000 });
       const request = buildXaiGrokImagineVideoPayload(
-        { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
+        { prompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
@@ -89,7 +86,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
     }
 
     const request = buildGrokImagineVideoPayload(
-      { prompt, mode, duration, resolution, aspect_ratio, task_id, index, nsfw_checker },
+      { prompt, duration, resolution, aspect_ratio, nsfw_checker },
       downloadUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {
@@ -101,7 +98,6 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
       meta: {
         sourceImageIds,
         ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
       },

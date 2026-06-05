@@ -6,7 +6,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
-import { openai, firstContent } from "@apicity/openai";
+import { createOpenAi, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import {
   VIDEO_MODELS,
@@ -96,7 +96,7 @@ Available assets:
 
 Determine which video generation tool to use and what parameters to pass.`;
 
-          const provider = openai({ apiKey, timeout: 15_000 });
+          const provider = createOpenAi({ apiKey, timeout: 15_000 });
           const result = await provider.post.v1.chat.completions({
             model: "gpt-4o-mini",
             messages: [

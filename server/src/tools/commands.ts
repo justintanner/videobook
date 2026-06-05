@@ -210,6 +210,18 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_status",
   },
   {
+    command: "/activity",
+    description: "View project activity log",
+    example: "/activity",
+    category: "action",
+    icon: "History",
+    size: "default",
+    variant: "zinc",
+    chevron: "down",
+    params: [],
+    uiAction: "open_status",
+  },
+  {
     command: "/copy",
     description: "Copy asset name",
     example: "/copy @hero-intro",

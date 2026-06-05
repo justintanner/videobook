@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { alibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
+import { createAlibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -35,7 +35,7 @@ export function registerGenerateAlibabaImageJob(fs: VideocityFs): void {
       uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
     }
 
-    const provider = alibaba({ apiKey, timeout: 120_000 });
+    const provider = createAlibaba({ apiKey, timeout: 120_000 });
 
     const request = buildAlibabaImagePayload(
       { prompt, model, size, n, watermark, thinking_mode: thinkingMode, seed },
@@ -83,7 +83,7 @@ export function registerGenerateAlibabaImageProJob(fs: VideocityFs): void {
       uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, "wan2.7-image-pro"));
     }
 
-    const provider = alibaba({ apiKey, timeout: 120_000 });
+    const provider = createAlibaba({ apiKey, timeout: 120_000 });
 
     const request = buildAlibabaImagePayload(
       { prompt, model: "wan2.7-image-pro", size, n, watermark, thinking_mode: thinkingMode, seed },

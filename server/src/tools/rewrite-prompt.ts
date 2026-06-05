@@ -7,7 +7,7 @@ import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openai, textPart, imageUrlPart, firstContent } from "@apicity/openai";
+import { createOpenAi, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
@@ -368,7 +368,7 @@ async function handleStandardRewrite(
   }
 
   const maxChars = model === "kling30" ? 400 : undefined;
-  const provider = openai({ apiKey, timeout: 60_000 });
+  const provider = createOpenAi({ apiKey, timeout: 60_000 });
   const extras = { maxChars, platform, customPrompt };
 
   let messages: OpenAiMessage[];
@@ -433,7 +433,7 @@ async function handleSceneRewrite(
   const guide = await loadGuide("kling30");
   const text = buildSceneRewriteText(guide, scenes, elements, sceneIndex, instruction);
 
-  const provider = openai({ apiKey, timeout: 60_000 });
+  const provider = createOpenAi({ apiKey, timeout: 60_000 });
   const result = await provider.post.v1.chat.completions({
     model: REWRITE_MODEL,
     messages: [{ role: "user", content: text }],

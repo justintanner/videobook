@@ -1,4 +1,4 @@
-import { fal, uploadFile } from "@apicity/fal";
+import { createFal, uploadFile } from "@apicity/fal";
 import type { VideocityFs } from "vc-engine";
 import {
   prepareAssetForUpload,
@@ -18,7 +18,7 @@ async function uploadPreparedToFal(
   const apiKey = getApiKey("FAL_API_KEY");
   if (apiKey) {
     try {
-      const provider = fal({ apiKey, timeout: 60_000 });
+      const provider = createFal({ apiKey, timeout: 60_000 });
       return await uploadFile(provider, {
         data,
         filename: hashedFilename,

@@ -2,7 +2,7 @@ import type { VideocityFs } from "vc-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import { openai, withRetry } from "@apicity/openai";
+import { createOpenAi, withRetry } from "@apicity/openai";
 import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -80,7 +80,7 @@ export function buildResponses(apiKey: string | undefined): ResponsesFn {
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not set");
   }
-  const client = openai({ apiKey, timeout: 180_000 });
+  const client = createOpenAi({ apiKey, timeout: 180_000 });
   return withRetry(client.post.v1.responses, { retries: 2, baseMs: 500 });
 }
 

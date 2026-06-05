@@ -1,5 +1,5 @@
 import type { VideocityFs } from "vc-engine";
-import { openai } from "@apicity/openai";
+import { createOpenAi } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -24,7 +24,7 @@ export function registerTranscribeVideoAudioJob(fs: VideocityFs): void {
     if (!readResult.ok) throw new Error(readResult.error.message);
 
     const file = new File([new Uint8Array(readResult.value)], "original.mp3", { type: "audio/mpeg" });
-    const provider = openai({ apiKey, timeout: 120_000 });
+    const provider = createOpenAi({ apiKey, timeout: 120_000 });
     const result = await provider.post.v1.audio.transcriptions({
       file,
       model: "gpt-4o-mini-transcribe",

@@ -3,7 +3,7 @@ import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
-import { openai, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
+import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import type { ToolDef } from "./tool-def.js";
 import {
@@ -128,7 +128,7 @@ export function suggestCutsDef(fs: VideocityFs): ToolDef {
         ...frameParts,
       ];
 
-      const provider = openai({ apiKey, timeout: 240_000 });
+      const provider = createOpenAi({ apiKey, timeout: 240_000 });
       const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
       let outputText: string;

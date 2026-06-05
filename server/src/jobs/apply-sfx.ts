@@ -1,6 +1,6 @@
 import type { VideocityFs } from "vc-engine";
 import { join, basename } from "node:path";
-import { elevenlabs } from "@apicity/elevenlabs";
+import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
@@ -38,7 +38,7 @@ type ApplySfxPayload = {
 };
 
 async function generateAndWriteSfx(
-  provider: ReturnType<typeof elevenlabs>,
+  provider: ReturnType<typeof createElevenLabs>,
   fs: VideocityFs,
   entry: SfxEntry,
   index: number,
@@ -106,7 +106,7 @@ export function registerApplySfxJob(fs: VideocityFs): void {
       "apply_sfx",
       { durationMs: LOCK_DURATION_MS, data: { state: "applying_sfx" } },
       async () => {
-      const provider = elevenlabs({ apiKey, timeout: 60_000 });
+      const provider = createElevenLabs({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
         sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId, projectSlug)),

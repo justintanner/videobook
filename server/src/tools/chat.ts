@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
-import { openai, firstContent } from "@apicity/openai";
+import { createOpenAi, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "vc-engine";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "vc-engine";
@@ -103,7 +103,7 @@ Determine which tool to use and what parameters to pass.`;
 
       let decision: ChatDecision;
       try {
-        const provider = openai({ apiKey, timeout: 15_000 });
+        const provider = createOpenAi({ apiKey, timeout: 15_000 });
         const result = await provider.post.v1.chat.completions({
           model: "gpt-5.4",
           messages: [

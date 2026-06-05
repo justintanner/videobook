@@ -95,7 +95,7 @@ describe("estimate_cost tool", () => {
       ["generate_wan27_videoedit_video", {}],
       ["extend_wan27_video", { duration: "5" }],
       // Grok-imagine video (resolution-tiered)
-      ["generate_grok_imagine_video", { resolution: "720p", duration: 6 }],
+      ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
       ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],
       // HappyHorse video (resolution-tiered)
       ["generate_happyhorse_t2v_video", { resolution: "1080p", duration: "5" }],

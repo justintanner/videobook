@@ -4,14 +4,19 @@ import type { UseMcpResult } from "use-mcp/react";
 export interface ActionLogEntry {
   hash: string;
   action: string;
-  payload: string | Record<string, unknown>;
+  title?: string;
+  category?: 'generate' | 'render' | 'upload' | 'transcribe' | 'trim' | 'edit' | 'create' | 'delete' | 'fail' | 'rewind' | 'other';
+  source?: 'action' | 'snapshot';
+  payload?: string | Record<string, unknown>;
   date: string;
+  rewindable?: boolean;
+  assetId?: string;
 }
 
 interface UseProjectActivityResult {
   entries: ActionLogEntry[];
   loading: boolean;
-  fetch: (projectSlug: string) => void;
+  fetch: (projectSlug: string) => Promise<void>;
 }
 
 export function useProjectActivity(callTool: UseMcpResult["callTool"]): UseProjectActivityResult {

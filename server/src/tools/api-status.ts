@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { kimicoding } from "@apicity/kimicoding";
+import { createKimiCoding } from "@apicity/kimicoding";
 import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -24,7 +24,7 @@ export function apiStatusDef(): ToolDef {
       }
 
       try {
-        const provider = kimicoding({ apiKey });
+        const provider = createKimiCoding({ apiKey });
         await provider.post.coding.v1.messages({
           model: "k2p5",
           max_tokens: 1,

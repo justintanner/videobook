@@ -100,6 +100,7 @@ interface RunnerInfo {
 const runnerByProject = new Map<string, RunnerInfo>();
 
 const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
+const rewindingProjects = new Set<string>();
 
 type Orientation = "portrait" | "landscape" | "square";
 type ClassifiedJob = { kind: AssetWorkKind; orientation?: Orientation };
@@ -415,6 +416,9 @@ async function ensureProjectReady(
     );
   }
   const dir = projectDirFor(slug);
+  if (rewindingProjects.has(slug)) {
+    throw new Error(`queue.enqueue: project is rewinding: ${slug}`);
+  }
   if (!(await projectExists(dir))) {
     throw new Error(
       `queue.enqueue: project not found: ${slug} (jobId=${jobId})`,
@@ -502,6 +506,106 @@ export async function waitForJob(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
+}
+
+export interface RewindQueuePreparation {
+  abortedJobs: number;
+  failedPendingTasks: number;
+}
+
+async function waitForRunnerStop(
+  runner: QueueRunner,
+  timeoutMs: number,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const stopped = runner.stop().then(() => true);
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  const result = await Promise.race([stopped, timedOut]);
+  if (timer) clearTimeout(timer);
+  return result;
+}
+
+async function restartRunnerIfProjectExists(projectSlug: string): Promise<void> {
+  try {
+    if (await projectExists(projectDirFor(projectSlug))) {
+      ensureRunner(projectSlug);
+    }
+  } catch {
+    return;
+  }
+}
+
+export async function prepareProjectForRewind(
+  projectSlug: string,
+  timeoutMs = 15_000,
+): Promise<RewindQueuePreparation> {
+  if (rewindingProjects.has(projectSlug)) {
+    throw new Error(`Project is already rewinding: ${projectSlug}`);
+  }
+  rewindingProjects.add(projectSlug);
+  let stoppedRunner = false;
+  try {
+    await fsRef.current.ensureProjectInitialized(projectSlug);
+    const info = runnerByProject.get(projectSlug);
+    if (info) {
+      const stopped = await waitForRunnerStop(info.runner, timeoutMs);
+      if (!stopped) {
+        info.runner.start();
+        throw new Error(
+          `Timed out waiting for active jobs to stop before rewinding ${projectSlug}`,
+        );
+      }
+      runnerByProject.delete(projectSlug);
+      stoppedRunner = true;
+    }
+
+    const states: JobState[] = ["queued", "running", "completing"];
+    const jobs = await fsRef.current.queue.list(projectSlug, { states });
+    for (const job of jobs) {
+      await fsRef.current.queue.abort(
+        projectSlug,
+        job.id,
+        "Aborted by project rewind",
+      );
+    }
+
+    const pending = await fsRef.current.pendingTasks.findAll(projectSlug);
+    let failedPendingTasks = 0;
+    if (pending.ok) {
+      for (const task of pending.value) {
+        const failed = await fsRef.current.pendingTasks.forceFail(
+          projectSlug,
+          task.assetId,
+          { message: "Aborted by project rewind", failCode: "rewind" },
+        );
+        if (failed.ok) failedPendingTasks += 1;
+      }
+    }
+
+    if (jobs.length > 0 || failedPendingTasks > 0) {
+      await fsRef.current
+        .logAction(
+          "rewind-abort-jobs",
+          { aborted_jobs: jobs.length, failed_pending_tasks: failedPendingTasks },
+          projectSlug,
+        )
+        .catch(() => {});
+    }
+
+    closeStateDb(projectDirFor(projectSlug));
+    return { abortedJobs: jobs.length, failedPendingTasks };
+  } catch (error) {
+    rewindingProjects.delete(projectSlug);
+    if (stoppedRunner) await restartRunnerIfProjectExists(projectSlug);
+    throw error;
+  }
+}
+
+export async function resumeProjectAfterRewind(projectSlug: string): Promise<void> {
+  rewindingProjects.delete(projectSlug);
+  await restartRunnerIfProjectExists(projectSlug);
 }
 
 /**

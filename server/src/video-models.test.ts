@@ -326,20 +326,20 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.model).toBeUndefined();
   });
 
-  it("grok_imagine: no hard required fields (matches Zod optionals)", () => {
+  it("grok_imagine: uses Kie Grok Imagine Video 1.5 defaults", () => {
     const schema = getVideoToolSchema("generate_grok_imagine_video");
     expect(schema).not.toBeNull();
-    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.required).toContain("image_slugs");
     expect(schema!.required).not.toContain("prompt");
-    expect(schema!.properties.mode.enum).toEqual(["fun", "normal", "spicy"]);
-    expect(schema!.properties.duration.type).toBe("string");
-    expect(schema!.properties.duration.enum).toEqual([
-      "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
-      "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-    ]);
+    expect(schema!.properties.mode).toBeUndefined();
+    expect(schema!.properties.duration.type).toBe("integer");
+    expect(schema!.properties.duration.minimum).toBe(1);
+    expect(schema!.properties.duration.maximum).toBe(15);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+    expect(schema!.properties.aspect_ratio.enum).toContain("auto");
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.properties.nsfw_checker.type).toBe("boolean");
+    expect(schema!.defaults).toEqual(VIDEO_MODELS.grok_imagine.defaults);
   });
 
   it("includes defaults from model definition", () => {
@@ -431,7 +431,7 @@ describe("validateVideoParams", () => {
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
     const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
-    expect(grokResult.image_slots).toEqual({ min: 0, max: 7 });
+    expect(grokResult.image_slots).toEqual({ min: 1, max: null });
   });
 
   it("tools without image-array fields return null image_slots", () => {
