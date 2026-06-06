@@ -121,6 +121,24 @@ describe("swap_plan_scene_frame aspect payloads", () => {
     });
   });
 
+  it("enqueues KIE GPT Image 2 swaps at 4K", async () => {
+    const chars = await seedPlan(2560, 1080);
+
+    const result = await swapPlanSceneFrameDef(fs).handler({
+      project_slug: PROJECT,
+      scene_index: 0,
+      frame_index: 1,
+      character_asset_ids: chars.map((id) => `@${id}`),
+      provider: "kie",
+      model: "gpt-image-2",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = enqueuedPayload();
+    expect(payload.aspectRatio).toBe("16:9");
+    expect(payload.resolution).toBe("4K");
+  });
+
   it("enqueues Fal Nano Banana swaps with a source-derived aspect ratio", async () => {
     const chars = await seedPlan(1440, 1080);
 

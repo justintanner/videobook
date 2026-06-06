@@ -398,7 +398,7 @@ export function swapPlanSceneFrameDef(fs: VideocityFs): ToolDef {
         ? (model === "wan-2-7-image-pro"
           ? { image_size: falWanImageSize }
           : { aspect_ratio: kieAspectRatio, resolution: "2K" })
-        : { aspectRatio: kieAspectRatio, resolution: "2K" };
+        : { aspectRatio: kieAspectRatio, resolution: model === "gpt-image-2" ? "4K" : "2K" };
       await queue.enqueue(jobId, {
         ...baseJob,
         ...providerSpecific,

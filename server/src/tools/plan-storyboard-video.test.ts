@@ -73,6 +73,8 @@ describe("plan_storyboard_video tools", () => {
     expect(sidecar).toMatchObject({
       formula: "storyboard_video",
       source_image_asset_id: sourceId,
+      storyboard_brief: "",
+      loop_video: false,
       storyboard_prompt: "Create a compact storyboard sheet.",
       video_prompt: "Use [Image 1] and [Image 2].",
       storyboard_asset_id: null,
@@ -111,6 +113,7 @@ describe("plan_storyboard_video tools", () => {
     const sidecar = parseSidecar(result.content);
     expect(sidecar.video_prompt).toContain("Use [Image 1] as the authoritative director-approved storyboard");
     expect(sidecar.video_prompt).toContain("Use [Image 2] as the original source image");
+    expect(sidecar.video_prompt).toContain("Do not force the final shot to match the opening shot");
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
   });
 
@@ -130,12 +133,67 @@ describe("plan_storyboard_video tools", () => {
     expect(result.isError).toBeFalsy();
     const sidecar = parseSidecar(result.content);
     expect(sidecar.source_image_analysis).toEqual(analysis);
+    expect(sidecar.storyboard_brief).toBe("");
+    expect(sidecar.loop_video).toBe(false);
     expect(sidecar.storyboard_prompt).toContain(analysis.prompt);
     expect(sidecar.storyboard_prompt).toContain(analysis.shot);
     expect(sidecar.storyboard_prompt).toContain(analysis.pose);
+    expect(sidecar.storyboard_prompt).toContain("User direction: derive the sequence subject and action from the source image analysis.");
+    expect(sidecar.storyboard_prompt).toContain("Loop behavior: this does not need to loop");
     expect(sidecar.storyboard_prompt).toContain("must look custom-built from the source image analysis");
     expect(sidecar.storyboard_prompt).not.toContain("BANANA BREAD");
     expect(sidecar.storyboard_prompt).not.toContain("banana peel");
+  });
+
+  it("adds user story direction and loop behavior to derived prompts", async () => {
+    const sourceId = await createImage("directed-loop-source", {
+      prompt: "A confident man in a blue suit standing on a Bangkok sidewalk with skyscrapers, temple details, tuk-tuk traffic, and bright midday light.",
+      shot: "full-body street portrait",
+      pose: "standing forward with hands in pockets",
+    });
+
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: "A business leader crosses the street, notices a chance meeting, and resets to the opening pose.",
+      loop_video: true,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.storyboard_brief).toBe("A business leader crosses the street, notices a chance meeting, and resets to the opening pose.");
+    expect(sidecar.loop_video).toBe(true);
+    expect(sidecar.storyboard_prompt).toContain("User direction: A business leader crosses the street");
+    expect(sidecar.storyboard_prompt).toContain("Loop behavior: design the final panel to visually match the opening panel");
+    expect(sidecar.storyboard_prompt).toContain("custom image-derived loopable sequence");
+    expect(sidecar.video_prompt).toContain("Make the final shot visually match the opening shot");
+    expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
+  });
+
+  it("rebuilds derived prompts when loop behavior changes", async () => {
+    const sourceId = await createImage("loop-update-source");
+
+    const first = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: "A calm sidewalk portrait turns into a confident city walk.",
+      loop_video: false,
+    });
+    expect(first.isError).toBeFalsy();
+    const firstSidecar = parseSidecar(first.content);
+
+    const second = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: "A calm sidewalk portrait turns into a confident city walk.",
+      loop_video: true,
+    });
+
+    expect(second.isError).toBeFalsy();
+    const secondSidecar = parseSidecar(second.content);
+    expect(secondSidecar.storyboard_prompt).not.toBe(firstSidecar.storyboard_prompt);
+    expect(secondSidecar.storyboard_prompt).toContain("final panel to visually match the opening panel");
+    expect(secondSidecar.video_prompt).toContain("Make the final shot visually match the opening shot");
   });
 
   it("persists a generated storyboard and clears the prior video", async () => {

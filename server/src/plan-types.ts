@@ -10,6 +10,8 @@ export type StoryboardVideoPlanSidecar = {
   formula: "storyboard_video";
   source_image_asset_id: string;
   source_image_analysis?: StoryboardVideoSourceAnalysis | null;
+  storyboard_brief: string;
+  loop_video: boolean;
   storyboard_prompt: string;
   video_prompt: string;
   storyboard_asset_id?: string | null;

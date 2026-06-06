@@ -11,14 +11,23 @@ import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-export const DEFAULT_VIDEO_PROMPT = `Use [Image 1] as the authoritative director-approved storyboard blueprint for the sequence. Treat every storyboard panel as a consecutive shot within a single cinematic sequence. Follow panel order exactly and do not invent alternative coverage. Do not render the storyboard sheet itself; recreate the filmed sequence implied by the storyboard panels.
+function buildDefaultVideoPrompt(loopVideo: boolean): string {
+  return `Use [Image 1] as the authoritative director-approved storyboard blueprint for the sequence. Treat every storyboard panel as a consecutive shot within a single cinematic sequence. Follow panel order exactly and do not invent alternative coverage. Do not render the storyboard sheet itself; recreate the filmed sequence implied by the storyboard panels.
 Use [Image 2] as the original source image and primary visual reference for subject identity, wardrobe, proportions, setting, mood, color palette, and material details.
 
 Reference images are sent in this exact order: [Image 1] is the generated storyboard sheet, [Image 2] is the original source image.
 
 Preserve the storyboard's panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc. Preserve the source image's visible subject, environment, wardrobe, props, lighting character, and overall aesthetic. If the storyboard contains director-strip text, use it as timing and rhythm guidance; if the source image conflicts with the storyboard, keep the source image authoritative for identity and visual design while keeping the storyboard authoritative for sequence structure.
 
-Generate one cohesive cinematic video with warm natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding extra characters, logos, captions, subtitles, UI, watermarks, or graphic overlays.`;
+Generate one cohesive cinematic video with warm natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding extra characters, logos, captions, subtitles, UI, watermarks, or graphic overlays.
+
+[LOOP REQUIREMENT]
+${loopVideo
+    ? "Make the final shot visually match the opening shot closely enough to loop cleanly. Preserve subject position, camera angle, motion direction, lighting, and prop state so the end can cut back to the start without a visible jump."
+    : "End on a clean final beat. Do not force the final shot to match the opening shot unless the storyboard itself asks for a loop."}`;
+}
+
+export const DEFAULT_VIDEO_PROMPT = buildDefaultVideoPrompt(false);
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -96,19 +105,46 @@ function analysisBlock(analysis: StoryboardVideoSourceAnalysis): string {
   ].join("\n");
 }
 
-export function buildStoryboardPromptFromAnalysis(analysis: StoryboardVideoSourceAnalysis): string {
+function normalizeBrief(value: string | undefined): string {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+function directionBlock(storyboardBrief: string, loopVideo: boolean): string {
+  return [
+    "[STORY DIRECTION]",
+    storyboardBrief
+      ? `User direction: ${storyboardBrief}`
+      : "User direction: derive the sequence subject and action from the source image analysis.",
+    loopVideo
+      ? "Loop behavior: design the final panel to visually match the opening panel so the generated video can cut back to the start cleanly."
+      : "Loop behavior: this does not need to loop; end on a satisfying final beat without forcing a match back to the opening frame.",
+  ].join("\n");
+}
+
+function isDefaultVideoPrompt(prompt: string | undefined): boolean {
+  if (!prompt) return false;
+  return prompt === buildDefaultVideoPrompt(false) || prompt === buildDefaultVideoPrompt(true);
+}
+
+export function buildStoryboardPromptFromAnalysis(
+  analysis: StoryboardVideoSourceAnalysis,
+  storyboardBrief = "",
+  loopVideo = false,
+): string {
   return `Create a 16:9 image.
 
 [SOURCE IMAGE ANALYSIS]
 Use this image analysis as the creative source of truth. Preserve visible subject identity, proportions, wardrobe, setting, props, lighting, mood, color palette, and camera language from the source image.
 ${analysisBlock(analysis)}
 
+${directionBlock(storyboardBrief, loopVideo)}
+
 [PROJECT CARD]
 Create a compact designed masthead, not a table.
 TITLE: Derive a concise uppercase title from the source image analysis.
-META LINE: Derive three short slash-separated phrases from the source image's subject, setting, mood, and plausible action.
-PRIORITY: Build a readable cinematic storyboard sequence that grows naturally from the source image analysis; do not force a prewritten recipe, dance, product, or genre unless the source image supports it.
-MICRO BRIEF: Turn the source image into a short, visually coherent video concept with a clear hook, middle action, and satisfying final beat.
+META LINE: Derive three short slash-separated phrases from the source image's subject, setting, mood, and the story direction.
+PRIORITY: Build a readable cinematic storyboard sequence that grows naturally from the source image analysis and the story direction; do not force a prewritten recipe, dance, product, or genre unless the source image supports it.
+MICRO BRIEF: Turn the source image into a short, visually coherent video concept with a clear hook, middle action, and ${loopVideo ? "a final beat that loops back into the opening frame" : "a satisfying final beat"}.
 
 [CONTINUITY HEADER]
 REFERENCE PRIORITY: The provided source image controls subject identity, body proportions, wardrobe, environment, lighting character, color palette, and visual style. This storyboard controls staging, motion, camera order, continuity, and rhythm.
@@ -117,8 +153,8 @@ SEQUENCE ID: derive a short uppercase sequence id from the title.
 [SCENE PACKET]
 PREMISE: Infer one specific cinematic micro-sequence from the source image analysis. It must feel plausible for the visible subject, location, wardrobe, props, and mood.
 LOCATION: Preserve the source image's visible environment and extend it only with plausible adjacent space.
-START -> END: Begin from a pose or moment compatible with the source image, then move through 12-16 connected visual beats toward a clean final image.
-ACTION CHAIN: Derive actions from visible posture, props, setting, and mood; keep the chain concrete, filmable, and physically continuous.
+START -> END: Begin from a pose or moment compatible with the source image, then move through 12-16 connected visual beats toward ${loopVideo ? "a final image that can match-cut back to the opening image" : "a clean final image"}.
+ACTION CHAIN: Derive actions from visible posture, props, setting, mood, and story direction; keep the chain concrete, filmable, and physically continuous.
 PROP / EFFECT STATE: Use only props, textures, atmosphere, and effects implied by the source image unless a simple bridging prop is needed for continuity.
 MUST READ: The storyboard must look custom-built from the source image analysis, not from a fixed template.
 
@@ -136,6 +172,7 @@ P02 is the geography master that establishes the source image's location, subjec
 
 [EMOTIONAL ARC]
 Derive the arc from the source image's mood. Show progression through camera distance, expression, posture, hand action, gaze, environmental motion, and texture changes.
+${loopVideo ? "For a loop, keep the emotional arc cyclical: hook -> action -> reset/payoff -> visual return to the opening energy." : "For a non-loop, let the emotional arc resolve clearly instead of returning to the opening frame."}
 
 [STYLE LOCKS]
 STYLE LOCK: clean monochrome rough-sketch storyboard panels on off-white paper, light-gray gesture lines, simplified shapes, crisp action hierarchy, no rendered panel lighting.
@@ -158,7 +195,7 @@ STATE TRACK: Track subject, prop, environment, and texture state changes per pan
 STYLE TRACK: Track the dominant visual motif or texture per panel.
 
 [SEQUENCE]
-Grid: compact cinematic storyboard sheet; panel artwork stays monochrome rough sketch while the director strip shapes a custom image-derived sequence.`;
+Grid: compact cinematic storyboard sheet; panel artwork stays monochrome rough sketch while the director strip shapes a custom image-derived ${loopVideo ? "loopable" : "non-loop"} sequence.`;
 }
 
 function renderMarkdown(sidecar: StoryboardVideoPlanSidecar): string {
@@ -172,6 +209,11 @@ function renderMarkdown(sidecar: StoryboardVideoPlanSidecar): string {
     `**Video model:** ${sidecar.video_model}`,
     `**Duration:** ${sidecar.duration_s}s`,
     `**Aspect:** ${sidecar.aspect_ratio}`,
+    `**Loop:** ${sidecar.loop_video ? "yes" : "no"}`,
+    "",
+    "## Storyboard Direction",
+    "",
+    sidecar.storyboard_brief || "derive from source image",
     "",
     ...(sidecar.source_image_analysis ? [
       "## Source Image Analysis",
@@ -228,6 +270,8 @@ export async function generateStoryboardVideoPlan(
   args: {
     projectSlug: string;
     sourceImageAssetId: string;
+    storyboardBrief?: string;
+    loopVideo?: boolean;
     storyboardPrompt?: string;
     videoPrompt?: string;
     videoModel?: "generate_seedance2_video" | "generate_seedance2_fast_video";
@@ -245,8 +289,13 @@ export async function generateStoryboardVideoPlan(
   }
 
   const sameSource = existing?.source_image_asset_id === sourceImageAssetId;
+  const storyboardBrief = normalizeBrief(args.storyboardBrief ?? (sameSource ? existing?.storyboard_brief : undefined));
+  const loopVideo = args.loopVideo ?? (sameSource ? existing?.loop_video ?? false : false);
+  const directionChanged = sameSource && existing
+    ? (existing.storyboard_brief ?? "") !== storyboardBrief || (existing.loop_video ?? false) !== loopVideo
+    : false;
   const explicitStoryboardPrompt = args.storyboardPrompt?.trim();
-  const existingStoryboardPrompt = sameSource ? existing?.storyboard_prompt : undefined;
+  const existingStoryboardPrompt = sameSource && !directionChanged ? existing?.storyboard_prompt : undefined;
   const needsGeneratedStoryboardPrompt = !explicitStoryboardPrompt && !existingStoryboardPrompt;
   const sourceImageAnalysis = needsGeneratedStoryboardPrompt
     ? await analyzeSourceImage(fs, args.projectSlug, sourceImageAssetId)
@@ -255,12 +304,18 @@ export async function generateStoryboardVideoPlan(
       : await readCachedSourceAnalysis(fs, args.projectSlug, sourceImageAssetId);
 
   const durationS = Math.min(15, Math.max(4, args.durationS ?? existing?.duration_s ?? 15));
+  const explicitVideoPrompt = args.videoPrompt?.trim();
+  const existingVideoPrompt = sameSource && !directionChanged && !isDefaultVideoPrompt(existing?.video_prompt)
+    ? existing?.video_prompt
+    : undefined;
   const sidecar: StoryboardVideoPlanSidecar = {
     formula: "storyboard_video",
     source_image_asset_id: sourceImageAssetId,
     source_image_analysis: sourceImageAnalysis,
-    storyboard_prompt: explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!),
-    video_prompt: args.videoPrompt?.trim() || (sameSource ? existing?.video_prompt : undefined) || DEFAULT_VIDEO_PROMPT,
+    storyboard_brief: storyboardBrief,
+    loop_video: loopVideo,
+    storyboard_prompt: explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!, storyboardBrief, loopVideo),
+    video_prompt: explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo),
     storyboard_asset_id: sameSource ? existing?.storyboard_asset_id ?? null : null,
     video_asset_id: sameSource ? existing?.video_asset_id ?? null : null,
     storyboard_model: "generate_gpt_image",

@@ -62,6 +62,8 @@ interface StoryboardVideoPlanSidecar {
     shot?: string;
     pose?: string;
   } | null;
+  storyboard_brief: string;
+  loop_video: boolean;
   storyboard_prompt: string;
   video_prompt: string;
   storyboard_asset_id?: string | null;
@@ -438,8 +440,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
 }) {
   const [sourceImageId, setSourceImageId] = useState<string | null>(() => sidecar?.source_image_asset_id ?? null);
+  const [storyboardBrief, setStoryboardBrief] = useState(() => sidecar?.storyboard_brief ?? '');
+  const [loopVideo, setLoopVideo] = useState(() => sidecar?.loop_video ?? false);
   const [storyboardPrompt, setStoryboardPrompt] = useState(() => sidecar?.storyboard_prompt ?? '');
   const [videoPrompt, setVideoPrompt] = useState(() => sidecar?.video_prompt ?? '');
+  const [storyboardPromptEdited, setStoryboardPromptEdited] = useState(false);
+  const [videoPromptEdited, setVideoPromptEdited] = useState(false);
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(() => videoModelFromTool(sidecar?.video_model));
   const [durationS, setDurationS] = useState(() => sidecar?.duration_s ?? 15);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -452,6 +458,8 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     sidecar?.source_image_asset_id ?? '',
     sidecar?.storyboard_asset_id ?? '',
     sidecar?.video_asset_id ?? '',
+    sidecar?.storyboard_brief ?? '',
+    sidecar?.loop_video ? 'loop' : 'no-loop',
     sidecar?.storyboard_prompt ?? '',
     sidecar?.video_prompt ?? '',
     sidecar?.video_model ?? '',
@@ -461,8 +469,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   useEffect(() => {
     if (!sidecar) return;
     setSourceImageId(sidecar.source_image_asset_id);
+    setStoryboardBrief(sidecar.storyboard_brief ?? '');
+    setLoopVideo(sidecar.loop_video ?? false);
     setStoryboardPrompt(sidecar.storyboard_prompt);
     setVideoPrompt(normalizeStoryboardVideoPrompt(sidecar.video_prompt));
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
     setSelectedVideoModel(videoModelFromTool(sidecar.video_model));
     setDurationS(sidecar.duration_s);
   }, [sidecar, sidecarKey]);
@@ -486,17 +498,41 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     [selectedVideoModel, sidecar, videoPrompt],
   );
 
+  const handleStoryboardBriefChange = useCallback((next: string) => {
+    setStoryboardBrief(next);
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
+  }, []);
+
+  const handleLoopVideoChange = useCallback((next: boolean) => {
+    setLoopVideo(next);
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
+  }, []);
+
+  const handleStoryboardPromptChange = useCallback((next: string) => {
+    setStoryboardPrompt(next);
+    setStoryboardPromptEdited(true);
+  }, []);
+
+  const handleVideoPromptChange = useCallback((next: string) => {
+    setVideoPrompt(next);
+    setVideoPromptEdited(true);
+  }, []);
+
   const savePlan = useCallback(async (nextSourceImageId: string, opts?: { resetPrompts?: boolean }) => {
     setSavingPlan(true);
     try {
       const args: Record<string, unknown> = {
         project_slug: projectSlug,
         source_image_asset_id: nextSourceImageId,
+        storyboard_brief: storyboardBrief,
+        loop_video: loopVideo,
         video_model: TOOL_BY_VIDEO_MODEL[selectedVideoModel],
         duration_s: durationS,
       };
-      if (!opts?.resetPrompts && storyboardPrompt.trim().length > 0) args.storyboard_prompt = storyboardPrompt;
-      if (!opts?.resetPrompts && videoPrompt.trim().length > 0) args.video_prompt = normalizeStoryboardVideoPrompt(videoPrompt.trim());
+      if (!opts?.resetPrompts && storyboardPromptEdited && storyboardPrompt.trim().length > 0) args.storyboard_prompt = storyboardPrompt;
+      if (!opts?.resetPrompts && videoPromptEdited && videoPrompt.trim().length > 0) args.video_prompt = normalizeStoryboardVideoPrompt(videoPrompt.trim());
       const result = await callTool('plan_storyboard_video', args);
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan update failed';
@@ -507,8 +543,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       const parsed = JSON.parse(text) as { sidecar?: StoryboardVideoPlanSidecar };
       if (!parsed.sidecar) return null;
       onSidecarUpdate(parsed.sidecar);
+      setStoryboardBrief(parsed.sidecar.storyboard_brief ?? '');
+      setLoopVideo(parsed.sidecar.loop_video ?? false);
       setStoryboardPrompt(parsed.sidecar.storyboard_prompt);
       setVideoPrompt(normalizeStoryboardVideoPrompt(parsed.sidecar.video_prompt));
+      setStoryboardPromptEdited(false);
+      setVideoPromptEdited(false);
       await callTool('sync', { project_slug: projectSlug });
       return parsed.sidecar;
     } catch (err) {
@@ -518,7 +558,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     } finally {
       setSavingPlan(false);
     }
-  }, [callTool, projectSlug, selectedVideoModel, durationS, storyboardPrompt, videoPrompt, onSidecarUpdate]);
+  }, [callTool, projectSlug, storyboardBrief, loopVideo, selectedVideoModel, durationS, storyboardPromptEdited, storyboardPrompt, videoPromptEdited, videoPrompt, onSidecarUpdate]);
 
   const handleSourceDrop = useCallback((assetId: string) => {
     if (!assetId.startsWith('img-')) {
@@ -528,6 +568,8 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setSourceImageId(assetId);
     setStoryboardPrompt('');
     setVideoPrompt('');
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
     void savePlan(assetId, { resetPrompts: true });
   }, [savePlan]);
 
@@ -574,7 +616,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         prompt: plan.storyboard_prompt,
         image_slugs: [`@${plan.source_image_asset_id}`],
         aspect_ratio: '16:9',
-        resolution: '1K',
+        resolution: '4K',
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue GPT Image 2';
@@ -680,6 +722,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
           sourceAspect={sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height)}
           onDropSource={handleSourceDrop}
         />
+        <StoryboardDirectionPanel
+          storyboardBrief={storyboardBrief}
+          loopVideo={loopVideo}
+          onBriefChange={handleStoryboardBriefChange}
+          onLoopChange={handleLoopVideoChange}
+        />
       </div>
 
       <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
@@ -722,7 +770,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
             <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard prompt</div>
             <PromptEditor
               value={storyboardPrompt}
-              onChange={setStoryboardPrompt}
+              onChange={handleStoryboardPromptChange}
               mediaItems={mediaItems}
               projectSlug={projectSlug}
             />
@@ -748,13 +796,13 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
                 className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
               />
             </label>
-            <span className="text-emerald-300/45">16:9 / 720p / GPT storyboard + Seedance video</span>
+            <span className="text-emerald-300/45">16:9 / 4K GPT storyboard / 720p Seedance video</span>
           </div>
           <VideoPanel
             selectedModel={selectedVideoModel}
             onSelectModel={setSelectedVideoModel}
             prompt={videoPrompt}
-            onPromptChange={setVideoPrompt}
+            onPromptChange={handleVideoPromptChange}
             payload={videoPayload}
             mediaItems={mediaItems}
             sourceAspect={outputAspect}
@@ -771,6 +819,67 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
           />
         </div>
       </section>
+    </div>
+  );
+}
+
+function StoryboardDirectionPanel({ storyboardBrief, loopVideo, onBriefChange, onLoopChange }: {
+  storyboardBrief: string;
+  loopVideo: boolean;
+  onBriefChange: (next: string) => void;
+  onLoopChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_8.5rem] gap-3 items-start">
+      <label className="min-w-0">
+        <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard direction</span>
+        <textarea
+          value={storyboardBrief}
+          onChange={(e) => onBriefChange(e.target.value)}
+          rows={3}
+          placeholder="Bangkok confidence walk, rainy neon chase, product reveal..."
+          className={cn(
+            'w-full min-h-[4.75rem] p-2 rounded bg-black/60 border border-zinc-700',
+            'text-[11px] font-mono text-emerald-300/90 resize-y',
+            'focus:outline-none focus:border-emerald-500/60',
+            'placeholder:text-emerald-300/30',
+          )}
+        />
+      </label>
+      <div className="min-w-0">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Loop</div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={loopVideo}
+          onClick={() => onLoopChange(!loopVideo)}
+          title={loopVideo ? 'Loop enabled' : 'Loop disabled'}
+          className={cn(
+            'h-8 w-full px-2 flex items-center justify-between rounded border transition-colors',
+            loopVideo
+              ? 'bg-emerald-500/15 border-emerald-500/55 text-emerald-200'
+              : 'bg-black/60 border-zinc-700 text-emerald-300/55 hover:border-emerald-500/40 hover:text-emerald-300/80',
+          )}
+        >
+          <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider">
+            <RefreshCw className="w-3 h-3" />
+            {loopVideo ? 'On' : 'Off'}
+          </span>
+          <span
+            className={cn(
+              'relative h-[18px] w-8 rounded-full border transition-colors',
+              loopVideo ? 'border-emerald-300/70 bg-emerald-300/20' : 'border-zinc-600 bg-zinc-950',
+            )}
+          >
+            <span
+              className={cn(
+                'absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform',
+                loopVideo ? 'translate-x-[0.875rem] bg-emerald-200' : 'translate-x-0.5 bg-zinc-500',
+              )}
+            />
+          </span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -1748,7 +1857,7 @@ function buildSwapPayload(
       prompt,
       [inputKey]: inputs,
       aspect_ratio: imageAspectRatio,
-      resolution: '2K',
+      resolution: model === 'gpt-image-2' ? '4K' : '2K',
     },
   };
 }

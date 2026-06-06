@@ -7,6 +7,8 @@ import type { ToolDef } from "./tool-def.js";
 const schema = {
   project_slug: z.string().describe("Project slug"),
   source_image_asset_id: z.string().describe("Single img-* source image used as the character/reference image"),
+  storyboard_brief: z.string().optional().describe("User direction for what the image-derived storyboard should be about"),
+  loop_video: z.boolean().optional().describe("Whether the storyboard and video should be designed as a seamless loop"),
   storyboard_prompt: z.string().optional().describe("Editable GPT Image 2 storyboard prompt"),
   video_prompt: z.string().optional().describe("Editable Seedance 2 video prompt"),
   video_model: z.enum(["generate_seedance2_video", "generate_seedance2_fast_video"]).optional().describe("Seedance tool to use for the final video"),
@@ -23,6 +25,8 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
       const {
         project_slug,
         source_image_asset_id,
+        storyboard_brief,
+        loop_video,
         storyboard_prompt,
         video_prompt,
         video_model,
@@ -30,6 +34,8 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
       } = args as {
         project_slug: string;
         source_image_asset_id: string;
+        storyboard_brief?: string;
+        loop_video?: boolean;
         storyboard_prompt?: string;
         video_prompt?: string;
         video_model?: "generate_seedance2_video" | "generate_seedance2_fast_video";
@@ -40,6 +46,8 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
         const sidecar = await generateStoryboardVideoPlan(fs, {
           projectSlug: project_slug,
           sourceImageAssetId: source_image_asset_id,
+          ...(storyboard_brief !== undefined ? { storyboardBrief: storyboard_brief } : {}),
+          ...(loop_video !== undefined ? { loopVideo: loop_video } : {}),
           ...(storyboard_prompt !== undefined ? { storyboardPrompt: storyboard_prompt } : {}),
           ...(video_prompt !== undefined ? { videoPrompt: video_prompt } : {}),
           ...(video_model !== undefined ? { videoModel: video_model } : {}),
