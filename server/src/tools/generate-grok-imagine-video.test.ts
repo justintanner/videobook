@@ -137,7 +137,7 @@ describe("generate_grok_imagine_video tool", () => {
     expect(parsed.job_id).toBeDefined();
   });
 
-  it("enqueues job with multiple image_slugs", async () => {
+  it("rejects multiple image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createFs({ projectsDir: tempDir });
@@ -161,9 +161,8 @@ describe("generate_grok_imagine_video tool", () => {
       },
     });
 
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_images).toEqual(ids);
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("expected array to have <=1 items");
   });
 });

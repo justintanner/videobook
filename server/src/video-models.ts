@@ -431,6 +431,10 @@ const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unkno
   generate_happyhorse_ref_video: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.reference_image,
 };
 
+const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
+  generate_grok_imagine_video: { min: 1, max: 1 },
+};
+
 // ---------------------------------------------------------------------------
 // Parameter schemas (static JSON Schema defs)
 // ---------------------------------------------------------------------------
@@ -441,6 +445,8 @@ type ParamSchema = {
   enum?: (string | number | boolean)[];
   default?: unknown;
   items?: Record<string, unknown>;
+  minItems?: number;
+  maxItems?: number;
   minimum?: number;
   maximum?: number;
   minLength?: number;
@@ -673,7 +679,11 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
       if (param === "aspect_ratio") { prop.enum = GROK_VIDEO_15_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default true)"; prop.default = true; }
-      if (param === "image_slugs") prop.description = "Reference image assets (at least one required, e.g., @img-sunset)";
+      if (param === "image_slugs") {
+        prop.description = "Exactly one reference image asset (required, e.g., @img-sunset)";
+        prop.minItems = 1;
+        prop.maxItems = 1;
+      }
     }
     if (toolName === "generate_grok_imagine_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
@@ -852,6 +862,10 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
+  if (toolName === "generate_grok_imagine_video" && totalImages > 1) {
+    warnings.push(`Grok Imagine 1.5 supports exactly one reference image (got ${totalImages})`);
+  }
+
   if (toolName === "generate_kling30_video") {
     const multiPrompt = params.multi_prompt as unknown[] | undefined;
     if (multiPrompt && totalImages > 1) warnings.push(`Kling 3.0 multi-shot mode allows max 1 reference image (got ${totalImages})`);
@@ -912,7 +926,7 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  const imageSlots = readSlotConstraints(IMAGE_FIELD_SCHEMAS[toolName]);
+  const imageSlots = IMAGE_SLOT_OVERRIDES[toolName] ?? readSlotConstraints(IMAGE_FIELD_SCHEMAS[toolName]);
 
   const multiPromptSlots = toolName === "generate_kling30_video" ? 5 : null;
 

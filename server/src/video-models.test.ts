@@ -337,6 +337,8 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.duration.maximum).toBe(15);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
     expect(schema!.properties.aspect_ratio.enum).toContain("auto");
+    expect(schema!.properties.image_slugs.minItems).toBe(1);
+    expect(schema!.properties.image_slugs.maxItems).toBe(1);
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.properties.nsfw_checker.type).toBe("boolean");
     expect(schema!.defaults).toEqual(VIDEO_MODELS.grok_imagine.defaults);
@@ -431,7 +433,9 @@ describe("validateVideoParams", () => {
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
     const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
-    expect(grokResult.image_slots).toEqual({ min: 1, max: null });
+    expect(grokResult.image_slots).toEqual({ min: 1, max: 1 });
+    const tooManyGrokImages = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a", "@img-b"] });
+    expect(tooManyGrokImages.warnings).toContain("Grok Imagine 1.5 supports exactly one reference image (got 2)");
   });
 
   it("tools without image-array fields return null image_slots", () => {

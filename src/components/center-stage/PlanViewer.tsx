@@ -398,8 +398,29 @@ function normalizeStoryboardVideoPrompt(prompt: string): string {
     .replaceAll('@[character ref]', '[Image 2]');
 }
 
-function resolveStoryboardVideoPrompt(prompt: string): string {
-  return normalizeStoryboardVideoPrompt(prompt);
+function buildGrokStoryboardVideoPrompt(prompt: string): string {
+  const normalized = normalizeStoryboardVideoPrompt(prompt);
+  if (!normalized.startsWith("Use [Image 1] as the authoritative director-approved storyboard blueprint")) {
+    return `${normalized}
+
+Grok Imagine 1.5 receives exactly one image in this plan: [Image 1], the generated storyboard sheet. Ignore references to any other attached image.`;
+  }
+  const loopRequirement = normalized.includes("Make the final shot visually match the opening shot")
+    ? "Make the final shot visually match the opening shot closely enough to loop cleanly."
+    : "End on a clean final beat. Do not force a loop unless the storyboard itself asks for one.";
+  return `Use [Image 1] as the only visual reference image. [Image 1] is the director-approved storyboard sheet for the sequence.
+Do not render the storyboard sheet itself. Recreate the filmed sequence implied by its panels, following panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc.
+Because Grok Imagine 1.5 accepts exactly one image, rely on the storyboard sheet for identity, setting, wardrobe, style, and sequence structure. Do not assume any extra attached source images.
+Generate one cohesive cinematic video with natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding logos, captions, subtitles, UI, watermarks, or graphic overlays.
+
+[LOOP REQUIREMENT]
+${loopRequirement}`;
+}
+
+function resolveStoryboardVideoPrompt(prompt: string, videoModel: VideoModel): string {
+  return videoModel === 'grok-imagine-1.5'
+    ? buildGrokStoryboardVideoPrompt(prompt)
+    : normalizeStoryboardVideoPrompt(prompt);
 }
 
 function deriveStoryboardTileState(assetId: string | null | undefined, mediaItems: MediaItem[]): FrameTileState {
@@ -432,13 +453,13 @@ function buildStoryboardVideoPayload(
   const storyboardId = sidecar?.storyboard_asset_id ?? 'img-storyboard';
   const sourceImageIds = storyboardSourceImageIds(sidecar);
   const referenceImageUrls = [`@${storyboardId}`, ...(sourceImageIds.length > 0 ? sourceImageIds : ['img-source']).map((id) => `@${id}`)];
-  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt);
+  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt, videoModel);
   if (videoModel === 'grok-imagine-1.5') {
     return {
       model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
       input: {
         prompt: resolvedPrompt,
-        image_urls: referenceImageUrls,
+        image_urls: [`@${storyboardId}`],
         resolution: '720p',
         aspect_ratio: '16:9',
         duration: sidecar?.duration_s ?? 15,
@@ -710,9 +731,11 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         toast({ title: 'Storyboard required', description: 'Generate or drop a storyboard image before video.', duration: 3500 });
         return;
       }
-      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt);
+      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt, selectedVideoModel);
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const imageSlugs = [`@${storyboardId}`, ...storyboardSourceImageIds(plan).map((id) => `@${id}`)];
+      const imageSlugs = selectedVideoModel === 'grok-imagine-1.5'
+        ? [`@${storyboardId}`]
+        : [`@${storyboardId}`, ...storyboardSourceImageIds(plan).map((id) => `@${id}`)];
       const result = await callTool(toolName, selectedVideoModel === 'grok-imagine-1.5'
         ? {
           project_slug: projectSlug,
