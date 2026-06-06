@@ -76,6 +76,7 @@ import { generateAlibabaImageProDef } from "./generate-alibaba-image-pro.js";
 import { generateAlibabaQwenImageDef } from "./generate-alibaba-qwen-image.js";
 import { generateAlibabaQwenImageEditDef } from "./generate-alibaba-qwen-image-edit.js";
 import { generateAlibabaVideoDef } from "./generate-alibaba-video.js";
+import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { editTimelineDef } from "./edit-timeline.js";
@@ -246,6 +247,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateAlibabaQwenImageDef(fs),
     generateAlibabaQwenImageEditDef(fs),
     generateAlibabaVideoDef(fs),
+    concatImagesDef(fs),
     chatDef(fs),
     getTimelineDef(fs),
     editTimelineDef(fs),

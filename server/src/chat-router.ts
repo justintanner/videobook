@@ -111,6 +111,13 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: ["prompt", "image_slugs", "aspect_ratio"],
     category: "generation",
   },
+  {
+    name: "concat_images",
+    actualTool: "concat_images",
+    description: "Concatenate image assets into a single reference-sheet image while preserving each image's aspect ratio",
+    params: ["image_slugs", "layout", "aspect_ratio"],
+    category: "generation",
+  },
 ];
 
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
@@ -144,6 +151,7 @@ Parameter guidelines:
 - For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs for reference image asset IDs (include @ prefix)
+- For concat_images: use image_slugs for all referenced image asset IDs (include @ prefix); use layout horizontal for side-by-side requests
 - Do NOT include project_slug in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
 

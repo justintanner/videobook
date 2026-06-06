@@ -400,17 +400,20 @@ function normalizeStoryboardVideoPrompt(prompt: string): string {
 
 function buildGrokStoryboardVideoPrompt(prompt: string): string {
   const normalized = normalizeStoryboardVideoPrompt(prompt);
+  if (normalized.includes("concatenated reference sheet") || normalized.includes("single concatenated reference sheet")) {
+    return normalized;
+  }
   if (!normalized.startsWith("Use [Image 1] as the authoritative director-approved storyboard blueprint")) {
     return `${normalized}
 
-Grok Imagine 1.5 receives exactly one image in this plan: [Image 1], the generated storyboard sheet. Ignore references to any other attached image.`;
+Grok Imagine 1.5 receives exactly one image in this plan: [Image 1], a concatenated reference sheet. The sheet places the generated storyboard first, followed by the source reference images in order. Use the storyboard portion for sequence structure and the source portions for identity, wardrobe, setting, lighting, mood, and style.`;
   }
   const loopRequirement = normalized.includes("Make the final shot visually match the opening shot")
     ? "Make the final shot visually match the opening shot closely enough to loop cleanly."
     : "End on a clean final beat. Do not force a loop unless the storyboard itself asks for one.";
-  return `Use [Image 1] as the only visual reference image. [Image 1] is the director-approved storyboard sheet for the sequence.
+  return `Use [Image 1] as the only visual reference image. [Image 1] is a concatenated reference sheet: the generated director-approved storyboard appears first, followed by the source reference images in order.
 Do not render the storyboard sheet itself. Recreate the filmed sequence implied by its panels, following panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc.
-Because Grok Imagine 1.5 accepts exactly one image, rely on the storyboard sheet for identity, setting, wardrobe, style, and sequence structure. Do not assume any extra attached source images.
+Because Grok Imagine 1.5 accepts exactly one image, use this single concatenated sheet as both the storyboard blueprint and visual reference pack. Treat the storyboard portion as authoritative for sequence structure. Treat the source-image portions as authoritative for identity, wardrobe, proportions, setting, lighting, mood, color palette, and material details.
 Generate one cohesive cinematic video with natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding logos, captions, subtitles, UI, watermarks, or graphic overlays.
 
 [LOOP REQUIREMENT]
@@ -459,7 +462,7 @@ function buildStoryboardVideoPayload(
       model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
       input: {
         prompt: resolvedPrompt,
-        image_urls: [`@${storyboardId}`],
+        image_urls: [`concat(${referenceImageUrls.join(', ')})`],
         resolution: '720p',
         aspect_ratio: '16:9',
         duration: sidecar?.duration_s ?? 15,
@@ -733,9 +736,30 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       }
       const prompt = resolveStoryboardVideoPrompt(plan.video_prompt, selectedVideoModel);
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const imageSlugs = selectedVideoModel === 'grok-imagine-1.5'
-        ? [`@${storyboardId}`]
-        : [`@${storyboardId}`, ...storyboardSourceImageIds(plan).map((id) => `@${id}`)];
+      const sourceSlugs = storyboardSourceImageIds(plan).map((id) => `@${id}`);
+      let imageSlugs = [`@${storyboardId}`, ...sourceSlugs];
+      if (selectedVideoModel === 'grok-imagine-1.5') {
+        const concatResult = await callTool('concat_images', {
+          project_slug: projectSlug,
+          image_slugs: imageSlugs,
+          aspect_ratio: '16:9',
+          layout: imageSlugs.length <= 2 ? 'horizontal' : 'grid',
+          name: `grok-storyboard-${storyboardId.replace(/^img-/, '')}`,
+        });
+        if (concatResult.isError) {
+          const msg = (concatResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to concatenate storyboard references';
+          toast({ title: 'Reference concat failed', description: msg, duration: 5000 });
+          return;
+        }
+        const concatText = (concatResult.content as Array<{ type: string; text: string }>)[0].text;
+        const concatParsed = JSON.parse(concatText) as { img_asset_id?: string; asset_id?: string };
+        const concatAssetId = concatParsed.img_asset_id ?? concatParsed.asset_id;
+        if (!concatAssetId) {
+          toast({ title: 'Reference concat failed', description: 'concat_images did not return an img asset id.', duration: 5000 });
+          return;
+        }
+        imageSlugs = [`@${concatAssetId}`];
+      }
       const result = await callTool(toolName, selectedVideoModel === 'grok-imagine-1.5'
         ? {
           project_slug: projectSlug,

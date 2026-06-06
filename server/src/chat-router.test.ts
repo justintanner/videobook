@@ -34,6 +34,15 @@ describe("getRoutableTool", () => {
     expect(tool!.params).toContain("image_slugs");
   });
 
+  it("returns correct tool info for concat_images", () => {
+    const tool = getRoutableTool("concat_images");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("concat_images");
+    expect(tool!.category).toBe("generation");
+    expect(tool!.params).toContain("image_slugs");
+    expect(tool!.params).toContain("layout");
+  });
+
   it("returns undefined for nonexistent tool", () => {
     expect(getRoutableTool("nonexistent")).toBeUndefined();
   });
@@ -55,6 +64,7 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("download_video");
     expect(prompt).toContain("generate_video");
     expect(prompt).toContain("generate_image");
+    expect(prompt).toContain("concat_images");
     expect(prompt).toContain("Available tools:");
   });
 
@@ -100,7 +110,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(14);
+    expect(ROUTABLE_TOOLS.length).toBe(15);
   });
 
   it("contains both action and generation categories", () => {
