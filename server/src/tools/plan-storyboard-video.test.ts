@@ -73,6 +73,7 @@ describe("plan_storyboard_video tools", () => {
     expect(sidecar).toMatchObject({
       formula: "storyboard_video",
       source_image_asset_id: sourceId,
+      source_image_asset_ids: [sourceId],
       storyboard_brief: "",
       loop_video: false,
       storyboard_prompt: "Create a compact storyboard sheet.",
@@ -99,7 +100,7 @@ describe("plan_storyboard_video tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("source_image_asset_id must be an img-* asset");
+    expect((result.content as TextContent)[0].text).toContain("source_image_asset_ids[0] must be an img-* asset");
   });
 
   it("defaults the Seedance prompt to ordered image references", async () => {
@@ -112,9 +113,44 @@ describe("plan_storyboard_video tools", () => {
     expect(result.isError).toBeFalsy();
     const sidecar = parseSidecar(result.content);
     expect(sidecar.video_prompt).toContain("Use [Image 1] as the authoritative director-approved storyboard");
-    expect(sidecar.video_prompt).toContain("Use [Image 2] as the original source image");
+    expect(sidecar.video_prompt).toContain("Use [Image 2] as the primary source image");
     expect(sidecar.video_prompt).toContain("Do not force the final shot to match the opening shot");
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
+  });
+
+  it("persists Grok Imagine 1.5 as the storyboard video model", async () => {
+    const sourceId = await createImage("grok-video-source");
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      video_model: "generate_grok_imagine_video",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.video_model).toBe("generate_grok_imagine_video");
+  });
+
+  it("creates a storyboard-video plan from multiple source image assets", async () => {
+    const primary = await createImage("primary-source");
+    const wardrobe = await createImage("wardrobe-source");
+    const setting = await createImage("setting-source");
+
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_ids: [`@${primary}`, `@${wardrobe}`, `@${setting}`, `@${primary}`],
+      storyboard_brief: "Use the first image as the hero and borrow outfit and setting details from the other references.",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.source_image_asset_id).toBe(primary);
+    expect(sidecar.source_image_asset_ids).toEqual([primary, wardrobe, setting]);
+    expect(sidecar.storyboard_prompt).toContain("Use the first image as the hero");
+    expect(sidecar.video_prompt).toContain("Use [Image 3] through [Image 4] as additional source image references");
+    expect(sidecar.video_prompt).toContain("[Image 2] is the primary source image");
+    expect(sidecar.storyboard_asset_id).toBeNull();
+    expect(sidecar.video_asset_id).toBeNull();
   });
 
   it("builds the default storyboard prompt from source image analysis", async () => {

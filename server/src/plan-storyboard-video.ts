@@ -10,14 +10,22 @@ import type { DescribeImageResult } from "./jobs/describe-image.js";
 import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "./plan-types.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const MAX_SOURCE_IMAGES = 15;
 
-function buildDefaultVideoPrompt(loopVideo: boolean): string {
+function buildDefaultVideoPrompt(loopVideo: boolean, sourceImageCount = 1): string {
+  const additionalSourceLine = sourceImageCount > 1
+    ? `Use [Image 3]${sourceImageCount > 2 ? ` through [Image ${sourceImageCount + 1}]` : ""} as additional source image references for secondary identity, wardrobe, object, setting, texture, lighting, mood, and style details.`
+    : "";
+  const referenceOrderLine = sourceImageCount > 1
+    ? `Reference images are sent in this exact order: [Image 1] is the generated storyboard sheet, [Image 2] is the primary source image, and [Image 3]${sourceImageCount > 2 ? ` through [Image ${sourceImageCount + 1}] are additional source images` : " is an additional source image"}.`
+    : "Reference images are sent in this exact order: [Image 1] is the generated storyboard sheet, [Image 2] is the primary source image.";
   return `Use [Image 1] as the authoritative director-approved storyboard blueprint for the sequence. Treat every storyboard panel as a consecutive shot within a single cinematic sequence. Follow panel order exactly and do not invent alternative coverage. Do not render the storyboard sheet itself; recreate the filmed sequence implied by the storyboard panels.
-Use [Image 2] as the original source image and primary visual reference for subject identity, wardrobe, proportions, setting, mood, color palette, and material details.
+Use [Image 2] as the primary source image and primary visual reference for subject identity, wardrobe, proportions, setting, mood, color palette, and material details.
+${additionalSourceLine}
 
-Reference images are sent in this exact order: [Image 1] is the generated storyboard sheet, [Image 2] is the original source image.
+${referenceOrderLine}
 
-Preserve the storyboard's panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc. Preserve the source image's visible subject, environment, wardrobe, props, lighting character, and overall aesthetic. If the storyboard contains director-strip text, use it as timing and rhythm guidance; if the source image conflicts with the storyboard, keep the source image authoritative for identity and visual design while keeping the storyboard authoritative for sequence structure.
+Preserve the storyboard's panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc. Preserve the source images' visible subjects, environments, wardrobe, props, lighting character, and overall aesthetic. If the storyboard contains director-strip text, use it as timing and rhythm guidance; if source images conflict with the storyboard, keep the source images authoritative for identity and visual design while keeping the storyboard authoritative for sequence structure.
 
 Generate one cohesive cinematic video with warm natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding extra characters, logos, captions, subtitles, UI, watermarks, or graphic overlays.
 
@@ -123,7 +131,41 @@ function directionBlock(storyboardBrief: string, loopVideo: boolean): string {
 
 function isDefaultVideoPrompt(prompt: string | undefined): boolean {
   if (!prompt) return false;
-  return prompt === buildDefaultVideoPrompt(false) || prompt === buildDefaultVideoPrompt(true);
+  return prompt.startsWith("Use [Image 1] as the authoritative director-approved storyboard blueprint")
+    && prompt.includes("[LOOP REQUIREMENT]");
+}
+
+function normalizeSourceImageIds(args: {
+  sourceImageAssetId?: string;
+  sourceImageAssetIds?: string[];
+}): string[] {
+  const input = [
+    ...(args.sourceImageAssetId ? [args.sourceImageAssetId] : []),
+    ...(args.sourceImageAssetIds ?? []),
+  ];
+  const ids: string[] = [];
+  for (const value of input) {
+    const id = value.replace(/^@/, "").trim();
+    if (!id || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  if (ids.length === 0) throw new Error("At least one source image is required");
+  if (ids.length > MAX_SOURCE_IMAGES) {
+    throw new Error(`At most ${MAX_SOURCE_IMAGES} source images are supported`);
+  }
+  return ids;
+}
+
+function sourceImageIdsForPlan(plan: StoryboardVideoPlanSidecar | null): string[] {
+  if (!plan) return [];
+  return normalizeSourceImageIds({
+    sourceImageAssetId: plan.source_image_asset_id,
+    sourceImageAssetIds: plan.source_image_asset_ids,
+  });
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 export function buildStoryboardPromptFromAnalysis(
@@ -199,10 +241,12 @@ Grid: compact cinematic storyboard sheet; panel artwork stays monochrome rough s
 }
 
 function renderMarkdown(sidecar: StoryboardVideoPlanSidecar): string {
+  const sourceImageAssetIds = sourceImageIdsForPlan(sidecar);
   return [
     "# Plan: image -> storyboard -> video",
     "",
-    `**Source image:** @${sidecar.source_image_asset_id}`,
+    `**Primary source image:** @${sidecar.source_image_asset_id}`,
+    `**Source images:** ${sourceImageAssetIds.map((id) => `@${id}`).join(", ")}`,
     `**Storyboard:** ${sidecar.storyboard_asset_id ? `@${sidecar.storyboard_asset_id}` : "not generated"}`,
     `**Video:** ${sidecar.video_asset_id ? `@${sidecar.video_asset_id}` : "not generated"}`,
     `**Storyboard model:** ${sidecar.storyboard_model}`,
@@ -269,17 +313,25 @@ export async function generateStoryboardVideoPlan(
   fs: VideocityFs,
   args: {
     projectSlug: string;
-    sourceImageAssetId: string;
+    sourceImageAssetId?: string;
+    sourceImageAssetIds?: string[];
     storyboardBrief?: string;
     loopVideo?: boolean;
     storyboardPrompt?: string;
     videoPrompt?: string;
-    videoModel?: "generate_seedance2_video" | "generate_seedance2_fast_video";
+    videoModel?: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
     durationS?: number;
   },
 ): Promise<StoryboardVideoPlanSidecar> {
-  const sourceImageAssetId = args.sourceImageAssetId.replace(/^@/, "");
-  await resolveImageFile(fs, args.projectSlug, sourceImageAssetId, "source_image_asset_id");
+  const sourceImageAssetIds = normalizeSourceImageIds({
+    sourceImageAssetId: args.sourceImageAssetId,
+    sourceImageAssetIds: args.sourceImageAssetIds,
+  });
+  const sourceImageAssetId = sourceImageAssetIds[0];
+  if (!sourceImageAssetId) throw new Error("At least one source image is required");
+  for (const [index, assetId] of sourceImageAssetIds.entries()) {
+    await resolveImageFile(fs, args.projectSlug, assetId, `source_image_asset_ids[${index}]`);
+  }
 
   let existing: StoryboardVideoPlanSidecar | null = null;
   try {
@@ -288,7 +340,7 @@ export async function generateStoryboardVideoPlan(
     existing = null;
   }
 
-  const sameSource = existing?.source_image_asset_id === sourceImageAssetId;
+  const sameSource = sameStringArray(sourceImageIdsForPlan(existing), sourceImageAssetIds);
   const storyboardBrief = normalizeBrief(args.storyboardBrief ?? (sameSource ? existing?.storyboard_brief : undefined));
   const loopVideo = args.loopVideo ?? (sameSource ? existing?.loop_video ?? false : false);
   const directionChanged = sameSource && existing
@@ -311,11 +363,12 @@ export async function generateStoryboardVideoPlan(
   const sidecar: StoryboardVideoPlanSidecar = {
     formula: "storyboard_video",
     source_image_asset_id: sourceImageAssetId,
+    source_image_asset_ids: sourceImageAssetIds,
     source_image_analysis: sourceImageAnalysis,
     storyboard_brief: storyboardBrief,
     loop_video: loopVideo,
     storyboard_prompt: explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!, storyboardBrief, loopVideo),
-    video_prompt: explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo),
+    video_prompt: explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo, sourceImageAssetIds.length),
     storyboard_asset_id: sameSource ? existing?.storyboard_asset_id ?? null : null,
     video_asset_id: sameSource ? existing?.video_asset_id ?? null : null,
     storyboard_model: "generate_gpt_image",

@@ -57,6 +57,7 @@ type PlanFormula = 'char_swap' | 'storyboard_video';
 interface StoryboardVideoPlanSidecar {
   formula: 'storyboard_video';
   source_image_asset_id: string;
+  source_image_asset_ids?: string[];
   source_image_analysis?: {
     prompt: string;
     shot?: string;
@@ -69,7 +70,7 @@ interface StoryboardVideoPlanSidecar {
   storyboard_asset_id?: string | null;
   video_asset_id?: string | null;
   storyboard_model: 'generate_gpt_image';
-  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video';
+  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video' | 'generate_grok_imagine_video';
   duration_s: number;
   aspect_ratio: '16:9';
   resolution: '720p';
@@ -85,6 +86,17 @@ function planFormula(sidecar: AnyPlanSidecar | null): PlanFormula | null {
 
 function isStoryboardVideoPlan(sidecar: AnyPlanSidecar | null): sidecar is StoryboardVideoPlanSidecar {
   return sidecar?.formula === 'storyboard_video';
+}
+
+function storyboardSourceImageIds(sidecar: StoryboardVideoPlanSidecar | null): string[] {
+  if (!sidecar) return [];
+  const ids: string[] = [];
+  for (const value of [sidecar.source_image_asset_id, ...(sidecar.source_image_asset_ids ?? [])]) {
+    const id = value.replace(/^@/, '').trim();
+    if (!id || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  return ids;
 }
 
 function formatTimecode(seconds: number): string {
@@ -270,7 +282,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
-  const title = activeFormula === 'storyboard_video' ? 'PLAN: IMAGE TO VIDEO' : 'PLAN: CHAR SWAP';
+  const title = activeFormula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
 
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
@@ -347,7 +359,7 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
 }) {
   const formulas: Array<{ id: PlanFormula; label: string; icon: React.ReactNode }> = [
     { id: 'char_swap', label: 'Char Swap', icon: <MapPin className="w-3 h-3" /> },
-    { id: 'storyboard_video', label: 'Image to Video', icon: <Images className="w-3 h-3" /> },
+    { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-3 h-3" /> },
   ];
   return (
     <div className="mb-5 flex items-center gap-2 border-b border-zinc-800/70">
@@ -376,6 +388,7 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
 }
 
 function videoModelFromTool(toolName: StoryboardVideoPlanSidecar['video_model'] | undefined): VideoModel {
+  if (toolName === 'generate_grok_imagine_video') return 'grok-imagine-1.5';
   return toolName === 'generate_seedance2_fast_video' ? 'seedance-2-fast' : 'seedance-2-ref';
 }
 
@@ -417,13 +430,27 @@ function buildStoryboardVideoPayload(
   videoPrompt: string,
 ): { model: string; input: Record<string, unknown> } {
   const storyboardId = sidecar?.storyboard_asset_id ?? 'img-storyboard';
-  const sourceImageId = sidecar?.source_image_asset_id ?? 'img-source';
+  const sourceImageIds = storyboardSourceImageIds(sidecar);
+  const referenceImageUrls = [`@${storyboardId}`, ...(sourceImageIds.length > 0 ? sourceImageIds : ['img-source']).map((id) => `@${id}`)];
   const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt);
+  if (videoModel === 'grok-imagine-1.5') {
+    return {
+      model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
+      input: {
+        prompt: resolvedPrompt,
+        image_urls: referenceImageUrls,
+        resolution: '720p',
+        aspect_ratio: '16:9',
+        duration: sidecar?.duration_s ?? 15,
+        nsfw_checker: true,
+      },
+    };
+  }
   return {
     model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
     input: {
       prompt: resolvedPrompt,
-      reference_image_urls: [`@${storyboardId}`, `@${sourceImageId}`],
+      reference_image_urls: referenceImageUrls,
       resolution: '720p',
       aspect_ratio: '16:9',
       duration: sidecar?.duration_s ?? 15,
@@ -439,7 +466,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
 }) {
-  const [sourceImageId, setSourceImageId] = useState<string | null>(() => sidecar?.source_image_asset_id ?? null);
+  const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(sidecar));
   const [storyboardBrief, setStoryboardBrief] = useState(() => sidecar?.storyboard_brief ?? '');
   const [loopVideo, setLoopVideo] = useState(() => sidecar?.loop_video ?? false);
   const [storyboardPrompt, setStoryboardPrompt] = useState(() => sidecar?.storyboard_prompt ?? '');
@@ -456,6 +483,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
 
   const sidecarKey = [
     sidecar?.source_image_asset_id ?? '',
+    ...(sidecar?.source_image_asset_ids ?? []),
     sidecar?.storyboard_asset_id ?? '',
     sidecar?.video_asset_id ?? '',
     sidecar?.storyboard_brief ?? '',
@@ -468,7 +496,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
 
   useEffect(() => {
     if (!sidecar) return;
-    setSourceImageId(sidecar.source_image_asset_id);
+    setSourceImageIds(storyboardSourceImageIds(sidecar));
     setStoryboardBrief(sidecar.storyboard_brief ?? '');
     setLoopVideo(sidecar.loop_video ?? false);
     setStoryboardPrompt(sidecar.storyboard_prompt);
@@ -479,11 +507,13 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setDurationS(sidecar.duration_s);
   }, [sidecar, sidecarKey]);
 
-  const sourceItem = useMemo(
-    () => (sourceImageId ? mediaItems.find((m) => m.id === sourceImageId) ?? null : null),
-    [sourceImageId, mediaItems],
+  const sourceItems = useMemo(
+    () => sourceImageIds.map((id) => ({
+      id,
+      item: mediaItems.find((m) => m.id === id) ?? null,
+    })),
+    [sourceImageIds, mediaItems],
   );
-  const sourceSrc = sourceItem?.thumbnailSrc ?? sourceItem?.filePath ?? null;
   const outputAspect = useMemo(() => sourceAspectFromDimensions(16, 9), []);
   const storyboardState = useMemo(
     () => deriveStoryboardTileState(sidecar?.storyboard_asset_id, mediaItems),
@@ -520,12 +550,15 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setVideoPromptEdited(true);
   }, []);
 
-  const savePlan = useCallback(async (nextSourceImageId: string, opts?: { resetPrompts?: boolean }) => {
+  const savePlan = useCallback(async (nextSourceImageIds: string[], opts?: { resetPrompts?: boolean }) => {
+    const primarySourceImageId = nextSourceImageIds[0];
+    if (!primarySourceImageId) return null;
     setSavingPlan(true);
     try {
       const args: Record<string, unknown> = {
         project_slug: projectSlug,
-        source_image_asset_id: nextSourceImageId,
+        source_image_asset_id: primarySourceImageId,
+        source_image_asset_ids: nextSourceImageIds,
         storyboard_brief: storyboardBrief,
         loop_video: loopVideo,
         video_model: TOOL_BY_VIDEO_MODEL[selectedVideoModel],
@@ -543,6 +576,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       const parsed = JSON.parse(text) as { sidecar?: StoryboardVideoPlanSidecar };
       if (!parsed.sidecar) return null;
       onSidecarUpdate(parsed.sidecar);
+      setSourceImageIds(storyboardSourceImageIds(parsed.sidecar));
       setStoryboardBrief(parsed.sidecar.storyboard_brief ?? '');
       setLoopVideo(parsed.sidecar.loop_video ?? false);
       setStoryboardPrompt(parsed.sidecar.storyboard_prompt);
@@ -565,13 +599,43 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       toast({ title: 'Wrong asset type', description: `Drop an img-* source image, got ${assetId}.`, duration: 3000 });
       return;
     }
-    setSourceImageId(assetId);
+    if (sourceImageIds.includes(assetId)) {
+      toast({ title: 'Source already added', description: `@${assetId} is already in the source list.`, duration: 2500 });
+      return;
+    }
+    const nextSourceImageIds = [...sourceImageIds, assetId];
+    setSourceImageIds(nextSourceImageIds);
     setStoryboardPrompt('');
     setVideoPrompt('');
     setStoryboardPromptEdited(false);
     setVideoPromptEdited(false);
-    void savePlan(assetId, { resetPrompts: true });
-  }, [savePlan]);
+    void savePlan(nextSourceImageIds, { resetPrompts: true });
+  }, [sourceImageIds, savePlan]);
+
+  const handleSourceRemove = useCallback((assetId: string) => {
+    if (sourceImageIds.length <= 1) {
+      toast({ title: 'Source required', description: 'Keep at least one source image for the plan.', duration: 2500 });
+      return;
+    }
+    const nextSourceImageIds = sourceImageIds.filter((id) => id !== assetId);
+    setSourceImageIds(nextSourceImageIds);
+    setStoryboardPrompt('');
+    setVideoPrompt('');
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
+    void savePlan(nextSourceImageIds, { resetPrompts: true });
+  }, [sourceImageIds, savePlan]);
+
+  const handleSourcePromote = useCallback((assetId: string) => {
+    if (sourceImageIds[0] === assetId) return;
+    const nextSourceImageIds = [assetId, ...sourceImageIds.filter((id) => id !== assetId)];
+    setSourceImageIds(nextSourceImageIds);
+    setStoryboardPrompt('');
+    setVideoPrompt('');
+    setStoryboardPromptEdited(false);
+    setVideoPromptEdited(false);
+    void savePlan(nextSourceImageIds, { resetPrompts: true });
+  }, [sourceImageIds, savePlan]);
 
   const persistStoryboard = useCallback(async (assetId: string) => {
     const result = await callTool('replace_plan_storyboard_video_storyboard', {
@@ -606,15 +670,15 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   }, [callTool, projectSlug, onSidecarUpdate]);
 
   const handleGenerateStoryboard = useCallback(async () => {
-    if (!sourceImageId || generatingStoryboard) return;
+    if (sourceImageIds.length === 0 || generatingStoryboard) return;
     setGeneratingStoryboard(true);
     try {
-      const plan = await savePlan(sourceImageId);
+      const plan = await savePlan(sourceImageIds);
       if (!plan) return;
       const result = await callTool('generate_gpt_image', {
         project_slug: projectSlug,
         prompt: plan.storyboard_prompt,
-        image_slugs: [`@${plan.source_image_asset_id}`],
+        image_slugs: storyboardSourceImageIds(plan).map((id) => `@${id}`),
         aspect_ratio: '16:9',
         resolution: '4K',
       });
@@ -631,13 +695,13 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     } finally {
       setGeneratingStoryboard(false);
     }
-  }, [sourceImageId, generatingStoryboard, savePlan, callTool, projectSlug, persistStoryboard]);
+  }, [sourceImageIds, generatingStoryboard, savePlan, callTool, projectSlug, persistStoryboard]);
 
   const handleGenerateVideo = useCallback(async () => {
-    if (!sourceImageId || generatingVideo) return;
+    if (sourceImageIds.length === 0 || generatingVideo) return;
     setGeneratingVideo(true);
     try {
-      const plan = await savePlan(sourceImageId);
+      const plan = await savePlan(sourceImageIds);
       if (!plan) return;
       const storyboardId = plan.storyboard_asset_id;
       if (!storyboardId) {
@@ -646,17 +710,28 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       }
       const prompt = resolveStoryboardVideoPrompt(plan.video_prompt);
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const result = await callTool(toolName, {
-        project_slug: projectSlug,
-        prompt,
-        image_slugs: [`@${storyboardId}`, `@${plan.source_image_asset_id}`],
-        resolution: '720p',
-        aspect_ratio: '16:9',
-        duration: String(plan.duration_s),
-        generate_audio: true,
-      });
+      const imageSlugs = [`@${storyboardId}`, ...storyboardSourceImageIds(plan).map((id) => `@${id}`)];
+      const result = await callTool(toolName, selectedVideoModel === 'grok-imagine-1.5'
+        ? {
+          project_slug: projectSlug,
+          prompt,
+          image_slugs: imageSlugs,
+          resolution: '720p',
+          aspect_ratio: '16:9',
+          duration: plan.duration_s,
+          nsfw_checker: true,
+        }
+        : {
+          project_slug: projectSlug,
+          prompt,
+          image_slugs: imageSlugs,
+          resolution: '720p',
+          aspect_ratio: '16:9',
+          duration: String(plan.duration_s),
+          generate_audio: true,
+        });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `Failed to enqueue ${LABEL_BY_VIDEO_MODEL[selectedVideoModel]}`;
         toast({ title: 'Video generation failed', description: msg, duration: 5000 });
         return;
       }
@@ -668,7 +743,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     } finally {
       setGeneratingVideo(false);
     }
-  }, [sourceImageId, generatingVideo, savePlan, selectedVideoModel, callTool, projectSlug, persistVideo]);
+  }, [sourceImageIds, generatingVideo, savePlan, selectedVideoModel, callTool, projectSlug, persistVideo]);
 
   const handleStoryboardReplace = useCallback(async (assetId: string) => {
     setReplacingStoryboard(true);
@@ -689,19 +764,19 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   }, [persistVideo]);
 
   const storyboardAssetId = sidecar?.storyboard_asset_id ?? null;
-  const canGenerateStoryboard = Boolean(sourceImageId) && !savingPlan && !generatingStoryboard;
-  const canGenerateVideo = Boolean(sourceImageId && storyboardAssetId) && !savingPlan && !generatingVideo;
+  const canGenerateStoryboard = sourceImageIds.length > 0 && !savingPlan && !generatingStoryboard;
+  const canGenerateVideo = sourceImageIds.length > 0 && Boolean(storyboardAssetId) && !savingPlan && !generatingVideo;
 
   return (
     <div className="space-y-5">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: image to storyboard to video</h1>
+          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: storyboard</h1>
           <button
             type="button"
-            onClick={() => { if (sourceImageId) void savePlan(sourceImageId); }}
-            disabled={!sourceImageId || savingPlan}
-            title={sourceImageId ? 'Save plan prompts' : 'Drop a source image'}
+            onClick={() => { if (sourceImageIds.length > 0) void savePlan(sourceImageIds); }}
+            disabled={sourceImageIds.length === 0 || savingPlan}
+            title={sourceImageIds.length > 0 ? 'Save plan prompts' : 'Drop a source image'}
             className={cn(
               'h-8 px-3 flex items-center gap-1.5 rounded',
               'text-xs font-mono font-bold uppercase tracking-wider',
@@ -716,11 +791,15 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
           </button>
         </div>
         <StoryboardSourceDropZone
-          sourceImageId={sourceImageId}
-          sourceSrc={sourceSrc}
-          sourceLabel={sourceItem?.slug ?? (sourceImageId ? `@${sourceImageId}` : null)}
-          sourceAspect={sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height)}
+          sources={sourceItems.map(({ id, item }) => ({
+            id,
+            src: item?.thumbnailSrc ?? item?.filePath ?? null,
+            label: item?.slug ?? `@${id}`,
+            aspect: sourceAspectFromDimensions(item?.width, item?.height),
+          }))}
           onDropSource={handleSourceDrop}
+          onRemoveSource={handleSourceRemove}
+          onPromoteSource={handleSourcePromote}
         />
         <StoryboardDirectionPanel
           storyboardBrief={storyboardBrief}
@@ -796,11 +875,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
                 className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
               />
             </label>
-            <span className="text-emerald-300/45">16:9 / 4K GPT storyboard / 720p Seedance video</span>
+            <span className="text-emerald-300/45">16:9 / 4K GPT storyboard / 720p video</span>
           </div>
           <VideoPanel
             selectedModel={selectedVideoModel}
             onSelectModel={setSelectedVideoModel}
+            models={STORYBOARD_VIDEO_MODELS}
             prompt={videoPrompt}
             onPromptChange={handleVideoPromptChange}
             payload={videoPayload}
@@ -808,7 +888,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
             sourceAspect={outputAspect}
             projectSlug={projectSlug}
             disabled={!canGenerateVideo}
-            disabledReason={!sourceImageId ? 'Drop a source image first' : !storyboardAssetId ? 'Generate or drop a storyboard first' : generatingVideo ? 'Video gen submitting...' : undefined}
+            disabledReason={sourceImageIds.length === 0 ? 'Drop a source image first' : !storyboardAssetId ? 'Generate or drop a storyboard first' : generatingVideo ? 'Video gen submitting...' : undefined}
             videoTileState={videoTileState}
             videoAssetId={sidecar?.video_asset_id ?? null}
             replacing={replacingVideo || generatingVideo}
@@ -884,12 +964,16 @@ function StoryboardDirectionPanel({ storyboardBrief, loopVideo, onBriefChange, o
   );
 }
 
-function StoryboardSourceDropZone({ sourceImageId, sourceSrc, sourceLabel, sourceAspect, onDropSource }: {
-  sourceImageId: string | null;
-  sourceSrc: string | null;
-  sourceLabel: string | null;
-  sourceAspect: SourceAspect;
+function StoryboardSourceDropZone({ sources, onDropSource, onRemoveSource, onPromoteSource }: {
+  sources: Array<{
+    id: string;
+    src: string | null;
+    label: string;
+    aspect: SourceAspect;
+  }>;
   onDropSource: (assetId: string) => void;
+  onRemoveSource: (assetId: string) => void;
+  onPromoteSource: (assetId: string) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -915,26 +999,63 @@ function StoryboardSourceDropZone({ sourceImageId, sourceSrc, sourceLabel, sourc
       onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
       onDrop={handleDrop}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="w-32 bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
-          style={{ aspectRatio: sourceAspect.css }}
-        >
-          {sourceSrc ? (
-            <img src={sourceSrc} alt={sourceLabel ?? sourceImageId ?? 'source image'} className="w-full h-full object-contain" loading="lazy" />
-          ) : (
-            <Images className="w-5 h-5 text-emerald-300/40" />
-          )}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Source image</div>
-          <div className="text-xs font-mono text-emerald-200/80 truncate">
-            {sourceLabel ?? 'Drop one img-* reference image'}
-          </div>
-          <div className="mt-1 text-[10px] font-mono text-emerald-300/40">
-            {sourceImageId ? `@${sourceImageId}` : 'Creates the plan and loads the default prompts'}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Source images</div>
+          <div className="text-[10px] font-mono text-emerald-300/40">
+            {sources.length > 0 ? `${sources.length} source${sources.length === 1 ? '' : 's'}` : 'drop img-* references'}
           </div>
         </div>
+        {sources.length === 0 ? (
+          <div className="h-28 rounded bg-black/35 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
+            <Images className="w-5 h-5 text-emerald-300/35" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop one or more source images</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {sources.map((source, index) => (
+              <div key={source.id} className="group relative w-28 rounded border border-zinc-700/60 bg-zinc-900 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => onPromoteSource(source.id)}
+                  disabled={index === 0}
+                  title={index === 0 ? 'Primary source image' : 'Make primary source'}
+                  className="block w-full"
+                >
+                  <div className="bg-black/40 flex items-center justify-center" style={{ aspectRatio: source.aspect.css }}>
+                    {source.src ? (
+                      <img src={source.src} alt={source.label} className="w-full h-full object-contain" loading="lazy" />
+                    ) : (
+                      <Images className="w-4 h-4 text-emerald-300/40" />
+                    )}
+                  </div>
+                  <div className="px-1.5 py-1 text-left">
+                    <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/45">
+                      {index === 0 ? 'Primary' : `Source ${index + 1}`}
+                    </div>
+                    <div className="text-[10px] font-mono text-emerald-200/75 truncate">{source.label}</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemoveSource(source.id)}
+                  title="Remove source image"
+                  className={cn(
+                    'absolute top-1 right-1 h-5 w-5 rounded border border-zinc-700/70 bg-black/80',
+                    'items-center justify-center text-emerald-300/60 hover:text-white hover:border-red-300/70 hover:bg-red-500/25',
+                    'hidden group-hover:flex',
+                  )}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            <div className="w-28 rounded border border-dashed border-zinc-700/70 bg-black/25 flex flex-col items-center justify-center gap-1 text-center px-2">
+              <Images className="w-4 h-4 text-emerald-300/30" />
+              <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">drop to add</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1096,13 +1217,21 @@ function parseVariantKey(key: string): { provider: SwapProvider; model: SwapMode
   return null;
 }
 
-type VideoModel = 'seedance-2-ref' | 'seedance-2-fast';
+type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'grok-imagine-1.5';
 
 const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
+const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast', 'grok-imagine-1.5'];
 
 const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'generate_seedance2_video',
   'seedance-2-fast': 'generate_seedance2_fast_video',
+  'grok-imagine-1.5': 'generate_grok_imagine_video',
+};
+
+const LABEL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
+  'seedance-2-ref': 'Seedance 2',
+  'seedance-2-fast': 'Seedance Fast',
+  'grok-imagine-1.5': 'Grok Imagine 1.5',
 };
 
 // Per-scene clip + audio live as sibling files inside the `plan` asset
@@ -2016,6 +2145,7 @@ function readySwapAssetIds(
 const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
   'seedance-2-ref': 'bytedance/seedance-2',
   'seedance-2-fast': 'bytedance/seedance-2-fast',
+  'grok-imagine-1.5': 'grok-imagine-video-1-5-preview',
 };
 
 function buildKieVideoPayload(
@@ -2233,7 +2363,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // and which server tool RUN VIDEO dispatches.
   const [videoModelPrompts, setVideoModelPrompts] = useState<Record<VideoModel, string>>(() => {
     const seed = rewriteVisualWithImageTokens(scene.visual, characters);
-    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed };
+    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'grok-imagine-1.5': seed };
   });
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
   const setSelectedVideoPrompt = useCallback((next: string) => {
@@ -2741,9 +2871,10 @@ function VideoStepBlock({ bothReady, ...rest }: {
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
+  models?: VideoModel[];
   prompt: string;
   onPromptChange: (next: string) => void;
   payload: unknown;
@@ -2774,14 +2905,14 @@ function VideoPanel({ selectedModel, onSelectModel, prompt, onPromptChange, payl
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center gap-x-2">
-        {ALL_VIDEO_MODELS.map((m) => (
+        {models.map((m) => (
           <TabButton
             key={m}
             active={selectedModel === m}
             onClick={() => onSelectModel(m)}
             icon={null}
           >
-            {m}
+            {LABEL_BY_VIDEO_MODEL[m]}
           </TabButton>
         ))}
       </div>
