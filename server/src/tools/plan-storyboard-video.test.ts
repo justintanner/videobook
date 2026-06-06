@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFs } from "vc-engine";
 import type { VideocityFs } from "vc-engine";
-import type { StoryboardVideoPlanSidecar } from "../plan-types.js";
+import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "../plan-types.js";
 import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
 import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
@@ -13,6 +13,12 @@ type TextContent = Array<{ type: string; text: string }>;
 type Result<T> = { ok: true; value: T } | { ok: false; error: { message: string } };
 
 const PROJECT = "test-proj";
+const ANALYSIS_FILENAME = ".original.analysis.json";
+const DEFAULT_ANALYSIS: StoryboardVideoSourceAnalysis = {
+  prompt: "A cinematic source image with a person in a lived-in room, natural light, visible wardrobe, and a grounded everyday mood.",
+  shot: "medium portrait",
+  pose: "relaxed standing posture",
+};
 
 function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error.message);
@@ -39,9 +45,12 @@ describe("plan_storyboard_video tools", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  async function createImage(name = "source"): Promise<string> {
+  async function createImage(name = "source", analysis: StoryboardVideoSourceAnalysis | null = DEFAULT_ANALYSIS): Promise<string> {
     const asset = unwrap(await fs.createAsset("img", name, PROJECT));
     unwrap(await fs.writeFile(asset.assetId, "original.png", Buffer.from("png"), PROJECT));
+    if (analysis) {
+      unwrap(await fs.writeFile(asset.assetId, ANALYSIS_FILENAME, JSON.stringify(analysis, null, 2), PROJECT));
+    }
     return asset.assetId;
   }
 
@@ -101,8 +110,32 @@ describe("plan_storyboard_video tools", () => {
     expect(result.isError).toBeFalsy();
     const sidecar = parseSidecar(result.content);
     expect(sidecar.video_prompt).toContain("Use [Image 1] as the authoritative director-approved storyboard");
-    expect(sidecar.video_prompt).toContain("Use [Image 2] as the authoritative C1 character reference");
+    expect(sidecar.video_prompt).toContain("Use [Image 2] as the original source image");
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
+  });
+
+  it("builds the default storyboard prompt from source image analysis", async () => {
+    const analysis: StoryboardVideoSourceAnalysis = {
+      prompt: "A sunlit retro kitchen portrait with teal cabinets, a yellow tied shirt, striped lounge pants, soft film grain, and an easy summer mood.",
+      shot: "vertical medium portrait near a kitchen counter",
+      pose: "one hand in messy hair, one hand resting on the counter",
+    };
+    const sourceId = await createImage("analysis-source", analysis);
+
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.source_image_analysis).toEqual(analysis);
+    expect(sidecar.storyboard_prompt).toContain(analysis.prompt);
+    expect(sidecar.storyboard_prompt).toContain(analysis.shot);
+    expect(sidecar.storyboard_prompt).toContain(analysis.pose);
+    expect(sidecar.storyboard_prompt).toContain("must look custom-built from the source image analysis");
+    expect(sidecar.storyboard_prompt).not.toContain("BANANA BREAD");
+    expect(sidecar.storyboard_prompt).not.toContain("banana peel");
   });
 
   it("persists a generated storyboard and clears the prior video", async () => {

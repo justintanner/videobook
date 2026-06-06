@@ -1,8 +1,15 @@
 export type PlanFormula = "char_swap" | "storyboard_video";
 
+export type StoryboardVideoSourceAnalysis = {
+  prompt: string;
+  shot?: string;
+  pose?: string;
+};
+
 export type StoryboardVideoPlanSidecar = {
   formula: "storyboard_video";
   source_image_asset_id: string;
+  source_image_analysis?: StoryboardVideoSourceAnalysis | null;
   storyboard_prompt: string;
   video_prompt: string;
   storyboard_asset_id?: string | null;

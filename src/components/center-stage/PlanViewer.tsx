@@ -57,6 +57,11 @@ type PlanFormula = 'char_swap' | 'storyboard_video';
 interface StoryboardVideoPlanSidecar {
   formula: 'storyboard_video';
   source_image_asset_id: string;
+  source_image_analysis?: {
+    prompt: string;
+    shot?: string;
+    pose?: string;
+  } | null;
   storyboard_prompt: string;
   video_prompt: string;
   storyboard_asset_id?: string | null;
