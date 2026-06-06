@@ -3,7 +3,10 @@ import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
 type KeyStatus = "configured" | "missing" | "placeholder";
-type CreditsStatus = "ok" | "missing_key" | "placeholder_key" | "error";
+type CreditsStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavailable";
+type Provider = "kie" | "elevenlabs";
+type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY";
+type ProviderLabel = "Kie" | "ElevenLabs";
 
 interface CreditsInfo {
   status: CreditsStatus;
@@ -14,9 +17,9 @@ interface CreditsInfo {
 }
 
 interface ProviderKeyInfo {
-  provider: "kie";
-  label: "Kie";
-  envKey: "KIE_API_KEY";
+  provider: Provider;
+  label: ProviderLabel;
+  envKey: ProviderEnvKey;
   keyStatus: KeyStatus;
   maskedKey: string | null;
   credits: CreditsInfo;
@@ -26,7 +29,13 @@ interface ProviderKeyStatusResponse {
   providers: ProviderKeyInfo[];
 }
 
-type KieCreditReader = (apiKey: string) => Promise<number>;
+interface ProviderConfig {
+  provider: Provider;
+  label: ProviderLabel;
+  envKey: ProviderEnvKey;
+}
+
+type CreditReader = (apiKey: string) => Promise<number>;
 
 function maskKey(apiKey: string): string {
   const prefixLength = Math.min(6, Math.max(2, apiKey.length));
@@ -50,83 +59,106 @@ async function readKieCredits(apiKey: string): Promise<number> {
   return response.data;
 }
 
-export async function getProviderKeyStatus(readCredits: KieCreditReader = readKieCredits): Promise<ProviderKeyStatusResponse> {
-  const apiKey = process.env.KIE_API_KEY;
+function getMissingProvider(config: ProviderConfig): ProviderKeyInfo {
+  return {
+    ...config,
+    keyStatus: "missing",
+    maskedKey: null,
+    credits: {
+      status: "missing_key",
+      value: null,
+      unit: "credits",
+      fetchedAt: null,
+      message: `${config.envKey} environment variable is not set`,
+    },
+  };
+}
 
-  if (!apiKey) {
-    return {
-      providers: [{
-        provider: "kie",
-        label: "Kie",
-        envKey: "KIE_API_KEY",
-        keyStatus: "missing",
-        maskedKey: null,
-        credits: {
-          status: "missing_key",
-          value: null,
-          unit: "credits",
-          fetchedAt: null,
-          message: "KIE_API_KEY environment variable is not set",
-        },
-      }],
-    };
-  }
+function getPlaceholderProvider(config: ProviderConfig): ProviderKeyInfo {
+  return {
+    ...config,
+    keyStatus: "placeholder",
+    maskedKey: null,
+    credits: {
+      status: "placeholder_key",
+      value: null,
+      unit: "credits",
+      fetchedAt: null,
+      message: `${config.envKey} is a placeholder; refusing to call the real API`,
+    },
+  };
+}
 
-  if (isPlaceholderApiKey(apiKey)) {
-    return {
-      providers: [{
-        provider: "kie",
-        label: "Kie",
-        envKey: "KIE_API_KEY",
-        keyStatus: "placeholder",
-        maskedKey: null,
-        credits: {
-          status: "placeholder_key",
-          value: null,
-          unit: "credits",
-          fetchedAt: null,
-          message: "KIE_API_KEY is a placeholder; refusing to call the real API",
-        },
-      }],
-    };
-  }
-
-  const base: Omit<ProviderKeyInfo, "credits"> = {
-    provider: "kie",
-    label: "Kie",
-    envKey: "KIE_API_KEY",
+function getConfiguredProviderBase(config: ProviderConfig, apiKey: string): Omit<ProviderKeyInfo, "credits"> {
+  return {
+    ...config,
     keyStatus: "configured",
     maskedKey: maskKey(apiKey),
   };
+}
+
+async function getCreditProvider(config: ProviderConfig, readCredits: CreditReader): Promise<ProviderKeyInfo> {
+  const apiKey = process.env[config.envKey];
+
+  if (!apiKey) return getMissingProvider(config);
+  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
+
+  const base = getConfiguredProviderBase(config, apiKey);
 
   try {
     const value = await readCredits(apiKey);
     return {
-      providers: [{
-        ...base,
-        credits: {
-          status: "ok",
-          value,
-          unit: "credits",
-          fetchedAt: new Date().toISOString(),
-          message: null,
-        },
-      }],
+      ...base,
+      credits: {
+        status: "ok",
+        value,
+        unit: "credits",
+        fetchedAt: new Date().toISOString(),
+        message: null,
+      },
     };
   } catch (error) {
     return {
-      providers: [{
-        ...base,
-        credits: {
-          status: "error",
-          value: null,
-          unit: "credits",
-          fetchedAt: null,
-          message: sanitizeMessage(error, apiKey),
-        },
-      }],
+      ...base,
+      credits: {
+        status: "error",
+        value: null,
+        unit: "credits",
+        fetchedAt: null,
+        message: sanitizeMessage(error, apiKey),
+      },
     };
   }
+}
+
+function getKeyOnlyProvider(config: ProviderConfig): ProviderKeyInfo {
+  const apiKey = process.env[config.envKey];
+
+  if (!apiKey) return getMissingProvider(config);
+  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
+
+  return {
+    ...getConfiguredProviderBase(config, apiKey),
+    credits: {
+      status: "unavailable",
+      value: null,
+      unit: "credits",
+      fetchedAt: null,
+      message: "Credit balance is not available for this provider",
+    },
+  };
+}
+
+export async function getProviderKeyStatus(readKieCreditsFn: CreditReader = readKieCredits): Promise<ProviderKeyStatusResponse> {
+  const kie: ProviderConfig = { provider: "kie", label: "Kie", envKey: "KIE_API_KEY" };
+  const elevenlabs: ProviderConfig = { provider: "elevenlabs", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY" };
+
+  return {
+    providers: [
+      await getCreditProvider(kie, readKieCreditsFn),
+      getKeyOnlyProvider(elevenlabs),
+    ],
+  };
 }
 
 export function providerKeyStatusDef(): ToolDef {
