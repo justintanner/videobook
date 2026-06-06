@@ -1,11 +1,11 @@
 import type { VideocityFs } from "vc-engine";
 import { submitKieTask } from "./kie-paygate.js";
-import { createXai } from "@apicity/xai";
-import type { XaiImageGenerateRequest } from "@apicity/xai";
+import type { XaiImageGenerateRequest, XaiImageResponse } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
+import { callXaiPaid, createXaiPaygatedProvider, XAI_IMAGE_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
 
 type GenerateGrokImagineTextImagePayload = {
   type: "generate_grok_imagine_text_image";
@@ -31,7 +31,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
       // xAI path — synchronous image generation
       const apiKey = requireApiKey("XAI_API_KEY");
 
-      const provider = createXai({ apiKey, timeout: 120_000 });
+      const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
       const request: XaiImageGenerateRequest = {
         prompt,
@@ -40,7 +40,11 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
       };
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
-      const result = await provider.post.v1.images.generations(request);
+      const result = await callXaiPaid<XaiImageGenerateRequest, XaiImageResponse>(
+        provider.post.v1.images.generations,
+        XAI_IMAGE_GENERATIONS_DOT_PATH,
+        request,
+      );
 
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");

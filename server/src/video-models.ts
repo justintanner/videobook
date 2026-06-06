@@ -229,7 +229,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: { duration: "6", resolution: "720p", aspect_ratio: "16:9" },
     providers: [
-      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations()", envKey: "XAI_API_KEY" },
+      { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations(request, { otp })", envKey: "XAI_API_KEY" },
     ],
   },
   grok_imagine_extend: {

@@ -1,12 +1,13 @@
 import type { VideocityFs } from "vc-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import type { GrokVideo15AspectRatio } from "@apicity/kie";
+import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
-import { createXai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
+import { callXaiPaid, createXaiPaygatedProvider, XAI_VIDEO_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
@@ -48,13 +49,17 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
         imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
       }
 
-      const provider = createXai({ apiKey, timeout: 120_000 });
+      const provider = createXaiPaygatedProvider(apiKey, 120_000);
       const request = buildXaiGrokImagineVideoPayload(
         { prompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
       await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-      const { request_id } = await provider.post.v1.videos.generations(request);
+      const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
+        provider.post.v1.videos.generations,
+        XAI_VIDEO_GENERATIONS_DOT_PATH,
+        request,
+      );
 
       {
         const _ptResult = await fs.pendingTasks.write(projectSlug, {
@@ -68,7 +73,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
             ...(duration !== undefined ? { duration } : {}),
             ...(resolution !== undefined ? { resolution } : {}),
           },
-      }, ctx.getOwnerId());
+        }, ctx.getOwnerId());
         if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
         if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
       }

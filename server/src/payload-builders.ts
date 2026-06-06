@@ -959,7 +959,7 @@ function translateToolPayload(
     case "generate_grok_imagine_video": {
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
-        return { provider_path: "xai.post.v1.videos.generations()", payload: payload as unknown as Record<string, unknown> };
+        return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
@@ -971,7 +971,7 @@ function translateToolPayload(
     case "generate_grok_imagine_image": {
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
-        return { provider_path: "xai.post.v1.images.edits()", payload: payload as unknown as Record<string, unknown> };
+        return { provider_path: "xai.post.v1.images.edits(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
@@ -1006,14 +1006,14 @@ function translateToolPayload(
           response_format: "url",
           ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as string } : {}),
         };
-        return { provider_path: "xai.post.v1.images.generations()", payload: payload as unknown as Record<string, unknown> };
+        return { provider_path: "xai.post.v1.images.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_ref_video": {
       const payload = buildXaiGrokImagineRefVideoPayload(args as GrokImagineRefVideoArgs, imageSlugs);
-      return { provider_path: "xai.post.v1.videos.generations()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_image": {
       const payload = buildNanoBananaImagePayload(args as NanoBananaImageArgs, imageSlugs);

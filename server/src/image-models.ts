@@ -396,7 +396,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     providers.push({
       key: "xai",
       label: "xAI",
-      provider_path: `xai.post.v1.images.${config.xaiEndpoint}()`,
+      provider_path: `xai.post.v1.images.${config.xaiEndpoint}(request, { otp })`,
       envKey: "XAI_API_KEY",
     });
   }

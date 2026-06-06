@@ -1,9 +1,10 @@
 import type { VideocityFs } from "vc-engine";
+import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
 import { uploadAssetFile } from "../upload.js";
-import { createXai } from "@apicity/xai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
+import { callXaiPaid, createXaiPaygatedProvider, XAI_VIDEO_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
 
 type RefImageInput = {
   assetId: string;
@@ -36,7 +37,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
       imageUrls.push(await uploadAssetFile(fs, ref.assetId, ref.filename, projectSlug));
     }
 
-    const provider = createXai({ apiKey, timeout: 120_000 });
+    const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
     const request = buildXaiGrokImagineRefVideoPayload(
       { prompt, duration, resolution, aspect_ratio: aspectRatio },
@@ -44,7 +45,11 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
     );
 
     await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
-    const { request_id } = await provider.post.v1.videos.generations(request);
+    const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
+      provider.post.v1.videos.generations,
+      XAI_VIDEO_GENERATIONS_DOT_PATH,
+      request,
+    );
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)
     {
       const _ptResult = await fs.pendingTasks.write(projectSlug, {
@@ -59,7 +64,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
           ...(resolution !== undefined ? { resolution } : {}),
           ...(aspectRatio !== undefined ? { aspectRatio } : {}),
         },
-    }, ctx.getOwnerId());
+      }, ctx.getOwnerId());
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
       if (_ptResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
     }
