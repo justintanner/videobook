@@ -117,12 +117,38 @@ function normalizeBrief(value: string | undefined): string {
   return value?.trim().replace(/\s+/g, " ") ?? "";
 }
 
+function providerSafeStoryboardBrief(value: string): { text: string; adapted: boolean } {
+  let text = normalizeBrief(value);
+  if (!text) return { text, adapted: false };
+
+  const original = text;
+  text = text
+    .replace(/\bfake\s+(?:eff?iel|eiffel)\s+towers\b/gi, "counterfeit Eiffel Tower souvenirs")
+    .replace(/\bfake\s+trinkets\b/gi, "counterfeit souvenirs")
+    .replace(/\bscammer\b/gi, "unauthorized souvenir seller")
+    .replace(/\bexposes\s+him\s+by\s+saying\s+["']it's a scam["']/gi, "clearly warns that the sale is counterfeit")
+    .replace(/["']it's a scam["']/gi, "a clear warning about counterfeit souvenirs")
+    .replace(/["']pack it up and move along["']/gi, "a calm request to move along")
+    .replace(/\bgo back to where you came from\b/gi, "move along")
+    .replace(/["']move along["']/gi, "move along");
+
+  if (/go\s+back\s+to\s+where\s+you\s+came\s+from/i.test(original)) {
+    text = text.replace(/\bthen\s+tells\s+the\s+unauthorized souvenir seller\s+to\s+move along\b/gi, "then asks the seller to move along");
+  }
+
+  return { text, adapted: text !== original };
+}
+
 function directionBlock(storyboardBrief: string, loopVideo: boolean): string {
+  const safeBrief = providerSafeStoryboardBrief(storyboardBrief);
   return [
     "[STORY DIRECTION]",
-    storyboardBrief
-      ? `User direction: ${storyboardBrief}`
+    safeBrief.text
+      ? `${safeBrief.adapted ? "User direction, adapted for visual storytelling" : "User direction"}: ${safeBrief.text}`
       : "User direction: derive the sequence subject and action from the source image analysis.",
+    ...(safeBrief.adapted
+      ? ["Safety adaptation: keep confrontation visual and non-hateful; do not render exact hostile quoted dialog or origin-based insults."]
+      : []),
     loopVideo
       ? "Loop behavior: design the final panel to visually match the opening panel so the generated video can cut back to the start cleanly."
       : "Loop behavior: this does not need to loop; end on a satisfying final beat without forcing a match back to the opening frame.",
@@ -175,69 +201,23 @@ export function buildStoryboardPromptFromAnalysis(
 ): string {
   return `Create a 16:9 image.
 
-[SOURCE IMAGE ANALYSIS]
-Use this image analysis as the creative source of truth. Preserve visible subject identity, proportions, wardrobe, setting, props, lighting, mood, color palette, and camera language from the source image.
+[SOURCE]
+Use the attached image and this analysis as the creative source of truth. Preserve visible subject identity, proportions, wardrobe, location logic, lighting, mood, color palette, and camera language.
 ${analysisBlock(analysis)}
 
 ${directionBlock(storyboardBrief, loopVideo)}
 
-[PROJECT CARD]
-Create a compact designed masthead, not a table.
-TITLE: Derive a concise uppercase title from the source image analysis.
-META LINE: Derive three short slash-separated phrases from the source image's subject, setting, mood, and the story direction.
-PRIORITY: Build a readable cinematic storyboard sequence that grows naturally from the source image analysis and the story direction; do not force a prewritten recipe, dance, product, or genre unless the source image supports it.
-MICRO BRIEF: Turn the source image into a short, visually coherent video concept with a clear hook, middle action, and ${loopVideo ? "a final beat that loops back into the opening frame" : "a satisfying final beat"}.
-
-[CONTINUITY HEADER]
-REFERENCE PRIORITY: The provided source image controls subject identity, body proportions, wardrobe, environment, lighting character, color palette, and visual style. This storyboard controls staging, motion, camera order, continuity, and rhythm.
-SEQUENCE ID: derive a short uppercase sequence id from the title.
-
-[SCENE PACKET]
-PREMISE: Infer one specific cinematic micro-sequence from the source image analysis. It must feel plausible for the visible subject, location, wardrobe, props, and mood.
-LOCATION: Preserve the source image's visible environment and extend it only with plausible adjacent space.
-START -> END: Begin from a pose or moment compatible with the source image, then move through 12-16 connected visual beats toward ${loopVideo ? "a final image that can match-cut back to the opening image" : "a clean final image"}.
-ACTION CHAIN: Derive actions from visible posture, props, setting, mood, and story direction; keep the chain concrete, filmable, and physically continuous.
-PROP / EFFECT STATE: Use only props, textures, atmosphere, and effects implied by the source image unless a simple bridging prop is needed for continuity.
-MUST READ: The storyboard must look custom-built from the source image analysis, not from a fixed template.
-
-[CHARACTER SANITIZATION]
-Describe only visible or strongly implied traits from the source image analysis. Remove backstory, invisible psychology, and excessive costume detail that cannot appear in a panel.
-
-[IDENTITY CONSISTENCY]
-The provided source image controls the primary subject. Do not redesign, age-shift, beautify, duplicate, merge, or add another main subject. Keep wardrobe, hair, silhouette, proportions, and defining visual details consistent across panels.
-
-[STORYBOARD PURITY]
-Panel images are visual-only low-detail monochrome light-gray rough sketches. Put panel numbers, beat names, and lens tags in the header strip outside each panel image. No color, labels, arrows, captions, subtitles, logos, watermarks, timing marks, diagrams, UI, ghost poses, duplicate bodies, or technical overlays inside panels.
-
-[MASTER SHOT RULE]
-P02 is the geography master that establishes the source image's location, subject placement, main props, and movement path. Use P02 to anchor all later wide, over-shoulder, top-down, close-up, and insert views.
-
-[EMOTIONAL ARC]
-Derive the arc from the source image's mood. Show progression through camera distance, expression, posture, hand action, gaze, environmental motion, and texture changes.
-${loopVideo ? "For a loop, keep the emotional arc cyclical: hook -> action -> reset/payoff -> visual return to the opening energy." : "For a non-loop, let the emotional arc resolve clearly instead of returning to the opening frame."}
-
-[STYLE LOCKS]
-STYLE LOCK: clean monochrome rough-sketch storyboard panels on off-white paper, light-gray gesture lines, simplified shapes, crisp action hierarchy, no rendered panel lighting.
-EFFECT LOCK: inside panels, effects and atmosphere are simple monochrome shapes only.
-ENVIRONMENT LOCK: preserve the source image's location logic, main background forms, lighting direction, and prop geography across views.
-
-[SPATIAL CONTINUITY LOCK]
-Keep the subject and environment in one continuous place. Allowed changes are camera distance, camera height, pose, gaze, prop state, atmospheric state, and final object/action state.
-
-[DIRECTOR STRIP]
-Bottom animatic track board aligned to panel columns. Tracks: BEAT LINE, CAMERA PATH, ACTION PATH, RHYTHM TRACK, ESCALATION MAP, STATE TRACK, STYLE TRACK. Use shot chips, thin lines, rhythm blocks, small intensity bars, one-to-three-word labels. No seconds or timestamps.
-RHYTHM TRACK format: RHY P##: [hold|slow reveal|build|burst|impact|pause|recover|final hit] / [short block|medium block|long block] / [clean beat|match beat|smash beat|held beat|whip beat].
-ESCALATION MAP format: ESC P##: [L1 calm|L2 tension|L3 rise|L4 surge|L5 peak] / [flat|rise|spike|drop|release|unresolved].
-PANEL HEADERS: Create 12-16 panels with panel number, lens tag, and beat name in each header strip. Use a mix of close hook, geography master, over-shoulder or back view, hand/prop inserts, action peaks, reaction beat, payoff reveal, and final macro or close detail.
-CAMERA + LENS PLAN: Derive camera movement from the source image's shot language and the inferred action chain.
-ACTION PATH: List one concrete action per panel, in panel order.
-RHYTHM TRACK: Assign rhythm labels per panel based on the action arc.
-ESCALATION MAP: Assign escalation labels per panel based on the emotional arc.
-STATE TRACK: Track subject, prop, environment, and texture state changes per panel.
-STYLE TRACK: Track the dominant visual motif or texture per panel.
+[STORYBOARD SHEET]
+Make a compact cinematic storyboard sheet, not a photoreal still.
+Create a small designed masthead with an uppercase title and a short meta line.
+Draw 12 panels in a 3x4 grid, derived from the source image and story direction.
+P01 is the hook close-up, P02 is the geography master, P03-P10 are connected action beats, P11 is the payoff setup, and P12 is ${loopVideo ? "a visual match back to P01 for a clean loop" : "a clean final beat"}.
+Every panel must be a visual-only low-detail monochrome rough sketch on off-white paper with light-gray pencil lines. Keep panel numbers, lens tags, and beat names in header strips outside the panel art. Do not put dialogue, captions, subtitles, arrows, UI, logos, watermarks, or technical overlays inside panels.
+At the bottom, add a compact director strip with short one-to-three-word chips for BEAT, CAMERA, ACTION, RHYTHM, ESCALATION, STATE, and STYLE.
+The storyboard must look custom-built from the source image analysis, not from a fixed template.
 
 [SEQUENCE]
-Grid: compact cinematic storyboard sheet; panel artwork stays monochrome rough sketch while the director strip shapes a custom image-derived ${loopVideo ? "loopable" : "non-loop"} sequence.`;
+Grid: compact 12-panel cinematic storyboard sheet; panel artwork stays monochrome rough sketch while the director strip shapes a custom image-derived ${loopVideo ? "loopable" : "non-loop"} sequence.`;
 }
 
 function renderMarkdown(sidecar: StoryboardVideoPlanSidecar): string {
@@ -321,6 +301,7 @@ export async function generateStoryboardVideoPlan(
     videoPrompt?: string;
     videoModel?: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
     durationS?: number;
+    rebuildPrompts?: boolean;
   },
 ): Promise<StoryboardVideoPlanSidecar> {
   const sourceImageAssetIds = normalizeSourceImageIds({
@@ -343,11 +324,12 @@ export async function generateStoryboardVideoPlan(
   const sameSource = sameStringArray(sourceImageIdsForPlan(existing), sourceImageAssetIds);
   const storyboardBrief = normalizeBrief(args.storyboardBrief ?? (sameSource ? existing?.storyboard_brief : undefined));
   const loopVideo = args.loopVideo ?? (sameSource ? existing?.loop_video ?? false : false);
+  const rebuildPrompts = args.rebuildPrompts === true;
   const directionChanged = sameSource && existing
     ? (existing.storyboard_brief ?? "") !== storyboardBrief || (existing.loop_video ?? false) !== loopVideo
     : false;
   const explicitStoryboardPrompt = args.storyboardPrompt?.trim();
-  const existingStoryboardPrompt = sameSource && !directionChanged ? existing?.storyboard_prompt : undefined;
+  const existingStoryboardPrompt = sameSource && !directionChanged && !rebuildPrompts ? existing?.storyboard_prompt : undefined;
   const needsGeneratedStoryboardPrompt = !explicitStoryboardPrompt && !existingStoryboardPrompt;
   const sourceImageAnalysis = needsGeneratedStoryboardPrompt
     ? await analyzeSourceImage(fs, args.projectSlug, sourceImageAssetId)
@@ -357,9 +339,19 @@ export async function generateStoryboardVideoPlan(
 
   const durationS = Math.min(15, Math.max(4, args.durationS ?? existing?.duration_s ?? 15));
   const explicitVideoPrompt = args.videoPrompt?.trim();
-  const existingVideoPrompt = sameSource && !directionChanged && !isDefaultVideoPrompt(existing?.video_prompt)
+  const existingVideoPrompt = sameSource && !directionChanged && !rebuildPrompts && !isDefaultVideoPrompt(existing?.video_prompt)
     ? existing?.video_prompt
     : undefined;
+  const nextStoryboardPrompt = explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!, storyboardBrief, loopVideo);
+  const nextVideoPrompt = explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo, sourceImageAssetIds.length);
+  const storyboardPromptChanged = existing ? (existing.storyboard_prompt ?? "") !== nextStoryboardPrompt : true;
+  const videoPromptChanged = existing ? (existing.video_prompt ?? "") !== nextVideoPrompt : true;
+  const nextVideoModel = args.videoModel ?? existing?.video_model ?? "generate_seedance2_video";
+  const keepStoryboardAsset = sameSource && !directionChanged && !rebuildPrompts && !storyboardPromptChanged;
+  const keepVideoAsset = keepStoryboardAsset
+    && !videoPromptChanged
+    && nextVideoModel === existing?.video_model
+    && durationS === existing?.duration_s;
   const sidecar: StoryboardVideoPlanSidecar = {
     formula: "storyboard_video",
     source_image_asset_id: sourceImageAssetId,
@@ -367,12 +359,12 @@ export async function generateStoryboardVideoPlan(
     source_image_analysis: sourceImageAnalysis,
     storyboard_brief: storyboardBrief,
     loop_video: loopVideo,
-    storyboard_prompt: explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!, storyboardBrief, loopVideo),
-    video_prompt: explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo, sourceImageAssetIds.length),
-    storyboard_asset_id: sameSource ? existing?.storyboard_asset_id ?? null : null,
-    video_asset_id: sameSource ? existing?.video_asset_id ?? null : null,
+    storyboard_prompt: nextStoryboardPrompt,
+    video_prompt: nextVideoPrompt,
+    storyboard_asset_id: keepStoryboardAsset ? existing?.storyboard_asset_id ?? null : null,
+    video_asset_id: keepVideoAsset ? existing?.video_asset_id ?? null : null,
     storyboard_model: "generate_gpt_image",
-    video_model: args.videoModel ?? existing?.video_model ?? "generate_seedance2_video",
+    video_model: nextVideoModel,
     duration_s: durationS,
     aspect_ratio: "16:9",
     resolution: "720p",

@@ -14,6 +14,7 @@ const schema = {
   video_prompt: z.string().optional().describe("Editable final video prompt"),
   video_model: z.enum(["generate_seedance2_video", "generate_seedance2_fast_video", "generate_grok_imagine_video"]).optional().describe("Video tool to use for the final storyboard render"),
   duration_s: z.number().int().min(4).max(15).optional().describe("Final video duration in seconds"),
+  rebuild_prompts: z.boolean().optional().describe("Regenerate derived storyboard/video prompts from the current source analysis and direction"),
 };
 
 export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
@@ -33,6 +34,7 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
         video_prompt,
         video_model,
         duration_s,
+        rebuild_prompts,
       } = args as {
         project_slug: string;
         source_image_asset_id?: string;
@@ -43,6 +45,7 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
         video_prompt?: string;
         video_model?: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
         duration_s?: number;
+        rebuild_prompts?: boolean;
       };
 
       try {
@@ -56,6 +59,7 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
           ...(video_prompt !== undefined ? { videoPrompt: video_prompt } : {}),
           ...(video_model !== undefined ? { videoModel: video_model } : {}),
           ...(duration_s !== undefined ? { durationS: duration_s } : {}),
+          ...(rebuild_prompts !== undefined ? { rebuildPrompts: rebuild_prompts } : {}),
         });
         return {
           content: [{

@@ -564,6 +564,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         video_model: TOOL_BY_VIDEO_MODEL[selectedVideoModel],
         duration_s: durationS,
       };
+      if (opts?.resetPrompts) args.rebuild_prompts = true;
       if (!opts?.resetPrompts && storyboardPromptEdited && storyboardPrompt.trim().length > 0) args.storyboard_prompt = storyboardPrompt;
       if (!opts?.resetPrompts && videoPromptEdited && videoPrompt.trim().length > 0) args.video_prompt = normalizeStoryboardVideoPrompt(videoPrompt.trim());
       const result = await callTool('plan_storyboard_video', args);
@@ -673,14 +674,15 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     if (sourceImageIds.length === 0 || generatingStoryboard) return;
     setGeneratingStoryboard(true);
     try {
-      const plan = await savePlan(sourceImageIds);
+      const shouldRebuildPrompt = storyboardState.kind === 'error' && !storyboardPromptEdited;
+      const plan = await savePlan(sourceImageIds, { resetPrompts: shouldRebuildPrompt });
       if (!plan) return;
       const result = await callTool('generate_gpt_image', {
         project_slug: projectSlug,
         prompt: plan.storyboard_prompt,
-        image_slugs: storyboardSourceImageIds(plan).map((id) => `@${id}`),
+        image_slugs: storyboardSourceImageIds(plan).slice(0, 1).map((id) => `@${id}`),
         aspect_ratio: '16:9',
-        resolution: '4K',
+        resolution: '2K',
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue GPT Image 2';
@@ -695,7 +697,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     } finally {
       setGeneratingStoryboard(false);
     }
-  }, [sourceImageIds, generatingStoryboard, savePlan, callTool, projectSlug, persistStoryboard]);
+  }, [sourceImageIds, generatingStoryboard, storyboardState.kind, storyboardPromptEdited, savePlan, callTool, projectSlug, persistStoryboard]);
 
   const handleGenerateVideo = useCallback(async () => {
     if (sourceImageIds.length === 0 || generatingVideo) return;
@@ -875,7 +877,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
                 className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
               />
             </label>
-            <span className="text-emerald-300/45">16:9 / 4K GPT storyboard / 720p video</span>
+            <span className="text-emerald-300/45">16:9 / 2K GPT storyboard / 720p video</span>
           </div>
           <VideoPanel
             selectedModel={selectedVideoModel}
@@ -910,7 +912,7 @@ function StoryboardDirectionPanel({ storyboardBrief, loopVideo, onBriefChange, o
   onLoopChange: (next: boolean) => void;
 }) {
   return (
-    <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_8.5rem] gap-3 items-start">
+    <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_7.75rem] gap-3 items-start">
       <label className="min-w-0">
         <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard direction</span>
         <textarea
@@ -935,26 +937,26 @@ function StoryboardDirectionPanel({ storyboardBrief, loopVideo, onBriefChange, o
           onClick={() => onLoopChange(!loopVideo)}
           title={loopVideo ? 'Loop enabled' : 'Loop disabled'}
           className={cn(
-            'h-8 w-full px-2 flex items-center justify-between rounded border transition-colors',
+            'h-8 w-full px-2 flex items-center justify-between gap-2 rounded border transition-colors',
             loopVideo
               ? 'bg-emerald-500/15 border-emerald-500/55 text-emerald-200'
               : 'bg-black/60 border-zinc-700 text-emerald-300/55 hover:border-emerald-500/40 hover:text-emerald-300/80',
           )}
         >
-          <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider">
+          <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider">
             <RefreshCw className="w-3 h-3" />
             {loopVideo ? 'On' : 'Off'}
           </span>
           <span
             className={cn(
-              'relative h-[18px] w-8 rounded-full border transition-colors',
+              'relative h-4 w-8 shrink-0 overflow-hidden rounded-full border transition-colors',
               loopVideo ? 'border-emerald-300/70 bg-emerald-300/20' : 'border-zinc-600 bg-zinc-950',
             )}
           >
             <span
               className={cn(
-                'absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform',
-                loopVideo ? 'translate-x-[0.875rem] bg-emerald-200' : 'translate-x-0.5 bg-zinc-500',
+                'absolute left-0.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-transform',
+                loopVideo ? 'translate-x-4 bg-emerald-200' : 'translate-x-0 bg-zinc-500',
               )}
             />
           </span>

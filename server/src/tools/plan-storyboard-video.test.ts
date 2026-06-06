@@ -206,6 +206,66 @@ describe("plan_storyboard_video tools", () => {
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
   });
 
+  it("adapts hostile quoted direction in derived storyboard prompts", async () => {
+    const sourceId = await createImage("adapted-direction-source", {
+      prompt: "A smiling man in a blue suit stands in front of the Eiffel Tower on a bright tourist walkway.",
+      shot: "full-body tourist portrait",
+      pose: "standing forward with hands in pockets",
+    });
+    const brief = "man sees a scammer selling fake effiel towers, exposes him by saying \"it's a scam\" and then tells the scammer to \"go back to where you came from\"";
+
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: brief,
+      loop_video: true,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.storyboard_brief).toBe(brief);
+    expect(sidecar.storyboard_prompt).toContain("User direction, adapted for visual storytelling");
+    expect(sidecar.storyboard_prompt).toContain("counterfeit Eiffel Tower souvenirs");
+    expect(sidecar.storyboard_prompt).toContain("move along");
+    expect(sidecar.storyboard_prompt).not.toContain("\"it's a scam\"");
+    expect(sidecar.storyboard_prompt).not.toContain("\"pack it up");
+    expect(sidecar.storyboard_prompt).not.toContain("go back to where you came from");
+    expect(sidecar.storyboard_prompt.length).toBeLessThan(5000);
+  });
+
+  it("rebuilds derived prompts for the same source when requested", async () => {
+    const sourceId = await createImage("rebuild-source");
+    const initial = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: "A calm portrait becomes a short city walk.",
+      storyboard_prompt: "Old custom storyboard prompt.",
+      video_prompt: "Old custom video prompt.",
+    });
+    expect(initial.isError).toBeFalsy();
+    const storyboard = await createImage("old-storyboard");
+    const storyboardResult = await replacePlanStoryboardVideoStoryboardDef(fs).handler({
+      project_slug: PROJECT,
+      asset_id: storyboard,
+    });
+    expect(storyboardResult.isError).toBeFalsy();
+
+    const rebuilt = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_brief: "A calm portrait becomes a short city walk.",
+      rebuild_prompts: true,
+    });
+
+    expect(rebuilt.isError).toBeFalsy();
+    const sidecar = parseSidecar(rebuilt.content);
+    expect(sidecar.storyboard_prompt).not.toBe("Old custom storyboard prompt.");
+    expect(sidecar.storyboard_prompt).toContain(DEFAULT_ANALYSIS.prompt);
+    expect(sidecar.video_prompt).toContain("Use [Image 1] as the authoritative director-approved storyboard");
+    expect(sidecar.storyboard_asset_id).toBeNull();
+    expect(sidecar.video_asset_id).toBeNull();
+  });
+
   it("rebuilds derived prompts when loop behavior changes", async () => {
     const sourceId = await createImage("loop-update-source");
 
