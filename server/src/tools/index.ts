@@ -146,6 +146,8 @@ import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js
 import { acceptPlanSceneVideoSwapDef } from "./accept-plan-scene-video-swap.js";
 import { replacePlanSceneVideoSwapDef } from "./replace-plan-scene-video-swap.js";
 import { readPlanDef } from "./read-plan.js";
+import { planScreenshotDialogDef } from "./plan-screenshot-dialog.js";
+import { replacePlanScreenshotDialogSceneVideoDef } from "./replace-plan-screenshot-dialog-scene-video.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -316,6 +318,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     acceptPlanSceneVideoSwapDef(fs),
     replacePlanSceneVideoSwapDef(fs),
     readPlanDef(fs),
+    planScreenshotDialogDef(fs),
+    replacePlanScreenshotDialogSceneVideoDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),

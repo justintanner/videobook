@@ -293,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan",
-    description: "Open the project's visualization plan with per-scene image/video gen buttons. Singleton per project.",
+    description: "Open the project's active visualization plan with formula tabs for char-swap and screenshots + dialog. Singleton per project.",
     example: "/plan",
     category: "action",
     icon: "MapPin",

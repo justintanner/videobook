@@ -621,6 +621,7 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
       }));
 
       const sidecar = {
+        formula: "char_swap",
         scenes,
         source_asset_id: sourceAssetId,
         total_duration_s: totalDuration,
@@ -691,4 +692,3 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

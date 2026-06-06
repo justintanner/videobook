@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw } from 'lucide-react';
+import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -40,6 +40,7 @@ interface PlanScene {
 }
 
 interface PlanSidecar {
+  formula?: 'char_swap';
   scenes: PlanScene[];
   total_duration_s: number;
   max_scene_seconds: number;
@@ -49,6 +50,37 @@ interface PlanSidecar {
   analysis_prompt?: string;
   user_context?: string;
   word_count?: number;
+}
+
+type PlanFormula = 'char_swap' | 'screenshot_dialog';
+
+interface ScreenshotDialogPlanScene {
+  image_asset_id: string;
+  dialog: string;
+  visual: string;
+  duration_s: number;
+  video?: string | null;
+}
+
+interface ScreenshotDialogPlanSidecar {
+  formula: 'screenshot_dialog';
+  scenes: ScreenshotDialogPlanScene[];
+  screenshot_asset_ids: string[];
+  total_duration_s: number;
+  model: string;
+  analysis_prompt?: string;
+  user_context?: string;
+}
+
+type AnyPlanSidecar = PlanSidecar | ScreenshotDialogPlanSidecar;
+
+function planFormula(sidecar: AnyPlanSidecar | null): PlanFormula | null {
+  if (!sidecar) return null;
+  return sidecar.formula === 'screenshot_dialog' ? 'screenshot_dialog' : 'char_swap';
+}
+
+function isScreenshotDialogPlan(sidecar: AnyPlanSidecar | null): sidecar is ScreenshotDialogPlanSidecar {
+  return sidecar?.formula === 'screenshot_dialog';
 }
 
 function formatTimecode(seconds: number): string {
@@ -130,7 +162,8 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
   onClose: () => void;
 }) {
   const { dispatch } = useCommandDispatch();
-  const [sidecar, setSidecar] = useState<PlanSidecar | null>(null);
+  const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
+  const [activeFormula, setActiveFormula] = useState<PlanFormula>('char_swap');
   const [pendingSource, setPendingSource] = useState<string | null>(null);
   const [pendingCharA, setPendingCharA] = useState<string | null>(null);
   const [pendingCharB, setPendingCharB] = useState<string | null>(null);
@@ -151,8 +184,9 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
       }
       try {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed: PlanSidecar = JSON.parse(text);
+        const parsed: AnyPlanSidecar = JSON.parse(text);
         setSidecar(parsed);
+        setActiveFormula(planFormula(parsed) ?? 'char_swap');
         setPendingSource(null);
         setPendingCharA(null);
         setPendingCharB(null);
@@ -163,10 +197,13 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
     return () => { cancelledRef.current = true; };
   }, [callTool, projectSlug, item?.id, item?.prompt]);
 
+  const charSidecar = planFormula(sidecar) === 'char_swap' ? sidecar as PlanSidecar : null;
+  const screenshotDialogSidecar = isScreenshotDialogPlan(sidecar) ? sidecar : null;
+
   // Effective slot values: pending wins, else fall back to sidecar.
-  const sourceId = pendingSource ?? sidecar?.source_asset_id ?? null;
-  const charAId = pendingCharA ?? sidecar?.characters[0]?.asset_id ?? null;
-  const charBId = pendingCharB ?? sidecar?.characters[1]?.asset_id ?? null;
+  const sourceId = pendingSource ?? charSidecar?.source_asset_id ?? null;
+  const charAId = pendingCharA ?? charSidecar?.characters[0]?.asset_id ?? null;
+  const charBId = pendingCharB ?? charSidecar?.characters[1]?.asset_id ?? null;
 
   const sourceItem = useMemo(
     () => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null),
@@ -181,10 +218,10 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
     ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS))
     : null;
 
-  const slotsDifferFromSidecar = sidecar
-    ? sidecar.source_asset_id !== sourceId
-      || (sidecar.characters[0]?.asset_id ?? null) !== charAId
-      || (sidecar.characters[1]?.asset_id ?? null) !== charBId
+  const slotsDifferFromSidecar = charSidecar
+    ? charSidecar.source_asset_id !== sourceId
+      || (charSidecar.characters[0]?.asset_id ?? null) !== charAId
+      || (charSidecar.characters[1]?.asset_id ?? null) !== charBId
     : true;
 
   const canGenerate =
@@ -211,8 +248,9 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
       if (!planResult.isError) {
         try {
           const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          const parsed: PlanSidecar = JSON.parse(text);
+          const parsed: AnyPlanSidecar = JSON.parse(text);
           setSidecar(parsed);
+          setActiveFormula(planFormula(parsed) ?? 'char_swap');
           setPendingSource(null);
           setPendingCharA(null);
           setPendingCharB(null);
@@ -226,56 +264,515 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
     }
   }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, scenesCount]);
 
+  const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
+  const title = activeFormula === 'screenshot_dialog' ? 'PLAN: SCREENSHOTS + DIALOG' : 'PLAN: CHAR SWAP';
 
   return (
-    <PlanShell title="PLAN: CHAR SWAP" slug={slug} onClose={onClose}>
+    <PlanShell title={title} slug={slug} onClose={onClose}>
       <div
         className="flex-1 overflow-y-auto scrollbar-domain"
         style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
       >
         <div className="max-w-3xl mx-auto px-6 py-6">
-          <PlanHeader
-            sourceId={sourceId}
-            charAId={charAId}
-            charBId={charBId}
-            mediaItems={mediaItems}
-            sourceAspect={sourceAspect}
-            duration={duration}
-            scenesCount={scenesCount}
-            canGenerate={canGenerate}
-            generating={generating}
-            onSourceDrop={setPendingSource}
-            onCharADrop={setPendingCharA}
-            onCharBDrop={setPendingCharB}
-            onGenerate={() => { void handleGenerate(); }}
+          <PlanFormulaTabs
+            activeFormula={activeFormula}
+            currentFormula={currentFormula}
+            onSelect={setActiveFormula}
           />
-          {sidecar && (
-            <PlanAuditFromSidecar sidecar={sidecar} projectSlug={projectSlug} />
-          )}
-          {!sidecar && sourceId && charAId && charBId && charAId !== charBId && (
-            <PlanPreviewBlock
-              sourceId={sourceId}
-              charAId={charAId}
-              charBId={charBId}
-              projectSlug={projectSlug}
-              callTool={callTool}
-            />
-          )}
-          {sidecar && (
-            <PlanScenes
-              data={sidecar}
+          {activeFormula === 'char_swap' ? (
+            <>
+              <PlanHeader
+                sourceId={sourceId}
+                charAId={charAId}
+                charBId={charBId}
+                mediaItems={mediaItems}
+                sourceAspect={sourceAspect}
+                duration={duration}
+                scenesCount={scenesCount}
+                canGenerate={canGenerate}
+                generating={generating}
+                onSourceDrop={setPendingSource}
+                onCharADrop={setPendingCharA}
+                onCharBDrop={setPendingCharB}
+                onGenerate={() => { void handleGenerate(); }}
+              />
+              {charSidecar && (
+                <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
+              )}
+              {!charSidecar && sourceId && charAId && charBId && charAId !== charBId && (
+                <PlanPreviewBlock
+                  sourceId={sourceId}
+                  charAId={charAId}
+                  charBId={charBId}
+                  projectSlug={projectSlug}
+                  callTool={callTool}
+                />
+              )}
+              {charSidecar && (
+                <PlanScenes
+                  data={charSidecar}
+                  mediaItems={mediaItems}
+                  sourceAspect={sourceAspect}
+                  projectSlug={projectSlug}
+                  callTool={callTool}
+                  dispatch={dispatch}
+                  onSidecarUpdate={(next) => setSidecar(next)}
+                />
+              )}
+            </>
+          ) : (
+            <ScreenshotDialogPlanFormula
+              sidecar={screenshotDialogSidecar}
               mediaItems={mediaItems}
-              sourceAspect={sourceAspect}
               projectSlug={projectSlug}
               callTool={callTool}
-              dispatch={dispatch}
-              onSidecarUpdate={setSidecar}
+              onSidecarUpdate={(next) => setSidecar(next)}
             />
           )}
         </div>
       </div>
     </PlanShell>
+  );
+}
+
+function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
+  activeFormula: PlanFormula;
+  currentFormula: PlanFormula | null;
+  onSelect: (formula: PlanFormula) => void;
+}) {
+  const formulas: Array<{ id: PlanFormula; label: string; icon: React.ReactNode }> = [
+    { id: 'char_swap', label: 'Char Swap', icon: <MapPin className="w-3 h-3" /> },
+    { id: 'screenshot_dialog', label: 'Screenshots + Dialog', icon: <Images className="w-3 h-3" /> },
+  ];
+  return (
+    <div className="mb-5 flex items-center gap-2 border-b border-zinc-800/70">
+      {formulas.map((formula) => (
+        <button
+          key={formula.id}
+          type="button"
+          onClick={() => onSelect(formula.id)}
+          className={cn(
+            'h-8 px-3 flex items-center gap-1.5 border-b-2',
+            'text-[11px] font-mono font-bold uppercase tracking-wider transition-colors',
+            activeFormula === formula.id
+              ? 'border-emerald-400 text-emerald-300'
+              : 'border-transparent text-emerald-300/40 hover:text-emerald-300/70',
+          )}
+        >
+          {formula.icon}
+          {formula.label}
+          {currentFormula === formula.id && (
+            <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-300/70" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function parseDialogBlocks(value: string): string[] {
+  return value
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+}
+
+function ScreenshotDialogPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+  sidecar: ScreenshotDialogPlanSidecar | null;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+  onSidecarUpdate: (sidecar: ScreenshotDialogPlanSidecar) => void;
+}) {
+  const [screenshotIds, setScreenshotIds] = useState<string[]>(() => sidecar?.screenshot_asset_ids ?? []);
+  const [dialogDraft, setDialogDraft] = useState(() => sidecar?.scenes.map((scene) => scene.dialog).join('\n\n') ?? '');
+  const [lastLoadedPlan, setLastLoadedPlan] = useState<string | null>(() => sidecar?.screenshot_asset_ids.join('|') ?? null);
+  const [generating, setGenerating] = useState(false);
+
+  const sidecarKey = sidecar?.screenshot_asset_ids.join('|') ?? null;
+  useEffect(() => {
+    if (!sidecar || sidecarKey === lastLoadedPlan || generating) return;
+    setLastLoadedPlan(sidecarKey);
+    setScreenshotIds(sidecar.screenshot_asset_ids);
+    setDialogDraft(sidecar.scenes.map((scene) => scene.dialog).join('\n\n'));
+  }, [sidecar, sidecarKey, lastLoadedPlan, generating]);
+
+  const dialogBlocks = useMemo(() => parseDialogBlocks(dialogDraft), [dialogDraft]);
+  const canGenerate = screenshotIds.length > 0
+    && screenshotIds.length === dialogBlocks.length
+    && dialogBlocks.every((block) => block.length > 0);
+
+  const addScreenshot = useCallback((assetId: string) => {
+    if (!assetId.startsWith('img-')) {
+      toast({ title: 'Wrong asset type', description: `Drop an img-* screenshot, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setScreenshotIds((prev) => prev.includes(assetId) ? prev : [...prev, assetId]);
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
+    if (!canGenerate || generating) return;
+    setGenerating(true);
+    try {
+      const result = await callTool('plan_screenshot_dialog', {
+        project_slug: projectSlug,
+        screenshot_asset_ids: screenshotIds,
+        dialog_blocks: dialogBlocks,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
+        toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: ScreenshotDialogPlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        const readResult = await callTool('read_plan', { project_slug: projectSlug });
+        if (!readResult.isError) {
+          const text = (readResult.content as Array<{ type: string; text: string }>)[0].text;
+          const parsed = JSON.parse(text) as ScreenshotDialogPlanSidecar;
+          if (parsed.formula === 'screenshot_dialog') onSidecarUpdate(parsed);
+        }
+      }
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Plan generated', description: `${screenshotIds.length} scenes`, duration: 2500 });
+    } finally {
+      setGenerating(false);
+    }
+  }, [canGenerate, generating, callTool, projectSlug, screenshotIds, dialogBlocks, onSidecarUpdate]);
+
+  const countMismatch = screenshotIds.length > 0
+    && dialogBlocks.length > 0
+    && screenshotIds.length !== dialogBlocks.length;
+
+  return (
+    <div className="space-y-5">
+      <div className="mb-6 pb-4 border-b border-zinc-800/60">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: screenshots + dialog</h1>
+          <button
+            type="button"
+            onClick={() => { void handleGenerate(); }}
+            disabled={generating || !canGenerate}
+            title={canGenerate ? 'Generate plan from screenshots and dialog' : 'Add matching screenshots and dialog blocks'}
+            className={cn(
+              'h-8 px-3 flex items-center gap-1.5 rounded',
+              'text-xs font-mono font-bold uppercase tracking-wider',
+              'text-emerald-300 hover:text-white',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
+              'transition-colors duration-150',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
+            )}
+          >
+            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Images className="w-3.5 h-3.5" />}
+            {generating ? 'Generating…' : 'Generate Plan'}
+          </button>
+        </div>
+        <ScreenshotDropZone
+          screenshotIds={screenshotIds}
+          mediaItems={mediaItems}
+          onDropScreenshot={addScreenshot}
+          onRemove={(assetId) => setScreenshotIds((prev) => prev.filter((id) => id !== assetId))}
+        />
+        <div className="mt-4">
+          <label className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog blocks</label>
+          <textarea
+            value={dialogDraft}
+            onChange={(e) => setDialogDraft(e.target.value)}
+            rows={8}
+            className={cn(
+              'w-full p-3 rounded bg-black/60 border border-zinc-700 text-xs font-mono text-emerald-300/90 resize-y',
+              'focus:outline-none focus:border-emerald-500/60 placeholder:text-emerald-300/30',
+            )}
+            placeholder={'Line one for screenshot 1.\n\nLine two for screenshot 2.'}
+          />
+          <div
+            className={cn(
+              'mt-1 text-[10px] font-mono',
+              countMismatch ? 'text-amber-300/80' : 'text-emerald-300/45',
+            )}
+          >
+            {screenshotIds.length} screenshot{screenshotIds.length === 1 ? '' : 's'} · {dialogBlocks.length} dialog block{dialogBlocks.length === 1 ? '' : 's'}
+          </div>
+        </div>
+      </div>
+      {sidecar && (
+        <div className="space-y-5">
+          {sidecar.scenes.map((scene, index) => (
+            <ScreenshotDialogSceneBlock
+              key={`${scene.image_asset_id}-${index}`}
+              scene={scene}
+              index={index}
+              mediaItems={mediaItems}
+              projectSlug={projectSlug}
+              callTool={callTool}
+              onSidecarUpdate={onSidecarUpdate}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScreenshotDropZone({ screenshotIds, mediaItems, onDropScreenshot, onRemove }: {
+  screenshotIds: string[];
+  mediaItems: MediaItem[];
+  onDropScreenshot: (assetId: string) => void;
+  onRemove: (assetId: string) => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      if (typeof payload.id === 'string') onDropScreenshot(payload.id);
+    } catch {
+      return;
+    }
+  };
+  return (
+    <div
+      className={cn(
+        'min-h-28 rounded border border-dashed p-3 transition-colors',
+        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70 bg-zinc-950/40',
+      )}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      <div className="flex flex-wrap gap-3">
+        {screenshotIds.map((assetId, index) => {
+          const item = mediaItems.find((m) => m.id === assetId) ?? null;
+          const src = item?.thumbnailSrc ?? item?.filePath ?? null;
+          const sourceAspect = sourceAspectFromDimensions(item?.width, item?.height);
+          return (
+            <div key={assetId} className="flex flex-col gap-1 w-32">
+              <div
+                className="relative w-32 bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
+                style={{ aspectRatio: sourceAspect.css }}
+              >
+                {src ? (
+                  <img src={src} alt={item?.slug ?? assetId} className="w-full h-full object-contain" loading="lazy" />
+                ) : (
+                  <FileText className="w-5 h-5 text-emerald-300/40" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(assetId)}
+                  title="Remove screenshot"
+                  className="absolute top-1 right-1 h-5 w-5 rounded bg-black/70 border border-zinc-700/70 flex items-center justify-center text-emerald-300/70 hover:text-red-200 hover:border-red-400/70"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="text-[10px] font-mono text-emerald-300/60 truncate">
+                {index + 1}. {item?.slug ?? `@${assetId}`}
+              </div>
+            </div>
+          );
+        })}
+        <div className="w-32 aspect-video rounded border border-zinc-700/50 bg-black/40 flex flex-col items-center justify-center gap-1 text-emerald-300/40">
+          <Images className="w-5 h-5" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-center px-2">drop image</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function screenshotDialogPrompt(scene: ScreenshotDialogPlanScene): string {
+  return [
+    scene.visual,
+    '',
+    `Exact spoken dialog: ${scene.dialog}`,
+  ].join('\n');
+}
+
+function deriveScreenshotDialogVideoState(scene: ScreenshotDialogPlanScene, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
+  const vidId = scene.video;
+  if (!vidId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === vidId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
+  if (item.status === 'ready') return { kind: 'ready', src: `/files/${projectSlug}/${vidId}/original.mp4` };
+  return { kind: 'generating', label: item.status === 'replacing-audio' ? 'splicing audio…' : 'generating…' };
+}
+
+function buildScreenshotDialogVideoPayload(
+  videoModel: VideoModel,
+  scene: ScreenshotDialogPlanScene,
+  prompt: string,
+  sourceAspect: SourceAspect,
+): { model: string; input: Record<string, unknown> } {
+  return {
+    model: videoModel === 'seedance-2-ref' ? 'bytedance/seedance-2' : 'bytedance/seedance-2-fast',
+    input: {
+      prompt,
+      first_frame_url: `@${scene.image_asset_id}`,
+      resolution: '720p',
+      aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
+      duration: scene.duration_s,
+      generate_audio: true,
+    },
+  };
+}
+
+function ScreenshotDialogSceneBlock({ scene, index, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+  scene: ScreenshotDialogPlanScene;
+  index: number;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+  onSidecarUpdate: (sidecar: ScreenshotDialogPlanSidecar) => void;
+}) {
+  const imageItem = mediaItems.find((m) => m.id === scene.image_asset_id) ?? null;
+  const sourceAspect = sourceAspectFromDimensions(imageItem?.width, imageItem?.height);
+  const imageSrc = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
+  const promptSeed = useMemo(() => screenshotDialogPrompt(scene), [scene]);
+  const [prompt, setPrompt] = useState(promptSeed);
+  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
+  const [submitting, setSubmitting] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+
+  useEffect(() => {
+    if (scene.video != null) return;
+    setPrompt(promptSeed);
+  }, [promptSeed, scene.video]);
+
+  const videoTileState = useMemo(
+    () => deriveScreenshotDialogVideoState(scene, mediaItems, projectSlug),
+    [scene, mediaItems, projectSlug],
+  );
+  const payload = useMemo(
+    () => buildScreenshotDialogVideoPayload(selectedVideoModel, scene, prompt, sourceAspect),
+    [selectedVideoModel, scene, prompt, sourceAspect],
+  );
+
+  const persistVideo = useCallback(async (assetId: string) => {
+    const result = await callTool('replace_plan_screenshot_dialog_scene_video', {
+      project_slug: projectSlug,
+      scene_index: index,
+      asset_id: assetId,
+    });
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
+      toast({ title: `Scene ${index + 1} video replace failed`, description: msg, duration: 5000 });
+      return;
+    }
+    try {
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: ScreenshotDialogPlanSidecar };
+      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    } catch {
+      return;
+    }
+  }, [callTool, projectSlug, index, onSidecarUpdate]);
+
+  const handleVideo = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
+      const result = await callTool(toolName, {
+        project_slug: projectSlug,
+        prompt,
+        first_frame_slug: `@${scene.image_asset_id}`,
+        resolution: '720p',
+        aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
+        duration: String(scene.duration_s),
+        generate_audio: true,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
+        toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { vid_asset_id?: string };
+      if (parsed.vid_asset_id) await persistVideo(parsed.vid_asset_id);
+      toast({ title: `Scene ${index + 1} enqueued`, description: selectedVideoModel, duration: 2500 });
+      await callTool('sync', { project_slug: projectSlug });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [submitting, selectedVideoModel, callTool, projectSlug, prompt, scene.image_asset_id, scene.duration_s, sourceAspect, index, persistVideo]);
+
+  const runVideoReplace = useCallback(async (vidAssetId: string) => {
+    setReplacing(true);
+    try {
+      await persistVideo(vidAssetId);
+    } finally {
+      setReplacing(false);
+    }
+  }, [persistVideo]);
+
+  return (
+    <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
+        <div className="flex items-center gap-3 text-xs font-mono">
+          <span className="text-emerald-300/50">Scene {index + 1}</span>
+          <span className="text-emerald-300/90 font-bold">{scene.duration_s}s</span>
+        </div>
+        <span className="text-[10px] font-mono text-emerald-300/45 truncate max-w-[16rem]">
+          {imageItem?.slug ?? `@${scene.image_asset_id}`}
+        </span>
+      </header>
+      <div className="p-3 border-b border-zinc-800/40 bg-black/20 grid grid-cols-[minmax(8rem,12rem)_1fr] gap-3">
+        <div
+          className="bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
+          style={{ aspectRatio: sourceAspect.css }}
+        >
+          {imageSrc ? (
+            <img src={imageSrc} alt={imageItem?.slug ?? scene.image_asset_id} className="w-full h-full object-contain" loading="lazy" />
+          ) : (
+            <FileText className="w-6 h-6 text-emerald-300/40" />
+          )}
+        </div>
+        <div className="min-w-0 flex flex-col gap-2">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog</div>
+            <div className="rounded border border-zinc-800/70 bg-black/50 p-2 text-xs leading-relaxed text-emerald-200/85 whitespace-pre-wrap">
+              {scene.dialog}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Planner visual</div>
+            <div className="rounded border border-zinc-800/70 bg-black/50 p-2 text-xs leading-relaxed text-emerald-200/75 whitespace-pre-wrap">
+              {scene.visual}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20">
+        <VideoPanel
+          selectedModel={selectedVideoModel}
+          onSelectModel={setSelectedVideoModel}
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          payload={payload}
+          mediaItems={mediaItems}
+          sourceAspect={sourceAspect}
+          projectSlug={projectSlug}
+          disabled={submitting}
+          disabledReason={submitting ? 'Video gen submitting…' : undefined}
+          videoTileState={videoTileState}
+          videoAssetId={scene.video ?? null}
+          replacing={replacing}
+          onIdleClick={() => { void handleVideo(); }}
+          onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
+          onErrorRetry={() => { void handleVideo(); }}
+          onRegen={() => { void handleVideo(); }}
+        />
+      </div>
+    </section>
   );
 }
 

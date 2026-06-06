@@ -8,6 +8,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 type TextContent = Array<{ type: string; text: string }>;
 
 interface ReadPlanResponse {
+  formula?: string;
   scenes: Array<{ start: number; end: number; visual: string }>;
   total_duration_s: number;
   max_scene_seconds: number;
@@ -70,6 +71,7 @@ describe("read_plan tool", () => {
     expect(parsed.scenes).toHaveLength(2);
     expect(parsed.scenes[0].visual).toBe(FIXTURE_SIDECAR.scenes[0].visual);
     expect(parsed.scenes[1].start).toBe(8.5);
+    expect(parsed.formula).toBe("char_swap");
     expect(parsed.total_duration_s).toBe(17);
     expect(parsed.max_scene_seconds).toBe(15);
     expect(parsed.source_asset_id).toBe("vid-test-source");

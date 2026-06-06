@@ -13,6 +13,7 @@ interface PlanScene {
 }
 
 interface PlanSidecar {
+  formula?: string;
   scenes: PlanScene[];
   total_duration_s: number;
   max_scene_seconds: number;
@@ -43,9 +44,11 @@ export function readPlanDef(fs: VideocityFs): ToolDef {
         };
       }
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(result.value) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(result.value.formula ? result.value : { ...result.value, formula: "char_swap" }),
+        }],
       };
     },
   };
 }
-
