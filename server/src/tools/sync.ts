@@ -164,7 +164,7 @@ export async function readRenderSettings(
 }
 
 const BASE_DEFAULTS: Record<string, unknown> = {
-  subtitlesEnabled: false,
+  subtitlesEnabled: true,
   position: "bottom",
   fontSize: "medium",
   audioFadeIn: 150,

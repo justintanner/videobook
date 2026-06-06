@@ -9,6 +9,7 @@ import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { findAudioFile } from "vc-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
+import { enqueueLazyTimelineRender } from "../lazy-render.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -59,7 +60,7 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
       assetId, assetDir, projectSlug, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
-    return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
+    const result = await withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
     {
 
     const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
@@ -165,6 +166,12 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
 
     }
     });
+    try {
+      await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    } catch (err) {
+      void err;
+    }
+    return result;
   });
 }
 

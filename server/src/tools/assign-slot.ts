@@ -4,7 +4,7 @@ import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
 import { SKIP_CROP_EXTENSIONS } from "../jobs/process-image.js";
-import { findAutoRenderActions, readStoredRenderDefaults } from "./sync.js";
+import { enqueueLazyTimelineRender } from "../lazy-render.js";
 
 const IMAGE_ORIGINAL_RE = /^original\.(jpe?g|png|webp|gif|svg)$/i;
 
@@ -178,41 +178,8 @@ export function assignSlotDef(fs: VideocityFs): ToolDef {
         let autoRenderJobId: string | undefined;
         if (asset_id.startsWith("vid-")) {
           try {
-            const orientation = Array.isArray(config.render)
-              ? (config.render[0] ?? "landscape")
-              : config.render;
-            const renderActions = await findAutoRenderActions(fs, project_slug, [asset], orientation);
-            if (renderActions.length > 0) {
-              const action = renderActions[0];
-              const stored = await readStoredRenderDefaults(fs, asset_id, project_slug, orientation);
-              const jobId = `auto-render-${asset_id}-${Date.now()}`;
-              await queue.enqueue(jobId, {
-                type: "render_project",
-                projectSlug: project_slug,
-                assetId: action.assetId,
-                orientation,
-                assets: [{
-                  assetId: action.assetId,
-                  assetDir: action.assetDir,
-                  videoPath: action.videoPath,
-                  videoFilename: action.videoFilename,
-                  hasElevenlabs: action.hasElevenlabs,
-                }],
-                subtitlesEnabled: action.hasElevenlabs ? (stored.subtitlesEnabled as boolean) : false,
-                highlightStyle: stored.highlightStyle as string,
-                position: stored.position as string,
-                fontSize: stored.fontSize as string,
-                textColor: stored.textColor as string,
-                highlightColor: stored.highlightColor as string,
-                audioFadeIn: stored.audioFadeIn as number,
-                audioFadeOut: stored.audioFadeOut as number,
-                audioVolume: stored.audioVolume as number,
-                osgImagePath: (stored.osgImagePath as string | null) ?? null,
-                osgPosition: stored.osgPosition as string,
-                backgroundMode: stored.backgroundMode as string,
-              });
-              autoRenderJobId = jobId;
-            }
+            const autoRender = await enqueueLazyTimelineRender(fs, project_slug, asset_id, asset);
+            autoRenderJobId = autoRender?.jobId;
           } catch {
             // Auto-render failure must not fail the assignment
           }

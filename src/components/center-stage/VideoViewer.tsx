@@ -172,7 +172,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
   const handleSubtitleChange = (field: string, value: string | boolean | number) => {
     const key = subtitleFieldMap[field] ?? field;
-    onSettingsChange({ ...settings, [key]: value });
+    onSettingsChange(prev => ({ ...prev, [key]: value }));
   };
 
   const handleOsgChange = (field: string, value: string | boolean | null) => {
@@ -186,11 +186,11 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
   };
 
   const handleAudioChange = (field: string, value: number) => {
-    onSettingsChange({ ...settings, [field]: value });
+    onSettingsChange(prev => ({ ...prev, [field]: value }));
   };
 
   const handleBackgroundChange = (mode: 'blur' | 'black') => {
-    onSettingsChange({ ...settings, backgroundMode: mode });
+    onSettingsChange(prev => ({ ...prev, backgroundMode: mode }));
   };
 
   return (

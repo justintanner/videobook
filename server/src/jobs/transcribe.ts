@@ -7,6 +7,7 @@ import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
+import { enqueueLazyTimelineRender } from "../lazy-render.js";
 
 type TranscribePayload = {
   type: "transcribe";
@@ -54,7 +55,7 @@ export function registerTranscribeJob(fs: VideocityFs): void {
       projectSlug,
     } = payload as TranscribePayload;
 
-    return withLocalLease(
+    const result = await withLocalLease(
       fs,
       projectSlug,
       assetId,
@@ -103,5 +104,11 @@ export function registerTranscribeJob(fs: VideocityFs): void {
         return { success: true, provider: "elevenlabs" as const };
       },
     );
+    try {
+      await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    } catch (err) {
+      void err;
+    }
+    return result;
   });
 }

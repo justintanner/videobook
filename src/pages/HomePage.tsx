@@ -491,46 +491,59 @@ export function HomePage() {
   const { isDragging } = useWindowDropzone({ onDrop: handleDrop });
 
   const applySubsSetting = useCallback((field: string, value: string) => {
+    const key = field.trim().toLowerCase();
+    const rawValue = value.trim();
+    const normalizedValue = rawValue.toLowerCase();
     setRenderSettings(prev => {
-      switch (field) {
+      switch (key) {
         case 'on': return { ...prev, subtitlesEnabled: true };
         case 'off': return { ...prev, subtitlesEnabled: false };
         case 'enabled': {
-          const on = value === 'on' || value === 'true';
+          const on = normalizedValue === 'on' || normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
           return { ...prev, subtitlesEnabled: on };
         }
         case 'style': {
-          if (value === 'impact' || value === 'highlight') return { ...prev, subtitleStyle: value };
+          if (normalizedValue === 'impact' || normalizedValue === 'highlight') return { ...prev, subtitleStyle: normalizedValue };
           return prev;
         }
         case 'position': {
           const posMap: Record<string, 'top' | 'middle' | 'bottom'> = { top: 'top', mid: 'middle', middle: 'middle', bottom: 'bottom' };
-          const pos = posMap[value];
+          const pos = posMap[normalizedValue];
           return pos ? { ...prev, subtitlePosition: pos } : prev;
         }
-        case 'fontSize':
+        case 'fontsize':
         case 'size': {
-          const sizeMap: Record<string, 'small' | 'medium' | 'large'> = { s: 'small', m: 'medium', l: 'large', small: 'small', medium: 'medium', large: 'large' };
-          const sz = sizeMap[value];
+          const sizeMap: Record<string, 'small' | 'medium' | 'large'> = {
+            s: 'small',
+            sm: 'small',
+            small: 'small',
+            m: 'medium',
+            md: 'medium',
+            medium: 'medium',
+            l: 'large',
+            lg: 'large',
+            large: 'large',
+          };
+          const sz = sizeMap[normalizedValue];
           return sz ? { ...prev, fontSize: sz } : prev;
         }
-        case 'textColor':
-        case 'color': return { ...prev, textColor: value };
-        case 'highlightColor':
-        case 'highlight': return { ...prev, highlightColor: value };
+        case 'textcolor':
+        case 'color': return { ...prev, textColor: rawValue };
+        case 'highlightcolor':
+        case 'highlight': return { ...prev, highlightColor: rawValue };
         case 'stroke':
-        case 'strokeWidth': {
-          const n = Math.max(0, Math.min(20, parseInt(value, 10) || 0));
+        case 'strokewidth': {
+          const n = Math.max(0, Math.min(20, parseInt(rawValue, 10) || 0));
           return { ...prev, strokeWidth: n };
         }
-        case 'strokeColor': return { ...prev, strokeColor: value };
+        case 'strokecolor': return { ...prev, strokeColor: rawValue };
         case 'shadow':
-        case 'shadowBlur': {
-          const n = Math.max(0, Math.min(30, parseInt(value, 10) || 0));
+        case 'shadowblur': {
+          const n = Math.max(0, Math.min(30, parseInt(rawValue, 10) || 0));
           return { ...prev, shadowBlur: n };
         }
-        case 'shadowOpacity': {
-          const n = Math.max(0, Math.min(100, parseInt(value, 10) || 0));
+        case 'shadowopacity': {
+          const n = Math.max(0, Math.min(100, parseInt(rawValue, 10) || 0));
           return { ...prev, shadowOpacity: n };
         }
         default: return prev;
