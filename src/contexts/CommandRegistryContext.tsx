@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, parseCommandArgs } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -64,12 +64,13 @@ export function CommandRegistryProvider({
 
     try {
       if (commandStr.startsWith('/')) {
-        const cmd = allCommands.find((c) => c.command === commandStr);
+        const cmd = selectCommandForInput(allCommands, commandStr, rest);
         if (cmd) {
           const args: Record<string, CommandArgValue> = parseCommandArgs(rest, cmd.params);
           const stringArgs: Record<string, string> = {};
           for (const [k, v] of Object.entries(args)) {
-            if (typeof v === 'string') stringArgs[k] = v;
+            if (Array.isArray(v)) stringArgs[k] = v.join(' ');
+            else stringArgs[k] = String(v);
           }
 
           // uiAction dispatch

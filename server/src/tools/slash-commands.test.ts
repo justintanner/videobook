@@ -67,6 +67,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/assign");
     expect(commandNames).toContain("/unassign");
     expect(commandNames).toContain("/rewrite");
+    expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).toContain("/render");
     expect(commandNames).toContain("/vocals");
     expect(commandNames).toContain("/original");
@@ -82,6 +83,24 @@ describe("slash_commands tool", () => {
     expect(plan.uiAction).toBe("open_plan");
     expect(plan.params).toEqual([]);
     expect(plan.category).toBe("action");
+  });
+
+  it("does not return duplicate command names", async () => {
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "test-proj" },
+    });
+
+    const result = await client.callTool({
+      name: "slash_commands",
+      arguments: {},
+    });
+
+    const commands: Command[] = JSON.parse(
+      (result.content as TextContent)[0].text,
+    );
+    const names = commands.map((c) => c.command);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("includes dynamic project commands", async () => {

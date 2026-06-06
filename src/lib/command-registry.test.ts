@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseCommandArgs,
   filterCommandsByMountKeys,
+  selectCommandForInput,
 } from "./command-registry.js";
 import type { CommandParam, ServerCommand } from "./command-registry.js";
 
@@ -132,7 +133,21 @@ describe("parseCommandArgs", () => {
     const params: CommandParam[] = [
       { name: "position", type: "number", required: true, description: "" },
     ];
-    expect(parseCommandArgs("3", params)).toEqual({ position: "3" });
+    expect(parseCommandArgs("3", params)).toEqual({ position: 3 });
+  });
+
+  it("parses decimal number param from token", () => {
+    const params: CommandParam[] = [
+      { name: "boost", type: "number", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("1.2", params)).toEqual({ boost: 1.2 });
+  });
+
+  it("parses boolean param from token", () => {
+    const params: CommandParam[] = [
+      { name: "full", type: "boolean", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("true", params)).toEqual({ full: true });
   });
 
   // -----------------------------------------------------------------------
@@ -198,6 +213,19 @@ describe("parseCommandArgs", () => {
     });
   });
 
+  it("parses trailing boolean after omitted optional strings", () => {
+    const params: CommandParam[] = [
+      { name: "url", type: "string", required: true, description: "" },
+      { name: "start_time", type: "string", required: false, description: "" },
+      { name: "end_time", type: "string", required: false, description: "" },
+      { name: "full", type: "boolean", required: false, description: "" },
+    ];
+    expect(parseCommandArgs("https://example.com/vid full", params)).toEqual({
+      url: "https://example.com/vid",
+      full: true,
+    });
+  });
+
   it("rest-array param collects remaining tokens with @ stripped", () => {
     const params: CommandParam[] = [
       { name: "source_asset_id", type: "string", required: true, description: "" },
@@ -229,6 +257,39 @@ describe("parseCommandArgs", () => {
     expect(parseCommandArgs("@vid-foo extra stuff", params)).toEqual({
       asset_id: "vid-foo extra stuff",
     });
+  });
+});
+
+describe("selectCommandForInput", () => {
+  const makeCmd = (command: string, params: CommandParam[]): ServerCommand => ({
+    command,
+    description: "",
+    category: "action",
+    icon: "",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params,
+  });
+
+  it("prefers asset-first duplicate for @ asset input", () => {
+    const assetCmd = makeCmd("/rewrite", [
+      { name: "asset_id", type: "string", required: true, description: "" },
+    ]);
+    const promptCmd = makeCmd("/rewrite", [
+      { name: "prompt", type: "string", required: true, description: "" },
+    ]);
+    expect(selectCommandForInput([assetCmd, promptCmd], "/rewrite", "@script-one")).toBe(assetCmd);
+  });
+
+  it("prefers non-asset duplicate for plain text input", () => {
+    const assetCmd = makeCmd("/rewrite", [
+      { name: "asset_id", type: "string", required: true, description: "" },
+    ]);
+    const promptCmd = makeCmd("/rewrite", [
+      { name: "prompt", type: "string", required: true, description: "" },
+    ]);
+    expect(selectCommandForInput([assetCmd, promptCmd], "/rewrite", "make it cinematic")).toBe(promptCmd);
   });
 });
 

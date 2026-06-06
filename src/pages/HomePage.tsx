@@ -580,6 +580,7 @@ export function HomePage() {
 
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
+    open_inbox: () => setStatusOpen(true),
     open_status: () => setStatusOpen(true),
     open_trim: (assetId: string) => setTrimAssetId(assetId),
     open_crop: (assetId: string, ratio?: string) => {
@@ -588,6 +589,7 @@ export function HomePage() {
       if (!target) return;
       const item = mediaItems.find((m) => m.id === target || m.slug === `@${target}` || m.slug === target);
       if (item) handleSelectItem(item);
+      handleViewerSizeChange('original');
       setCropTarget({ assetId: item?.id ?? target, ratio });
     },
     open_gen: (type: string, prompt: string) => {

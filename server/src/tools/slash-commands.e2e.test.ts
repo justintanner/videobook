@@ -68,7 +68,7 @@ describe("slash commands e2e", () => {
     return cmd;
   }
 
-  function simulateParse(commandStr: string, rest: string): Record<string, string> {
+  function simulateParse(commandStr: string, rest: string): Record<string, unknown> {
     const cmd = findCommand(commandStr);
     return parseCommandArgs(rest, cmd.params);
   }
@@ -854,7 +854,7 @@ describe("slash commands e2e", () => {
 
     it("/files parses position number", () => {
       const args = simulateParse("/files", "3");
-      expect(args.position).toBe("3");
+      expect(args.position).toBe(3);
     });
   });
 
@@ -2837,7 +2837,7 @@ describe("slash commands e2e", () => {
 
     it("/files parses large position number", () => {
       const args = simulateParse("/files", "99");
-      expect(args.position).toBe("99");
+      expect(args.position).toBe(99);
     });
   });
 

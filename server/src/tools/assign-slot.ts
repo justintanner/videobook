@@ -189,6 +189,7 @@ export function assignSlotDef(fs: VideocityFs): ToolDef {
               await queue.enqueue(jobId, {
                 type: "render_project",
                 projectSlug: project_slug,
+                assetId: action.assetId,
                 orientation,
                 assets: [{
                   assetId: action.assetId,

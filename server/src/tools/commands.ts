@@ -363,9 +363,9 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "upscale_grok_imagine_video", autoInject: ["project_slug"] },
   },
   {
-    command: "/rewrite",
+    command: "/rewrite-script",
     description: "Rewrite a script asset in place with the full describe model",
-    example: "/rewrite @script-desc-product-shot",
+    example: "/rewrite-script @script-desc-product-shot",
     category: "context_menu",
     icon: "RefreshCw",
     size: "default",

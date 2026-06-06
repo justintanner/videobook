@@ -288,6 +288,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         await queue.enqueue(jobId, {
           type: "render_project",
           projectSlug: project_slug,
+          assetId: asset_id,
           orientation,
           assets: [{
             assetId: asset_id,

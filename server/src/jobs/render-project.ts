@@ -312,6 +312,10 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       if (osgCopyPath) await unlink(osgCopyPath).catch(() => {});
     }
 
-    return { success: true, rendered, failed };
+    if (rendered.length === 0 && failed.length > 0) {
+      throw new Error(`Render failed: ${failed.map((f) => `${f.assetId}: ${f.error}`).join("; ")}`);
+    }
+
+    return { success: failed.length === 0, rendered, failed };
   });
 }
