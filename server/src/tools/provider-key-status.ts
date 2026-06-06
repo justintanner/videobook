@@ -4,9 +4,9 @@ import type { ToolDef } from "./tool-def.js";
 
 type KeyStatus = "configured" | "missing" | "placeholder";
 type CreditsStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavailable";
-type Provider = "kie" | "elevenlabs";
-type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY";
-type ProviderLabel = "Kie" | "ElevenLabs";
+type Provider = "kie" | "elevenlabs" | "openai" | "xai";
+type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY" | "OPENAI_API_KEY" | "XAI_API_KEY";
+type ProviderLabel = "Kie" | "ElevenLabs" | "OpenAI" | "xAI";
 
 interface CreditsInfo {
   status: CreditsStatus;
@@ -152,11 +152,15 @@ function getKeyOnlyProvider(config: ProviderConfig): ProviderKeyInfo {
 export async function getProviderKeyStatus(readKieCreditsFn: CreditReader = readKieCredits): Promise<ProviderKeyStatusResponse> {
   const kie: ProviderConfig = { provider: "kie", label: "Kie", envKey: "KIE_API_KEY" };
   const elevenlabs: ProviderConfig = { provider: "elevenlabs", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY" };
+  const openai: ProviderConfig = { provider: "openai", label: "OpenAI", envKey: "OPENAI_API_KEY" };
+  const xai: ProviderConfig = { provider: "xai", label: "xAI", envKey: "XAI_API_KEY" };
 
   return {
     providers: [
       await getCreditProvider(kie, readKieCreditsFn),
       getKeyOnlyProvider(elevenlabs),
+      getKeyOnlyProvider(openai),
+      getKeyOnlyProvider(xai),
     ],
   };
 }

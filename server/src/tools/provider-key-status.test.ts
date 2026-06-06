@@ -4,6 +4,8 @@ import { getProviderKeyStatus } from "./provider-key-status.js";
 describe("provider key status", () => {
   const originalKieKey = process.env.KIE_API_KEY;
   const originalElevenLabsKey = process.env.ELEVENLABS_API_KEY;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalXaiKey = process.env.XAI_API_KEY;
 
   afterEach(() => {
     if (originalKieKey) {
@@ -16,11 +18,23 @@ describe("provider key status", () => {
     } else {
       delete process.env.ELEVENLABS_API_KEY;
     }
+    if (originalOpenAiKey) {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    } else {
+      delete process.env.OPENAI_API_KEY;
+    }
+    if (originalXaiKey) {
+      process.env.XAI_API_KEY = originalXaiKey;
+    } else {
+      delete process.env.XAI_API_KEY;
+    }
   });
 
   it("returns missing status without calling Kie when KIE_API_KEY is not set", async () => {
     delete process.env.KIE_API_KEY;
     delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.XAI_API_KEY;
     let called = false;
 
     const result = await getProviderKeyStatus(async () => {
@@ -39,6 +53,20 @@ describe("provider key status", () => {
     expect(result.providers[1]).toMatchObject({
       provider: "elevenlabs",
       envKey: "ELEVENLABS_API_KEY",
+      keyStatus: "missing",
+      maskedKey: null,
+      credits: { status: "missing_key", value: null },
+    });
+    expect(result.providers[2]).toMatchObject({
+      provider: "openai",
+      envKey: "OPENAI_API_KEY",
+      keyStatus: "missing",
+      maskedKey: null,
+      credits: { status: "missing_key", value: null },
+    });
+    expect(result.providers[3]).toMatchObject({
+      provider: "xai",
+      envKey: "XAI_API_KEY",
       keyStatus: "missing",
       maskedKey: null,
       credits: { status: "missing_key", value: null },
@@ -84,6 +112,67 @@ describe("provider key status", () => {
         fetchedAt: null,
         message: "Credit balance is not available for this provider",
       },
+    });
+  });
+
+  it("returns key-only status for OpenAI and xAI with masked key prefixes", async () => {
+    process.env.KIE_API_KEY = "real-looking-kie-key";
+    const openAiKey = "real-looking-openai-key";
+    const xaiKey = "real-looking-xai-key";
+    process.env.OPENAI_API_KEY = openAiKey;
+    process.env.XAI_API_KEY = xaiKey;
+
+    const result = await getProviderKeyStatus(async () => 10);
+
+    const json = JSON.stringify(result);
+    expect(json).not.toContain(openAiKey);
+    expect(json).not.toContain(xaiKey);
+    expect(result.providers[2]).toMatchObject({
+      provider: "openai",
+      label: "OpenAI",
+      envKey: "OPENAI_API_KEY",
+      keyStatus: "configured",
+      maskedKey: "real-l********",
+      credits: {
+        status: "unavailable",
+        value: null,
+        unit: "credits",
+        fetchedAt: null,
+        message: "Credit balance is not available for this provider",
+      },
+    });
+    expect(result.providers[3]).toMatchObject({
+      provider: "xai",
+      label: "xAI",
+      envKey: "XAI_API_KEY",
+      keyStatus: "configured",
+      maskedKey: "real-l********",
+      credits: {
+        status: "unavailable",
+        value: null,
+        unit: "credits",
+        fetchedAt: null,
+        message: "Credit balance is not available for this provider",
+      },
+    });
+  });
+
+  it("returns placeholder status for OpenAI and xAI placeholder keys", async () => {
+    process.env.KIE_API_KEY = "real-looking-kie-key";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.XAI_API_KEY = "test-xai-key";
+
+    const result = await getProviderKeyStatus(async () => 10);
+
+    expect(result.providers[2]).toMatchObject({
+      keyStatus: "placeholder",
+      maskedKey: null,
+      credits: { status: "placeholder_key", value: null },
+    });
+    expect(result.providers[3]).toMatchObject({
+      keyStatus: "placeholder",
+      maskedKey: null,
+      credits: { status: "placeholder_key", value: null },
     });
   });
 

@@ -3,8 +3,8 @@ import type { UseMcpResult } from 'use-mcp/react';
 
 export type ProviderKeyStatus = 'configured' | 'missing' | 'placeholder';
 export type ProviderCreditsStatus = 'ok' | 'missing_key' | 'placeholder_key' | 'error' | 'unavailable';
-export type ProviderKeyProvider = 'kie' | 'elevenlabs';
-export type ProviderEnvKey = 'KIE_API_KEY' | 'ELEVENLABS_API_KEY';
+export type ProviderKeyProvider = 'kie' | 'elevenlabs' | 'openai' | 'xai';
+export type ProviderEnvKey = 'KIE_API_KEY' | 'ELEVENLABS_API_KEY' | 'OPENAI_API_KEY' | 'XAI_API_KEY';
 
 export interface ProviderCreditsInfo {
   status: ProviderCreditsStatus;
