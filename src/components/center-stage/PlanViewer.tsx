@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Trash2 } from 'lucide-react';
+import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -52,35 +52,32 @@ interface PlanSidecar {
   word_count?: number;
 }
 
-type PlanFormula = 'char_swap' | 'screenshot_dialog';
+type PlanFormula = 'char_swap' | 'storyboard_video';
 
-interface ScreenshotDialogPlanScene {
-  image_asset_id: string;
-  dialog: string;
-  visual: string;
+interface StoryboardVideoPlanSidecar {
+  formula: 'storyboard_video';
+  source_image_asset_id: string;
+  storyboard_prompt: string;
+  video_prompt: string;
+  storyboard_asset_id?: string | null;
+  video_asset_id?: string | null;
+  storyboard_model: 'generate_gpt_image';
+  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video';
   duration_s: number;
-  video?: string | null;
-}
-
-interface ScreenshotDialogPlanSidecar {
-  formula: 'screenshot_dialog';
-  scenes: ScreenshotDialogPlanScene[];
-  screenshot_asset_ids: string[];
+  aspect_ratio: '16:9';
+  resolution: '720p';
   total_duration_s: number;
-  model: string;
-  analysis_prompt?: string;
-  user_context?: string;
 }
 
-type AnyPlanSidecar = PlanSidecar | ScreenshotDialogPlanSidecar;
+type AnyPlanSidecar = PlanSidecar | StoryboardVideoPlanSidecar;
 
 function planFormula(sidecar: AnyPlanSidecar | null): PlanFormula | null {
   if (!sidecar) return null;
-  return sidecar.formula === 'screenshot_dialog' ? 'screenshot_dialog' : 'char_swap';
+  return sidecar.formula === 'storyboard_video' ? 'storyboard_video' : 'char_swap';
 }
 
-function isScreenshotDialogPlan(sidecar: AnyPlanSidecar | null): sidecar is ScreenshotDialogPlanSidecar {
-  return sidecar?.formula === 'screenshot_dialog';
+function isStoryboardVideoPlan(sidecar: AnyPlanSidecar | null): sidecar is StoryboardVideoPlanSidecar {
+  return sidecar?.formula === 'storyboard_video';
 }
 
 function formatTimecode(seconds: number): string {
@@ -198,7 +195,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
   }, [callTool, projectSlug, item?.id, item?.prompt]);
 
   const charSidecar = planFormula(sidecar) === 'char_swap' ? sidecar as PlanSidecar : null;
-  const screenshotDialogSidecar = isScreenshotDialogPlan(sidecar) ? sidecar : null;
+  const storyboardVideoSidecar = isStoryboardVideoPlan(sidecar) ? sidecar : null;
 
   // Effective slot values: pending wins, else fall back to sidecar.
   const sourceId = pendingSource ?? charSidecar?.source_asset_id ?? null;
@@ -266,7 +263,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
-  const title = activeFormula === 'screenshot_dialog' ? 'PLAN: SCREENSHOTS + DIALOG' : 'PLAN: CHAR SWAP';
+  const title = activeFormula === 'storyboard_video' ? 'PLAN: IMAGE TO VIDEO' : 'PLAN: CHAR SWAP';
 
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
@@ -322,8 +319,8 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
               )}
             </>
           ) : (
-            <ScreenshotDialogPlanFormula
-              sidecar={screenshotDialogSidecar}
+            <StoryboardVideoPlanFormula
+              sidecar={storyboardVideoSidecar}
               mediaItems={mediaItems}
               projectSlug={projectSlug}
               callTool={callTool}
@@ -343,7 +340,7 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
 }) {
   const formulas: Array<{ id: PlanFormula; label: string; icon: React.ReactNode }> = [
     { id: 'char_swap', label: 'Char Swap', icon: <MapPin className="w-3 h-3" /> },
-    { id: 'screenshot_dialog', label: 'Screenshots + Dialog', icon: <Images className="w-3 h-3" /> },
+    { id: 'storyboard_video', label: 'Image to Video', icon: <Images className="w-3 h-3" /> },
   ];
   return (
     <div className="mb-5 flex items-center gap-2 border-b border-zinc-800/70">
@@ -371,93 +368,289 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
   );
 }
 
-function parseDialogBlocks(value: string): string[] {
-  return value
-    .split(/\n\s*\n/g)
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0);
+function videoModelFromTool(toolName: StoryboardVideoPlanSidecar['video_model'] | undefined): VideoModel {
+  return toolName === 'generate_seedance2_fast_video' ? 'seedance-2-fast' : 'seedance-2-ref';
 }
 
-function ScreenshotDialogPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
-  sidecar: ScreenshotDialogPlanSidecar | null;
+function resolveStoryboardVideoPrompt(prompt: string, sourceImageId: string, storyboardId: string): string {
+  return prompt
+    .replaceAll('@[storyboard ref]', `@${storyboardId}`)
+    .replaceAll('@[character ref]', `@${sourceImageId}`);
+}
+
+function deriveStoryboardTileState(assetId: string | null | undefined, mediaItems: MediaItem[]): FrameTileState {
+  if (!assetId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === assetId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'storyboard gen failed' };
+  if (item.status === 'ready') {
+    const src = item.thumbnailSrc ?? item.filePath ?? null;
+    if (src) return { kind: 'ready', src };
+  }
+  return { kind: 'generating' };
+}
+
+function deriveStoryboardVideoState(sidecar: StoryboardVideoPlanSidecar | null, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
+  const vidId = sidecar?.video_asset_id;
+  if (!vidId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === vidId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
+  if (item.status === 'ready') return { kind: 'ready', src: `/files/${projectSlug}/${vidId}/original.mp4` };
+  return { kind: 'generating', label: item.status === 'replacing-audio' ? 'splicing audio...' : 'generating...' };
+}
+
+function buildStoryboardVideoPayload(
+  videoModel: VideoModel,
+  sidecar: StoryboardVideoPlanSidecar | null,
+  videoPrompt: string,
+): { model: string; input: Record<string, unknown> } {
+  const storyboardId = sidecar?.storyboard_asset_id ?? 'img-storyboard';
+  const sourceImageId = sidecar?.source_image_asset_id ?? 'img-source';
+  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt, sourceImageId, storyboardId);
+  return {
+    model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
+    input: {
+      prompt: resolvedPrompt,
+      reference_image_urls: [`@${sourceImageId}`, `@${storyboardId}`],
+      resolution: '720p',
+      aspect_ratio: '16:9',
+      duration: sidecar?.duration_s ?? 15,
+      generate_audio: true,
+    },
+  };
+}
+
+function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+  sidecar: StoryboardVideoPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
-  onSidecarUpdate: (sidecar: ScreenshotDialogPlanSidecar) => void;
+  onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
 }) {
-  const [screenshotIds, setScreenshotIds] = useState<string[]>(() => sidecar?.screenshot_asset_ids ?? []);
-  const [dialogDraft, setDialogDraft] = useState(() => sidecar?.scenes.map((scene) => scene.dialog).join('\n\n') ?? '');
-  const [lastLoadedPlan, setLastLoadedPlan] = useState<string | null>(() => sidecar?.screenshot_asset_ids.join('|') ?? null);
-  const [generating, setGenerating] = useState(false);
+  const [sourceImageId, setSourceImageId] = useState<string | null>(() => sidecar?.source_image_asset_id ?? null);
+  const [storyboardPrompt, setStoryboardPrompt] = useState(() => sidecar?.storyboard_prompt ?? '');
+  const [videoPrompt, setVideoPrompt] = useState(() => sidecar?.video_prompt ?? '');
+  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(() => videoModelFromTool(sidecar?.video_model));
+  const [durationS, setDurationS] = useState(() => sidecar?.duration_s ?? 15);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [generatingStoryboard, setGeneratingStoryboard] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [replacingStoryboard, setReplacingStoryboard] = useState(false);
+  const [replacingVideo, setReplacingVideo] = useState(false);
 
-  const sidecarKey = sidecar?.screenshot_asset_ids.join('|') ?? null;
+  const sidecarKey = [
+    sidecar?.source_image_asset_id ?? '',
+    sidecar?.storyboard_asset_id ?? '',
+    sidecar?.video_asset_id ?? '',
+    sidecar?.storyboard_prompt ?? '',
+    sidecar?.video_prompt ?? '',
+    sidecar?.video_model ?? '',
+    sidecar?.duration_s ?? '',
+  ].join('|');
+
   useEffect(() => {
-    if (!sidecar || sidecarKey === lastLoadedPlan || generating) return;
-    setLastLoadedPlan(sidecarKey);
-    setScreenshotIds(sidecar.screenshot_asset_ids);
-    setDialogDraft(sidecar.scenes.map((scene) => scene.dialog).join('\n\n'));
-  }, [sidecar, sidecarKey, lastLoadedPlan, generating]);
+    if (!sidecar) return;
+    setSourceImageId(sidecar.source_image_asset_id);
+    setStoryboardPrompt(sidecar.storyboard_prompt);
+    setVideoPrompt(sidecar.video_prompt);
+    setSelectedVideoModel(videoModelFromTool(sidecar.video_model));
+    setDurationS(sidecar.duration_s);
+  }, [sidecar, sidecarKey]);
 
-  const dialogBlocks = useMemo(() => parseDialogBlocks(dialogDraft), [dialogDraft]);
-  const canGenerate = screenshotIds.length > 0
-    && screenshotIds.length === dialogBlocks.length
-    && dialogBlocks.every((block) => block.length > 0);
+  const sourceItem = useMemo(
+    () => (sourceImageId ? mediaItems.find((m) => m.id === sourceImageId) ?? null : null),
+    [sourceImageId, mediaItems],
+  );
+  const sourceSrc = sourceItem?.thumbnailSrc ?? sourceItem?.filePath ?? null;
+  const outputAspect = useMemo(() => sourceAspectFromDimensions(16, 9), []);
+  const storyboardState = useMemo(
+    () => deriveStoryboardTileState(sidecar?.storyboard_asset_id, mediaItems),
+    [sidecar?.storyboard_asset_id, mediaItems],
+  );
+  const videoTileState = useMemo(
+    () => deriveStoryboardVideoState(sidecar, mediaItems, projectSlug),
+    [sidecar, mediaItems, projectSlug],
+  );
+  const videoPayload = useMemo(
+    () => buildStoryboardVideoPayload(selectedVideoModel, sidecar, videoPrompt),
+    [selectedVideoModel, sidecar, videoPrompt],
+  );
 
-  const addScreenshot = useCallback((assetId: string) => {
+  const savePlan = useCallback(async (nextSourceImageId: string, opts?: { resetPrompts?: boolean }) => {
+    setSavingPlan(true);
+    try {
+      const args: Record<string, unknown> = {
+        project_slug: projectSlug,
+        source_image_asset_id: nextSourceImageId,
+        video_model: TOOL_BY_VIDEO_MODEL[selectedVideoModel],
+        duration_s: durationS,
+      };
+      if (!opts?.resetPrompts && storyboardPrompt.trim().length > 0) args.storyboard_prompt = storyboardPrompt;
+      if (!opts?.resetPrompts && videoPrompt.trim().length > 0) args.video_prompt = videoPrompt;
+      const result = await callTool('plan_storyboard_video', args);
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan update failed';
+        toast({ title: 'Plan update failed', description: msg, duration: 5000 });
+        return null;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: StoryboardVideoPlanSidecar };
+      if (!parsed.sidecar) return null;
+      onSidecarUpdate(parsed.sidecar);
+      setStoryboardPrompt(parsed.sidecar.storyboard_prompt);
+      setVideoPrompt(parsed.sidecar.video_prompt);
+      await callTool('sync', { project_slug: projectSlug });
+      return parsed.sidecar;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: 'Plan update failed', description: msg, duration: 5000 });
+      return null;
+    } finally {
+      setSavingPlan(false);
+    }
+  }, [callTool, projectSlug, selectedVideoModel, durationS, storyboardPrompt, videoPrompt, onSidecarUpdate]);
+
+  const handleSourceDrop = useCallback((assetId: string) => {
     if (!assetId.startsWith('img-')) {
-      toast({ title: 'Wrong asset type', description: `Drop an img-* screenshot, got ${assetId}.`, duration: 3000 });
+      toast({ title: 'Wrong asset type', description: `Drop an img-* source image, got ${assetId}.`, duration: 3000 });
       return;
     }
-    setScreenshotIds((prev) => prev.includes(assetId) ? prev : [...prev, assetId]);
-  }, []);
+    setSourceImageId(assetId);
+    setStoryboardPrompt('');
+    setVideoPrompt('');
+    void savePlan(assetId, { resetPrompts: true });
+  }, [savePlan]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!canGenerate || generating) return;
-    setGenerating(true);
+  const persistStoryboard = useCallback(async (assetId: string) => {
+    const result = await callTool('replace_plan_storyboard_video_storyboard', {
+      project_slug: projectSlug,
+      asset_id: assetId,
+    });
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Storyboard replace failed';
+      toast({ title: 'Storyboard replace failed', description: msg, duration: 5000 });
+      return null;
+    }
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text) as { sidecar?: StoryboardVideoPlanSidecar };
+    if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    return parsed.sidecar ?? null;
+  }, [callTool, projectSlug, onSidecarUpdate]);
+
+  const persistVideo = useCallback(async (assetId: string) => {
+    const result = await callTool('replace_plan_storyboard_video_video', {
+      project_slug: projectSlug,
+      asset_id: assetId,
+    });
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Video replace failed';
+      toast({ title: 'Video replace failed', description: msg, duration: 5000 });
+      return null;
+    }
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text) as { sidecar?: StoryboardVideoPlanSidecar };
+    if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    return parsed.sidecar ?? null;
+  }, [callTool, projectSlug, onSidecarUpdate]);
+
+  const handleGenerateStoryboard = useCallback(async () => {
+    if (!sourceImageId || generatingStoryboard) return;
+    setGeneratingStoryboard(true);
     try {
-      const result = await callTool('plan_screenshot_dialog', {
+      const plan = await savePlan(sourceImageId);
+      if (!plan) return;
+      const result = await callTool('generate_gpt_image', {
         project_slug: projectSlug,
-        screenshot_asset_ids: screenshotIds,
-        dialog_blocks: dialogBlocks,
+        prompt: plan.storyboard_prompt,
+        image_slugs: [`@${plan.source_image_asset_id}`],
+        aspect_ratio: '16:9',
+        resolution: '1K',
       });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
-        toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue GPT Image 2';
+        toast({ title: 'Storyboard generation failed', description: msg, duration: 5000 });
         return;
       }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: ScreenshotDialogPlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        const readResult = await callTool('read_plan', { project_slug: projectSlug });
-        if (!readResult.isError) {
-          const text = (readResult.content as Array<{ type: string; text: string }>)[0].text;
-          const parsed = JSON.parse(text) as ScreenshotDialogPlanSidecar;
-          if (parsed.formula === 'screenshot_dialog') onSidecarUpdate(parsed);
-        }
-      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { img_asset_id?: string };
+      if (parsed.img_asset_id) await persistStoryboard(parsed.img_asset_id);
       await callTool('sync', { project_slug: projectSlug });
-      toast({ title: 'Plan generated', description: `${screenshotIds.length} scenes`, duration: 2500 });
+      toast({ title: 'Storyboard enqueued', description: 'GPT Image 2', duration: 2500 });
     } finally {
-      setGenerating(false);
+      setGeneratingStoryboard(false);
     }
-  }, [canGenerate, generating, callTool, projectSlug, screenshotIds, dialogBlocks, onSidecarUpdate]);
+  }, [sourceImageId, generatingStoryboard, savePlan, callTool, projectSlug, persistStoryboard]);
 
-  const countMismatch = screenshotIds.length > 0
-    && dialogBlocks.length > 0
-    && screenshotIds.length !== dialogBlocks.length;
+  const handleGenerateVideo = useCallback(async () => {
+    if (!sourceImageId || generatingVideo) return;
+    setGeneratingVideo(true);
+    try {
+      const plan = await savePlan(sourceImageId);
+      if (!plan) return;
+      const storyboardId = plan.storyboard_asset_id;
+      if (!storyboardId) {
+        toast({ title: 'Storyboard required', description: 'Generate or drop a storyboard image before video.', duration: 3500 });
+        return;
+      }
+      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt, plan.source_image_asset_id, storyboardId);
+      const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
+      const result = await callTool(toolName, {
+        project_slug: projectSlug,
+        prompt,
+        image_slugs: [`@${plan.source_image_asset_id}`, `@${storyboardId}`],
+        resolution: '720p',
+        aspect_ratio: '16:9',
+        duration: String(plan.duration_s),
+        generate_audio: true,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
+        toast({ title: 'Video generation failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { vid_asset_id?: string };
+      if (parsed.vid_asset_id) await persistVideo(parsed.vid_asset_id);
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Video enqueued', description: selectedVideoModel, duration: 2500 });
+    } finally {
+      setGeneratingVideo(false);
+    }
+  }, [sourceImageId, generatingVideo, savePlan, selectedVideoModel, callTool, projectSlug, persistVideo]);
+
+  const handleStoryboardReplace = useCallback(async (assetId: string) => {
+    setReplacingStoryboard(true);
+    try {
+      await persistStoryboard(assetId);
+    } finally {
+      setReplacingStoryboard(false);
+    }
+  }, [persistStoryboard]);
+
+  const handleVideoReplace = useCallback(async (assetId: string) => {
+    setReplacingVideo(true);
+    try {
+      await persistVideo(assetId);
+    } finally {
+      setReplacingVideo(false);
+    }
+  }, [persistVideo]);
+
+  const storyboardAssetId = sidecar?.storyboard_asset_id ?? null;
+  const canGenerateStoryboard = Boolean(sourceImageId) && !savingPlan && !generatingStoryboard;
+  const canGenerateVideo = Boolean(sourceImageId && storyboardAssetId) && !savingPlan && !generatingVideo;
 
   return (
     <div className="space-y-5">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: screenshots + dialog</h1>
+          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: image to storyboard to video</h1>
           <button
             type="button"
-            onClick={() => { void handleGenerate(); }}
-            disabled={generating || !canGenerate}
-            title={canGenerate ? 'Generate plan from screenshots and dialog' : 'Add matching screenshots and dialog blocks'}
+            onClick={() => { if (sourceImageId) void savePlan(sourceImageId); }}
+            disabled={!sourceImageId || savingPlan}
+            title={sourceImageId ? 'Save plan prompts' : 'Drop a source image'}
             className={cn(
               'h-8 px-3 flex items-center gap-1.5 rounded',
               'text-xs font-mono font-bold uppercase tracking-wider',
@@ -467,62 +660,118 @@ function ScreenshotDialogPlanFormula({ sidecar, mediaItems, projectSlug, callToo
               'disabled:opacity-40 disabled:cursor-not-allowed',
             )}
           >
-            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Images className="w-3.5 h-3.5" />}
-            {generating ? 'Generating…' : 'Generate Plan'}
+            {savingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {savingPlan ? 'Saving...' : 'Save Plan'}
           </button>
         </div>
-        <ScreenshotDropZone
-          screenshotIds={screenshotIds}
-          mediaItems={mediaItems}
-          onDropScreenshot={addScreenshot}
-          onRemove={(assetId) => setScreenshotIds((prev) => prev.filter((id) => id !== assetId))}
+        <StoryboardSourceDropZone
+          sourceImageId={sourceImageId}
+          sourceSrc={sourceSrc}
+          sourceLabel={sourceItem?.slug ?? (sourceImageId ? `@${sourceImageId}` : null)}
+          sourceAspect={sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height)}
+          onDropSource={handleSourceDrop}
         />
-        <div className="mt-4">
-          <label className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog blocks</label>
-          <textarea
-            value={dialogDraft}
-            onChange={(e) => setDialogDraft(e.target.value)}
-            rows={8}
+      </div>
+
+      <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+        <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">1</span>
+            <span className="text-emerald-300/70 uppercase tracking-wider">Generate storyboard image</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { void handleGenerateStoryboard(); }}
+            disabled={!canGenerateStoryboard}
+            title={canGenerateStoryboard ? 'Generate storyboard with GPT Image 2' : 'Drop a source image first'}
             className={cn(
-              'w-full p-3 rounded bg-black/60 border border-zinc-700 text-xs font-mono text-emerald-300/90 resize-y',
-              'focus:outline-none focus:border-emerald-500/60 placeholder:text-emerald-300/30',
-            )}
-            placeholder={'Line one for screenshot 1.\n\nLine two for screenshot 2.'}
-          />
-          <div
-            className={cn(
-              'mt-1 text-[10px] font-mono',
-              countMismatch ? 'text-amber-300/80' : 'text-emerald-300/45',
+              'h-7 px-2.5 flex items-center gap-1.5 rounded',
+              'text-[10px] font-mono font-bold uppercase tracking-wider',
+              'text-emerald-300 hover:text-white',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/70',
+              'transition-colors duration-150',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
             )}
           >
-            {screenshotIds.length} screenshot{screenshotIds.length === 1 ? '' : 's'} · {dialogBlocks.length} dialog block{dialogBlocks.length === 1 ? '' : 's'}
-          </div>
-        </div>
-      </div>
-      {sidecar && (
-        <div className="space-y-5">
-          {sidecar.scenes.map((scene, index) => (
-            <ScreenshotDialogSceneBlock
-              key={`${scene.image_asset_id}-${index}`}
-              scene={scene}
-              index={index}
+            {generatingStoryboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
+            {generatingStoryboard ? 'Generating...' : 'Generate'}
+          </button>
+        </header>
+        <div className="p-3 grid grid-cols-1 md:grid-cols-[minmax(12rem,18rem)_1fr] gap-3">
+          <StoryboardImageSlot
+            state={storyboardState}
+            sourceAspect={outputAspect}
+            assetId={storyboardAssetId}
+            replacing={replacingStoryboard}
+            generating={generatingStoryboard}
+            onIdleClick={() => { void handleGenerateStoryboard(); }}
+            onReplace={(assetId) => { void handleStoryboardReplace(assetId); }}
+            onErrorRetry={() => { void handleGenerateStoryboard(); }}
+            onRegen={() => { void handleGenerateStoryboard(); }}
+          />
+          <div className="min-w-0">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard prompt</div>
+            <PromptEditor
+              value={storyboardPrompt}
+              onChange={setStoryboardPrompt}
               mediaItems={mediaItems}
               projectSlug={projectSlug}
-              callTool={callTool}
-              onSidecarUpdate={onSidecarUpdate}
             />
-          ))}
+          </div>
         </div>
-      )}
+      </section>
+
+      <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+        <header className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 bg-black/40 text-xs font-mono">
+          <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">2</span>
+          <span className="text-emerald-300/70 uppercase tracking-wider">Generate video</span>
+        </header>
+        <div className="px-3 py-3 bg-black/20">
+          <div className="mb-3 flex items-center gap-3 text-[11px] font-mono">
+            <label className="flex items-center gap-1.5">
+              <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
+              <input
+                type="number"
+                min={4}
+                max={15}
+                value={durationS}
+                onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
+                className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+              />
+            </label>
+            <span className="text-emerald-300/45">16:9 / 720p / GPT storyboard + Seedance video</span>
+          </div>
+          <VideoPanel
+            selectedModel={selectedVideoModel}
+            onSelectModel={setSelectedVideoModel}
+            prompt={videoPrompt}
+            onPromptChange={setVideoPrompt}
+            payload={videoPayload}
+            mediaItems={mediaItems}
+            sourceAspect={outputAspect}
+            projectSlug={projectSlug}
+            disabled={!canGenerateVideo}
+            disabledReason={!sourceImageId ? 'Drop a source image first' : !storyboardAssetId ? 'Generate or drop a storyboard first' : generatingVideo ? 'Video gen submitting...' : undefined}
+            videoTileState={videoTileState}
+            videoAssetId={sidecar?.video_asset_id ?? null}
+            replacing={replacingVideo || generatingVideo}
+            onIdleClick={() => { void handleGenerateVideo(); }}
+            onReplace={(vidAssetId) => { void handleVideoReplace(vidAssetId); }}
+            onErrorRetry={() => { void handleGenerateVideo(); }}
+            onRegen={() => { void handleGenerateVideo(); }}
+          />
+        </div>
+      </section>
     </div>
   );
 }
 
-function ScreenshotDropZone({ screenshotIds, mediaItems, onDropScreenshot, onRemove }: {
-  screenshotIds: string[];
-  mediaItems: MediaItem[];
-  onDropScreenshot: (assetId: string) => void;
-  onRemove: (assetId: string) => void;
+function StoryboardSourceDropZone({ sourceImageId, sourceSrc, sourceLabel, sourceAspect, onDropSource }: {
+  sourceImageId: string | null;
+  sourceSrc: string | null;
+  sourceLabel: string | null;
+  sourceAspect: SourceAspect;
+  onDropSource: (assetId: string) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -532,7 +781,7 @@ function ScreenshotDropZone({ screenshotIds, mediaItems, onDropScreenshot, onRem
     if (!json) return;
     try {
       const payload = JSON.parse(json) as SidebarDragPayload;
-      if (typeof payload.id === 'string') onDropScreenshot(payload.id);
+      if (typeof payload.id === 'string') onDropSource(payload.id);
     } catch {
       return;
     }
@@ -540,7 +789,7 @@ function ScreenshotDropZone({ screenshotIds, mediaItems, onDropScreenshot, onRem
   return (
     <div
       className={cn(
-        'min-h-28 rounded border border-dashed p-3 transition-colors',
+        'rounded border border-dashed p-3 transition-colors',
         dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70 bg-zinc-950/40',
       )}
       onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -548,231 +797,145 @@ function ScreenshotDropZone({ screenshotIds, mediaItems, onDropScreenshot, onRem
       onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
       onDrop={handleDrop}
     >
-      <div className="flex flex-wrap gap-3">
-        {screenshotIds.map((assetId, index) => {
-          const item = mediaItems.find((m) => m.id === assetId) ?? null;
-          const src = item?.thumbnailSrc ?? item?.filePath ?? null;
-          const sourceAspect = sourceAspectFromDimensions(item?.width, item?.height);
-          return (
-            <div key={assetId} className="flex flex-col gap-1 w-32">
-              <div
-                className="relative w-32 bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
-                style={{ aspectRatio: sourceAspect.css }}
-              >
-                {src ? (
-                  <img src={src} alt={item?.slug ?? assetId} className="w-full h-full object-contain" loading="lazy" />
-                ) : (
-                  <FileText className="w-5 h-5 text-emerald-300/40" />
-                )}
-                <button
-                  type="button"
-                  onClick={() => onRemove(assetId)}
-                  title="Remove screenshot"
-                  className="absolute top-1 right-1 h-5 w-5 rounded bg-black/70 border border-zinc-700/70 flex items-center justify-center text-emerald-300/70 hover:text-red-200 hover:border-red-400/70"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="text-[10px] font-mono text-emerald-300/60 truncate">
-                {index + 1}. {item?.slug ?? `@${assetId}`}
-              </div>
-            </div>
-          );
-        })}
-        <div className="w-32 aspect-video rounded border border-zinc-700/50 bg-black/40 flex flex-col items-center justify-center gap-1 text-emerald-300/40">
-          <Images className="w-5 h-5" />
-          <span className="text-[10px] font-mono uppercase tracking-wider text-center px-2">drop image</span>
+      <div className="flex items-center gap-3">
+        <div
+          className="w-32 bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
+          style={{ aspectRatio: sourceAspect.css }}
+        >
+          {sourceSrc ? (
+            <img src={sourceSrc} alt={sourceLabel ?? sourceImageId ?? 'source image'} className="w-full h-full object-contain" loading="lazy" />
+          ) : (
+            <Images className="w-5 h-5 text-emerald-300/40" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Source image</div>
+          <div className="text-xs font-mono text-emerald-200/80 truncate">
+            {sourceLabel ?? 'Drop one img-* reference image'}
+          </div>
+          <div className="mt-1 text-[10px] font-mono text-emerald-300/40">
+            {sourceImageId ? `@${sourceImageId}` : 'Creates the plan and loads the default prompts'}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function screenshotDialogPrompt(scene: ScreenshotDialogPlanScene): string {
-  return [
-    scene.visual,
-    '',
-    `Exact spoken dialog: ${scene.dialog}`,
-  ].join('\n');
-}
-
-function deriveScreenshotDialogVideoState(scene: ScreenshotDialogPlanScene, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
-  const vidId = scene.video;
-  if (!vidId) return { kind: 'idle' };
-  const item = mediaItems.find((m) => m.id === vidId);
-  if (!item) return { kind: 'generating' };
-  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
-  if (item.status === 'ready') return { kind: 'ready', src: `/files/${projectSlug}/${vidId}/original.mp4` };
-  return { kind: 'generating', label: item.status === 'replacing-audio' ? 'splicing audio…' : 'generating…' };
-}
-
-function buildScreenshotDialogVideoPayload(
-  videoModel: VideoModel,
-  scene: ScreenshotDialogPlanScene,
-  prompt: string,
-  sourceAspect: SourceAspect,
-): { model: string; input: Record<string, unknown> } {
-  return {
-    model: videoModel === 'seedance-2-ref' ? 'bytedance/seedance-2' : 'bytedance/seedance-2-fast',
-    input: {
-      prompt,
-      first_frame_url: `@${scene.image_asset_id}`,
-      resolution: '720p',
-      aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-      duration: scene.duration_s,
-      generate_audio: true,
-    },
-  };
-}
-
-function ScreenshotDialogSceneBlock({ scene, index, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
-  scene: ScreenshotDialogPlanScene;
-  index: number;
-  mediaItems: MediaItem[];
-  projectSlug: string;
-  callTool: UseMcpResult['callTool'];
-  onSidecarUpdate: (sidecar: ScreenshotDialogPlanSidecar) => void;
+function StoryboardImageSlot({ state, sourceAspect, assetId, replacing, generating, onReplace, onIdleClick, onErrorRetry, onRegen }: {
+  state: FrameTileState;
+  sourceAspect: SourceAspect;
+  assetId: string | null;
+  replacing: boolean;
+  generating: boolean;
+  onReplace: (assetId: string) => void;
+  onIdleClick: () => void;
+  onErrorRetry?: () => void;
+  onRegen: () => void;
 }) {
-  const imageItem = mediaItems.find((m) => m.id === scene.image_asset_id) ?? null;
-  const sourceAspect = sourceAspectFromDimensions(imageItem?.width, imageItem?.height);
-  const imageSrc = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
-  const promptSeed = useMemo(() => screenshotDialogPrompt(scene), [scene]);
-  const [prompt, setPrompt] = useState(promptSeed);
-  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
-  const [submitting, setSubmitting] = useState(false);
-  const [replacing, setReplacing] = useState(false);
-
-  useEffect(() => {
-    if (scene.video != null) return;
-    setPrompt(promptSeed);
-  }, [promptSeed, scene.video]);
-
-  const videoTileState = useMemo(
-    () => deriveScreenshotDialogVideoState(scene, mediaItems, projectSlug),
-    [scene, mediaItems, projectSlug],
-  );
-  const payload = useMemo(
-    () => buildScreenshotDialogVideoPayload(selectedVideoModel, scene, prompt, sourceAspect),
-    [selectedVideoModel, scene, prompt, sourceAspect],
-  );
-
-  const persistVideo = useCallback(async (assetId: string) => {
-    const result = await callTool('replace_plan_screenshot_dialog_scene_video', {
-      project_slug: projectSlug,
-      scene_index: index,
-      asset_id: assetId,
-    });
-    if (result.isError) {
-      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
-      toast({ title: `Scene ${index + 1} video replace failed`, description: msg, duration: 5000 });
-      return;
-    }
+  const [dragActive, setDragActive] = useState(false);
+  const showSpinner = state.kind === 'generating' || replacing || generating;
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
     try {
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { sidecar?: ScreenshotDialogPlanSidecar };
-      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const droppedId = payload.id;
+      if (typeof droppedId !== 'string') return;
+      if (!droppedId.startsWith('img-')) {
+        toast({ title: 'Not an image asset', description: `${droppedId} is not an img-* asset.`, duration: 3000 });
+        return;
+      }
+      if (droppedId === assetId) return;
+      onReplace(droppedId);
     } catch {
       return;
     }
-  }, [callTool, projectSlug, index, onSidecarUpdate]);
-
-  const handleVideo = useCallback(async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const result = await callTool(toolName, {
-        project_slug: projectSlug,
-        prompt,
-        first_frame_slug: `@${scene.image_asset_id}`,
-        resolution: '720p',
-        aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-        duration: String(scene.duration_s),
-        generate_audio: true,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
-        toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
-        return;
-      }
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { vid_asset_id?: string };
-      if (parsed.vid_asset_id) await persistVideo(parsed.vid_asset_id);
-      toast({ title: `Scene ${index + 1} enqueued`, description: selectedVideoModel, duration: 2500 });
-      await callTool('sync', { project_slug: projectSlug });
-    } finally {
-      setSubmitting(false);
-    }
-  }, [submitting, selectedVideoModel, callTool, projectSlug, prompt, scene.image_asset_id, scene.duration_s, sourceAspect, index, persistVideo]);
-
-  const runVideoReplace = useCallback(async (vidAssetId: string) => {
-    setReplacing(true);
-    try {
-      await persistVideo(vidAssetId);
-    } finally {
-      setReplacing(false);
-    }
-  }, [persistVideo]);
-
+  };
   return (
-    <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="text-emerald-300/50">Scene {index + 1}</span>
-          <span className="text-emerald-300/90 font-bold">{scene.duration_s}s</span>
-        </div>
-        <span className="text-[10px] font-mono text-emerald-300/45 truncate max-w-[16rem]">
-          {imageItem?.slug ?? `@${scene.image_asset_id}`}
-        </span>
-      </header>
-      <div className="p-3 border-b border-zinc-800/40 bg-black/20 grid grid-cols-[minmax(8rem,12rem)_1fr] gap-3">
-        <div
-          className="bg-zinc-900 border border-zinc-700/60 rounded overflow-hidden flex items-center justify-center"
-          style={{ aspectRatio: sourceAspect.css }}
+    <div
+      className={cn(
+        'relative self-start w-full bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
+        dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
+      )}
+      style={{ aspectRatio: sourceAspect.css }}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      {state.kind === 'ready' ? (
+        <img src={state.src} alt="storyboard result" className="w-full h-full object-contain" loading="lazy" />
+      ) : state.kind === 'idle' && !showSpinner ? (
+        <button
+          type="button"
+          onClick={onIdleClick}
+          title="Click to generate storyboard or drop an img-* storyboard"
+          className="w-full h-full flex flex-col items-center justify-center gap-1.5 hover:bg-emerald-500/5 transition-colors cursor-pointer"
         >
-          {imageSrc ? (
-            <img src={imageSrc} alt={imageItem?.slug ?? scene.image_asset_id} className="w-full h-full object-contain" loading="lazy" />
-          ) : (
-            <FileText className="w-6 h-6 text-emerald-300/40" />
+          <Images className="w-5 h-5 text-emerald-400/50 group-hover:text-emerald-300/80" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/50 group-hover:text-emerald-300/80 px-3 text-center">
+            click to generate or drop storyboard
+          </span>
+        </button>
+      ) : (
+        <div className="w-full h-full bg-black/60" />
+      )}
+      {showSpinner && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/70">
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-300/80" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/70">
+            {replacing ? 'updating...' : 'generating...'}
+          </span>
+        </div>
+      )}
+      {state.kind === 'error' && !showSpinner && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-red-950/70 px-3">
+          <span className="text-[10px] font-mono text-red-200/90 text-center line-clamp-3">{state.message}</span>
+          {onErrorRetry && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onErrorRetry(); }}
+              title="Re-run the storyboard generation"
+              className={cn(
+                'h-6 px-2 flex items-center gap-1 rounded',
+                'text-[10px] font-mono uppercase tracking-wider',
+                'text-red-50 hover:text-white',
+                'bg-red-500/30 hover:bg-red-500/50 border border-red-300/50 hover:border-red-200/80',
+              )}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </button>
           )}
         </div>
-        <div className="min-w-0 flex flex-col gap-2">
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog</div>
-            <div className="rounded border border-zinc-800/70 bg-black/50 p-2 text-xs leading-relaxed text-emerald-200/85 whitespace-pre-wrap">
-              {scene.dialog}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Planner visual</div>
-            <div className="rounded border border-zinc-800/70 bg-black/50 p-2 text-xs leading-relaxed text-emerald-200/75 whitespace-pre-wrap">
-              {scene.visual}
-            </div>
-          </div>
+      )}
+      {state.kind === 'ready' && !showSpinner && (
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRegen(); }}
+            title="Regenerate the storyboard with the current prompt"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-emerald-300/80 hover:text-emerald-300',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
+            )}
+          >
+            <RefreshCw className="w-3 h-3" />
+            Regen
+          </button>
         </div>
-      </div>
-      <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20">
-        <VideoPanel
-          selectedModel={selectedVideoModel}
-          onSelectModel={setSelectedVideoModel}
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          payload={payload}
-          mediaItems={mediaItems}
-          sourceAspect={sourceAspect}
-          projectSlug={projectSlug}
-          disabled={submitting}
-          disabledReason={submitting ? 'Video gen submitting…' : undefined}
-          videoTileState={videoTileState}
-          videoAssetId={scene.video ?? null}
-          replacing={replacing}
-          onIdleClick={() => { void handleVideo(); }}
-          onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
-          onErrorRetry={() => { void handleVideo(); }}
-          onRegen={() => { void handleVideo(); }}
-        />
-      </div>
-    </section>
+      )}
+      {dragActive && !replacing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop to replace</span>
+        </div>
+      )}
+    </div>
   );
 }
 
