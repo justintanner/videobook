@@ -12,7 +12,7 @@ const schema = {
   loop_video: z.boolean().optional().describe("Whether the storyboard and video should be designed as a seamless loop"),
   storyboard_prompt: z.string().optional().describe("Editable GPT Image 2 storyboard prompt"),
   video_prompt: z.string().optional().describe("Editable final video prompt"),
-  video_model: z.enum(["generate_seedance2_video", "generate_seedance2_fast_video", "generate_grok_imagine_video"]).optional().describe("Video tool to use for the final storyboard render"),
+  video_model: z.enum(["generate_seedance2_video", "generate_seedance2_fast_video"]).optional().describe("Video tool to use for the final storyboard render"),
   duration_s: z.number().int().min(4).max(15).optional().describe("Final video duration in seconds"),
   rebuild_prompts: z.boolean().optional().describe("Regenerate derived storyboard/video prompts from the current source analysis and direction"),
 };
@@ -43,7 +43,7 @@ export function planStoryboardVideoDef(fs: VideocityFs): ToolDef {
         loop_video?: boolean;
         storyboard_prompt?: string;
         video_prompt?: string;
-        video_model?: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
+        video_model?: string;
         duration_s?: number;
         rebuild_prompts?: boolean;
       };

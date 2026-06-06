@@ -18,7 +18,7 @@ export type StoryboardVideoPlanSidecar = {
   storyboard_asset_id?: string | null;
   video_asset_id?: string | null;
   storyboard_model: "generate_gpt_image";
-  video_model: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
+  video_model: "generate_seedance2_video" | "generate_seedance2_fast_video";
   duration_s: number;
   aspect_ratio: "16:9";
   resolution: "720p";

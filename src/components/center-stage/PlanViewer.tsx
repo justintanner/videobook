@@ -70,7 +70,7 @@ interface StoryboardVideoPlanSidecar {
   storyboard_asset_id?: string | null;
   video_asset_id?: string | null;
   storyboard_model: 'generate_gpt_image';
-  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video' | 'generate_grok_imagine_video';
+  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video';
   duration_s: number;
   aspect_ratio: '16:9';
   resolution: '720p';
@@ -387,8 +387,7 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
   );
 }
 
-function videoModelFromTool(toolName: StoryboardVideoPlanSidecar['video_model'] | undefined): VideoModel {
-  if (toolName === 'generate_grok_imagine_video') return 'grok-imagine-1.5';
+function videoModelFromTool(toolName: string | undefined): VideoModel {
   return toolName === 'generate_seedance2_fast_video' ? 'seedance-2-fast' : 'seedance-2-ref';
 }
 
@@ -396,34 +395,6 @@ function normalizeStoryboardVideoPrompt(prompt: string): string {
   return prompt
     .replaceAll('@[storyboard ref]', '[Image 1]')
     .replaceAll('@[character ref]', '[Image 2]');
-}
-
-function buildGrokStoryboardVideoPrompt(prompt: string): string {
-  const normalized = normalizeStoryboardVideoPrompt(prompt);
-  if (normalized.includes("concatenated reference sheet") || normalized.includes("single concatenated reference sheet")) {
-    return normalized;
-  }
-  if (!normalized.startsWith("Use [Image 1] as the authoritative director-approved storyboard blueprint")) {
-    return `${normalized}
-
-Grok Imagine 1.5 receives exactly one image in this plan: [Image 1], a concatenated reference sheet. The sheet places the generated storyboard first, followed by the source reference images in order. Use the storyboard portion for sequence structure and the source portions for identity, wardrobe, setting, lighting, mood, and style.`;
-  }
-  const loopRequirement = normalized.includes("Make the final shot visually match the opening shot")
-    ? "Make the final shot visually match the opening shot closely enough to loop cleanly."
-    : "End on a clean final beat. Do not force a loop unless the storyboard itself asks for one.";
-  return `Use [Image 1] as the only visual reference image. [Image 1] is a concatenated reference sheet: the generated director-approved storyboard appears first, followed by the source reference images in order.
-Do not render the storyboard sheet itself. Recreate the filmed sequence implied by its panels, following panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc.
-Because Grok Imagine 1.5 accepts exactly one image, use this single concatenated sheet as both the storyboard blueprint and visual reference pack. Treat the storyboard portion as authoritative for sequence structure. Treat the source-image portions as authoritative for identity, wardrobe, proportions, setting, lighting, mood, color palette, and material details.
-Generate one cohesive cinematic video with natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding logos, captions, subtitles, UI, watermarks, or graphic overlays.
-
-[LOOP REQUIREMENT]
-${loopRequirement}`;
-}
-
-function resolveStoryboardVideoPrompt(prompt: string, videoModel: VideoModel): string {
-  return videoModel === 'grok-imagine-1.5'
-    ? buildGrokStoryboardVideoPrompt(prompt)
-    : normalizeStoryboardVideoPrompt(prompt);
 }
 
 function deriveStoryboardTileState(assetId: string | null | undefined, mediaItems: MediaItem[]): FrameTileState {
@@ -456,24 +427,10 @@ function buildStoryboardVideoPayload(
   const storyboardId = sidecar?.storyboard_asset_id ?? 'img-storyboard';
   const sourceImageIds = storyboardSourceImageIds(sidecar);
   const referenceImageUrls = [`@${storyboardId}`, ...(sourceImageIds.length > 0 ? sourceImageIds : ['img-source']).map((id) => `@${id}`)];
-  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt, videoModel);
-  if (videoModel === 'grok-imagine-1.5') {
-    return {
-      model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
-      input: {
-        prompt: resolvedPrompt,
-        image_urls: [`concat(${referenceImageUrls.join(', ')})`],
-        resolution: '720p',
-        aspect_ratio: '16:9',
-        duration: sidecar?.duration_s ?? 15,
-        nsfw_checker: true,
-      },
-    };
-  }
   return {
     model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
     input: {
-      prompt: resolvedPrompt,
+      prompt: normalizeStoryboardVideoPrompt(videoPrompt),
       reference_image_urls: referenceImageUrls,
       resolution: '720p',
       aspect_ratio: '16:9',
@@ -734,51 +691,19 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         toast({ title: 'Storyboard required', description: 'Generate or drop a storyboard image before video.', duration: 3500 });
         return;
       }
-      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt, selectedVideoModel);
+      const prompt = normalizeStoryboardVideoPrompt(plan.video_prompt);
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
       const sourceSlugs = storyboardSourceImageIds(plan).map((id) => `@${id}`);
-      let imageSlugs = [`@${storyboardId}`, ...sourceSlugs];
-      if (selectedVideoModel === 'grok-imagine-1.5') {
-        const concatResult = await callTool('concat_images', {
-          project_slug: projectSlug,
-          image_slugs: imageSlugs,
-          aspect_ratio: '16:9',
-          layout: imageSlugs.length <= 2 ? 'horizontal' : 'grid',
-          name: `grok-storyboard-${storyboardId.replace(/^img-/, '')}`,
-        });
-        if (concatResult.isError) {
-          const msg = (concatResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to concatenate storyboard references';
-          toast({ title: 'Reference concat failed', description: msg, duration: 5000 });
-          return;
-        }
-        const concatText = (concatResult.content as Array<{ type: string; text: string }>)[0].text;
-        const concatParsed = JSON.parse(concatText) as { img_asset_id?: string; asset_id?: string };
-        const concatAssetId = concatParsed.img_asset_id ?? concatParsed.asset_id;
-        if (!concatAssetId) {
-          toast({ title: 'Reference concat failed', description: 'concat_images did not return an img asset id.', duration: 5000 });
-          return;
-        }
-        imageSlugs = [`@${concatAssetId}`];
-      }
-      const result = await callTool(toolName, selectedVideoModel === 'grok-imagine-1.5'
-        ? {
-          project_slug: projectSlug,
-          prompt,
-          image_slugs: imageSlugs,
-          resolution: '720p',
-          aspect_ratio: '16:9',
-          duration: plan.duration_s,
-          nsfw_checker: true,
-        }
-        : {
-          project_slug: projectSlug,
-          prompt,
-          image_slugs: imageSlugs,
-          resolution: '720p',
-          aspect_ratio: '16:9',
-          duration: String(plan.duration_s),
-          generate_audio: true,
-        });
+      const imageSlugs = [`@${storyboardId}`, ...sourceSlugs];
+      const result = await callTool(toolName, {
+        project_slug: projectSlug,
+        prompt,
+        image_slugs: imageSlugs,
+        resolution: '720p',
+        aspect_ratio: '16:9',
+        duration: String(plan.duration_s),
+        generate_audio: true,
+      });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `Failed to enqueue ${LABEL_BY_VIDEO_MODEL[selectedVideoModel]}`;
         toast({ title: 'Video generation failed', description: msg, duration: 5000 });
@@ -1266,21 +1191,19 @@ function parseVariantKey(key: string): { provider: SwapProvider; model: SwapMode
   return null;
 }
 
-type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'grok-imagine-1.5';
+type VideoModel = 'seedance-2-ref' | 'seedance-2-fast';
 
 const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
-const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast', 'grok-imagine-1.5'];
+const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
 
 const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'generate_seedance2_video',
   'seedance-2-fast': 'generate_seedance2_fast_video',
-  'grok-imagine-1.5': 'generate_grok_imagine_video',
 };
 
 const LABEL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'Seedance 2',
   'seedance-2-fast': 'Seedance Fast',
-  'grok-imagine-1.5': 'Grok Imagine 1.5',
 };
 
 // Per-scene clip + audio live as sibling files inside the `plan` asset
@@ -2194,7 +2117,6 @@ function readySwapAssetIds(
 const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
   'seedance-2-ref': 'bytedance/seedance-2',
   'seedance-2-fast': 'bytedance/seedance-2-fast',
-  'grok-imagine-1.5': 'grok-imagine-video-1-5-preview',
 };
 
 function buildKieVideoPayload(
@@ -2412,7 +2334,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // and which server tool RUN VIDEO dispatches.
   const [videoModelPrompts, setVideoModelPrompts] = useState<Record<VideoModel, string>>(() => {
     const seed = rewriteVisualWithImageTokens(scene.visual, characters);
-    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'grok-imagine-1.5': seed };
+    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed };
   });
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
   const setSelectedVideoPrompt = useCallback((next: string) => {

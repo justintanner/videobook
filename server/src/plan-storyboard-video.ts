@@ -13,6 +13,14 @@ const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const MAX_SOURCE_IMAGES = 15;
 type StoryboardVideoModel = StoryboardVideoPlanSidecar["video_model"];
 
+function isStoryboardVideoModel(value: unknown): value is StoryboardVideoModel {
+  return value === "generate_seedance2_video" || value === "generate_seedance2_fast_video";
+}
+
+function normalizeStoryboardVideoModel(value: unknown): StoryboardVideoModel {
+  return value === "generate_seedance2_fast_video" ? "generate_seedance2_fast_video" : "generate_seedance2_video";
+}
+
 function buildDefaultVideoPrompt(loopVideo: boolean, sourceImageCount = 1): string {
   const additionalSourceLine = sourceImageCount > 1
     ? `Use [Image 3]${sourceImageCount > 2 ? ` through [Image ${sourceImageCount + 1}]` : ""} as additional source image references for secondary identity, wardrobe, object, setting, texture, lighting, mood, and style details.`
@@ -34,34 +42,6 @@ Generate one cohesive cinematic video with warm natural motion, clear readable a
 ${loopVideo
     ? "Make the final shot visually match the opening shot closely enough to loop cleanly. Preserve subject position, camera angle, motion direction, lighting, and prop state so the end can cut back to the start without a visible jump."
     : "End on a clean final beat. Do not force the final shot to match the opening shot unless the storyboard itself asks for a loop."}`;
-}
-
-function buildDefaultGrokVideoPrompt(loopVideo: boolean, sourceImageCount = 1): string {
-  const sourceReferenceLine = sourceImageCount > 1
-    ? `The remaining cells contain the primary source image followed by ${sourceImageCount - 1} additional source reference image${sourceImageCount > 2 ? "s" : ""}, in order.`
-    : "The remaining cell contains the primary source image.";
-  return `Use [Image 1] as the only visual reference image. [Image 1] is a single concatenated reference sheet for Grok Imagine 1.5. The generated director-approved storyboard appears first, followed by the source reference images in order.
-${sourceReferenceLine}
-
-Treat the storyboard portion as authoritative for sequence structure, panel order, shot scale, camera direction, staging, action choreography, continuity notes, and emotional arc. Do not render the storyboard sheet itself; recreate the filmed sequence implied by its panels.
-Treat the source-image portions as authoritative for subject identity, wardrobe, proportions, setting, lighting, mood, color palette, materials, and style. If the storyboard and source references conflict, keep source references authoritative for visual identity and the storyboard authoritative for action structure.
-
-Generate one cohesive cinematic video with natural motion, clear readable action, plausible physical continuity, and tactile detail. Avoid adding extra characters, logos, captions, subtitles, UI, watermarks, or graphic overlays.
-
-[LOOP REQUIREMENT]
-${loopVideo
-    ? "Make the final shot visually match the opening shot closely enough to loop cleanly. Preserve subject position, camera angle, motion direction, lighting, and prop state so the end can cut back to the start without a visible jump."
-    : "End on a clean final beat. Do not force the final shot to match the opening shot unless the storyboard itself asks for a loop."}`;
-}
-
-function buildDefaultVideoPromptForModel(
-  videoModel: StoryboardVideoModel,
-  loopVideo: boolean,
-  sourceImageCount: number,
-): string {
-  return videoModel === "generate_grok_imagine_video"
-    ? buildDefaultGrokVideoPrompt(loopVideo, sourceImageCount)
-    : buildDefaultVideoPrompt(loopVideo, sourceImageCount);
 }
 
 export const DEFAULT_VIDEO_PROMPT = buildDefaultVideoPrompt(false);
@@ -330,7 +310,7 @@ export async function generateStoryboardVideoPlan(
     loopVideo?: boolean;
     storyboardPrompt?: string;
     videoPrompt?: string;
-    videoModel?: "generate_seedance2_video" | "generate_seedance2_fast_video" | "generate_grok_imagine_video";
+    videoModel?: unknown;
     durationS?: number;
     rebuildPrompts?: boolean;
   },
@@ -369,19 +349,24 @@ export async function generateStoryboardVideoPlan(
       : await readCachedSourceAnalysis(fs, args.projectSlug, sourceImageAssetId);
 
   const durationS = Math.min(15, Math.max(4, args.durationS ?? existing?.duration_s ?? 15));
-  const nextVideoModel = args.videoModel ?? existing?.video_model ?? "generate_seedance2_video";
+  const existingVideoModel = existing?.video_model;
+  const existingVideoModelSupported = isStoryboardVideoModel(existingVideoModel);
+  const nextVideoModel = normalizeStoryboardVideoModel(args.videoModel ?? existingVideoModel);
+  const videoModelChanged = existing
+    ? !existingVideoModelSupported || nextVideoModel !== existingVideoModel
+    : false;
   const explicitVideoPrompt = args.videoPrompt?.trim();
-  const existingVideoPrompt = sameSource && !directionChanged && !rebuildPrompts && !isDefaultVideoPrompt(existing?.video_prompt)
+  const existingVideoPrompt = sameSource && !directionChanged && !rebuildPrompts && !videoModelChanged && !isDefaultVideoPrompt(existing?.video_prompt)
     ? existing?.video_prompt
     : undefined;
   const nextStoryboardPrompt = explicitStoryboardPrompt || existingStoryboardPrompt || buildStoryboardPromptFromAnalysis(sourceImageAnalysis!, storyboardBrief, loopVideo);
-  const nextVideoPrompt = explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPromptForModel(nextVideoModel, loopVideo, sourceImageAssetIds.length);
+  const nextVideoPrompt = explicitVideoPrompt || existingVideoPrompt || buildDefaultVideoPrompt(loopVideo, sourceImageAssetIds.length);
   const storyboardPromptChanged = existing ? (existing.storyboard_prompt ?? "") !== nextStoryboardPrompt : true;
   const videoPromptChanged = existing ? (existing.video_prompt ?? "") !== nextVideoPrompt : true;
   const keepStoryboardAsset = sameSource && !directionChanged && !rebuildPrompts && !storyboardPromptChanged;
   const keepVideoAsset = keepStoryboardAsset
     && !videoPromptChanged
-    && nextVideoModel === existing?.video_model
+    && !videoModelChanged
     && durationS === existing?.duration_s;
   const sidecar: StoryboardVideoPlanSidecar = {
     formula: "storyboard_video",

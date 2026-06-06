@@ -118,8 +118,8 @@ describe("plan_storyboard_video tools", () => {
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
   });
 
-  it("persists Grok Imagine 1.5 as the storyboard video model", async () => {
-    const sourceId = await createImage("grok-video-source");
+  it("falls back to Seedance when Grok is requested for storyboard video", async () => {
+    const sourceId = await createImage("removed-grok-video-source");
     const result = await planStoryboardVideoDef(fs).handler({
       project_slug: PROJECT,
       source_image_asset_id: sourceId,
@@ -128,14 +128,13 @@ describe("plan_storyboard_video tools", () => {
 
     expect(result.isError).toBeFalsy();
     const sidecar = parseSidecar(result.content);
-    expect(sidecar.video_model).toBe("generate_grok_imagine_video");
-    expect(sidecar.video_prompt).toContain("single concatenated reference sheet");
-    expect(sidecar.video_prompt).toContain("Grok Imagine 1.5");
-    expect(sidecar.video_prompt).not.toContain("Reference images are sent in this exact order");
+    expect(sidecar.video_model).toBe("generate_seedance2_video");
+    expect(sidecar.video_prompt).toContain("Reference images are sent in this exact order");
+    expect(sidecar.video_prompt).not.toContain("Grok Imagine 1.5");
   });
 
-  it("rebuilds the default video prompt when switching from Seedance to Grok Imagine 1.5", async () => {
-    const sourceId = await createImage("switch-grok-source");
+  it("migrates stale Grok storyboard plans back to Seedance", async () => {
+    const sourceId = await createImage("stale-grok-source");
     const first = await planStoryboardVideoDef(fs).handler({
       project_slug: PROJECT,
       source_image_asset_id: sourceId,
@@ -143,19 +142,27 @@ describe("plan_storyboard_video tools", () => {
     expect(first.isError).toBeFalsy();
     const firstSidecar = parseSidecar(first.content);
     expect(firstSidecar.video_model).toBe("generate_seedance2_video");
-    expect(firstSidecar.video_prompt).toContain("Reference images are sent in this exact order");
+    unwrap(await fs.writeFile("plan", ".plan.json", JSON.stringify({
+      ...firstSidecar,
+      video_model: "generate_grok_imagine_video",
+      video_prompt: `Use [Image 1] as the only visual reference image. [Image 1] is a single concatenated reference sheet for Grok Imagine 1.5.
+
+[LOOP REQUIREMENT]
+End on a clean final beat.`,
+      video_asset_id: "vid-stale-grok",
+    }, null, 2), PROJECT));
 
     const second = await planStoryboardVideoDef(fs).handler({
       project_slug: PROJECT,
       source_image_asset_id: sourceId,
-      video_model: "generate_grok_imagine_video",
     });
 
     expect(second.isError).toBeFalsy();
     const secondSidecar = parseSidecar(second.content);
-    expect(secondSidecar.video_model).toBe("generate_grok_imagine_video");
-    expect(secondSidecar.video_prompt).toContain("single concatenated reference sheet");
-    expect(secondSidecar.video_prompt).not.toContain("Reference images are sent in this exact order");
+    expect(secondSidecar.video_model).toBe("generate_seedance2_video");
+    expect(secondSidecar.video_prompt).toContain("Reference images are sent in this exact order");
+    expect(secondSidecar.video_prompt).not.toContain("Grok Imagine 1.5");
+    expect(secondSidecar.video_asset_id).toBeNull();
   });
 
   it("creates a storyboard-video plan from multiple source image assets", async () => {
