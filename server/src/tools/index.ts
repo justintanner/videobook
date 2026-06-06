@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
+import { providerKeyStatusDef } from "./provider-key-status.js";
 import { createProjectDef } from "./create-project.js";
 import { renameProjectDef } from "./rename-project.js";
 import { deleteProjectDef } from "./delete-project.js";
@@ -172,6 +173,7 @@ export function registerAllTools(server: McpServer, fs: VideocityFs): void {
 export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
   return [
     apiStatusDef(),
+    providerKeyStatusDef(),
     estimateCostDef(fs),
     createProjectDef(fs),
     renameProjectDef(fs),

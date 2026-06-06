@@ -19,6 +19,7 @@ import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
 import type { ChatInputHandle } from '@/components/ui/ChatInput';
 import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
+import { ProviderKeysScreen } from '@/components/settings/ProviderKeysScreen';
 import { ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/trim/TrimEditor';
@@ -44,6 +45,7 @@ import { useMarkAssetSeen } from '@/hooks/useMarkAssetSeen';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
 import { useRenderSettings } from '@/hooks/useRenderSettings';
+import { useProviderKeyStatus } from '@/hooks/useProviderKeyStatus';
 import type { Orientation } from '@/hooks/useTimeline';
 import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
@@ -75,6 +77,7 @@ export function HomePage() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [statusOpen, setStatusOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -112,6 +115,12 @@ export function HomePage() {
   const { extract: extractSkeleton } = useExtractSkeleton(sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
+  const {
+    data: providerKeyStatus,
+    loading: providerKeyStatusLoading,
+    error: providerKeyStatusError,
+    refresh: refreshProviderKeyStatus,
+  } = useProviderKeyStatus(callTool, state);
 
   useEffect(() => {
     if (state === 'ready') refreshProjects();
@@ -143,7 +152,7 @@ export function HomePage() {
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (statusOpen || genPanel != null) return;
+    if (statusOpen || settingsOpen || genPanel != null) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -168,7 +177,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [statusOpen, genPanel]);
+  }, [statusOpen, settingsOpen, genPanel]);
 
   // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
@@ -269,6 +278,7 @@ export function HomePage() {
   }, [projectSlug, markAssetSeenLocal, markAssetSeen]);
 
   const handleSelectItem = useCallback((item: MediaItem) => {
+    setSettingsOpen(false);
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
@@ -417,6 +427,7 @@ export function HomePage() {
   }, []);
 
   const handleSlotClick = useCallback((slotIndex: number) => {
+    setSettingsOpen(false);
     setSelectedItem(null);
     setGenPanel(null);
     setTimelineSlotIndex(slotIndex);
@@ -591,6 +602,12 @@ export function HomePage() {
     });
   }, [mediaItems]);
 
+  const handleSettingsClick = useCallback(() => {
+    setSettingsOpen((open) => !open);
+    setStatusOpen(false);
+    void refreshProviderKeyStatus();
+  }, [refreshProviderKeyStatus]);
+
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
     open_inbox: () => setStatusOpen(true),
@@ -606,17 +623,20 @@ export function HomePage() {
       setCropTarget({ assetId: item?.id ?? target, ratio });
     },
     open_gen: (type: string, prompt: string) => {
+      setSettingsOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
       setGenPanel({ category, prompt: prompt || '' });
     },
     open_gen_video: (prompt: string) => {
+      setSettingsOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'video', prompt: prompt || '' });
     },
     open_gen_image: (prompt: string) => {
+      setSettingsOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'image', prompt: prompt || '' });
@@ -686,6 +706,7 @@ export function HomePage() {
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
     open_plan: () => {
+      setSettingsOpen(false);
       const planAsset = mediaItems.find((m) => m.id === 'plan');
       if (planAsset) {
         handleSelectItem(planAsset);
@@ -743,7 +764,9 @@ export function HomePage() {
             callTool={callTool}
             onProjectChange={handleProjectChange}
             onStatusClick={() => setStatusOpen(true)}
+            onSettingsClick={handleSettingsClick}
             onAnimateCommand={handleAnimateCommand}
+            settingsActive={settingsOpen}
           />
 
           <div className="flex flex-row overflow-hidden">
@@ -813,7 +836,14 @@ export function HomePage() {
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 p-4 overflow-hidden flex flex-col">
-                {genPanel != null ? (
+                {settingsOpen ? (
+                  <ProviderKeysScreen
+                    data={providerKeyStatus}
+                    loading={providerKeyStatusLoading}
+                    error={providerKeyStatusError}
+                    onRefresh={() => { void refreshProviderKeyStatus(); }}
+                  />
+                ) : genPanel != null ? (
                   <GenPreviewPanel
                     key={genPanel.category}
                     ref={genPanelRef}

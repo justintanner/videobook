@@ -10,10 +10,12 @@ interface HomeHeaderBarProps {
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
   onStatusClick: () => void;
+  onSettingsClick: () => void;
   onAnimateCommand: (text: string) => void;
+  settingsActive?: boolean;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onAnimateCommand }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onSettingsClick, onAnimateCommand, settingsActive = false }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -45,7 +47,12 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
       <div className="flex items-center gap-1">
         <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="projects" onClick={onStatusClick} />
 
-        <button className="flex items-center justify-center w-8 h-8 rounded text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+        <button
+          type="button"
+          onClick={onSettingsClick}
+          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${settingsActive ? 'text-primary bg-primary/10' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
+          title="Settings"
+        >
           <Settings className="w-4 h-4" />
         </button>
       </div>
