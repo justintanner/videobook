@@ -65,8 +65,8 @@ STYLE TRACK: P01 smile chip -> P02 kitchen map -> P03 back sway -> P04 single pe
 [SEQUENCE]
 Grid: 16 panels in a compact 4x4 cinematic storyboard sheet; panel artwork stays monochrome rough sketch while the director strip shapes a playful cooking-dance montage with camera-kiss hook, mostly back-facing kitchen choreography, top-down banana bread prep inserts, oven payoff, and satisfying slice finale.`;
 
-export const DEFAULT_VIDEO_PROMPT = `Use @[storyboard ref] as the authoritative director-approved storyboard blueprint for the sequence. Treat every storyboard panel as a consecutive shot within a single cinematic sequence. Follow panel order exactly and do not invent alternative coverage. The storyboard is the primary source of truth for visual storytelling. Recreate the filmed sequence implied by the panels rather than the physical storyboard artwork.
-Use @[character ref] as the authoritative C1 character reference.
+export const DEFAULT_VIDEO_PROMPT = `Use [Image 1] as the authoritative director-approved storyboard blueprint for the sequence. Treat every storyboard panel as a consecutive shot within a single cinematic sequence. Follow panel order exactly and do not invent alternative coverage. The storyboard is the primary source of truth for visual storytelling. Recreate the filmed sequence implied by the panels rather than the physical storyboard artwork.
+Use [Image 2] as the authoritative C1 character reference.
 
 EMOTIONAL GUIDANCE: Valence: playful, warm, teasing, proud. Arousal: quick hook to steady groove, tactile prep surges, brief pause, satisfying release through body rhythm, over-shoulder glances, hand precision, steam, crumbs, and food texture.
 

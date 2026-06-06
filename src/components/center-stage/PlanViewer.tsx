@@ -372,10 +372,14 @@ function videoModelFromTool(toolName: StoryboardVideoPlanSidecar['video_model'] 
   return toolName === 'generate_seedance2_fast_video' ? 'seedance-2-fast' : 'seedance-2-ref';
 }
 
-function resolveStoryboardVideoPrompt(prompt: string, sourceImageId: string, storyboardId: string): string {
+function normalizeStoryboardVideoPrompt(prompt: string): string {
   return prompt
-    .replaceAll('@[storyboard ref]', `@${storyboardId}`)
-    .replaceAll('@[character ref]', `@${sourceImageId}`);
+    .replaceAll('@[storyboard ref]', '[Image 1]')
+    .replaceAll('@[character ref]', '[Image 2]');
+}
+
+function resolveStoryboardVideoPrompt(prompt: string): string {
+  return normalizeStoryboardVideoPrompt(prompt);
 }
 
 function deriveStoryboardTileState(assetId: string | null | undefined, mediaItems: MediaItem[]): FrameTileState {
@@ -407,12 +411,12 @@ function buildStoryboardVideoPayload(
 ): { model: string; input: Record<string, unknown> } {
   const storyboardId = sidecar?.storyboard_asset_id ?? 'img-storyboard';
   const sourceImageId = sidecar?.source_image_asset_id ?? 'img-source';
-  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt, sourceImageId, storyboardId);
+  const resolvedPrompt = resolveStoryboardVideoPrompt(videoPrompt);
   return {
     model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
     input: {
       prompt: resolvedPrompt,
-      reference_image_urls: [`@${sourceImageId}`, `@${storyboardId}`],
+      reference_image_urls: [`@${storyboardId}`, `@${sourceImageId}`],
       resolution: '720p',
       aspect_ratio: '16:9',
       duration: sidecar?.duration_s ?? 15,
@@ -453,7 +457,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     if (!sidecar) return;
     setSourceImageId(sidecar.source_image_asset_id);
     setStoryboardPrompt(sidecar.storyboard_prompt);
-    setVideoPrompt(sidecar.video_prompt);
+    setVideoPrompt(normalizeStoryboardVideoPrompt(sidecar.video_prompt));
     setSelectedVideoModel(videoModelFromTool(sidecar.video_model));
     setDurationS(sidecar.duration_s);
   }, [sidecar, sidecarKey]);
@@ -487,7 +491,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         duration_s: durationS,
       };
       if (!opts?.resetPrompts && storyboardPrompt.trim().length > 0) args.storyboard_prompt = storyboardPrompt;
-      if (!opts?.resetPrompts && videoPrompt.trim().length > 0) args.video_prompt = videoPrompt;
+      if (!opts?.resetPrompts && videoPrompt.trim().length > 0) args.video_prompt = normalizeStoryboardVideoPrompt(videoPrompt.trim());
       const result = await callTool('plan_storyboard_video', args);
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan update failed';
@@ -499,7 +503,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       if (!parsed.sidecar) return null;
       onSidecarUpdate(parsed.sidecar);
       setStoryboardPrompt(parsed.sidecar.storyboard_prompt);
-      setVideoPrompt(parsed.sidecar.video_prompt);
+      setVideoPrompt(normalizeStoryboardVideoPrompt(parsed.sidecar.video_prompt));
       await callTool('sync', { project_slug: projectSlug });
       return parsed.sidecar;
     } catch (err) {
@@ -593,12 +597,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         toast({ title: 'Storyboard required', description: 'Generate or drop a storyboard image before video.', duration: 3500 });
         return;
       }
-      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt, plan.source_image_asset_id, storyboardId);
+      const prompt = resolveStoryboardVideoPrompt(plan.video_prompt);
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
       const result = await callTool(toolName, {
         project_slug: projectSlug,
         prompt,
-        image_slugs: [`@${plan.source_image_asset_id}`, `@${storyboardId}`],
+        image_slugs: [`@${storyboardId}`, `@${plan.source_image_asset_id}`],
         resolution: '720p',
         aspect_ratio: '16:9',
         duration: String(plan.duration_s),
