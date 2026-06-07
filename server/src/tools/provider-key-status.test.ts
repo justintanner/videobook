@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getProviderKeyStatus } from "./provider-key-status.js";
 
 describe("provider key status", () => {
@@ -6,6 +6,13 @@ describe("provider key status", () => {
   const originalElevenLabsKey = process.env.ELEVENLABS_API_KEY;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
   const originalXaiKey = process.env.XAI_API_KEY;
+
+  beforeEach(() => {
+    delete process.env.KIE_API_KEY;
+    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.XAI_API_KEY;
+  });
 
   afterEach(() => {
     if (originalKieKey) {
@@ -49,6 +56,7 @@ describe("provider key status", () => {
       keyStatus: "missing",
       maskedKey: null,
       credits: { status: "missing_key", value: null },
+      tokenLookup: { status: "missing_key", value: null },
     });
     expect(result.providers[1]).toMatchObject({
       provider: "elevenlabs",
@@ -56,6 +64,7 @@ describe("provider key status", () => {
       keyStatus: "missing",
       maskedKey: null,
       credits: { status: "missing_key", value: null },
+      tokenLookup: { status: "missing_key", value: null },
     });
     expect(result.providers[2]).toMatchObject({
       provider: "openai",
@@ -63,6 +72,7 @@ describe("provider key status", () => {
       keyStatus: "missing",
       maskedKey: null,
       credits: { status: "missing_key", value: null },
+      tokenLookup: { status: "missing_key", value: null },
     });
     expect(result.providers[3]).toMatchObject({
       provider: "xai",
@@ -70,6 +80,7 @@ describe("provider key status", () => {
       keyStatus: "missing",
       maskedKey: null,
       credits: { status: "missing_key", value: null },
+      tokenLookup: { status: "missing_key", value: null },
     });
   });
 
@@ -87,6 +98,7 @@ describe("provider key status", () => {
       keyStatus: "placeholder",
       maskedKey: null,
       credits: { status: "placeholder_key", value: null },
+      tokenLookup: { status: "placeholder_key", value: null },
     });
   });
 
@@ -112,17 +124,34 @@ describe("provider key status", () => {
         fetchedAt: null,
         message: "Credit balance is not available for this provider",
       },
+      tokenLookup: {
+        status: "unavailable",
+        value: null,
+        unit: "tokens",
+        fetchedAt: null,
+        message: "Token lookup is not available for this provider",
+      },
     });
   });
 
-  it("returns key-only status for OpenAI and xAI with masked key prefixes", async () => {
+  it("returns live token lookup status for OpenAI and xAI with masked key prefixes", async () => {
     process.env.KIE_API_KEY = "real-looking-kie-key";
     const openAiKey = "real-looking-openai-key";
     const xaiKey = "real-looking-xai-key";
     process.env.OPENAI_API_KEY = openAiKey;
     process.env.XAI_API_KEY = xaiKey;
 
-    const result = await getProviderKeyStatus(async () => 10);
+    const result = await getProviderKeyStatus(
+      async () => 10,
+      async (key) => {
+        expect(key).toBe(openAiKey);
+        return { value: 7, model: "gpt-test" };
+      },
+      async (key) => {
+        expect(key).toBe(xaiKey);
+        return { value: 5, model: "grok-test" };
+      },
+    );
 
     const json = JSON.stringify(result);
     expect(json).not.toContain(openAiKey);
@@ -140,7 +169,15 @@ describe("provider key status", () => {
         fetchedAt: null,
         message: "Credit balance is not available for this provider",
       },
+      tokenLookup: {
+        status: "ok",
+        value: 7,
+        unit: "tokens",
+        model: "gpt-test",
+        message: null,
+      },
     });
+    expect(result.providers[2].tokenLookup.fetchedAt).toEqual(expect.any(String));
     expect(result.providers[3]).toMatchObject({
       provider: "xai",
       label: "xAI",
@@ -154,7 +191,15 @@ describe("provider key status", () => {
         fetchedAt: null,
         message: "Credit balance is not available for this provider",
       },
+      tokenLookup: {
+        status: "ok",
+        value: 5,
+        unit: "tokens",
+        model: "grok-test",
+        message: null,
+      },
     });
+    expect(result.providers[3].tokenLookup.fetchedAt).toEqual(expect.any(String));
   });
 
   it("returns placeholder status for OpenAI and xAI placeholder keys", async () => {
@@ -168,11 +213,13 @@ describe("provider key status", () => {
       keyStatus: "placeholder",
       maskedKey: null,
       credits: { status: "placeholder_key", value: null },
+      tokenLookup: { status: "placeholder_key", value: null },
     });
     expect(result.providers[3]).toMatchObject({
       keyStatus: "placeholder",
       maskedKey: null,
       credits: { status: "placeholder_key", value: null },
+      tokenLookup: { status: "placeholder_key", value: null },
     });
   });
 
@@ -186,6 +233,7 @@ describe("provider key status", () => {
       keyStatus: "placeholder",
       maskedKey: null,
       credits: { status: "placeholder_key", value: null },
+      tokenLookup: { status: "placeholder_key", value: null },
     });
   });
 
@@ -204,6 +252,7 @@ describe("provider key status", () => {
       keyStatus: "configured",
       maskedKey: "real-l********",
       credits: { status: "ok", value: 123.45, unit: "credits", message: null },
+      tokenLookup: { status: "unavailable", value: null, unit: "tokens" },
     });
     expect(result.providers[0].credits.fetchedAt).toEqual(expect.any(String));
   });
@@ -219,6 +268,27 @@ describe("provider key status", () => {
     const json = JSON.stringify(result);
     expect(json).not.toContain(apiKey);
     expect(result.providers[0].credits).toMatchObject({
+      status: "error",
+      value: null,
+      message: "bad key [redacted]",
+    });
+  });
+
+  it("sanitizes token lookup endpoint errors", async () => {
+    const apiKey = "real-looking-openai-key";
+    process.env.OPENAI_API_KEY = apiKey;
+
+    const result = await getProviderKeyStatus(
+      async () => 10,
+      async () => {
+        throw new Error(`bad key ${apiKey}`);
+      },
+      async () => ({ value: 5, model: "grok-test" }),
+    );
+
+    const json = JSON.stringify(result);
+    expect(json).not.toContain(apiKey);
+    expect(result.providers[2].tokenLookup).toMatchObject({
       status: "error",
       value: null,
       message: "bad key [redacted]",

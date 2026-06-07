@@ -2,14 +2,23 @@ import { useCallback, useState } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 
 export type ProviderKeyStatus = 'configured' | 'missing' | 'placeholder';
-export type ProviderCreditsStatus = 'ok' | 'missing_key' | 'placeholder_key' | 'error' | 'unavailable';
+export type ProviderLookupStatus = 'ok' | 'missing_key' | 'placeholder_key' | 'error' | 'unavailable';
 export type ProviderKeyProvider = 'kie' | 'elevenlabs' | 'openai' | 'xai';
 export type ProviderEnvKey = 'KIE_API_KEY' | 'ELEVENLABS_API_KEY' | 'OPENAI_API_KEY' | 'XAI_API_KEY';
 
 export interface ProviderCreditsInfo {
-  status: ProviderCreditsStatus;
+  status: ProviderLookupStatus;
   value: number | null;
   unit: 'credits';
+  fetchedAt: string | null;
+  message: string | null;
+}
+
+export interface ProviderTokenLookupInfo {
+  status: ProviderLookupStatus;
+  value: number | null;
+  unit: 'tokens';
+  model: string | null;
   fetchedAt: string | null;
   message: string | null;
 }
@@ -21,6 +30,7 @@ export interface ProviderKeyInfo {
   keyStatus: ProviderKeyStatus;
   maskedKey: string | null;
   credits: ProviderCreditsInfo;
+  tokenLookup: ProviderTokenLookupInfo;
 }
 
 export interface ProviderKeyStatusResponse {

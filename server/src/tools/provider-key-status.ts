@@ -1,17 +1,28 @@
 import { createKie } from "@apicity/kie";
+import { createOpenAi } from "@apicity/openai";
+import { createXai } from "@apicity/xai";
 import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
 type KeyStatus = "configured" | "missing" | "placeholder";
-type CreditsStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavailable";
+type LookupStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavailable";
 type Provider = "kie" | "elevenlabs" | "openai" | "xai";
 type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY" | "OPENAI_API_KEY" | "XAI_API_KEY";
 type ProviderLabel = "Kie" | "ElevenLabs" | "OpenAI" | "xAI";
 
 interface CreditsInfo {
-  status: CreditsStatus;
+  status: LookupStatus;
   value: number | null;
   unit: "credits";
+  fetchedAt: string | null;
+  message: string | null;
+}
+
+interface TokenLookupInfo {
+  status: LookupStatus;
+  value: number | null;
+  unit: "tokens";
+  model: string | null;
   fetchedAt: string | null;
   message: string | null;
 }
@@ -23,6 +34,7 @@ interface ProviderKeyInfo {
   keyStatus: KeyStatus;
   maskedKey: string | null;
   credits: CreditsInfo;
+  tokenLookup: TokenLookupInfo;
 }
 
 interface ProviderKeyStatusResponse {
@@ -36,6 +48,16 @@ interface ProviderConfig {
 }
 
 type CreditReader = (apiKey: string) => Promise<number>;
+type TokenReader = (apiKey: string) => Promise<TokenLookupResult>;
+
+interface TokenLookupResult {
+  value: number;
+  model: string;
+}
+
+const TOKEN_LOOKUP_TEXT = "Videocity token lookup";
+const OPENAI_TOKEN_LOOKUP_MODEL = "gpt-5.4";
+const XAI_TOKEN_LOOKUP_MODEL = "grok-4.20-reasoning";
 
 function maskKey(apiKey: string): string {
   const prefixLength = Math.min(6, Math.max(2, apiKey.length));
@@ -59,6 +81,51 @@ async function readKieCredits(apiKey: string): Promise<number> {
   return response.data;
 }
 
+async function readOpenAiTokens(apiKey: string): Promise<TokenLookupResult> {
+  const provider = createOpenAi({ apiKey, timeout: 30_000 });
+  const response = await provider.post.v1.responses.inputTokens({
+    model: OPENAI_TOKEN_LOOKUP_MODEL,
+    input: TOKEN_LOOKUP_TEXT,
+  });
+  return {
+    value: response.input_tokens,
+    model: OPENAI_TOKEN_LOOKUP_MODEL,
+  };
+}
+
+async function readXaiTokens(apiKey: string): Promise<TokenLookupResult> {
+  const provider = createXai({ apiKey, timeout: 30_000 });
+  const response = await provider.post.v1.tokenizeText({
+    model: XAI_TOKEN_LOOKUP_MODEL,
+    text: TOKEN_LOOKUP_TEXT,
+  });
+  return {
+    value: response.token_ids.length,
+    model: XAI_TOKEN_LOOKUP_MODEL,
+  };
+}
+
+function unavailableCredits(message: string): CreditsInfo {
+  return {
+    status: "unavailable",
+    value: null,
+    unit: "credits",
+    fetchedAt: null,
+    message,
+  };
+}
+
+function unavailableTokenLookup(message: string): TokenLookupInfo {
+  return {
+    status: "unavailable",
+    value: null,
+    unit: "tokens",
+    model: null,
+    fetchedAt: null,
+    message,
+  };
+}
+
 function getMissingProvider(config: ProviderConfig): ProviderKeyInfo {
   return {
     ...config,
@@ -68,6 +135,14 @@ function getMissingProvider(config: ProviderConfig): ProviderKeyInfo {
       status: "missing_key",
       value: null,
       unit: "credits",
+      fetchedAt: null,
+      message: `${config.envKey} environment variable is not set`,
+    },
+    tokenLookup: {
+      status: "missing_key",
+      value: null,
+      unit: "tokens",
+      model: null,
       fetchedAt: null,
       message: `${config.envKey} environment variable is not set`,
     },
@@ -86,10 +161,18 @@ function getPlaceholderProvider(config: ProviderConfig): ProviderKeyInfo {
       fetchedAt: null,
       message: `${config.envKey} is a placeholder; refusing to call the real API`,
     },
+    tokenLookup: {
+      status: "placeholder_key",
+      value: null,
+      unit: "tokens",
+      model: null,
+      fetchedAt: null,
+      message: `${config.envKey} is a placeholder; refusing to call the real API`,
+    },
   };
 }
 
-function getConfiguredProviderBase(config: ProviderConfig, apiKey: string): Omit<ProviderKeyInfo, "credits"> {
+function getConfiguredProviderBase(config: ProviderConfig, apiKey: string): Omit<ProviderKeyInfo, "credits" | "tokenLookup"> {
   return {
     ...config,
     keyStatus: "configured",
@@ -116,6 +199,7 @@ async function getCreditProvider(config: ProviderConfig, readCredits: CreditRead
         fetchedAt: new Date().toISOString(),
         message: null,
       },
+      tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
     };
   } catch (error) {
     return {
@@ -127,11 +211,12 @@ async function getCreditProvider(config: ProviderConfig, readCredits: CreditRead
         fetchedAt: null,
         message: sanitizeMessage(error, apiKey),
       },
+      tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
     };
   }
 }
 
-function getKeyOnlyProvider(config: ProviderConfig): ProviderKeyInfo {
+function getKeyOnlyProvider(config: ProviderConfig, tokenMessage = "Token lookup is not available for this provider"): ProviderKeyInfo {
   const apiKey = process.env[config.envKey];
 
   if (!apiKey) return getMissingProvider(config);
@@ -139,30 +224,67 @@ function getKeyOnlyProvider(config: ProviderConfig): ProviderKeyInfo {
 
   return {
     ...getConfiguredProviderBase(config, apiKey),
-    credits: {
-      status: "unavailable",
-      value: null,
-      unit: "credits",
-      fetchedAt: null,
-      message: "Credit balance is not available for this provider",
-    },
+    credits: unavailableCredits("Credit balance is not available for this provider"),
+    tokenLookup: unavailableTokenLookup(tokenMessage),
   };
 }
 
-export async function getProviderKeyStatus(readKieCreditsFn: CreditReader = readKieCredits): Promise<ProviderKeyStatusResponse> {
+async function getTokenProvider(config: ProviderConfig, readTokens: TokenReader): Promise<ProviderKeyInfo> {
+  const apiKey = process.env[config.envKey];
+
+  if (!apiKey) return getMissingProvider(config);
+  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
+
+  const base = getConfiguredProviderBase(config, apiKey);
+
+  try {
+    const result = await readTokens(apiKey);
+    return {
+      ...base,
+      credits: unavailableCredits("Credit balance is not available for this provider"),
+      tokenLookup: {
+        status: "ok",
+        value: result.value,
+        unit: "tokens",
+        model: result.model,
+        fetchedAt: new Date().toISOString(),
+        message: null,
+      },
+    };
+  } catch (error) {
+    return {
+      ...base,
+      credits: unavailableCredits("Credit balance is not available for this provider"),
+      tokenLookup: {
+        status: "error",
+        value: null,
+        unit: "tokens",
+        model: null,
+        fetchedAt: null,
+        message: sanitizeMessage(error, apiKey),
+      },
+    };
+  }
+}
+
+export async function getProviderKeyStatus(
+  readKieCreditsFn: CreditReader = readKieCredits,
+  readOpenAiTokensFn: TokenReader = readOpenAiTokens,
+  readXaiTokensFn: TokenReader = readXaiTokens,
+): Promise<ProviderKeyStatusResponse> {
   const kie: ProviderConfig = { provider: "kie", label: "Kie", envKey: "KIE_API_KEY" };
   const elevenlabs: ProviderConfig = { provider: "elevenlabs", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY" };
   const openai: ProviderConfig = { provider: "openai", label: "OpenAI", envKey: "OPENAI_API_KEY" };
   const xai: ProviderConfig = { provider: "xai", label: "xAI", envKey: "XAI_API_KEY" };
 
-  return {
-    providers: [
-      await getCreditProvider(kie, readKieCreditsFn),
-      getKeyOnlyProvider(elevenlabs),
-      getKeyOnlyProvider(openai),
-      getKeyOnlyProvider(xai),
-    ],
-  };
+  const providers = await Promise.all([
+    getCreditProvider(kie, readKieCreditsFn),
+    Promise.resolve(getKeyOnlyProvider(elevenlabs)),
+    getTokenProvider(openai, readOpenAiTokensFn),
+    getTokenProvider(xai, readXaiTokensFn),
+  ]);
+
+  return { providers };
 }
 
 export function providerKeyStatusDef(): ToolDef {

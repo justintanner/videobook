@@ -20,6 +20,13 @@ function formatCredits(provider: ProviderKeyInfo): string {
   });
 }
 
+function formatTokens(provider: ProviderKeyInfo): string {
+  if (provider.tokenLookup.value === null) return 'N/A';
+  return provider.tokenLookup.value.toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  });
+}
+
 function formatFetchedAt(value: string | null): string {
   if (!value) return 'N/A';
   return new Date(value).toLocaleString(undefined, {
@@ -35,9 +42,20 @@ function keyDisplay(provider: ProviderKeyInfo): string {
   return provider.maskedKey ?? label(provider.keyStatus);
 }
 
+function checkedAt(provider: ProviderKeyInfo): string | null {
+  return provider.credits.fetchedAt ?? provider.tokenLookup.fetchedAt;
+}
+
+function statusTitle(provider: ProviderKeyInfo): string | undefined {
+  if (provider.tokenLookup.status === 'ok') return provider.tokenLookup.model ?? undefined;
+  if (provider.tokenLookup.status === 'error') return provider.tokenLookup.message ?? undefined;
+  if (provider.credits.status === 'ok' || provider.credits.status === 'error') return provider.credits.message ?? undefined;
+  return provider.tokenLookup.message ?? provider.credits.message ?? undefined;
+}
+
 function ProviderRow({ provider }: { provider: ProviderKeyInfo }) {
   return (
-    <div className="grid grid-cols-[0.75fr_0.95fr_1.35fr_0.55fr_1fr] gap-3 items-center px-3 py-3 border-t border-border/60">
+    <div className="grid grid-cols-[0.7fr_0.9fr_1.25fr_0.48fr_0.52fr_0.95fr] gap-3 items-center px-3 py-3 border-t border-border/60">
       <div className="min-w-0">
         <div className="font-mono text-sm font-bold text-foreground truncate">{provider.label}</div>
       </div>
@@ -60,8 +78,14 @@ function ProviderRow({ provider }: { provider: ProviderKeyInfo }) {
       </div>
 
       <div className="min-w-0">
-        <span className="font-mono text-xs text-muted-foreground whitespace-nowrap truncate block" title={provider.credits.message ?? undefined}>
-          {formatFetchedAt(provider.credits.fetchedAt)}
+        <div className="font-mono text-base font-bold tabular-nums text-foreground truncate" title={provider.tokenLookup.model ?? provider.tokenLookup.message ?? undefined}>
+          {formatTokens(provider)}
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <span className="font-mono text-xs text-muted-foreground whitespace-nowrap truncate block" title={statusTitle(provider)}>
+          {formatFetchedAt(checkedAt(provider))}
         </span>
       </div>
     </div>
@@ -85,7 +109,7 @@ export function ProviderKeysScreen({ data, loading, error, onRefresh }: Provider
             onClick={onRefresh}
             disabled={loading}
             className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-wait transition-colors inline-flex items-center gap-2"
-            title="Refresh credits"
+            title="Refresh provider status"
           >
             <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
             <span className="text-xs font-mono font-bold tracking-[0.18em]">{loading ? 'REFRESHING' : 'REFRESH'}</span>
@@ -94,11 +118,12 @@ export function ProviderKeysScreen({ data, loading, error, onRefresh }: Provider
 
         <div className="min-h-0 flex-1 overflow-hidden p-3">
           <div className="h-full min-h-0 border border-border bg-card/70 rounded overflow-hidden flex flex-col">
-            <div className="grid grid-cols-[0.75fr_0.95fr_1.35fr_0.55fr_1fr] gap-3 items-center px-3 py-2 border-b border-border/80 bg-zinc-950/40 shrink-0">
+            <div className="grid grid-cols-[0.7fr_0.9fr_1.25fr_0.48fr_0.52fr_0.95fr] gap-3 items-center px-3 py-2 border-b border-border/80 bg-zinc-950/40 shrink-0">
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Provider</div>
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Environment</div>
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Key</div>
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Credits</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Tokens</div>
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Last Checked</div>
             </div>
 
