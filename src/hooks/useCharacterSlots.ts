@@ -6,6 +6,7 @@ export type CharacterSubjectKind = "female" | "male" | "animal" | "other";
 export interface CharacterProfile {
   name?: string;
   subject_kind: CharacterSubjectKind;
+  elevenlabs_voice_id?: string;
   // female / male only
   age?: string;
   ethnicity?: string;
@@ -46,6 +47,8 @@ function normalizeCharacterProfile(raw: unknown): CharacterProfile {
   };
   const name = getStr(obj, "name");
   if (name) profile.name = name;
+  const voiceId = getStr(obj, "elevenlabs_voice_id");
+  if (voiceId) profile.elevenlabs_voice_id = voiceId;
   for (const k of ["wardrobe", "poses", "backdrop", "outfits"] as const) {
     const v = obj[k];
     if (Array.isArray(v) && v.every((x) => typeof x === "string")) {

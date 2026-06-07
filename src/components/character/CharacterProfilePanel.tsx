@@ -15,6 +15,7 @@ type ProfileKey = keyof CharacterProfile;
 const SHORT_FIELDS: Array<{ key: ProfileKey; label: string }> = [
   { key: "name", label: "Name" },
   { key: "subject_kind", label: "Subject" },
+  { key: "elevenlabs_voice_id", label: "Voice" },
   { key: "age", label: "Age" },
   { key: "ethnicity", label: "Background" },
   { key: "height", label: "Height" },

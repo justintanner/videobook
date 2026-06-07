@@ -30,6 +30,7 @@ import {
 const CHARACTER_PROFILE_SCHEMA = z.object({
   name: z.string().optional(),
   subject_kind: z.enum(["female", "male", "animal", "other"]).optional(),
+  elevenlabs_voice_id: z.string().optional(),
   age: z.string().optional(),
   ethnicity: z.string().optional(),
   height: z.string().optional(),

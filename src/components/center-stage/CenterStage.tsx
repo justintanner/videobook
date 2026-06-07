@@ -34,7 +34,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClose: () => void;
   imageAssets: MediaItem[];
   mediaItems: MediaItem[];
-  onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile) => void;
+  onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile, onProfileSaved?: (profile: CharacterProfile) => void) => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
   onCropConsumed?: () => void;
 }) {

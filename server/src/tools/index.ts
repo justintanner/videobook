@@ -3,6 +3,7 @@ import type { VideocityFs } from "vc-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
+import { listElevenLabsVoicesDef } from "./list-elevenlabs-voices.js";
 import { createProjectDef } from "./create-project.js";
 import { renameProjectDef } from "./rename-project.js";
 import { deleteProjectDef } from "./delete-project.js";
@@ -157,6 +158,7 @@ import { suggestSfxDef } from "./suggest-sfx.js";
 import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
+import { setCharacterVoiceDef } from "./set-character-voice.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
@@ -174,6 +176,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
   return [
     apiStatusDef(),
     providerKeyStatusDef(),
+    listElevenLabsVoicesDef(),
     estimateCostDef(fs),
     createProjectDef(fs),
     renameProjectDef(fs),
@@ -333,6 +336,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     applySfxDef(fs),
     pinCharacterSlotDef(fs),
     unpinCharacterSlotDef(fs),
+    setCharacterVoiceDef(fs),
     postDef(),
     xConnectStartDef(),
     xConnectStatusDef(),

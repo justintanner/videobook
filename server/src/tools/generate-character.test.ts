@@ -4,7 +4,7 @@ import {
   defaultCharacterWardrobeClause,
   type CharacterPromptProfile,
 } from "./generate-character.js";
-import { normalizeCharacterSubjectKind } from "../jobs/extract-character.js";
+import { normalizeCharacterProfile, normalizeCharacterSubjectKind } from "../jobs/extract-character.js";
 
 const maleProfile: CharacterPromptProfile = {
   subject_kind: "male",
@@ -62,6 +62,15 @@ describe("character sheet prompt defaults", () => {
 
   it("maps a missing subject_kind to male as a fallback", () => {
     expect(normalizeCharacterSubjectKind({})).toBe("male");
+  });
+
+  it("preserves the ElevenLabs voice ID in character metadata", () => {
+    const profile = normalizeCharacterProfile(
+      { ...animalProfile, elevenlabs_voice_id: "voice-custom-1" },
+      animalProfile.source_image_asset_id,
+    );
+
+    expect(profile.elevenlabs_voice_id).toBe("voice-custom-1");
   });
 
   it("keeps the female-specific hair-up/hair-down layout", () => {

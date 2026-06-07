@@ -91,7 +91,11 @@ export function HomePage() {
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
-  const [characterDialog, setCharacterDialog] = useState<{ initialSlug: string | null; initialProfile?: CharacterProfile } | null>(null);
+  const [characterDialog, setCharacterDialog] = useState<{
+    initialSlug: string | null;
+    initialProfile?: CharacterProfile;
+    onProfileSaved?: (profile: CharacterProfile) => void;
+  } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
@@ -894,7 +898,7 @@ export function HomePage() {
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
                     mediaItems={mediaItems}
-                    onEditCharacterProfile={(charId, profile) => setCharacterDialog({ initialSlug: charId, initialProfile: profile })}
+                    onEditCharacterProfile={(charId, profile, onProfileSaved) => setCharacterDialog({ initialSlug: charId, initialProfile: profile, onProfileSaved })}
                     cropTarget={cropTarget}
                     onCropConsumed={() => setCropTarget(null)}
                   />
@@ -1064,6 +1068,7 @@ export function HomePage() {
         submitting={characterSubmitting}
         callTool={callTool}
         callState={state}
+        onProfileSaved={characterDialog?.onProfileSaved}
       />
       <PostComposerDialog
         open={!!postPanel}

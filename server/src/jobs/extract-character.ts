@@ -18,6 +18,7 @@ export type CharacterSubjectKind = "female" | "male" | "animal" | "other";
 export type Character = {
   name?: string;
   subject_kind: CharacterSubjectKind;
+  elevenlabs_voice_id?: string;
   // female / male only
   age?: string;
   ethnicity?: string;
@@ -126,6 +127,8 @@ export function normalizeCharacterProfile(
   };
   const name = strField(obj, "name");
   if (name) character.name = name;
+  const voiceId = strField(obj, "elevenlabs_voice_id");
+  if (voiceId) character.elevenlabs_voice_id = voiceId;
   passthroughSlots(obj, character);
 
   if (isFreeformSubject(subjectKind)) {

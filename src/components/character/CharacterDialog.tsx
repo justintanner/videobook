@@ -11,9 +11,11 @@ import {
 import { useAnalyzeCharacterImage } from '@/hooks/useAnalyzeCharacterImage';
 import type { UseGenerateCharacterResult, CharacterOutcome } from '@/hooks/useGenerateCharacter';
 import { type CharacterProfile, type CharacterSubjectKind, isFreeformSubject } from '@/hooks/useCharacterSlots';
+import { useElevenLabsVoices } from '@/hooks/useElevenLabsVoices';
 import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { CostBadge } from '@/components/cost/CostBadge';
 import type { UseMcpResult } from 'use-mcp/react';
+import { toast } from '@/hooks/useToast';
 
 const FAL_OUTFIT_ENDPOINT_BY_MODEL: Record<OutfitModelKey, string> = {
   nano_banana_pro: 'fal-ai/nano-banana-pro/edit',
@@ -133,6 +135,14 @@ function emptyProfile(sourceAssetId: string): CharacterProfile {
   };
 }
 
+function profileWithVoiceId(base: CharacterProfile | null, sourceAssetId: string, voiceId: string): CharacterProfile {
+  const next = { ...(base ?? emptyProfile(sourceAssetId)) };
+  const trimmed = voiceId.trim();
+  if (trimmed) next.elevenlabs_voice_id = trimmed;
+  else delete next.elevenlabs_voice_id;
+  return next;
+}
+
 interface CharacterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -144,6 +154,7 @@ interface CharacterDialogProps {
   submitting: boolean;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
+  onProfileSaved?: (profile: CharacterProfile) => void;
 }
 
 export function CharacterDialog({
@@ -157,6 +168,7 @@ export function CharacterDialog({
   submitting,
   callTool,
   callState,
+  onProfileSaved,
 }: CharacterDialogProps) {
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -175,6 +187,7 @@ export function CharacterDialog({
   const [additionalReferenceSlugs, setAdditionalReferenceSlugs] = useState<string[]>([]);
   const [outfitText, setOutfitText] = useState<string>('');
   const [outfitImageSlug, setOutfitImageSlug] = useState<string | null>(null);
+  const [voiceSaving, setVoiceSaving] = useState(false);
 
   const imageChoices = useMemo<ImageChoice[]>(
     () => imageAssets.filter((m) => m.type === 'image').map(mediaItemToChoice),
@@ -195,9 +208,22 @@ export function CharacterDialog({
   const subjectKind: CharacterSubjectKind = profile?.subject_kind ?? 'female';
   const activeFieldGroups = useMemo(() => fieldGroups(subjectKind), [subjectKind]);
   const isFreeform = isFreeformSubject(subjectKind);
+  const selectedVoiceId = profile?.elevenlabs_voice_id ?? '';
 
   const { analyze, loading: analyzing } = useAnalyzeCharacterImage(callTool);
+  const {
+    customVoices,
+    genericVoices,
+    voices,
+    loading: voicesLoading,
+    loaded: voicesLoaded,
+    error: voicesError,
+    warning: voicesWarning,
+    refresh: refreshVoices,
+    ensureLoaded: ensureVoicesLoaded,
+  } = useElevenLabsVoices(callTool, callState);
   const lastAnalyzedRef = useRef<string | null>(null);
+  const voiceSaveSeqRef = useRef(0);
 
   // When the dialog opens with a source, either seed from a supplied profile
   // (re-edit mode) or run vision extraction (new char-* from img-*).
@@ -244,7 +270,7 @@ export function CharacterDialog({
     const kind = profile?.subject_kind ?? 'female';
     const extracted = await analyze(projectSlug, source.assetId, kind);
     if (extracted) {
-      setProfile(extracted);
+      setProfile(profile?.elevenlabs_voice_id ? { ...extracted, elevenlabs_voice_id: profile.elevenlabs_voice_id } : extracted);
     } else {
       setAnalyzeError('Vision extraction failed. Edit the fields manually and click Generate.');
     }
@@ -257,6 +283,45 @@ export function CharacterDialog({
       return [...prev, assetId];
     });
   }, []);
+
+  const handleVoiceChange = useCallback((voiceId: string) => {
+    const nextProfile = profileWithVoiceId(profile, source?.assetId ?? '', voiceId);
+    setProfile(nextProfile);
+    if (!projectSlug || callState !== 'ready' || !source?.assetId.startsWith('char-')) return;
+
+    const seq = voiceSaveSeqRef.current + 1;
+    voiceSaveSeqRef.current = seq;
+    setVoiceSaving(true);
+    void (async () => {
+      try {
+        const res = await callTool('set_character_voice', {
+          project_slug: projectSlug,
+          char_asset_id: source.assetId,
+          elevenlabs_voice_id: voiceId.trim(),
+        });
+        if (seq !== voiceSaveSeqRef.current) return;
+        const content = res.content as Array<{ type: string; text: string }> | undefined;
+        const text = content?.[0]?.text;
+        if (res.isError) {
+          toast({ title: 'Save voice failed', description: text ?? 'set_character_voice failed', duration: 4000 });
+          return;
+        }
+        if (!text) return;
+        const parsed = JSON.parse(text) as { profile?: CharacterProfile };
+        if (parsed.profile) onProfileSaved?.(parsed.profile);
+      } catch (e) {
+        if (seq !== voiceSaveSeqRef.current) return;
+        toast({ title: 'Save voice failed', description: e instanceof Error ? e.message : String(e), duration: 4000 });
+      } finally {
+        if (seq === voiceSaveSeqRef.current) setVoiceSaving(false);
+      }
+    })();
+  }, [profile, source, projectSlug, callState, callTool, onProfileSaved]);
+
+  const currentVoiceMissing = useMemo(() => {
+    if (!selectedVoiceId) return false;
+    return !voices.some((voice) => voice.voice_id === selectedVoiceId);
+  }, [selectedVoiceId, voices]);
 
   const profileComplete = useMemo(() => {
     if (!profile) return false;
@@ -438,6 +503,67 @@ export function CharacterDialog({
                 </button>
               ))}
             </div>
+          </section>
+
+          <section>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70">ElevenLabs voice</div>
+              <button
+                type="button"
+                onClick={() => void refreshVoices()}
+                disabled={callState !== 'ready' || voicesLoading || voiceSaving}
+                title="Refresh voice IDs"
+                className={cn(
+                  'flex items-center justify-center w-6 h-6 rounded border transition-colors',
+                  callState !== 'ready' || voicesLoading || voiceSaving
+                    ? 'border-zinc-700 text-zinc-500 cursor-not-allowed'
+                    : 'border-cyan-500/30 text-cyan-300/80 hover:border-cyan-300 hover:text-cyan-100',
+                )}
+              >
+                {voicesLoading || voiceSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              </button>
+            </div>
+            <select
+              value={selectedVoiceId}
+              disabled={analyzing || voiceSaving}
+              onFocus={() => void ensureVoicesLoaded()}
+              onPointerDown={() => void ensureVoicesLoaded()}
+              onChange={(e) => handleVoiceChange(e.target.value)}
+              className={cn(
+                'w-full bg-black/40 border border-cyan-500/20 rounded px-2 py-1.5 text-[11px] font-mono text-cyan-100',
+                'focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40',
+              )}
+            >
+              <option value="">No voice</option>
+              {(currentVoiceMissing || customVoices.length > 0) && (
+                <optgroup label="Custom">
+                  {currentVoiceMissing && <option value={selectedVoiceId}>{selectedVoiceId} · current</option>}
+                  {customVoices.map((voice) => (
+                    <option key={voice.voice_id} value={voice.voice_id}>
+                      {voice.name} · {voice.voice_id}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {genericVoices.length > 0 && (
+                <optgroup label="Generic">
+                  {genericVoices.map((voice) => (
+                    <option key={voice.voice_id} value={voice.voice_id}>
+                      {voice.name} · {voice.voice_id}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {!voicesLoaded && !voicesLoading && !currentVoiceMissing && customVoices.length === 0 && genericVoices.length === 0 && (
+                <option value="" disabled>Load voice IDs</option>
+              )}
+              {voicesLoading && <option value="" disabled>Loading voice IDs</option>}
+            </select>
+            {(voicesError || voicesWarning) && (
+              <div className="mt-1 text-[9px] font-mono text-amber-300/70">
+                {voicesError ?? voicesWarning}
+              </div>
+            )}
           </section>
 
           <section>

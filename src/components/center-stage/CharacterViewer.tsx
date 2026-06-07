@@ -34,7 +34,7 @@ export interface CharacterViewerProps {
   callState: UseMcpResult['state'];
   onClose: () => void;
   imageAssets: MediaItem[];
-  onEditProfile: (charAssetId: string, profile: CharacterProfile) => void;
+  onEditProfile: (charAssetId: string, profile: CharacterProfile, onProfileSaved?: (profile: CharacterProfile) => void) => void;
 }
 
 export function CharacterViewer({
@@ -108,8 +108,8 @@ export function CharacterViewer({
 
   const handleEditProfile = useCallback(() => {
     if (!slots.profile) return;
-    onEditProfile(item.id, slots.profile);
-  }, [slots.profile, onEditProfile, item.id]);
+    onEditProfile(item.id, slots.profile, slots.refresh);
+  }, [slots.profile, onEditProfile, item.id, slots.refresh]);
 
   const handleUnpin = useCallback(
     (slot: SlotKind, assetId: string) => {
