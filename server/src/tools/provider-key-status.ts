@@ -1,3 +1,4 @@
+import { createElevenLabs, type ElevenLabsUserSubscriptionResponse } from "@apicity/elevenlabs";
 import { createKie } from "@apicity/kie";
 import { createOpenAi } from "@apicity/openai";
 import { createXai } from "@apicity/xai";
@@ -9,6 +10,11 @@ type LookupStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavai
 type Provider = "kie" | "elevenlabs" | "openai" | "xai";
 type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY" | "OPENAI_API_KEY" | "XAI_API_KEY";
 type ProviderLabel = "Kie" | "ElevenLabs" | "OpenAI" | "xAI";
+
+interface CreditLookupResult {
+  value: number;
+  message: string | null;
+}
 
 interface CreditsInfo {
   status: LookupStatus;
@@ -47,7 +53,7 @@ interface ProviderConfig {
   envKey: ProviderEnvKey;
 }
 
-type CreditReader = (apiKey: string) => Promise<number>;
+type CreditReader = (apiKey: string) => Promise<number | CreditLookupResult>;
 type TokenReader = (apiKey: string) => Promise<TokenLookupResult>;
 
 interface TokenLookupResult {
@@ -79,6 +85,31 @@ async function readKieCredits(apiKey: string): Promise<number> {
     throw new Error("Kie credit endpoint did not return a numeric balance");
   }
   return response.data;
+}
+
+function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function formatElevenLabsSubscriptionMessage(subscription: ElevenLabsUserSubscriptionResponse): string {
+  const remaining = formatInteger(subscription.remaining_character_count);
+  const limit = formatInteger(subscription.character_limit);
+  const used = formatInteger(subscription.character_count);
+  return `${subscription.tier} plan: ${remaining} of ${limit} characters remaining (${used} used)`;
+}
+
+async function readElevenLabsCredits(apiKey: string): Promise<CreditLookupResult> {
+  const provider = createElevenLabs({ apiKey, timeout: 30_000 });
+  const subscription = await provider.v1.user.subscription();
+
+  if (!Number.isFinite(subscription.remaining_character_count)) {
+    throw new Error("ElevenLabs subscription endpoint did not return a numeric remaining character count");
+  }
+
+  return {
+    value: subscription.remaining_character_count,
+    message: formatElevenLabsSubscriptionMessage(subscription),
+  };
 }
 
 async function readOpenAiTokens(apiKey: string): Promise<TokenLookupResult> {
@@ -180,6 +211,13 @@ function getConfiguredProviderBase(config: ProviderConfig, apiKey: string): Omit
   };
 }
 
+function normalizeCreditLookupResult(result: number | CreditLookupResult): CreditLookupResult {
+  if (typeof result === "number") {
+    return { value: result, message: null };
+  }
+  return result;
+}
+
 async function getCreditProvider(config: ProviderConfig, readCredits: CreditReader): Promise<ProviderKeyInfo> {
   const apiKey = process.env[config.envKey];
 
@@ -189,15 +227,15 @@ async function getCreditProvider(config: ProviderConfig, readCredits: CreditRead
   const base = getConfiguredProviderBase(config, apiKey);
 
   try {
-    const value = await readCredits(apiKey);
+    const result = normalizeCreditLookupResult(await readCredits(apiKey));
     return {
       ...base,
       credits: {
         status: "ok",
-        value,
+        value: result.value,
         unit: "credits",
         fetchedAt: new Date().toISOString(),
-        message: null,
+        message: result.message,
       },
       tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
     };
@@ -214,19 +252,6 @@ async function getCreditProvider(config: ProviderConfig, readCredits: CreditRead
       tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
     };
   }
-}
-
-function getKeyOnlyProvider(config: ProviderConfig, tokenMessage = "Token lookup is not available for this provider"): ProviderKeyInfo {
-  const apiKey = process.env[config.envKey];
-
-  if (!apiKey) return getMissingProvider(config);
-  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
-
-  return {
-    ...getConfiguredProviderBase(config, apiKey),
-    credits: unavailableCredits("Credit balance is not available for this provider"),
-    tokenLookup: unavailableTokenLookup(tokenMessage),
-  };
 }
 
 async function getTokenProvider(config: ProviderConfig, readTokens: TokenReader): Promise<ProviderKeyInfo> {
@@ -271,6 +296,7 @@ export async function getProviderKeyStatus(
   readKieCreditsFn: CreditReader = readKieCredits,
   readOpenAiTokensFn: TokenReader = readOpenAiTokens,
   readXaiTokensFn: TokenReader = readXaiTokens,
+  readElevenLabsCreditsFn: CreditReader = readElevenLabsCredits,
 ): Promise<ProviderKeyStatusResponse> {
   const kie: ProviderConfig = { provider: "kie", label: "Kie", envKey: "KIE_API_KEY" };
   const elevenlabs: ProviderConfig = { provider: "elevenlabs", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY" };
@@ -279,7 +305,7 @@ export async function getProviderKeyStatus(
 
   const providers = await Promise.all([
     getCreditProvider(kie, readKieCreditsFn),
-    Promise.resolve(getKeyOnlyProvider(elevenlabs)),
+    getCreditProvider(elevenlabs, readElevenLabsCreditsFn),
     getTokenProvider(openai, readOpenAiTokensFn),
     getTokenProvider(xai, readXaiTokensFn),
   ]);
@@ -290,7 +316,7 @@ export async function getProviderKeyStatus(
 export function providerKeyStatusDef(): ToolDef {
   return {
     name: "provider_key_status",
-    description: "List configured provider API keys and live credit balances without exposing secret values",
+    description: "List configured provider API keys, live credit balances, and token lookups without exposing secret values",
     schema: {},
     handler: async () => ({
       content: [{ type: "text" as const, text: JSON.stringify(await getProviderKeyStatus()) }],

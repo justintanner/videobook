@@ -102,12 +102,23 @@ describe("provider key status", () => {
     });
   });
 
-  it("returns key-only status for ElevenLabs with a masked key prefix", async () => {
+  it("returns live credit data for ElevenLabs with a masked key prefix", async () => {
     process.env.KIE_API_KEY = "real-looking-kie-key";
     const apiKey = "real-looking-elevenlabs-key";
     process.env.ELEVENLABS_API_KEY = apiKey;
 
-    const result = await getProviderKeyStatus(async () => 10);
+    const result = await getProviderKeyStatus(
+      async () => 10,
+      async () => ({ value: 7, model: "gpt-test" }),
+      async () => ({ value: 5, model: "grok-test" }),
+      async (key) => {
+        expect(key).toBe(apiKey);
+        return {
+          value: 1234,
+          message: "creator plan: 1,234 of 10,000 characters remaining (8,766 used)",
+        };
+      },
+    );
 
     const json = JSON.stringify(result);
     expect(json).not.toContain(apiKey);
@@ -118,11 +129,10 @@ describe("provider key status", () => {
       keyStatus: "configured",
       maskedKey: "real-l********",
       credits: {
-        status: "unavailable",
-        value: null,
+        status: "ok",
+        value: 1234,
         unit: "credits",
-        fetchedAt: null,
-        message: "Credit balance is not available for this provider",
+        message: "creator plan: 1,234 of 10,000 characters remaining (8,766 used)",
       },
       tokenLookup: {
         status: "unavailable",
@@ -132,6 +142,7 @@ describe("provider key status", () => {
         message: "Token lookup is not available for this provider",
       },
     });
+    expect(result.providers[1].credits.fetchedAt).toEqual(expect.any(String));
   });
 
   it("returns live token lookup status for OpenAI and xAI with masked key prefixes", async () => {

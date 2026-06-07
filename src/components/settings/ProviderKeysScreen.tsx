@@ -74,7 +74,9 @@ function ProviderRow({ provider }: { provider: ProviderKeyInfo }) {
       </div>
 
       <div className="min-w-0">
-        <div className="font-mono text-base font-bold tabular-nums text-foreground truncate">{formatCredits(provider)}</div>
+        <div className="font-mono text-base font-bold tabular-nums text-foreground truncate" title={provider.credits.message ?? undefined}>
+          {formatCredits(provider)}
+        </div>
       </div>
 
       <div className="min-w-0">
