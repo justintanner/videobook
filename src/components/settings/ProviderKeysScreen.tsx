@@ -1,5 +1,6 @@
 import { RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CloseButton } from '@/components/gen/ui/CloseButton';
 import type { ProviderKeyInfo, ProviderKeyStatusResponse } from '@/hooks/useProviderKeyStatus';
 
 interface ProviderKeysScreenProps {
@@ -7,6 +8,7 @@ interface ProviderKeysScreenProps {
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onClose: () => void;
 }
 
 function label(value: string): string {
@@ -94,7 +96,7 @@ function ProviderRow({ provider }: { provider: ProviderKeyInfo }) {
   );
 }
 
-export function ProviderKeysScreen({ data, loading, error, onRefresh }: ProviderKeysScreenProps) {
+export function ProviderKeysScreen({ data, loading, error, onRefresh, onClose }: ProviderKeysScreenProps) {
   const providers = data?.providers ?? [];
 
   return (
@@ -106,20 +108,24 @@ export function ProviderKeysScreen({ data, loading, error, onRefresh }: Provider
       >
         <div className="flex items-center justify-between gap-3 border-b border-primary/25 px-3 py-2 bg-zinc-950/40 shrink-0">
           <div className="font-mono text-base font-bold tracking-widest text-foreground">API KEYS</div>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-wait transition-colors inline-flex items-center gap-2"
-            title="Refresh provider status"
-          >
-            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-            <span className="text-xs font-mono font-bold tracking-[0.18em]">{loading ? 'REFRESHING' : 'REFRESH'}</span>
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden p-3">
-          <div className="h-full min-h-0 border border-border bg-card/70 rounded overflow-hidden flex flex-col">
+        <div className="min-h-0 flex-1 overflow-hidden p-3 flex flex-col gap-2">
+          <div className="shrink-0 flex justify-end">
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading}
+              className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-wait transition-colors inline-flex items-center gap-2"
+              title="Refresh provider status"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              <span className="text-xs font-mono font-bold tracking-[0.18em]">{loading ? 'REFRESHING' : 'REFRESH'}</span>
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 border border-border bg-card/70 rounded overflow-hidden flex flex-col">
             <div className="grid grid-cols-[0.7fr_0.9fr_1.25fr_0.48fr_0.52fr_0.95fr] gap-3 items-center px-3 py-2 border-b border-border/80 bg-zinc-950/40 shrink-0">
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Provider</div>
               <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Environment</div>

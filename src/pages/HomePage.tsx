@@ -400,12 +400,31 @@ export function HomePage() {
     }
   }, [audioReplace, projectSlug, callTool, sync]);
 
+  const resetOpenScreens = useCallback(() => {
+    setStatusOpen(false);
+    setSettingsOpen(false);
+    setTrimAssetId(null);
+    setCropTarget(null);
+    setSelectedItem(null);
+    setViewerFlipped(false);
+    setPendingFilePosition(null);
+    setPendingBackTab(null);
+    setTimelineSlotIndex(null);
+    setGenPanel(null);
+    setCharacterDialog(null);
+    setPostPanel(null);
+    setPlanEmptyOverride(false);
+    setAudioReplace(null);
+    setAudioReplaceSubmitting(false);
+  }, []);
+
   const handleProjectChange = useCallback(async (slug: string) => {
+    resetOpenScreens();
     clearAssets();
     setProjectSlug(slug);
     await switchProject(slug);
     await listAssets(slug, sortOrder);
-  }, [setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
+  }, [resetOpenScreens, setProjectSlug, clearAssets, switchProject, listAssets, sortOrder]);
 
   const handleOpenAsset = useCallback((assetId: string) => {
     const item = mediaItems.find(m => m.id === assetId);
@@ -842,6 +861,7 @@ export function HomePage() {
                     loading={providerKeyStatusLoading}
                     error={providerKeyStatusError}
                     onRefresh={() => { void refreshProviderKeyStatus(); }}
+                    onClose={() => setSettingsOpen(false)}
                   />
                 ) : genPanel != null ? (
                   <GenPreviewPanel
