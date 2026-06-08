@@ -14,7 +14,7 @@ import type { ViewerSize, BackTab } from './viewer-types';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, planResetKey, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -31,6 +31,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
+  planResetKey?: number;
   onClose: () => void;
   imageAssets: MediaItem[];
   mediaItems: MediaItem[];
@@ -76,6 +77,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         mediaItems={mediaItems}
         projectSlug={projectSlug}
         callTool={callTool}
+        resetKey={planResetKey}
         onClose={onClose}
       />
     );

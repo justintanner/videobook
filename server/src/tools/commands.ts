@@ -293,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan",
-    description: "Open the project's active plan with formula tabs for Char Swap, Storyboard, and Clip Show. Singleton per project.",
+    description: "Open the project's Plan template selector for Storyboard and Clip Show. Singleton per project.",
     example: "/plan",
     category: "action",
     icon: "MapPin",

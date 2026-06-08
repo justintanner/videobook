@@ -98,6 +98,7 @@ export function HomePage() {
   } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
+  const [planOpenKey, setPlanOpenKey] = useState(0);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -274,6 +275,7 @@ export function HomePage() {
     () => (planEmptyOverride ? mediaItems.find((m) => m.id === 'plan') ?? null : null),
     [planEmptyOverride, mediaItems],
   );
+  const planCenterStageOpen = !settingsOpen && genPanel == null && (activeSelection?.type === 'plan' || planEmptyOverride);
 
   const handleMarkSeen = useCallback((assetId: string) => {
     if (!projectSlug) return;
@@ -287,6 +289,7 @@ export function HomePage() {
     setGenPanel(null);
     setTimelineSlotIndex(null);
     setPlanEmptyOverride(false);
+    if (item.type === 'plan') setPlanOpenKey((key) => key + 1);
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
@@ -734,6 +737,7 @@ export function HomePage() {
       if (planAsset) {
         handleSelectItem(planAsset);
       } else {
+        setPlanOpenKey((key) => key + 1);
         setSelectedItem(null);
         setGenPanel(null);
         setTimelineSlotIndex(null);
@@ -858,7 +862,7 @@ export function HomePage() {
 
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 p-4 overflow-hidden flex flex-col">
+              <div className={`flex-1 ${planCenterStageOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
                 {settingsOpen ? (
                   <ProviderKeysScreen
                     data={providerKeyStatus}
@@ -895,6 +899,7 @@ export function HomePage() {
                     onSettingsChange={setRenderSettings}
                     callTool={callTool}
                     callState={state}
+                    planResetKey={planOpenKey}
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
                     mediaItems={mediaItems}
@@ -908,6 +913,7 @@ export function HomePage() {
                     mediaItems={mediaItems}
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
+                    resetKey={planOpenKey}
                     onClose={() => setPlanEmptyOverride(false)}
                   />
                 ) : timelineSlotIndex != null ? (

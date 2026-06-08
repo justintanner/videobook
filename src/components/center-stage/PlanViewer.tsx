@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2 } from 'lucide-react';
+import { ArrowLeft, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -158,10 +158,11 @@ interface PlanViewerProps {
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
+  resetKey?: number;
   onClose: () => void;
 }
 
-export function PlanViewer({ item, mediaItems, projectSlug, callTool, onClose }: PlanViewerProps) {
+export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, onClose }: PlanViewerProps) {
   useMountKey('viewer');
   return (
     <PlanBody
@@ -169,6 +170,7 @@ export function PlanViewer({ item, mediaItems, projectSlug, callTool, onClose }:
       mediaItems={mediaItems}
       projectSlug={projectSlug}
       callTool={callTool}
+      resetKey={resetKey}
       onClose={onClose}
     />
   );
@@ -217,21 +219,26 @@ function PlanShell({ title, slug, onClose, children }: {
 // points. 10s = midpoint.
 const APPROX_SCENE_SECONDS = 10;
 
-function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
+function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }: {
   item: MediaItem | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
+  resetKey?: number;
   onClose: () => void;
 }) {
   const { dispatch } = useCommandDispatch();
   const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
-  const [activeFormula, setActiveFormula] = useState<PlanFormula>('char_swap');
+  const [activeFormula, setActiveFormula] = useState<PlanFormula | null>(null);
   const [pendingSource, setPendingSource] = useState<string | null>(null);
   const [pendingCharA, setPendingCharA] = useState<string | null>(null);
   const [pendingCharB, setPendingCharB] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    setActiveFormula(null);
+  }, [resetKey]);
 
   // Load read_plan on mount / when the plan asset changes. A read failure here
   // means "no plan yet" — we keep sidecar=null and the slot UI takes over.
@@ -249,7 +256,6 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
         const parsed: AnyPlanSidecar = JSON.parse(text);
         setSidecar(parsed);
-        setActiveFormula(planFormula(parsed) ?? 'char_swap');
         setPendingSource(null);
         setPendingCharA(null);
         setPendingCharB(null);
@@ -330,9 +336,13 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
-  const title = activeFormula === 'clip_show'
+  const title = activeFormula == null
+    ? 'PLAN'
+    : activeFormula === 'clip_show'
     ? 'PLAN: CLIP SHOW'
     : activeFormula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
+  const showSelector = activeFormula == null;
+  const backToTemplates = useCallback(() => setActiveFormula(null), []);
 
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
@@ -340,13 +350,13 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
         className="flex-1 overflow-y-auto scrollbar-domain"
         style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
       >
-        <div className="max-w-3xl mx-auto px-6 py-6">
-          <PlanFormulaTabs
-            activeFormula={activeFormula}
-            currentFormula={currentFormula}
-            onSelect={setActiveFormula}
-          />
-          {activeFormula === 'char_swap' ? (
+        <div className="w-full px-4 sm:px-6 py-5">
+          {showSelector ? (
+            <PlanTemplateSelector
+              currentFormula={currentFormula}
+              onSelect={setActiveFormula}
+            />
+          ) : activeFormula === 'char_swap' ? (
             <>
               <PlanHeader
                 sourceId={sourceId}
@@ -362,6 +372,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
                 onCharADrop={setPendingCharA}
                 onCharBDrop={setPendingCharB}
                 onGenerate={() => { void handleGenerate(); }}
+                onBack={backToTemplates}
               />
               {charSidecar && (
                 <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
@@ -394,6 +405,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
               projectSlug={projectSlug}
               callTool={callTool}
               onSidecarUpdate={(next) => setSidecar(next)}
+              onBack={backToTemplates}
             />
           ) : (
             <ClipShowPlanFormula
@@ -402,6 +414,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
               projectSlug={projectSlug}
               callTool={callTool}
               onSidecarUpdate={(next) => setSidecar(next)}
+              onBack={backToTemplates}
             />
           )}
         </div>
@@ -410,38 +423,104 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
   );
 }
 
-function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
-  activeFormula: PlanFormula;
+function PlanBackButton({ onBack }: {
+  onBack: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      title="Back to templates"
+      className={cn(
+        'h-8 px-2.5 flex items-center gap-1.5 rounded',
+        'text-[10px] font-mono font-bold uppercase tracking-wider',
+        'text-emerald-300/65 hover:text-emerald-200',
+        'bg-zinc-950/60 hover:bg-emerald-500/10 border border-zinc-700/70 hover:border-emerald-500/50',
+        'transition-colors duration-150',
+      )}
+    >
+      <ArrowLeft className="w-3.5 h-3.5" />
+      Templates
+    </button>
+  );
+}
+
+function PlanTemplateSelector({ currentFormula, onSelect }: {
   currentFormula: PlanFormula | null;
   onSelect: (formula: PlanFormula) => void;
 }) {
-  const formulas: Array<{ id: PlanFormula; label: string; icon: React.ReactNode }> = [
-    { id: 'char_swap', label: 'Char Swap', icon: <MapPin className="w-3 h-3" /> },
-    { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-3 h-3" /> },
-    { id: 'clip_show', label: 'Clip Show', icon: <Mic className="w-3 h-3" /> },
+  const templates: Array<{ id: Exclude<PlanFormula, 'char_swap'>; label: string; icon: React.ReactNode; meta: string }> = [
+    { id: 'clip_show', label: 'Clip Show', icon: <Mic className="w-4 h-4" />, meta: 'char-* + vid-*' },
+    { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-4 h-4" />, meta: 'img-*' },
   ];
   return (
-    <div className="mb-5 flex items-center gap-2 border-b border-zinc-800/70">
-      {formulas.map((formula) => (
+    <div className="min-h-full flex flex-col">
+      <div className="mb-5 pb-4 border-b border-zinc-800/70">
+        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/45">Plan</div>
+        <h1 className="mt-1 text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Templates</h1>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        {templates.map((template) => {
+          const isCurrent = currentFormula === template.id;
+          return (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() => onSelect(template.id)}
+              className={cn(
+                'min-h-32 p-4 rounded border text-left transition-colors',
+                'bg-zinc-950/50 hover:bg-emerald-500/10',
+                isCurrent ? 'border-emerald-500/65' : 'border-zinc-800/75 hover:border-emerald-500/50',
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={cn(
+                    'w-8 h-8 rounded border flex items-center justify-center shrink-0',
+                    isCurrent ? 'border-emerald-500/70 text-emerald-200 bg-emerald-500/15' : 'border-zinc-700/80 text-emerald-300/65 bg-black/35',
+                  )}>
+                    {template.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-mono font-bold uppercase tracking-wider text-emerald-200 truncate">{template.label}</span>
+                    <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-emerald-300/40 truncate">{template.meta}</span>
+                  </span>
+                </div>
+                {isCurrent && (
+                  <span className="shrink-0 h-5 px-2 rounded border border-emerald-500/40 bg-emerald-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-200/80">
+                    Current
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {currentFormula === 'char_swap' && (
         <button
-          key={formula.id}
           type="button"
-          onClick={() => onSelect(formula.id)}
+          onClick={() => onSelect('char_swap')}
           className={cn(
-            'h-8 px-3 flex items-center gap-1.5 border-b-2',
-            'text-[11px] font-mono font-bold uppercase tracking-wider transition-colors',
-            activeFormula === formula.id
-              ? 'border-emerald-400 text-emerald-300'
-              : 'border-transparent text-emerald-300/40 hover:text-emerald-300/70',
+            'mt-4 w-full min-h-20 p-4 rounded border text-left transition-colors',
+            'bg-zinc-950/40 hover:bg-emerald-500/10 border-zinc-800/75 hover:border-emerald-500/45',
           )}
         >
-          {formula.icon}
-          {formula.label}
-          {currentFormula === formula.id && (
-            <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-300/70" />
-          )}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-8 h-8 rounded border border-zinc-700/80 flex items-center justify-center shrink-0 text-emerald-300/55 bg-black/35">
+                <MapPin className="w-4 h-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-mono font-bold uppercase tracking-wider text-emerald-200 truncate">Legacy Plan</span>
+                <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-emerald-300/35 truncate">char swap</span>
+              </span>
+            </div>
+            <span className="shrink-0 h-5 px-2 rounded border border-emerald-500/35 bg-emerald-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-200/70">
+              Current
+            </span>
+          </div>
         </button>
-      ))}
+      )}
     </div>
   );
 }
@@ -499,12 +578,13 @@ function buildStoryboardVideoPayload(
   };
 }
 
-function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate, onBack }: {
   sidecar: StoryboardVideoPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
+  onBack: () => void;
 }) {
   const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(sidecar));
   const [storyboardBrief, setStoryboardBrief] = useState(() => sidecar?.storyboard_brief ?? '');
@@ -804,7 +884,10 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     <div className="space-y-5">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: storyboard</h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <PlanBackButton onBack={onBack} />
+            <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: storyboard</h1>
+          </div>
           <button
             type="button"
             onClick={() => { if (sourceImageIds.length > 0) void savePlan(sourceImageIds); }}
@@ -979,12 +1062,13 @@ function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
   ].join('|');
 }
 
-function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate, onBack }: {
   sidecar: ClipShowPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
+  onBack: () => void;
 }) {
   const [characterId, setCharacterId] = useState(() => sidecar?.character.asset_id ?? '');
   const [clipIds, setClipIds] = useState<string[]>(() => sidecar?.clip_asset_ids ?? []);
@@ -1063,7 +1147,10 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
     <div className="space-y-5">
       <div className="mb-6 pb-4 border-b border-zinc-800/60">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: clip show</h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <PlanBackButton onBack={onBack} />
+            <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: clip show</h1>
+          </div>
           <button
             type="button"
             onClick={() => { void handleGeneratePlan(); }}
@@ -4081,7 +4168,7 @@ function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   );
 }
 
-function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, duration, scenesCount, canGenerate, generating, onSourceDrop, onCharADrop, onCharBDrop, onGenerate }: {
+function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, duration, scenesCount, canGenerate, generating, onSourceDrop, onCharADrop, onCharBDrop, onGenerate, onBack }: {
   sourceId: string | null;
   charAId: string | null;
   charBId: string | null;
@@ -4095,6 +4182,7 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, dura
   onCharADrop: (id: string) => void;
   onCharBDrop: (id: string) => void;
   onGenerate: () => void;
+  onBack: () => void;
 }) {
   const sourceItem = sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null;
   const charAItem = charAId ? mediaItems.find((m) => m.id === charAId) ?? null : null;
@@ -4102,7 +4190,10 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, dura
   return (
     <div className="mb-6 pb-4 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-3 gap-3">
-        <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: char swap</h1>
+        <div className="flex items-center gap-2 min-w-0">
+          <PlanBackButton onBack={onBack} />
+          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: char swap</h1>
+        </div>
         <button
           type="button"
           onClick={onGenerate}
