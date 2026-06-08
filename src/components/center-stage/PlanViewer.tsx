@@ -183,8 +183,8 @@ function PlanShell({ title, slug, onClose, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex-1 flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full relative">
+    <div className="flex-1 min-w-0 flex items-center justify-center overflow-hidden">
+      <div className="w-full h-full min-w-0 relative">
         <div className="absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
           <ViewerToolbar
             left={
@@ -205,7 +205,7 @@ function PlanShell({ title, slug, onClose, children }: {
               </button>
             }
           />
-          <div className="flex-1 bg-black flex flex-col min-h-0 relative">
+          <div className="flex-1 min-w-0 bg-black flex flex-col min-h-0 relative">
             {children}
           </div>
         </div>
@@ -235,10 +235,15 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
   const [pendingCharB, setPendingCharB] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setActiveFormula(null);
   }, [resetKey]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [activeFormula, resetKey]);
 
   // Load read_plan on mount / when the plan asset changes. A read failure here
   // means "no plan yet" — we keep sidecar=null and the slot UI takes over.
@@ -347,10 +352,11 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
       <div
-        className="flex-1 overflow-y-auto scrollbar-domain"
+        ref={scrollRef}
+        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-domain"
         style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
       >
-        <div className="w-full px-4 sm:px-6 py-5">
+        <div className="w-full min-w-0 px-4 sm:px-6 py-5">
           {showSelector ? (
             <PlanTemplateSelector
               currentFormula={currentFormula}
@@ -1403,8 +1409,8 @@ function ClipShowAudioSlot({ state, assetId, generating, disabled, disabledReaso
       onDrop={handleDrop}
     >
       {state.kind === 'ready' ? (
-        <div className="space-y-2">
-          <audio controls src={state.src} className="w-full h-8" />
+        <div className="min-w-0 space-y-2">
+          <audio controls src={state.src} className="w-full min-w-0 h-8" />
           <button
             type="button"
             onClick={onGenerate}
@@ -1625,7 +1631,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
   const clipSrc = clipItem?.thumbnailSrc ?? null;
 
   return (
-    <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+    <section className="min-w-0 border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
       <header className="flex items-center justify-between gap-3 px-3 py-2 border-b border-zinc-800/60 bg-black/40">
         <div className="min-w-0 flex items-center gap-2 text-xs font-mono">
           <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">{index + 1}</span>
@@ -1634,9 +1640,9 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
         </div>
         <div className="text-[10px] font-mono text-emerald-300/45">GPT-5.5</div>
       </header>
-      <div className="p-3 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-[12rem_1fr] gap-3">
-          <div className="space-y-2">
+      <div className="min-w-0 p-3 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-[12rem_minmax(0,1fr)] gap-3">
+          <div className="min-w-0 space-y-2">
             <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
               <div className="h-28 flex items-center justify-center">
                 {clipSrc ? <img src={clipSrc} alt={clipItem?.slug ?? segment.clip_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-5 h-5 text-emerald-300/35" />}
@@ -1649,14 +1655,14 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
               <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog</span>
               <PromptEditor value={dialog} onChange={setDialog} mediaItems={mediaItems} projectSlug={projectSlug} />
             </label>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
+              <div className="min-w-0">
                 <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Joke notes</div>
                 <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
                   {segment.joke_notes}
                 </div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Quality notes</div>
                 <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
                   {segment.quality_notes}
@@ -1666,8 +1672,8 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <div>
+        <div className="grid grid-cols-1 lg:grid-cols-[repeat(3,minmax(0,1fr))] gap-3">
+          <div className="min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">1 Audio</div>
               <button
@@ -1691,7 +1697,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
               onReplace={(assetId) => { void handleAudioReplace(assetId); }}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">2 First frame</div>
               <button
@@ -1717,7 +1723,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
               onRegen={() => { void handleGenerateFrame(); }}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">3 Seedance video</div>
               <button
@@ -1746,7 +1752,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
           <label className="min-w-0">
             <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">First-frame prompt</span>
             <PromptEditor value={firstFramePrompt} onChange={setFirstFramePrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
