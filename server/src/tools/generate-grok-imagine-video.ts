@@ -1,5 +1,6 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import { findAudioFile } from "vc-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokVideo15AspectRatioSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -30,10 +31,26 @@ const generateGrokImagineVideoSchema = {
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
   aspect_ratio: z.enum(GrokVideo15AspectRatioSchema.options).optional().describe("Output aspect ratio"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
+  replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug). Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
+
+type RefAudioInput = {
+  assetId: string;
+  filename: string;
+};
+
+async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<{ ok: true; value: RefAudioInput } | { ok: false; error: string }> {
+  const assetId = raw.replace(/^@/, "").trim();
+  if (!assetId.startsWith("aud-")) return { ok: false, error: `replace_audio_with must be an aud-* asset, got: ${assetId}` };
+  const manifest = await fs.getManifest(assetId, projectSlug);
+  if (!manifest.ok) return { ok: false, error: manifest.error.message };
+  const file = findAudioFile(manifest.value.files, assetId);
+  if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
+  return { ok: true, value: { assetId, filename: file.name } };
+}
 
 export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
@@ -41,7 +58,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5 Preview. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, duration, resolution, aspect_ratio, nsfw_checker, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -99,6 +116,18 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         imageFilenames.push(imageFile.name);
       }
 
+      let replaceAudioWith: RefAudioInput | undefined;
+      if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
+        const resolvedAudio = await resolveAudioSlug(fs, replace_audio_with, project_slug);
+        if (!resolvedAudio.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: resolvedAudio.error }],
+          };
+        }
+        replaceAudioWith = resolvedAudio.value;
+      }
+
       const videoName = deriveVideoName(assetIds[0]);
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -124,6 +153,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
+        ...(replaceAudioWith !== undefined ? { replaceAudioWith } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
@@ -133,6 +163,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
           text: JSON.stringify({
             vid_asset_id: vidAssetId,
             source_images: assetIds,
+            ...(replaceAudioWith ? { replace_audio_with: replaceAudioWith.assetId } : {}),
             job_id: jobId,
             status: "enqueued",
           }),

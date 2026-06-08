@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images } from 'lucide-react';
+import { Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -52,7 +52,7 @@ interface PlanSidecar {
   word_count?: number;
 }
 
-type PlanFormula = 'char_swap' | 'storyboard_video';
+type PlanFormula = 'char_swap' | 'storyboard_video' | 'clip_show';
 
 interface StoryboardVideoPlanSidecar {
   formula: 'storyboard_video';
@@ -77,15 +77,62 @@ interface StoryboardVideoPlanSidecar {
   total_duration_s: number;
 }
 
-type AnyPlanSidecar = PlanSidecar | StoryboardVideoPlanSidecar;
+type ClipShowPlacement = 'before' | 'after' | 'both';
+
+interface ClipShowCharacter {
+  asset_id: string;
+  name: string;
+  description: string;
+  elevenlabs_voice_id: string;
+}
+
+interface ClipShowSegment {
+  clip_asset_id: string;
+  clip_summary: string;
+  placement: ClipShowPlacement;
+  intro_dialog: string;
+  outro_dialog: string;
+  dialog: string;
+  joke_notes: string;
+  quality_notes: string;
+  first_frame_prompt: string;
+  video_prompt: string;
+  audio_asset_id?: string | null;
+  first_frame_asset_id?: string | null;
+  video_asset_id?: string | null;
+}
+
+interface ClipShowPlanSidecar {
+  formula: 'clip_show';
+  character: ClipShowCharacter;
+  clip_asset_ids: string[];
+  show_brief: string;
+  tone: string;
+  model: 'gpt-5.5';
+  audio_model: 'elevenlabs';
+  first_frame_model: 'generate_gpt_image';
+  video_model: 'generate_seedance2_video';
+  video_resolution: '720p';
+  video_aspect_ratio: '16:9';
+  video_duration_s: number;
+  total_duration_s: number;
+  segments: ClipShowSegment[];
+}
+
+type AnyPlanSidecar = PlanSidecar | StoryboardVideoPlanSidecar | ClipShowPlanSidecar;
 
 function planFormula(sidecar: AnyPlanSidecar | null): PlanFormula | null {
   if (!sidecar) return null;
+  if (sidecar.formula === 'clip_show') return 'clip_show';
   return sidecar.formula === 'storyboard_video' ? 'storyboard_video' : 'char_swap';
 }
 
 function isStoryboardVideoPlan(sidecar: AnyPlanSidecar | null): sidecar is StoryboardVideoPlanSidecar {
   return sidecar?.formula === 'storyboard_video';
+}
+
+function isClipShowPlan(sidecar: AnyPlanSidecar | null): sidecar is ClipShowPlanSidecar {
+  return sidecar?.formula === 'clip_show';
 }
 
 function storyboardSourceImageIds(sidecar: StoryboardVideoPlanSidecar | null): string[] {
@@ -215,6 +262,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   const charSidecar = planFormula(sidecar) === 'char_swap' ? sidecar as PlanSidecar : null;
   const storyboardVideoSidecar = isStoryboardVideoPlan(sidecar) ? sidecar : null;
+  const clipShowSidecar = isClipShowPlan(sidecar) ? sidecar : null;
 
   // Effective slot values: pending wins, else fall back to sidecar.
   const sourceId = pendingSource ?? charSidecar?.source_asset_id ?? null;
@@ -282,7 +330,9 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
 
   const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
-  const title = activeFormula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
+  const title = activeFormula === 'clip_show'
+    ? 'PLAN: CLIP SHOW'
+    : activeFormula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
 
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
@@ -337,9 +387,17 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, onClose }: {
                 />
               )}
             </>
-          ) : (
+          ) : activeFormula === 'storyboard_video' ? (
             <StoryboardVideoPlanFormula
               sidecar={storyboardVideoSidecar}
+              mediaItems={mediaItems}
+              projectSlug={projectSlug}
+              callTool={callTool}
+              onSidecarUpdate={(next) => setSidecar(next)}
+            />
+          ) : (
+            <ClipShowPlanFormula
+              sidecar={clipShowSidecar}
               mediaItems={mediaItems}
               projectSlug={projectSlug}
               callTool={callTool}
@@ -360,6 +418,7 @@ function PlanFormulaTabs({ activeFormula, currentFormula, onSelect }: {
   const formulas: Array<{ id: PlanFormula; label: string; icon: React.ReactNode }> = [
     { id: 'char_swap', label: 'Char Swap', icon: <MapPin className="w-3 h-3" /> },
     { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-3 h-3" /> },
+    { id: 'clip_show', label: 'Clip Show', icon: <Mic className="w-3 h-3" /> },
   ];
   return (
     <div className="mb-5 flex items-center gap-2 border-b border-zinc-800/70">
@@ -874,6 +933,744 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         </div>
       </section>
     </div>
+  );
+}
+
+type AudioTileState =
+  | { kind: 'idle' }
+  | { kind: 'generating' }
+  | { kind: 'ready'; src: string }
+  | { kind: 'error'; message: string };
+
+function deriveClipShowAudioState(assetId: string | null | undefined, mediaItems: MediaItem[], projectSlug: string): AudioTileState {
+  if (!assetId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === assetId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'audio gen failed' };
+  if (item.status === 'ready') return { kind: 'ready', src: item.filePath || `/files/${projectSlug}/${assetId}/original.mp3` };
+  return { kind: 'generating' };
+}
+
+function deriveClipShowVideoState(assetId: string | null | undefined, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
+  if (!assetId) return { kind: 'idle' };
+  const item = mediaItems.find((m) => m.id === assetId);
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
+  if (item.status === 'ready') return { kind: 'ready', src: `/files/${projectSlug}/${assetId}/original.mp4` };
+  return { kind: 'generating', label: item.status === 'replacing-audio' ? 'splicing audio...' : 'generating...' };
+}
+
+function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
+  if (!sidecar) return '';
+  return [
+    sidecar.character.asset_id,
+    sidecar.clip_asset_ids.join(','),
+    sidecar.show_brief,
+    sidecar.tone,
+    sidecar.segments.map((s) => [
+      s.clip_asset_id,
+      s.dialog,
+      s.first_frame_prompt,
+      s.video_prompt,
+      s.audio_asset_id ?? '',
+      s.first_frame_asset_id ?? '',
+      s.video_asset_id ?? '',
+    ].join(':')).join('|'),
+  ].join('|');
+}
+
+function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+  sidecar: ClipShowPlanSidecar | null;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+  onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
+}) {
+  const [characterId, setCharacterId] = useState(() => sidecar?.character.asset_id ?? '');
+  const [clipIds, setClipIds] = useState<string[]>(() => sidecar?.clip_asset_ids ?? []);
+  const [showBrief, setShowBrief] = useState(() => sidecar?.show_brief ?? '');
+  const [tone, setTone] = useState(() => sidecar?.tone ?? 'sharp, playful, punchy, not mean');
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const sidecarKey = clipShowSidecarKey(sidecar);
+
+  useEffect(() => {
+    if (!sidecar) return;
+    setCharacterId(sidecar.character.asset_id);
+    setClipIds(sidecar.clip_asset_ids);
+    setShowBrief(sidecar.show_brief);
+    setTone(sidecar.tone);
+  }, [sidecar, sidecarKey]);
+
+  const characterItem = useMemo(
+    () => (characterId ? mediaItems.find((m) => m.id === characterId) ?? null : null),
+    [characterId, mediaItems],
+  );
+  const clipItems = useMemo(
+    () => clipIds.map((id) => ({ id, item: mediaItems.find((m) => m.id === id) ?? null })),
+    [clipIds, mediaItems],
+  );
+
+  const handleCharacterDrop = useCallback((assetId: string) => {
+    if (!assetId.startsWith('char-')) {
+      toast({ title: 'Wrong asset type', description: `Drop a char-* host, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setCharacterId(assetId);
+  }, []);
+
+  const handleClipDrop = useCallback((assetId: string) => {
+    if (!assetId.startsWith('vid-')) {
+      toast({ title: 'Wrong asset type', description: `Drop vid-* clips, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setClipIds((prev) => (prev.includes(assetId) ? prev : [...prev, assetId]));
+  }, []);
+
+  const handleClipRemove = useCallback((assetId: string) => {
+    setClipIds((prev) => prev.filter((id) => id !== assetId));
+  }, []);
+
+  const canGeneratePlan = characterId.length > 0 && clipIds.length > 0 && !generatingPlan;
+
+  const handleGeneratePlan = useCallback(async () => {
+    if (!canGeneratePlan) return;
+    setGeneratingPlan(true);
+    try {
+      const result = await callTool('plan_clip_show', {
+        project_slug: projectSlug,
+        character_asset_id: characterId,
+        clip_asset_ids: clipIds,
+        show_brief: showBrief,
+        tone,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Clip Show plan failed';
+        toast({ title: 'Clip Show failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+      if (!parsed.sidecar) return;
+      onSidecarUpdate(parsed.sidecar);
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Clip Show planned', description: `${parsed.sidecar.segments.length} segment${parsed.sidecar.segments.length === 1 ? '' : 's'}`, duration: 2500 });
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }, [canGeneratePlan, callTool, projectSlug, characterId, clipIds, showBrief, tone, onSidecarUpdate]);
+
+  return (
+    <div className="space-y-5">
+      <div className="mb-6 pb-4 border-b border-zinc-800/60">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Plan: clip show</h1>
+          <button
+            type="button"
+            onClick={() => { void handleGeneratePlan(); }}
+            disabled={!canGeneratePlan}
+            title={canGeneratePlan ? 'Generate Clip Show plan with GPT-5.5' : 'Drop a host character and at least one clip'}
+            className={cn(
+              'h-8 px-3 flex items-center gap-1.5 rounded',
+              'text-xs font-mono font-bold uppercase tracking-wider',
+              'text-emerald-300 hover:text-white',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
+              'transition-colors duration-150',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
+            )}
+          >
+            {generatingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
+            {generatingPlan ? 'Planning...' : 'Generate Plan'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-3">
+          <ClipShowCharacterDropZone
+            item={characterItem}
+            assetId={characterId || null}
+            onDropAsset={handleCharacterDrop}
+          />
+          <ClipShowClipsDropZone
+            clips={clipItems}
+            onDropClip={handleClipDrop}
+            onRemoveClip={handleClipRemove}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
+          <label className="min-w-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Show brief</span>
+            <textarea
+              value={showBrief}
+              onChange={(e) => setShowBrief(e.target.value)}
+              rows={3}
+              placeholder="Late-night host reacts to each clip with dry, visual jokes..."
+              className={cn(
+                'w-full min-h-[4.75rem] p-2 rounded bg-black/60 border border-zinc-700',
+                'text-[11px] font-mono text-emerald-300/90 resize-y',
+                'focus:outline-none focus:border-emerald-500/60',
+                'placeholder:text-emerald-300/30',
+              )}
+            />
+          </label>
+          <label className="min-w-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Tone</span>
+            <textarea
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              rows={3}
+              className={cn(
+                'w-full min-h-[4.75rem] p-2 rounded bg-black/60 border border-zinc-700',
+                'text-[11px] font-mono text-emerald-300/90 resize-y',
+                'focus:outline-none focus:border-emerald-500/60',
+              )}
+            />
+          </label>
+        </div>
+      </div>
+
+      {sidecar ? (
+        <div className="space-y-4">
+          {sidecar.segments.map((segment, index) => (
+            <ClipShowSegmentBlock
+              key={`${segment.clip_asset_id}-${index}`}
+              sidecar={sidecar}
+              segment={segment}
+              index={index}
+              mediaItems={mediaItems}
+              projectSlug={projectSlug}
+              callTool={callTool}
+              onSidecarUpdate={onSidecarUpdate}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded border border-zinc-800/60 bg-zinc-950/40 p-5 text-center">
+          <Mic className="w-6 h-6 mx-auto mb-2 text-emerald-300/40" />
+          <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-300/45">
+            drop a voiced char-* host and vid-* clips
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClipShowCharacterDropZone({ item, assetId, onDropAsset }: {
+  item: MediaItem | null;
+  assetId: string | null;
+  onDropAsset: (assetId: string) => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      if (typeof payload.id === 'string') onDropAsset(payload.id);
+    } catch {
+      return;
+    }
+  };
+  const src = item?.thumbnailSrc ?? item?.filePath ?? null;
+  return (
+    <div
+      className={cn(
+        'rounded border border-dashed p-3 transition-colors bg-zinc-950/40',
+        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70',
+      )}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-2">Host character</div>
+      <div className="h-32 rounded bg-black/35 border border-zinc-800/70 flex items-center justify-center overflow-hidden">
+        {src ? (
+          <img src={src} alt={item?.slug ?? assetId ?? 'host'} className="w-full h-full object-contain" loading="lazy" />
+        ) : (
+          <Mic className="w-5 h-5 text-emerald-300/35" />
+        )}
+      </div>
+      <div className="mt-2 text-[10px] font-mono text-emerald-200/75 truncate">
+        {item?.slug ?? (assetId ? `@${assetId}` : 'drop char-* host')}
+      </div>
+    </div>
+  );
+}
+
+function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
+  clips: Array<{ id: string; item: MediaItem | null }>;
+  onDropClip: (assetId: string) => void;
+  onRemoveClip: (assetId: string) => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      if (typeof payload.id === 'string') onDropClip(payload.id);
+    } catch {
+      return;
+    }
+  };
+  return (
+    <div
+      className={cn(
+        'rounded border border-dashed p-3 transition-colors bg-zinc-950/40',
+        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70',
+      )}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">Video clips</div>
+        <div className="text-[10px] font-mono text-emerald-300/40">{clips.length > 0 ? `${clips.length} clip${clips.length === 1 ? '' : 's'}` : 'drop vid-* clips'}</div>
+      </div>
+      {clips.length === 0 ? (
+        <div className="h-32 rounded bg-black/35 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
+          <Film className="w-5 h-5 text-emerald-300/35" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop clips here</span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {clips.map(({ id, item }, index) => {
+            const src = item?.thumbnailSrc ?? null;
+            return (
+              <div key={id} className="group relative w-32 rounded border border-zinc-700/60 bg-zinc-900 overflow-hidden">
+                <div className="h-20 bg-black/40 flex items-center justify-center">
+                  {src ? <img src={src} alt={item?.slug ?? id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-4 h-4 text-emerald-300/40" />}
+                </div>
+                <div className="px-1.5 py-1">
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/45">Clip {index + 1}</div>
+                  <div className="text-[10px] font-mono text-emerald-200/75 truncate">{item?.slug ?? `@${id}`}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveClip(id)}
+                  title="Remove clip"
+                  className={cn(
+                    'absolute top-1 right-1 h-5 w-5 rounded border border-zinc-700/70 bg-black/80',
+                    'items-center justify-center text-emerald-300/60 hover:text-white hover:border-red-300/70 hover:bg-red-500/25',
+                    'hidden group-hover:flex',
+                  )}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
+          <div className="w-32 rounded border border-dashed border-zinc-700/70 bg-black/25 flex flex-col items-center justify-center gap-1 text-center px-2">
+            <Film className="w-4 h-4 text-emerald-300/30" />
+            <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">drop to add</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClipShowAudioSlot({ state, assetId, generating, disabled, disabledReason, onGenerate, onReplace }: {
+  state: AudioTileState;
+  assetId: string | null;
+  generating: boolean;
+  disabled: boolean;
+  disabledReason?: string;
+  onGenerate: () => void;
+  onReplace: (assetId: string) => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const showSpinner = generating || state.kind === 'generating';
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const droppedId = payload.id;
+      if (typeof droppedId !== 'string') return;
+      if (!droppedId.startsWith('aud-')) {
+        toast({ title: 'Not an audio asset', description: `${droppedId} is not an aud-* asset.`, duration: 3000 });
+        return;
+      }
+      if (droppedId === assetId) return;
+      onReplace(droppedId);
+    } catch {
+      return;
+    }
+  };
+  return (
+    <div
+      className={cn(
+        'relative rounded border bg-zinc-950/60 min-h-[6.5rem] p-3 flex flex-col justify-center transition-colors',
+        dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
+      )}
+      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+      onDrop={handleDrop}
+    >
+      {state.kind === 'ready' ? (
+        <div className="space-y-2">
+          <audio controls src={state.src} className="w-full h-8" />
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={disabled || generating}
+            title="Regenerate ElevenLabs audio"
+            className={cn(
+              'h-6 px-2 flex items-center gap-1 rounded',
+              'text-[10px] font-mono uppercase tracking-wider',
+              'text-emerald-300/80 hover:text-emerald-300',
+              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
+            )}
+          >
+            <RefreshCw className="w-3 h-3" />
+            Regen
+          </button>
+        </div>
+      ) : state.kind === 'error' ? (
+        <div className="flex flex-col items-center justify-center gap-1.5 text-center">
+          <span className="text-[10px] font-mono text-red-200/90 line-clamp-2">{state.message}</span>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={disabled}
+            title="Retry ElevenLabs audio"
+            className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-red-50 bg-red-500/30 hover:bg-red-500/50 border border-red-300/50"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Retry
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={disabled || showSpinner}
+          title={disabled ? disabledReason : 'Generate ElevenLabs audio'}
+          className="min-h-[5rem] flex flex-col items-center justify-center gap-1.5 hover:bg-emerald-500/5 rounded transition-colors disabled:cursor-not-allowed"
+        >
+          {showSpinner ? <Loader2 className="w-5 h-5 animate-spin text-emerald-300/80" /> : <Volume2 className="w-5 h-5 text-emerald-400/50" />}
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/50 px-3 text-center">
+            {showSpinner ? 'generating audio...' : 'generate or drop audio'}
+          </span>
+        </button>
+      )}
+      {dragActive && (
+        <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop audio</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+  sidecar: ClipShowPlanSidecar;
+  segment: ClipShowSegment;
+  index: number;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+  onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
+}) {
+  const [dialog, setDialog] = useState(segment.dialog);
+  const [firstFramePrompt, setFirstFramePrompt] = useState(segment.first_frame_prompt);
+  const [videoPrompt, setVideoPrompt] = useState(segment.video_prompt);
+  const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [generatingFrame, setGeneratingFrame] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const outputAspect = useMemo(() => sourceAspectFromDimensions(16, 9), []);
+  const clipItem = useMemo(
+    () => mediaItems.find((m) => m.id === segment.clip_asset_id) ?? null,
+    [mediaItems, segment.clip_asset_id],
+  );
+  const audioState = useMemo(
+    () => deriveClipShowAudioState(segment.audio_asset_id, mediaItems, projectSlug),
+    [segment.audio_asset_id, mediaItems, projectSlug],
+  );
+  const frameState = useMemo(
+    () => deriveStoryboardTileState(segment.first_frame_asset_id, mediaItems),
+    [segment.first_frame_asset_id, mediaItems],
+  );
+  const videoState = useMemo(
+    () => deriveClipShowVideoState(segment.video_asset_id, mediaItems, projectSlug),
+    [segment.video_asset_id, mediaItems, projectSlug],
+  );
+
+  useEffect(() => {
+    setDialog(segment.dialog);
+    setFirstFramePrompt(segment.first_frame_prompt);
+    setVideoPrompt(segment.video_prompt);
+  }, [segment.dialog, segment.first_frame_prompt, segment.video_prompt]);
+
+  const replaceSegment = useCallback(async (patch: Record<string, unknown>) => {
+    const result = await callTool('replace_plan_clip_show_asset', {
+      project_slug: projectSlug,
+      segment_index: index,
+      dialog,
+      first_frame_prompt: firstFramePrompt,
+      video_prompt: videoPrompt,
+      ...patch,
+    });
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan update failed';
+      toast({ title: 'Clip Show update failed', description: msg, duration: 5000 });
+      return null;
+    }
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+    if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    return parsed.sidecar ?? null;
+  }, [callTool, projectSlug, index, dialog, firstFramePrompt, videoPrompt, onSidecarUpdate]);
+
+  const handleGenerateAudio = useCallback(async () => {
+    if (!dialog.trim()) return;
+    setGeneratingAudio(true);
+    try {
+      const saved = await replaceSegment({});
+      if (!saved) return;
+      const result = await callTool('generate_elevenlabs_t2a', {
+        project_slug: projectSlug,
+        character_asset_id: sidecar.character.asset_id,
+        text: dialog.trim(),
+        asset_name: `clip-show-s${index + 1}`,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'ElevenLabs generation failed';
+        toast({ title: 'Audio generation failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { aud_asset_id?: string };
+      if (parsed.aud_asset_id) await replaceSegment({ audio_asset_id: parsed.aud_asset_id });
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Audio enqueued', description: sidecar.character.elevenlabs_voice_id, duration: 2500 });
+    } finally {
+      setGeneratingAudio(false);
+    }
+  }, [dialog, replaceSegment, callTool, projectSlug, sidecar.character.asset_id, sidecar.character.elevenlabs_voice_id, index]);
+
+  const handleGenerateFrame = useCallback(async () => {
+    if (!firstFramePrompt.trim()) return;
+    setGeneratingFrame(true);
+    try {
+      const saved = await replaceSegment({});
+      if (!saved) return;
+      const result = await callTool('generate_gpt_image', {
+        project_slug: projectSlug,
+        prompt: firstFramePrompt.trim(),
+        image_slugs: [`@${sidecar.character.asset_id}`],
+        aspect_ratio: '16:9',
+        resolution: '2K',
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'First frame generation failed';
+        toast({ title: 'First frame failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { img_asset_id?: string };
+      if (parsed.img_asset_id) await replaceSegment({ first_frame_asset_id: parsed.img_asset_id });
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'First frame enqueued', description: 'GPT Image 2', duration: 2500 });
+    } finally {
+      setGeneratingFrame(false);
+    }
+  }, [firstFramePrompt, replaceSegment, callTool, projectSlug, sidecar.character.asset_id]);
+
+  const handleGenerateVideo = useCallback(async () => {
+    const firstFrameAssetId = segment.first_frame_asset_id;
+    const audioAssetId = segment.audio_asset_id;
+    if (!firstFrameAssetId || !audioAssetId) return;
+    setGeneratingVideo(true);
+    try {
+      const saved = await replaceSegment({});
+      if (!saved) return;
+      const prompt = `${videoPrompt.trim()}\n\nSpoken dialog: ${dialog.trim()}`;
+      const result = await callTool('generate_seedance2_video', {
+        project_slug: projectSlug,
+        first_frame_slug: `@${firstFrameAssetId}`,
+        prompt,
+        duration: String(sidecar.video_duration_s),
+        resolution: sidecar.video_resolution,
+        aspect_ratio: sidecar.video_aspect_ratio,
+        generate_audio: false,
+        replace_audio_with: `@${audioAssetId}`,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Seedance video generation failed';
+        toast({ title: 'Video generation failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { vid_asset_id?: string };
+      if (parsed.vid_asset_id) await replaceSegment({ video_asset_id: parsed.vid_asset_id });
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Seedance video enqueued', description: 'audio will be spliced after generation', duration: 2500 });
+    } finally {
+      setGeneratingVideo(false);
+    }
+  }, [segment.first_frame_asset_id, segment.audio_asset_id, replaceSegment, videoPrompt, dialog, callTool, projectSlug, sidecar.video_duration_s, sidecar.video_resolution, sidecar.video_aspect_ratio]);
+
+  const handleAudioReplace = useCallback(async (assetId: string) => {
+    await replaceSegment({ audio_asset_id: assetId });
+  }, [replaceSegment]);
+
+  const handleFrameReplace = useCallback(async (assetId: string) => {
+    await replaceSegment({ first_frame_asset_id: assetId });
+  }, [replaceSegment]);
+
+  const handleVideoReplace = useCallback(async (assetId: string) => {
+    await replaceSegment({ video_asset_id: assetId });
+  }, [replaceSegment]);
+
+  const canGenerateAudio = dialog.trim().length > 0 && !generatingAudio;
+  const canGenerateFrame = firstFramePrompt.trim().length > 0 && !generatingFrame;
+  const canGenerateVideo = audioState.kind === 'ready' && frameState.kind === 'ready' && !generatingVideo;
+  const clipSrc = clipItem?.thumbnailSrc ?? null;
+
+  return (
+    <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-3 py-2 border-b border-zinc-800/60 bg-black/40">
+        <div className="min-w-0 flex items-center gap-2 text-xs font-mono">
+          <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">{index + 1}</span>
+          <span className="text-emerald-300/70 uppercase tracking-wider truncate">{clipItem?.slug ?? `@${segment.clip_asset_id}`}</span>
+          <span className="text-emerald-300/35 uppercase tracking-wider">{segment.placement}</span>
+        </div>
+        <div className="text-[10px] font-mono text-emerald-300/45">GPT-5.5</div>
+      </header>
+      <div className="p-3 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-[12rem_1fr] gap-3">
+          <div className="space-y-2">
+            <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
+              <div className="h-28 flex items-center justify-center">
+                {clipSrc ? <img src={clipSrc} alt={clipItem?.slug ?? segment.clip_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-5 h-5 text-emerald-300/35" />}
+              </div>
+            </div>
+            <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed">{segment.clip_summary}</div>
+          </div>
+          <div className="min-w-0 space-y-3">
+            <label className="block">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog</span>
+              <PromptEditor value={dialog} onChange={setDialog} mediaItems={mediaItems} projectSlug={projectSlug} />
+            </label>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Joke notes</div>
+                <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
+                  {segment.joke_notes}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Quality notes</div>
+                <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
+                  {segment.quality_notes}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">1 Audio</div>
+              <button
+                type="button"
+                onClick={() => { void handleGenerateAudio(); }}
+                disabled={!canGenerateAudio}
+                title={canGenerateAudio ? 'Generate ElevenLabs audio' : 'Dialog required'}
+                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generatingAudio ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
+                T2A
+              </button>
+            </div>
+            <ClipShowAudioSlot
+              state={audioState}
+              assetId={segment.audio_asset_id ?? null}
+              generating={generatingAudio}
+              disabled={!canGenerateAudio}
+              disabledReason="Dialog required"
+              onGenerate={() => { void handleGenerateAudio(); }}
+              onReplace={(assetId) => { void handleAudioReplace(assetId); }}
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">2 First frame</div>
+              <button
+                type="button"
+                onClick={() => { void handleGenerateFrame(); }}
+                disabled={!canGenerateFrame}
+                title={canGenerateFrame ? 'Generate first frame' : 'First-frame prompt required'}
+                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generatingFrame ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
+                Frame
+              </button>
+            </div>
+            <StoryboardImageSlot
+              state={frameState}
+              sourceAspect={outputAspect}
+              assetId={segment.first_frame_asset_id ?? null}
+              replacing={false}
+              generating={generatingFrame}
+              onIdleClick={() => { void handleGenerateFrame(); }}
+              onReplace={(assetId) => { void handleFrameReplace(assetId); }}
+              onErrorRetry={() => { void handleGenerateFrame(); }}
+              onRegen={() => { void handleGenerateFrame(); }}
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">3 Seedance video</div>
+              <button
+                type="button"
+                onClick={() => { void handleGenerateVideo(); }}
+                disabled={!canGenerateVideo}
+                title={canGenerateVideo ? 'Generate Seedance video' : 'Audio and first frame required'}
+                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generatingVideo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Film className="w-3 h-3" />}
+                Video
+              </button>
+            </div>
+            <VideoSwapSlot
+              state={videoState}
+              sourceAspect={outputAspect}
+              videoAssetId={segment.video_asset_id ?? null}
+              replacing={generatingVideo}
+              disabled={!canGenerateVideo}
+              disabledReason="Audio and first frame required"
+              onIdleClick={() => { void handleGenerateVideo(); }}
+              onReplace={(assetId) => { void handleVideoReplace(assetId); }}
+              onErrorRetry={() => { void handleGenerateVideo(); }}
+              onRegen={() => { void handleGenerateVideo(); }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <label className="min-w-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">First-frame prompt</span>
+            <PromptEditor value={firstFramePrompt} onChange={setFirstFramePrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
+          </label>
+          <label className="min-w-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Seedance video prompt</span>
+            <PromptEditor value={videoPrompt} onChange={setVideoPrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
+          </label>
+        </div>
+      </div>
+    </section>
   );
 }
 

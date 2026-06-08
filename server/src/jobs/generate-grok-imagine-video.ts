@@ -21,6 +21,7 @@ type GenerateGrokImagineVideoPayload = {
   resolution?: "480p" | "720p";
   aspect_ratio?: GrokVideo15AspectRatio;
   nsfw_checker?: boolean;
+  replaceAudioWith?: { assetId: string; filename: string };
   _provider?: string;
 };
 
@@ -28,7 +29,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
-      projectSlug, prompt, duration, resolution, aspect_ratio, nsfw_checker, _provider,
+      projectSlug, prompt, duration, resolution, aspect_ratio, nsfw_checker, replaceAudioWith, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
     if (sourceImageIds.length === 0) {
@@ -72,6 +73,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
             ...(prompt !== undefined ? { prompt } : {}),
             ...(duration !== undefined ? { duration } : {}),
             ...(resolution !== undefined ? { resolution } : {}),
+            ...(replaceAudioWith !== undefined ? { replaceAudioWith } : {}),
           },
         }, ctx.getOwnerId());
         if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${vidAssetId}: ${_ptResult.error.message}`);
@@ -105,6 +107,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
         ...(prompt !== undefined ? { prompt } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
+        ...(replaceAudioWith !== undefined ? { replaceAudioWith } : {}),
       },
     });
 

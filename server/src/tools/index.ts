@@ -152,6 +152,8 @@ import { readPlanDef } from "./read-plan.js";
 import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
 import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
+import { planClipShowDef } from "./plan-clip-show.js";
+import { replacePlanClipShowAssetDef } from "./replace-plan-clip-show-asset.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -159,6 +161,7 @@ import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
 import { setCharacterVoiceDef } from "./set-character-voice.js";
+import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
@@ -329,6 +332,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     planStoryboardVideoDef(fs),
     replacePlanStoryboardVideoStoryboardDef(fs),
     replacePlanStoryboardVideoVideoDef(fs),
+    planClipShowDef(fs),
+    replacePlanClipShowAssetDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
@@ -337,6 +342,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     pinCharacterSlotDef(fs),
     unpinCharacterSlotDef(fs),
     setCharacterVoiceDef(fs),
+    generateElevenlabsT2aDef(fs),
     postDef(),
     xConnectStartDef(),
     xConnectStatusDef(),

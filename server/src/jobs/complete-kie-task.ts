@@ -542,6 +542,28 @@ async function completeGrokImagineVideo(
     await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
+  const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
+  if (replaceAudioWith) {
+    const audioManifest = await fs.getManifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    if (!audioManifest.ok) {
+      throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
+    }
+    const audioPath = join(audioManifest.value.path, replaceAudioWith.filename);
+    const audioAssetId = `${replaceAudioWith.assetId}/${replaceAudioWith.filename}`;
+    await queue.enqueue(`replace-audio-${assetId}-${Date.now()}`, {
+      type: "replace_video_audio",
+      inputPath: videoPath,
+      audioPath,
+      outputPath: join(assetDir, "original_audio_replaced.mp4"),
+      assetId,
+      assetDir,
+      audioAssetId,
+      projectSlug,
+      extraProvenance: provenance,
+    } as unknown as Record<string, unknown>);
+    return;
+  }
+
   const jobId = `process-video-${assetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "process_video",

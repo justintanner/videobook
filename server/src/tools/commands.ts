@@ -293,7 +293,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan",
-    description: "Open the project's active visualization plan with formula tabs for char-swap and screenshots + dialog. Singleton per project.",
+    description: "Open the project's active plan with formula tabs for Char Swap, Storyboard, and Clip Show. Singleton per project.",
     example: "/plan",
     category: "action",
     icon: "MapPin",
@@ -302,6 +302,21 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "open_plan",
+  },
+  {
+    command: "/plan-clip-show",
+    description: "Generate a Clip Show plan from one char-* host with an ElevenLabs voice and one or more vid-* clips. Writes jokes, dialog, first-frame prompts, and Seedance prompts to plan/.",
+    example: "/plan-clip-show @char-host @vid-fail @vid-payoff",
+    category: "context_menu",
+    icon: "Mic",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "character_asset_id", type: "string", required: true, description: "Host character asset with assigned ElevenLabs voice" },
+      { name: "clip_asset_ids", type: "string[]", required: true, description: "One or more vid-* clips to talk about" },
+    ],
+    mcpTool: { tool: "plan_clip_show", autoInject: ["project_slug"] },
   },
   {
     command: "/plan-vis",

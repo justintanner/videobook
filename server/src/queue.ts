@@ -78,6 +78,7 @@ function extractAssetId(payload: Record<string, unknown>): string | null {
   if (typeof payload.assetId === "string") return payload.assetId;
   if (typeof payload.imageAssetId === "string") return payload.imageAssetId;
   if (typeof payload.audioAssetId === "string") return payload.audioAssetId;
+  if (typeof payload.audAssetId === "string") return payload.audAssetId;
   return null;
 }
 
