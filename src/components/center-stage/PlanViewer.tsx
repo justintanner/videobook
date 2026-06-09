@@ -1151,8 +1151,8 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
 
   return (
     <div className="space-y-5">
-      <div className="mb-6 pb-4 border-b border-zinc-800/60">
-        <div className="flex items-center justify-between mb-3 gap-3">
+      <section className="mb-6 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/70">
+        <div className="flex items-center justify-between gap-3 border-b border-emerald-500/15 bg-black/45 px-3 py-2.5">
           <div className="flex items-center gap-2 min-w-0">
             <PlanBackButton onBack={onBack} />
             <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: clip show</h1>
@@ -1175,52 +1175,62 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
             {generatingPlan ? 'Planning...' : 'Generate Plan'}
           </button>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-3">
-          <ClipShowCharacterDropZone
-            item={characterItem}
-            assetId={characterId || null}
-            onDropAsset={handleCharacterDrop}
-          />
-          <ClipShowClipsDropZone
-            clips={clipItems}
-            onDropClip={handleClipDrop}
-            onRemoveClip={handleClipRemove}
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
-          <label className="min-w-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Show brief</span>
-            <textarea
-              value={showBrief}
-              onChange={(e) => setShowBrief(e.target.value)}
-              rows={3}
-              placeholder="Late-night host reacts to each clip with dry, visual jokes..."
-              className={cn(
-                'w-full min-h-[4.75rem] p-2 rounded bg-black/60 border border-zinc-700',
-                'text-[11px] font-mono text-emerald-300/90 resize-y',
-                'focus:outline-none focus:border-emerald-500/60',
-                'placeholder:text-emerald-300/30',
-              )}
+        <div className="p-3 space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
+            <ClipShowCharacterDropZone
+              item={characterItem}
+              assetId={characterId || null}
+              onDropAsset={handleCharacterDrop}
             />
-          </label>
-          <label className="min-w-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Tone</span>
-            <textarea
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-              rows={3}
-              className={cn(
-                'w-full min-h-[4.75rem] p-2 rounded bg-black/60 border border-zinc-700',
-                'text-[11px] font-mono text-emerald-300/90 resize-y',
-                'focus:outline-none focus:border-emerald-500/60',
-              )}
+            <ClipShowClipsDropZone
+              clips={clipItems}
+              onDropClip={handleClipDrop}
+              onRemoveClip={handleClipRemove}
             />
-          </label>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
+            <label className="min-w-0">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
+              <textarea
+                value={showBrief}
+                onChange={(e) => setShowBrief(e.target.value)}
+                rows={2}
+                placeholder="Immigration in the UK"
+                className={cn(
+                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
+                  'text-sm font-mono text-emerald-200/90 resize-y',
+                  'focus:outline-none focus:border-emerald-400/70',
+                  'placeholder:text-emerald-300/30',
+                )}
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
+              <textarea
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
+                rows={2}
+                className={cn(
+                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
+                  'text-[11px] font-mono text-emerald-300/90 resize-y',
+                  'focus:outline-none focus:border-emerald-500/60',
+                )}
+              />
+            </label>
+          </div>
         </div>
-      </div>
+      </section>
 
       {sidecar ? (
         <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-2">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
+              {sidecar.segments.length} clip{sidecar.segments.length === 1 ? '' : 's'} planned
+            </div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/35">
+              dialog -&gt; audio -&gt; first frame -&gt; video
+            </div>
+          </div>
           {sidecar.segments.map((segment, index) => (
             <ClipShowSegmentBlock
               key={`${segment.clip_asset_id}-${index}`}
@@ -1235,7 +1245,7 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
           ))}
         </div>
       ) : (
-        <div className="rounded border border-zinc-800/60 bg-zinc-950/40 p-5 text-center">
+        <div className="rounded border border-dashed border-emerald-500/25 bg-zinc-950/40 p-6 text-center">
           <Mic className="w-6 h-6 mx-auto mb-2 text-emerald-300/40" />
           <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-300/45">
             drop a voiced char-* host and vid-* clips
@@ -1268,16 +1278,16 @@ function ClipShowCharacterDropZone({ item, assetId, onDropAsset }: {
   return (
     <div
       className={cn(
-        'rounded border border-dashed p-3 transition-colors bg-zinc-950/40',
-        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70',
+        'min-w-0 rounded border border-dashed p-3 transition-colors bg-black/35',
+        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-emerald-500/25',
       )}
       onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
       onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
       onDrop={handleDrop}
     >
-      <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-2">Host character</div>
-      <div className="h-32 rounded bg-black/35 border border-zinc-800/70 flex items-center justify-center overflow-hidden">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55 mb-2">Character</div>
+      <div className="h-32 rounded bg-zinc-950/70 border border-zinc-800/70 flex items-center justify-center overflow-hidden">
         {src ? (
           <img src={src} alt={item?.slug ?? assetId ?? 'host'} className="w-full h-full object-contain" loading="lazy" />
         ) : (
@@ -1312,8 +1322,8 @@ function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
   return (
     <div
       className={cn(
-        'rounded border border-dashed p-3 transition-colors bg-zinc-950/40',
-        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-700/70',
+        'min-w-0 rounded border border-dashed p-3 transition-colors bg-black/35',
+        dragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-emerald-500/25',
       )}
       onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
@@ -1321,20 +1331,20 @@ function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
       onDrop={handleDrop}
     >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">Video clips</div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Clips</div>
         <div className="text-[10px] font-mono text-emerald-300/40">{clips.length > 0 ? `${clips.length} clip${clips.length === 1 ? '' : 's'}` : 'drop vid-* clips'}</div>
       </div>
       {clips.length === 0 ? (
-        <div className="h-32 rounded bg-black/35 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
+        <div className="h-32 rounded bg-zinc-950/70 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
           <Film className="w-5 h-5 text-emerald-300/35" />
           <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop clips here</span>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-h-32 flex-wrap gap-2">
           {clips.map(({ id, item }, index) => {
             const src = item?.thumbnailSrc ?? null;
             return (
-              <div key={id} className="group relative w-32 rounded border border-zinc-700/60 bg-zinc-900 overflow-hidden">
+              <div key={id} className="group relative w-36 rounded border border-zinc-700/60 bg-zinc-950/80 overflow-hidden">
                 <div className="h-20 bg-black/40 flex items-center justify-center">
                   {src ? <img src={src} alt={item?.slug ?? id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-4 h-4 text-emerald-300/40" />}
                 </div>
@@ -1357,7 +1367,7 @@ function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
               </div>
             );
           })}
-          <div className="w-32 rounded border border-dashed border-zinc-700/70 bg-black/25 flex flex-col items-center justify-center gap-1 text-center px-2">
+          <div className="w-36 min-h-28 rounded border border-dashed border-zinc-700/70 bg-black/25 flex flex-col items-center justify-center gap-1 text-center px-2">
             <Film className="w-4 h-4 text-emerald-300/30" />
             <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">drop to add</span>
           </div>
@@ -1626,141 +1636,107 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
   }, [replaceSegment]);
 
   const canGenerateAudio = dialog.trim().length > 0 && !generatingAudio;
-  const canGenerateFrame = firstFramePrompt.trim().length > 0 && !generatingFrame;
   const canGenerateVideo = audioState.kind === 'ready' && frameState.kind === 'ready' && !generatingVideo;
   const clipSrc = clipItem?.thumbnailSrc ?? null;
+  const placementLabel = segment.placement === 'before' ? 'Intro' : segment.placement === 'after' ? 'Outro' : 'Intro + Outro';
 
   return (
-    <section className="min-w-0 border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-3 py-2 border-b border-zinc-800/60 bg-black/40">
-        <div className="min-w-0 flex items-center gap-2 text-xs font-mono">
-          <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">{index + 1}</span>
-          <span className="text-emerald-300/70 uppercase tracking-wider truncate">{clipItem?.slug ?? `@${segment.clip_asset_id}`}</span>
-          <span className="text-emerald-300/35 uppercase tracking-wider">{segment.placement}</span>
+    <section className="min-w-0 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/55">
+      <header className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-emerald-500/15 bg-black/45">
+        <div className="min-w-0 flex items-center gap-2 font-mono">
+          <span className="inline-flex w-6 h-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/45 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold">{index + 1}</span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-200 truncate">Clip {index + 1} {placementLabel}</h2>
+            <div className="text-[10px] uppercase tracking-wider text-emerald-300/40 truncate">{clipItem?.slug ?? `@${segment.clip_asset_id}`}</div>
+          </div>
         </div>
         <div className="text-[10px] font-mono text-emerald-300/45">GPT-5.5</div>
       </header>
       <div className="min-w-0 p-3 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-[12rem_minmax(0,1fr)] gap-3">
-          <div className="min-w-0 space-y-2">
+        <div className="grid grid-cols-1 xl:grid-cols-[15rem_minmax(0,1fr)] gap-3">
+          <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/60">Source clip</div>
+              <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">{segment.placement}</div>
+            </div>
             <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
               <div className="h-28 flex items-center justify-center">
                 {clipSrc ? <img src={clipSrc} alt={clipItem?.slug ?? segment.clip_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-5 h-5 text-emerald-300/35" />}
               </div>
             </div>
-            <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed">{segment.clip_summary}</div>
+            <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed line-clamp-5">{segment.clip_summary}</div>
           </div>
-          <div className="min-w-0 space-y-3">
-            <label className="block">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Dialog</span>
+
+          <div className="min-w-0 grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] 2xl:grid-cols-[repeat(4,minmax(0,1fr))] gap-3">
+            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Dialog</div>
+                <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">edit</div>
+              </div>
               <PromptEditor value={dialog} onChange={setDialog} mediaItems={mediaItems} projectSlug={projectSlug} />
-            </label>
-            <div className="grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Joke notes</div>
-                <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
-                  {segment.joke_notes}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Quality notes</div>
-                <div className="min-h-[4.5rem] rounded border border-zinc-800/70 bg-black/35 p-2 text-[11px] font-mono text-emerald-200/65 leading-relaxed">
-                  {segment.quality_notes}
-                </div>
-              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[repeat(3,minmax(0,1fr))] gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">1 Audio</div>
-              <button
-                type="button"
-                onClick={() => { void handleGenerateAudio(); }}
+            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">T2A audio</div>
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">dialog voiceover</div>
+                </div>
+              </div>
+              <ClipShowAudioSlot
+                state={audioState}
+                assetId={segment.audio_asset_id ?? null}
+                generating={generatingAudio}
                 disabled={!canGenerateAudio}
-                title={canGenerateAudio ? 'Generate ElevenLabs audio' : 'Dialog required'}
-                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generatingAudio ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
-                T2A
-              </button>
+                disabledReason="Dialog required"
+                onGenerate={() => { void handleGenerateAudio(); }}
+                onReplace={(assetId) => { void handleAudioReplace(assetId); }}
+              />
             </div>
-            <ClipShowAudioSlot
-              state={audioState}
-              assetId={segment.audio_asset_id ?? null}
-              generating={generatingAudio}
-              disabled={!canGenerateAudio}
-              disabledReason="Dialog required"
-              onGenerate={() => { void handleGenerateAudio(); }}
-              onReplace={(assetId) => { void handleAudioReplace(assetId); }}
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">2 First frame</div>
-              <button
-                type="button"
-                onClick={() => { void handleGenerateFrame(); }}
-                disabled={!canGenerateFrame}
-                title={canGenerateFrame ? 'Generate first frame' : 'First-frame prompt required'}
-                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generatingFrame ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
-                Frame
-              </button>
-            </div>
-            <StoryboardImageSlot
-              state={frameState}
-              sourceAspect={outputAspect}
-              assetId={segment.first_frame_asset_id ?? null}
-              replacing={false}
-              generating={generatingFrame}
-              onIdleClick={() => { void handleGenerateFrame(); }}
-              onReplace={(assetId) => { void handleFrameReplace(assetId); }}
-              onErrorRetry={() => { void handleGenerateFrame(); }}
-              onRegen={() => { void handleGenerateFrame(); }}
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">3 Seedance video</div>
-              <button
-                type="button"
-                onClick={() => { void handleGenerateVideo(); }}
-                disabled={!canGenerateVideo}
-                title={canGenerateVideo ? 'Generate Seedance video' : 'Audio and first frame required'}
-                className="h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generatingVideo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Film className="w-3 h-3" />}
-                Video
-              </button>
-            </div>
-            <VideoSwapSlot
-              state={videoState}
-              sourceAspect={outputAspect}
-              videoAssetId={segment.video_asset_id ?? null}
-              replacing={generatingVideo}
-              disabled={!canGenerateVideo}
-              disabledReason="Audio and first frame required"
-              onIdleClick={() => { void handleGenerateVideo(); }}
-              onReplace={(assetId) => { void handleVideoReplace(assetId); }}
-              onErrorRetry={() => { void handleGenerateVideo(); }}
-              onRegen={() => { void handleGenerateVideo(); }}
-            />
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
-          <label className="min-w-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">First-frame prompt</span>
-            <PromptEditor value={firstFramePrompt} onChange={setFirstFramePrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
-          </label>
-          <label className="min-w-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Seedance video prompt</span>
-            <PromptEditor value={videoPrompt} onChange={setVideoPrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
-          </label>
+            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">First frame</div>
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">prompt to image</div>
+                </div>
+              </div>
+              <PromptEditor value={firstFramePrompt} onChange={setFirstFramePrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
+              <StoryboardImageSlot
+                state={frameState}
+                sourceAspect={outputAspect}
+                assetId={segment.first_frame_asset_id ?? null}
+                replacing={false}
+                generating={generatingFrame}
+                onIdleClick={() => { void handleGenerateFrame(); }}
+                onReplace={(assetId) => { void handleFrameReplace(assetId); }}
+                onErrorRetry={() => { void handleGenerateFrame(); }}
+                onRegen={() => { void handleGenerateFrame(); }}
+              />
+            </div>
+
+            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Final video</div>
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">frame + audio</div>
+                </div>
+              </div>
+              <PromptEditor value={videoPrompt} onChange={setVideoPrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
+              <VideoSwapSlot
+                state={videoState}
+                sourceAspect={outputAspect}
+                videoAssetId={segment.video_asset_id ?? null}
+                replacing={generatingVideo}
+                disabled={!canGenerateVideo}
+                disabledReason="Audio and first frame required"
+                onIdleClick={() => { void handleGenerateVideo(); }}
+                onReplace={(assetId) => { void handleVideoReplace(assetId); }}
+                onErrorRetry={() => { void handleGenerateVideo(); }}
+                onRegen={() => { void handleGenerateVideo(); }}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -4022,7 +3998,9 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
   projectSlug: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editorHeight, setEditorHeight] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (editing && textareaRef.current) {
       textareaRef.current.focus();
@@ -4030,6 +4008,10 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
       textareaRef.current.setSelectionRange(len, len);
     }
   }, [editing]);
+  const handleEdit = useCallback(() => {
+    setEditorHeight(previewRef.current?.getBoundingClientRect().height ?? null);
+    setEditing(true);
+  }, []);
   // Stable color assignment: first distinct token gets palette[0], second
   // distinct token gets palette[1], and so on. Matches reads in renderPromptLine.
   const colorByToken = useMemo(() => {
@@ -4051,6 +4033,7 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => setEditing(false)}
         rows={4}
+        style={editorHeight == null ? undefined : { height: `${editorHeight}px` }}
         className={cn(
           'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-emerald-300/90 resize-y',
           'focus:outline-none focus:border-emerald-500/60',
@@ -4061,8 +4044,9 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
   }
   return (
     <button
+      ref={previewRef}
       type="button"
-      onClick={() => setEditing(true)}
+      onClick={handleEdit}
       title="Click to edit prompt"
       className={cn(
         'w-full text-left p-2 rounded bg-black/60 border border-zinc-700',
