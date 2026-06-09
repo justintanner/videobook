@@ -2,6 +2,7 @@ import type { VideocityFs } from "vc-engine";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerArchiveClipJob } from "./archive-clip.js";
+import { registerRestoreArchiveClipJob } from "./restore-archive-clip.js";
 import { registerTrimVideoJob } from "./trim-video.js";
 import { registerSplitVideoJob } from "./split-video.js";
 import { registerEvenSplitJob } from "./even-split.js";
@@ -99,6 +100,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTranscribeJob(fs);
   registerDownloadVideoJob(fs);
   registerArchiveClipJob(fs);
+  registerRestoreArchiveClipJob(fs);
   registerTrimVideoJob(fs);
   registerSplitVideoJob(fs);
   registerEvenSplitJob(fs);

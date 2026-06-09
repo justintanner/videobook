@@ -32,6 +32,7 @@ import { cropVideoDef } from "./crop-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
 import { searchArchiveDef } from "./search-archive.js";
+import { restoreArchiveClipsDef } from "./restore-archive-clips.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
 import { audioBoostDef } from "./audio-boost.js";
 import { reverseVideoDef } from "./reverse-video.js";
@@ -211,6 +212,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     downloadVideoDef(fs),
     archiveClipDef(fs),
     searchArchiveDef(),
+    restoreArchiveClipsDef(fs),
     changeVideoSpeedDef(fs),
     audioBoostDef(fs),
     reverseVideoDef(fs),

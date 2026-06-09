@@ -24,6 +24,11 @@ type HitSeed = {
   indexKey: string;
 };
 
+type ArchiveSearchHit = {
+  sortAt: string;
+  result: Record<string, unknown>;
+};
+
 function markerShaFromKey(key: string): string | null {
   const match = /\/([a-f0-9]{64})-[^/]+\.json$/i.exec(key);
   return match?.[1]?.toLowerCase() ?? null;
@@ -106,6 +111,8 @@ export function searchArchiveDef(): ToolDef {
       people: z.array(z.string()).optional().default([]).describe("Named people to match; multiple values use match-any semantics"),
       query: z.string().optional().describe("Optional case-insensitive title/topic/person/transcript substring search"),
       limit: z.number().int().positive().max(100).optional().default(20),
+      offset: z.number().int().min(0).optional().default(0),
+      sort: z.enum(["newest", "oldest"]).optional().default("newest").describe("Sort archived clips by archive updated time"),
       include_transcript: z.boolean().optional().default(false).describe("Include full transcript text in results"),
       presign_media: z.boolean().optional().default(true).describe("Return a temporary B2 media URL"),
     },
@@ -115,6 +122,8 @@ export function searchArchiveDef(): ToolDef {
         people,
         query,
         limit,
+        offset,
+        sort,
         include_transcript,
         presign_media,
       } = args as {
@@ -122,6 +131,8 @@ export function searchArchiveDef(): ToolDef {
         people: string[];
         query?: string;
         limit: number;
+        offset: number;
+        sort: "newest" | "oldest";
         include_transcript: boolean;
         presign_media: boolean;
       };
@@ -151,7 +162,7 @@ export function searchArchiveDef(): ToolDef {
         if (!byHash.has(seed.sha256)) byHash.set(seed.sha256, seed);
       }
 
-      const results = [];
+      const hits: ArchiveSearchHit[] = [];
       for (const seed of byHash.values()) {
         const index = await getJson<ArchiveIndex>(b2, config.bucket, seed.indexKey);
         if (!index) continue;
@@ -159,34 +170,50 @@ export function searchArchiveDef(): ToolDef {
           ? await getText(b2, config.bucket, index.transcript.text_key)
           : null;
         if (!includesQuery(index, transcript, query)) continue;
-        const signed = presign_media
-          ? b2.presign.getObject({ bucket: config.bucket, key: index.media.key, expiresIn: 3600 })
-          : null;
-        results.push({
-          archive_id: index.archive_id,
-          sha256: index.sha256,
-          title: index.title,
-          topics: index.topics,
-          people: index.people,
-          sources: index.sources,
-          duration: index.duration,
-          media: {
-            key: index.media.key,
-            content_type: index.media.content_type,
-            size_bytes: index.media.size_bytes,
-            url: signed?.url ?? null,
-            expires_at: signed?.expiresAt ?? null,
+        hits.push({
+          sortAt: index.updated_at || index.created_at,
+          result: {
+            archive_id: index.archive_id,
+            sha256: index.sha256,
+            title: index.title,
+            topics: index.topics,
+            people: index.people,
+            sources: index.sources,
+            duration: index.duration,
+            media: {
+              key: index.media.key,
+              content_type: index.media.content_type,
+              size_bytes: index.media.size_bytes,
+              url: null,
+              expires_at: null,
+            },
+            transcript_excerpt: excerptFor(transcript, query),
+            ...(include_transcript ? { transcript } : {}),
           },
-          transcript_excerpt: excerptFor(transcript, query),
-          ...(include_transcript ? { transcript } : {}),
         });
-        if (results.length >= limit) break;
+      }
+
+      hits.sort((a, b) => sort === "newest" ? b.sortAt.localeCompare(a.sortAt) : a.sortAt.localeCompare(b.sortAt));
+      const paged = hits.slice(offset, offset + limit).map((hit) => hit.result);
+      if (presign_media) {
+        for (const result of paged) {
+          const media = result.media as { key: string; url: string | null; expires_at: string | null };
+          const signed = b2.presign.getObject({ bucket: config.bucket, key: media.key, expiresIn: 3600 });
+          media.url = signed?.url ?? null;
+          media.expires_at = signed?.expiresAt ?? null;
+        }
       }
 
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ results }),
+          text: JSON.stringify({
+            results: paged,
+            total: hits.length,
+            offset,
+            limit,
+            has_more: offset + paged.length < hits.length,
+          }),
         }],
       };
     },

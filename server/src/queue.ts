@@ -150,6 +150,7 @@ function jobTypeToAssetWorkKind(
     case "describe_image":         return { kind: "describe" };
     case "rewrite_script":         return { kind: "rewrite_script" };
     case "archive_clip":           return { kind: "archive" };
+    case "restore_archive_clip":   return { kind: "download" };
     case "download_video":         return { kind: "download" };
     case "watermark_video":        return { kind: "final" };
     case "complete_kie_task":      return { kind: "generate" };

@@ -116,6 +116,32 @@ describe("archive MCP tools", () => {
     expect(content[0]?.text).toContain("Missing B2 configuration");
   });
 
+  it("rejects invalid restore archive IDs before checking B2", async () => {
+    const c = await makeClient();
+    clearArchiveEnv();
+    const result = await c.callTool({
+      name: "restore_archive_clips",
+      arguments: { project_slug: "test-proj", archive_ids: ["not-an-id"] },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0]?.text).toContain("Invalid archive_id");
+  });
+
+  it("reports missing B2 configuration for restore_archive_clips", async () => {
+    const c = await makeClient();
+    clearArchiveEnv();
+    const result = await c.callTool({
+      name: "restore_archive_clips",
+      arguments: { project_slug: "test-proj", archive_ids: ["a".repeat(64)] },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0]?.text).toContain("Missing B2 configuration");
+  });
+
   it("enqueues a URL archive without requiring a caller-supplied project", async () => {
     const c = await makeClient();
     setValidArchiveEnv();

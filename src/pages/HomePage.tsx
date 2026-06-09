@@ -12,8 +12,8 @@ import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, PlanViewer } from '@/components/center-stage';
-import type { ViewerSize } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, PlanViewer, ArchiveBrowser } from '@/components/center-stage';
+import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
 import { ChatInput } from '@/components/ui/ChatInput';
@@ -78,6 +78,10 @@ export function HomePage() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [statusOpen, setStatusOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveInitialResponse, setArchiveInitialResponse] = useState<ArchiveSearchResponse | null>(null);
+  const [archiveInitialError, setArchiveInitialError] = useState<string | null>(null);
+  const [archiveInitialLoading, setArchiveInitialLoading] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -158,7 +162,7 @@ export function HomePage() {
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (statusOpen || settingsOpen || genPanel != null) return;
+    if (statusOpen || settingsOpen || archiveOpen || genPanel != null) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -183,7 +187,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [statusOpen, settingsOpen, genPanel]);
+  }, [statusOpen, settingsOpen, archiveOpen, genPanel]);
 
   // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
@@ -288,6 +292,7 @@ export function HomePage() {
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSettingsOpen(false);
+    setArchiveOpen(false);
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
@@ -413,6 +418,10 @@ export function HomePage() {
   const resetOpenScreens = useCallback(() => {
     setStatusOpen(false);
     setSettingsOpen(false);
+    setArchiveOpen(false);
+    setArchiveInitialResponse(null);
+    setArchiveInitialError(null);
+    setArchiveInitialLoading(false);
     setTrimAssetId(null);
     setCropTarget(null);
     setSelectedItem(null);
@@ -458,6 +467,7 @@ export function HomePage() {
 
   const handleSlotClick = useCallback((slotIndex: number) => {
     setSettingsOpen(false);
+    setArchiveOpen(false);
     setSelectedItem(null);
     setGenPanel(null);
     setTimelineSlotIndex(slotIndex);
@@ -482,6 +492,7 @@ export function HomePage() {
   const handleActivityRewound = useCallback(async () => {
     if (!projectSlug) return;
     clearAssets();
+    setArchiveOpen(false);
     setSelectedItem(null);
     setTimelineSlotIndex(null);
     setGenPanel(null);
@@ -634,9 +645,67 @@ export function HomePage() {
 
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen((open) => !open);
+    setArchiveOpen(false);
     setStatusOpen(false);
     void refreshProviderKeyStatus();
   }, [refreshProviderKeyStatus]);
+
+  const handleArchiveClick = useCallback(() => {
+    if (archiveOpen) {
+      setArchiveOpen(false);
+      return;
+    }
+    setStatusOpen(false);
+    setSettingsOpen(false);
+    setSelectedItem(null);
+    setTimelineSlotIndex(null);
+    setGenPanel(null);
+    setPlanEmptyOverride(false);
+    setArchiveInitialResponse(null);
+    setArchiveInitialError(null);
+    setArchiveInitialLoading(true);
+    setArchiveOpen(true);
+
+    if (state !== 'ready') {
+      setArchiveInitialError('MCP is not ready');
+      setArchiveInitialLoading(false);
+      return;
+    }
+
+    void callTool('search_archive', {
+      limit: 20,
+      offset: 0,
+      sort: 'newest',
+      include_transcript: false,
+      presign_media: true,
+    }).then((result) => {
+      const content = result.content as Array<{ type: string; text: string }>;
+      if (result.isError) {
+        setArchiveInitialError(content[0]?.text ?? 'Archive search failed');
+        setArchiveInitialResponse(null);
+        return;
+      }
+      const parsed = JSON.parse(content[0]?.text ?? '{"results":[],"total":0,"offset":0,"limit":20,"has_more":false}') as ArchiveSearchResponse;
+      setArchiveInitialResponse(parsed);
+      setArchiveInitialError(null);
+    }).catch((error: unknown) => {
+      setArchiveInitialError(error instanceof Error ? error.message : String(error));
+      setArchiveInitialResponse(null);
+    }).finally(() => {
+      setArchiveInitialLoading(false);
+    });
+  }, [archiveOpen, callTool, state]);
+
+  const handleArchiveRestoreComplete = useCallback((response: RestoreResponse) => {
+    if (!projectSlug) return;
+    sync(projectSlug);
+    void listAssets(projectSlug, sortOrder);
+    toast({
+      title: 'Archive restore queued',
+      description: `${response.restored.length} restoring, ${response.skipped.length} skipped`,
+      duration: 3000,
+    });
+  }, [projectSlug, sync, listAssets, sortOrder]);
 
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
@@ -654,6 +723,7 @@ export function HomePage() {
     },
     open_gen: (type: string, prompt: string) => {
       setSettingsOpen(false);
+      setArchiveOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
@@ -661,12 +731,14 @@ export function HomePage() {
     },
     open_gen_video: (prompt: string) => {
       setSettingsOpen(false);
+      setArchiveOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'video', prompt: prompt || '' });
     },
     open_gen_image: (prompt: string) => {
       setSettingsOpen(false);
+      setArchiveOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'image', prompt: prompt || '' });
@@ -737,6 +809,7 @@ export function HomePage() {
     },
     open_plan: () => {
       setSettingsOpen(false);
+      setArchiveOpen(false);
       const planAsset = mediaItems.find((m) => m.id === 'plan');
       if (planAsset) {
         handleSelectItem(planAsset);
@@ -795,8 +868,10 @@ export function HomePage() {
             callTool={callTool}
             onProjectChange={handleProjectChange}
             onStatusClick={() => setStatusOpen(true)}
+            onArchiveClick={handleArchiveClick}
             onSettingsClick={handleSettingsClick}
             onAnimateCommand={handleAnimateCommand}
+            archiveActive={archiveOpen}
             settingsActive={settingsOpen}
           />
 
@@ -883,6 +958,17 @@ export function HomePage() {
                     onClose={() => setGenPanel(null)}
                     callTool={callTool}
                     projectSlug={projectSlug}
+                  />
+                ) : archiveOpen ? (
+                  <ArchiveBrowser
+                    projectSlug={projectSlug}
+                    callTool={callTool}
+                    callState={state}
+                    initialResponse={archiveInitialResponse}
+                    initialError={archiveInitialError}
+                    initialLoading={archiveInitialLoading}
+                    onClose={() => setArchiveOpen(false)}
+                    onRestoreComplete={handleArchiveRestoreComplete}
                   />
                 ) : activeSelection ? (
                   <AssetViewer
