@@ -552,6 +552,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "extract_audio", autoInject: ["project_slug"] },
   },
   {
+    command: "/archive",
+    description: "Archive a full video or audio asset to the global B2 clip archive and transcribe it",
+    example: "/archive @vid-clip ai interview",
+    category: "context_menu",
+    icon: "Archive",
+    size: "default",
+    variant: "amber",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video or audio asset to archive" },
+      { name: "topics", type: "string[]", required: false, description: "Optional search topic tokens to attach" },
+    ],
+    mcpTool: { tool: "archive_clip", autoInject: ["project_slug"] },
+  },
+  {
     command: "/audio-boost",
     description: "Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.",
     example: "/audio-boost @vid-clip 2",

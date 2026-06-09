@@ -1,0 +1,15 @@
+OPENAI_API_KEY=op://Apicity/OPENAI_API_KEY/password
+KIE_API_KEY=op://Apicity/KIE_API_KEY/password
+XAI_API_KEY=op://Apicity/XAI_API_KEY/password
+X_CLIENT_ID=op://Apicity/X_CLIENT_ID/password
+X_CLIENT_SECRET=op://Apicity/X_CLIENT_SECRET/password
+KIMI_CODING_API_KEY=op://Apicity/KIMI_CODING_API_KEY/password
+FAL_API_KEY=op://Apicity/FAL_API_KEY/password
+DASHSCOPE_API_KEY=op://Apicity/DASHSCOPE_API_KEY/password
+ELEVENLABS_API_KEY=op://Apicity/ELEVENLABS_API_KEY/password
+B2_ACCESS_KEY_ID=op://Apicity/B2_ACCESS_KEY_ID/password
+B2_SECRET_ACCESS_KEY=op://Apicity/B2_SECRET_ACCESS_KEY/password
+B2_REGION=op://Apicity/B2_REGION/password
+B2_BUCKET=op://Apicity/B2_BUCKET/password
+B2_ENDPOINT=op://Apicity/B2_ENDPOINT/password
+B2_ARCHIVE_PREFIX=

@@ -937,6 +937,12 @@ describe("slash commands e2e", () => {
       expect(args.new_name).toBe("my cool copy");
     });
 
+    it("/archive parses an asset id and optional topic tokens", () => {
+      const args = simulateParse("/archive", "@vid-clip ai interview");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.topics).toEqual(["ai", "interview"]);
+    });
+
     it("/unassign without @ prefix", () => {
       const args = simulateParse("/unassign", "s03");
       expect(args.slot).toBe("s03");

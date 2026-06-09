@@ -59,6 +59,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/inbox");
     expect(commandNames).toContain("/copy");
     expect(commandNames).toContain("/folder");
+    expect(commandNames).toContain("/archive");
     expect(commandNames).toContain("/duplicate");
     expect(commandNames).toContain("/history");
     expect(commandNames).toContain("/open");
@@ -83,6 +84,11 @@ describe("slash_commands tool", () => {
     expect(plan.uiAction).toBe("open_plan");
     expect(plan.params).toEqual([]);
     expect(plan.category).toBe("action");
+
+    const archive = commands.find((c) => c.command === "/archive")!;
+    expect(archive.category).toBe("context_menu");
+    expect(archive.mcpTool?.tool).toBe("archive_clip");
+    expect(archive.mcpTool?.autoInject).toContain("project_slug");
   });
 
   it("does not return duplicate command names", async () => {

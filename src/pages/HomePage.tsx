@@ -11,7 +11,7 @@ import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
-import { AssetMenu } from '@/components/sidebar/menus/AssetMenu';
+import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer, PlanViewer } from '@/components/center-stage';
 import type { ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
@@ -97,6 +97,7 @@ export function HomePage() {
     onProfileSaved?: (profile: CharacterProfile) => void;
   } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
+  const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [planOpenKey, setPlanOpenKey] = useState(0);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
@@ -420,6 +421,7 @@ export function HomePage() {
     setGenPanel(null);
     setCharacterDialog(null);
     setPostPanel(null);
+    setProjectExportAssetId(null);
     setPlanEmptyOverride(false);
     setAudioReplace(null);
     setAudioReplaceSubmitting(false);
@@ -829,6 +831,7 @@ export function HomePage() {
                     const itemFilePath = item.filePath;
                     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
                     const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
+                    const canProjectExport = !!projectSlug && projects.some((p) => p.slug !== projectSlug);
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -840,9 +843,7 @@ export function HomePage() {
                           ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
                           : undefined}
                         onMarkSeen={onMarkSeen}
-                        projectSlug={projectSlug}
-                        projects={projects}
-                        callTool={callTool}
+                        onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
                         MenuItem={ContextMenuItem}
                       />
                     );
@@ -968,6 +969,7 @@ export function HomePage() {
                   {clips.map((item) => {
                     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
                     const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
+                    const canProjectExport = !!projectSlug && projects.some((p) => p.slug !== projectSlug);
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -976,9 +978,7 @@ export function HomePage() {
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
                         onMarkSeen={onMarkSeen}
-                        projectSlug={projectSlug}
-                        projects={projects}
-                        callTool={callTool}
+                        onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
                         MenuItem={ContextMenuItem}
                       />
                     );
@@ -1083,6 +1083,14 @@ export function HomePage() {
         initialText={postPanel?.text ?? ''}
         projectSlug={projectSlug}
         callTool={callTool}
+      />
+      <ProjectExportPicker
+        assetId={projectExportAssetId}
+        projectSlug={projectSlug}
+        projects={projects}
+        callTool={callTool}
+        onClose={() => setProjectExportAssetId(null)}
+        onAfterExport={() => { void refreshProjects(); }}
       />
       {audioReplace && (
         <div

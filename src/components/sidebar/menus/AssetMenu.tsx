@@ -1,4 +1,5 @@
-import { Fragment, type ComponentType, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { UseMcpResult } from 'use-mcp/react'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
@@ -14,11 +15,17 @@ interface AssetMenuProps {
   onAnimateEdit?: (text: string) => void
   onExtractSkeleton?: () => void
   onMarkSeen?: () => void
+  onOpenProjectExport?: () => void
+  MenuItem: MenuItemComponent
+}
+
+interface ProjectExportPickerProps {
+  assetId: string | null
   projectSlug?: string
   projects?: { slug: string }[]
   callTool?: UseMcpResult['callTool']
+  onClose: () => void
   onAfterExport?: (targetProject: string) => void
-  MenuItem: MenuItemComponent
 }
 
 interface CommandAction {
@@ -137,27 +144,31 @@ function copySlugToClipboard(slug: string) {
   toast({ title: 'Copied', description: slug, duration: 2000 })
 }
 
-export function AssetMenu({
-  slug,
-  filePath,
-  itemType,
-  onAnimateCommand,
-  onAnimateEdit,
-  onExtractSkeleton,
-  onMarkSeen,
+export function ProjectExportPicker({
+  assetId,
   projectSlug,
   projects,
   callTool,
+  onClose,
   onAfterExport,
-  MenuItem,
-}: AssetMenuProps) {
+}: ProjectExportPickerProps) {
+  const [exportingTarget, setExportingTarget] = useState<string | null>(null)
   const targetProjects = (projects ?? []).filter((p) => p.slug !== projectSlug)
-  const canExportToProject = !!projectSlug && !!callTool && targetProjects.length > 0
+
+  useEffect(() => {
+    if (!assetId) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !exportingTarget) onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [assetId, exportingTarget, onClose])
+
+  if (!assetId) return null
 
   const exportToProject = async (target: string) => {
     if (!callTool || !projectSlug) return
-    const assetId = slug.replace(/^@/, '')
-
+    setExportingTarget(target)
     try {
       const result = await callTool('export_asset_to_project', {
         asset_id: assetId,
@@ -187,11 +198,82 @@ export function AssetMenu({
         duration: 3000,
       })
       onAfterExport?.(target)
+      onClose()
     } catch (e: unknown) {
       toast({ title: 'Export failed', description: e instanceof Error ? e.message : String(e), duration: 4000 })
+    } finally {
+      setExportingTarget(null)
     }
   }
 
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+      onMouseDown={() => { if (!exportingTarget) onClose() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export to project"
+        className="w-[360px] max-w-[92vw] overflow-hidden rounded border border-cyan-500/30 bg-zinc-950 shadow-[0_0_24px_rgba(34,211,238,0.18)]"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-cyan-500/15 px-3 py-2">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-300">Export to project</span>
+          <span className="max-w-[11rem] truncate font-mono text-[10px] text-zinc-500">@{assetId}</span>
+        </div>
+        <div className="max-h-72 overflow-y-auto p-1.5">
+          {targetProjects.length === 0 ? (
+            <div className="px-3 py-4 text-sm text-zinc-500">No other projects</div>
+          ) : targetProjects.map((project) => {
+            const exporting = exportingTarget === project.slug
+            return (
+              <button
+                key={project.slug}
+                type="button"
+                disabled={exportingTarget !== null}
+                onClick={() => { void exportToProject(project.slug) }}
+                className={cn(
+                  'flex w-full items-center justify-between rounded px-3 py-2 text-left transition-colors',
+                  'border-l-[3px] border-l-cyan-500/30 bg-white/[0.02] hover:bg-white/[0.08] focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
+                  exportingTarget !== null && !exporting && 'opacity-45',
+                )}
+              >
+                <span className="min-w-0 truncate text-sm font-semibold text-zinc-100">{project.slug}</span>
+                <span className="ml-3 shrink-0 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                  {exporting ? 'Exporting' : 'Select'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="flex justify-end border-t border-cyan-500/15 px-3 py-2">
+          <button
+            type="button"
+            disabled={exportingTarget !== null}
+            onClick={onClose}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+export function AssetMenu({
+  slug,
+  filePath,
+  itemType,
+  onAnimateCommand,
+  onAnimateEdit,
+  onExtractSkeleton,
+  onMarkSeen,
+  onOpenProjectExport,
+  MenuItem,
+}: AssetMenuProps) {
   const imageActions: CommandAction[] = itemType === 'image'
     ? [
         {
@@ -270,6 +352,13 @@ export function AssetMenu({
           onSelect: () => onAnimateCommand?.(`/extract-audio ${slug}`),
         },
         {
+          command: `/archive ${slug}`,
+          title: 'Archive Clip',
+          titleClassName: 'text-amber-400',
+          accentColor: 'border-l-amber-500/50 focus:border-l-amber-500/80',
+          onSelect: () => onAnimateCommand?.(`/archive ${slug}`),
+        },
+        {
           command: `/splice ${slug} ...`,
           title: 'Splice with...',
           titleClassName: 'text-amber-400',
@@ -313,15 +402,14 @@ export function AssetMenu({
           title: 'Export to Downloads',
           onSelect: () => onAnimateCommand?.(`/export ${slug}`),
         },
+        ...(onOpenProjectExport
+          ? [{
+              command: `/export-to-project ${slug}`,
+              title: 'Export to Project',
+              onSelect: onOpenProjectExport,
+            }]
+          : []),
       ]
-    : []
-
-  const projectExportActions: CommandAction[] = canExportToProject
-    ? targetProjects.map((p) => ({
-        command: `/export-to-project ${slug} ${p.slug}`,
-        title: `Export to ${p.slug}`,
-        onSelect: () => { void exportToProject(p.slug) },
-      }))
     : []
 
   const fileActions: CommandAction[] = [
@@ -344,8 +432,7 @@ export function AssetMenu({
 
   const hasImageActions = imageActions.length > 0
   const hasVideoActions = videoActions.length > 0
-  const combinedExportActions = [...exportActions, ...projectExportActions]
-  const hasExportActions = combinedExportActions.length > 0
+  const hasExportActions = exportActions.length > 0
 
   return (
     <>
@@ -378,7 +465,7 @@ export function AssetMenu({
       {hasExportActions && (
         <>
           <ContextMenuSeparator />
-          <CommandActionList actions={combinedExportActions} MenuItem={MenuItem} />
+          <CommandActionList actions={exportActions} MenuItem={MenuItem} />
         </>
       )}
       <ContextMenuSeparator />
