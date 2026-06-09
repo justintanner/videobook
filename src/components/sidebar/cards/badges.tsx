@@ -78,13 +78,33 @@ export function NewBadge({ item }: NewBadgeProps) {
   const visual = getCardVisualState(item);
   return (
     <div
-      className="absolute top-2 right-2 z-30 px-1.5 py-0.5 rounded text-black text-[9px] font-mono font-bold tracking-wider pointer-events-none"
+      className="px-1.5 py-0.5 rounded text-black text-[9px] font-mono font-bold tracking-wider"
       style={{
         backgroundColor: visual.color,
         boxShadow: `0 0 8px ${colorWithAlpha(visual, 0.7)}`,
       }}
     >
       NEW
+    </div>
+  );
+}
+
+interface ArchiveBadgeProps {
+  item: MediaItem;
+}
+
+export function ArchiveBadge({ item }: ArchiveBadgeProps) {
+  const color = '#f59e0b';
+  return (
+    <div
+      className="px-1.5 py-0.5 rounded text-black text-[9px] font-mono font-bold tracking-wider"
+      style={{
+        backgroundColor: color,
+        boxShadow: '0 0 8px rgba(245, 158, 11, 0.7)',
+      }}
+      title={item.archiveId ?? 'Archived'}
+    >
+      ARCHIVED
     </div>
   );
 }

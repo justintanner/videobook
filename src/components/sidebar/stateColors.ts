@@ -188,6 +188,7 @@ const PIPELINE_STATES = new Set<ClipState>([
   'changing-speed',
   'replacing-audio',
   'isolating',
+  'archiving',
 ]);
 
 function isPipelineState(status: ClipState): boolean {

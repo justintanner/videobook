@@ -240,6 +240,8 @@ export function HomePage() {
         duration: asset.duration,
         waveform: asset.waveform,
         frameDirs: asset.frame_dirs,
+        archiveId: asset.archive_id,
+        archivedAt: asset.archived_at,
         pendingState: pending?.state,
         pendingProgress: pending?.progress,
         pendingTaskType: pending?.taskType,

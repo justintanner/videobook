@@ -27,6 +27,26 @@ describe("archive clip job helpers", () => {
     expect(registerArchiveClipJob.length).toBe(1);
   });
 
+  it("builds an asset snapshot with dotfiles and directory contents", () => {
+    const snapshot = __archiveClipJobTest.buildAssetSnapshot({
+      path: "/projects/demo/vid-demo",
+      files: [
+        { name: ".original.json", size_bytes: 1, extension: "json", mtimeMs: 1 },
+        { name: "original.mp4", size_bytes: 2, extension: "mp4", mtimeMs: 2 },
+      ],
+      directories: {
+        original_frames: ["000001.jpg", ".frames.json"],
+      },
+    }, "demo", "vid-demo");
+
+    expect(snapshot.files.map((file) => file.relativePath)).toEqual([
+      ".original.json",
+      "original.mp4",
+      "original_frames/000001.jpg",
+      "original_frames/.frames.json",
+    ]);
+  });
+
   it("splits a three-hour clip into twenty-minute starts", () => {
     expect(__archiveClipJobTest.chunkStarts(3 * 60 * 60)).toEqual([
       0,

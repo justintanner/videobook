@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   archiveTags,
+  assetSnapshotKey,
+  assetSnapshotPrefix,
   chunkKey,
   clipKey,
   indexKey,
@@ -29,11 +31,20 @@ describe("B2 archive helpers", () => {
     const config = { prefix: "archive" };
 
     expect(clipKey(config, sha256, "original.mp4")).toBe(`archive/clips/${sha256}/original.mp4`);
-    expect(indexKey(config, sha256)).toBe(`archive/clips/${sha256}/index.json`);
+    expect(indexKey(config, sha256)).toBe(`archive/clips/${sha256}/archive.json`);
     expect(transcriptJsonKey(config, sha256)).toBe(`archive/clips/${sha256}/transcript.json`);
     expect(transcriptTextKey(config, sha256)).toBe(`archive/clips/${sha256}/transcript.txt`);
     expect(chunkKey(config, sha256, 7)).toBe(`archive/clips/${sha256}/chunk-007.json`);
     expect(ingestKey(config, sha256, "ingest-a")).toBe(`archive/clips/${sha256}/ingest-ingest-a.json`);
+    expect(assetSnapshotKey(config, sha256, ".original.json")).toBe(
+      `archive/clips/${sha256}/.original.json`,
+    );
+    expect(assetSnapshotKey(config, sha256, "original_frames/000001.jpg")).toBe(
+      `archive/clips/${sha256}/original_frames__000001.jpg`,
+    );
+    expect(assetSnapshotPrefix(config, sha256)).toBe(
+      `archive/clips/${sha256}/`,
+    );
     expect(topicMarkerKey(config, "ai-safety", sha256, "ingest-a")).toBe(`archive/topics/ai-safety/${sha256}-ingest-a.json`);
     expect(personMarkerKey(config, "ada-lovelace", sha256, "ingest-a")).toBe(`archive/people/ada-lovelace/${sha256}-ingest-a.json`);
   });

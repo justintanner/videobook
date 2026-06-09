@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/context-menu';
 import type { MediaItem, ClipState } from '../types';
 import { getCardVisualState, isRenderingState } from '../stateColors';
-import { NewBadge } from './badges';
+import { ArchiveBadge, NewBadge } from './badges';
 import {
   UploadingOverlay,
   GeneratingOverlay,
@@ -54,6 +54,7 @@ const PIPELINE_STATE_LABELS: Partial<Record<ClipState, string>> = {
   'changing-speed': 'CHANGING SPEED',
   'replacing-audio': 'REPLACING AUDIO',
   isolating: 'ISOLATING VOCALS',
+  archiving: 'ARCHIVING',
 };
 
 function StateOverlay({ item }: { item: MediaItem }) {
@@ -78,6 +79,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
 export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData, onMarkSeen }: CardShellProps) {
   const visual = getCardVisualState(item);
   const isUnseen = visual.isReady && !visual.isError && item.seenAt == null;
+  const isArchived = visual.isReady && item.archiveId != null;
   const showAccent = visual.isError || visual.isGold || visual.isActive || selected;
 
   const classes = cn(
@@ -140,8 +142,12 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
       {/* State overlay */}
       <StateOverlay item={item} />
 
-      {/* NEW badge (top-right) - only when ready, not errored, never seen */}
-      {isUnseen && <NewBadge item={item} />}
+      {(isArchived || isUnseen) && (
+        <div className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1 pointer-events-none">
+          {isArchived && <ArchiveBadge item={item} />}
+          {isUnseen && <NewBadge item={item} />}
+        </div>
+      )}
 
       {/* CONTENT - Type-specific rendering */}
       {children}

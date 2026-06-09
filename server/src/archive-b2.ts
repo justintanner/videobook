@@ -134,8 +134,31 @@ export function clipKey(config: Pick<ArchiveConfig, "prefix">, sha256: string, f
   return archiveKey(config, `${clipPrefix(sha256)}${filename}`);
 }
 
+export function assetSnapshotPrefix(
+  config: Pick<ArchiveConfig, "prefix">,
+  sha256: string,
+): string {
+  return archiveKey(config, clipPrefix(sha256));
+}
+
+function flattenSnapshotPath(relativePath: string): string {
+  return relativePath
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .join("__");
+}
+
+export function assetSnapshotKey(
+  config: Pick<ArchiveConfig, "prefix">,
+  sha256: string,
+  relativePath: string,
+): string {
+  return `${assetSnapshotPrefix(config, sha256)}${flattenSnapshotPath(relativePath)}`;
+}
+
 export function indexKey(config: Pick<ArchiveConfig, "prefix">, sha256: string): string {
-  return clipKey(config, sha256, "index.json");
+  return clipKey(config, sha256, "archive.json");
 }
 
 export function transcriptJsonKey(config: Pick<ArchiveConfig, "prefix">, sha256: string): string {
@@ -240,6 +263,19 @@ export function mergeArchiveIngests(
 
 export function contentTypeForFilename(filename: string): string {
   switch (extname(filename).toLowerCase()) {
+    case ".aac":
+      return "audio/aac";
+    case ".flac":
+      return "audio/flac";
+    case ".gif":
+      return "image/gif";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".json":
+      return "application/json";
+    case ".md":
+      return "text/markdown; charset=utf-8";
     case ".mp4":
       return "video/mp4";
     case ".mov":
@@ -254,6 +290,14 @@ export function contentTypeForFilename(filename: string): string {
       return "audio/wav";
     case ".m4a":
       return "audio/mp4";
+    case ".ogg":
+      return "audio/ogg";
+    case ".png":
+      return "image/png";
+    case ".txt":
+      return "text/plain; charset=utf-8";
+    case ".webp":
+      return "image/webp";
     default:
       return "application/octet-stream";
   }

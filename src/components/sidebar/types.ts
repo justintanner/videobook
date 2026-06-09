@@ -24,6 +24,7 @@ export type ClipState =
   | 'rendering-square'
   | 'render-queued-square'
   | 'downloading'
+  | 'archiving'
   | 'transcribing'
   | 'error'
   | 'deleting'
@@ -56,6 +57,8 @@ export interface MediaItem {
   duration?: number | null;
   waveform?: number[] | null;
   frameDirs?: Record<string, string[]>;
+  archiveId?: string | null;
+  archivedAt?: string | null;
   pendingState?: PendingState;
   pendingProgress?: number;
   pendingTaskType?: string;

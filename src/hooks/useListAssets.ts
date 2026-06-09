@@ -17,6 +17,8 @@ export interface ListAsset {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
+  archive_id: string | null;
+  archived_at: string | null;
   seen_at: number | null;
 }
 

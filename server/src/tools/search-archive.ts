@@ -87,9 +87,9 @@ async function loadAllIndexSeeds(
 ): Promise<HitSeed[]> {
   const objects = await listObjects(args.b2, args.bucket, archiveKey({ prefix: args.prefix }, "clips/"));
   return objects
-    .filter((object) => /\/index\.json$/.test(object.key))
+    .filter((object) => /\/archive\.json$/.test(object.key))
     .map((object) => {
-      const match = /(?:^|\/)clips\/([a-f0-9]{64})\/index\.json$/i.exec(object.key);
+      const match = /(?:^|\/)clips\/([a-f0-9]{64})\/archive\.json$/i.exec(object.key);
       return match?.[1]
         ? { sha256: match[1].toLowerCase(), indexKey: object.key }
         : null;

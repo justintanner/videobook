@@ -12,7 +12,7 @@ import { createOpenAi, firstContent } from "@apicity/openai";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { extname, join, posix } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
@@ -21,6 +21,8 @@ import { validateDownloadOutput } from "./download-video.js";
 import { withLocalLease } from "./_lease.js";
 import {
   archiveTags,
+  assetSnapshotKey,
+  assetSnapshotPrefix,
   chunkKey,
   clipKey,
   contentTypeForFilename,
@@ -64,6 +66,18 @@ type PreparedMedia = {
   source: ArchiveSourceRef;
   cleanup?: () => Promise<void>;
   analysisTopics: string[];
+  assetSnapshot?: AssetSnapshot;
+};
+
+type AssetSnapshotFile = {
+  relativePath: string;
+  filePath: string;
+};
+
+type AssetSnapshot = {
+  projectSlug: string;
+  assetId: string;
+  files: AssetSnapshotFile[];
 };
 
 type TranscriptResult = {
@@ -93,6 +107,27 @@ function pickMediaFile(files: AssetManifestFile[], assetId: string): AssetManife
     ?? findPrimaryMediaFile(files, assetId)
     ?? findVideoFile(files)
     ?? findAudioFile(files, assetId);
+}
+
+function buildAssetSnapshot(
+  manifest: { path: string; files: AssetManifestFile[]; directories?: Record<string, string[]> },
+  projectSlug: string,
+  assetId: string,
+): AssetSnapshot {
+  const files: AssetSnapshotFile[] = manifest.files.map((file) => ({
+    relativePath: file.name,
+    filePath: join(manifest.path, file.name),
+  }));
+  for (const [dir, names] of Object.entries(manifest.directories ?? {})) {
+    for (const name of names) {
+      const relativePath = posix.join(dir, name);
+      files.push({
+        relativePath,
+        filePath: join(manifest.path, dir, name),
+      });
+    }
+  }
+  return { projectSlug, assetId, files };
 }
 
 async function readAnalysisTopics(
@@ -147,6 +182,7 @@ async function prepareAssetMedia(
       created_at: new Date().toISOString(),
     },
     analysisTopics: await readAnalysisTopics(fs, payload.assetId, payload.sourceProjectSlug),
+    assetSnapshot: buildAssetSnapshot(manifest.value, payload.sourceProjectSlug, payload.assetId),
   };
 }
 
@@ -421,6 +457,36 @@ async function buildAndWriteIndex(args: {
   return index;
 }
 
+async function uploadAssetSnapshot(args: {
+  snapshot: AssetSnapshot | undefined;
+  sha256: string;
+  config: ReturnType<typeof getArchiveConfig>;
+  b2: ReturnType<typeof createArchiveB2>;
+}): Promise<{ prefix: string; fileCount: number } | null> {
+  if (!args.snapshot) return null;
+  const prefix = assetSnapshotPrefix(
+    args.config,
+    args.sha256,
+  );
+  let fileCount = 0;
+  for (const file of args.snapshot.files) {
+    const key = assetSnapshotKey(
+      args.config,
+      args.sha256,
+      file.relativePath,
+    );
+    await uploadFileToB2(
+      args.b2,
+      args.config.bucket,
+      key,
+      file.filePath,
+      contentTypeForFilename(file.relativePath),
+    );
+    fileCount += 1;
+  }
+  return { prefix, fileCount };
+}
+
 async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
   const prepared = payload.url ? await prepareUrlMedia(payload) : await prepareAssetMedia(fs, payload);
   try {
@@ -453,6 +519,12 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
       transcriptText = transcriptResult.text;
       duration = transcriptResult.duration;
     }
+    const assetSnapshot = await uploadAssetSnapshot({
+      snapshot: prepared.assetSnapshot,
+      sha256,
+      config,
+      b2,
+    });
 
     const title = sourceTitle(payload.title, prepared.source.title);
     const enriched = duplicate ? { topics: [], people: [] } : await enrichMetadata(title ?? null, transcriptText);
@@ -491,6 +563,8 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
       sha256,
       duplicate,
       ingest_id: payload.ingestId,
+      asset_snapshot_prefix: assetSnapshot?.prefix ?? null,
+      asset_snapshot_file_count: assetSnapshot?.fileCount ?? 0,
       topics: index.topics.map((topic) => topic.label),
       people: index.people.map((person) => person.label),
     };
@@ -499,11 +573,32 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
   }
 }
 
+async function writeArchiveMetadata(fs: VideocityFs, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
+  if (!payload.assetId || !payload.sourceProjectSlug) return;
+  const archiveId = result.archive_id;
+  if (typeof archiveId !== "string") return;
+  const write = await fs.writeMetadata(payload.assetId, "archive", {
+    archive_id: archiveId,
+    ingest_id: result.ingest_id,
+    duplicate: result.duplicate,
+    asset_snapshot_prefix: result.asset_snapshot_prefix,
+    asset_snapshot_file_count: result.asset_snapshot_file_count,
+    topics: result.topics,
+    people: result.people,
+    archived_at: new Date().toISOString(),
+  }, payload.sourceProjectSlug);
+  if (!write.ok) throw new Error(write.error.message);
+}
+
 export function registerArchiveClipJob(fs: VideocityFs): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {
-      return withLocalLease(fs, p.sourceProjectSlug ?? p.projectSlug, p.assetId, ctx, "download", async () => runArchive(fs, p));
+      return withLocalLease(fs, p.sourceProjectSlug ?? p.projectSlug, p.assetId, ctx, "archive", async () => {
+        const result = await runArchive(fs, p);
+        await writeArchiveMetadata(fs, p, result);
+        return result;
+      });
     }
     return runArchive(fs, { ...p, ingestId: p.ingestId || randomUUID() });
   });
@@ -511,6 +606,7 @@ export function registerArchiveClipJob(fs: VideocityFs): void {
 
 export const __archiveClipJobTest = {
   archiveTags,
+  buildAssetSnapshot,
   chunkStarts,
   mergeTranscripts,
   sampleTranscript,

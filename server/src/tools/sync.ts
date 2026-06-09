@@ -64,9 +64,16 @@ export type SyncAsset = {
   duration: number | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
+  archive_id: string | null;
+  archived_at: string | null;
   /** Unix seconds when user first viewed this asset, or null if still unseen.
    *  Drives the sidebar's NEW badge. */
   seen_at: number | null;
+};
+
+type ArchiveMetadata = {
+  archive_id?: unknown;
+  archived_at?: unknown;
 };
 
 export type SyncResult = {
@@ -286,12 +293,13 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
   const assets = await fs.listAssets(project_slug, { sort });
   return Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [manifestResult, lockData, pendingTask, generationError, metadata, assetWorkRow] = await Promise.all([
+      const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow] = await Promise.all([
         fs.getManifest(a.id, project_slug, { includeDotfiles: true }),
         fs.getLockData(a.path),
         fs.pendingTasks.read(project_slug, a.id),
         fs.generationErrors.read(project_slug, a.id),
         fs.readMetadata<Record<string, unknown>>(a.id, "original", project_slug),
+        fs.readMetadata<ArchiveMetadata>(a.id, "archive", project_slug),
         fs.assetWork.read(project_slug, a.id),
       ]);
 
@@ -357,6 +365,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
       });
 
       const meta = metadata.ok ? metadata.value : null;
+      const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
 
       // Backfill duration if missing from metadata
       let duration = (meta?.duration as number) ?? null;
@@ -406,6 +415,8 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         duration,
         waveform,
         frame_dirs: frameDirs,
+        archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,
+        archived_at: typeof archiveMeta?.archived_at === "string" ? archiveMeta.archived_at : null,
         seen_at: assetWorkRow.ok && assetWorkRow.value ? assetWorkRow.value.seenAt : null,
       };
     }),
