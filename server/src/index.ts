@@ -166,20 +166,24 @@ async function start(): Promise<void> {
   });
 }
 
-process.on("SIGINT", async () => {
-  for (const h of reaperHandles) h.stop();
-  stopScheduler();
-  await queue.stop();
-  fs.close();
-  process.exit(0);
-});
+async function shutdown(): Promise<void> {
+  let exitCode = 0;
+  try {
+    for (const h of reaperHandles) h.stop();
+    stopScheduler();
+    await queue.stop();
+    fs.close();
+  } catch (error) {
+    console.error("[shutdown] cleanup failed:", error);
+    exitCode = 1;
+  }
+  process.exit(exitCode);
+}
 
-process.on("SIGTERM", async () => {
-  for (const h of reaperHandles) h.stop();
-  stopScheduler();
-  await queue.stop();
-  fs.close();
-  process.exit(0);
-});
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-start();
+start().catch((error) => {
+  console.error("[startup] fatal:", error);
+  process.exit(1);
+});

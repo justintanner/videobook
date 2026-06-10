@@ -30,6 +30,9 @@ export interface LocalUploadResult {
   assetId: string;
   path: string;
   filename: string;
+  // Set when waitForProcessing was requested and the processing job failed.
+  // The upload itself succeeded and the asset is kept.
+  processingError?: string;
 }
 
 export type LocalUploadOutcome =
@@ -132,6 +135,23 @@ interface UploadLocalArgs {
 // presence check and still skips the asset.
 const UPLOAD_LOCK_MS = 5 * 60_000;
 
+async function runProcessingJob(
+  jobId: string,
+  payload: Record<string, unknown>,
+  waitForProcessing: boolean | undefined,
+): Promise<string | null> {
+  if (!waitForProcessing) {
+    await queue.enqueue(jobId, payload);
+    return null;
+  }
+  try {
+    await queue.enqueueAndWait(jobId, payload);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 async function uploadLocal(
   fs: VideocityFs,
   args: UploadLocalArgs,
@@ -188,6 +208,7 @@ async function uploadLocal(
       };
     } else {
       const provenance = { origin: args.origin ?? "upload", processed_at: new Date().toISOString() };
+      let processingError: string | null = null;
       if (assetId.startsWith("vid-")) {
         const videoPath = path.join(assetPath, writtenFilename);
         const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -200,11 +221,7 @@ async function uploadLocal(
           provenance,
           ...(args.waitForProcessing ? { skipDownstreamJobs: true } : {}),
         } as unknown as Record<string, unknown>;
-        if (args.waitForProcessing) {
-          await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
-        } else {
-          await queue.enqueue(jobId, payload);
-        }
+        processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
       } else if (assetId.startsWith("img-")) {
         const jobId = `process-image-${assetId}-${Date.now()}`;
         const payload = {
@@ -214,17 +231,18 @@ async function uploadLocal(
           extension: ext,
           provenance,
         } as unknown as Record<string, unknown>;
-        if (args.waitForProcessing) {
-          await queue.enqueueAndWait(jobId, payload).catch(() => undefined);
-        } else {
-          await queue.enqueue(jobId, payload);
-        }
+        processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
       } else {
         await fs.writeMetadata(assetId, "original", provenance, args.projectSlug);
       }
       outcome = {
         ok: true,
-        value: { assetId, path: assetPath, filename: writtenFilename },
+        value: {
+          assetId,
+          path: assetPath,
+          filename: writtenFilename,
+          ...(processingError ? { processingError } : {}),
+        },
       };
     }
   } finally {

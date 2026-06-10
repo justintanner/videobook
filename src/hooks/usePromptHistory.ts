@@ -36,28 +36,29 @@ export function usePromptHistory(
   useEffect(() => { callToolRef.current = callTool; });
   useEffect(() => { projectSlugRef.current = projectSlug; });
 
-  // Load persisted history when project or surface changes.
+  // Load persisted history when project or surface changes (or once callTool
+  // becomes available). loadedKeyRef is only committed on success so a failed
+  // load retries on the next effect run.
   useEffect(() => {
-    const ct = callToolRef.current;
-    if (!ct || !projectSlug) return;
+    if (!callTool || !projectSlug) return;
     const key = `${projectSlug}::${surface}`;
     if (key === loadedKeyRef.current) return;
-    loadedKeyRef.current = key;
 
-    ct('list_prompt_history', { project_slug: projectSlug, surface, limit: 100 })
+    callTool('list_prompt_history', { project_slug: projectSlug, surface, limit: 100 })
       .then((result) => {
         if (result.isError) return;
         const content = result.content as Array<{ type: string; text: string }>;
         const parsed = JSON.parse(content[0].text) as { entries: PromptHistoryEntry[] };
         // Server returns newest-first; reverse so navigateBack walks from end.
         const ordered = parsed.entries.map((e) => e.prompt).reverse();
+        loadedKeyRef.current = key;
         entriesRef.current = ordered;
         cursorRef.current = -1;
         setEntries(ordered);
         setCursor(-1);
       })
       .catch(() => {});
-  }, [projectSlug, surface]);
+  }, [callTool, projectSlug, surface]);
 
   const push = useCallback((prompt: string, params?: Record<string, unknown>) => {
     if (!prompt.trim()) return;

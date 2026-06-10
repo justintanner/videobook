@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
@@ -22,7 +22,7 @@ export function showFolderDef(fs: VideocityFs): ToolDef {
       }
 
       return new Promise((resolve) => {
-        exec(`open -R "${result.value}"`, (error) => {
+        execFile("open", ["-R", result.value], (error) => {
           if (error) {
             resolve({
               isError: true as const,

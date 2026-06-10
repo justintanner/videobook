@@ -460,6 +460,9 @@ export async function uploadFileToB2(
       offset += read.bytesRead;
       partNumber += 1;
     }
+    if (offset < fileStat.size) {
+      throw new Error(`Short read uploading ${key}: got ${offset} of ${fileStat.size} bytes`);
+    }
     await b2.objects.completeMultipartUpload({
       bucket,
       key,
