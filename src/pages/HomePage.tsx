@@ -383,11 +383,34 @@ export function HomePage() {
     });
   }, [projectSlug, upload, sync, listAssets, sortOrder]);
 
-  const handleDeleteClip = useCallback((video: MediaItem) => {
+  const handleDeleteClip = useCallback(async (video: MediaItem) => {
     if (!projectSlug) return;
     setDeletingIds((prev) => new Set(prev).add(video.id));
-    callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
-  }, [callTool, projectSlug]);
+    try {
+      const result = await callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined;
+        toast({ title: 'Delete failed', description: content?.[0]?.text ?? 'delete_asset failed', duration: 5000 });
+        return;
+      }
+      removeAsset(video.id);
+      setSelectedItem((current) => current?.id === video.id ? null : current);
+      setTrimAssetId((current) => current === video.id ? null : current);
+      await Promise.all([
+        fetchTimeline(projectSlug),
+        listAssets(projectSlug, sortOrder),
+      ]);
+      sync(projectSlug);
+    } catch (error) {
+      toast({ title: 'Delete failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(video.id);
+        return next;
+      });
+    }
+  }, [callTool, fetchTimeline, listAssets, projectSlug, removeAsset, sortOrder, sync]);
 
   const handleAudioDroppedOnVideo = useCallback((video: MediaItem, audioId: string, audioSlug: string) => {
     setAudioReplace({ videoId: video.id, videoSlug: video.slug, audioId, audioSlug });

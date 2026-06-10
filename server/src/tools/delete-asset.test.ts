@@ -53,6 +53,43 @@ describe("delete_asset tool", () => {
     expect(manifestResult.isError).toBe(true);
   });
 
+  it("clears timeline slots referencing the deleted asset", async () => {
+    const data = Buffer.from("fake-png-data").toString("base64");
+    const uploadResult = await client.callTool({
+      name: "upload_file",
+      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+    });
+    const uploaded = JSON.parse(
+      (uploadResult.content as Array<{ type: string; text: string }>)[0].text
+    ) as { assetId: string };
+
+    const assignResult = await client.callTool({
+      name: "assign_slot",
+      arguments: { asset_id: uploaded.assetId, slot: "s01", project_slug: "test-proj" },
+    });
+    expect(assignResult.isError).toBeFalsy();
+
+    const result = await client.callTool({
+      name: "delete_asset",
+      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text
+    );
+    expect(parsed.timeline).toEqual({ updated: true });
+
+    const timelineResult = await client.callTool({
+      name: "get_timeline",
+      arguments: { project_slug: "test-proj" },
+    });
+    const timeline = JSON.parse(
+      (timelineResult.content as Array<{ type: string; text: string }>)[0].text
+    ) as { slots: Array<{ slug: string }> };
+    expect(timeline.slots[0]?.slug).toBe("");
+  });
+
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "delete_asset",
