@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -25,7 +25,7 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
       "Variants: \"full\" (full reproduction prompt + breakdown) or \"tldr\" (1–2 sentence summary). " +
       "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that feed. " +
       "Optional custom_prompt applies a transformation instruction (e.g. \"replace the pig with a man in a blue suit\"). " +
-      "Previous versions are preserved in git history via vc-engine. " +
+      "Previous versions are preserved in git history via videocity-engine. " +
       "Returns immediately; sync reports status=\"generating\" until the new markdown is written.",
     schema: {
       asset_id: z.string().describe("Script asset ID (script-*)"),

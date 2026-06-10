@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";

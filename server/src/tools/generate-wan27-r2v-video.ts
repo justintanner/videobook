@@ -1,10 +1,10 @@
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "vc-engine";
+import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);

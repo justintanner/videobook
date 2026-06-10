@@ -1,6 +1,6 @@
 import { createFreeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {

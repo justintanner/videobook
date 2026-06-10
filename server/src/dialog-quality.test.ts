@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assessDialogQuality, readAndAssessDialog } from "./dialog-quality.js";
 import { createFsForTest } from "./fs.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 describe("assessDialogQuality", () => {
   it("returns hasDialog=false with reason 'empty' for empty text", () => {

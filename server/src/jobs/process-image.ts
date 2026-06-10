@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";

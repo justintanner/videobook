@@ -1,8 +1,8 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "vc-engine";
+import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const BOOST_MIN = 1.0;

@@ -1,4 +1,4 @@
-import type { VideocityFs, FsError } from "vc-engine";
+import type { VideocityFs, FsError } from "videocity-engine";
 import { createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as path from "node:path";

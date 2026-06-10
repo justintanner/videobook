@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import type { KlingElement, MultiShotPrompt } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";

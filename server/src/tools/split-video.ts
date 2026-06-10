@@ -1,8 +1,8 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "vc-engine";
+import { findVideoFile } from "videocity-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -36,7 +36,7 @@ function validateSplitParams(
   return { chunkAEnd, chunkBStart };
 }
 
-// slugifyName in vc-engine truncates to 4 words AND filters stop words
+// slugifyName in videocity-engine truncates to 4 words AND filters stop words
 // (which include "a"), so naming chunks "...-a" and "...-b" loses the suffix
 // asymmetrically. Use numeric suffixes 1/2 — they survive both filters — and
 // trim the source name to its last 2 words so the suffix fits in the cap.

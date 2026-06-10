@@ -5,9 +5,9 @@
  * Always defaults to nano_banana (richest settings). The user can switch
  * models via the dropdown in the UI.
  */
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { resolveAllAssets, expandSlotRefs } from "vc-engine";
+import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
 import {
   getImageModels,
   buildImageModelOption,

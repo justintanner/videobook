@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";

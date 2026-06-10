@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 /**
  * Asserts the gen-start red-flash bug stays fixed: after a tool calls

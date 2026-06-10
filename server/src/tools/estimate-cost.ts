@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";

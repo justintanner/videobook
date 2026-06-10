@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { createOpenAi } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";

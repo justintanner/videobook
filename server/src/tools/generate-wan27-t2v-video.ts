@@ -1,9 +1,9 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile } from "vc-engine";
+import { findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 function slugify(text: string): string {

@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -6,7 +6,7 @@ import type {
   ElevenLabsTranscriptWord,
   ElevenLabsTranscriptCharacter,
 } from "@apicity/elevenlabs";
-import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "vc-engine";
+import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "videocity-engine";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { createOpenAi, firstContent } from "@apicity/openai";
 import { randomUUID } from "node:crypto";

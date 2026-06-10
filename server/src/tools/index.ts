@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";

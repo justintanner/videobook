@@ -2,9 +2,9 @@ import { copyFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { findPrimaryMediaFile } from "vc-engine";
+import { findPrimaryMediaFile } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 
 async function resolveDestination(baseName: string, ext: string): Promise<string> {

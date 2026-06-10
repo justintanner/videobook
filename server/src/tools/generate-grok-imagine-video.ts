@@ -1,6 +1,6 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
-import { findAudioFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import { findAudioFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokVideo15AspectRatioSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";

@@ -1,5 +1,5 @@
 import { createKie, uploadFile } from "@apicity/kie";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,

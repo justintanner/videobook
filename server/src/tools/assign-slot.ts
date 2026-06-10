@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetEntry } from "vc-engine";
+import type { VideocityFs, AssetEntry } from "videocity-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

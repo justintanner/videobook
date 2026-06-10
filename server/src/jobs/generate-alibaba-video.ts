@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { createAlibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";

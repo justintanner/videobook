@@ -1,4 +1,4 @@
-import type { AssetManifestFile, VideocityFs } from "vc-engine";
+import type { AssetManifestFile, VideocityFs } from "videocity-engine";
 import { extname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import {

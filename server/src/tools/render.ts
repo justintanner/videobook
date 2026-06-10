@@ -1,8 +1,8 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "vc-engine";
+import { findVideoFile } from "videocity-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";

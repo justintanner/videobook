@@ -1,5 +1,5 @@
 import { createAlibaba, uploadFile } from "@apicity/alibaba";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 import { getApiKey } from "../api-key.js";
 

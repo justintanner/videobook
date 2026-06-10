@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import type { JobHandlerContext } from "../queue.js";
 
 type AssetWorkKind =

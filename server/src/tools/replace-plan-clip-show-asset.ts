@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { readClipShowPlan, writeClipShowPlan } from "../plan-clip-show.js";
 import type { ClipShowPlanSidecar } from "../plan-types.js";

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";

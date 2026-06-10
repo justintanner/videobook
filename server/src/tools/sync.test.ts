@@ -6,7 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 describe("sync tool", () => {
   let client: Client;

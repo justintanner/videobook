@@ -1,5 +1,5 @@
-import type { VideocityFs } from "vc-engine";
-import { findAudioFile, findVideoFile } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
+import { findAudioFile, findVideoFile } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile, mkdir, readFile, rm, stat } from "node:fs/promises";

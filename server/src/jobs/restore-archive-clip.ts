@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { join } from "node:path";
 import { createArchiveB2, getArchiveConfig } from "../archive-b2.js";
 import { queue, registerJobHandler } from "../queue.js";

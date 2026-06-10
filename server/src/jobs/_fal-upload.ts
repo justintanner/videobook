@@ -1,5 +1,5 @@
 import { createFal, uploadFile } from "@apicity/fal";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,

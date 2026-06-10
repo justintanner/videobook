@@ -1,4 +1,4 @@
-import type { ActionLogEntry, GitCommit, VideocityFs } from "vc-engine";
+import type { ActionLogEntry, GitCommit, VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { isExcludedAction } from "./activity-policy.js";
 import type { ToolDef } from "./tool-def.js";

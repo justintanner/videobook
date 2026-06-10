@@ -1,9 +1,9 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { getFFmpeggy } from "../ffmpeg.js";
-import { findVideoFile } from "vc-engine";
+import { findVideoFile } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const MAX_DURATION_SECONDS = 300;

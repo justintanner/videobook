@@ -1,6 +1,6 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { findVideoFile } from "vc-engine";
+import { findVideoFile } from "videocity-engine";
 
 export const MODEL = "gpt-5.4";
 const MAX_FRAMES = 15;

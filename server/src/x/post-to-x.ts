@@ -1,5 +1,5 @@
-import type { VideocityFs } from "vc-engine";
-import { findPrimaryMediaFile } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
+import { findPrimaryMediaFile } from "videocity-engine";
 import { createX } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
 import { extname, join } from "node:path";

@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";

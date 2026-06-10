@@ -1,7 +1,7 @@
 /**
  * Video model registry, schemas, validation, and routing prompt.
  */
-import type { ResolvedAsset } from "vc-engine";
+import type { ResolvedAsset } from "videocity-engine";
 import {
   GrokVideo15PreviewRequestSchema,
   GrokTextToVideoRequestSchema,

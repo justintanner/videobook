@@ -21,7 +21,7 @@ import {
   isValidProjectSlug,
   queueApi,
   closeStateDb,
-} from "vc-engine";
+} from "videocity-engine";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
 

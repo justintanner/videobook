@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { mkdir, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
 import sharp from "sharp";

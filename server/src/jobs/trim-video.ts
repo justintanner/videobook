@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { execFile } from "node:child_process";
 import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";

@@ -6,8 +6,8 @@ import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { JobHandlerContext } from "../queue.js";
-import { QUEUED_TASK_ID } from "vc-engine";
-import type { PendingTask, TaskType, VideocityFs } from "vc-engine";
+import { QUEUED_TASK_ID } from "videocity-engine";
+import type { PendingTask, TaskType, VideocityFs } from "videocity-engine";
 import { requireApiKey } from "../api-key.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";

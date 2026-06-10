@@ -21,7 +21,7 @@ React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API
 
 **MCP Server:** `server/src/index.ts` — Express app exposing `POST /mcp` with `StreamableHTTPServerTransport` (stateless). Tools are registered in `server/src/tools/`. The server is also accessible to external MCP clients (Claude Desktop, etc.) at `http://localhost:3001/mcp`.
 
-**Filesystem Layer:** `vc-engine` (local dependency at `../vc-engine`) — provides project/asset management with git versioning. All project, asset, and file operations go through `createFs()` from this package.
+**Filesystem Layer:** `videocity-engine` — npm dependency providing project/asset management with git versioning. All project, asset, and file operations go through `createFs()` from this package.
 
 ## TypeScript
 
@@ -33,7 +33,7 @@ Flat ESLint config (`eslint.config.js`) with typescript-eslint, react-hooks, and
 
 ## Filesystem Operations
 
-IMPORTANT: All project, asset, and file operations MUST use the `vc-engine` package. Never use `node:fs` directly for managing projects, assets, or their files — always go through `createFs()` from `vc-engine`. This ensures git versioning, proper directory structure, and consistent error handling via `Result` types.
+IMPORTANT: All project, asset, and file operations MUST use the `videocity-engine` package. Never use `node:fs` directly for managing projects, assets, or their files — always go through `createFs()` from `videocity-engine`. This ensures git versioning, proper directory structure, and consistent error handling via `Result` types.
 
 ## External API Calls
 

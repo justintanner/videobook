@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { createAlibaba } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";

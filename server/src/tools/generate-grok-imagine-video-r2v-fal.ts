@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoReferenceToVideoRequestSchema } from "@apicity/fal/zod";

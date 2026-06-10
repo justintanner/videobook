@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";

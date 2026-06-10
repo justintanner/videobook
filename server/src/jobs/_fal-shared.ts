@@ -1,6 +1,6 @@
 import { createFal } from "@apicity/fal";
-import type { VideocityFs } from "vc-engine";
-import { type PendingTask } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
+import { type PendingTask } from "videocity-engine";
 import { requireApiKey } from "../api-key.js";
 export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
 

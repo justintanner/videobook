@@ -6,7 +6,7 @@
  *
  * Only identity, labels, image slot limits, and defaults are configured here.
  */
-import type { ResolvedAsset } from "vc-engine";
+import type { ResolvedAsset } from "videocity-engine";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import {

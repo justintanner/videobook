@@ -1,12 +1,12 @@
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "vc-engine";
+import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
-import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "vc-engine";
+import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "videocity-engine";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

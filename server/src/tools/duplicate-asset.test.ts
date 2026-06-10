@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 describe("duplicate_asset tool", () => {
   let client: Client;

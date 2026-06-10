@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import type { GrokVideo15AspectRatio } from "@apicity/kie";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";

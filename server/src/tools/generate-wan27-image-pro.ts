@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";

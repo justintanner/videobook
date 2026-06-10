@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { registerSeedance2Job } from "./_seedance2-shared.js";
 
 export function registerGenerateSeedance2VideoJob(fs: VideocityFs): void {

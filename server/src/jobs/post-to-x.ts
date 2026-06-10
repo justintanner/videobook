@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import { postToX, type PostToXResult } from "../x/post-to-x.js";
 

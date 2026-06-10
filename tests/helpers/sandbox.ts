@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { createFs, type VideocityFs } from 'vc-engine';
+import { createFs, type VideocityFs } from 'videocity-engine';
 
 const execFileAsync = promisify(execFile);
 

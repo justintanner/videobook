@@ -1,4 +1,4 @@
-import type { AssetEntry, VideocityFs } from "vc-engine";
+import type { AssetEntry, VideocityFs } from "videocity-engine";
 import type {
   BackgroundMode,
   FontSizePreset,

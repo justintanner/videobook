@@ -1,5 +1,5 @@
-import type { AssetManifestFile, VideocityFs } from "vc-engine";
-import { findVideoFile } from "vc-engine";
+import type { AssetManifestFile, VideocityFs } from "videocity-engine";
+import { findVideoFile } from "videocity-engine";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createOpenAi, firstContent, imageBase64Part, textPart, withRetry } from "@apicity/openai";

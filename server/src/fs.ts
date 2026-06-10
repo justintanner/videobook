@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createFs } from "vc-engine";
+import { createFs } from "videocity-engine";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PROJECTS_DIR = resolve(__dirname, "../../projects");

@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { registerAllTools } from "./tools/index.js";
 import { fs as defaultFs } from "./fs.js";
 

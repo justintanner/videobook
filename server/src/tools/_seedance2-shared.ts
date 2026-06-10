@@ -1,5 +1,5 @@
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
-import { findAudioFile, findVideoFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import { findAudioFile, findVideoFile } from "videocity-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";

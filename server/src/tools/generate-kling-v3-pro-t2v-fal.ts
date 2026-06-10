@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3ProTextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";

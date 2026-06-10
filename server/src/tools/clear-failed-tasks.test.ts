@@ -6,7 +6,7 @@ import { createFsForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 async function createImageAsset(fs: VideocityFs, projectSlug: string, name: string): Promise<string> {
   const result = await fs.createAsset("img", name, projectSlug);

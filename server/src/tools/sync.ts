@@ -1,5 +1,5 @@
-import type { VideocityFs, AssetEntry, AssetManifestFile } from "vc-engine";
-import { computeAssetStatus, QUEUED_TASK_ID } from "vc-engine";
+import type { VideocityFs, AssetEntry, AssetManifestFile } from "videocity-engine";
+import { computeAssetStatus, QUEUED_TASK_ID } from "videocity-engine";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -15,10 +15,10 @@ import {
   findAudioFile,
   findPrimaryMediaFile,
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
-} from "vc-engine";
+} from "videocity-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
-import type { PendingTask } from "vc-engine";
+import type { PendingTask } from "videocity-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
@@ -344,7 +344,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         ? `/files/${project_slug}/${a.id}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
-      // Status derivation lives in vc-engine (`computeAssetStatus`). We pass
+      // Status derivation lives in videocity-engine (`computeAssetStatus`). We pass
       // the asset-type-aware primary media name we already computed so the
       // engine doesn't have to redo media-type heuristics.
       const status = computeAssetStatus({

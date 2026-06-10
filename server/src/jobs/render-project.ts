@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";

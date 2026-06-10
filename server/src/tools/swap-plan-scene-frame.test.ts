@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { createFs } from "vc-engine";
-import type { VideocityFs } from "vc-engine";
+import { createFs } from "videocity-engine";
+import type { VideocityFs } from "videocity-engine";
 import { queue } from "../queue.js";
 import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
 

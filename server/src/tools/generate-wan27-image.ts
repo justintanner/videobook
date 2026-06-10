@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "vc-engine";
+import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";

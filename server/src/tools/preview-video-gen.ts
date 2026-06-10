@@ -3,10 +3,10 @@
  * video generation tool and returns a rich preview JSON for the frontend to
  * render a dynamic parameter form.
  */
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "vc-engine";
+import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
 import {
   VIDEO_MODELS,
   buildVideoRoutingPrompt,

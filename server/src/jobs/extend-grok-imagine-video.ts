@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import type { GrokImagineResolution, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";

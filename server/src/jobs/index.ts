@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerArchiveClipJob } from "./archive-clip.js";

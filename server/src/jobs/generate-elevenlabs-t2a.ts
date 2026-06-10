@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";

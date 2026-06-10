@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createFsForTest } from "../fs.js";
 import { findUnprocessedUploads } from "./process-upload.js";
 import { queue } from "../queue.js";
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 
 describe("findUnprocessedUploads", () => {
   let tempDir: string;

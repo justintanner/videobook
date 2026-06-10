@@ -1,4 +1,4 @@
-import type { VideocityFs } from "vc-engine";
+import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { readStoryboardVideoPlan, writeStoryboardVideoPlan } from "../plan-storyboard-video.js";
 import type { ToolDef } from "./tool-def.js";
