@@ -167,9 +167,9 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "url", type: "string", required: true, description: "Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)" },
-      { name: "start_time", type: "string", required: false, description: "Start time (e.g. '30', '1:30', '2m20s')" },
-      { name: "end_time", type: "string", required: false, description: "End time (e.g. '60', '2:00', '3m')" },
-      { name: "full", type: "boolean", required: false, description: "Download entire video (no 3-min cap)" },
+      { name: "start_time", type: "string", required: false, description: "Requested start time metadata (e.g. '30', '1:30', '2m20s')" },
+      { name: "end_time", type: "string", required: false, description: "Requested end time metadata (e.g. '60', '2:00', '3m')" },
+      { name: "full", type: "boolean", required: false, description: "Deprecated; downloads are always full" },
     ],
     mcpTool: { tool: "download_video", autoInject: ["project_slug"] },
   },

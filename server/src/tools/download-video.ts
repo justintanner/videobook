@@ -1,13 +1,9 @@
 import type { VideocityFs } from "vc-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { extractOpenGraph } from "@devmehq/open-graph-extractor";
-import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue } from "../queue.js";
 import { parseTime } from "../time-parse.js";
 import type { ToolDef } from "./tool-def.js";
-
-const DEFAULT_MAX_DURATION = 180;
 
 const SOURCE_PREFIX_MAP: Record<string, string> = {
   "youtube.com": "yt",
@@ -24,13 +20,6 @@ const SOURCE_PREFIX_MAP: Record<string, string> = {
   "dailymotion.com": "dm",
 };
 
-const OG_PLATFORM_SUFFIX = / on (?:X|Twitter|Instagram|Facebook|YouTube|TikTok|Vimeo|Reddit|Twitch|Dailymotion)$/i;
-const OG_HANDLE_PAREN = / \(@?\w+\)/g;
-
-function cleanOgTitle(raw: string): string {
-  return raw.replace(OG_PLATFORM_SUFFIX, "").replace(OG_HANDLE_PAREN, "").trim();
-}
-
 function sourcePrefix(url: string): string {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, "");
@@ -45,21 +34,20 @@ function sourcePrefix(url: string): string {
 export function downloadVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "download_video",
-    description: "Download a video from a URL (YouTube, Twitter/X, etc.) into a videocity project as an asset. Supports time ranges and auto-exports 16:9 and 9:16 versions.",
+    description: "Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.",
     schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
-      start_time: z.string().optional().describe("Start time (e.g. '30', '1:30', '2m20s')"),
-      end_time: z.string().optional().describe("End time (e.g. '60', '2:00', '3m')"),
+      start_time: z.string().optional().describe("Requested start time metadata (e.g. '30', '1:30', '2m20s')"),
+      end_time: z.string().optional().describe("Requested end time metadata (e.g. '60', '2:00', '3m')"),
       project_slug: z.string().describe("Project slug"),
       export_videos: z.boolean().optional().default(false).describe("Auto-export 16:9 and 9:16 versions (default: off)"),
-      full: z.boolean().optional().default(false).describe("Download entire video (no 3-min cap)"),
+      full: z.boolean().optional().default(false).describe("Deprecated; downloads are always full"),
     },
     handler: async (args) => {
-      const { url, start_time, end_time, project_slug, export_videos, full } = args as {
+      const { url, start_time, end_time, project_slug, export_videos } = args as {
         url: string; start_time?: string; end_time?: string;
         project_slug: string; export_videos?: boolean; full?: boolean;
       };
-      // Parse times
       let startSecs: number | undefined;
       let endSecs: number | undefined;
       try {
@@ -70,52 +58,22 @@ export function downloadVideoDef(fs: VideocityFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: msg }] };
       }
 
-      // Validate
-      if (full && (startSecs !== undefined || endSecs !== undefined)) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Cannot specify start/end times with full=true." }],
-        };
-      }
       if (startSecs !== undefined && endSecs !== undefined && startSecs >= endSecs) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "start_time must be less than end_time." }],
         };
       }
+      const requestedRange = startSecs !== undefined || endSecs !== undefined
+        ? {
+            ...(startSecs !== undefined ? { start: startSecs } : {}),
+            ...(endSecs !== undefined ? { end: endSecs } : {}),
+          }
+        : undefined;
 
-      // Build download sections for yt-dlp
-      let downloadSections: string | undefined;
-      if (!full) {
-        const s = startSecs ?? 0;
-        const e = endSecs ?? DEFAULT_MAX_DURATION;
-        downloadSections = `*${s}-${e}`;
-      }
-
-      // Normalize URL: prepend https:// when no protocol is provided
       const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-
-      // 1. Source prefix from URL
       const prefix = sourcePrefix(normalizedUrl);
-
-      // 2. OG extraction — one call
-      let ogData: IOGResult | null = null;
-      let title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
-      if (process.env.NODE_ENV !== "test") {
-        try {
-          const response = await fetch(normalizedUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; VideocityBot/1.0)" },
-            signal: AbortSignal.timeout(10_000),
-            redirect: "follow",
-          });
-          ogData = extractOpenGraph(await response.text());
-          if (ogData.ogTitle) title = cleanOgTitle(ogData.ogTitle);
-        } catch {
-          // OG fetch failure is non-fatal
-        }
-      }
-
-      // 3. Name decision (short, source-prefixed)
+      const title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
       const assetName = `${prefix} ${title}`;
       const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {
@@ -127,27 +85,20 @@ export function downloadVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId, path: assetDir } = assetResult.value;
 
-      // 4. Immediately save OG data to hidden file
-      if (ogData) {
-        await fs.writeFile(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)), project_slug);
-      }
-
-      // 5. Launch job (no ogData in payload — it's on disk)
-      const filename = full ? "original_full.mp4" : "original.mp4";
-      const outputPath = join(assetDir, filename);
+      const outputPath = join(assetDir, "original.mp4");
       const jobId = `download-${assetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "download_video",
         url: normalizedUrl,
         outputPath,
-        downloadSections,
         assetId,
         assetDir,
         projectSlug: project_slug,
         exportVideos: export_videos ?? false,
-        full: full ?? false,
+        full: true,
         sourcePrefix: prefix,
+        ...(requestedRange ? { requestedRange } : {}),
       } as unknown as Record<string, unknown>);
 
       return {
@@ -156,4 +107,3 @@ export function downloadVideoDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

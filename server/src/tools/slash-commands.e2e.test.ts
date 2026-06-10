@@ -124,7 +124,7 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBe(true);
     });
 
-    it("errors when full=true with start_time", async () => {
+    it("accepts full=true with start_time", async () => {
       const result = await client.callTool({
         name: "download_video",
         arguments: {
@@ -134,7 +134,7 @@ describe("slash commands e2e", () => {
           full: true,
         },
       });
-      expect(result.isError).toBe(true);
+      expect(result.isError).toBeFalsy();
     });
 
     it("errors for invalid timestamp format", async () => {
@@ -1035,7 +1035,7 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it("errors when full=true with end_time", async () => {
+    it("accepts full=true with end_time", async () => {
       const result = await client.callTool({
         name: "download_video",
         arguments: {
@@ -1045,7 +1045,7 @@ describe("slash commands e2e", () => {
           full: true,
         },
       });
-      expect(result.isError).toBe(true);
+      expect(result.isError).toBeFalsy();
     });
 
     it("errors when start_time equals end_time", async () => {
@@ -2953,7 +2953,7 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it("full=true produces original_full.mp4 filename in job", async () => {
+    it("full=true remains accepted", async () => {
       const result = await client.callTool({
         name: "download_video",
         arguments: {

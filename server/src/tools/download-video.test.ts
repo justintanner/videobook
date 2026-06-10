@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { queue, registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -55,7 +55,7 @@ describe("download_video tool", () => {
     expect(content[0].text).toContain("Cannot parse timestamp");
   });
 
-  it("returns error when full=true with start_time", async () => {
+  it("accepts full=true with start_time", async () => {
     const result = await client.callTool({
       name: "download_video",
       arguments: {
@@ -66,9 +66,38 @@ describe("download_video tool", () => {
       },
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("Cannot specify");
+    expect(JSON.parse(content[0].text).status).toBe("enqueued");
+  });
+
+  it("always enqueues original.mp4 without download sections", async () => {
+    let capturedPayload: Record<string, unknown> | null = null;
+    registerJobHandler("download_video", async (payload) => {
+      capturedPayload = payload;
+      return { stubbed: true };
+    });
+
+    const result = await client.callTool({
+      name: "download_video",
+      arguments: {
+        url: "https://example.com/video",
+        project_slug: "test-proj",
+        start_time: "10",
+        end_time: "30",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const content = result.content as TextContent;
+    const parsed = JSON.parse(content[0].text) as { job_id: string };
+    await waitForJob(parsed.job_id);
+
+    if (!capturedPayload) throw new Error("download job payload was not captured");
+    expect(String(capturedPayload.outputPath)).toMatch(/original\.mp4$/);
+    expect(capturedPayload).not.toHaveProperty("downloadSections");
+    expect(capturedPayload.requestedRange).toEqual({ start: 10, end: 30 });
+    expect(capturedPayload.full).toBe(true);
   });
 
   it("returns error when start_time >= end_time", async () => {
@@ -87,7 +116,7 @@ describe("download_video tool", () => {
     expect(content[0].text).toContain("must be less");
   });
 
-  it("enqueues job for any URL (OG fetch failure is non-fatal)", async () => {
+  it("enqueues job for any URL without waiting on metadata", async () => {
     const result = await client.callTool({
       name: "download_video",
       arguments: {
@@ -120,7 +149,7 @@ describe("download_video tool", () => {
     expect(content[0].text).toContain("must be less");
   });
 
-  it("returns error when full=true with end_time", async () => {
+  it("accepts full=true with end_time", async () => {
     const result = await client.callTool({
       name: "download_video",
       arguments: {
@@ -131,8 +160,8 @@ describe("download_video tool", () => {
       },
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("Cannot specify");
+    expect(JSON.parse(content[0].text).status).toBe("enqueued");
   });
 });

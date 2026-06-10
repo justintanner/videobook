@@ -2,6 +2,7 @@ import type { VideocityFs } from "vc-engine";
 import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
+import { extractOpenGraph } from "@devmehq/open-graph-extractor";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
@@ -14,6 +15,12 @@ const LOCK_DURATION_MS = 600_000;
 // `original.jpg` that sync's `findUnprocessedUploads` would pick up and
 // process as if the asset were a successful image upload (origin "external").
 const OG_IMAGE_FILENAME = ".opengraph.jpg";
+const OG_PLATFORM_SUFFIX = / on (?:X|Twitter|Instagram|Facebook|YouTube|TikTok|Vimeo|Reddit|Twitch|Dailymotion)$/i;
+const OG_HANDLE_PAREN = / \(@?\w+\)/g;
+
+function cleanOgTitle(raw: string): string {
+  return raw.replace(OG_PLATFORM_SUFFIX, "").replace(OG_HANDLE_PAREN, "").trim();
+}
 
 export async function validateDownloadOutput(outputPath: string): Promise<void> {
   const partPath = outputPath + ".part";
@@ -30,8 +37,7 @@ export async function validateDownloadOutput(outputPath: string): Promise<void> 
       try { await unlink(outputPath); } catch { /* best-effort cleanup */ }
       throw new Error("Download produced an empty file");
     }
-    // yt-dlp can finalize a non-empty mp4 that is structurally broken (missing
-    // moov atom when --download-sections aborts before muxing the trailer).
+    // yt-dlp can finalize a non-empty mp4 that is structurally broken.
     // Probe the container so process_video doesn't get a non-decodable file.
     try {
       await probeVideo(outputPath);
@@ -92,17 +98,65 @@ function extractOgImageUrl(ogImage: IOGResult["ogImage"]): string | null {
   return typeof ogImage === "object" && "url" in ogImage ? (ogImage.url as string) : null;
 }
 
+async function readOpenGraphData(fs: VideocityFs, assetId: string, projectSlug: string): Promise<IOGResult | null> {
+  const result = await fs.readFile(assetId, ".opengraph.json", projectSlug);
+  if (!result.ok) return null;
+  try {
+    return JSON.parse(result.value.toString()) as IOGResult;
+  } catch {
+    return null;
+  }
+}
+
+async function loadOpenGraphData(
+  fs: VideocityFs,
+  url: string,
+  assetId: string,
+  projectSlug: string,
+): Promise<IOGResult | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; VideocityBot/1.0)" },
+      signal: AbortSignal.timeout(10_000),
+      redirect: "follow",
+    });
+    const ogData = extractOpenGraph(await response.text());
+    await fs.writeFile(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)), projectSlug);
+    return ogData;
+  } catch {
+    return readOpenGraphData(fs, assetId, projectSlug);
+  }
+}
+
+async function stageOpenGraphImage(
+  fs: VideocityFs,
+  ogData: IOGResult,
+  assetId: string,
+  projectSlug: string,
+): Promise<void> {
+  const imageUrl = extractOgImageUrl(ogData.ogImage);
+  if (!imageUrl) return;
+  try {
+    await downloadUrlIntoAsset(fs, imageUrl, assetId, OG_IMAGE_FILENAME, projectSlug, {
+      kind: "OG image",
+      fetchInit: { signal: AbortSignal.timeout(15_000), redirect: "follow" },
+    });
+  } catch (error) {
+    void error;
+  }
+}
+
 type DownloadVideoPayload = {
   type: "download_video";
   url: string;
-  outputPath: string;
-  downloadSections?: string;
+  outputPath?: string;
   assetId: string;
   assetDir: string;
   projectSlug?: string;
   exportVideos: boolean;
   full: boolean;
   sourcePrefix: string;
+  requestedRange?: { start?: number; end?: number };
 };
 
 type InfoResult = {
@@ -139,11 +193,12 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
 
   registerJobHandler("download_video", async (payload, ctx) => {
     const {
-      url, outputPath, downloadSections,
-      assetId, assetDir, projectSlug, exportVideos, full,
-      sourcePrefix,
+      url,
+      assetId, assetDir, projectSlug, exportVideos,
+      sourcePrefix, requestedRange,
     } = payload as DownloadVideoPayload;
     const slug = projectSlug ?? "";
+    const outputPath = join(assetDir, "original.mp4");
 
     return withLockedLocalLease(
       fs,
@@ -157,20 +212,9 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh img-
       // asset; a successful video download promotes it after step (d).
-      try {
-        const ogFileResult = await fs.readFile(assetId, ".opengraph.json", projectSlug ?? "");
-        if (ogFileResult.ok) {
-          const ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
-          const imageUrl = extractOgImageUrl(ogData.ogImage);
-          if (imageUrl) {
-            await downloadUrlIntoAsset(fs, imageUrl, assetId, OG_IMAGE_FILENAME, projectSlug ?? "", {
-              kind: "OG image",
-              fetchInit: { signal: AbortSignal.timeout(15_000), redirect: "follow" },
-            });
-          }
-        }
-      } catch {
-        // non-fatal
+      const ogData = await loadOpenGraphData(fs, url, assetId, slug);
+      if (ogData) {
+        await stageOpenGraphImage(fs, ogData, assetId, slug);
       }
 
       // (b) Fetch ytdlp metadata
@@ -189,14 +233,8 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
 
           // Read OG metadata for asset naming and provenance
           let ogTitle = "image";
-          let ogData: IOGResult | null = null;
-          try {
-            const ogFileResult = await fs.readFile(assetId, ".opengraph.json", slug);
-            if (ogFileResult.ok) {
-              ogData = JSON.parse(ogFileResult.value.toString()) as IOGResult;
-              if (ogData.ogTitle) ogTitle = ogData.ogTitle;
-            }
-          } catch { /* non-fatal */ }
+          const fallbackOgData = ogData ?? await readOpenGraphData(fs, assetId, slug);
+          if (fallbackOgData?.ogTitle) ogTitle = cleanOgTitle(fallbackOgData.ogTitle);
 
           const assetName = [sourcePrefix, ogTitle].join(" ");
           const imgResult = await fs.createAsset("img", assetName, slug);
@@ -217,9 +255,9 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
           const provenance = {
             origin: "download",
             source_url: url,
-            title: ogData?.ogTitle ?? "",
+            title: fallbackOgData?.ogTitle ?? "",
             uploader: "",
-            description: ogData?.ogDescription ?? "",
+            description: fallbackOgData?.ogDescription ?? "",
             webpage_url: url,
             platform: sourcePrefix,
             thumbnail: "",
@@ -257,7 +295,7 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
           if (!assetResult.ok) continue;
 
           const { assetId: newAssetId, path: newAssetDir } = assetResult.value;
-          const newFilename = full ? "original_full.mp4" : "original.mp4";
+          const newFilename = "original.mp4";
           const newOutputPath = join(newAssetDir, newFilename);
           const newJobId = `download-${newAssetId}-${Date.now()}`;
 
@@ -265,13 +303,13 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
             type: "download_video",
             url,
             outputPath: newOutputPath,
-            downloadSections,
             assetId: newAssetId,
             assetDir: newAssetDir,
             projectSlug,
             exportVideos,
-            full,
+            full: true,
             sourcePrefix,
+            ...(requestedRange ? { requestedRange } : {}),
             _playlistItem: i + 1,
           } as unknown as Record<string, unknown>);
         }
@@ -359,10 +397,6 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
         .setOutputTemplate(outputPath)
         .addArgs("--merge-output-format", "mp4");
 
-      if (downloadSections) {
-        builder.addArgs("--download-sections", downloadSections);
-        builder.addArgs("--force-keyframes-at-cuts");
-      }
       if (playlistItem !== undefined) {
         builder.addArgs("--playlist-items", String(playlistItem));
       } else {
@@ -414,7 +448,8 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
         webpage_url: info.webpage_url ?? "",
         platform: info.extractor ?? "",
         thumbnail: info.thumbnail ?? "",
-        full,
+        full: true,
+        ...(requestedRange ? { requested_range: requestedRange } : {}),
         downloaded_at: new Date().toISOString(),
       };
 
