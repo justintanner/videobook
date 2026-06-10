@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Videocity Clip Downloader",
+  "version": "0.1.0",
+  "description": "Queue links and pages in the local Videocity server.",
+  "permissions": ["activeTab", "contextMenus", "notifications"],
+  "host_permissions": [
+    "http://127.0.0.1:3001/*",
+    "http://localhost:3001/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Videocity"
+  },
+  "icons": {
+    "16": "vc-logo.png",
+    "48": "vc-logo.png",
+    "128": "vc-logo.png"
+  }
+}
