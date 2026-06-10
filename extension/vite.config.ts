@@ -1,10 +1,11 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 
 const extensionDir = import.meta.dirname;
 const repoDir = path.resolve(extensionDir, "..");
 const outDir = path.resolve(repoDir, "dist-extension");
+const iconsDir = path.resolve(extensionDir, "icons");
 
 function staticExtensionFiles(): Plugin {
   return {
@@ -12,7 +13,10 @@ function staticExtensionFiles(): Plugin {
     writeBundle() {
       mkdirSync(outDir, { recursive: true });
       copyFileSync(path.resolve(extensionDir, "manifest.json"), path.resolve(outDir, "manifest.json"));
-      copyFileSync(path.resolve(repoDir, "vc-logo.png"), path.resolve(outDir, "vc-logo.png"));
+      mkdirSync(path.resolve(outDir, "icons"), { recursive: true });
+      for (const icon of readdirSync(iconsDir)) {
+        copyFileSync(path.resolve(iconsDir, icon), path.resolve(outDir, "icons", icon));
+      }
     },
   };
 }
@@ -26,10 +30,12 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
-      input: path.resolve(extensionDir, "src/background.ts"),
+      input: {
+        background: path.resolve(extensionDir, "src/background.ts"),
+        "x-post-content": path.resolve(extensionDir, "src/x-post-content.ts"),
+      },
       output: {
-        entryFileNames: "background.js",
-        inlineDynamicImports: true,
+        entryFileNames: "[name].js",
       },
     },
   },

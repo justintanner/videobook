@@ -13,11 +13,25 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Videocity"
+    "default_title": "Videocity",
+    "default_icon": {
+      "16": "icons/videocity-16.png",
+      "32": "icons/videocity-32.png",
+      "48": "icons/videocity-48.png",
+      "128": "icons/videocity-128.png"
+    }
   },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["x-post-content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "icons": {
-    "16": "vc-logo.png",
-    "48": "vc-logo.png",
-    "128": "vc-logo.png"
+    "16": "icons/videocity-16.png",
+    "32": "icons/videocity-32.png",
+    "48": "icons/videocity-48.png",
+    "128": "icons/videocity-128.png"
   }
 }
