@@ -171,7 +171,7 @@ export function GenerateCommandButton({
       )}>
         <span className={cn(
           'font-mono font-bold text-xs tracking-widest transition-colors',
-          state ? 'text-current' : v.text,
+          isLoading || isSuccess ? 'text-current' : v.text,
         )}>
           {displayText}
         </span>
@@ -199,7 +199,7 @@ export function GenerateCommandButton({
                   'border-x border-current/20 bg-black/60',
                   'shadow-[inset_0_0_6px_rgba(0,0,0,0.85)]',
                   'overflow-hidden',
-                  slotLocked ? 'cursor-default' : 'cursor-pointer hover:bg-black/80',
+                  slotLocked ? 'cursor-default' : 'cursor-pointer',
                   slot.tone === 'loading' && 'text-current/60',
                   // Use the variant color in both 'normal' and 'stale' so the
                   // LCD never clashes with the surrounding button hue.
@@ -248,7 +248,7 @@ export function GenerateCommandButton({
       {/* Icon zone */}
       <div className={cn(
         'relative z-10 flex items-center justify-center h-full px-2 transition-colors',
-        state ? 'text-current' : v.icon,
+        isLoading || isSuccess ? 'text-current' : v.icon,
       )}>
         {displayIcon}
       </div>
