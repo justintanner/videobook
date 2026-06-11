@@ -53,6 +53,16 @@
   --animate-cyber-shimmer: cyber-shimmer 2.5s ease-in-out infinite;
 }
 
+/* Stacking scale (Tailwind arbitrary z-[N] values across components):
+     100/101  overlay + panel (drawers, dialogs: ActivityLogDrawer, TrimEditor, PostComposerDialog)
+     120      nested modals opened from a dialog (AssetPickerModal)
+     130      menus / popovers (AssetMenu)
+     140      toasts — always topmost (toast.tsx)
+   Transition durations:
+     150ms    color/small controls (icon buttons, toggles, tabs)
+     200ms    medium layout shifts (drop slots, input focus)
+     300ms    large command buttons only (scale + gradient states) */
+
 @layer base {
   * {
     @apply border-border;

@@ -14,6 +14,8 @@ interface GenToggleProps<T extends string> {
 export function GenToggle<T extends string>({ value, onChange, options, disabled, compact, theme }: GenToggleProps<T>) {
   const t = theme ?? genThemes.image;
 
+  // Disabled tiers: control groups dim to opacity-30 + pointer-events-none;
+  // individual buttons use disabled:opacity-50 (+ disabled:hover suppression).
   return (
     <div className={cn('flex gap-1.5', disabled && 'opacity-30 pointer-events-none')}>
       {options.map((option) => {

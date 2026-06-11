@@ -359,7 +359,7 @@ export function ActivityLogDrawer({
                           className={cn(
                             'shrink-0 px-3 border-l border-emerald-500/10 text-[10px] tracking-[0.16em] uppercase',
                             'text-violet-300/75 hover:text-violet-200 hover:bg-violet-500/[0.08] transition-colors',
-                            'disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-violet-300/75',
+                            'disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-violet-300/75',
                           )}
                         >
                           {isRewinding ? 'rewinding' : 'rewind'}

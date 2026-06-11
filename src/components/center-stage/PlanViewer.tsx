@@ -905,7 +905,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
               'text-emerald-300 hover:text-white',
               'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
               'transition-colors duration-150',
-              'disabled:opacity-40 disabled:cursor-not-allowed',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
             {savingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -948,7 +948,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
               'text-emerald-300 hover:text-white',
               'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/70',
               'transition-colors duration-150',
-              'disabled:opacity-40 disabled:cursor-not-allowed',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
             {generatingStoryboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
@@ -1168,7 +1168,7 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
               'text-emerald-300 hover:text-white',
               'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
               'transition-colors duration-150',
-              'disabled:opacity-40 disabled:cursor-not-allowed',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
             {generatingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
@@ -1431,7 +1431,7 @@ function ClipShowAudioSlot({ state, assetId, generating, disabled, disabledReaso
               'text-[10px] font-mono uppercase tracking-wider',
               'text-emerald-300/80 hover:text-emerald-300',
               'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
-              'disabled:opacity-40 disabled:cursor-not-allowed',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >
             <RefreshCw className="w-3 h-3" />
@@ -4195,7 +4195,7 @@ function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, dura
             'text-emerald-300 hover:text-white',
             'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
             'transition-colors duration-150',
-            'disabled:opacity-40 disabled:cursor-not-allowed',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
         >
           {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}

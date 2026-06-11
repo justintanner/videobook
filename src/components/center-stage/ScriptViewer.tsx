@@ -560,7 +560,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                         'text-emerald-300/90 hover:text-emerald-200',
                         'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
-                        'disabled:opacity-40 disabled:cursor-not-allowed',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
                       )}
                     >
                       {historyNav.loading
@@ -578,7 +578,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                         'text-emerald-300/90 hover:text-emerald-200',
                         'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
-                        'disabled:opacity-40 disabled:cursor-not-allowed',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
                       )}
                     >
                       <ChevronRight className="w-3.5 h-3.5" />

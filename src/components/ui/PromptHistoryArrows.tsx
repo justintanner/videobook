@@ -76,7 +76,7 @@ function PromptHistoryArrows({
         className={cn(
           'flex items-center justify-center rounded',
           sz.button,
-          'hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors',
+          'hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors',
         )}
       >
         <ChevronLeft className={sz.icon} />
@@ -92,7 +92,7 @@ function PromptHistoryArrows({
         className={cn(
           'flex items-center justify-center rounded',
           sz.button,
-          'hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors',
+          'hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors',
         )}
       >
         <ChevronRight className={sz.icon} />
