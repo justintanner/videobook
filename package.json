@@ -29,7 +29,7 @@
     "@apicity/kie": "^0.4.0",
     "@apicity/kimicoding": "^0.4.0",
     "@apicity/openai": "^0.4.0",
-    "@apicity/x": "^0.4.0",
+    "@apicity/x": "^0.4.1",
     "@apicity/xai": "^0.4.0",
     "@mediapipe/tasks-vision": "^0.10.34",
     "@radix-ui/react-context-menu": "^2.2.16",
