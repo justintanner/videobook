@@ -18,7 +18,7 @@ function ThumbIcon({ type }: { type: MediaItem['type'] }) {
     case 'script':
       return <FileText className="w-3.5 h-3.5 text-primary/50" />;
     case 'plan':
-      return <Compass className="w-3.5 h-3.5 text-indigo-400/50" />;
+      return <Compass className="w-3.5 h-3.5 text-emerald-400/50" />;
     case 'video':
       return <Film className="w-3.5 h-3.5 text-primary/50" />;
     case 'image':
@@ -48,7 +48,7 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
             'hover:ring-1 hover:ring-primary/50',
             selected && !isGold && 'ring-1 ring-primary',
             selected && isGold && 'ring-1 ring-amber-400/60',
-            item.type === 'plan' ? 'bg-[#151b3d]' : 'bg-card/80',
+            'bg-card/80',
           )}
         >
           {hasImage ? (

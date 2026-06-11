@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
+import { getCardVisualState } from '@/components/sidebar/stateColors';
 
 interface DownloadingReadoutProps {
   asset: MediaItem;
@@ -29,7 +30,7 @@ function CloudDownloadIcon({ color }: { color: string }) {
 }
 
 export function DownloadingReadout({ asset, className }: DownloadingReadoutProps) {
-  const primaryColor = '#22c55e';
+  const primaryColor = getCardVisualState(asset).color;
 
   return (
     <div

@@ -1,4 +1,5 @@
 import type { MediaItem } from '../types';
+import { cardTone } from '@/theme/domains';
 import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
 interface SlugBadgeProps {
@@ -94,13 +95,13 @@ interface ArchiveBadgeProps {
 }
 
 export function ArchiveBadge({ item }: ArchiveBadgeProps) {
-  const color = '#f59e0b';
+  const tone = cardTone('final');
   return (
     <div
       className="px-1.5 py-0.5 rounded text-black text-[9px] font-mono font-bold tracking-wider"
       style={{
-        backgroundColor: color,
-        boxShadow: '0 0 8px rgba(245, 158, 11, 0.7)',
+        backgroundColor: tone.color,
+        boxShadow: `0 0 8px rgba(${tone.rgb}, 0.7)`,
       }}
       title={item.archiveId ?? 'Archived'}
     >
@@ -121,7 +122,7 @@ export function ResolutionBadge({ item, width, height }: ResolutionBadgeProps) {
   return (
     <div className="absolute top-2 left-2 z-20">
       <div
-        className="px-2 py-1 rounded bg-black/70 backdrop-blur-md border text-[10px] font-mono font-bold"
+        className="min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded bg-black/70 backdrop-blur-md border text-[10px] font-mono font-bold"
         style={{
           borderColor: colorWithAlpha(visual, 0.32),
           color: visual.color,

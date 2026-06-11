@@ -111,8 +111,7 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
       <DropdownMenuTrigger asChild>
         <button
           tabIndex={-1}
-          className="h-8 px-3 flex items-center gap-1 font-mono text-[13px] font-bold text-cyan-400 relative transition-all duration-[120ms] hover:text-white"
-          style={{ background: 'rgba(0,217,255,0.06)' }}
+          className="h-8 px-3 flex items-center gap-1 font-mono text-[13px] font-bold text-cyan-400 relative transition-all duration-150 hover:text-white bg-primary/5"
         >
           {ratioLabel(active, item)}
           <ChevronDown className="w-3 h-3" />
@@ -155,7 +154,7 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
     return <p className="text-sm text-muted-foreground/50 font-mono text-center py-8">No data found.</p>;
   }
   if (data.startsWith('Error:')) {
-    return <p className="text-sm font-mono" style={{ color: '#ff4060' }}>{data}</p>;
+    return <p className="text-sm font-mono text-destructive">{data}</p>;
   }
 
   let parsed: unknown;
@@ -311,10 +310,9 @@ export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose, onCloseV
             tabIndex={-1}
             onClick={() => onSelect(tab)}
             className={cn(
-              'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-[120ms] relative',
-              active === tab ? 'text-cyan-400' : 'text-muted-foreground hover:text-white/70',
+              'h-8 px-3 flex items-center font-mono text-[13px] font-bold transition-all duration-150 relative',
+              active === tab ? 'text-cyan-400 bg-primary/5' : 'text-muted-foreground hover:text-white/70',
             )}
-            style={{ background: active === tab ? 'rgba(0,217,255,0.06)' : 'transparent' }}
           >
             <span>/{tab}</span>
             {active === tab && <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />}
