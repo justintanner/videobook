@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { AssetMeta, VideocityFs } from "videocity-engine";
 import type { JobHandlerContext } from "../queue.js";
 
 type AssetWorkKind =
@@ -149,6 +149,54 @@ export async function withLocalLease<T>(
     throw err;
   } finally {
     clearInterval(heartbeat);
+  }
+}
+
+const CLAIM_RETRY_INTERVAL_MS = 1_000;
+
+export type LockedLeaseClaim =
+  | { ok: true; ownerId: string }
+  | { ok: false; reason: string };
+
+/**
+ * Claim the asset dir lock AND a local job lease together, polling both until
+ * `options.waitForActiveMs` elapses. Waiting (instead of failing fast)
+ * serializes workers that target the same asset — e.g. the three
+ * per-orientation render jobs the render tool enqueues at once — so
+ * latecomers run after the current holder finishes rather than erroring.
+ *
+ * On success the caller owns both and must itself complete/fail the lease
+ * and release the lock.
+ */
+export async function claimLockedLease(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+  assetDir: string,
+  kind: AssetWorkKind,
+  lock: { durationMs: number; data?: Record<string, unknown> },
+  options: LeaseOptions & { meta?: Partial<AssetMeta> } = {},
+): Promise<LockedLeaseClaim> {
+  const started = Date.now();
+  const waitForActiveMs = options.waitForActiveMs ?? 0;
+  let reason = "could not claim asset";
+  while (true) {
+    const lockResult = await fs.acquireLock(assetDir, lock);
+    if (lockResult.ok) {
+      const lease = await fs.assetWork.begin(projectSlug, assetId, {
+        kind,
+        ownerKind: "job",
+        durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
+        ...(options.meta ? { meta: options.meta } : {}),
+      });
+      if (lease) return { ok: true, ownerId: lease.ownerId };
+      await fs.releaseLock(assetDir).catch(() => {});
+      reason = "active owner already holds asset lease";
+    } else {
+      reason = `Asset is locked: ${lockResult.error.message}`;
+    }
+    if (Date.now() - started >= waitForActiveMs) return { ok: false, reason };
+    await sleep(CLAIM_RETRY_INTERVAL_MS);
   }
 }
 

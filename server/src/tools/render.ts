@@ -286,6 +286,15 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osgImagePath = join(osgManifest.value.path, imgFile.name);
       }
 
+      // A previously failed job leaves the assets row at status='error',
+      // which beginAssetWork refuses to lease — and enqueue never resets it.
+      // An explicit render is a retry: clear the stale failure first so the
+      // new jobs can claim the asset.
+      const clearResult = await fs.generationErrors.clear(project_slug, asset_id);
+      if (!clearResult.ok) {
+        console.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
+      }
+
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
       const jobs: Array<{ job_id: string; orientation: Orientation }> = [];

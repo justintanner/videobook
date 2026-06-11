@@ -20,6 +20,7 @@ import type {
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
 import { requireApiKey } from "../api-key.js";
+import { claimLockedLease } from "./_lease.js";
 import { buildResponses } from "./describe-image.js";
 import {
   iso1FromIso3,
@@ -38,6 +39,10 @@ import {
 } from "../remotion/constants.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
+// How long a render job waits for another holder of the same asset before
+// giving up. The render tool enqueues one job per orientation and the queue
+// runs them concurrently, so same-asset jobs must queue behind each other.
+const CLAIM_WAIT_MS = 900_000;
 const REMOTION_ENTRY = new URL("../remotion/index.tsx", import.meta.url).pathname;
 
 let bundleLocation: string | null = null;
@@ -197,26 +202,25 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
     try {
       for (const asset of assets) {
         try {
-          const lockResult = await fs.acquireLock(asset.assetDir, { durationMs: LOCK_DURATION_MS, data: { state: `rendering-${orientation}` } });
-          if (!lockResult.ok) {
-            failed.push({ assetId: asset.assetId, error: `Asset is locked: ${lockResult.error.message}` });
+          // Per-asset lock + lease: render is a single-asset transition for
+          // each entry in the loop; the wrapper's catch CAS-fails this exact
+          // owner (other assets in the batch keep their leases). Waiting
+          // serializes concurrent renders of the same asset (one job per
+          // orientation) instead of failing the latecomers.
+          const claim = await claimLockedLease(
+            fs,
+            projectSlug,
+            asset.assetId,
+            asset.assetDir,
+            "render",
+            { durationMs: LOCK_DURATION_MS, data: { state: `rendering-${orientation}` } },
+            { durationMs: LOCK_DURATION_MS, waitForActiveMs: CLAIM_WAIT_MS, meta: { orientation } },
+          );
+          if (!claim.ok) {
+            failed.push({ assetId: asset.assetId, error: claim.reason });
             continue;
           }
-
-          // Per-asset lease: render is a single-asset transition for each
-          // entry in the loop; the wrapper's catch CAS-fails this exact owner
-          // (other assets in the batch keep their leases).
-          const lease = await fs.assetWork.begin(projectSlug, asset.assetId, {
-            kind: "render",
-            ownerKind: "job",
-            durationMs: LOCK_DURATION_MS,
-            meta: { orientation },
-          });
-          if (!lease) {
-            await fs.releaseLock(asset.assetDir);
-            failed.push({ assetId: asset.assetId, error: "active owner already holds asset lease" });
-            continue;
-          }
+          const lease = { ownerId: claim.ownerId };
           const heartbeat = setInterval(() => {
             void fs.assetWork.renew(projectSlug, asset.assetId, lease.ownerId, 60_000);
           }, 20_000);
