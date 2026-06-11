@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Settings, FileText, Loader2, X, Copy, Zap, Images, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Settings, FileText, Loader2, Copy, Zap, Images, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { ToastAction } from '@/components/ui/toast';
@@ -464,14 +465,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
-                  <button
-                    tabIndex={-1}
-                    onClick={onClose}
-                    title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
-                  >
-                    <X className="w-4 h-4 stroke-[2.5]" />
-                  </button>
+                  <CloseButton tabIndex={-1} onClick={onClose} tone="emerald" title="Close (ESC)" />
                 </div>
               }
             />

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { GenFrame } from './GenFrame';
-import { CloseButton } from './CloseButton';
+import { CloseButton } from '@/components/ui/CloseButton';
 import type { Domain } from '@/theme/domains';
 
 const HEADER_LABEL_TEXT: Record<Domain, string> = {
@@ -60,7 +60,7 @@ export function GenPanel({
       </div>
       <div className="flex items-center gap-1">
         {headerExtra}
-        {closeHidden ? headerRight : <CloseButton onClick={onClose} disabled={closeDisabled} />}
+        {closeHidden ? headerRight : <CloseButton onClick={onClose} disabled={closeDisabled} title="Close (ESC)" />}
       </div>
     </div>
   );

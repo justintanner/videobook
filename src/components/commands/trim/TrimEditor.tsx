@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
-import { CloseButton } from '@/components/gen/ui/CloseButton';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -313,7 +313,7 @@ export function TrimEditor({
           <div className="absolute inset-x-0 flex justify-center pointer-events-none">
             <span className="font-mono text-xs tracking-widest text-zinc-400">{assetId ? `@${assetId}` : ''}</span>
           </div>
-          <CloseButton onClick={onClose} />
+          <CloseButton onClick={onClose} title="Close (ESC)" />
         </div>
 
         <div className="flex-1 min-h-0 flex overflow-hidden relative">

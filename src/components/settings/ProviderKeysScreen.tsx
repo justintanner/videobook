@@ -1,6 +1,6 @@
 import { RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CloseButton } from '@/components/gen/ui/CloseButton';
+import { CloseButton } from '@/components/ui/CloseButton';
 import type { ProviderKeyInfo, ProviderKeyStatusResponse } from '@/hooks/useProviderKeyStatus';
 
 interface ProviderKeysScreenProps {

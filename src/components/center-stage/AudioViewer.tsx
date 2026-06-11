@@ -1,4 +1,5 @@
-import { Settings, AudioLines, X } from 'lucide-react';
+import { Settings, AudioLines } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
@@ -73,14 +74,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
                   >
                     <Settings className="w-4 h-4 stroke-[2.5]" />
                   </button>
-                  <button
-                    tabIndex={-1}
-                    onClick={onClose}
-                    title="Close"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-violet-300 transition-colors duration-150 rounded hover:bg-violet-500/10"
-                  >
-                    <X className="w-4 h-4 stroke-[2.5]" />
-                  </button>
+                  <CloseButton tabIndex={-1} onClick={onClose} tone="violet" />
                 </div>
               }
             />

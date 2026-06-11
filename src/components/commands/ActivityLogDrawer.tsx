@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatInput } from '@/components/ui/ChatInput';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
 import type { CommandDescriptor } from '@/lib/command-registry';
 import type { ActionLogEntry } from '@/hooks/useProjectActivity';
@@ -262,13 +263,7 @@ export function ActivityLogDrawer({
               ACTIVITY_LOG
             </span>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close activity log"
-            className="text-emerald-400/70 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)] transition-all font-mono text-xs tracking-widest"
-          >
-            [ X ]
-          </button>
+          <CloseButton onClick={onClose} tone="emerald" title="Close (ESC)" aria-label="Close activity log" />
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2 } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -195,14 +196,7 @@ function PlanShell({ title, slug, onClose, children }: {
             }
             slug={slug}
             right={
-              <button
-                tabIndex={-1}
-                onClick={onClose}
-                title="Close"
-                className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
-              >
-                <X className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              <CloseButton tabIndex={-1} onClick={onClose} tone="emerald" />
             }
           />
           <div className="flex-1 min-w-0 bg-black flex flex-col min-h-0 relative">

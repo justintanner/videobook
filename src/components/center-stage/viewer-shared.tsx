@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ChevronDown, RotateCcw, RefreshCw, Check, VideoOff, Zap, Copy, X } from 'lucide-react';
+import { ChevronDown, RotateCcw, RefreshCw, Check, VideoOff, Zap, Copy } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
@@ -331,16 +332,7 @@ export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose, onCloseV
         >
           <RotateCcw className="w-4 h-4 stroke-[2.5]" />
         </button>
-        {onCloseViewer && (
-          <button
-            tabIndex={-1}
-            onClick={onCloseViewer}
-            title="Close"
-            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-          >
-            <X className="w-4 h-4 stroke-[2.5]" />
-          </button>
-        )}
+        {onCloseViewer && <CloseButton tabIndex={-1} onClick={onCloseViewer} />}
       </div>
     </div>
   );

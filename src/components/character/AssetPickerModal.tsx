@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
+import { CloseButton } from "@/components/ui/CloseButton";
 import { cn } from "@/lib/utils";
 import type { MediaItem } from "@/components/sidebar/types";
 
@@ -45,14 +46,7 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/30 shrink-0">
           <div className="text-xs font-mono font-bold tracking-widest text-cyan-200 uppercase">{title}</div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close picker"
-            className="w-6 h-6 flex items-center justify-center rounded text-cyan-300/70 hover:text-cyan-100 hover:bg-cyan-500/10 transition-colors duration-150"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <CloseButton onClick={onClose} tone="cyan" aria-label="Close picker" />
         </div>
         <div className="px-4 py-2 border-b border-cyan-500/20 shrink-0">
           <div className="relative">

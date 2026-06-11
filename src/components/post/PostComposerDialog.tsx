@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, LogIn, Send, Share2, X, Calendar, Image as ImageIcon, Film } from 'lucide-react';
+import { Loader2, LogIn, Send, Share2, Calendar, Image as ImageIcon, Film } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -161,14 +162,7 @@ export function PostComposerDialog({
             <Share2 className="w-3.5 h-3.5" />
             Post
           </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <CloseButton onClick={() => onOpenChange(false)} />
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">

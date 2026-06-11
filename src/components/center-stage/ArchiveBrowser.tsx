@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArchiveRestore, CheckSquare, Loader2, Search, Square, X } from 'lucide-react'
+import { ArchiveRestore, CheckSquare, Loader2, Search, Square } from 'lucide-react'
+import { CloseButton } from '@/components/ui/CloseButton'
 import type { UseMcpResult } from 'use-mcp/react'
 import { cn } from '@/lib/utils'
 
@@ -263,14 +264,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
               <div className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-200">Archive</div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-zinc-800 text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200"
-            title="Close archive"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <CloseButton onClick={onClose} className="shrink-0" title="Close archive" aria-label="Close archive" />
         </div>
 
         <form onSubmit={handleSearch} className="flex shrink-0 items-center gap-2 border-b border-border/40 px-3 py-3">

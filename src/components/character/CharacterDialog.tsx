@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Zap, X, User, RefreshCw } from 'lucide-react';
+import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -399,15 +400,7 @@ export function CharacterDialog({
           <User className="w-3.5 h-3.5" />
           Character — Identity profile + 4-up reference sheet
         </div>
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() => onOpenChange(false)}
-          aria-label="Close character view"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <CloseButton tabIndex={-1} onClick={() => onOpenChange(false)} tone="cyan" aria-label="Close character view" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden flex">
