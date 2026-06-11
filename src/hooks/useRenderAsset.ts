@@ -24,6 +24,7 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
 
       if (settings) {
         args.subtitles_enabled = settings.subtitlesEnabled;
+        args.subtitle_language = settings.subtitleLanguage;
         args.highlight_style = settings.subtitleStyle;
         args.position = settings.subtitlePosition;
         args.font_size = settings.fontSize;

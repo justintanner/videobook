@@ -41,6 +41,7 @@ import { extractAudioDef } from "./extract-audio.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
 import { spliceVideoDef } from "./splice-video.js";
 import { transcribeDef } from "./transcribe.js";
+import { translateSubtitlesDef } from "./translate-subtitles.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
 import { generateGrokImagineT2vVideoDef } from "./generate-grok-imagine-t2v-video.js";
@@ -221,6 +222,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     replaceVideoAudioDef(fs),
     spliceVideoDef(fs),
     transcribeDef(fs),
+    translateSubtitlesDef(fs),
     generateGrokImagineVideoDef(fs),
     generateGrokImagineRefVideoDef(fs),
     generateGrokImagineT2vVideoDef(fs),

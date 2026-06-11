@@ -7,7 +7,7 @@ import type { Orientation } from '@/hooks/useTimeline';
 import { RenderingReadout } from './RenderingReadout';
 import { DownloadingReadout } from './DownloadingReadout';
 import { RenderSettingsPanel } from './RenderSettingsPanel';
-import type { RenderSettings } from './render-settings-types';
+import { sourceLanguageLabel, type RenderSettings, type TranscriptInfo } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
 import { type ViewerSize, type BackTab, RENDERING_STATUSES } from './viewer-types';
@@ -136,12 +136,13 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
   return <RenderPrompt item={item} orientation={orient} onRender={onRender} />;
 }
 
-function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onSettingsChange }: {
+function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onSettingsChange, transcript }: {
   renderOrientation: Orientation;
   onSizeChange: (s: ViewerSize) => void;
   onRender?: (settings: RenderSettings) => void;
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+  transcript?: TranscriptInfo | null;
 }) {
   const allOrientations: Orientation[] = ['landscape', 'portrait', 'square'];
 
@@ -160,6 +161,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
   const subtitleFieldMap: Record<string, keyof RenderSettings> = {
     enabled: 'subtitlesEnabled',
+    language: 'subtitleLanguage',
     style: 'subtitleStyle',
     position: 'subtitlePosition',
     fontSize: 'fontSize',
@@ -199,6 +201,9 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
       orientations={orientationEntries}
       onOrientationClick={handleClick}
       subtitlesEnabled={settings.subtitlesEnabled}
+      subtitleLanguage={settings.subtitleLanguage}
+      subtitleSourceLabel={sourceLanguageLabel(transcript ?? null)}
+      subtitleCachedTranslations={transcript?.cachedTranslations}
       subtitleStyle={settings.subtitleStyle}
       subtitlePosition={settings.subtitlePosition}
       fontSize={settings.fontSize}
@@ -228,7 +233,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
 const VIDEO_BACK_TABS: BackTab[] = ['settings', 'files', 'history'];
 
-export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, onClose, cropTarget, onCropConsumed }: {
+export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, onClose, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -243,6 +248,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClearPendingBackTab?: () => void;
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+  transcript?: TranscriptInfo | null;
   callTool: UseMcpResult['callTool'];
   onClose: () => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
@@ -384,6 +390,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   onRender={onRender}
                   settings={settings}
                   onSettingsChange={onSettingsChange}
+                  transcript={transcript}
                 />
               </div>
             ) : bf.backTab === 'files' ? (

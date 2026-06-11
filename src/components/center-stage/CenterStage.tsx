@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { Orientation } from '@/hooks/useTimeline';
-import type { RenderSettings } from './render-settings-types';
+import type { RenderSettings, TranscriptInfo } from './render-settings-types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { VideoViewer } from './VideoViewer';
 import { ImageViewer } from './ImageViewer';
@@ -14,7 +14,7 @@ import type { ViewerSize, BackTab } from './viewer-types';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, callTool, callState, planResetKey, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -29,6 +29,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onClearPendingBackTab?: () => void;
   settings: RenderSettings;
   onSettingsChange: (s: RenderSettings | ((prev: RenderSettings) => RenderSettings)) => void;
+  transcript?: TranscriptInfo | null;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
   planResetKey?: number;
@@ -62,6 +63,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onClearPendingBackTab={onClearPendingBackTab}
         settings={settings}
         onSettingsChange={onSettingsChange}
+        transcript={transcript}
         callTool={callTool}
         onClose={onClose}
         cropTarget={cropTarget}

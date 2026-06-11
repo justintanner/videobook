@@ -57,8 +57,41 @@ describe("enqueueLazyTimelineRender", () => {
     expect(payload.type).toBe("render_project");
     expect(payload.orientation).toBe("portrait");
     expect(payload.subtitlesEnabled).toBe(true);
+    expect(payload.subtitleLanguage).toBe("original");
     expect(payload.fontSize).toBe("medium");
     expect(payload.strokeWidth).toBe(6);
+  });
+
+  it("carries a stored subtitleLanguage through to the render payload", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    // Settings live on another orientation: target-orientation metadata would
+    // mark the clip already rendered, and readStoredRenderDefaults falls back.
+    await fs.writeMetadata(assetId, "landscape.render", { subtitleLanguage: "en" }, projectSlug);
+    await fs.writeProjectMeta("timeline", {
+      slots: [{ slug: assetId }],
+      render: "portrait",
+    }, projectSlug);
+
+    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0][1].subtitleLanguage).toBe("en");
+  });
+
+  it("normalizes an invalid stored subtitleLanguage to 'original'", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    await fs.writeMetadata(assetId, "landscape.render", { subtitleLanguage: "english!!" }, projectSlug);
+    await fs.writeProjectMeta("timeline", {
+      slots: [{ slug: assetId }],
+      render: "portrait",
+    }, projectSlug);
+
+    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0][1].subtitleLanguage).toBe("original");
   });
 
   it("does not enqueue when the asset is not assigned to the timeline", async () => {

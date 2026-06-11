@@ -56,7 +56,7 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState, PendingState } from '@/components/sidebar/types';
-import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, storedToRenderSettings } from '@/components/center-stage/render-settings-types';
+import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isSubtitleLanguage, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
@@ -102,6 +102,7 @@ export function HomePage() {
   const [pendingFilePosition, setPendingFilePosition] = useState<number | null>(null);
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | 'history' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+  const [transcriptInfo, setTranscriptInfo] = useState<TranscriptInfo | null>(null);
   const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
@@ -341,8 +342,9 @@ export function HomePage() {
     let cancelled = false;
     fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
       if (cancelled) return;
-      const stored = all?.[settingsOrientation];
+      const stored = all?.settings?.[settingsOrientation];
       setRenderSettings(stored ? storedToRenderSettings(stored) : getDefaultRenderSettings(settingsOrientation));
+      setTranscriptInfo(all?.transcript ?? null);
     });
     return () => { cancelled = true; };
   }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings]);
@@ -595,6 +597,10 @@ export function HomePage() {
         case 'enabled': {
           const on = normalizedValue === 'on' || normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
           return { ...prev, subtitlesEnabled: on };
+        }
+        case 'language':
+        case 'lang': {
+          return isSubtitleLanguage(normalizedValue) ? { ...prev, subtitleLanguage: normalizedValue } : prev;
         }
         case 'style': {
           if (normalizedValue === 'impact' || normalizedValue === 'highlight') return { ...prev, subtitleStyle: normalizedValue };
@@ -1298,6 +1304,7 @@ export function HomePage() {
                     onClearPendingBackTab={() => setPendingBackTab(null)}
                     settings={renderSettings}
                     onSettingsChange={setRenderSettings}
+                    transcript={transcriptInfo}
                     callTool={callTool}
                     callState={state}
                     planResetKey={planOpenKey}

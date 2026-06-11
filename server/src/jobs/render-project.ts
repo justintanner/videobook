@@ -10,6 +10,7 @@ import { parseSegments } from "../remotion/subtitles/segments.js";
 import { chunkSegments } from "../remotion/subtitles/chunker.js";
 import type {
   Orientation,
+  Segment,
   SubtitleStyle,
   SubtitlePosition,
   FontSizePreset,
@@ -18,6 +19,15 @@ import type {
   Chunk,
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
+import { requireApiKey } from "../api-key.js";
+import { buildResponses } from "./describe-image.js";
+import {
+  iso1FromIso3,
+  readLanguageCode,
+  sidecarMatchesSource,
+  translatedTranscriptFilename,
+  translateTranscript,
+} from "./_translate-transcript.js";
 import {
   LANDSCAPE_WIDTH,
   LANDSCAPE_HEIGHT,
@@ -64,6 +74,7 @@ type RenderProjectPayload = {
   orientation: Orientation;
   assets: AssetDescriptor[];
   subtitlesEnabled: boolean;
+  subtitleLanguage?: string;
   highlightStyle: SubtitleStyle;
   position: SubtitlePosition;
   fontSize: FontSizePreset;
@@ -82,6 +93,58 @@ type RenderProjectPayload = {
   shadowOpacity: number;
 };
 
+// Lazy subtitle-language resolution: serve the cached translated sidecar when
+// it matches the current transcript, translate-and-cache when it doesn't, and
+// fall back to the original-language transcript on any translation failure —
+// a render must never fail because translation did.
+async function resolveSubtitleSegments(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+  raw: unknown,
+  subtitleLanguage: string,
+): Promise<Segment[]> {
+  const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
+  const sourceIso1 = iso1FromIso3(readLanguageCode(raw));
+  if (subtitleLanguage === "original" || subtitleLanguage === sourceIso1) {
+    return sourceSegments;
+  }
+
+  const sidecarFilename = translatedTranscriptFilename(subtitleLanguage);
+  const existing = await fs.readFile(assetId, sidecarFilename, projectSlug);
+  if (existing.ok) {
+    try {
+      const sidecar = JSON.parse(existing.value.toString()) as unknown;
+      if (sidecarMatchesSource(sidecar, sourceSegments)) {
+        return parseSegments(sidecar as Parameters<typeof parseSegments>[0]);
+      }
+    } catch {
+      // unreadable sidecar — re-translate below
+    }
+  }
+
+  try {
+    const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
+    const sidecar = await translateTranscript(raw, subtitleLanguage, responses);
+    const writeResult = await fs.writeFile(
+      assetId,
+      sidecarFilename,
+      JSON.stringify(sidecar, null, 2),
+      projectSlug,
+    );
+    if (!writeResult.ok) {
+      console.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
+    }
+    return parseSegments(sidecar as unknown as Parameters<typeof parseSegments>[0]);
+  } catch (err) {
+    console.warn(
+      `[render] subtitle translation to ${subtitleLanguage} failed for ${assetId}, falling back to original:`,
+      err instanceof Error ? err.message : err,
+    );
+    return sourceSegments;
+  }
+}
+
 export function registerRenderProjectJob(fs: VideocityFs): void {
   registerJobHandler("render_project", async (payload, _ctx) => {
     void _ctx;
@@ -90,6 +153,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       orientation,
       assets,
       subtitlesEnabled,
+      subtitleLanguage = "original",
       highlightStyle,
       position,
       fontSize,
@@ -168,7 +232,8 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
             if (asset.hasElevenlabs) {
               const elevenlabsResult = await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug);
               if (elevenlabsResult.ok) {
-                allSegments = parseSegments(JSON.parse(elevenlabsResult.value.toString()));
+                const raw = JSON.parse(elevenlabsResult.value.toString()) as unknown;
+                allSegments = await resolveSubtitleSegments(fs, projectSlug, asset.assetId, raw, subtitleLanguage);
               }
             }
 
@@ -265,6 +330,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
 
               const renderSettings = {
                 subtitlesEnabled,
+                subtitleLanguage,
                 highlightStyle,
                 position,
                 fontSize,

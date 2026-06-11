@@ -50,6 +50,11 @@ export function renderDef(fs: VideocityFs): ToolDef {
         .boolean()
         .optional()
         .describe("Enable subtitle overlay (default: true when elevenlabs.json exists)"),
+      subtitle_language: z
+        .string()
+        .regex(/^(original|[a-z]{2})$/)
+        .optional()
+        .describe("Subtitle language: 'original' or a two-letter ISO 639-1 code (e.g. 'en'). Lazily translates and caches elevenlabs.<lang>.json (default: original)"),
       highlight_style: z
         .enum(["impact", "highlight"])
         .optional()
@@ -117,6 +122,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         project_slug,
         orientation: explicitOrientation,
         subtitles_enabled,
+        subtitle_language = "original",
         highlight_style = "impact",
         position = "bottom",
         font_size = "medium",
@@ -137,6 +143,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         project_slug: string;
         orientation?: Orientation;
         subtitles_enabled?: boolean;
+        subtitle_language?: string;
         highlight_style?: "impact" | "highlight";
         position?: "top" | "middle" | "bottom";
         font_size?: "small" | "medium" | "large";
@@ -298,6 +305,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
             hasElevenlabs,
           }],
           subtitlesEnabled: subsEnabled,
+          subtitleLanguage: subtitle_language,
           highlightStyle: highlight_style,
           position,
           fontSize: font_size,

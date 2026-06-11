@@ -1,9 +1,16 @@
 import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, X } from 'lucide-react';
+import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, X, ChevronDown, Check } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { SUBTITLE_LANGUAGES } from './render-settings-types';
 import { sectionTheme, type SectionTheme as DomainSectionTheme } from '@/theme/domains';
 
 // ── Types ──
@@ -18,6 +25,9 @@ export interface RenderSettingsPanelProps {
   onOrientationClick?: (orient: Orientation) => void;
 
   subtitlesEnabled: boolean;
+  subtitleLanguage: string;
+  subtitleSourceLabel?: string | null;
+  subtitleCachedTranslations?: string[];
   subtitleStyle: 'impact' | 'highlight';
   subtitlePosition: 'top' | 'middle' | 'bottom';
   fontSize: 'small' | 'medium' | 'large';
@@ -405,11 +415,64 @@ function ColorSwatch({ value, onChange, disabled, theme }: { value: string; onCh
   );
 }
 
+// ── Subtitle language picker ──
+
+function languageLabel(language: string, sourceLabel: string | null): string {
+  if (language !== 'original') return language.toUpperCase();
+  return sourceLabel ? `ORIGINAL (${sourceLabel})` : 'ORIGINAL';
+}
+
+function LanguagePicker({ value, sourceLabel, cached, onChange, disabled, theme }: {
+  value: string;
+  sourceLabel: string | null;
+  cached: string[];
+  onChange?: (v: string) => void;
+  disabled?: boolean;
+  theme: SectionTheme;
+}) {
+  const options = ['original', ...SUBTITLE_LANGUAGES];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          disabled={disabled}
+          className={cn(
+            'h-8 px-3 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border flex items-center gap-1.5',
+            theme.controlBg, theme.controlBorder, theme.activeText, theme.controlHover,
+            disabled && 'opacity-30 pointer-events-none',
+          )}
+        >
+          {languageLabel(value, sourceLabel)}
+          <ChevronDown className="w-3 h-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+        {options.map((language) => {
+          const active = language === value;
+          const isCached = language !== 'original' && cached.includes(language);
+          return (
+            <DropdownMenuItem key={language} onClick={() => onChange?.(language)} className="py-2">
+              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
+                {active ? <Check className="w-3 h-3 inline text-primary" /> : '›'}
+              </span>
+              <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !active && 'text-muted-foreground/60')}>
+                {languageLabel(language, sourceLabel)}
+              </span>
+              {isCached && <span className="ml-2 w-1.5 h-1.5 rounded-full bg-cyan-400/70" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ── Main component ──
 
 export function RenderSettingsPanel({
   orientations, onOrientationClick,
-  subtitlesEnabled, subtitleStyle, subtitlePosition, fontSize,
+  subtitlesEnabled, subtitleLanguage, subtitleSourceLabel, subtitleCachedTranslations,
+  subtitleStyle, subtitlePosition, fontSize,
   textColor = '#F8FAFC', highlightColor = '#991B1B',
   strokeWidth, strokeColor, shadowBlur, shadowOpacity, onSubtitleChange,
   audioVolume, audioFadeIn, audioFadeOut, onAudioChange,
@@ -464,6 +527,16 @@ export function RenderSettingsPanel({
             </SettingRow>
             <SettingRow label="Size" theme={cyan}>
               <PillToggle theme={cyan} disabled={disabled} options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]} value={fontSize} onChange={(v) => onSubtitleChange?.('fontSize', v)} />
+            </SettingRow>
+            <SettingRow label="Language" theme={cyan}>
+              <LanguagePicker
+                theme={cyan}
+                disabled={disabled || !subtitlesEnabled}
+                value={subtitleLanguage}
+                sourceLabel={subtitleSourceLabel ?? null}
+                cached={subtitleCachedTranslations ?? []}
+                onChange={(v) => onSubtitleChange?.('language', v)}
+              />
             </SettingRow>
             <SettingRow label="Text" theme={cyan}>
               <ColorSwatch theme={cyan} disabled={disabled} value={textColor} onChange={(v) => onSubtitleChange?.('textColor', v)} />

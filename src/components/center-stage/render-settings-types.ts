@@ -1,5 +1,6 @@
 export interface RenderSettings {
   subtitlesEnabled: boolean;
+  subtitleLanguage: string;
   subtitleStyle: 'impact' | 'highlight';
   subtitlePosition: 'top' | 'middle' | 'bottom';
   fontSize: 'small' | 'medium' | 'large';
@@ -20,6 +21,7 @@ export interface RenderSettings {
 
 export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   subtitlesEnabled: true,
+  subtitleLanguage: 'original',
   subtitleStyle: 'impact',
   subtitlePosition: 'bottom',
   fontSize: 'medium',
@@ -37,6 +39,36 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   shadowBlur: 6,
   shadowOpacity: 60,
 };
+
+// Subtitle language: 'original' (source transcript) or an ISO 639-1 code.
+export function isSubtitleLanguage(value: unknown): value is string {
+  return typeof value === 'string' && (value === 'original' || /^[a-z]{2}$/.test(value));
+}
+
+// Curated targets offered in the /subs language dropdown.
+export const SUBTITLE_LANGUAGES: string[] = ['en', 'es', 'pt', 'fr', 'de', 'it', 'nl', 'pl', 'ru', 'tr', 'ar', 'hi', 'id', 'ja', 'ko', 'zh'];
+
+// ElevenLabs reports the detected source language in ISO 639-3; map common
+// codes to the ISO 639-1 codes the language setting uses.
+const ISO3_TO_ISO1: Record<string, string> = {
+  eng: 'en', zho: 'zh', cmn: 'zh', yue: 'zh', spa: 'es', por: 'pt', fra: 'fr',
+  deu: 'de', ita: 'it', nld: 'nl', pol: 'pl', rus: 'ru', tur: 'tr', ara: 'ar',
+  hin: 'hi', ind: 'id', jpn: 'ja', kor: 'ko', vie: 'vi', tha: 'th', ukr: 'uk',
+};
+
+export interface TranscriptInfo {
+  sourceLanguageCode: string | null;
+  sourceLanguage: string | null;
+  cachedTranslations: string[];
+}
+
+export function sourceLanguageLabel(info: TranscriptInfo | null): string | null {
+  if (!info) return null;
+  const iso1 = info.sourceLanguage
+    ?? (info.sourceLanguageCode ? ISO3_TO_ISO1[info.sourceLanguageCode.toLowerCase()] ?? null : null);
+  if (iso1) return iso1.toUpperCase();
+  return info.sourceLanguageCode ? info.sourceLanguageCode.toUpperCase() : null;
+}
 
 function extractAssetId(osgImagePath: string | undefined | null): string | null {
   if (!osgImagePath) return null;
@@ -56,6 +88,7 @@ export function getDefaultRenderSettings(orientation: string): RenderSettings {
 export function storedToRenderSettings(stored: Record<string, unknown>): RenderSettings {
   return {
     subtitlesEnabled: (stored.subtitlesEnabled as boolean | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlesEnabled,
+    subtitleLanguage: isSubtitleLanguage(stored.subtitleLanguage) ? stored.subtitleLanguage : DEFAULT_RENDER_SETTINGS.subtitleLanguage,
     subtitleStyle: (stored.highlightStyle as RenderSettings['subtitleStyle'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitleStyle,
     subtitlePosition: (stored.position as RenderSettings['subtitlePosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlePosition,
     fontSize: (stored.fontSize as RenderSettings['fontSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.fontSize,

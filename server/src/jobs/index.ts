@@ -1,5 +1,6 @@
 import type { VideocityFs } from "videocity-engine";
 import { registerTranscribeJob } from "./transcribe.js";
+import { registerTranslateTranscriptJob } from "./translate-transcript.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerArchiveClipJob } from "./archive-clip.js";
 import { registerRestoreArchiveClipJob } from "./restore-archive-clip.js";
@@ -98,6 +99,7 @@ import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 
 export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTranscribeJob(fs);
+  registerTranslateTranscriptJob(fs);
   registerDownloadVideoJob(fs);
   registerArchiveClipJob(fs);
   registerRestoreArchiveClipJob(fs);

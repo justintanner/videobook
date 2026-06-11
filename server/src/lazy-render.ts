@@ -8,6 +8,7 @@ import type {
   SubtitleStyle,
 } from "./remotion/subtitles/types.js";
 import { queue } from "./queue.js";
+import { isLanguageSetting } from "./jobs/_translate-transcript.js";
 import { findAutoRenderActions, readStoredRenderDefaults } from "./tools/sync.js";
 
 type TimelineSlot = {
@@ -150,6 +151,7 @@ export async function enqueueLazyTimelineRender(
       hasElevenlabs: action.hasElevenlabs,
     }],
     subtitlesEnabled,
+    subtitleLanguage: isLanguageSetting(stored.subtitleLanguage) ? stored.subtitleLanguage : "original",
     highlightStyle: isSubtitleStyle(stored.highlightStyle) ? stored.highlightStyle : "highlight",
     position: isSubtitlePosition(stored.position) ? stored.position : "bottom",
     fontSize: isFontSizePreset(stored.fontSize) ? stored.fontSize : "medium",
