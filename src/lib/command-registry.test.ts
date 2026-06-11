@@ -62,6 +62,62 @@ describe("parseCommandArgs", () => {
     });
   });
 
+  it("parses /speed style asset + number args", () => {
+    const params: CommandParam[] = [
+      { name: "asset_id", type: "string", required: true, description: "" },
+      { name: "speed", type: "number", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-x 2", params)).toEqual({
+      asset_id: "vid-x",
+      speed: 2,
+    });
+  });
+
+  it("parses /archive-restore style trailing string[] of ids", () => {
+    const params: CommandParam[] = [
+      { name: "archive_ids", type: "string[]", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("arc-abc123 arc-def456", params)).toEqual({
+      archive_ids: ["arc-abc123", "arc-def456"],
+    });
+  });
+
+  it("parses /say style asset + trailing text", () => {
+    const params: CommandParam[] = [
+      { name: "character_asset_id", type: "string", required: true, description: "" },
+      { name: "text", type: "string", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@char-host hello there everyone", params)).toEqual({
+      character_asset_id: "char-host",
+      text: "hello there everyone",
+    });
+  });
+
+  it("parses /audio-set style ref + field + number", () => {
+    const params: CommandParam[] = [
+      { name: "audio_ref", type: "string", required: true, description: "" },
+      { name: "field", type: "string", required: true, description: "" },
+      { name: "value", type: "number", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@aud-music volume 80", params)).toEqual({
+      audio_ref: "aud-music",
+      field: "volume",
+      value: 80,
+    });
+  });
+
+  it("parses /split style optional trailing number left absent", () => {
+    const params: CommandParam[] = [
+      { name: "asset_id", type: "string", required: true, description: "" },
+      { name: "chunk_a_end", type: "number", required: true, description: "" },
+      { name: "chunk_b_start", type: "number", required: false, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-x 10", params)).toEqual({
+      asset_id: "vid-x",
+      chunk_a_end: 10,
+    });
+  });
+
   it("strips 'to' connector from last param", () => {
     const params: CommandParam[] = [
       { name: "asset_id", type: "string", required: true, description: "" },

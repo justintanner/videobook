@@ -42,6 +42,10 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useListProjects } from '@/hooks/useListProjects';
 import { useMarkAssetSeen } from '@/hooks/useMarkAssetSeen';
+import { useCreateProject } from '@/hooks/useCreateProject';
+import { useRenameProject } from '@/hooks/useRenameProject';
+import { useDeleteProject } from '@/hooks/useDeleteProject';
+import { useXConnect } from '@/hooks/useXConnect';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
 import { useRenderSettings } from '@/hooks/useRenderSettings';
@@ -72,6 +76,10 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatAssetCount(count: number): string {
+  return count === 1 ? '1 asset' : `${count} assets`;
+}
+
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -82,6 +90,10 @@ export function HomePage() {
   const [archiveInitialResponse, setArchiveInitialResponse] = useState<ArchiveSearchResponse | null>(null);
   const [archiveInitialError, setArchiveInitialError] = useState<string | null>(null);
   const [archiveInitialLoading, setArchiveInitialLoading] = useState(false);
+  const [archiveInitialQuery, setArchiveInitialQuery] = useState('');
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<string | null>(null);
+  const [deleteProjectSubmitting, setDeleteProjectSubmitting] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -117,6 +129,13 @@ export function HomePage() {
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { projects, refresh: refreshProjects } = useListProjects(callTool);
+  const { createProject } = useCreateProject(callTool);
+  const { renameProject } = useRenameProject(callTool);
+  const { deleteProject } = useDeleteProject(callTool);
+  const { connect: connectX } = useXConnect(callTool, {
+    onConnected: () => toast({ title: 'X connected', description: 'Your X account is linked.', duration: 3000 }),
+    onError: (message) => toast({ title: 'X connect failed', description: message, duration: 5000 }),
+  });
   const { listAssets, assets: assetList, clearAssets, removeAsset, markAssetSeenLocal } = useListAssets(callTool);
   const markAssetSeen = useMarkAssetSeen(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
@@ -673,11 +692,8 @@ export function HomePage() {
     void refreshProviderKeyStatus();
   }, [refreshProviderKeyStatus]);
 
-  const handleArchiveClick = useCallback(() => {
-    if (archiveOpen) {
-      setArchiveOpen(false);
-      return;
-    }
+  const openArchive = useCallback((query?: string) => {
+    const trimmedQuery = query?.trim() ?? '';
     setStatusOpen(false);
     setSettingsOpen(false);
     setSelectedItem(null);
@@ -687,6 +703,7 @@ export function HomePage() {
     setArchiveInitialResponse(null);
     setArchiveInitialError(null);
     setArchiveInitialLoading(true);
+    setArchiveInitialQuery(trimmedQuery);
     setArchiveOpen(true);
 
     if (state !== 'ready') {
@@ -696,6 +713,7 @@ export function HomePage() {
     }
 
     void callTool('search_archive', {
+      ...(trimmedQuery ? { query: trimmedQuery } : {}),
       limit: 20,
       offset: 0,
       sort: 'newest',
@@ -717,7 +735,15 @@ export function HomePage() {
     }).finally(() => {
       setArchiveInitialLoading(false);
     });
-  }, [archiveOpen, callTool, state]);
+  }, [callTool, state]);
+
+  const handleArchiveClick = useCallback(() => {
+    if (archiveOpen) {
+      setArchiveOpen(false);
+      return;
+    }
+    openArchive();
+  }, [archiveOpen, openArchive]);
 
   const handleArchiveRestoreComplete = useCallback((response: RestoreResponse) => {
     if (!projectSlug) return;
@@ -729,6 +755,231 @@ export function HomePage() {
       duration: 3000,
     });
   }, [projectSlug, sync, listAssets, sortOrder]);
+
+  const handleCreateProject = useCallback(async (slug: string) => {
+    const cleaned = slug.trim();
+    if (!cleaned) return;
+    const created = await createProject(cleaned);
+    if (!created) {
+      toast({ title: 'Create project failed', description: `Could not create "${cleaned}"`, duration: 5000 });
+      return;
+    }
+    await handleProjectChange(cleaned);
+    refreshProjects();
+  }, [createProject, handleProjectChange, refreshProjects]);
+
+  const handleRenameProject = useCallback(async (newSlug: string) => {
+    const cleaned = newSlug.trim();
+    if (!projectSlug || !cleaned || cleaned === projectSlug) return;
+    const ok = await renameProject(projectSlug, cleaned);
+    if (!ok) {
+      toast({ title: 'Rename project failed', description: `Could not rename to "${cleaned}"`, duration: 5000 });
+      return;
+    }
+    await handleProjectChange(cleaned);
+    refreshProjects();
+  }, [projectSlug, renameProject, handleProjectChange, refreshProjects]);
+
+  const handleRequestDeleteProject = useCallback((slug: string) => {
+    const target = slug.trim().replace(/^@/, '') || projectSlug;
+    if (!target) return;
+    if (!projects.some((p) => p.slug === target)) {
+      toast({ title: 'Delete project failed', description: `No project "${target}"`, duration: 4000 });
+      return;
+    }
+    if (projects.length <= 1) {
+      toast({ title: 'Cannot delete', description: 'Create another project before deleting this one', duration: 4000 });
+      return;
+    }
+    setDeleteProjectTarget(target);
+  }, [projectSlug, projects]);
+
+  const handleConfirmDeleteProject = useCallback(async () => {
+    if (!deleteProjectTarget) return;
+    setDeleteProjectSubmitting(true);
+    try {
+      const result = await deleteProject(deleteProjectTarget);
+      if (!result.ok) {
+        toast({ title: 'Delete project failed', description: result.error, duration: 5000 });
+        return;
+      }
+      const nextSlug = result.value.default_project_slug ?? projects.find((p) => p.slug !== deleteProjectTarget)?.slug;
+      refreshProjects();
+      if (deleteProjectTarget === projectSlug && nextSlug) {
+        await handleProjectChange(nextSlug);
+      }
+      toast({ title: 'Project deleted', description: deleteProjectTarget, duration: 2500 });
+    } finally {
+      setDeleteProjectSubmitting(false);
+      setDeleteProjectTarget(null);
+    }
+  }, [deleteProjectTarget, deleteProject, projects, projectSlug, refreshProjects, handleProjectChange]);
+
+  const handleCloseViewer = useCallback(() => {
+    setSelectedItem(null);
+    setGenPanel(null);
+    setTimelineSlotIndex(null);
+    setArchiveOpen(false);
+    setSettingsOpen(false);
+    setTrimAssetId(null);
+    setCropTarget(null);
+    setViewerFlipped(false);
+    setPendingFilePosition(null);
+    setPendingBackTab(null);
+    setPlanEmptyOverride(false);
+  }, []);
+
+  const setSidebarsCollapsed = useCallback((side: string, collapsed: boolean) => {
+    const s = side.trim().toLowerCase();
+    if (s !== 'right') setLeftCollapsed(collapsed);
+    if (s !== 'left') setRightCollapsed(collapsed);
+  }, []);
+
+  const timelineFps = previewData.fps || 30;
+
+  const resolveTimelineAudio = useCallback((ref: string) => {
+    const clean = ref.trim().replace(/^@/, '');
+    return timeline?.audio?.find((a) => a.id === clean || a.slug === clean || a.slug === `@${clean}`);
+  }, [timeline]);
+
+  const handleTimelineAudioAdd = useCallback((assetId: string, startSec: string, durationSec: string) => {
+    if (!projectSlug) return;
+    const cleaned = assetId.trim().replace(/^@/, '');
+    if (!cleaned.startsWith('aud-')) {
+      toast({ title: 'Audio add failed', description: `Expected an aud-* asset, got "${cleaned}"`, duration: 4000 });
+      return;
+    }
+    const startFrame = Math.max(0, Math.round((parseFloat(startSec) || 0) * timelineFps));
+    const parsedDuration = Math.round((parseFloat(durationSec) || 0) * timelineFps);
+    void addAudio(projectSlug, cleaned, startFrame, parsedDuration > 0 ? parsedDuration : undefined).then((ok) => {
+      if (!ok) toast({ title: 'Audio add failed', description: cleaned, duration: 4000 });
+    });
+  }, [projectSlug, addAudio, timelineFps]);
+
+  const handleTimelineAudioMove = useCallback((audioRef: string, startSec: string) => {
+    if (!projectSlug) return;
+    const clip = resolveTimelineAudio(audioRef);
+    if (!clip) {
+      toast({ title: 'Audio move failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
+      return;
+    }
+    const startFrame = Math.max(0, Math.round((parseFloat(startSec) || 0) * timelineFps));
+    void moveAudio(projectSlug, clip.id, startFrame).then((ok) => {
+      if (!ok) toast({ title: 'Audio move failed', description: clip.slug, duration: 4000 });
+    });
+  }, [projectSlug, resolveTimelineAudio, moveAudio, timelineFps]);
+
+  const handleTimelineAudioRemove = useCallback((audioRef: string) => {
+    if (!projectSlug) return;
+    const clip = resolveTimelineAudio(audioRef);
+    if (!clip) {
+      toast({ title: 'Audio remove failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
+      return;
+    }
+    void removeAudio(projectSlug, clip.id).then((ok) => {
+      if (!ok) toast({ title: 'Audio remove failed', description: clip.slug, duration: 4000 });
+    });
+  }, [projectSlug, resolveTimelineAudio, removeAudio]);
+
+  const handleTimelineAudioUpdate = useCallback((audioRef: string, field: string, value: string) => {
+    if (!projectSlug) return;
+    const clip = resolveTimelineAudio(audioRef);
+    if (!clip) {
+      toast({ title: 'Audio update failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
+      return;
+    }
+    const num = parseFloat(value);
+    if (!Number.isFinite(num)) {
+      toast({ title: 'Audio update failed', description: `Invalid value "${value}"`, duration: 4000 });
+      return;
+    }
+    const key = field.trim().toLowerCase();
+    const fields = key === 'volume'
+      ? { volume: Math.max(0, Math.min(100, num)) }
+      : key === 'fade-in' || key === 'fadein'
+        ? { fadeIn: Math.max(0, num) }
+        : key === 'fade-out' || key === 'fadeout'
+          ? { fadeOut: Math.max(0, num) }
+          : null;
+    if (!fields) {
+      toast({ title: 'Audio update failed', description: `Unknown field "${field}" (volume | fade-in | fade-out)`, duration: 4000 });
+      return;
+    }
+    void updateAudio(projectSlug, clip.id, fields).then((ok) => {
+      if (!ok) toast({ title: 'Audio update failed', description: clip.slug, duration: 4000 });
+    });
+  }, [projectSlug, resolveTimelineAudio, updateAudio]);
+
+  const handleExtractSkeletonCommand = useCallback((assetId: string) => {
+    if (!projectSlug) return;
+    const cleaned = assetId.trim().replace(/^@/, '');
+    const item = mediaItems.find((m) => m.id === cleaned);
+    if (!item || !(item.type === 'image' || item.type === 'character') || !item.filePath) {
+      toast({ title: 'Pose extraction failed', description: `No image or character asset "${cleaned}"`, duration: 4000 });
+      return;
+    }
+    void extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: item.filePath });
+  }, [projectSlug, mediaItems, extractSkeleton]);
+
+  const handleRewindCommand = useCallback((commitHash: string) => {
+    const hash = commitHash.trim();
+    if (!hash) {
+      setStatusOpen(true);
+      return;
+    }
+    if (!projectSlug) return;
+    void (async () => {
+      const result = await callTool('rewind_project', { commit_hash: hash, project_slug: projectSlug });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined;
+        toast({ title: 'Rewind failed', description: content?.[0]?.text ?? 'rewind_project failed', duration: 5000 });
+        return;
+      }
+      toast({ title: 'Project rewound', description: hash, duration: 2500 });
+      await handleActivityRewound();
+    })();
+  }, [projectSlug, callTool, handleActivityRewound]);
+
+  const handleShowVoices = useCallback(() => {
+    void (async () => {
+      const result = await callTool('list_elevenlabs_voices', {});
+      const content = result.content as Array<{ type: string; text: string }> | undefined;
+      if (result.isError) {
+        toast({ title: 'Voices unavailable', description: content?.[0]?.text ?? 'list_elevenlabs_voices failed', duration: 5000 });
+        return;
+      }
+      try {
+        const parsed = JSON.parse(content?.[0]?.text ?? '{}') as { voices?: Array<{ voice_id: string; name: string }> };
+        const voices = parsed.voices ?? [];
+        const shown = voices.slice(0, 12).map((v) => `${v.name} (${v.voice_id})`).join('\n');
+        const more = voices.length > 12 ? `\n…and ${voices.length - 12} more` : '';
+        toast({ title: `ElevenLabs voices (${voices.length})`, description: `${shown}${more}`, duration: 8000 });
+      } catch {
+        toast({ title: 'Voices unavailable', description: 'Could not parse voice list', duration: 5000 });
+      }
+    })();
+  }, [callTool]);
+
+  const handleOpenSlotPlayer = useCallback((slot: string) => {
+    const slots = timeline?.slots ?? [];
+    const cleaned = slot.trim();
+    let index: number;
+    if (cleaned) {
+      const m = cleaned.match(/^@?s?0*(\d+)$/i);
+      if (!m) {
+        toast({ title: 'Invalid slot', description: `"${cleaned}" — use e.g. @s01`, duration: 4000 });
+        return;
+      }
+      index = parseInt(m[1], 10) - 1;
+    } else {
+      index = slots.findIndex((s) => s?.slug);
+    }
+    if (index < 0 || !slots[index]?.slug) {
+      toast({ title: 'Slot empty', description: cleaned ? `${cleaned} has no clip assigned` : 'No filled timeline slots', duration: 4000 });
+      return;
+    }
+    handleSlotClick(index);
+  }, [timeline, handleSlotClick]);
 
   const uiActions: UiActionMap = useMemo(() => ({
     open_upload: triggerUpload,
@@ -844,7 +1095,35 @@ export function HomePage() {
         setPlanEmptyOverride(true);
       }
     },
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget]);
+    open_projects: () => setProjectsOpen(true),
+    create_project: (slug: string) => { void handleCreateProject(slug); },
+    rename_project: (newSlug: string) => { void handleRenameProject(newSlug); },
+    delete_project: handleRequestDeleteProject,
+    close_viewer: handleCloseViewer,
+    sidebar_collapse: (side: string) => setSidebarsCollapsed(side, true),
+    sidebar_expand: (side: string) => setSidebarsCollapsed(side, false),
+    sidebar_sort: (order: string) => {
+      const o = order.trim().toLowerCase();
+      if (o === 'newest' || o === 'oldest') setSortOrder(o);
+      else setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'));
+    },
+    open_provider_keys: () => {
+      setSettingsOpen(true);
+      setArchiveOpen(false);
+      setStatusOpen(false);
+      void refreshProviderKeyStatus();
+    },
+    open_archive: (query: string) => openArchive(query),
+    timeline_audio_add: handleTimelineAudioAdd,
+    timeline_audio_move: handleTimelineAudioMove,
+    timeline_audio_remove: handleTimelineAudioRemove,
+    timeline_audio_update: handleTimelineAudioUpdate,
+    extract_skeleton: handleExtractSkeletonCommand,
+    rewind_activity: handleRewindCommand,
+    show_voices: handleShowVoices,
+    x_connect: () => { void connectX(); },
+    open_slot_player: handleOpenSlotPlayer,
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer]);
 
   return (
     <MountKeyProvider>
@@ -896,6 +1175,8 @@ export function HomePage() {
             onAnimateCommand={handleAnimateCommand}
             archiveActive={archiveOpen}
             settingsActive={settingsOpen}
+            projectsOpen={projectsOpen}
+            onProjectsOpenChange={setProjectsOpen}
           />
 
           <div className="flex flex-row overflow-hidden">
@@ -990,6 +1271,7 @@ export function HomePage() {
                     initialResponse={archiveInitialResponse}
                     initialError={archiveInitialError}
                     initialLoading={archiveInitialLoading}
+                    initialQuery={archiveInitialQuery}
                     onClose={() => setArchiveOpen(false)}
                     onRestoreComplete={handleArchiveRestoreComplete}
                   />
@@ -1203,6 +1485,39 @@ export function HomePage() {
         onClose={() => setProjectExportAssetId(null)}
         onAfterExport={() => { void refreshProjects(); }}
       />
+      {deleteProjectTarget && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center"
+          onClick={() => { if (!deleteProjectSubmitting) setDeleteProjectTarget(null); }}
+        >
+          <div
+            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-red-400/40 rounded p-4 shadow-[0_0_24px_rgba(248,113,113,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-[10px] font-mono font-bold tracking-widest text-red-400 mb-2">DELETE PROJECT?</div>
+            <div className="text-sm text-zinc-200 mb-3">
+              Delete <span className="font-mono text-red-300">{deleteProjectTarget}</span> and all of its assets?
+            </div>
+            <div className="text-[11px] text-zinc-400 mb-4">
+              {formatAssetCount(projects.find((p) => p.slug === deleteProjectTarget)?.asset_count ?? 0)} will be removed. This cannot be undone.
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteProjectSubmitting}
+                onClick={() => setDeleteProjectTarget(null)}
+                className="px-3 py-1.5 text-xs font-mono tracking-widest border border-zinc-700 text-zinc-300 hover:bg-zinc-800 rounded disabled:opacity-50"
+              >CANCEL</button>
+              <button
+                type="button"
+                disabled={deleteProjectSubmitting}
+                onClick={() => { void handleConfirmDeleteProject(); }}
+                className="px-3 py-1.5 text-xs font-mono tracking-widest border border-red-400 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded disabled:opacity-50"
+              >{deleteProjectSubmitting ? 'DELETING…' : 'DELETE'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {audioReplace && (
         <div
           className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center"

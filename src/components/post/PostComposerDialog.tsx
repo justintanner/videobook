@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, LogIn, Send, Share2, X, Calendar, Image as ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
+import { useXConnect } from '@/hooks/useXConnect';
 import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 
 const MAX_TEXT = 280;
@@ -24,17 +25,6 @@ interface ToolTextResult {
   isError?: boolean;
   content?: Array<{ type: string; text: string }>;
 }
-
-interface XConnectStatus {
-  connected: boolean;
-  pending: boolean;
-  has_credentials: boolean;
-  error?: string;
-  expires_at?: string;
-}
-
-const POLL_INTERVAL_MS = 1500;
-const POLL_TIMEOUT_MS = 5 * 60_000;
 
 function extractText(result: unknown): string | null {
   const r = result as ToolTextResult;
@@ -65,13 +55,8 @@ export function PostComposerDialog({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ status: 'posted' | 'scheduled'; tweet_url?: string; scheduled_for?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [xStatus, setXStatus] = useState<XConnectStatus | null>(null);
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const userPickedOrientationRef = useRef(false);
-  const pollTimerRef = useRef<number | null>(null);
-  const pollDeadlineRef = useRef<number>(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const history = usePromptHistory(callTool, 'post', projectSlug);
@@ -82,83 +67,11 @@ export function PostComposerDialog({
     onAfterDispatch: () => onOpenChange(false),
   });
 
-  const fetchXStatus = useCallback(async (): Promise<XConnectStatus | null> => {
-    try {
-      const res = await callTool('x_connect_status', {});
-      const r = res as ToolTextResult;
-      if (r.isError) return null;
-      const t = extractText(res);
-      if (!t) return null;
-      return JSON.parse(t) as XConnectStatus;
-    } catch {
-      return null;
-    }
-  }, [callTool]);
-
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current !== null) {
-      window.clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }, []);
-
-  const pollStatus = useCallback(async () => {
-    pollTimerRef.current = null;
-    if (Date.now() > pollDeadlineRef.current) {
-      setConnecting(false);
-      setConnectError('Timed out waiting for X authorization. Try again.');
-      return;
-    }
-    const s = await fetchXStatus();
-    if (s) {
-      setXStatus(s);
-      if (s.connected) {
-        setConnecting(false);
-        setConnectError(null);
-        return;
-      }
-      if (s.error && !s.pending) {
-        setConnecting(false);
-        setConnectError(s.error);
-        return;
-      }
-    }
-    pollTimerRef.current = window.setTimeout(pollStatus, POLL_INTERVAL_MS);
-  }, [fetchXStatus]);
-
-  const connectX = useCallback(async () => {
-    if (connecting) return;
-    setConnectError(null);
-    setConnecting(true);
-    try {
-      const res = await callTool('x_connect_start', {});
-      const r = res as ToolTextResult;
-      if (r.isError) {
-        setConnectError(extractText(res) ?? 'Could not start X connect flow');
-        setConnecting(false);
-        return;
-      }
-      const t = extractText(res);
-      if (!t) {
-        setConnectError('Empty response from x_connect_start');
-        setConnecting(false);
-        return;
-      }
-      const parsed = JSON.parse(t) as { authorize_url: string };
-      window.open(parsed.authorize_url, '_blank', 'noopener,noreferrer');
-      pollDeadlineRef.current = Date.now() + POLL_TIMEOUT_MS;
-      pollTimerRef.current = window.setTimeout(pollStatus, POLL_INTERVAL_MS);
-    } catch (err) {
-      setConnectError(err instanceof Error ? err.message : String(err));
-      setConnecting(false);
-    }
-  }, [callTool, connecting, pollStatus]);
+  const { status: xStatus, connecting, connectError, connect: connectX, fetchStatus: fetchXStatus, reset: resetXConnect } = useXConnect(callTool);
 
   useEffect(() => {
     if (!open) {
-      stopPolling();
-      setConnecting(false);
-      setConnectError(null);
+      resetXConnect();
       return;
     }
     setText(initialText);
@@ -169,15 +82,13 @@ export function PostComposerDialog({
     userPickedOrientationRef.current = false;
     setOrientation('portrait');
     history.reset();
-    fetchXStatus().then((s) => {
-      if (s) setXStatus(s);
-    });
+    void fetchXStatus();
     return () => {
-      stopPolling();
+      resetXConnect();
     };
     // `history` is recreated each render — reset is stable enough; deps below cover the trigger surface.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialText, item?.id, fetchXStatus, stopPolling]);
+  }, [open, initialText, item?.id, fetchXStatus, resetXConnect]);
 
   const charCount = text.length;
   const overLimit = charCount > MAX_TEXT;

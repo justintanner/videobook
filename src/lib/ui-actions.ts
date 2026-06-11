@@ -36,6 +36,25 @@ export interface UiActionCallbacks {
   open_character_dialog: (initialSlug: string) => void;
   open_post_composer: (assetSlug: string, text: string) => void;
   open_plan: () => void;
+  open_projects: () => void;
+  create_project: (slug: string) => void;
+  rename_project: (newSlug: string) => void;
+  delete_project: (slug: string) => void;
+  close_viewer: () => void;
+  sidebar_collapse: (side: string) => void;
+  sidebar_expand: (side: string) => void;
+  sidebar_sort: (order: string) => void;
+  open_provider_keys: () => void;
+  open_archive: (query: string) => void;
+  timeline_audio_add: (assetId: string, startSec: string, durationSec: string) => void;
+  timeline_audio_move: (audioRef: string, startSec: string) => void;
+  timeline_audio_remove: (audioRef: string) => void;
+  timeline_audio_update: (audioRef: string, field: string, value: string) => void;
+  extract_skeleton: (assetId: string) => void;
+  rewind_activity: (commitHash: string) => void;
+  show_voices: () => void;
+  x_connect: () => void;
+  open_slot_player: (slot: string) => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;
@@ -125,8 +144,49 @@ export function executeUiAction(
     case 'open_post_composer':
       (fn as UiActionCallbacks['open_post_composer'])(ctx.args.asset_slug ?? '', ctx.args.text ?? '');
       break;
+    case 'create_project':
+      (fn as UiActionCallbacks['create_project'])(ctx.args.project_slug ?? ctx.raw);
+      break;
+    case 'rename_project':
+      (fn as UiActionCallbacks['rename_project'])(ctx.args.new_slug ?? ctx.raw);
+      break;
+    case 'delete_project':
+      (fn as UiActionCallbacks['delete_project'])(ctx.args.project_slug ?? '');
+      break;
+    case 'sidebar_collapse':
+    case 'sidebar_expand':
+      (fn as UiActionCallbacks['sidebar_collapse'])(ctx.args.side ?? '');
+      break;
+    case 'sidebar_sort':
+      (fn as UiActionCallbacks['sidebar_sort'])(ctx.args.order ?? '');
+      break;
+    case 'open_archive':
+      (fn as UiActionCallbacks['open_archive'])(ctx.args.query ?? ctx.raw);
+      break;
+    case 'timeline_audio_add':
+      (fn as UiActionCallbacks['timeline_audio_add'])(ctx.args.asset_id ?? '', ctx.args.start ?? '', ctx.args.duration ?? '');
+      break;
+    case 'timeline_audio_move':
+      (fn as UiActionCallbacks['timeline_audio_move'])(ctx.args.audio_ref ?? '', ctx.args.start ?? '');
+      break;
+    case 'timeline_audio_remove':
+      (fn as UiActionCallbacks['timeline_audio_remove'])(ctx.args.audio_ref ?? ctx.raw);
+      break;
+    case 'timeline_audio_update':
+      (fn as UiActionCallbacks['timeline_audio_update'])(ctx.args.audio_ref ?? '', ctx.args.field ?? '', ctx.args.value ?? '');
+      break;
+    case 'extract_skeleton':
+      (fn as UiActionCallbacks['extract_skeleton'])(ctx.args.asset_id ?? ctx.raw);
+      break;
+    case 'rewind_activity':
+      (fn as UiActionCallbacks['rewind_activity'])(ctx.args.commit_hash ?? ctx.raw);
+      break;
+    case 'open_slot_player':
+      (fn as UiActionCallbacks['open_slot_player'])(ctx.args.slot ?? ctx.raw);
+      break;
     default:
-      // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info
+      // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info,
+      // open_projects, close_viewer, open_provider_keys, show_voices, x_connect
       (fn as () => void)();
       break;
   }

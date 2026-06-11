@@ -57,17 +57,17 @@ export function splitVideoDef(fs: VideocityFs): ToolDef {
       asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
       project_slug: z.string().describe("Project slug"),
       chunk_a_end: z.number().describe("End of the first chunk in seconds"),
-      chunk_b_start: z.number().describe("Start of the second chunk in seconds (<= chunk_a_end for overlap, equal for clean split)"),
+      chunk_b_start: z.number().optional().describe("Start of the second chunk in seconds (<= chunk_a_end for overlap, equal for clean split; defaults to chunk_a_end)"),
     },
     handler: async (args) => {
       const { asset_id, project_slug, chunk_a_end, chunk_b_start } = args as {
         asset_id: string;
         project_slug: string;
         chunk_a_end: number;
-        chunk_b_start: number;
+        chunk_b_start?: number;
       };
 
-      const validated = validateSplitParams(chunk_a_end, chunk_b_start);
+      const validated = validateSplitParams(chunk_a_end, chunk_b_start ?? chunk_a_end);
       if ("error" in validated) {
         return {
           isError: true as const,

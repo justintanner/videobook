@@ -48,6 +48,7 @@ type ArchiveBrowserProps = {
   initialResponse?: ArchiveSearchResponse | null
   initialError?: string | null
   initialLoading?: boolean
+  initialQuery?: string
   onClose: () => void
   onRestoreComplete: (response: RestoreResponse) => void
 }
@@ -84,8 +85,8 @@ function isAudioContent(contentType: string): boolean {
   return contentType.toLowerCase().startsWith('audio/')
 }
 
-export function ArchiveBrowser({ projectSlug, callTool, callState, initialResponse, initialError, initialLoading = false, onClose, onRestoreComplete }: ArchiveBrowserProps) {
-  const [query, setQuery] = useState('')
+export function ArchiveBrowser({ projectSlug, callTool, callState, initialResponse, initialError, initialLoading = false, initialQuery = '', onClose, onRestoreComplete }: ArchiveBrowserProps) {
+  const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState<ArchiveResult[]>(initialResponse?.results ?? [])
   const [total, setTotal] = useState(initialResponse?.total ?? 0)
   const [offset, setOffset] = useState(initialResponse?.offset ?? 0)
@@ -97,6 +98,10 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
   const [searched, setSearched] = useState(initialResponse != null || initialError != null)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    setQuery(initialQuery)
+  }, [initialQuery])
 
   useEffect(() => {
     if (initialResponse) {

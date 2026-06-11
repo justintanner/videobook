@@ -15,14 +15,18 @@ interface ProjectDropdownProps {
   assetCount: number | undefined
   callTool: UseMcpResult['callTool']
   onProjectChange: (slug: string) => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 function formatAssetCount(count: number): string {
   return count === 1 ? '1 asset' : `${count} assets`
 }
 
-export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectChange }: ProjectDropdownProps) {
-  const [open, setOpen] = useState(false)
+export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectChange, open: controlledOpen, onOpenChange }: ProjectDropdownProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
   const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
@@ -43,12 +47,17 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
   const activeProject = projects.find((project) => project.slug === projectSlug)
   const displayedAssetCount = assetCount ?? activeProject?.asset_count
 
+  // Snapshot the active project whenever the popover opens, including
+  // externally-controlled opens (e.g. the /projects command).
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) setSnapshotSlug(projectSlug)
+  }
+
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
-    if (nextOpen) {
-      setSnapshotSlug(projectSlug)
-      refresh()
-    } else {
+    if (!nextOpen) {
       setEditingSlug(null)
       setEditValue('')
       setCreatingNew(false)
@@ -56,7 +65,14 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
       setConfirmingDeleteSlug(null)
       setDeleteError(null)
     }
-  }, [projectSlug, refresh])
+  }, [setOpen])
+
+  // Refresh the project list on every open edge, including external opens.
+  const prevOpenRef = useRef(open)
+  useEffect(() => {
+    if (open && !prevOpenRef.current) refresh()
+    prevOpenRef.current = open
+  }, [open, refresh])
 
   useEffect(() => {
     if (editingSlug) editInputRef.current?.focus()

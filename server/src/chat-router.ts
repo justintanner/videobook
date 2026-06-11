@@ -96,6 +96,97 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: [],
     category: "action",
   },
+  {
+    name: "split_video",
+    actualTool: "split_video",
+    description: "Split a video into two new assets at a timestamp (chunk_a_end seconds; optional chunk_b_start for overlap)",
+    params: ["asset_id", "chunk_a_end", "chunk_b_start"],
+    category: "action",
+  },
+  {
+    name: "export_asset_to_project",
+    actualTool: "export_asset_to_project",
+    description: "Export/copy an asset into a different project",
+    params: ["asset_id", "target_project", "new_name"],
+    category: "action",
+  },
+  {
+    name: "add_timeline_audio",
+    actualTool: "add_timeline_audio",
+    description: "Add an audio asset to the timeline audio lane (positions in frames at 30 fps)",
+    params: ["asset_id", "start_frame", "duration_frames"],
+    category: "action",
+  },
+  {
+    name: "move_timeline_audio",
+    actualTool: "move_timeline_audio",
+    description: "Move a timeline audio clip to a new start position (frames at 30 fps)",
+    params: ["audio_id", "start_frame"],
+    category: "action",
+  },
+  {
+    name: "remove_timeline_audio",
+    actualTool: "remove_timeline_audio",
+    description: "Remove an audio clip from the timeline audio lane",
+    params: ["audio_id"],
+    category: "action",
+  },
+  {
+    name: "update_timeline_audio",
+    actualTool: "update_timeline_audio",
+    description: "Update a timeline audio clip's volume (0-100) or fade_in/fade_out (ms)",
+    params: ["audio_id", "volume", "fade_in", "fade_out"],
+    category: "action",
+  },
+  {
+    name: "archive_clip",
+    actualTool: "archive_clip",
+    description: "Archive a video or audio asset to the global clip archive with optional topic tags",
+    params: ["asset_id", "topics"],
+    category: "action",
+  },
+  {
+    name: "search_archive",
+    actualTool: "search_archive",
+    description: "Search the global clip archive by text query and/or topics",
+    params: ["query", "topics"],
+    category: "action",
+  },
+  {
+    name: "restore_archive_clips",
+    actualTool: "restore_archive_clips",
+    description: "Restore archived clips into the current project by archive ID",
+    params: ["archive_ids"],
+    category: "action",
+  },
+  {
+    name: "set_character_voice",
+    actualTool: "set_character_voice",
+    description: "Set or clear the ElevenLabs voice ID on a char-* asset",
+    params: ["char_asset_id", "elevenlabs_voice_id"],
+    category: "action",
+  },
+  {
+    name: "list_elevenlabs_voices",
+    actualTool: "list_elevenlabs_voices",
+    description: "List available ElevenLabs voices",
+    params: [],
+    category: "action",
+  },
+  {
+    name: "create_project",
+    actualTool: "create_project",
+    description: "Create a new project",
+    params: ["project_slug"],
+    category: "action",
+  },
+  {
+    name: "clear_failed_tasks",
+    actualTool: "clear_failed_tasks",
+    description: "Delete all assets with failed generations in the current project",
+    params: [],
+    category: "action",
+  },
   // --- Generation tools ---
   {
     name: "generate_video",
@@ -118,11 +209,19 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: ["image_slugs", "layout", "aspect_ratio"],
     category: "generation",
   },
+  {
+    name: "generate_elevenlabs_t2a",
+    actualTool: "generate_elevenlabs_t2a",
+    description: "Generate speech audio from text using a character's assigned ElevenLabs voice",
+    params: ["character_asset_id", "text"],
+    category: "generation",
+  },
 ];
 
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
   download_video: ["start_time", "end_time"],
+  split_video: ["chunk_a_end", "chunk_b_start"],
 };
 
 function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
@@ -152,6 +251,7 @@ Parameter guidelines:
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs for reference image asset IDs (include @ prefix)
 - For concat_images: use image_slugs for all referenced image asset IDs (include @ prefix); use layout horizontal for side-by-side requests
+- Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
 

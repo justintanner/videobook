@@ -15,9 +15,11 @@ interface HomeHeaderBarProps {
   onAnimateCommand: (text: string) => void;
   archiveActive?: boolean;
   settingsActive?: boolean;
+  projectsOpen?: boolean;
+  onProjectsOpenChange?: (open: boolean) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -36,6 +38,8 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
           assetCount={assetCount}
           callTool={callTool}
           onProjectChange={onProjectChange}
+          open={projectsOpen}
+          onOpenChange={onProjectsOpenChange}
         />
 
         {/* Generation shortcuts */}

@@ -110,7 +110,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(15);
+    expect(ROUTABLE_TOOLS.length).toBe(29);
   });
 
   it("contains both action and generation categories", () => {
@@ -124,9 +124,10 @@ describe("ROUTABLE_TOOLS", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("every tool has non-empty params array (except render_timeline, which takes no routing params)", () => {
+  it("every tool has non-empty params array (except tools that take no routing params)", () => {
+    const noParamTools = new Set(["render_timeline", "list_elevenlabs_voices", "clear_failed_tasks"]);
     for (const tool of ROUTABLE_TOOLS) {
-      if (tool.name === "render_timeline") continue;
+      if (noParamTools.has(tool.name)) continue;
       expect(tool.params.length).toBeGreaterThan(0);
     }
   });

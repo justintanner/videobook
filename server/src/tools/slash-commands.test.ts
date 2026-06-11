@@ -79,6 +79,35 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/files");
     expect(commandNames).toContain("/plan");
     expect(commandNames).toContain("/plan-vis");
+    expect(commandNames).toContain("/projects");
+    expect(commandNames).toContain("/project-new");
+    expect(commandNames).toContain("/project-rename");
+    expect(commandNames).toContain("/project-delete");
+    expect(commandNames).toContain("/close");
+    expect(commandNames).toContain("/collapse");
+    expect(commandNames).toContain("/expand");
+    expect(commandNames).toContain("/sort");
+    expect(commandNames).toContain("/keys");
+    expect(commandNames).toContain("/archive-browse");
+    expect(commandNames).toContain("/audio-add");
+    expect(commandNames).toContain("/audio-move");
+    expect(commandNames).toContain("/audio-remove");
+    expect(commandNames).toContain("/audio-set");
+    expect(commandNames).toContain("/reverse");
+    expect(commandNames).toContain("/speed");
+    expect(commandNames).toContain("/split");
+    expect(commandNames).toContain("/export-to");
+    expect(commandNames).toContain("/skeleton");
+    expect(commandNames).toContain("/archive-restore");
+    expect(commandNames).toContain("/rewind");
+    expect(commandNames).toContain("/clear-failed");
+    expect(commandNames).toContain("/voice");
+    expect(commandNames).toContain("/voices");
+    expect(commandNames).toContain("/pin");
+    expect(commandNames).toContain("/unpin");
+    expect(commandNames).toContain("/say");
+    expect(commandNames).toContain("/connect-x");
+    expect(commandNames).toContain("/play");
 
     const plan = commands.find((c) => c.command === "/plan")!;
     expect(plan.uiAction).toBe("open_plan");
@@ -245,7 +274,7 @@ describe("slash_commands tool", () => {
     }
   });
 
-  it("returns empty project commands when no projects exist", async () => {
+  it("returns no switch-project commands when no projects exist", async () => {
     const result = await client.callTool({
       name: "slash_commands",
       arguments: {},
@@ -254,7 +283,26 @@ describe("slash_commands tool", () => {
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,
     );
-    const projectCommands = commands.filter((c) => c.category === "project");
-    expect(projectCommands).toHaveLength(0);
+    const switchCommands = commands.filter((c) => c.uiAction === "switch_project");
+    expect(switchCommands).toHaveLength(0);
+  });
+
+  it("skips dynamic project commands that collide with hardcoded names", async () => {
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "play" },
+    });
+
+    const result = await client.callTool({
+      name: "slash_commands",
+      arguments: {},
+    });
+
+    const commands: Command[] = JSON.parse(
+      (result.content as TextContent)[0].text,
+    );
+    const playCommands = commands.filter((c) => c.command === "/play");
+    expect(playCommands).toHaveLength(1);
+    expect(playCommands[0].uiAction).toBe("open_slot_player");
   });
 });
