@@ -53,6 +53,74 @@ describe("edit_timeline tool", () => {
     expect(data.path).toBeTruthy();
   });
 
+  it("preserves audio and currentOrientation when a partial update omits them", async () => {
+    const audio = [
+      { id: "aud-1", slug: "aud-music", startFrame: 0, durationFrames: 120, volume: 0.8 },
+    ];
+    const first = await client.callTool({
+      name: "edit_timeline",
+      arguments: {
+        project_slug: "test-proj",
+        slots: [{ slug: "vid-intro" }],
+        render: "portrait",
+        audio,
+        currentOrientation: "portrait",
+      },
+    });
+    expect(first.isError).toBeFalsy();
+
+    // Orientation-style update: slots + render only, no audio/currentOrientation.
+    const second = await client.callTool({
+      name: "edit_timeline",
+      arguments: {
+        project_slug: "test-proj",
+        slots: [{ slug: "vid-intro" }],
+        render: "landscape",
+      },
+    });
+    expect(second.isError).toBeFalsy();
+
+    const readBack = await client.callTool({
+      name: "get_timeline",
+      arguments: { project_slug: "test-proj" },
+    });
+    expect(readBack.isError).toBeFalsy();
+    const content = readBack.content as Array<{ type: string; text: string }>;
+    const config = JSON.parse(content[0].text);
+    expect(config.render).toBe("landscape");
+    expect(config.audio).toEqual(audio);
+    expect(config.currentOrientation).toBe("portrait");
+  });
+
+  it("clears audio when an explicit empty array is sent", async () => {
+    await client.callTool({
+      name: "edit_timeline",
+      arguments: {
+        project_slug: "test-proj",
+        slots: [{ slug: "vid-intro" }],
+        audio: [{ id: "aud-1", slug: "aud-music", startFrame: 0, durationFrames: 120 }],
+      },
+    });
+    const cleared = await client.callTool({
+      name: "edit_timeline",
+      arguments: {
+        project_slug: "test-proj",
+        slots: [{ slug: "vid-intro" }],
+        audio: [],
+      },
+    });
+    expect(cleared.isError).toBeFalsy();
+
+    const readBack = await client.callTool({
+      name: "get_timeline",
+      arguments: { project_slug: "test-proj" },
+    });
+    const content = readBack.content as Array<{ type: string; text: string }>;
+    const config = JSON.parse(content[0].text);
+    // The engine omits the audio key entirely when no clips remain.
+    expect(config.audio ?? []).toEqual([]);
+  });
+
   it("returns error for nonexistent project", async () => {
     const result = await client.callTool({
       name: "edit_timeline",

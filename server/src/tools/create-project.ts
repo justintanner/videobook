@@ -11,7 +11,16 @@ export function createProjectDef(fs: VideocityFs): ToolDef {
       const { project_slug } = args as { project_slug: string };
       const result = await fs.createProject(project_slug);
       if (result.ok) {
-        await fs.writeProjectMeta("timeline", { slots: [], render: "landscape" }, project_slug);
+        const seed = await fs.writeProjectMeta("timeline", { slots: [], render: "landscape" }, project_slug);
+        if (!seed.ok) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Project created but failed to seed timeline: ${seed.error.message}`,
+            }],
+          };
+        }
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result.value) }],
         };

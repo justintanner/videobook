@@ -30,6 +30,25 @@ describe("create_project tool", () => {
     expect(data.is_default).toBe(true);
   });
 
+  it("seeds a readable timeline on success", async () => {
+    client = await createTestClient(tempDir);
+    const created = await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "seeded" },
+    });
+    expect(created.isError).toBeFalsy();
+
+    const timeline = await client.callTool({
+      name: "get_timeline",
+      arguments: { project_slug: "seeded" },
+    });
+    expect(timeline.isError).toBeFalsy();
+    const content = timeline.content as Array<{ type: string; text: string }>;
+    const config = JSON.parse(content[0].text);
+    expect(config.slots).toEqual([]);
+    expect(config.render).toBe("landscape");
+  });
+
   it("returns error for duplicate slug", async () => {
     client = await createTestClient(tempDir);
     await client.callTool({

@@ -270,6 +270,9 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
           }
           ctx.setLease({ kind: "owner", ownerId: claimed.ownerId });
           heartbeat = setInterval(() => {
+            // After a Pattern A owner→task handoff the owner lease is dead;
+            // stop renewing it.
+            if (leaseRef.current?.kind !== "owner") return;
             void fsRef.current.assetWork.renew(
               projectSlug,
               assetId,

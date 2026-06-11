@@ -32,7 +32,7 @@ type TimelineConfig = {
 export function editTimelineDef(fs: VideocityFs): ToolDef {
   return {
     name: "edit_timeline",
-    description: "Set the timeline for a project (replaces all slots and render orientation)",
+    description: "Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)",
     schema: {
       project_slug: z.string().describe("Project slug"),
       slots: z.array(z.object({
@@ -66,11 +66,21 @@ export function editTimelineDef(fs: VideocityFs): ToolDef {
         currentOrientation?: ViewerSize;
       };
 
+      // Preserve optional fields the caller didn't send — a partial update
+      // (e.g. orientation only) must not wipe existing audio clips.
+      const existingResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const existing: TimelineConfig | undefined =
+        existingResult.ok && !Array.isArray(existingResult.value)
+          ? existingResult.value
+          : undefined;
+
+      const mergedAudio = audio ?? existing?.audio;
+      const mergedOrientation = currentOrientation ?? existing?.currentOrientation;
       const config: TimelineConfig = {
         slots,
         render,
-        ...(audio !== undefined && { audio }),
-        ...(currentOrientation !== undefined && { currentOrientation }),
+        ...(mergedAudio !== undefined && { audio: mergedAudio }),
+        ...(mergedOrientation !== undefined && { currentOrientation: mergedOrientation }),
       };
       const result = await fs.writeProjectMeta("timeline", config, project_slug);
       if (result.ok) {

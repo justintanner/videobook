@@ -58,6 +58,10 @@ export function useOutfitPromptPreview({
 
   useEffect(() => {
     if (callState !== "ready") return;
+    // Derived from modelsKey so the effect keys off the stable string, not the
+    // `models` array identity (a fresh array per render would reset the
+    // debounce timer on every parent render).
+    const models = modelsKey.split(",").filter(Boolean) as OutfitModelKey[];
     if (models.length === 0) {
       setPrompts([]);
       setError(null);
@@ -110,7 +114,7 @@ export function useOutfitPromptPreview({
       );
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [callState, projectSlug, modelImageSlug, modelsKey, provider, hasBackdrop, poseDescription, shot, platform, poseCoverage, models]);
+  }, [callState, projectSlug, modelImageSlug, modelsKey, provider, hasBackdrop, poseDescription, shot, platform, poseCoverage]);
 
   return { prompts, negativePrompt, loading, error };
 }

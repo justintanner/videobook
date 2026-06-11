@@ -70,6 +70,8 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
         project_slug: projectSlug,
         slots: updatedConfig.slots,
         render: orient,
+        ...(current.audio !== undefined && { audio: current.audio }),
+        ...(current.currentOrientation !== undefined && { currentOrientation: current.currentOrientation }),
       });
       if (editResult.isError) return false;
 
@@ -82,17 +84,19 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
   }, []);
 
   const setCurrentOrientation = useCallback((projectSlug: string, orient: ViewerSize) => {
-    callToolRef.current("get_timeline", { project_slug: projectSlug }).then(getResult => {
+    callToolRef.current("get_timeline", { project_slug: projectSlug }).then(async getResult => {
       if (getResult.isError) return;
       const content = getResult.content as Array<{ type: string; text: string }>;
       const current: TimelineConfig = JSON.parse(content[0].text);
       const updated = { ...current, currentOrientation: orient };
-      callToolRef.current("edit_timeline", {
+      const editResult = await callToolRef.current("edit_timeline", {
         project_slug: projectSlug,
         slots: updated.slots,
         render: updated.render,
+        ...(current.audio !== undefined && { audio: current.audio }),
         currentOrientation: orient,
       });
+      if (editResult.isError) return;
       setTimeline(updated);
     }).catch(() => {});
   }, []);
