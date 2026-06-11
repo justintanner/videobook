@@ -56,7 +56,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
         <button
           type="button"
           onClick={onArchiveClick}
-          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${archiveActive ? 'text-amber-300 bg-amber-500/10' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
+          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${archiveActive ? 'text-amber-300 bg-amber-500/10' : 'text-muted-foreground/60 hover:text-amber-300/80 hover:bg-amber-500/10'}`}
           title="Archive"
         >
           <ArchiveRestore className="w-4 h-4" />
@@ -65,7 +65,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
         <button
           type="button"
           onClick={onSettingsClick}
-          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${settingsActive ? 'text-primary bg-primary/10' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
+          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${settingsActive ? 'text-primary bg-primary/10' : 'text-muted-foreground/60 hover:text-primary hover:bg-primary/10'}`}
           title="Settings"
         >
           <Settings className="w-4 h-4" />

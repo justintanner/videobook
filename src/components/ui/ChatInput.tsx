@@ -583,9 +583,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 : commandResult === 'transmitting'
                   ? 'text-primary/60'
                   : chatInput.trim() && !disabled && !isLoading && !isTransmitting && !isAnimating
-                    ? 'text-primary bg-primary/10 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_12px_rgba(0,255,255,0.3)] hover:scale-110'
+                    ? 'text-primary bg-primary/10 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_12px_rgba(0,255,255,0.3)] hover:scale-[1.02] active:scale-[0.98]'
                     : 'text-primary/30',
-            'disabled:opacity-30 disabled:cursor-not-allowed'
+            'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
           onClick={handleSend}
           disabled={isLoading || isTransmitting || disabled || isAnimating || !!commandResult || !chatInput.trim()}

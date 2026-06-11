@@ -117,7 +117,7 @@ export function ProviderKeysScreen({ data, loading, error, onRefresh, onClose }:
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-wait transition-colors inline-flex items-center gap-2"
+              className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:hover:bg-primary/10 disabled:opacity-50 disabled:cursor-wait transition-colors inline-flex items-center gap-2"
               title="Refresh provider status"
             >
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />

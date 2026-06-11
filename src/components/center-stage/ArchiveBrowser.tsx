@@ -303,7 +303,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
               type="button"
               disabled={offset === 0 || loading || initialLoading || restoring}
               onClick={handlePreviousPage}
-              className="flex h-7 items-center border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Prev
             </button>
@@ -314,7 +314,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
               type="button"
               disabled={!hasMore || loading || initialLoading || restoring}
               onClick={handleNextPage}
-              className="flex h-7 items-center border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>
@@ -322,7 +322,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
               type="button"
               disabled={results.length === 0 || initialLoading || restoring}
               onClick={handleSelectVisible}
-              className="flex h-7 items-center gap-1.5 border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center gap-1.5 border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {visibleSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
               {visibleSelected ? 'Clear' : 'Select visible'}
@@ -361,7 +361,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
                     onClick={() => toggleSelected(result.archive_id)}
                     className={cn(
                       'grid cursor-pointer grid-cols-[8rem_minmax(0,1fr)] gap-3 border bg-black/30 p-2 transition-colors',
-                      selected ? 'border-amber-400/60 bg-amber-500/10' : 'border-zinc-800 hover:border-zinc-700',
+                      selected ? 'border-amber-400/60 bg-amber-500/10 hover:bg-amber-500/15' : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-500/10',
                     )}
                   >
                     <div className="aspect-video overflow-hidden bg-black">

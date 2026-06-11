@@ -49,7 +49,7 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
             type="button"
             onClick={onClose}
             aria-label="Close picker"
-            className="text-cyan-300/70 hover:text-cyan-100"
+            className="w-6 h-6 flex items-center justify-center rounded text-cyan-300/70 hover:text-cyan-100 hover:bg-cyan-500/10 transition-colors duration-150"
           >
             <X className="w-4 h-4" />
           </button>
@@ -65,7 +65,7 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
               placeholder="Search slugs, titles…"
               className={cn(
                 "w-full bg-black/60 border border-cyan-500/20 rounded pl-7 pr-2 py-1.5 text-xs font-mono text-cyan-100",
-                "focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40",
+                "focus:border-cyan-400/40 focus:outline-none focus:ring-1 focus:ring-cyan-400/40",
               )}
             />
           </div>
@@ -82,7 +82,7 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
                   onClick={() => onPick(it.id)}
                   className={cn(
                     "group relative aspect-square rounded border border-cyan-500/20 overflow-hidden bg-black",
-                    "hover:border-cyan-300 transition-colors",
+                    "hover:border-cyan-300 hover:bg-cyan-500/10 transition-colors duration-150",
                   )}
                   title={it.slug}
                 >

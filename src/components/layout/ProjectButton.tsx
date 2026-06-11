@@ -18,8 +18,8 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
         className={cn(
           'group flex items-center gap-0 rounded overflow-hidden relative max-w-[48vw]',
           'h-8 border border-zinc-500/25 bg-zinc-500/10',
-          'transition-all duration-300 cursor-pointer',
-          'hover:border-zinc-500/40',
+          'transition-all duration-150 cursor-pointer',
+          'hover:border-zinc-400/40',
           'focus-visible:ring-2 focus-visible:ring-zinc-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
           className
         )}
