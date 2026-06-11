@@ -17,9 +17,9 @@
 import { homedir } from "node:os";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { createXOAuth, XError, type XOAuthTokenResponse } from "@apicity/x";
 
 const REFRESH_BUFFER_MS = 60_000;
-const TOKEN_ENDPOINT = "https://api.x.com/2/oauth2/token";
 
 export interface XTokenState {
   access_token: string;
@@ -80,14 +80,6 @@ function expiresWithin(state: XTokenState, ms: number): boolean {
   return expiresAt - Date.now() < ms;
 }
 
-interface RefreshResponse {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  token_type?: string;
-  scope?: string;
-}
-
 export async function refreshTokens(
   state: XTokenState,
   fetchImpl: typeof fetch = fetch,
@@ -100,28 +92,20 @@ export async function refreshTokens(
       + "Re-run scripts/mint-x-token.mjs or refresh manually.",
     );
   }
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetchImpl(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
+  const oauth = createXOAuth({ clientId, clientSecret, fetch: fetchImpl });
+  let body: XOAuthTokenResponse;
+  try {
+    body = await oauth.post.v2.oauth2.token({
       grant_type: "refresh_token",
       refresh_token: state.refresh_token,
-    }),
-  });
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = JSON.stringify(await res.json());
-    } catch {
-      detail = await res.text().catch(() => "");
+    });
+  } catch (err) {
+    if (err instanceof XError) {
+      const detail = err.body ? JSON.stringify(err.body) : err.message;
+      throw new Error(`X token refresh failed (${err.status}): ${detail}`);
     }
-    throw new Error(`X token refresh failed (${res.status}): ${detail}`);
+    throw err;
   }
-  const body = (await res.json()) as RefreshResponse;
   const next: XTokenState = {
     access_token: body.access_token,
     refresh_token: body.refresh_token ?? state.refresh_token,

@@ -1,5 +1,6 @@
 import http from "node:http";
 import crypto from "node:crypto";
+import { createXOAuth, type XOAuthTokenResponse } from "@apicity/x";
 import { readTokens, writeTokens } from "./x-tokens.js";
 
 const REDIRECT = "http://127.0.0.1:8765/callback";
@@ -50,37 +51,19 @@ function buildErrorHtml(message: string): string {
 </head><body><div><h1>X connect failed</h1><p>${safe}</p></div></body></html>`;
 }
 
-interface TokenExchangeResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
-
 async function exchangeCodeForTokens(
   clientId: string,
   clientSecret: string,
   code: string,
   verifier: string,
-): Promise<TokenExchangeResponse> {
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch("https://api.x.com/2/oauth2/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: REDIRECT,
-      code_verifier: verifier,
-    }),
+): Promise<XOAuthTokenResponse> {
+  const oauth = createXOAuth({ clientId, clientSecret });
+  return oauth.post.v2.oauth2.token({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT,
+    code_verifier: verifier,
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Token exchange failed (${res.status}): ${detail}`);
-  }
-  return (await res.json()) as TokenExchangeResponse;
 }
 
 export async function startOAuthFlow(): Promise<{ authorize_url: string }> {
@@ -163,6 +146,11 @@ export async function startOAuthFlow(): Promise<{ authorize_url: string }> {
         code,
         flow.verifier,
       );
+      if (!tok.refresh_token) {
+        throw new Error(
+          "X did not return a refresh token — check that the offline.access scope is granted.",
+        );
+      }
       await writeTokens({
         access_token: tok.access_token,
         refresh_token: tok.refresh_token,

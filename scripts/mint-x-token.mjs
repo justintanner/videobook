@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { createXOAuth } from "@apicity/x";
 
 const CLIENT_ID = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
@@ -70,30 +71,24 @@ const server = http.createServer(async (req, res) => {
     server.close();
     process.exit(1);
   }
-  const basic = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
-  const tokenRes = await fetch("https://api.x.com/2/oauth2/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
+  const oauth = createXOAuth({
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+  });
+  let tok;
+  try {
+    tok = await oauth.post.v2.oauth2.token({
       grant_type: "authorization_code",
       code,
       redirect_uri: REDIRECT,
       code_verifier: verifier,
-    }),
-  });
-
-  if (!tokenRes.ok) {
-    const detail = await tokenRes.text().catch(() => "");
+    });
+  } catch (err) {
     res.writeHead(500).end("token exchange failed");
-    console.error(`Token exchange failed (${tokenRes.status}): ${detail}`);
+    console.error(`Token exchange failed: ${err.message}`);
     server.close();
     process.exit(1);
   }
-
-  const tok = await tokenRes.json();
   const next = {
     access_token: tok.access_token,
     refresh_token: tok.refresh_token,
