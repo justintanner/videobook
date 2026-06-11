@@ -791,8 +791,15 @@ export function HomePage() {
       toast({ title: 'Cannot delete', description: 'Create another project before deleting this one', duration: 4000 });
       return;
     }
+    refreshProjects();
     setDeleteProjectTarget(target);
-  }, [projectSlug, projects]);
+  }, [projectSlug, projects, refreshProjects]);
+
+  const deleteProjectAssetCount = useMemo(() => {
+    if (!deleteProjectTarget) return 0;
+    if (deleteProjectTarget === projectSlug && assetList) return assetList.length;
+    return projects.find((p) => p.slug === deleteProjectTarget)?.asset_count ?? 0;
+  }, [deleteProjectTarget, projectSlug, assetList, projects]);
 
   const handleConfirmDeleteProject = useCallback(async () => {
     if (!deleteProjectTarget) return;
@@ -1499,7 +1506,7 @@ export function HomePage() {
               Delete <span className="font-mono text-red-300">{deleteProjectTarget}</span> and all of its assets?
             </div>
             <div className="text-[11px] text-zinc-400 mb-4">
-              {formatAssetCount(projects.find((p) => p.slug === deleteProjectTarget)?.asset_count ?? 0)} will be removed. This cannot be undone.
+              {formatAssetCount(deleteProjectAssetCount)} will be removed. This cannot be undone.
             </div>
             <div className="flex justify-end gap-2">
               <button

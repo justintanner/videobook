@@ -8,7 +8,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
     name: "rewind_project",
     description: "Rewind a project to a previous git commit (creates detached HEAD)",
     schema: {
-      commit_hash: z.string().describe("Git commit hash to rewind to"),
+      commit_hash: z.string().min(7).describe("Git commit hash to rewind to (full hash or a prefix of at least 7 characters)"),
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
@@ -18,28 +18,39 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
       let failedPendingTasks = 0;
       try {
         const history = await fs.getHistory(project_slug, 10_000);
-        if (!history.some((commit) => commit.hash === commit_hash)) {
+        const matches = history.filter((commit) => commit.hash.startsWith(commit_hash));
+        if (matches.length === 0) {
           return {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: "Failed to rewind project. Check commit hash.",
+              text: `Commit ${commit_hash} not found in project history. Use a hash from project_history or the activity log.`,
             }],
           };
         }
+        if (matches.length > 1) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Commit prefix ${commit_hash} is ambiguous (${matches.length} matches). Provide more characters.`,
+            }],
+          };
+        }
+        const resolvedHash = matches[0].hash;
 
         const queueResult = await prepareProjectForRewind(project_slug);
         prepared = true;
         abortedJobs = queueResult.abortedJobs;
         failedPendingTasks = queueResult.failedPendingTasks;
 
-        const result = await fs.rewindProject(commit_hash, project_slug);
+        const result = await fs.rewindProject(resolvedHash, project_slug);
         if (!result) {
           return {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: "Failed to rewind project. Check commit hash.",
+              text: `Failed to rewind project to ${resolvedHash}. The engine could not restore that commit.`,
             }],
           };
         }
@@ -50,7 +61,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
             text: JSON.stringify({
               status: "rewound",
               project: project_slug,
-              commit: commit_hash,
+              commit: resolvedHash,
               aborted_jobs: abortedJobs,
               failed_pending_tasks: failedPendingTasks,
             }),

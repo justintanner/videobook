@@ -69,6 +69,44 @@ describe("rewind_project tool", () => {
       },
     });
     expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("not found in project history");
+  });
+
+  it("rewinds using a short hash prefix", async () => {
+    const historyResult = await client.callTool({
+      name: "project_history",
+      arguments: { project_slug: "test-proj" },
+    });
+    const commits = JSON.parse(
+      (historyResult.content as Array<{ type: string; text: string }>)[0].text
+    );
+    const fullHash = commits[commits.length - 1].hash as string;
+
+    const data = Buffer.from("fake-data").toString("base64");
+    await client.callTool({
+      name: "upload_file",
+      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+    });
+
+    const result = await client.callTool({
+      name: "rewind_project",
+      arguments: { commit_hash: fullHash.slice(0, 7), project_slug: "test-proj" },
+    });
+
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text
+    );
+    expect(parsed.status).toBe("rewound");
+    expect(parsed.commit).toBe(fullHash);
+  });
+
+  it("rejects a hash shorter than 7 characters", async () => {
+    const result = await client.callTool({
+      name: "rewind_project",
+      arguments: { commit_hash: "abc12", project_slug: "test-proj" },
+    });
+    expect(result.isError).toBe(true);
   });
 
   it("aborts queued project jobs before rewinding", async () => {

@@ -1323,7 +1323,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "zinc",
     chevron: "right",
     params: [
-      { name: "commit_hash", type: "string", required: false, description: "Git commit hash from /activity (omit to browse)" },
+      { name: "commit_hash", type: "string", required: false, description: "Git commit hash or unique prefix (min 7 chars) from /activity (omit to browse)" },
     ],
     uiAction: "rewind_activity",
   },
