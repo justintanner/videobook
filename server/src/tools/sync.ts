@@ -360,6 +360,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
             ? {
                 status: assetWorkRow.value.status,
                 meta: assetWorkRow.value.meta,
+                deadlineAt: assetWorkRow.value.deadlineAt,
               }
             : null,
       });

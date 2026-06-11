@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -319,17 +319,36 @@ describe("buildAssetList", () => {
     await fs.releaseLock(assetDir);
   });
 
-  it("surfaces 'error' for video with no media/lock/task (orphaned)", async () => {
+  it("surfaces 'loading' for a freshly created video (createAsset→enqueue window)", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "fresh-vid", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+
+    // createAsset co-writes a pending assets row with a 5-minute deadline.
+    // Until the job enqueue stamps meta.kind, the asset reads as "loading" —
+    // not the orphan "error" that used to flash a red tile in the UI.
+    const assets = await buildAssetList(fs, "test-proj");
+    const asset = assets.find(a => a.id === createResult.value.assetId)!;
+    expect(asset.status).toBe("loading");
+  });
+
+  it("surfaces 'error' for video with no media/lock/task once the pending deadline expires (orphaned)", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.createAsset("vid", "empty-vid", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
     // Empty asset directory — no media, no lock, no pending task — is an
-    // orphaned failed generation. The clamp now allows "error" through so
-    // the inbox shows the failure instead of appearing stuck in "generating".
-    const assets = await buildAssetList(fs, "test-proj");
-    const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    expect(asset.status).toBe("error");
+    // orphaned failed generation once createAsset's 5-minute pending deadline
+    // lapses. Fake only Date so the deadline reads as expired.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 6 * 60_000);
+      const assets = await buildAssetList(fs, "test-proj");
+      const asset = assets.find(a => a.id === createResult.value.assetId)!;
+      expect(asset.status).toBe("error");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not clamp non-video assets", async () => {
@@ -337,13 +356,19 @@ describe("buildAssetList", () => {
     const createResult = await fs.createAsset("img", "empty-img", "test-proj");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
-    // Empty image asset — no media, no lock, no pending task — is an orphaned
-    // failed generation. The video-only clamp does not apply to images, so
-    // "error" passes through unchanged (it would pass through for videos too
-    // now that "error" is in the clamp allow-list).
-    const assets = await buildAssetList(fs, "test-proj");
-    const asset = assets.find(a => a.id === createResult.value.assetId)!;
-    expect(asset.status).toBe("error");
+    // Empty image asset past its pending deadline — no media, no lock, no
+    // pending task — is an orphaned failed generation. The video-only clamp
+    // does not apply to images, so "error" passes through unchanged (it would
+    // pass through for videos too now that "error" is in the clamp allow-list).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 6 * 60_000);
+      const assets = await buildAssetList(fs, "test-proj");
+      const asset = assets.find(a => a.id === createResult.value.assetId)!;
+      expect(asset.status).toBe("error");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
