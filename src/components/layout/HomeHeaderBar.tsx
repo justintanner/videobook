@@ -1,6 +1,7 @@
 import { ArchiveRestore, Clapperboard, Film, ImageIcon, MapPin, Settings, History } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
+import { useToast } from '@/hooks/useToast';
 import type { UseMcpResult } from 'use-mcp/react';
 
 interface HomeHeaderBarProps {
@@ -20,6 +21,9 @@ interface HomeHeaderBarProps {
 }
 
 export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
+  const { toasts } = useToast();
+  const hasOpenToast = toasts.some((toast) => toast.open);
+
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
       <div className="flex items-center gap-1">
@@ -51,7 +55,13 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
 
       {/* Right side */}
       <div className="flex items-center gap-1">
-        <CommandButton command="/activity" icon={<History className="w-3.5 h-3.5" />} variant="projects" onClick={onStatusClick} />
+        <CommandButton
+          command="/activity"
+          icon={<History className="w-3.5 h-3.5" />}
+          variant="projects"
+          onClick={onStatusClick}
+          className={hasOpenToast ? 'toast-origin-pulse border-emerald-500/60' : undefined}
+        />
 
         <button
           type="button"

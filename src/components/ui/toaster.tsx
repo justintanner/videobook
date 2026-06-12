@@ -18,90 +18,39 @@ export function Toaster() {
   const { toasts } = useToast();
 
   return (
-    <ToastProvider>
+    <ToastProvider swipeDirection="right">
       {toasts.map(function ({ id, title, description, action, variant, ...props }) {
         const Icon = getToastIcon(variant);
         const isDestructive = variant === 'destructive';
 
         return (
-          <Toast key={id} variant={variant} {...props}>
-            {/* Scanline overlay */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
-              <div
-                className={cn(
-                  'absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,255,255,0.1)_50%)] bg-[length:100%_4px] animate-cyber-scanline',
-                  isDestructive && 'bg-[linear-gradient(transparent_50%,rgba(239,68,68,0.1)_50%)]'
-                )}
-              />
-            </div>
-
-            {/* Shimmer effect */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div
-                className={cn(
-                  'absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent -translate-x-full animate-cyber-shimmer',
-                  isDestructive && 'via-destructive/10'
-                )}
-              />
-            </div>
-
-            {/* Corner accents */}
-            <div
+          <Toast key={id} variant={variant} className="activity-scanlines" {...props}>
+            <Icon
               className={cn(
-                'absolute -top-px -left-px w-3 h-3 border-t-2 border-l-2 border-primary/60',
-                isDestructive && 'border-destructive/60'
-              )}
-            />
-            <div
-              className={cn(
-                'absolute -top-px -right-px w-3 h-3 border-t-2 border-r-2 border-primary/60',
-                isDestructive && 'border-destructive/60'
-              )}
-            />
-            <div
-              className={cn(
-                'absolute -bottom-px -left-px w-3 h-3 border-b-2 border-l-2 border-primary/60',
-                isDestructive && 'border-destructive/60'
-              )}
-            />
-            <div
-              className={cn(
-                'absolute -bottom-px -right-px w-3 h-3 border-b-2 border-r-2 border-primary/60',
-                isDestructive && 'border-destructive/60'
+                'w-3.5 h-3.5 mt-0.5 shrink-0',
+                isDestructive
+                  ? 'text-red-300 drop-shadow-[0_0_6px_rgba(239,68,68,0.75)]'
+                  : 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.55)]'
               )}
             />
 
-            {/* Icon with glow */}
-            <div className="relative shrink-0">
-              <div
-                className={cn(
-                  'absolute inset-0 blur-md rounded-full animate-pulse',
-                  isDestructive ? 'bg-destructive/30' : 'bg-primary/30'
-                )}
-              />
-              <div
-                className={cn(
-                  'relative w-10 h-10 rounded border flex items-center justify-center',
-                  isDestructive ? 'border-destructive/40 bg-destructive/10' : 'border-primary/40 bg-primary/10'
-                )}
-              >
-                <Icon className={cn('w-5 h-5', isDestructive ? 'text-destructive' : 'text-primary')} />
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 grid gap-1 relative z-10">
+            <div className="flex-1 min-w-0 grid gap-1">
               {title && (
                 <ToastTitle
                   className={cn(
-                    'font-mono text-xs uppercase tracking-wider',
-                    isDestructive ? 'text-destructive/80' : 'text-primary/80'
+                    isDestructive
+                      ? 'text-red-300 drop-shadow-[0_0_6px_rgba(239,68,68,0.55)]'
+                      : 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.55)]'
                   )}
                 >
-                  {title}
+                  [{title}]
                 </ToastTitle>
               )}
-              {description && <ToastDescription className="text-sm font-medium">{description}</ToastDescription>}
+              {description && (
+                <ToastDescription className={isDestructive ? 'text-red-200/90' : 'text-emerald-100/80'}>
+                  {description}
+                </ToastDescription>
+              )}
             </div>
 
             {action}

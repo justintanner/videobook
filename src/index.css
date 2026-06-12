@@ -383,6 +383,15 @@
     animation: activity-row-boot 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   }
 
+  .toast-deploy {
+    animation: toast-deploy 280ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    transform-origin: top right;
+  }
+
+  .toast-origin-pulse {
+    animation: toast-origin-pulse 600ms ease-out both;
+  }
+
   .activity-title-in {
     animation: activity-title-in 420ms steps(14, end) both;
     white-space: nowrap;
@@ -1149,6 +1158,33 @@
     opacity: 1;
     transform: translateX(0);
     filter: brightness(1);
+  }
+}
+
+/* Toast deploys out of the /activity button — mirrors activity-row-boot's brightness boot */
+@keyframes toast-deploy {
+  from {
+    opacity: 0;
+    transform: scale(0.6) translateY(-8px);
+    filter: brightness(1.8);
+  }
+  60% {
+    opacity: 1;
+    filter: brightness(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes toast-origin-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 18px 6px rgba(16, 185, 129, 0);
   }
 }
 
