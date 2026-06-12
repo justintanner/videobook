@@ -3,8 +3,33 @@ import type { UseMcpResult } from 'use-mcp/react';
 
 export type ProviderKeyStatus = 'configured' | 'missing' | 'placeholder';
 export type ProviderLookupStatus = 'ok' | 'missing_key' | 'placeholder_key' | 'error' | 'unavailable';
-export type ProviderKeyProvider = 'kie' | 'elevenlabs' | 'openai' | 'xai';
-export type ProviderEnvKey = 'KIE_API_KEY' | 'ELEVENLABS_API_KEY' | 'OPENAI_API_KEY' | 'XAI_API_KEY';
+export type ProviderKeyProvider =
+  | 'kie'
+  | 'elevenlabs'
+  | 'openai'
+  | 'xai'
+  | 'x'
+  | 'kimicoding'
+  | 'fal'
+  | 'dashscope'
+  | 'b2';
+export type ProviderEnvKey =
+  | 'KIE_API_KEY'
+  | 'ELEVENLABS_API_KEY'
+  | 'OPENAI_API_KEY'
+  | 'XAI_API_KEY'
+  | 'X_CLIENT_ID'
+  | 'X_CLIENT_SECRET'
+  | 'KIMI_CODING_API_KEY'
+  | 'FAL_API_KEY'
+  | 'DASHSCOPE_API_KEY'
+  | 'B2_ACCESS_KEY_ID'
+  | 'B2_SECRET_ACCESS_KEY'
+  | 'B2_REGION'
+  | 'B2_BUCKET'
+  | 'B2_ENDPOINT'
+  | 'B2_ARCHIVE_PREFIX';
+export type ProviderKeySource = '1password' | 'env' | 'missing';
 
 export interface ProviderCreditsInfo {
   status: ProviderLookupStatus;
@@ -29,6 +54,9 @@ export interface ProviderKeyInfo {
   envKey: ProviderEnvKey;
   keyStatus: ProviderKeyStatus;
   maskedKey: string | null;
+  secret: boolean;
+  source: ProviderKeySource;
+  editable: boolean;
   credits: ProviderCreditsInfo;
   tokenLookup: ProviderTokenLookupInfo;
 }

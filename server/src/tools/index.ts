@@ -3,6 +3,7 @@ import type { VideocityFs } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
+import { setEnvSecretDef } from "./set-env-secret.js";
 import { listElevenLabsVoicesDef } from "./list-elevenlabs-voices.js";
 import { createProjectDef } from "./create-project.js";
 import { renameProjectDef } from "./rename-project.js";
@@ -183,6 +184,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
   return [
     apiStatusDef(),
     providerKeyStatusDef(),
+    setEnvSecretDef(),
     listElevenLabsVoicesDef(),
     estimateCostDef(fs),
     createProjectDef(fs),

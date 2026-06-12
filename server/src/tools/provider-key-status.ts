@@ -3,13 +3,29 @@ import { createKie } from "@apicity/kie";
 import { createOpenAi } from "@apicity/openai";
 import { createXai } from "@apicity/xai";
 import { isPlaceholderApiKey } from "../api-key.js";
+import {
+  getDefaultSecretStore,
+  isSecretEnvKey,
+  maskEnvValue,
+  type ManagedEnvKey,
+  type SecretSource,
+  type SecretStore,
+} from "../env-secrets.js";
 import type { ToolDef } from "./tool-def.js";
 
 type KeyStatus = "configured" | "missing" | "placeholder";
 type LookupStatus = "ok" | "missing_key" | "placeholder_key" | "error" | "unavailable";
-type Provider = "kie" | "elevenlabs" | "openai" | "xai";
-type ProviderEnvKey = "KIE_API_KEY" | "ELEVENLABS_API_KEY" | "OPENAI_API_KEY" | "XAI_API_KEY";
-type ProviderLabel = "Kie" | "ElevenLabs" | "OpenAI" | "xAI";
+type ProviderGroup =
+  | "kie"
+  | "elevenlabs"
+  | "openai"
+  | "xai"
+  | "x"
+  | "kimicoding"
+  | "fal"
+  | "dashscope"
+  | "b2";
+type LiveLookup = "kie-credits" | "elevenlabs-credits" | "openai-tokens" | "xai-tokens";
 
 interface CreditLookupResult {
   value: number;
@@ -34,11 +50,14 @@ interface TokenLookupInfo {
 }
 
 interface ProviderKeyInfo {
-  provider: Provider;
-  label: ProviderLabel;
-  envKey: ProviderEnvKey;
+  envKey: ManagedEnvKey;
+  provider: ProviderGroup;
+  label: string;
   keyStatus: KeyStatus;
   maskedKey: string | null;
+  secret: boolean;
+  source: SecretSource;
+  editable: boolean;
   credits: CreditsInfo;
   tokenLookup: TokenLookupInfo;
 }
@@ -47,11 +66,48 @@ interface ProviderKeyStatusResponse {
   providers: ProviderKeyInfo[];
 }
 
-interface ProviderConfig {
-  provider: Provider;
-  label: ProviderLabel;
-  envKey: ProviderEnvKey;
+interface KeyRegistryEntry {
+  provider: ProviderGroup;
+  label: string;
+  live?: LiveLookup;
 }
+
+// Row order: live-checked providers first, then the rest grouped by provider.
+const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
+  KIE_API_KEY: { provider: "kie", label: "Kie", live: "kie-credits" },
+  ELEVENLABS_API_KEY: { provider: "elevenlabs", label: "ElevenLabs", live: "elevenlabs-credits" },
+  OPENAI_API_KEY: { provider: "openai", label: "OpenAI", live: "openai-tokens" },
+  XAI_API_KEY: { provider: "xai", label: "xAI", live: "xai-tokens" },
+  X_CLIENT_ID: { provider: "x", label: "X OAuth" },
+  X_CLIENT_SECRET: { provider: "x", label: "X OAuth" },
+  KIMI_CODING_API_KEY: { provider: "kimicoding", label: "Kimi Coding" },
+  FAL_API_KEY: { provider: "fal", label: "FAL" },
+  DASHSCOPE_API_KEY: { provider: "dashscope", label: "DashScope" },
+  B2_ACCESS_KEY_ID: { provider: "b2", label: "Backblaze B2" },
+  B2_SECRET_ACCESS_KEY: { provider: "b2", label: "Backblaze B2" },
+  B2_REGION: { provider: "b2", label: "Backblaze B2" },
+  B2_BUCKET: { provider: "b2", label: "Backblaze B2" },
+  B2_ENDPOINT: { provider: "b2", label: "Backblaze B2" },
+  B2_ARCHIVE_PREFIX: { provider: "b2", label: "Backblaze B2" },
+};
+
+const ROW_ORDER: readonly ManagedEnvKey[] = [
+  "KIE_API_KEY",
+  "ELEVENLABS_API_KEY",
+  "OPENAI_API_KEY",
+  "XAI_API_KEY",
+  "X_CLIENT_ID",
+  "X_CLIENT_SECRET",
+  "KIMI_CODING_API_KEY",
+  "FAL_API_KEY",
+  "DASHSCOPE_API_KEY",
+  "B2_ACCESS_KEY_ID",
+  "B2_SECRET_ACCESS_KEY",
+  "B2_REGION",
+  "B2_BUCKET",
+  "B2_ENDPOINT",
+  "B2_ARCHIVE_PREFIX",
+];
 
 type CreditReader = (apiKey: string) => Promise<number | CreditLookupResult>;
 type TokenReader = (apiKey: string) => Promise<TokenLookupResult>;
@@ -61,14 +117,17 @@ interface TokenLookupResult {
   model: string;
 }
 
+export interface ProviderKeyStatusDeps {
+  store?: SecretStore;
+  readKieCredits?: CreditReader;
+  readOpenAiTokens?: TokenReader;
+  readXaiTokens?: TokenReader;
+  readElevenLabsCredits?: CreditReader;
+}
+
 const TOKEN_LOOKUP_TEXT = "Videocity token lookup";
 const OPENAI_TOKEN_LOOKUP_MODEL = "gpt-5.4";
 const XAI_TOKEN_LOOKUP_MODEL = "grok-4.20-reasoning";
-
-function maskKey(apiKey: string): string {
-  const prefixLength = Math.min(6, Math.max(2, apiKey.length));
-  return `${apiKey.slice(0, prefixLength)}${"*".repeat(8)}`;
-}
 
 function sanitizeMessage(error: unknown, apiKey: string): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -136,78 +195,82 @@ async function readXaiTokens(apiKey: string): Promise<TokenLookupResult> {
   };
 }
 
+function creditsInfo(status: LookupStatus, message: string | null): CreditsInfo {
+  return { status, value: null, unit: "credits", fetchedAt: null, message };
+}
+
+function tokenLookupInfo(status: LookupStatus, message: string | null): TokenLookupInfo {
+  return { status, value: null, unit: "tokens", model: null, fetchedAt: null, message };
+}
+
 function unavailableCredits(message: string): CreditsInfo {
-  return {
-    status: "unavailable",
-    value: null,
-    unit: "credits",
-    fetchedAt: null,
-    message,
-  };
+  return creditsInfo("unavailable", message);
 }
 
 function unavailableTokenLookup(message: string): TokenLookupInfo {
+  return tokenLookupInfo("unavailable", message);
+}
+
+const NO_CREDITS_MESSAGE = "Credit balance is not available for this provider";
+const NO_TOKEN_LOOKUP_MESSAGE = "Token lookup is not available for this provider";
+
+interface KeyBase {
+  envKey: ManagedEnvKey;
+  provider: ProviderGroup;
+  label: string;
+  keyStatus: KeyStatus;
+  maskedKey: string | null;
+  secret: boolean;
+  source: SecretSource;
+  editable: boolean;
+}
+
+function buildKeyBase(envKey: ManagedEnvKey, store: SecretStore): { base: KeyBase; value: string | null } {
+  const entry = KEY_REGISTRY[envKey];
+  const source = store.getSource(envKey);
+  const secret = isSecretEnvKey(envKey);
+  const raw = store.getValue(envKey);
+  const value = !raw || raw.startsWith("op://") ? null : raw;
+
+  let keyStatus: KeyStatus = "configured";
+  if (value === null) keyStatus = "missing";
+  else if (isPlaceholderApiKey(value)) keyStatus = "placeholder";
+
+  const maskedKey =
+    keyStatus !== "configured" || value === null
+      ? null
+      : secret
+        ? maskEnvValue(value)
+        : value;
+
   return {
-    status: "unavailable",
-    value: null,
-    unit: "tokens",
-    model: null,
-    fetchedAt: null,
-    message,
+    base: {
+      envKey,
+      provider: entry.provider,
+      label: entry.label,
+      keyStatus,
+      maskedKey,
+      secret,
+      source,
+      editable: source !== "1password",
+    },
+    value: keyStatus === "configured" ? value : null,
   };
 }
 
-function getMissingProvider(config: ProviderConfig): ProviderKeyInfo {
+function statusOnlyInfo(base: KeyBase): ProviderKeyInfo {
+  if (base.keyStatus === "missing") {
+    const message = `${base.envKey} environment variable is not set`;
+    return { ...base, credits: creditsInfo("missing_key", message), tokenLookup: tokenLookupInfo("missing_key", message) };
+  }
+  if (base.keyStatus === "placeholder") {
+    const message = `${base.envKey} is a placeholder; refusing to call the real API`;
+    return { ...base, credits: creditsInfo("placeholder_key", message), tokenLookup: tokenLookupInfo("placeholder_key", message) };
+  }
   return {
-    ...config,
-    keyStatus: "missing",
-    maskedKey: null,
-    credits: {
-      status: "missing_key",
-      value: null,
-      unit: "credits",
-      fetchedAt: null,
-      message: `${config.envKey} environment variable is not set`,
-    },
-    tokenLookup: {
-      status: "missing_key",
-      value: null,
-      unit: "tokens",
-      model: null,
-      fetchedAt: null,
-      message: `${config.envKey} environment variable is not set`,
-    },
-  };
-}
-
-function getPlaceholderProvider(config: ProviderConfig): ProviderKeyInfo {
-  return {
-    ...config,
-    keyStatus: "placeholder",
-    maskedKey: null,
-    credits: {
-      status: "placeholder_key",
-      value: null,
-      unit: "credits",
-      fetchedAt: null,
-      message: `${config.envKey} is a placeholder; refusing to call the real API`,
-    },
-    tokenLookup: {
-      status: "placeholder_key",
-      value: null,
-      unit: "tokens",
-      model: null,
-      fetchedAt: null,
-      message: `${config.envKey} is a placeholder; refusing to call the real API`,
-    },
-  };
-}
-
-function getConfiguredProviderBase(config: ProviderConfig, apiKey: string): Omit<ProviderKeyInfo, "credits" | "tokenLookup"> {
-  return {
-    ...config,
-    keyStatus: "configured",
-    maskedKey: maskKey(apiKey),
+    ...base,
+    credits: unavailableCredits(NO_CREDITS_MESSAGE),
+    tokenLookup: unavailableTokenLookup(NO_TOKEN_LOOKUP_MESSAGE),
   };
 }
 
@@ -218,14 +281,8 @@ function normalizeCreditLookupResult(result: number | CreditLookupResult): Credi
   return result;
 }
 
-async function getCreditProvider(config: ProviderConfig, readCredits: CreditReader): Promise<ProviderKeyInfo> {
-  const apiKey = process.env[config.envKey];
-
-  if (!apiKey) return getMissingProvider(config);
-  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
-
-  const base = getConfiguredProviderBase(config, apiKey);
-
+async function creditLookupInfo(base: KeyBase, apiKey: string, readCredits: CreditReader): Promise<ProviderKeyInfo> {
+  const tokenLookup = unavailableTokenLookup(NO_TOKEN_LOOKUP_MESSAGE);
   try {
     const result = normalizeCreditLookupResult(await readCredits(apiKey));
     return {
@@ -237,36 +294,24 @@ async function getCreditProvider(config: ProviderConfig, readCredits: CreditRead
         fetchedAt: new Date().toISOString(),
         message: result.message,
       },
-      tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
+      tokenLookup,
     };
   } catch (error) {
     return {
       ...base,
-      credits: {
-        status: "error",
-        value: null,
-        unit: "credits",
-        fetchedAt: null,
-        message: sanitizeMessage(error, apiKey),
-      },
-      tokenLookup: unavailableTokenLookup("Token lookup is not available for this provider"),
+      credits: creditsInfo("error", sanitizeMessage(error, apiKey)),
+      tokenLookup,
     };
   }
 }
 
-async function getTokenProvider(config: ProviderConfig, readTokens: TokenReader): Promise<ProviderKeyInfo> {
-  const apiKey = process.env[config.envKey];
-
-  if (!apiKey) return getMissingProvider(config);
-  if (isPlaceholderApiKey(apiKey)) return getPlaceholderProvider(config);
-
-  const base = getConfiguredProviderBase(config, apiKey);
-
+async function tokenLookupKeyInfo(base: KeyBase, apiKey: string, readTokens: TokenReader): Promise<ProviderKeyInfo> {
+  const credits = unavailableCredits(NO_CREDITS_MESSAGE);
   try {
     const result = await readTokens(apiKey);
     return {
       ...base,
-      credits: unavailableCredits("Credit balance is not available for this provider"),
+      credits,
       tokenLookup: {
         status: "ok",
         value: result.value,
@@ -279,47 +324,46 @@ async function getTokenProvider(config: ProviderConfig, readTokens: TokenReader)
   } catch (error) {
     return {
       ...base,
-      credits: unavailableCredits("Credit balance is not available for this provider"),
-      tokenLookup: {
-        status: "error",
-        value: null,
-        unit: "tokens",
-        model: null,
-        fetchedAt: null,
-        message: sanitizeMessage(error, apiKey),
-      },
+      credits,
+      tokenLookup: tokenLookupInfo("error", sanitizeMessage(error, apiKey)),
     };
   }
 }
 
-export async function getProviderKeyStatus(
-  readKieCreditsFn: CreditReader = readKieCredits,
-  readOpenAiTokensFn: TokenReader = readOpenAiTokens,
-  readXaiTokensFn: TokenReader = readXaiTokens,
-  readElevenLabsCreditsFn: CreditReader = readElevenLabsCredits,
-): Promise<ProviderKeyStatusResponse> {
-  const kie: ProviderConfig = { provider: "kie", label: "Kie", envKey: "KIE_API_KEY" };
-  const elevenlabs: ProviderConfig = { provider: "elevenlabs", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY" };
-  const openai: ProviderConfig = { provider: "openai", label: "OpenAI", envKey: "OPENAI_API_KEY" };
-  const xai: ProviderConfig = { provider: "xai", label: "xAI", envKey: "XAI_API_KEY" };
+export async function getProviderKeyStatus(deps: ProviderKeyStatusDeps = {}): Promise<ProviderKeyStatusResponse> {
+  const store = deps.store ?? getDefaultSecretStore();
+  const creditReaders: Record<"kie-credits" | "elevenlabs-credits", CreditReader> = {
+    "kie-credits": deps.readKieCredits ?? readKieCredits,
+    "elevenlabs-credits": deps.readElevenLabsCredits ?? readElevenLabsCredits,
+  };
+  const tokenReaders: Record<"openai-tokens" | "xai-tokens", TokenReader> = {
+    "openai-tokens": deps.readOpenAiTokens ?? readOpenAiTokens,
+    "xai-tokens": deps.readXaiTokens ?? readXaiTokens,
+  };
 
-  const providers = await Promise.all([
-    getCreditProvider(kie, readKieCreditsFn),
-    getCreditProvider(elevenlabs, readElevenLabsCreditsFn),
-    getTokenProvider(openai, readOpenAiTokensFn),
-    getTokenProvider(xai, readXaiTokensFn),
-  ]);
+  const providers = await Promise.all(
+    ROW_ORDER.map((envKey) => {
+      const { base, value } = buildKeyBase(envKey, store);
+      const live = KEY_REGISTRY[envKey].live;
+      if (!live || value === null) return Promise.resolve(statusOnlyInfo(base));
+      if (live === "kie-credits" || live === "elevenlabs-credits") {
+        return creditLookupInfo(base, value, creditReaders[live]);
+      }
+      return tokenLookupKeyInfo(base, value, tokenReaders[live]);
+    }),
+  );
 
   return { providers };
 }
 
-export function providerKeyStatusDef(): ToolDef {
+export function providerKeyStatusDef(deps: ProviderKeyStatusDeps = {}): ToolDef {
   return {
     name: "provider_key_status",
-    description: "List configured provider API keys, live credit balances, and token lookups without exposing secret values",
+    description:
+      "List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.",
     schema: {},
     handler: async () => ({
-      content: [{ type: "text" as const, text: JSON.stringify(await getProviderKeyStatus()) }],
+      content: [{ type: "text" as const, text: JSON.stringify(await getProviderKeyStatus(deps)) }],
     }),
   };
 }

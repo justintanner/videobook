@@ -50,6 +50,7 @@ import { useTimeline } from '@/hooks/useTimeline';
 import { useRenderAsset } from '@/hooks/useRenderAsset';
 import { useRenderSettings } from '@/hooks/useRenderSettings';
 import { useProviderKeyStatus } from '@/hooks/useProviderKeyStatus';
+import { useSetEnvSecret } from '@/hooks/useSetEnvSecret';
 import type { Orientation } from '@/hooks/useTimeline';
 import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
@@ -151,6 +152,11 @@ export function HomePage() {
     error: providerKeyStatusError,
     refresh: refreshProviderKeyStatus,
   } = useProviderKeyStatus(callTool, state);
+  const {
+    setEnvSecret,
+    saving: envSecretSaving,
+    error: envSecretError,
+  } = useSetEnvSecret(callTool, state);
 
   useEffect(() => {
     if (state === 'ready') refreshProjects();
@@ -1263,6 +1269,9 @@ export function HomePage() {
                     data={providerKeyStatus}
                     loading={providerKeyStatusLoading}
                     error={providerKeyStatusError}
+                    saving={envSecretSaving}
+                    saveError={envSecretError}
+                    onSave={setEnvSecret}
                     onRefresh={() => { void refreshProviderKeyStatus(); }}
                     onClose={() => setSettingsOpen(false)}
                   />

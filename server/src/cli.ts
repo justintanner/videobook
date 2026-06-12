@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 import { z } from "zod";
 import { fs } from "./fs.js";
 import { queue, waitForJob } from "./queue.js";
