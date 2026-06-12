@@ -54,7 +54,7 @@ export function ClockOverlay({ item, label, startedAt }: ClockOverlayProps) {
 
   return (
     <div className="absolute inset-0 z-30 bg-black/70 overflow-hidden">
-      <AnimatedBackground visual={visual} fall={label === 'DOWNLOADING'} />
+      <AnimatedBackground visual={visual} variant={label === 'DOWNLOADING' ? 'stream' : 'rise'} />
       <div className="absolute inset-0 flex flex-col">
         <div
           className="flex-1 flex items-center justify-center gap-3"

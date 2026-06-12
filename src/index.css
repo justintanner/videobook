@@ -529,6 +529,25 @@
   }
 }
 
+/* Downloading: Falling data streaks. The streak element is 30% of the card
+   height, so translateY(350%) carries it just past the bottom edge. */
+@keyframes downloading-streak-fall {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(350%);
+    opacity: 0;
+  }
+}
+
 /* Generating: Segmented health bar */
 @keyframes generating-segment-fill {
   0%,
