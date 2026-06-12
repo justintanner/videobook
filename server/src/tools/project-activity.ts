@@ -104,6 +104,9 @@ function snapshotEntry(commit: GitCommit): ProjectActivityEntry | null {
   const assetMatch = commit.message.match(/^\[([^\]]+)\]\s+(.+)$/);
   const projectMatch = commit.message.match(/^(.+): project$/);
   const action = assetMatch?.[2] ?? projectMatch?.[1] ?? commit.message;
+  // Engine auto-commits every file write as a "write*" snapshot — per-file
+  // mechanics, not user-level events; they flood the feed during pipelines.
+  if (/^write/i.test(action)) return null;
   const assetId = assetMatch?.[1];
   return {
     hash: commit.hash,

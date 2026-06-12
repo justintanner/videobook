@@ -250,7 +250,6 @@ export function ActivityLogDrawer({
         aria-label="Project activity log"
         className={cn(
           'fixed inset-0 z-[101] bg-zinc-950 flex flex-col transition-all duration-300',
-          'activity-scanlines',
           'border border-emerald-500/20',
           'shadow-[0_0_120px_rgba(16,185,129,0.08)_inset]',
           visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95',

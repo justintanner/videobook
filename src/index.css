@@ -355,26 +355,6 @@
   }
 
   /* Activity log — video-game HUD */
-  .activity-scanlines::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 2px,
-      rgba(16, 185, 129, 0.045) 2px,
-      rgba(16, 185, 129, 0.045) 3px
-    );
-    mix-blend-mode: screen;
-    z-index: 1;
-  }
-  .activity-scanlines > * {
-    position: relative;
-    z-index: 2;
-  }
-
   .activity-cursor-blink {
     animation: activity-cursor-blink 1s steps(2, end) infinite;
   }

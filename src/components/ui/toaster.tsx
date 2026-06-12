@@ -24,7 +24,7 @@ export function Toaster() {
         const isDestructive = variant === 'destructive';
 
         return (
-          <Toast key={id} variant={variant} className="activity-scanlines" {...props}>
+          <Toast key={id} variant={variant} {...props}>
             <Icon
               className={cn(
                 'w-3.5 h-3.5 mt-0.5 shrink-0',

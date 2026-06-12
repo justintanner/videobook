@@ -73,5 +73,6 @@ describe("project_activity tool", () => {
     expect(entries.some((entry) => entry.source === "snapshot")).toBe(true);
     expect(entries.some((entry) => entry.action === "tool-asset-manifest")).toBe(false);
     expect(entries.every((entry) => entry.rewindable)).toBe(true);
+    expect(entries.some((entry) => entry.source === "snapshot" && /^write/i.test(entry.action))).toBe(false);
   });
 });
