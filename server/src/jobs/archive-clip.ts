@@ -16,9 +16,10 @@ import { extname, join, posix } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
-import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
 import { validateDownloadOutput } from "./download-video.js";
 import { withLocalLease } from "./_lease.js";
+import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
 import {
   archiveTags,
   assetSnapshotKey,
@@ -251,28 +252,6 @@ function mergeTranscripts(chunks: Array<{ transcript: ElevenLabsTranscript; offs
   };
 }
 
-function chunkStarts(duration: number): number[] {
-  if (!Number.isFinite(duration) || duration <= 0) return [0];
-  const count = Math.max(1, Math.ceil(duration / CHUNK_SECONDS));
-  return Array.from({ length: count }, (_, index) => index * CHUNK_SECONDS);
-}
-
-async function extractAudioChunk(mediaPath: string, start: number, duration: number, chunkPath: string): Promise<void> {
-  await runFfmpeg([
-    "-y",
-    ...(start > 0 ? ["-ss", String(start)] : []),
-    ...(duration > 0 ? ["-t", String(duration)] : []),
-    "-i", mediaPath,
-    "-vn",
-    "-ac", "1",
-    "-ar", "16000",
-    "-acodec", "libmp3lame",
-    "-q:a", "5",
-    "-f", "mp3",
-    chunkPath,
-  ]);
-}
-
 async function transcribeMedia(
   args: {
     mediaPath: string;
@@ -314,12 +293,10 @@ async function transcribeMedia(
   const dir = await mkdtemp(join(tmpdir(), "videocity-archive-audio-"));
   const chunks: Array<{ transcript: ElevenLabsTranscript; offset: number }> = [];
   try {
-    const starts = chunkStarts(probe.duration);
+    const starts = chunkStarts(probe.duration, CHUNK_SECONDS);
     for (let index = 0; index < starts.length; index++) {
       const start = starts[index];
-      const length = probe.duration > 0
-        ? Math.max(0.1, Math.min(CHUNK_SECONDS, probe.duration - start))
-        : 0;
+      const length = chunkLength(probe.duration, start, CHUNK_SECONDS);
       const chunkPath = join(dir, `chunk-${String(index).padStart(3, "0")}.mp3`);
       await extractAudioChunk(args.mediaPath, start, length, chunkPath);
       const bytes = await readFile(chunkPath);
@@ -607,7 +584,6 @@ export function registerArchiveClipJob(fs: VideocityFs): void {
 export const __archiveClipJobTest = {
   archiveTags,
   buildAssetSnapshot,
-  chunkStarts,
   mergeTranscripts,
   sampleTranscript,
 };

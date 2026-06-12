@@ -47,20 +47,6 @@ describe("archive clip job helpers", () => {
     ]);
   });
 
-  it("splits a three-hour clip into twenty-minute starts", () => {
-    expect(__archiveClipJobTest.chunkStarts(3 * 60 * 60)).toEqual([
-      0,
-      1200,
-      2400,
-      3600,
-      4800,
-      6000,
-      7200,
-      8400,
-      9600,
-    ]);
-  });
-
   it("merges chunk transcripts with absolute timestamps", () => {
     const merged = __archiveClipJobTest.mergeTranscripts([
       { transcript: transcript("hello", 1, 0.5), offset: 0 },
