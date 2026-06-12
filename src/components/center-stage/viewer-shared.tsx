@@ -142,6 +142,25 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
   );
 }
 
+// JsonNode emits ~6-10 React elements per JSON token; above this size a single
+// synchronous render blocks the main thread for tens of seconds (vc-pap).
+const HIGHLIGHT_MAX_CHARS = 200_000;
+const PLAIN_TEXT_MAX_CHARS = 500_000;
+
+function PlainTextPre({ text, className }: { text: string; className: string }) {
+  const truncated = text.length > PLAIN_TEXT_MAX_CHARS;
+  return (
+    <>
+      {truncated && (
+        <p className="text-xs font-mono text-amber-400/80 mb-3">
+          Showing first {formatBytes(PLAIN_TEXT_MAX_CHARS)} of {formatBytes(text.length)} — use Copy for the full content.
+        </p>
+      )}
+      <pre className={className}>{truncated ? text.slice(0, PLAIN_TEXT_MAX_CHARS) : text}</pre>
+    </>
+  );
+}
+
 function JsonTerminal({ data, loading }: { data: string | null; loading: boolean }) {
   if (loading) {
     return (
@@ -156,6 +175,10 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   }
   if (data.startsWith('Error:')) {
     return <p className="text-sm font-mono text-destructive">{data}</p>;
+  }
+
+  if (data.length > HIGHLIGHT_MAX_CHARS) {
+    return <PlainTextPre text={data} className="text-base font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed select-text" />;
   }
 
   let parsed: unknown;
@@ -272,7 +295,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   }
 
   return (
-    <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed select-text">{content}</pre>
+    <PlainTextPre text={content} className="text-sm font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed select-text" />
   );
 }
 
