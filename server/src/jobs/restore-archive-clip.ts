@@ -1,6 +1,6 @@
 import type { VideocityFs } from "videocity-engine";
 import { join } from "node:path";
-import { createArchiveB2, getArchiveConfig } from "../archive-b2.js";
+import { getArchiveStore } from "../archive-store.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -45,10 +45,10 @@ export function registerRestoreArchiveClipJob(fs: VideocityFs): void {
       "download",
       { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
       async () => {
-        const config = getArchiveConfig();
-        const b2 = createArchiveB2(config);
-        const response = await b2.objects.get({ bucket: config.bucket, key: p.mediaKey });
-        const write = await fs.writeFile(p.assetId, p.filename, Buffer.from(response.body), p.projectSlug);
+        const store = getArchiveStore();
+        const body = await store.getBytes(p.mediaKey);
+        if (!body) throw new Error(`Archive media not found: ${p.mediaKey}`);
+        const write = await fs.writeFile(p.assetId, p.filename, Buffer.from(body), p.projectSlug);
         if (!write.ok) throw new Error(write.error.message);
 
         const meta = provenance(p);

@@ -27,24 +27,18 @@ import {
   chunkKey,
   clipKey,
   contentTypeForFilename,
-  createArchiveB2,
-  getArchiveConfig,
-  getJson,
   hashFile,
   indexKey,
   ingestKey,
   mergeArchiveIngests,
-  objectExists,
   personMarkerKey,
-  putJson,
-  putText,
-  readArchiveIngests,
   topicMarkerKey,
   transcriptJsonKey,
   transcriptTextKey,
-  uploadFileToB2,
 } from "../archive-b2.js";
 import type { ArchiveIndex, ArchiveIngest, ArchiveSourceRef } from "../archive-b2.js";
+import { getArchiveStore, readArchiveIngests } from "../archive-store.js";
+import type { ArchiveStore } from "../archive-store.js";
 
 type ArchiveClipPayload = {
   type: "archive_clip";
@@ -253,6 +247,7 @@ function mergeTranscripts(chunks: Array<{ transcript: ElevenLabsTranscript; offs
 }
 
 async function transcribeMedia(
+  store: ArchiveStore,
   args: {
     mediaPath: string;
     sha256: string;
@@ -261,8 +256,6 @@ async function transcribeMedia(
     diarize: boolean;
   },
 ): Promise<TranscriptResult> {
-  const config = getArchiveConfig();
-  const b2 = createArchiveB2(config);
   const probe = await probeVideo(args.mediaPath);
   if (!probe.hasAudio) {
     const empty: ElevenLabsTranscript = {
@@ -274,12 +267,12 @@ async function transcribeMedia(
       transcription_id: null,
       audio_duration_secs: probe.duration,
     };
-    await putJson(b2, config.bucket, transcriptJsonKey(config, args.sha256), empty);
-    await putText(b2, config.bucket, transcriptTextKey(config, args.sha256), "");
+    await store.putJson(transcriptJsonKey(store, args.sha256), empty);
+    await store.putText(transcriptTextKey(store, args.sha256), "");
     return {
       transcript: {
-        json_key: transcriptJsonKey(config, args.sha256),
-        text_key: transcriptTextKey(config, args.sha256),
+        json_key: transcriptJsonKey(store, args.sha256),
+        text_key: transcriptTextKey(store, args.sha256),
         chunk_count: 0,
         provider: "elevenlabs",
       },
@@ -309,16 +302,16 @@ async function transcribeMedia(
         ...(args.languageCode ? { language_code: args.languageCode } : {}),
       };
       const response = await provider.v1.speechToText(request);
-      await putJson(b2, config.bucket, chunkKey(config, args.sha256, index), response);
+      await store.putJson(chunkKey(store, args.sha256, index), response);
       chunks.push({ transcript: transcriptFromResponse(response), offset: start });
     }
     const merged = mergeTranscripts(chunks, probe.duration);
-    await putJson(b2, config.bucket, transcriptJsonKey(config, args.sha256), merged);
-    await putText(b2, config.bucket, transcriptTextKey(config, args.sha256), merged.text);
+    await store.putJson(transcriptJsonKey(store, args.sha256), merged);
+    await store.putText(transcriptTextKey(store, args.sha256), merged.text);
     return {
       transcript: {
-        json_key: transcriptJsonKey(config, args.sha256),
-        text_key: transcriptTextKey(config, args.sha256),
+        json_key: transcriptJsonKey(store, args.sha256),
+        text_key: transcriptTextKey(store, args.sha256),
         chunk_count: chunks.length,
         provider: "elevenlabs",
       },
@@ -375,8 +368,7 @@ async function enrichMetadata(title: string | null, transcript: string): Promise
 
 async function writeMarkers(args: {
   ingest: ArchiveIngest;
-  config: ReturnType<typeof getArchiveConfig>;
-  b2: ReturnType<typeof createArchiveB2>;
+  store: ArchiveStore;
 }): Promise<void> {
   const marker = {
     sha256: args.ingest.sha256,
@@ -384,23 +376,19 @@ async function writeMarkers(args: {
     title: args.ingest.title,
     topics: args.ingest.topics,
     people: args.ingest.people,
-    index_key: indexKey(args.config, args.ingest.sha256),
+    index_key: indexKey(args.store, args.ingest.sha256),
     created_at: args.ingest.created_at,
   };
   await Promise.all([
     ...args.ingest.topics.map((topic) =>
-      putJson(
-        args.b2,
-        args.config.bucket,
-        topicMarkerKey(args.config, topic.key, args.ingest.sha256, args.ingest.ingest_id),
+      args.store.putJson(
+        topicMarkerKey(args.store, topic.key, args.ingest.sha256, args.ingest.ingest_id),
         marker,
       ),
     ),
     ...args.ingest.people.map((person) =>
-      putJson(
-        args.b2,
-        args.config.bucket,
-        personMarkerKey(args.config, person.key, args.ingest.sha256, args.ingest.ingest_id),
+      args.store.putJson(
+        personMarkerKey(args.store, person.key, args.ingest.sha256, args.ingest.ingest_id),
         marker,
       ),
     ),
@@ -416,10 +404,9 @@ async function buildAndWriteIndex(args: {
   transcript: ArchiveIndex["transcript"];
   duration: number | null;
   existing: ArchiveIndex | null;
-  config: ReturnType<typeof getArchiveConfig>;
-  b2: ReturnType<typeof createArchiveB2>;
+  store: ArchiveStore;
 }): Promise<ArchiveIndex> {
-  const ingests = await readArchiveIngests(args.b2, args.config, args.sha256);
+  const ingests = await readArchiveIngests(args.store, args.sha256);
   const index = mergeArchiveIngests(ingests, {
     sha256: args.sha256,
     mediaKey: args.mediaKey,
@@ -430,31 +417,28 @@ async function buildAndWriteIndex(args: {
     duration: args.duration,
     existing: args.existing,
   });
-  await putJson(args.b2, args.config.bucket, indexKey(args.config, args.sha256), index);
+  await args.store.putJson(indexKey(args.store, args.sha256), index);
   return index;
 }
 
 async function uploadAssetSnapshot(args: {
   snapshot: AssetSnapshot | undefined;
   sha256: string;
-  config: ReturnType<typeof getArchiveConfig>;
-  b2: ReturnType<typeof createArchiveB2>;
+  store: ArchiveStore;
 }): Promise<{ prefix: string; fileCount: number } | null> {
   if (!args.snapshot) return null;
   const prefix = assetSnapshotPrefix(
-    args.config,
+    args.store,
     args.sha256,
   );
   let fileCount = 0;
   for (const file of args.snapshot.files) {
     const key = assetSnapshotKey(
-      args.config,
+      args.store,
       args.sha256,
       file.relativePath,
     );
-    await uploadFileToB2(
-      args.b2,
-      args.config.bucket,
+    await args.store.uploadFile(
       key,
       file.filePath,
       contentTypeForFilename(file.relativePath),
@@ -467,13 +451,12 @@ async function uploadAssetSnapshot(args: {
 async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
   const prepared = payload.url ? await prepareUrlMedia(payload) : await prepareAssetMedia(fs, payload);
   try {
-    const config = getArchiveConfig();
-    const b2 = createArchiveB2(config);
+    const store = getArchiveStore();
     const sha256 = await hashFile(prepared.mediaPath);
-    const existing = await getJson<ArchiveIndex>(b2, config.bucket, indexKey(config, sha256));
+    const existing = await store.getJson<ArchiveIndex>(indexKey(store, sha256));
     const duplicate = existing !== null;
     const contentType = duplicate ? existing.media.content_type : contentTypeForFilename(prepared.filename);
-    const mediaKey = duplicate ? existing.media.key : clipKey(config, sha256, prepared.filename);
+    const mediaKey = duplicate ? existing.media.key : clipKey(store, sha256, prepared.filename);
     const size = duplicate ? existing.media.size_bytes : (await import("node:fs/promises")).stat(prepared.mediaPath).then((item) => item.size);
     const sizeBytes = await size;
 
@@ -482,10 +465,10 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
     let duration = existing?.duration ?? null;
 
     if (!duplicate) {
-      if (!(await objectExists(b2, config.bucket, mediaKey))) {
-        await uploadFileToB2(b2, config.bucket, mediaKey, prepared.mediaPath, contentType);
+      if (!(await store.exists(mediaKey))) {
+        await store.uploadFile(mediaKey, prepared.mediaPath, contentType);
       }
-      const transcriptResult = await transcribeMedia({
+      const transcriptResult = await transcribeMedia(store, {
         mediaPath: prepared.mediaPath,
         sha256,
         languageCode: payload.languageCode,
@@ -499,8 +482,7 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
     const assetSnapshot = await uploadAssetSnapshot({
       snapshot: prepared.assetSnapshot,
       sha256,
-      config,
-      b2,
+      store,
     });
 
     const title = sourceTitle(payload.title, prepared.source.title);
@@ -520,8 +502,8 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
       created_at: new Date().toISOString(),
     };
 
-    await putJson(b2, config.bucket, ingestKey(config, sha256, payload.ingestId), ingest);
-    await writeMarkers({ ingest, config, b2 });
+    await store.putJson(ingestKey(store, sha256, payload.ingestId), ingest);
+    await writeMarkers({ ingest, store });
     const index = await buildAndWriteIndex({
       sha256,
       mediaKey,
@@ -531,8 +513,7 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
       transcript,
       duration,
       existing,
-      config,
-      b2,
+      store,
     });
 
     return {

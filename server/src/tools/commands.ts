@@ -553,7 +553,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/archive",
-    description: "Archive a full video or audio asset to the global B2 clip archive and transcribe it",
+    description: "Archive a full video or audio asset to the global clip archive and transcribe it",
     example: "/archive @vid-clip ai interview",
     category: "context_menu",
     icon: "Archive",

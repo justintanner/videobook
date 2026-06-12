@@ -405,18 +405,6 @@ export async function listObjects(
   return out;
 }
 
-export async function readArchiveIngests(
-  b2: B2Provider,
-  config: ArchiveConfig,
-  sha256: string,
-): Promise<ArchiveIngest[]> {
-  const keys = (await listObjects(b2, config.bucket, archiveKey(config, clipPrefix(sha256))))
-    .map((item) => item.key)
-    .filter((key) => /\/ingest-[^/]+\.json$/.test(key));
-  const ingests = await Promise.all(keys.map((key) => getJson<ArchiveIngest>(b2, config.bucket, key)));
-  return ingests.filter((ingest): ingest is ArchiveIngest => ingest !== null);
-}
-
 export async function uploadFileToB2(
   b2: B2Provider,
   bucket: string,

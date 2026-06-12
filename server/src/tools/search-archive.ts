@@ -2,15 +2,11 @@ import { z } from "zod";
 import {
   archiveKey,
   archiveTags,
-  createArchiveB2,
-  getArchiveConfig,
-  getJson,
-  getText,
   indexKey,
-  listObjects,
-  missingArchiveConfigKeys,
 } from "../archive-b2.js";
 import type { ArchiveIndex } from "../archive-b2.js";
+import { getArchiveStore } from "../archive-store.js";
+import type { ArchiveStore } from "../archive-store.js";
 import type { ToolDef } from "./tool-def.js";
 
 type ArchiveMarker = {
@@ -62,21 +58,19 @@ async function loadMarkerSeeds(
   args: {
     kind: "topics" | "people";
     keys: string[];
-    prefix: string;
-    bucket: string;
-    b2: ReturnType<typeof createArchiveB2>;
+    store: ArchiveStore;
   },
 ): Promise<HitSeed[]> {
   const seeds: HitSeed[] = [];
   for (const key of args.keys) {
-    const objects = await listObjects(args.b2, args.bucket, archiveKey({ prefix: args.prefix }, `${args.kind}/${key}/`));
+    const objects = await args.store.list(archiveKey(args.store, `${args.kind}/${key}/`));
     for (const object of objects) {
-      const marker = await getJson<ArchiveMarker>(args.b2, args.bucket, object.key);
+      const marker = await args.store.getJson<ArchiveMarker>(object.key);
       const sha256 = marker?.sha256 ?? markerShaFromKey(object.key);
       if (!sha256) continue;
       seeds.push({
         sha256,
-        indexKey: marker?.index_key ?? indexKey({ prefix: args.prefix }, sha256),
+        indexKey: marker?.index_key ?? indexKey(args.store, sha256),
       });
     }
   }
@@ -85,12 +79,10 @@ async function loadMarkerSeeds(
 
 async function loadAllIndexSeeds(
   args: {
-    prefix: string;
-    bucket: string;
-    b2: ReturnType<typeof createArchiveB2>;
+    store: ArchiveStore;
   },
 ): Promise<HitSeed[]> {
-  const objects = await listObjects(args.b2, args.bucket, archiveKey({ prefix: args.prefix }, "clips/"));
+  const objects = await args.store.list(archiveKey(args.store, "clips/"));
   return objects
     .filter((object) => /\/archive\.json$/.test(object.key))
     .map((object) => {
@@ -105,7 +97,7 @@ async function loadAllIndexSeeds(
 export function searchArchiveDef(): ToolDef {
   return {
     name: "search_archive",
-    description: "Search the global B2 clip archive by topics, named people, or text query.",
+    description: "Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.",
     schema: {
       topics: z.array(z.string()).optional().default([]).describe("Topics to match; multiple values use match-any semantics"),
       people: z.array(z.string()).optional().default([]).describe("Named people to match; multiple values use match-any semantics"),
@@ -114,7 +106,7 @@ export function searchArchiveDef(): ToolDef {
       offset: z.number().int().min(0).optional().default(0),
       sort: z.enum(["newest", "oldest"]).optional().default("newest").describe("Sort archived clips by archive updated time"),
       include_transcript: z.boolean().optional().default(false).describe("Include full transcript text in results"),
-      presign_media: z.boolean().optional().default(true).describe("Return a temporary B2 media URL"),
+      presign_media: z.boolean().optional().default(true).describe("Return a playable media URL (temporary B2 URL or local server path)"),
     },
     handler: async (args) => {
       const {
@@ -137,25 +129,16 @@ export function searchArchiveDef(): ToolDef {
         presign_media: boolean;
       };
 
-      const missing = missingArchiveConfigKeys();
-      if (missing.length > 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Missing B2 configuration: ${missing.join(", ")}` }],
-        };
-      }
-
-      const config = getArchiveConfig();
-      const b2 = createArchiveB2(config);
+      const store = getArchiveStore();
       const topicKeys = archiveTags(topics, "manual").map((topic) => topic.key);
       const personKeys = archiveTags(people, "manual").map((person) => person.key);
 
       const seeds = topicKeys.length > 0 || personKeys.length > 0
         ? [
-            ...await loadMarkerSeeds({ kind: "topics", keys: topicKeys, prefix: config.prefix, bucket: config.bucket, b2 }),
-            ...await loadMarkerSeeds({ kind: "people", keys: personKeys, prefix: config.prefix, bucket: config.bucket, b2 }),
+            ...await loadMarkerSeeds({ kind: "topics", keys: topicKeys, store }),
+            ...await loadMarkerSeeds({ kind: "people", keys: personKeys, store }),
           ]
-        : await loadAllIndexSeeds({ prefix: config.prefix, bucket: config.bucket, b2 });
+        : await loadAllIndexSeeds({ store });
 
       const byHash = new Map<string, HitSeed>();
       for (const seed of seeds) {
@@ -164,10 +147,10 @@ export function searchArchiveDef(): ToolDef {
 
       const hits: ArchiveSearchHit[] = [];
       for (const seed of byHash.values()) {
-        const index = await getJson<ArchiveIndex>(b2, config.bucket, seed.indexKey);
+        const index = await store.getJson<ArchiveIndex>(seed.indexKey);
         if (!index) continue;
         const transcript = (query || include_transcript) && index.transcript
-          ? await getText(b2, config.bucket, index.transcript.text_key)
+          ? await store.getText(index.transcript.text_key)
           : null;
         if (!includesQuery(index, transcript, query)) continue;
         hits.push({
@@ -198,7 +181,7 @@ export function searchArchiveDef(): ToolDef {
       if (presign_media) {
         for (const result of paged) {
           const media = result.media as { key: string; url: string | null; expires_at: string | null };
-          const signed = b2.presign.getObject({ bucket: config.bucket, key: media.key, expiresIn: 3600 });
+          const signed = store.presignGet(media.key, 3600);
           media.url = signed?.url ?? null;
           media.expires_at = signed?.expiresAt ?? null;
         }

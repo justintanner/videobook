@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import { queue, registerJobHandler } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -12,7 +13,8 @@ type EnvName =
   | "B2_SECRET_ACCESS_KEY"
   | "B2_REGION"
   | "B2_BUCKET"
-  | "ELEVENLABS_API_KEY";
+  | "ELEVENLABS_API_KEY"
+  | "VIDEOCITY_ARCHIVE_DIR";
 
 const envNames: EnvName[] = [
   "B2_ACCESS_KEY_ID",
@@ -20,6 +22,7 @@ const envNames: EnvName[] = [
   "B2_REGION",
   "B2_BUCKET",
   "ELEVENLABS_API_KEY",
+  "VIDEOCITY_ARCHIVE_DIR",
 ];
 
 function captureEnv(): Record<EnvName, string | undefined> {
@@ -29,6 +32,7 @@ function captureEnv(): Record<EnvName, string | undefined> {
     B2_REGION: process.env.B2_REGION,
     B2_BUCKET: process.env.B2_BUCKET,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+    VIDEOCITY_ARCHIVE_DIR: process.env.VIDEOCITY_ARCHIVE_DIR,
   };
 }
 
@@ -57,6 +61,40 @@ function setValidArchiveEnv(): void {
   process.env.ELEVENLABS_API_KEY = "fake-elevenlabs-key";
 }
 
+const sha = "a".repeat(64);
+
+async function seedLocalArchiveClip(archiveDir: string): Promise<void> {
+  const clipDir = join(archiveDir, "clips", sha);
+  await mkdir(clipDir, { recursive: true });
+  await writeFile(join(clipDir, "original.mp4"), "fake-video-bytes");
+  await writeFile(join(clipDir, "transcript.txt"), "grace hopper explains compilers");
+  await writeFile(join(clipDir, "archive.json"), JSON.stringify({
+    schema_version: 1,
+    sha256: sha,
+    archive_id: sha,
+    title: "Compiler Lecture",
+    topics: [{ key: "compilers", label: "Compilers", source: "manual" }],
+    people: [{ key: "grace-hopper", label: "Grace Hopper", source: "manual" }],
+    sources: [],
+    ingests: [],
+    media: {
+      key: `clips/${sha}/original.mp4`,
+      filename: "original.mp4",
+      content_type: "video/mp4",
+      size_bytes: 16,
+    },
+    transcript: {
+      json_key: `clips/${sha}/transcript.json`,
+      text_key: `clips/${sha}/transcript.txt`,
+      chunk_count: 1,
+      provider: "elevenlabs",
+    },
+    duration: 60,
+    created_at: "2026-06-09T00:00:00.000Z",
+    updated_at: "2026-06-09T00:00:00.000Z",
+  }, null, 2));
+}
+
 describe("archive MCP tools", () => {
   let client: Client | undefined;
   let tempDir: string | undefined;
@@ -74,8 +112,14 @@ describe("archive MCP tools", () => {
   async function makeClient(): Promise<Client> {
     envSnapshot = captureEnv();
     tempDir = await mkdtemp(join(tmpdir(), "videocity-archive-tool-test-"));
-    client = await createTestClient(tempDir);
+    client = await createTestClient(join(tempDir, "projects"));
     return client;
+  }
+
+  function useLocalArchiveDir(): string {
+    const archiveDir = join(tempDir!, "archive");
+    process.env.VIDEOCITY_ARCHIVE_DIR = archiveDir;
+    return archiveDir;
   }
 
   it("rejects archive_clip when both source forms are supplied", async () => {
@@ -90,7 +134,7 @@ describe("archive MCP tools", () => {
     expect(content[0]?.text).toContain("exactly one");
   });
 
-  it("reports missing B2 configuration before enqueueing archive_clip", async () => {
+  it("reports missing ELEVENLABS_API_KEY before enqueueing archive_clip", async () => {
     const c = await makeClient();
     clearArchiveEnv();
     const result = await c.callTool({
@@ -100,23 +144,67 @@ describe("archive MCP tools", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0]?.text).toContain("Missing B2 configuration");
+    expect(content[0]?.text).toContain("ELEVENLABS_API_KEY");
   });
 
-  it("reports missing B2 configuration for search_archive", async () => {
+  it("enqueues archive_clip without B2 configuration via the local archive fallback", async () => {
     const c = await makeClient();
     clearArchiveEnv();
+    useLocalArchiveDir();
+    process.env.ELEVENLABS_API_KEY = "fake-elevenlabs-key";
+    registerJobHandler("archive_clip", async (payload) => payload);
+
+    const result = await c.callTool({
+      name: "archive_clip",
+      arguments: { url: "https://example.com/video" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const content = result.content as TextContent;
+    const parsed = JSON.parse(content[0]?.text ?? "{}") as Record<string, unknown>;
+    expect(parsed.status).toBe("enqueued");
+  });
+
+  it("searches an empty local archive without B2 configuration", async () => {
+    const c = await makeClient();
+    clearArchiveEnv();
+    useLocalArchiveDir();
     const result = await c.callTool({
       name: "search_archive",
       arguments: { topics: ["AI"] },
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
-    expect(content[0]?.text).toContain("Missing B2 configuration");
+    const parsed = JSON.parse(content[0]?.text ?? "{}") as Record<string, unknown>;
+    expect(parsed.results).toEqual([]);
+    expect(parsed.total).toBe(0);
   });
 
-  it("rejects invalid restore archive IDs before checking B2", async () => {
+  it("finds seeded clips in the local archive and serves media via /archive-files", async () => {
+    const c = await makeClient();
+    clearArchiveEnv();
+    const archiveDir = useLocalArchiveDir();
+    await seedLocalArchiveClip(archiveDir);
+
+    const result = await c.callTool({
+      name: "search_archive",
+      arguments: { query: "compilers" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const content = result.content as TextContent;
+    const parsed = JSON.parse(content[0]?.text ?? "{}") as {
+      total: number;
+      results: Array<{ archive_id: string; media: { url: string | null }; transcript_excerpt: string | null }>;
+    };
+    expect(parsed.total).toBe(1);
+    expect(parsed.results[0]?.archive_id).toBe(sha);
+    expect(parsed.results[0]?.media.url).toBe(`/archive-files/clips/${sha}/original.mp4`);
+    expect(parsed.results[0]?.transcript_excerpt).toContain("compilers");
+  });
+
+  it("rejects invalid restore archive IDs", async () => {
     const c = await makeClient();
     clearArchiveEnv();
     const result = await c.callTool({
@@ -129,17 +217,22 @@ describe("archive MCP tools", () => {
     expect(content[0]?.text).toContain("Invalid archive_id");
   });
 
-  it("reports missing B2 configuration for restore_archive_clips", async () => {
+  it("reports missing clips when restoring from an empty local archive", async () => {
     const c = await makeClient();
     clearArchiveEnv();
+    useLocalArchiveDir();
+    const fs = createFsForTest(join(tempDir!, "projects"));
+    const created = await fs.createProject();
+    if (!created.ok) throw new Error(created.error.message);
+
     const result = await c.callTool({
       name: "restore_archive_clips",
-      arguments: { project_slug: "test-proj", archive_ids: ["a".repeat(64)] },
+      arguments: { project_slug: created.value.slug, archive_ids: [sha] },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0]?.text).toContain("Missing B2 configuration");
+    expect(content[0]?.text).toContain("Archive clip not found");
   });
 
   it("enqueues a URL archive without requiring a caller-supplied project", async () => {

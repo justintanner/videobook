@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
 import { queue, reconcileQueueOnStartup } from "./queue.js";
+import { localArchiveDir } from "./archive-store.js";
 import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
@@ -60,6 +61,7 @@ const reaperHandles: { stop: () => void }[] = [];
 const app = express();
 app.use(cors());
 app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
+app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
 
 app.post("/api/upload/:projectSlug", async (req, res) => {
   const filename = typeof req.query.filename === "string" ? req.query.filename : "";

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
-import { missingArchiveConfigKeys } from "../archive-b2.js";
 import type { ToolDef } from "./tool-def.js";
 
 async function resolveQueueProjectSlug(fs: VideocityFs, projectSlug: string | undefined): Promise<string> {
@@ -22,7 +21,7 @@ function normalizeUrl(url: string): string {
 export function archiveClipDef(fs: VideocityFs): ToolDef {
   return {
     name: "archive_clip",
-    description: "Archive a full URL or existing video/audio asset to global B2 storage, dedupe by media SHA-256, and transcribe long clips in chunks.",
+    description: "Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.",
     schema: {
       url: z.string().optional().describe("Source URL to download in full"),
       asset_id: z.string().optional().describe("Existing video/audio asset ID to archive"),
@@ -68,14 +67,6 @@ export function archiveClipDef(fs: VideocityFs): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "project_slug is required when asset_id is used" }],
-        };
-      }
-
-      const missing = missingArchiveConfigKeys();
-      if (missing.length > 0) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Missing B2 configuration: ${missing.join(", ")}` }],
         };
       }
 

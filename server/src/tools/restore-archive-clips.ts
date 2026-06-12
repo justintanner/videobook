@@ -1,14 +1,9 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { extname } from "node:path";
-import {
-  createArchiveB2,
-  getArchiveConfig,
-  getJson,
-  indexKey,
-  missingArchiveConfigKeys,
-} from "../archive-b2.js";
+import { indexKey } from "../archive-b2.js";
 import type { ArchiveIndex } from "../archive-b2.js";
+import { getArchiveStore } from "../archive-store.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -153,17 +148,13 @@ export function restoreArchiveClipsDef(fs: VideocityFs): ToolDef {
       const invalid = archiveIds.filter((id) => !ARCHIVE_ID_RE.test(id));
       if (invalid.length > 0) return toolError(`Invalid archive_id: ${invalid.join(", ")}`);
 
-      const missing = missingArchiveConfigKeys();
-      if (missing.length > 0) return toolError(`Missing B2 configuration: ${missing.join(", ")}`);
-
       const project = await fs.getProject(project_slug);
       if (!project.ok) return toolError(project.error.message);
 
-      const config = getArchiveConfig();
-      const b2 = createArchiveB2(config);
+      const store = getArchiveStore();
       const indices: ArchiveIndex[] = [];
       for (const archiveId of archiveIds) {
-        const index = await getJson<ArchiveIndex>(b2, config.bucket, indexKey(config, archiveId));
+        const index = await store.getJson<ArchiveIndex>(indexKey(store, archiveId));
         if (!index) return toolError(`Archive clip not found: ${archiveId}`);
         indices.push(index);
       }
