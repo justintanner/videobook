@@ -132,7 +132,12 @@ function jobTypeToAssetWorkKind(
   switch (jobType) {
     case "process_video":
     case "process_image":          return { kind: "process" };
-    case "analyze_video":          return { kind: "analyze" };
+    case "analyze_video":
+    case "suggest_cuts":
+    case "suggest_sfx":
+    case "analyze_jokes":
+    case "detect_scenes":
+    case "plan_visualization":     return { kind: "analyze" };
     case "transcribe":
     case "transcribe_video_audio": return { kind: "transcribe" };
     case "trim_video":             return { kind: "trim" };

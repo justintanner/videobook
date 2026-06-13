@@ -312,26 +312,45 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
         toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
         return;
       }
-      await callTool('sync', { project_slug: projectSlug });
-      const planResult = await callTool('read_plan', { project_slug: projectSlug });
-      if (!planResult.isError) {
+
+      // plan_visualization now runs in the background (vision + ffmpeg). Poll
+      // read_plan until the new plan — matching the requested source +
+      // characters — lands, then swap the sidecar in. The source card shows an
+      // "analyzing" overlay meanwhile, so the UI never blocks.
+      const POLL_MS = 3000;
+      const MAX_ATTEMPTS = 100; // ~5 min, covers slow vision + scene detection
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        if (cancelledRef.current) return;
+        const planResult = await callTool('read_plan', { project_slug: projectSlug });
+        if (planResult.isError) continue;
+        let parsed: AnyPlanSidecar;
         try {
           const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          const parsed: AnyPlanSidecar = JSON.parse(text);
+          parsed = JSON.parse(text);
+        } catch {
+          continue;
+        }
+        const cs = planFormula(parsed) === 'char_swap' ? (parsed as PlanSidecar) : null;
+        const matchesRequest = cs
+          && cs.source_asset_id === sourceId
+          && (cs.characters[0]?.asset_id ?? null) === charAId
+          && (cs.characters[1]?.asset_id ?? null) === charBId;
+        if (matchesRequest) {
           setSidecar(parsed);
           setActiveFormula(planFormula(parsed) ?? 'char_swap');
           setPendingSource(null);
           setPendingCharA(null);
           setPendingCharB(null);
-        } catch {
-          // Sidecar will refresh on next mount.
+          toast({ title: 'Plan generated', description: `${cs.scenes.length} scenes`, duration: 2500 });
+          return;
         }
       }
-      toast({ title: 'Plan generated', description: `${scenesCount ?? '?'} scenes`, duration: 2500 });
+      toast({ title: 'Plan still generating', description: 'It will appear here when ready.', duration: 4000 });
     } finally {
       setGenerating(false);
     }
-  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, scenesCount]);
+  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool]);
 
   const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';

@@ -1,8 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { findVideoFile } from "videocity-engine";
 import { z } from "zod";
-import { join } from "node:path";
-import { detectSceneCandidates } from "../scene-detect.js";
+import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 export function detectScenesDef(fs: VideocityFs): ToolDef {
@@ -12,8 +11,9 @@ export function detectScenesDef(fs: VideocityFs): ToolDef {
       "Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. " +
       "Each candidate is { t, score, kind } where kind=\"shot\" is a camera/cut change (scdet score ≥ 10) " +
       "and kind=\"settle\" is a motion-settle moment inside a steady shot (the falling edge of a sustained " +
-      "high-motion run, e.g. \"the man finished standing up\"). Used by /plan-vis to align scene boundaries " +
-      "to picture rather than audio; also useful as a standalone read-only diagnostic.",
+      "high-motion run, e.g. \"the man finished standing up\"). Runs in the background and persists to " +
+      ".detect-scenes.json. Used by /plan-vis to align scene boundaries to picture rather than audio; also " +
+      "useful as a standalone read-only diagnostic.",
     schema: {
       source_asset_id: z.string().describe("Video asset id (vid-*) inside the project"),
       project_slug: z.string().describe("Project slug"),
@@ -40,29 +40,18 @@ export function detectScenesDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      let candidates;
-      try {
-        candidates = await detectSceneCandidates(join(manifestResult.value.path, videoFile.name));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Scene detection failed: ${msg}` }],
-        };
-      }
+      const jobId = `detect-scenes-${sourceAssetId}-${Date.now()}`;
+      await queue.enqueue(jobId, {
+        type: "detect_scenes",
+        assetId: sourceAssetId,
+        assetDir: manifestResult.value.path,
+        projectSlug: project_slug,
+      });
 
-      const shots = candidates.filter((c) => c.kind === "shot").length;
-      const settles = candidates.filter((c) => c.kind === "settle").length;
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({
-            asset_id: sourceAssetId,
-            count: candidates.length,
-            shots,
-            settles,
-            candidates,
-          }),
+          text: JSON.stringify({ asset_id: sourceAssetId, job_id: jobId, status: "enqueued" }),
         }],
       };
     },

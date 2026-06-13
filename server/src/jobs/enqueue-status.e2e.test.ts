@@ -103,6 +103,27 @@ describe("enqueue status (no red-flash window)", () => {
     expect(status.ok && status.value).toBe("trimming");
   });
 
+  it.each([
+    "suggest_cuts",
+    "suggest_sfx",
+    "analyze_jokes",
+    "detect_scenes",
+    "plan_visualization",
+  ])("%s: status is 'analyzing' immediately after enqueue", async (type) => {
+    const asset = await fs.createAsset("vid", `an-${type}`, slug);
+    expect(asset.ok).toBe(true);
+    if (!asset.ok) return;
+
+    await queue.enqueue(`an-${type}-${Date.now()}`, {
+      type,
+      projectSlug: slug,
+      assetId: asset.value.assetId,
+    });
+
+    const status = await fs.getAssetStatus(asset.value.assetId, slug);
+    expect(status.ok && status.value).toBe("analyzing");
+  });
+
   it("download: status is 'downloading' immediately after enqueue", async () => {
     const asset = await fs.createAsset("vid", "dl-test", slug);
     expect(asset.ok).toBe(true);
