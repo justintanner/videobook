@@ -109,6 +109,7 @@ describe("enqueue status (no red-flash window)", () => {
     "analyze_jokes",
     "detect_scenes",
     "plan_visualization",
+    "plan_clip_show",
   ])("%s: status is 'analyzing' immediately after enqueue", async (type) => {
     const asset = await fs.createAsset("vid", `an-${type}`, slug);
     expect(asset.ok).toBe(true);

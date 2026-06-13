@@ -1095,6 +1095,12 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
   const [tone, setTone] = useState(() => sidecar?.tone ?? 'sharp, playful, punchy, not mean');
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const sidecarKey = clipShowSidecarKey(sidecar);
+  const planPollCancelledRef = useRef(false);
+
+  useEffect(() => {
+    planPollCancelledRef.current = false;
+    return () => { planPollCancelledRef.current = true; };
+  }, []);
 
   useEffect(() => {
     if (!sidecar) return;
@@ -1137,6 +1143,10 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
 
   const handleGeneratePlan = useCallback(async () => {
     if (!canGeneratePlan) return;
+    // Remember the plan currently shown so polling can tell a freshly-generated
+    // plan apart from the existing one (regenerating with the same inputs still
+    // changes the GPT-written jokes/dialog, so the key differs).
+    const prevKey = clipShowSidecarKey(sidecar);
     setGeneratingPlan(true);
     try {
       const result = await callTool('plan_clip_show', {
@@ -1151,16 +1161,43 @@ function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSid
         toast({ title: 'Clip Show failed', description: msg, duration: 5000 });
         return;
       }
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
-      if (!parsed.sidecar) return;
-      onSidecarUpdate(parsed.sidecar);
-      await callTool('sync', { project_slug: projectSlug });
-      toast({ title: 'Clip Show planned', description: `${parsed.sidecar.segments.length} segment${parsed.sidecar.segments.length === 1 ? '' : 's'}`, duration: 2500 });
+
+      // plan_clip_show now runs in the background (GPT-5.5). Poll read_plan
+      // until the new clip_show plan — matching the requested host + clips —
+      // lands, then swap it in. The button shows "Planning..." but the rest of
+      // the UI stays responsive.
+      const POLL_MS = 3000;
+      const MAX_ATTEMPTS = 100; // ~5 min, covers slow GPT-5.5 generation
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        if (planPollCancelledRef.current) return;
+        const planResult = await callTool('read_plan', { project_slug: projectSlug });
+        if (planResult.isError) continue;
+        let parsed: AnyPlanSidecar;
+        try {
+          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
+          parsed = JSON.parse(text);
+        } catch {
+          continue;
+        }
+        if (planFormula(parsed) !== 'clip_show') continue;
+        const cs = parsed as ClipShowPlanSidecar;
+        const matchesRequest =
+          cs.character.asset_id === characterId &&
+          cs.clip_asset_ids.length === clipIds.length &&
+          cs.clip_asset_ids.every((id, i) => id === clipIds[i]);
+        if (matchesRequest && clipShowSidecarKey(cs) !== prevKey) {
+          onSidecarUpdate(cs);
+          await callTool('sync', { project_slug: projectSlug });
+          toast({ title: 'Clip Show planned', description: `${cs.segments.length} segment${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
+          return;
+        }
+      }
+      toast({ title: 'Clip Show still generating', description: 'It will appear here when ready.', duration: 4000 });
     } finally {
       setGeneratingPlan(false);
     }
-  }, [canGeneratePlan, callTool, projectSlug, characterId, clipIds, showBrief, tone, onSidecarUpdate]);
+  }, [canGeneratePlan, callTool, projectSlug, characterId, clipIds, showBrief, tone, onSidecarUpdate, sidecar]);
 
   return (
     <div className="space-y-5">

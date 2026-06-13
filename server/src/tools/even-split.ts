@@ -295,24 +295,17 @@ export function evenSplitDef(fs: VideocityFs): ToolDef {
       }
 
       const jobId = `even-split-${asset_id}-${Date.now()}`;
-      try {
-        await queue.enqueueAndWait(jobId, {
-          type: "even_split",
-          sourcePath,
-          sourceAssetId: asset_id,
-          chunks: created,
-          projectSlug: project_slug,
-          destination: destinationMode ? { assetId: destination!.asset_id } : undefined,
-        });
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Even-split failed: ${err instanceof Error ? err.message : String(err)}`,
-          }],
-        };
-      }
+      // Fire-and-forget: the chunk assets/files were already created above, so
+      // the UI can pick them up immediately. ffmpeg failures now surface via the
+      // asset-work failed state like every other queued tool, not this response.
+      await queue.enqueue(jobId, {
+        type: "even_split",
+        sourcePath,
+        sourceAssetId: asset_id,
+        chunks: created,
+        projectSlug: project_slug,
+        destination: destinationMode ? { assetId: destination!.asset_id } : undefined,
+      });
 
       return {
         content: [{
@@ -329,7 +322,7 @@ export function evenSplitDef(fs: VideocityFs): ToolDef {
                     filenames: destination!.filenames,
                   },
                   job_id: jobId,
-                  status: "completed",
+                  status: "enqueued",
                 }
               : {
                   source_asset_id: asset_id,
@@ -343,7 +336,7 @@ export function evenSplitDef(fs: VideocityFs): ToolDef {
                     exact: c.exact,
                   })),
                   job_id: jobId,
-                  status: "completed",
+                  status: "enqueued",
                 },
           ),
         }],

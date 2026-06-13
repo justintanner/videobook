@@ -41,6 +41,21 @@ async function uploadVideo(
   return JSON.parse((result.content as TextContent)[0].text);
 }
 
+// even_split now enqueues fire-and-forget, so the ffmpeg work finishes in the
+// background. Wait for the job to complete before probing on-disk chunks.
+async function waitForJob(jobId: string, timeoutMs = 120_000): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const status = await queue.getStatus(jobId);
+    if (status?.state === "completed") return;
+    if (status?.state === "failed") {
+      throw new Error(`job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`job ${jobId} did not complete within ${timeoutMs}ms`);
+}
+
 async function probeDuration(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [
     "-v", "error", "-show_entries", "format=duration",
@@ -282,6 +297,9 @@ describe("even_split tool (integration)", () => {
     expect(parsed.chunks[1].duration).toBe(7);
     expect(parsed.used_target_secs).toEqual([7]);
     expect(parsed.has_leftover).toBe(true);
+    expect(parsed.status).toBe("enqueued");
+
+    await waitForJob(parsed.job_id);
 
     // Verify on-disk durations stay at or under the requested cap.
     for (const chunk of parsed.chunks) {
@@ -322,6 +340,8 @@ describe("even_split tool (integration)", () => {
     expect(parsed.chunks).toHaveLength(3);
     expect(parsed.chunks.map((c: { duration: number }) => c.duration)).toEqual([7, 7, 7]);
     expect(parsed.has_leftover).toBe(false);
+
+    await waitForJob(parsed.job_id);
 
     for (const chunk of parsed.chunks) {
       const manifest = await client.callTool({
@@ -379,6 +399,8 @@ describe("even_split tool (integration)", () => {
     expect(parsed.chunks[2].exact).toBe(false);
     expect(parsed.used_target_secs).toEqual([10, 15]);
     expect(parsed.has_leftover).toBe(true);
+
+    await waitForJob(parsed.job_id);
 
     const expectedDurations = [10, 15, 5];
     for (let i = 0; i < parsed.chunks.length; i++) {
@@ -453,6 +475,8 @@ describe("even_split tool (integration)", () => {
       expect(parsed.destination.asset_id).toBe(dest.assetId);
       expect(parsed.destination.filenames).toEqual(["s1.mp4", "s2.mp4", "s3.mp4"]);
       expect(parsed.chunks).toBeUndefined();
+
+      await waitForJob(parsed.job_id);
 
       const manifest = await client.callTool({
         name: "asset_manifest",

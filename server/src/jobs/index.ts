@@ -58,6 +58,7 @@ import { registerSuggestSfxJob } from "./suggest-sfx.js";
 import { registerAnalyzeJokesJob } from "./analyze-jokes.js";
 import { registerDetectScenesJob } from "./detect-scenes.js";
 import { registerPlanVisualizationJob } from "./plan-visualization.js";
+import { registerPlanClipShowJob } from "./plan-clip-show.js";
 import { registerDescribeImageJob } from "./describe-image.js";
 import { registerExtractCharacterJob } from "./extract-character.js";
 import { registerRewriteScriptJob } from "./rewrite-script.js";
@@ -164,6 +165,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerAnalyzeJokesJob(fs);
   registerDetectScenesJob(fs);
   registerPlanVisualizationJob(fs);
+  registerPlanClipShowJob(fs);
   registerDescribeImageJob(fs);
   registerExtractCharacterJob(fs);
   registerRewriteScriptJob(fs);
