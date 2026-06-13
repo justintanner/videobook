@@ -439,6 +439,22 @@ export function HomePage() {
     }
   }, [callTool, fetchTimeline, listAssets, projectSlug, removeAsset, sortOrder, sync]);
 
+  const handleRecoverClip = useCallback(async (video: MediaItem) => {
+    if (!projectSlug) return;
+    try {
+      const result = await callTool('recover_asset', { asset_id: video.id, project_slug: projectSlug });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined;
+        toast({ title: 'Recover failed', description: content?.[0]?.text ?? 'recover_asset failed', duration: 5000 });
+        return;
+      }
+      await listAssets(projectSlug, sortOrder);
+      sync(projectSlug);
+    } catch (error) {
+      toast({ title: 'Recover failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
+    }
+  }, [callTool, listAssets, projectSlug, sortOrder, sync]);
+
   const handleAudioDroppedOnVideo = useCallback((video: MediaItem, audioId: string, audioSlug: string) => {
     setAudioReplace({ videoId: video.id, videoSlug: video.slug, audioId, audioSlug });
   }, []);
@@ -1400,7 +1416,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} />}
                         {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
                       </div>
                     );

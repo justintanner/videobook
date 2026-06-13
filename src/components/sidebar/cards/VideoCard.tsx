@@ -1,5 +1,5 @@
 import { useState, type MouseEvent as ReactMouseEvent, type DragEvent as ReactDragEvent } from 'react';
-import { X } from 'lucide-react';
+import { RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
@@ -15,12 +15,15 @@ interface VideoCardProps {
   onClick?: () => void;
   onMarkSeen?: () => void;
   onDelete?: (item: MediaItem) => void;
+  /** Fires when the user recovers a failed card. HomePage clears the asset's
+   *  persisted error (recover_asset) and re-syncs, returning it to ready. */
+  onRecover?: (item: MediaItem) => void;
   /** Fires when an aud-* card is dropped onto this video. HomePage uses this
    *  to surface a "replace audio?" confirm before invoking replace_video_audio. */
   onAudioDropped?: (audioAssetId: string, audioSlug: string) => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onAudioDropped }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onRecover, onAudioDropped }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -102,19 +105,38 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isProcessing} />}
 
-      {/* Delete button — visible on hover for error-state cards */}
-      {isError && onDelete && (
-        <button
-          type="button"
-          onClick={(e: ReactMouseEvent) => {
-            e.stopPropagation();
-            onDelete(item);
-          }}
-          aria-label={`Delete ${item.slug}`}
-          className="absolute top-1 right-1 z-50 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
-        >
-          <X className="w-3 h-3" />
-        </button>
+      {/* Recover / Delete buttons — visible on hover for error-state cards */}
+      {isError && (onRecover || onDelete) && (
+        <div className="absolute top-1 right-1 z-50 hidden group-hover:flex items-center gap-1">
+          {onRecover && (
+            <button
+              type="button"
+              onClick={(e: ReactMouseEvent) => {
+                e.stopPropagation();
+                onRecover(item);
+              }}
+              aria-label={`Recover ${item.slug}`}
+              title="Recover (clear error, keep media)"
+              className="flex items-center justify-center w-5 h-5 rounded-sm bg-emerald-500/80 hover:bg-emerald-500 text-white transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e: ReactMouseEvent) => {
+                e.stopPropagation();
+                onDelete(item);
+              }}
+              aria-label={`Delete ${item.slug}`}
+              title="Delete asset"
+              className="flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       )}
       </CardShell>
       {audioDragOver && (

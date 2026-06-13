@@ -15,6 +15,7 @@ import { uploadFileDef } from "./upload-file.js";
 import { assetManifestDef } from "./asset-manifest.js";
 import { deleteAssetDef } from "./delete-asset.js";
 import { clearFailedTasksDef } from "./clear-failed-tasks.js";
+import { recoverAssetDef } from "./recover-asset.js";
 import { renameAssetDef } from "./rename-asset.js";
 import { markAssetSeenDef } from "./mark-asset-seen.js";
 import { duplicateAssetDef } from "./duplicate-asset.js";
@@ -162,6 +163,7 @@ import { replacePlanClipShowAssetDef } from "./replace-plan-clip-show-asset.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
+import { analyzeJokesDef } from "./analyze-jokes.js";
 import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
@@ -197,6 +199,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     assetManifestDef(fs),
     deleteAssetDef(fs),
     clearFailedTasksDef(fs),
+    recoverAssetDef(fs),
     renameAssetDef(fs),
     markAssetSeenDef(fs),
     duplicateAssetDef(fs),
@@ -347,6 +350,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
+    analyzeJokesDef(fs),
     applyCutsDef(fs),
     applySfxDef(fs),
     pinCharacterSlotDef(fs),
