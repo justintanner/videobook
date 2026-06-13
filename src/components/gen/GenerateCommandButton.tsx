@@ -201,10 +201,14 @@ export function GenerateCommandButton({
                   'overflow-hidden',
                   slotLocked ? 'cursor-default' : 'cursor-pointer',
                   slot.tone === 'loading' && 'text-current/60',
+                  // While generating, the cost is locked and inactive — dim it to
+                  // the button's current hue so it doesn't keep reading as the
+                  // bright, actionable variant color (green/cyan).
+                  slot.tone !== 'loading' && isLoading && 'text-current/60',
                   // Use the variant color in both 'normal' and 'stale' so the
                   // LCD never clashes with the surrounding button hue.
-                  slot.tone !== 'loading' && !isDisabledVisual && v.text,
-                  slot.tone !== 'loading' && isDisabledVisual && 'text-zinc-600',
+                  slot.tone !== 'loading' && !isLoading && !isDisabledVisual && v.text,
+                  slot.tone !== 'loading' && !isLoading && isDisabledVisual && 'text-zinc-600',
                   slot.tone === 'stale' && 'opacity-60',
                 )}
               >
