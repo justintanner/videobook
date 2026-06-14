@@ -17,6 +17,11 @@ interface GenerateCommandButtonProps {
   state?: ExecuteButtonState;
   disabled?: boolean;
   disabledReason?: string;
+  /** True while a generation of this panel's category is still running in the
+   *  background (tracked via sync/ghost tiles) but the button itself is idle.
+   *  Dims the button so it stops reading as bright/actionable — yet it stays
+   *  clickable so more generations can be queued. */
+  pending?: boolean;
   onClick?: () => void;
   cost: UseEstimateCostResult;
   className?: string;
@@ -57,6 +62,7 @@ export function GenerateCommandButton({
   state,
   disabled,
   disabledReason,
+  pending,
   onClick,
   cost,
   className,
@@ -65,6 +71,8 @@ export function GenerateCommandButton({
   const isDisabledVisual = state === 'disabled';
   const isLoading = state != null && ['charging', 'submitting', 'queued', 'processing'].includes(state);
   const isSuccess = state === 'success';
+  // Background generation running while the button is otherwise idle.
+  const isPendingIdle = !!pending && !state;
   const slotLocked = isDisabledVisual || isLoading || isSuccess || !!disabled;
 
   const slot = deriveSlotState(cost);
@@ -95,6 +103,10 @@ export function GenerateCommandButton({
         isDisabledVisual && 'bg-zinc-800/30 text-zinc-600 border-zinc-700/50 shadow-none cursor-not-allowed',
         isLoading && 'opacity-90 cursor-wait',
         isSuccess && 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]',
+        // Muted-but-clickable: dims the whole chip (hue intact, unlike the gray
+        // disabled state) so it no longer reads as the bright actionable button
+        // while a generation is still running. Hover/scale below keeps it lively.
+        isPendingIdle && 'opacity-60',
         !isDisabledVisual && !isLoading && !isSuccess && cn('hover:scale-[1.02] active:scale-[0.98]', v.hoverBorder),
         'focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
         v.focusRing,

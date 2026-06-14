@@ -9,6 +9,7 @@ import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
 import { PlanCard } from '@/components/sidebar/cards/PlanCard';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
+import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
@@ -109,6 +110,11 @@ export function HomePage() {
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
+  // Optimistic placeholder tiles for just-enqueued generations, shown in the
+  // clips bar until the real asset surfaces via sync (or the safety expiry).
+  const [ghostClips, setGhostClips] = useState<
+    { id: string; category: 'video' | 'image'; prompt: string; startedAt: number }[]
+  >([]);
   const [characterDialog, setCharacterDialog] = useState<{
     initialSlug: string | null;
     initialProfile?: CharacterProfile;
@@ -291,6 +297,50 @@ export function HomePage() {
   const clips = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
+
+  // Drop ghost tiles once their real asset surfaces via sync, and expire
+  // stragglers (e.g. a failed enqueue) so a placeholder never lingers.
+  useEffect(() => {
+    if (ghostClips.length === 0) return;
+    const ids = new Set(mediaItems.map((m) => m.id));
+    const cutoff = Date.now() - 90_000;
+    setGhostClips((gs) => {
+      const next = gs.filter((g) => !ids.has(g.id) && g.startedAt > cutoff);
+      return next.length === gs.length ? gs : next;
+    });
+  }, [mediaItems, ghostClips.length]);
+
+  const handleGenerationSubmitted = useCallback(
+    (g: { assetId: string; category: 'video' | 'image'; prompt: string }) => {
+      setGhostClips((gs) =>
+        gs.some((x) => x.id === g.assetId)
+          ? gs
+          : [...gs, { id: g.assetId, category: g.category, prompt: g.prompt, startedAt: Date.now() }]);
+    },
+    [],
+  );
+
+  // Ghosts still awaiting their real card, split by where they render.
+  const videoGhosts = useMemo(() => {
+    const ids = new Set(clips.map((c) => c.id));
+    return ghostClips.filter((g) => g.category === 'video' && !ids.has(g.id));
+  }, [ghostClips, clips]);
+  const imageGhosts = useMemo(() => {
+    const ids = new Set(assets.map((a) => a.id));
+    return ghostClips.filter((g) => g.category === 'image' && !ids.has(g.id));
+  }, [ghostClips, assets]);
+
+  // Whether a generation of the open panel's category is still running —
+  // drives the dimmed-but-clickable /generate button.
+  const pendingGenForPanel = useMemo(() => {
+    if (!genPanel) return false;
+    const cat = genPanel.category;
+    const live = mediaItems.some((m) =>
+      m.type === cat &&
+      (m.pendingState === 'queued' || m.pendingState === 'processing') &&
+      (m.pendingTaskType?.startsWith('generate') ?? false));
+    return live || ghostClips.some((g) => g.category === cat);
+  }, [genPanel, mediaItems, ghostClips]);
 
   const trimItem = useMemo(() =>
     trimAssetId ? mediaItems.find(m => m.id === trimAssetId) ?? null : null,
@@ -1242,6 +1292,11 @@ export function HomePage() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                  {sortOrder === 'newest' && imageGhosts.map((g) => (
+                    <div key={g.id} className="w-full">
+                      <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
+                    </div>
+                  ))}
                   {assets.map((item) => {
                     const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
                     const itemFilePath = item.filePath;
@@ -1272,6 +1327,11 @@ export function HomePage() {
                       </div>
                     );
                   })}
+                  {sortOrder === 'oldest' && imageGhosts.map((g) => (
+                    <div key={g.id} className="w-full">
+                      <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
+                    </div>
+                  ))}
                   <UploadSlot onClick={triggerUpload} />
                 </div>
               )}
@@ -1300,6 +1360,8 @@ export function HomePage() {
                     onClose={() => setGenPanel(null)}
                     callTool={callTool}
                     projectSlug={projectSlug}
+                    pendingGeneration={pendingGenForPanel}
+                    onGenerationSubmitted={handleGenerationSubmitted}
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser
@@ -1398,6 +1460,11 @@ export function HomePage() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
+                  {sortOrder === 'newest' && videoGhosts.map((g) => (
+                    <div key={g.id} className="w-full">
+                      <GhostClipCard id={g.id} type="video" prompt={g.prompt} startedAt={g.startedAt} />
+                    </div>
+                  ))}
                   {clips.map((item) => {
                     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
                     const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
@@ -1421,6 +1488,11 @@ export function HomePage() {
                       </div>
                     );
                   })}
+                  {sortOrder === 'oldest' && videoGhosts.map((g) => (
+                    <div key={g.id} className="w-full">
+                      <GhostClipCard id={g.id} type="video" prompt={g.prompt} startedAt={g.startedAt} />
+                    </div>
+                  ))}
                   <UploadSlot onClick={triggerUpload} />
                 </div>
               )}

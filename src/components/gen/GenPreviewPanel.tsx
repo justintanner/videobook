@@ -36,6 +36,12 @@ interface GenPreviewPanelProps {
   onClose: () => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string | undefined;
+  /** True while a generation of this category is still running in the
+   *  background — dims the /generate button (kept clickable). */
+  pendingGeneration?: boolean;
+  /** Fired the moment a generation is enqueued, with the freshly-created asset
+   *  id, so the host can show an optimistic ghost tile in the clips bar. */
+  onGenerationSubmitted?: (g: { assetId: string; category: 'video' | 'image'; prompt: string }) => void;
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -90,6 +96,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   onClose,
   callTool,
   projectSlug,
+  pendingGeneration,
+  onGenerationSubmitted,
 }, ref) {
   useMountKey('gen');
 
@@ -526,6 +534,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             provider: selectedProviderKey,
           });
         }
+        // Surface an optimistic ghost tile immediately, keyed on the freshly
+        // enqueued asset id, so the new clip shows before the next sync poll.
+        const content = result.content as Array<{ type: string; text: string }>;
+        try {
+          const parsed = JSON.parse(content[0]?.text ?? '{}') as { vid_asset_id?: string; img_asset_id?: string };
+          const assetId = parsed.vid_asset_id ?? parsed.img_asset_id;
+          if (assetId) onGenerationSubmitted?.({ assetId, category, prompt: submittedPrompt });
+        } catch { /* result wasn't the expected JSON — skip the ghost tile */ }
         setGenState('success');
         setTimeout(() => {
           setGenState(undefined);
@@ -535,7 +551,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationSubmitted]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
@@ -677,6 +693,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           <GenerateCommandButton
             variant={buttonVariant}
             state={genState}
+            pending={pendingGeneration}
             cost={cost}
             onClick={handleGenerate}
             disabled={!selectedOption || liveWarnings.length > 0 || liveMissingRequired.length > 0}
