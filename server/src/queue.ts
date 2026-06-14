@@ -101,6 +101,11 @@ interface RunnerInfo {
 const runnerByProject = new Map<string, RunnerInfo>();
 
 const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
+// Upper bound on retained jobId→internalId mappings. getStatus drops entries
+// once a job reaches a terminal state, but fire-and-forget jobs that are never
+// polled would otherwise accumulate forever; evict oldest insertion-order
+// entries past this cap as a backstop.
+const JOB_INDEX_MAX = 2000;
 const rewindingProjects = new Set<string>();
 
 type Orientation = "portrait" | "landscape" | "square";
@@ -353,8 +358,15 @@ async function dispatchFailure(
     await fs
       .logAction("job-error", { assetId, error: message }, projectSlug)
       .catch(() => {});
-  } catch {
-    // best-effort; nothing more we can do here
+  } catch (secondary) {
+    // Best-effort: we couldn't mark the asset failed, so it may stay wedged
+    // in-progress until its lease expires. Surface it instead of swallowing —
+    // this is the diagnostic for "stuck asset" reports.
+    console.warn(
+      `[dispatchFailure] could not record failure for ${projectSlug}/${assetId}` +
+        ` (original error: ${message}):`,
+      secondary,
+    );
   }
 }
 
@@ -460,6 +472,14 @@ export const queue: Queue = {
     const { slug, dir } = await ensureProjectReady(jobId, payload);
     const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
     jobIdIndex.set(jobId, { slug, internalId: result.job.id });
+    if (jobIdIndex.size > JOB_INDEX_MAX) {
+      const overflow = jobIdIndex.size - JOB_INDEX_MAX;
+      let removed = 0;
+      for (const key of jobIdIndex.keys()) {
+        jobIdIndex.delete(key);
+        if (++removed >= overflow) break;
+      }
+    }
   },
 
   enqueueAndWait: async <T = unknown>(
@@ -480,8 +500,15 @@ export const queue: Queue = {
     if (!ix) return null;
     const job = await fsRef.current.queue.getJob(ix.slug, ix.internalId);
     if (!job) return null;
+    const state = mapState(job.state);
+    // Once a job is terminal the mapping is no longer needed: every caller
+    // (waitForJob and the test pollers) reads the terminal state once and
+    // returns. Dropping it here keeps the index lean for polled jobs.
+    if (state === "completed" || state === "failed") {
+      jobIdIndex.delete(jobId);
+    }
     return {
-      state: mapState(job.state),
+      state,
       ...(job.error ? { error: { message: job.error.message } } : {}),
     };
   },
@@ -527,15 +554,19 @@ export interface RewindQueuePreparation {
 async function waitForRunnerStop(
   runner: QueueRunner,
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<{ stopped: boolean; stopPromise: Promise<void> }> {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const stopped = runner.stop().then(() => true);
+  // Keep a handle on the underlying stop() so the caller can defer any restart
+  // until it actually settles, rather than racing start() against an
+  // in-flight stop() when we time out.
+  const stopPromise = runner.stop();
+  const stopped = stopPromise.then(() => true);
   const timedOut = new Promise<false>((resolve) => {
     timer = setTimeout(() => resolve(false), timeoutMs);
   });
   const result = await Promise.race([stopped, timedOut]);
   if (timer) clearTimeout(timer);
-  return result;
+  return { stopped: result, stopPromise };
 }
 
 async function restartRunnerIfProjectExists(projectSlug: string): Promise<void> {
@@ -561,9 +592,24 @@ export async function prepareProjectForRewind(
     await fsRef.current.ensureProjectInitialized(projectSlug);
     const info = runnerByProject.get(projectSlug);
     if (info) {
-      const stopped = await waitForRunnerStop(info.runner, timeoutMs);
+      const { stopped, stopPromise } = await waitForRunnerStop(
+        info.runner,
+        timeoutMs,
+      );
       if (!stopped) {
-        info.runner.start();
+        // stop() is still in flight; restart only once it settles so a
+        // late-completing stop() can't race the fresh start() and leave the
+        // runner half-stopped. Guarded so a fire-and-forget rejection or a
+        // torn-down runner can't crash the process.
+        void stopPromise
+          .catch(() => {})
+          .then(() => {
+            try {
+              info.runner.start();
+            } catch {
+              /* runner torn down meanwhile — nothing to restart */
+            }
+          });
         throw new Error(
           `Timed out waiting for active jobs to stop before rewinding ${projectSlug}`,
         );

@@ -160,4 +160,38 @@ describe("server queue (sqlite-backed)", () => {
     }
     throw new Error("child job did not complete");
   });
+
+  it("drops the jobIdIndex entry once a job reaches a terminal state", async () => {
+    await setProjectsDir(projectsDir);
+    const cfs = createFs({ projectsDir });
+    const created = await cfs.createProject("p");
+    expect(created.ok).toBe(true);
+
+    registerJobHandler("index_cleanup_probe", async () => ({ ok: true }));
+
+    await appQueue.enqueue("index-cleanup-probe", {
+      type: "index_cleanup_probe",
+      projectSlug: "p",
+    });
+
+    // The getStatus call that first observes a terminal state also evicts the
+    // index entry, so memory can't grow unbounded across fire-and-forget jobs.
+    const start = Date.now();
+    let sawCompleted = false;
+    while (Date.now() - start < 5_000) {
+      const status = await appQueue.getStatus("index-cleanup-probe");
+      if (status?.state === "completed") {
+        sawCompleted = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(sawCompleted).toBe(true);
+
+    // Entry is gone: a follow-up lookup is a miss rather than a stale hit.
+    expect(await appQueue.getStatus("index-cleanup-probe")).toBeNull();
+
+    await appQueue.stop();
+    cfs.close();
+  });
 });

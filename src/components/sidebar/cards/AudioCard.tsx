@@ -3,6 +3,7 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge } from './badges';
+import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
 
@@ -12,10 +13,13 @@ interface AudioCardProps {
   selected?: boolean;
   onClick?: () => void;
   onMarkSeen?: () => void;
+  onRecover?: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
 }
 
-export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: AudioCardProps) {
+export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onRecover, onDelete }: AudioCardProps) {
   const isCorrupt = false;
+  const isError = (item.status ?? 'ready') === 'error';
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
@@ -35,6 +39,9 @@ export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkS
 
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} />}
+
+      {/* Recover / Delete buttons — visible on hover for error-state cards */}
+      {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
     </CardShell>
   );
 }

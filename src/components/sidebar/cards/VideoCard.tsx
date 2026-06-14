@@ -1,10 +1,10 @@
-import { useState, type MouseEvent as ReactMouseEvent, type DragEvent as ReactDragEvent } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { useState, type DragEvent as ReactDragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge, DurationBadge } from './badges';
+import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
 
@@ -106,38 +106,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isProcessing} />}
 
       {/* Recover / Delete buttons — visible on hover for error-state cards */}
-      {isError && (onRecover || onDelete) && (
-        <div className="absolute top-1 right-1 z-50 hidden group-hover:flex items-center gap-1">
-          {onRecover && (
-            <button
-              type="button"
-              onClick={(e: ReactMouseEvent) => {
-                e.stopPropagation();
-                onRecover(item);
-              }}
-              aria-label={`Recover ${item.slug}`}
-              title="Recover (clear error, keep media)"
-              className="flex items-center justify-center w-5 h-5 rounded-sm bg-emerald-500/80 hover:bg-emerald-500 text-white transition-colors"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              onClick={(e: ReactMouseEvent) => {
-                e.stopPropagation();
-                onDelete(item);
-              }}
-              aria-label={`Delete ${item.slug}`}
-              title="Delete asset"
-              className="flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      )}
+      {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
       </CardShell>
       {audioDragOver && (
         <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-amber-500/20 ring-2 ring-amber-400 ring-inset">

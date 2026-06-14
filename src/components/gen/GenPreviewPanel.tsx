@@ -124,6 +124,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const refreshIdRef = useRef(0);
   const savedRef = useRef(loadGenSettings(category, projectSlug));
   const appliedSavedRef = useRef(false);
+  // Holds the pending success→idle reset timer so it can be cancelled on
+  // unmount, avoiding a setGenState call on an unmounted component.
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+  }, []);
 
   const fetchPreview = useCallback(async (
     cat: 'video' | 'image',
@@ -543,7 +549,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           if (assetId) onGenerationSubmitted?.({ assetId, category, prompt: submittedPrompt });
         } catch { /* result wasn't the expected JSON — skip the ghost tile */ }
         setGenState('success');
-        setTimeout(() => {
+        if (successTimerRef.current) clearTimeout(successTimerRef.current);
+        successTimerRef.current = setTimeout(() => {
+          successTimerRef.current = null;
           setGenState(undefined);
         }, 1200);
       }

@@ -93,24 +93,63 @@ export function registerSplitVideoJob(fs: VideocityFs): void {
       }),
     ]);
 
-    await Promise.all([
-      queue.enqueue(`process-video-${assetIdA}-${Date.now()}`, {
-        type: "process_video",
-        videoPath: outputPathA,
+    // Both chunk media files already exist on disk at this point. Enqueue each
+    // process_video job independently (allSettled, not all): if one enqueue
+    // fails we must not abandon the other chunk's already-built media. Any
+    // chunk whose job fails to land is flagged as a recoverable error instead
+    // of being silently orphaned.
+    const chunks = [
+      {
+        label: "a",
+        jobId: `process-video-${assetIdA}-${Date.now()}`,
         assetId: assetIdA,
         assetDir: assetDirA,
-        projectSlug,
+        videoPath: outputPathA,
         provenance: provenanceA,
-      } as unknown as Record<string, unknown>),
-      queue.enqueue(`process-video-${assetIdB}-${Date.now() + 1}`, {
-        type: "process_video",
-        videoPath: outputPathB,
+      },
+      {
+        label: "b",
+        jobId: `process-video-${assetIdB}-${Date.now() + 1}`,
         assetId: assetIdB,
         assetDir: assetDirB,
-        projectSlug,
+        videoPath: outputPathB,
         provenance: provenanceB,
-      } as unknown as Record<string, unknown>),
-    ]);
+      },
+    ];
+
+    const results = await Promise.allSettled(
+      chunks.map((c) =>
+        queue.enqueue(c.jobId, {
+          type: "process_video",
+          videoPath: c.videoPath,
+          assetId: c.assetId,
+          assetDir: c.assetDir,
+          projectSlug,
+          provenance: c.provenance,
+        } as unknown as Record<string, unknown>),
+      ),
+    );
+
+    const failed: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "rejected") {
+        const c = chunks[i];
+        const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        await fs.generationErrors.write(projectSlug, c.assetId, {
+          message: `split chunk ${c.label} was built but could not be queued for processing: ${reason}`,
+          failCode: "split_enqueue_failed",
+        });
+        failed.push(`chunk ${c.label} (${c.assetId})`);
+      }
+    }
+
+    if (failed.length > 0) {
+      throw new Error(
+        `split_video: failed to enqueue ${failed.join(", ")} for processing; ` +
+          `affected chunk(s) flagged as recoverable`,
+      );
+    }
 
     return { success: true, chunk_a: assetIdA, chunk_b: assetIdB };
   });

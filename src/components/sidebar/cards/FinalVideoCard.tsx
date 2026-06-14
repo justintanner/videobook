@@ -3,6 +3,7 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge, DurationBadge } from './badges';
+import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
 
@@ -12,10 +13,13 @@ interface FinalVideoCardProps {
   selected?: boolean;
   onClick?: () => void;
   onMarkSeen?: () => void;
+  onRecover?: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
 }
 
-export function FinalVideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: FinalVideoCardProps) {
+export function FinalVideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onRecover, onDelete }: FinalVideoCardProps) {
   const status = item.status ?? 'ready';
+  const isError = status === 'error';
   const thumbSrc = item.thumbnailSrc || (item.filePath ? item.filePath.replace(/\/[^/]+$/, '/original.jpg') : null);
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
@@ -39,6 +43,9 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick, on
 
       {/* Slug badge */}
       <SlugBadge item={item} muted={status !== 'ready'} />
+
+      {/* Recover / Delete buttons — visible on hover for error-state cards */}
+      {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
     </CardShell>
   );
 }

@@ -1,6 +1,7 @@
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import { SlugBadge } from './badges';
+import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
 
@@ -10,10 +11,13 @@ interface ScriptCardProps {
   selected?: boolean;
   onClick?: () => void;
   onMarkSeen?: () => void;
+  onRecover?: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
 }
 
-export function ScriptCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: ScriptCardProps) {
+export function ScriptCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onRecover, onDelete }: ScriptCardProps) {
   const isCorrupt = false;
+  const isError = (item.status ?? 'ready') === 'error';
   const scriptText = item.prompt;
 
   return (
@@ -33,6 +37,9 @@ export function ScriptCard({ item, contextMenuContent, selected, onClick, onMark
 
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} />}
+
+      {/* Recover / Delete buttons — visible on hover for error-state cards */}
+      {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
     </CardShell>
   );
 }

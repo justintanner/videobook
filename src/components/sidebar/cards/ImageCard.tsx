@@ -2,6 +2,7 @@ import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge, ResolutionBadge } from './badges';
+import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
 
@@ -11,9 +12,11 @@ interface ImageCardProps {
   selected?: boolean;
   onClick?: () => void;
   onMarkSeen?: () => void;
+  onRecover?: (item: MediaItem) => void;
+  onDelete?: (item: MediaItem) => void;
 }
 
-export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: ImageCardProps) {
+export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onRecover, onDelete }: ImageCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -43,6 +46,9 @@ export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkS
 
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isDownloading} />}
+
+      {/* Recover / Delete buttons — visible on hover for error-state cards */}
+      {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
     </CardShell>
   );
 }
