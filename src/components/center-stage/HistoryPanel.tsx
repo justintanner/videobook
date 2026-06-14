@@ -2,6 +2,7 @@ import { RefreshCw, History, Copy, Loader2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { CommandButton } from '@/components/commands';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
 
 type CommitOperation =
@@ -272,7 +273,7 @@ export function HistoryEmptyState({ loading }: { loading: boolean }) {
   }
   return (
     <div className="h-full flex items-center justify-center">
-      <span className="text-sm font-mono text-muted-foreground/30 tracking-wider uppercase">No history found</span>
+      <EmptyState>No history found</EmptyState>
     </div>
   );
 }

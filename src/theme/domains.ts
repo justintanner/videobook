@@ -27,6 +27,11 @@ const domainHex: Record<Domain, string> = {
   final: '#fbbf24',
 };
 
+// Canonical per-domain rgb (the Tailwind -400 shades, matching the
+// --clip-domain-* CSS vars in index.css). Every rgba()/glow literal below —
+// chip shadow, promptBg/promptHover insets, sectionTheme activeGlow — MUST use
+// the matching tuple here. (They can't be derived: Tailwind's JIT needs the
+// arbitrary-value classes spelled out as literals at scan time.)
 const domainRgb: Record<Domain, string> = {
   projects: '161, 161, 170',
   image: '34, 211, 238',
@@ -79,8 +84,8 @@ const chipVariants: Record<Domain, ChipVariantStyle> = {
     chevron: 'text-primary/40 group-hover:text-primary/50',
     chevronDown: 'text-primary/40 group-hover:text-primary/60',
     cursorBg: 'bg-primary/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(0,255,255,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(0,255,255,0.12)]',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(34,211,238,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(34,211,238,0.12)]',
     text: 'text-primary/70 group-hover:text-primary/90',
     icon: 'text-primary/80 group-hover:text-primary',
     hoverBorder: 'hover:border-cyan-400/40',
@@ -89,12 +94,12 @@ const chipVariants: Record<Domain, ChipVariantStyle> = {
   },
   video: {
     bg: 'bg-violet-500/20 border-violet-500/30',
-    shadow: 'rgba(139,92,246,0.5)',
+    shadow: 'rgba(167,139,250,0.5)',
     chevron: 'text-violet-400/40 group-hover:text-violet-400/50',
     chevronDown: 'text-violet-400/40 group-hover:text-violet-400/60',
     cursorBg: 'bg-violet-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(139,92,246,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(139,92,246,0.12)]',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(167,139,250,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(167,139,250,0.12)]',
     text: 'text-violet-400/70 group-hover:text-violet-400/90',
     icon: 'text-violet-400/80 group-hover:text-violet-400',
     hoverBorder: 'hover:border-violet-400/40',
@@ -103,12 +108,12 @@ const chipVariants: Record<Domain, ChipVariantStyle> = {
   },
   plan: {
     bg: 'bg-emerald-500/20 border-emerald-500/30',
-    shadow: 'rgba(16,185,129,0.5)',
+    shadow: 'rgba(52,211,153,0.5)',
     chevron: 'text-emerald-400/40 group-hover:text-emerald-400/50',
     chevronDown: 'text-emerald-400/40 group-hover:text-emerald-400/60',
     cursorBg: 'bg-emerald-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(16,185,129,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(16,185,129,0.12)]',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(52,211,153,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(52,211,153,0.12)]',
     text: 'text-emerald-400/70 group-hover:text-emerald-400/90',
     icon: 'text-emerald-400/80 group-hover:text-emerald-400',
     hoverBorder: 'hover:border-emerald-400/40',
@@ -117,12 +122,12 @@ const chipVariants: Record<Domain, ChipVariantStyle> = {
   },
   final: {
     bg: 'bg-amber-500/20 border-amber-500/30',
-    shadow: 'rgba(245,158,11,0.5)',
+    shadow: 'rgba(251,191,36,0.5)',
     chevron: 'text-amber-400/40 group-hover:text-amber-400/50',
     chevronDown: 'text-amber-400/40 group-hover:text-amber-400/60',
     cursorBg: 'bg-amber-400/40',
-    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(245,158,11,0.05)]',
-    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(245,158,11,0.12)]',
+    promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(251,191,36,0.05)]',
+    promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(251,191,36,0.12)]',
     text: 'text-amber-400/70 group-hover:text-amber-400/90',
     icon: 'text-amber-400/80 group-hover:text-amber-400',
     hoverBorder: 'hover:border-amber-400/40',
@@ -244,7 +249,7 @@ const sectionThemes: Record<Domain, SectionTheme> = {
     activeBg: 'bg-violet-500/20',
     activeBorder: 'border-violet-400',
     activeText: 'text-violet-300',
-    activeGlow: '0 0 12px rgba(139,92,246,0.25)',
+    activeGlow: '0 0 12px rgba(167,139,250,0.25)',
     inactiveBorder: 'border-violet-500/15',
     inactiveText: 'text-violet-400/25',
     inactiveHoverText: 'hover:text-violet-300/50',
@@ -272,7 +277,7 @@ const sectionThemes: Record<Domain, SectionTheme> = {
     activeBg: 'bg-emerald-500/20',
     activeBorder: 'border-emerald-400',
     activeText: 'text-emerald-300',
-    activeGlow: '0 0 12px rgba(16,185,129,0.25)',
+    activeGlow: '0 0 12px rgba(52,211,153,0.25)',
     inactiveBorder: 'border-emerald-500/15',
     inactiveText: 'text-emerald-400/25',
     inactiveHoverText: 'hover:text-emerald-300/50',
@@ -300,7 +305,7 @@ const sectionThemes: Record<Domain, SectionTheme> = {
     activeBg: 'bg-amber-500/20',
     activeBorder: 'border-amber-400',
     activeText: 'text-amber-300',
-    activeGlow: '0 0 12px rgba(245,158,11,0.25)',
+    activeGlow: '0 0 12px rgba(251,191,36,0.25)',
     inactiveBorder: 'border-amber-500/15',
     inactiveText: 'text-amber-400/25',
     inactiveHoverText: 'hover:text-amber-300/50',

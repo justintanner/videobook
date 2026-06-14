@@ -48,6 +48,12 @@ const READY_RAW = 'var(--color-primary)';
 const ERROR_RAW = '#ef4444';
 const DELETING_RAW = 'rgba(239, 68, 68, 0.4)';
 
+// Generic "active operation" cyan (ready / uploading / rendering / transcribing) —
+// distinct from the image *domain* cyan in domains.ts. Defined once here instead
+// of repeating the literal across every state tone below.
+const STATE_CYAN_RGB = '0, 255, 255';
+const rgba = (rgb: string, alpha: number): string => `rgba(${rgb}, ${alpha})`;
+
 const TONE_STYLES: Record<CardTone, {
   color: string;
   rgb: string;
@@ -59,11 +65,11 @@ const TONE_STYLES: Record<CardTone, {
 }> = {
   ready: {
     color: READY_RAW,
-    rgb: '0, 255, 255',
-    border: 'rgba(0, 255, 255, 0.35)',
-    glow: 'rgba(0, 255, 255, 0.35)',
-    soft: 'rgba(0, 255, 255, 0.14)',
-    faint: 'rgba(0, 255, 255, 0.06)',
+    rgb: STATE_CYAN_RGB,
+    border: rgba(STATE_CYAN_RGB, 0.35),
+    glow: rgba(STATE_CYAN_RGB, 0.35),
+    soft: rgba(STATE_CYAN_RGB, 0.14),
+    faint: rgba(STATE_CYAN_RGB, 0.06),
     dot: null,
   },
   error: {
@@ -87,11 +93,11 @@ const TONE_STYLES: Record<CardTone, {
   },
   uploading: {
     color: READY_RAW,
-    rgb: '0, 255, 255',
-    border: 'rgba(0, 255, 255, 0.45)',
-    glow: 'rgba(0, 255, 255, 0.45)',
-    soft: 'rgba(0, 255, 255, 0.16)',
-    faint: 'rgba(0, 255, 255, 0.06)',
+    rgb: STATE_CYAN_RGB,
+    border: rgba(STATE_CYAN_RGB, 0.45),
+    glow: rgba(STATE_CYAN_RGB, 0.45),
+    soft: rgba(STATE_CYAN_RGB, 0.16),
+    faint: rgba(STATE_CYAN_RGB, 0.06),
     dot: PROCESSING_DOT,
   },
   generating: {
@@ -123,20 +129,20 @@ const TONE_STYLES: Record<CardTone, {
   },
   rendering: {
     color: READY_RAW,
-    rgb: '0, 255, 255',
-    border: 'rgba(0, 255, 255, 0.45)',
-    glow: 'rgba(0, 255, 255, 0.45)',
-    soft: 'rgba(0, 255, 255, 0.16)',
-    faint: 'rgba(0, 255, 255, 0.07)',
+    rgb: STATE_CYAN_RGB,
+    border: rgba(STATE_CYAN_RGB, 0.45),
+    glow: rgba(STATE_CYAN_RGB, 0.45),
+    soft: rgba(STATE_CYAN_RGB, 0.16),
+    faint: rgba(STATE_CYAN_RGB, 0.07),
     dot: PROCESSING_DOT,
   },
   transcribing: {
     color: READY_RAW,
-    rgb: '0, 255, 255',
-    border: 'rgba(0, 255, 255, 0.45)',
-    glow: 'rgba(0, 255, 255, 0.45)',
-    soft: 'rgba(0, 255, 255, 0.16)',
-    faint: 'rgba(0, 255, 255, 0.07)',
+    rgb: STATE_CYAN_RGB,
+    border: rgba(STATE_CYAN_RGB, 0.45),
+    glow: rgba(STATE_CYAN_RGB, 0.45),
+    soft: rgba(STATE_CYAN_RGB, 0.16),
+    faint: rgba(STATE_CYAN_RGB, 0.07),
     dot: PROCESSING_DOT,
   },
   loading: {
@@ -302,7 +308,7 @@ export function getCardVisualState(item: MediaItem): CardVisualState {
 }
 
 export function colorWithAlpha(visual: Pick<CardVisualState, 'rgb'>, alpha: number): string {
-  return `rgba(${visual.rgb}, ${alpha})`;
+  return rgba(visual.rgb, alpha);
 }
 
 export function isRenderingState(status: string): boolean {

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type ComponentType, type ReactNode } fro
 import { createPortal } from 'react-dom'
 import type { UseMcpResult } from 'use-mcp/react'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/useToast'
 
@@ -224,7 +225,7 @@ export function ProjectExportPicker({
         </div>
         <div className="max-h-72 overflow-y-auto p-1.5">
           {targetProjects.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-zinc-500">No other projects</div>
+            <EmptyState className="px-3 py-4 text-left">No other projects</EmptyState>
           ) : targetProjects.map((project) => {
             const exporting = exportingTarget === project.slug
             return (

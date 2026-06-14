@@ -9,7 +9,7 @@ function Dashboard() {
   const { state, tools, error, retry, callTool } = useMcpConnection()
 
   return (
-    <div style={{ textAlign: "left", maxWidth: 520, margin: "2rem auto" }}>
+    <div className="mx-auto my-8 max-w-[520px] text-left">
       <McpStatus state={state} tools={tools} error={error} retry={retry} />
       {state === "ready" && <FileUpload callTool={callTool} />}
     </div>

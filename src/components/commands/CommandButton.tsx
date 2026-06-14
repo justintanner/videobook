@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ExecuteButtonState } from './types';
 import { sizes, variants } from './command-styles';
+import { LOADING_STATE, FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
 
 const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> = {
   default: {
@@ -78,12 +79,12 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         'transition-all duration-300 cursor-pointer',
         // State color overrides (after size classes so twMerge picks them)
         state && isDisabled && 'bg-zinc-800/30 text-zinc-600 border-zinc-700/50 shadow-none cursor-not-allowed',
-        state && isLoading && 'opacity-80 cursor-wait',
+        state && isLoading && LOADING_STATE,
         state && isSuccess && 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]',
         // Hover effects
         !isDisabled && !isLoading && !isSuccess && v.hoverBorder,
         state && !isDisabled && !isLoading && !isSuccess && 'hover:scale-[1.02] active:scale-[0.98]',
-        'focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        FOCUS_RING_BUTTON,
         v.focusRing,
         className
       )}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Zap, X, User, RefreshCw } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
@@ -417,7 +418,7 @@ export function CharacterDialog({
                 </div>
               </div>
             ) : (
-              <div className="text-[11px] font-mono text-muted-foreground">No source image selected. Run /character @img-… to seed one.</div>
+              <EmptyState size="sm" className="text-left">No source image selected. Run /character @img-… to seed one.</EmptyState>
             )}
           </section>
 
@@ -454,7 +455,7 @@ export function CharacterDialog({
                   );
                 })}
                 {additionalReferenceChoices.length === 0 && (
-                  <div className="text-[9px] font-mono text-cyan-400/50">No other image assets available.</div>
+                  <EmptyState size="sm" className="text-left">No other image assets available.</EmptyState>
                 )}
               </div>
             </section>
@@ -606,7 +607,7 @@ export function CharacterDialog({
                 </button>
               ))}
               {garmentChoices.length === 0 && (
-                <div className="text-[9px] font-mono text-cyan-400/50">No image assets in this project yet.</div>
+                <EmptyState size="sm" className="text-left">No image assets in this project yet.</EmptyState>
               )}
             </div>
           </section>

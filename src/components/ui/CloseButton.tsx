@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DISABLED_STATE, FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
 
 export type CloseButtonTone = 'primary' | 'cyan' | 'violet' | 'emerald';
 
@@ -40,9 +41,10 @@ export function CloseButton({
       className={cn(
         'w-6 h-6 flex items-center justify-center',
         'text-muted-foreground transition-colors duration-150 rounded',
-        'focus-visible:ring-1 focus-visible:outline-none',
+        FOCUS_RING_BUTTON,
         toneClasses[tone],
-        'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
+        DISABLED_STATE,
+        'disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
         className
       )}
     >

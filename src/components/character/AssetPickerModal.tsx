@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { CloseButton } from "@/components/ui/CloseButton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
 import type { MediaItem } from "@/components/sidebar/types";
 
@@ -66,7 +67,7 @@ export function AssetPickerModal({ open, title, assets, excludeIds, onPick, onCl
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-3">
           {filtered.length === 0 ? (
-            <div className="text-cyan-300/60 text-xs font-mono py-8 text-center">No matching assets.</div>
+            <EmptyState>No matching assets.</EmptyState>
           ) : (
             <div className="grid grid-cols-4 gap-2">
               {filtered.map((it) => (

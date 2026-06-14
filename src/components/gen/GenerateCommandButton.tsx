@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { variants } from '@/components/commands/command-styles';
+import { LOADING_STATE, FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseEstimateCostResult } from '@/hooks/useEstimateCost';
 import { formatUsd, isHeuristic, isUnknownEstimate, tooltipText } from '@/lib/format-cost';
@@ -101,14 +102,14 @@ export function GenerateCommandButton({
         v.bg,
         'transition-all duration-300 cursor-pointer',
         isDisabledVisual && 'bg-zinc-800/30 text-zinc-600 border-zinc-700/50 shadow-none cursor-not-allowed',
-        isLoading && 'opacity-90 cursor-wait',
+        isLoading && LOADING_STATE,
         isSuccess && 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.5)]',
         // Muted-but-clickable: dims the whole chip (hue intact, unlike the gray
         // disabled state) so it no longer reads as the bright actionable button
         // while a generation is still running. Hover/scale below keeps it lively.
         isPendingIdle && 'opacity-60',
         !isDisabledVisual && !isLoading && !isSuccess && cn('hover:scale-[1.02] active:scale-[0.98]', v.hoverBorder),
-        'focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-black focus-visible:outline-none',
+        FOCUS_RING_BUTTON,
         v.focusRing,
         className,
       )}

@@ -44,6 +44,11 @@
   --clip-domain-plan:     hsl(160 64% 52%);  /* emerald */
   --clip-domain-final:    hsl(43 96% 56%);   /* amber */
 
+  /* Generic "active operation" cyan — the default for card state glows
+     (uploading / rendering / transcribing / ready). Mirrors STATE_CYAN_RGB in
+     src/components/sidebar/stateColors.ts. Distinct from the image domain cyan. */
+  --state-cyan-rgb: 0, 255, 255;
+
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 8px;
@@ -166,17 +171,17 @@
   /* ==================== CLIP STATE UTILITIES ==================== */
 
   .clip-state-uploading {
-    --clip-state-rgb: var(--card-state-rgb, 0, 255, 255);
-    border: 2px solid var(--card-state-border, rgba(0, 255, 255, 0.4));
-    border-bottom-color: var(--card-state-color, rgba(0, 255, 255, 0.7));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-cyan-rgb));
+    border: 2px solid var(--card-state-border, rgba(var(--state-cyan-rgb), 0.4));
+    border-bottom-color: var(--card-state-color, rgba(var(--state-cyan-rgb), 0.7));
     animation: clip-uploading-pulse 2s ease-in-out infinite;
   }
 
   .clip-state-transcribing {
-    --clip-state-rgb: var(--card-state-rgb, 0, 255, 255);
+    --clip-state-rgb: var(--card-state-rgb, var(--state-cyan-rgb));
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--card-state-border, rgba(0, 255, 255, 0.2));
+    border: 1px solid var(--card-state-border, rgba(var(--state-cyan-rgb), 0.2));
   }
 
   .clip-state-generating {
@@ -201,8 +206,8 @@
   }
 
   .clip-state-rendering {
-    --clip-state-rgb: var(--card-state-rgb, 0, 255, 255);
-    border: 1px solid var(--card-state-border, rgba(0, 255, 255, 0.2));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-cyan-rgb));
+    border: 1px solid var(--card-state-border, rgba(var(--state-cyan-rgb), 0.2));
     animation: clip-rendering-pulse 2s ease-in-out infinite;
   }
 
@@ -235,8 +240,8 @@
 
   .uploading-pixel-grid {
     background-image:
-      linear-gradient(rgba(var(--card-state-rgb, 0, 255, 255), 0.2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(var(--card-state-rgb, 0, 255, 255), 0.2) 1px, transparent 1px);
+      linear-gradient(rgba(var(--card-state-rgb, var(--state-cyan-rgb)), 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(var(--card-state-rgb, var(--state-cyan-rgb)), 0.2) 1px, transparent 1px);
     background-size: 4px 4px;
   }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, RotateCcw, RefreshCw, Check, VideoOff, Zap, Copy } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
@@ -171,7 +172,7 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
     );
   }
   if (data === null) {
-    return <p className="text-sm text-muted-foreground/50 font-mono text-center py-8">No data found.</p>;
+    return <EmptyState>No data found.</EmptyState>;
   }
   if (data.startsWith('Error:')) {
     return <p className="text-sm font-mono text-destructive">{data}</p>;
@@ -291,7 +292,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   }
 
   if (content === null) {
-    return <p className="text-sm text-muted-foreground/50 font-mono text-center py-8">No data found.</p>;
+    return <EmptyState>No data found.</EmptyState>;
   }
 
   return (
