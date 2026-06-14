@@ -93,7 +93,9 @@ function armTimer(entry: ScheduledPostEntry): void {
   }
   const t = setTimeout(() => {
     armed.delete(entry.schedule_id);
-    void firePost(entry.schedule_id);
+    void firePost(entry.schedule_id).catch((e) =>
+      console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
+    );
   }, safeDelay);
   armed.set(entry.schedule_id, t);
 }
@@ -188,14 +190,18 @@ export async function loadAndArmAll(): Promise<void> {
     if (entry.status !== "pending") continue;
     const due = new Date(entry.scheduled_for).getTime();
     if (due <= now) {
-      void firePost(entry.schedule_id);
+      void firePost(entry.schedule_id).catch((e) =>
+        console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
+      );
     } else {
       armTimer(entry);
     }
   }
   if (!rearmInterval) {
     rearmInterval = setInterval(() => {
-      void rearmPending();
+      void rearmPending().catch((e) =>
+        console.error(`[scheduled-posts] rearmPending failed:`, e),
+      );
     }, REARM_INTERVAL_MS);
     rearmInterval.unref?.();
   }

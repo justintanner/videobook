@@ -102,7 +102,9 @@ export async function withProviderHandoff<T>(
   const activeOwnerId = ownerId;
   const heartbeat = ownsLease
     ? setInterval(() => {
-        void fs.assetWork.renew(projectSlug, assetId, activeOwnerId, HEARTBEAT_EXTEND_MS);
+        void fs.assetWork
+          .renew(projectSlug, assetId, activeOwnerId, HEARTBEAT_EXTEND_MS)
+          .catch((e) => console.warn(`[heartbeat] renew failed for ${assetId}:`, e));
       }, HEARTBEAT_INTERVAL_MS)
     : null;
   try {
@@ -136,7 +138,9 @@ export async function withLocalLease<T>(
   }
   ctx.setLease({ kind: "owner", ownerId: lease.ownerId });
   const heartbeat = setInterval(() => {
-    void fs.assetWork.renew(projectSlug, assetId, lease.ownerId, HEARTBEAT_EXTEND_MS);
+    void fs.assetWork
+      .renew(projectSlug, assetId, lease.ownerId, HEARTBEAT_EXTEND_MS)
+      .catch((e) => console.warn(`[heartbeat] renew failed for ${assetId}:`, e));
   }, HEARTBEAT_INTERVAL_MS);
   try {
     const result = await fn(lease.ownerId);

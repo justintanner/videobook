@@ -279,12 +279,11 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
             // After a Pattern A owner→task handoff the owner lease is dead;
             // stop renewing it.
             if (leaseRef.current?.kind !== "owner") return;
-            void fsRef.current.assetWork.renew(
-              projectSlug,
-              assetId,
-              claimed.ownerId,
-              60_000,
-            );
+            void fsRef.current.assetWork
+              .renew(projectSlug, assetId, claimed.ownerId, 60_000)
+              .catch((e) =>
+                console.warn(`[heartbeat] renew failed for ${assetId}:`, e),
+              );
           }, 20_000);
         }
         const result = await handler(job.payload, ctx);

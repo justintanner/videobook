@@ -222,7 +222,11 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
           }
           const lease = { ownerId: claim.ownerId };
           const heartbeat = setInterval(() => {
-            void fs.assetWork.renew(projectSlug, asset.assetId, lease.ownerId, 60_000);
+            void fs.assetWork
+              .renew(projectSlug, asset.assetId, lease.ownerId, 60_000)
+              .catch((e) =>
+                console.warn(`[heartbeat] renew failed for ${asset.assetId}:`, e),
+              );
           }, 20_000);
           let renderSucceeded = false;
 

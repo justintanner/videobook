@@ -62,7 +62,9 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
 
     // Renew the provider lease while we work — covers downloads + processing.
     const heartbeat = setInterval(() => {
-      void fs.assetWork.renew(projectSlug, assetId, ownerId, 60_000);
+      void fs.assetWork
+        .renew(projectSlug, assetId, ownerId, 60_000)
+        .catch((e) => console.warn(`[heartbeat] renew failed for ${assetId}:`, e));
     }, 20_000);
 
     try {
