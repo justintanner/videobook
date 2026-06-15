@@ -15,6 +15,7 @@ import { registerAudioBoostJob } from "./audio-boost.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
+import { registerExtractWaveformJob } from "./extract-waveform.js";
 import { registerReplaceVideoAudioJob } from "./replace-video-audio.js";
 import { registerSpliceVideoJob } from "./splice-video.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
@@ -120,6 +121,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);
+  registerExtractWaveformJob(fs);
   registerReplaceVideoAudioJob(fs);
   registerSpliceVideoJob(fs);
   registerGenerateGrokImagineVideoJob(fs);

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import * as fsp from "node:fs/promises";
@@ -128,35 +128,133 @@ export interface FFmpeggyClass {
 
 let _FFmpeggy: FFmpeggyClass | null = null;
 
+const SAMPLE_RATE = 8000;
+// Fine-grained RMS accumulators (~768 KB). We fold these in halves as audio
+// streams in, so memory stays constant regardless of clip length — see
+// extractWaveform.
+const WAVEFORM_FINE_BUCKETS = 1 << 16;
+
+/**
+ * Streams an asset's decoded audio and folds it into a bounded set of RMS
+ * accumulators, returning `barCount` normalised peaks (0..1).
+ *
+ * The earlier implementation buffered the entire PCM stream via execFile with a
+ * 50 MB `maxBuffer`. A video whose audio decoded to more than ~52 minutes of
+ * 8 kHz mono s16le overflowed that cap; ffmpeg was killed mid-stream, the error
+ * was swallowed, and an empty waveform came back — which never cached and so
+ * re-ran the multi-second decode on every poll. Streaming removes the cap (and
+ * the failure mode) entirely: memory is O(WAVEFORM_FINE_BUCKETS), not
+ * O(duration).
+ */
 export async function extractWaveform(videoPath: string, barCount?: number): Promise<number[]> {
+  const sumSq = new Float64Array(WAVEFORM_FINE_BUCKETS);
+  const count = new Int32Array(WAVEFORM_FINE_BUCKETS);
+  let samplesPerBucket = 1;
+  let writeIdx = 0;
+  let inBucket = 0;
+  let totalSamples = 0;
+
+  // Halve resolution in place when the buckets fill: merge each adjacent pair,
+  // double the samples-per-bucket, and resume writing at the midpoint. This
+  // caps the accumulators at WAVEFORM_FINE_BUCKETS for any clip length.
+  const foldPairs = (): void => {
+    const half = WAVEFORM_FINE_BUCKETS >> 1;
+    for (let i = 0; i < half; i++) {
+      sumSq[i] = sumSq[2 * i] + sumSq[2 * i + 1];
+      count[i] = count[2 * i] + count[2 * i + 1];
+    }
+    sumSq.fill(0, half);
+    count.fill(0, half);
+    samplesPerBucket *= 2;
+    writeIdx = half;
+  };
+
+  const addSample = (sample: number): void => {
+    sumSq[writeIdx] += sample * sample;
+    inBucket++;
+    totalSamples++;
+    if (inBucket === samplesPerBucket) {
+      count[writeIdx] = inBucket;
+      writeIdx++;
+      inBucket = 0;
+      if (writeIdx === WAVEFORM_FINE_BUCKETS) foldPairs();
+    }
+  };
+
   try {
-    const SAMPLE_RATE = 8000;
-    const { stdout } = await execFileAsync(FFMPEG, [
-      "-i", videoPath,
-      "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1",
-    ], { encoding: "buffer", maxBuffer: 50 * 1024 * 1024 });
-    const buf = stdout as unknown as Buffer;
-    if (buf.length < 2) return [];
-    const samples = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
-    // Default: 100 bars per second of audio (0.01s resolution)
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        FFMPEG,
+        ["-i", videoPath, "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1"],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+
+      let carry = -1; // a single low byte left over when a chunk splits a sample
+      let stderr = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        let offset = 0;
+        if (carry !== -1 && chunk.length > 0) {
+          addSample((((carry | (chunk[0] << 8)) << 16) >> 16)); // sign-extend 16-bit LE
+          offset = 1;
+          carry = -1;
+        }
+        const usableBytes = chunk.length - offset;
+        const end = offset + usableBytes - (usableBytes & 1);
+        for (let i = offset; i < end; i += 2) addSample(chunk.readInt16LE(i));
+        carry = usableBytes & 1 ? chunk[chunk.length - 1] : -1;
+      });
+      child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        // No samples means no decodable audio (no audio stream, or a decode
+        // error). Surface it once, but return empty rather than rejecting so a
+        // genuinely silent clip caches as "no waveform" instead of churning.
+        if (totalSamples === 0 && code !== 0) {
+          console.warn(
+            `[ffmpeg] no waveform for ${videoPath} (ffmpeg exit ${code}): ${
+              summarizeFfmpegStderr(stderr) || "no audio stream"
+            }`,
+          );
+        }
+        resolve();
+      });
+    });
+
+    if (totalSamples === 0) return [];
+    if (inBucket > 0) count[writeIdx++] = inBucket; // finalise the partial bucket
+    const usedBuckets = writeIdx;
+
+    // Default: 100 bars per second of audio (0.01s resolution), clamped 20..1000.
     if (barCount === undefined) {
-      const durationSec = samples.length / SAMPLE_RATE;
+      const durationSec = totalSamples / SAMPLE_RATE;
       barCount = Math.max(20, Math.min(1000, Math.round(durationSec * 100)));
     }
-    const samplesPerBin = Math.max(1, Math.floor(samples.length / barCount));
-    const peaks: number[] = [];
+    barCount = Math.min(barCount, usedBuckets);
+
+    // True RMS per bar: sum the squared energy and sample counts across the
+    // fine buckets the bar spans, then take the root-mean-square.
+    const peaks: number[] = new Array(barCount);
     for (let b = 0; b < barCount; b++) {
-      const start = b * samplesPerBin;
-      const end = Math.min(start + samplesPerBin, samples.length);
-      let sum = 0;
-      for (let i = start; i < end; i++) {
-        sum += samples[i] * samples[i];
+      const start = Math.floor((b * usedBuckets) / barCount);
+      const stop = Math.max(start + 1, Math.floor(((b + 1) * usedBuckets) / barCount));
+      let energy = 0;
+      let samples = 0;
+      for (let i = start; i < stop && i < usedBuckets; i++) {
+        energy += sumSq[i];
+        samples += count[i];
       }
-      peaks.push(Math.sqrt(sum / (end - start)));
+      peaks[b] = samples > 0 ? Math.sqrt(energy / samples) : 0;
     }
     const max = Math.max(...peaks, 1);
     return peaks.map((p) => p / max);
-  } catch {
+  } catch (err) {
+    // Only reached if ffmpeg fails to spawn (e.g. binary missing). The stream
+    // never buffers, so the old maxBuffer failure mode can't recur here.
+    console.error(
+      `[ffmpeg] waveform extraction failed for ${videoPath}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return [];
   }
 }

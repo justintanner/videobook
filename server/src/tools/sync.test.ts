@@ -139,6 +139,10 @@ describe("buildAssetList", () => {
   });
 
   afterEach(async () => {
+    // buildAssetList now enqueues background waveform extraction for videos,
+    // which lazily starts a queue runner. Stop it before removing the temp dir
+    // so no runner keeps polling a deleted state.sqlite.
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -175,6 +179,30 @@ describe("buildAssetList", () => {
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.mp4");
+  });
+
+  it("defers waveform extraction to a background job instead of blocking", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.createAsset("vid", "wf-defer", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    await writeFile(join(createResult.value.path, "original.mp4"), "fake-video-data");
+
+    const assets = await buildAssetList(fs, "test-proj");
+    // An uncached video does NOT run ffmpeg inline — waveform is deferred.
+    expect(assets[0].waveform).toBeNull();
+
+    // ...and a single extract_waveform job is enqueued. The enqueue is
+    // fire-and-forget, so poll briefly for it to land. Match any state: whether
+    // it has already run depends on whether a handler is registered.
+    let wfJobs: Awaited<ReturnType<typeof fs.queue.list>> = [];
+    for (let i = 0; i < 50 && wfJobs.length === 0; i++) {
+      const jobs = await fs.queue.list("test-proj", {
+        states: ["queued", "running", "completing", "done", "failed", "aborted"],
+      });
+      wfJobs = jobs.filter((j) => j.type === "extract_waveform");
+      if (wfJobs.length === 0) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(wfJobs.length).toBe(1);
   });
 
   it("finds image as primary media file when no video present", async () => {
@@ -432,6 +460,9 @@ describe("buildAssetList — failed download detection (RC3)", () => {
   });
 
   afterEach(async () => {
+    // See buildAssetList describe: stop the lazily-started waveform queue
+    // runner before removing the temp dir.
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

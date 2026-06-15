@@ -20,7 +20,7 @@ import { readAndAssessDialog } from "../dialog-quality.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import type { PendingTask } from "videocity-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
-import { extractWaveform, probeVideo } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
 
@@ -128,31 +128,49 @@ function buildFrameDirs(
   return out;
 }
 
-async function readOrExtractWaveform(
+async function readWaveformOrSchedule(
   fs: VideocityFs,
   assetId: string,
   projectSlug: string,
-  assetDir: string,
   videoFilename: string | null,
 ): Promise<number[] | null> {
   const existing = await fs.readAudioWaveform(assetId, projectSlug);
-  if (existing.ok) return existing.value.peaks;
+  if (existing.ok) {
+    // Empty peaks are a negative-cache marker ("extracted, nothing usable"):
+    // surface them as no-waveform so the UI is unchanged, but don't re-extract.
+    return existing.value.peaks.length > 0 ? existing.value.peaks : null;
+  }
   if (!videoFilename || !/^original\.(mp4|mov)$/i.test(videoFilename)) {
     return null;
   }
-  try {
-    const peaks = await extractWaveform(join(assetDir, videoFilename));
-    if (peaks.length === 0) return null;
-    const wavResult = await fs.writeAudioWaveform(assetId, peaks, projectSlug);
-    if (!wavResult.ok) {
-      // Persist failed but the in-memory peaks are still valid for this sync
-      // response. Log so the next sync retries lazy regeneration cleanly.
-      console.error(`[sync] writeAudioWaveform failed for ${assetId}: ${wavResult.error.message}`);
-    }
-    return peaks;
-  } catch {
-    return null;
-  }
+  // Waveform extraction shells out to ffmpeg and can take several seconds for
+  // long videos, so it must never run inline in list_assets / sync. Hand it to
+  // the job queue (deduped per asset) and return no-waveform now; the UI fills
+  // it in on a later poll once the background job has persisted the peaks.
+  scheduleWaveformExtraction(projectSlug, assetId, videoFilename);
+  return null;
+}
+
+function scheduleWaveformExtraction(
+  projectSlug: string,
+  assetId: string,
+  videoFilename: string,
+): void {
+  const jobId = `extract-waveform-${projectSlug}-${assetId}`;
+  void queue
+    .enqueue(jobId, {
+      type: "extract_waveform",
+      projectSlug,
+      waveformAssetId: assetId,
+      videoFilename,
+    })
+    .catch((err) => {
+      console.error(
+        `[sync] failed to enqueue waveform extraction for ${assetId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    });
 }
 
 const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
@@ -315,11 +333,10 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
       const renders = renderedOrientationsFor(files, a.id);
       const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
       const frameDirs = buildFrameDirs(directories, project_slug, a.id);
-      const waveform = await readOrExtractWaveform(
+      const waveform = await readWaveformOrSchedule(
         fs,
         a.id,
         project_slug,
-        a.path,
         mediaFile?.name ?? null,
       );
 
