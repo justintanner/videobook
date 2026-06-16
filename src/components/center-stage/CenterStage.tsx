@@ -9,13 +9,12 @@ import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
 import { CharacterViewer } from './CharacterViewer';
 import { PlanViewer } from './PlanViewer';
-import type { PlanFormula } from './PlanViewer';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, planRequestedFormula, onBackToTemplates, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, onBackToTemplates, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -34,7 +33,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
   planResetKey?: number;
-  planRequestedFormula?: PlanFormula | null;
   onBackToTemplates: () => void;
   onClose: () => void;
   imageAssets: MediaItem[];
@@ -83,7 +81,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         projectSlug={projectSlug}
         callTool={callTool}
         resetKey={planResetKey}
-        requestedFormula={planRequestedFormula}
         onClose={onClose}
         onBackToTemplates={onBackToTemplates}
       />

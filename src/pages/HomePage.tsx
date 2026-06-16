@@ -14,7 +14,6 @@ import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
 import { IdleScreen, AssetViewer, PlanViewer, TemplatesViewer, ArchiveBrowser } from '@/components/center-stage';
-import type { PlanFormula } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -126,9 +125,6 @@ export function HomePage() {
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [planOpenKey, setPlanOpenKey] = useState(0);
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  // The template chosen in /templates, carried into /plan so it opens that
-  // formula's config. Cleared when /plan is opened directly.
-  const [planRequestedFormula, setPlanRequestedFormula] = useState<PlanFormula | null>(null);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -384,8 +380,8 @@ export function HomePage() {
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
 
-  // Open the /templates chooser center stage, clearing the other center-stage
-  // views (an active selection outranks templates in the render cascade).
+  // Open the /templates marketplace center stage, clearing the other
+  // center-stage views (an active selection outranks templates in the cascade).
   const openTemplates = useCallback(() => {
     setSettingsOpen(false);
     setArchiveOpen(false);
@@ -396,10 +392,9 @@ export function HomePage() {
     setTemplatesOpen(true);
   }, []);
 
-  // Open /plan from a /templates choice, configured for the chosen formula.
-  // Mirrors open_plan but preserves the requested formula instead of clearing it.
-  const handleSelectTemplate = useCallback((formula: PlanFormula) => {
-    setPlanRequestedFormula(formula);
+  // After a plan is generated from a /templates preview, leave the marketplace
+  // and open /plan to work on the freshly-generated plan.
+  const handlePlanGenerated = useCallback(() => {
     setTemplatesOpen(false);
     setSettingsOpen(false);
     setArchiveOpen(false);
@@ -1211,7 +1206,6 @@ export function HomePage() {
       setSettingsOpen(false);
       setArchiveOpen(false);
       setTemplatesOpen(false);
-      setPlanRequestedFormula(null);
       const planAsset = mediaItems.find((m) => m.id === 'plan');
       if (planAsset) {
         handleSelectItem(planAsset);
@@ -1440,7 +1434,6 @@ export function HomePage() {
                     callTool={callTool}
                     callState={state}
                     planResetKey={planOpenKey}
-                    planRequestedFormula={planRequestedFormula}
                     onBackToTemplates={openTemplates}
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
@@ -1452,8 +1445,9 @@ export function HomePage() {
                 ) : templatesOpen ? (
                   <TemplatesViewer
                     projectSlug={projectSlug ?? ''}
+                    mediaItems={mediaItems}
                     callTool={callTool}
-                    onSelectTemplate={handleSelectTemplate}
+                    onGenerated={handlePlanGenerated}
                     onClose={() => setTemplatesOpen(false)}
                   />
                 ) : planEmptyOverride ? (
@@ -1463,7 +1457,6 @@ export function HomePage() {
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
                     resetKey={planOpenKey}
-                    requestedFormula={planRequestedFormula}
                     onClose={() => setPlanEmptyOverride(false)}
                     onBackToTemplates={openTemplates}
                   />

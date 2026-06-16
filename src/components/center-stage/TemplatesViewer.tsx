@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Images, LayoutTemplate, MapPin, Mic } from 'lucide-react';
+import { LayoutTemplate } from 'lucide-react';
 import type { UseMcpResult } from 'use-mcp/react';
 import { CloseButton } from '@/components/ui/CloseButton';
-import { cn } from '@/lib/utils';
+import type { MediaItem } from '@/components/sidebar/types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
 import type { PlanFormula } from './PlanViewer';
+import { TemplatesHome } from './templates/TemplatesHome';
+import { TemplatePreview } from './templates/TemplatePreview';
+import type { TemplateCatalogEntry } from './templates/catalog';
 
-// Derive the current plan's formula straight from the read_plan JSON. A sidecar
-// with no (or unknown) formula is the legacy char-swap plan.
+// Derive the current plan's formula straight from the read_plan JSON, to flag
+// the matching template card as "Current". A sidecar with no (or unknown)
+// formula is the legacy char-swap plan.
 function formulaFromPlanJson(text: string): PlanFormula | null {
   try {
     const parsed = JSON.parse(text) as { formula?: string };
@@ -22,18 +26,21 @@ function formulaFromPlanJson(text: string): PlanFormula | null {
 
 interface TemplatesViewerProps {
   projectSlug: string;
+  mediaItems: MediaItem[];
   callTool: UseMcpResult['callTool'];
-  onSelectTemplate: (formula: PlanFormula) => void;
+  // Called after a plan has been generated from a template preview — navigate
+  // to /plan to work on it.
+  onGenerated: () => void;
   onClose: () => void;
 }
 
-export function TemplatesViewer({ projectSlug, callTool, onSelectTemplate, onClose }: TemplatesViewerProps) {
+export function TemplatesViewer({ projectSlug, mediaItems, callTool, onGenerated, onClose }: TemplatesViewerProps) {
   useMountKey('viewer');
+  const [selected, setSelected] = useState<TemplateCatalogEntry | null>(null);
   const [currentFormula, setCurrentFormula] = useState<PlanFormula | null>(null);
   const cancelledRef = useRef(false);
 
-  // Read the existing plan (if any) to highlight the current template and to
-  // surface the legacy char-swap card. A read failure means "no plan yet".
+  // Read the existing plan (if any) to highlight the current template.
   useEffect(() => {
     if (!projectSlug) return;
     cancelledRef.current = false;
@@ -51,20 +58,31 @@ export function TemplatesViewer({ projectSlug, callTool, onSelectTemplate, onClo
   }, [callTool, projectSlug]);
 
   return (
-    <TemplatesShell onClose={onClose}>
+    <TemplatesShell slug={selected ? selected.name.toLowerCase() : 'pick a template'} onClose={onClose}>
       <div
         className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-domain"
         style={{ '--scrollbar-rgb': '45, 212, 191' } as React.CSSProperties}
       >
         <div className="w-full min-w-0 px-4 sm:px-6 py-5">
-          <TemplateChooser currentFormula={currentFormula} onSelect={onSelectTemplate} />
+          {selected ? (
+            <TemplatePreview
+              entry={selected}
+              projectSlug={projectSlug}
+              mediaItems={mediaItems}
+              callTool={callTool}
+              onBack={() => setSelected(null)}
+              onGenerated={onGenerated}
+            />
+          ) : (
+            <TemplatesHome currentFormula={currentFormula} onOpen={setSelected} />
+          )}
         </div>
       </div>
     </TemplatesShell>
   );
 }
 
-function TemplatesShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+function TemplatesShell({ slug, onClose, children }: { slug: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="flex-1 min-w-0 flex items-center justify-center overflow-hidden">
       <div className="w-full h-full min-w-0 relative">
@@ -76,7 +94,7 @@ function TemplatesShell({ onClose, children }: { onClose: () => void; children: 
                 <span>TEMPLATES</span>
               </span>
             }
-            slug="pick a template"
+            slug={slug}
             right={<CloseButton tabIndex={-1} onClick={onClose} tone="teal" />}
           />
           <div className="flex-1 min-w-0 bg-black flex flex-col min-h-0 relative">
@@ -84,86 +102,6 @@ function TemplatesShell({ onClose, children }: { onClose: () => void; children: 
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function TemplateChooser({ currentFormula, onSelect }: {
-  currentFormula: PlanFormula | null;
-  onSelect: (formula: PlanFormula) => void;
-}) {
-  const templates: Array<{ id: Exclude<PlanFormula, 'char_swap'>; label: string; icon: React.ReactNode; meta: string }> = [
-    { id: 'clip_show', label: 'Clip Show', icon: <Mic className="w-4 h-4" />, meta: 'char-* + vid-*' },
-    { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-4 h-4" />, meta: 'img-*' },
-  ];
-  return (
-    <div className="min-h-full flex flex-col">
-      <div className="mb-5 pb-4 border-b border-zinc-800/70">
-        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-300/45">Plan</div>
-        <h1 className="mt-1 text-lg font-bold text-teal-300 font-mono uppercase tracking-wider">Templates</h1>
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        {templates.map((template) => {
-          const isCurrent = currentFormula === template.id;
-          return (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() => onSelect(template.id)}
-              className={cn(
-                'min-h-32 p-4 rounded border text-left transition-colors',
-                'bg-zinc-950/50 hover:bg-teal-500/10',
-                isCurrent ? 'border-teal-500/65' : 'border-zinc-800/75 hover:border-teal-500/50',
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={cn(
-                    'w-8 h-8 rounded border flex items-center justify-center shrink-0',
-                    isCurrent ? 'border-teal-500/70 text-teal-200 bg-teal-500/15' : 'border-zinc-700/80 text-teal-300/65 bg-black/35',
-                  )}>
-                    {template.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-mono font-bold uppercase tracking-wider text-teal-200 truncate">{template.label}</span>
-                    <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-teal-300/40 truncate">{template.meta}</span>
-                  </span>
-                </div>
-                {isCurrent && (
-                  <span className="shrink-0 h-5 px-2 rounded border border-teal-500/40 bg-teal-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-teal-200/80">
-                    Current
-                  </span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {currentFormula === 'char_swap' && (
-        <button
-          type="button"
-          onClick={() => onSelect('char_swap')}
-          className={cn(
-            'mt-4 w-full min-h-20 p-4 rounded border text-left transition-colors',
-            'bg-zinc-950/40 hover:bg-teal-500/10 border-zinc-800/75 hover:border-teal-500/45',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-8 h-8 rounded border border-zinc-700/80 flex items-center justify-center shrink-0 text-teal-300/55 bg-black/35">
-                <MapPin className="w-4 h-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-mono font-bold uppercase tracking-wider text-teal-200 truncate">Legacy Plan</span>
-                <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-teal-300/35 truncate">char swap</span>
-              </span>
-            </div>
-            <span className="shrink-0 h-5 px-2 rounded border border-teal-500/35 bg-teal-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-teal-200/70">
-              Current
-            </span>
-          </div>
-        </button>
-      )}
     </div>
   );
 }

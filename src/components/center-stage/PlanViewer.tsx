@@ -162,16 +162,13 @@ interface PlanViewerProps {
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   resetKey?: number;
-  // The template chosen in /templates (or null when /plan is opened directly).
-  // When set it forces that formula's config; otherwise the formula is derived
-  // from the existing plan sidecar, falling back to the "pick a template" state.
-  requestedFormula?: PlanFormula | null;
   onClose: () => void;
-  // Navigate back to the /templates chooser (a separate center stage).
+  // Open the /templates marketplace (a separate center stage) to create or
+  // replace this project's plan. Plan generation now lives there, not here.
   onBackToTemplates: () => void;
 }
 
-export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, requestedFormula, onClose, onBackToTemplates }: PlanViewerProps) {
+export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates }: PlanViewerProps) {
   useMountKey('viewer');
   return (
     <PlanBody
@@ -180,7 +177,6 @@ export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, 
       projectSlug={projectSlug}
       callTool={callTool}
       resetKey={resetKey}
-      requestedFormula={requestedFormula}
       onClose={onClose}
       onBackToTemplates={onBackToTemplates}
     />
@@ -223,36 +219,31 @@ function PlanShell({ title, slug, onClose, children }: {
 // points. 10s = midpoint.
 const APPROX_SCENE_SECONDS = 10;
 
-function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requestedFormula, onClose, onBackToTemplates }: {
+function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates }: {
   item: MediaItem | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   resetKey?: number;
-  requestedFormula?: PlanFormula | null;
   onClose: () => void;
   onBackToTemplates: () => void;
 }) {
   const { dispatch } = useCommandDispatch();
   const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
-  const [pendingSource, setPendingSource] = useState<string | null>(null);
-  const [pendingCharA, setPendingCharA] = useState<string | null>(null);
-  const [pendingCharB, setPendingCharB] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // The formula whose config to show: an explicit choice from /templates wins,
-  // otherwise fall back to the existing plan's formula. Null → no plan yet.
-  const formula = requestedFormula ?? planFormula(sidecar);
+  // /plan is now a pure work area: the formula comes from the existing plan
+  // sidecar (generation moved to the /templates marketplace). Null → no plan.
+  const formula = planFormula(sidecar);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, left: 0 });
   }, [formula, resetKey]);
 
   // Load read_plan on mount / when the plan asset changes. A read failure here
-  // means "no plan yet" — we keep sidecar=null and the slot UI takes over.
+  // means "no plan yet" — sidecar stays null and the empty state takes over.
   useEffect(() => {
     if (!projectSlug) return;
     cancelledRef.current = false;
@@ -267,11 +258,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requested
       }
       try {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed: AnyPlanSidecar = JSON.parse(text);
-        setSidecar(parsed);
-        setPendingSource(null);
-        setPendingCharA(null);
-        setPendingCharB(null);
+        setSidecar(JSON.parse(text) as AnyPlanSidecar);
       } catch {
         setSidecar(null);
       } finally {
@@ -285,87 +272,14 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requested
   const storyboardVideoSidecar = isStoryboardVideoPlan(sidecar) ? sidecar : null;
   const clipShowSidecar = isClipShowPlan(sidecar) ? sidecar : null;
 
-  // Effective slot values: pending wins, else fall back to sidecar.
-  const sourceId = pendingSource ?? charSidecar?.source_asset_id ?? null;
-  const charAId = pendingCharA ?? charSidecar?.characters[0]?.asset_id ?? null;
-  const charBId = pendingCharB ?? charSidecar?.characters[1]?.asset_id ?? null;
-
-  const sourceItem = useMemo(
-    () => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null),
-    [sourceId, mediaItems],
+  const charSourceItem = useMemo(
+    () => (charSidecar?.source_asset_id ? mediaItems.find((m) => m.id === charSidecar.source_asset_id) ?? null : null),
+    [charSidecar?.source_asset_id, mediaItems],
   );
-  const sourceAspect = useMemo(
-    () => sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height),
-    [sourceItem?.width, sourceItem?.height],
+  const charSourceAspect = useMemo(
+    () => sourceAspectFromDimensions(charSourceItem?.width, charSourceItem?.height),
+    [charSourceItem?.width, charSourceItem?.height],
   );
-  const duration = sourceItem?.duration ?? null;
-  const scenesCount = duration && duration > 0
-    ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS))
-    : null;
-
-  const slotsDifferFromSidecar = charSidecar
-    ? charSidecar.source_asset_id !== sourceId
-      || (charSidecar.characters[0]?.asset_id ?? null) !== charAId
-      || (charSidecar.characters[1]?.asset_id ?? null) !== charBId
-    : true;
-
-  const canGenerate =
-    Boolean(sourceId && charAId && charBId)
-    && charAId !== charBId
-    && slotsDifferFromSidecar;
-
-  const handleGenerate = useCallback(async () => {
-    if (!canGenerate || !sourceId || !charAId || !charBId) return;
-    setGenerating(true);
-    try {
-      const result = await callTool('plan_visualization', {
-        source_asset_id: sourceId,
-        project_slug: projectSlug,
-        character_asset_ids: [charAId, charBId],
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
-        toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
-        return;
-      }
-
-      // plan_visualization now runs in the background (vision + ffmpeg). Poll
-      // read_plan until the new plan — matching the requested source +
-      // characters — lands, then swap the sidecar in. The source card shows an
-      // "analyzing" overlay meanwhile, so the UI never blocks.
-      const POLL_MS = 3000;
-      const MAX_ATTEMPTS = 100; // ~5 min, covers slow vision + scene detection
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        if (cancelledRef.current) return;
-        const planResult = await callTool('read_plan', { project_slug: projectSlug });
-        if (planResult.isError) continue;
-        let parsed: AnyPlanSidecar;
-        try {
-          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          parsed = JSON.parse(text);
-        } catch {
-          continue;
-        }
-        const cs = planFormula(parsed) === 'char_swap' ? (parsed as PlanSidecar) : null;
-        const matchesRequest = cs
-          && cs.source_asset_id === sourceId
-          && (cs.characters[0]?.asset_id ?? null) === charAId
-          && (cs.characters[1]?.asset_id ?? null) === charBId;
-        if (matchesRequest) {
-          setSidecar(parsed);
-          setPendingSource(null);
-          setPendingCharA(null);
-          setPendingCharB(null);
-          toast({ title: 'Plan generated', description: `${cs.scenes.length} scenes`, duration: 2500 });
-          return;
-        }
-      }
-      toast({ title: 'Plan still generating', description: 'It will appear here when ready.', duration: 4000 });
-    } finally {
-      setGenerating(false);
-    }
-  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool]);
 
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
   const title = formula == null
@@ -373,8 +287,8 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requested
     : formula === 'clip_show'
     ? 'PLAN: CLIP SHOW'
     : formula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
-  // While the initial read_plan is in flight and nothing was explicitly
-  // requested, hold off rendering so the empty state doesn't flash.
+  // While the initial read_plan is in flight, hold off rendering so the empty
+  // state doesn't flash before an existing plan loads.
   const showLoading = loadingPlan && formula == null;
 
   return (
@@ -391,66 +305,42 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requested
             </div>
           ) : formula == null ? (
             <PlanEmptyState onBackToTemplates={onBackToTemplates} />
-          ) : formula === 'char_swap' ? (
+          ) : (
             <>
-              <PlanHeader
-                sourceId={sourceId}
-                charAId={charAId}
-                charBId={charBId}
-                mediaItems={mediaItems}
-                sourceAspect={sourceAspect}
-                duration={duration}
-                scenesCount={scenesCount}
-                canGenerate={canGenerate}
-                generating={generating}
-                onSourceDrop={setPendingSource}
-                onCharADrop={setPendingCharA}
-                onCharBDrop={setPendingCharB}
-                onGenerate={() => { void handleGenerate(); }}
-                onBack={onBackToTemplates}
-              />
-              {charSidecar && (
-                <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
-              )}
-              {!charSidecar && sourceId && charAId && charBId && charAId !== charBId && (
-                <PlanPreviewBlock
-                  sourceId={sourceId}
-                  charAId={charAId}
-                  charBId={charBId}
-                  projectSlug={projectSlug}
-                  callTool={callTool}
-                />
-              )}
-              {charSidecar && (
-                <PlanScenes
-                  data={charSidecar}
+              <div className="mb-4">
+                <PlanBackButton onBack={onBackToTemplates} />
+              </div>
+              {formula === 'char_swap' && charSidecar ? (
+                <>
+                  <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
+                  <PlanScenes
+                    data={charSidecar}
+                    mediaItems={mediaItems}
+                    sourceAspect={charSourceAspect}
+                    projectSlug={projectSlug}
+                    callTool={callTool}
+                    dispatch={dispatch}
+                    onSidecarUpdate={(next) => setSidecar(next)}
+                  />
+                </>
+              ) : formula === 'storyboard_video' ? (
+                <StoryboardVideoPlanFormula
+                  sidecar={storyboardVideoSidecar}
                   mediaItems={mediaItems}
-                  sourceAspect={sourceAspect}
                   projectSlug={projectSlug}
                   callTool={callTool}
-                  dispatch={dispatch}
+                  onSidecarUpdate={(next) => setSidecar(next)}
+                />
+              ) : (
+                <ClipShowWork
+                  sidecar={clipShowSidecar}
+                  mediaItems={mediaItems}
+                  projectSlug={projectSlug}
+                  callTool={callTool}
                   onSidecarUpdate={(next) => setSidecar(next)}
                 />
               )}
             </>
-          ) : formula === 'storyboard_video' ? (
-            <StoryboardVideoPlanFormula
-              sidecar={storyboardVideoSidecar}
-              mediaItems={mediaItems}
-              projectSlug={projectSlug}
-              callTool={callTool}
-              onSidecarUpdate={(next) => setSidecar(next)}
-              onBack={onBackToTemplates}
-            />
-          ) : (
-            <ClipShowPlanFormula
-              sidecar={clipShowSidecar}
-              mediaItems={mediaItems}
-              projectSlug={projectSlug}
-              callTool={callTool}
-              onSidecarUpdate={(next) => setSidecar(next)}
-              onBack={onBackToTemplates}
-            />
           )}
         </div>
       </div>
@@ -556,13 +446,15 @@ function buildStoryboardVideoPayload(
   };
 }
 
-function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate, onBack }: {
+// Work area for the storyboard_video plan (rendered in /plan). Setup + plan
+// creation live in StoryboardSetup (the /templates marketplace). Reads its
+// config from the sidecar; per-step storyboard/video generation stays here.
+function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
   sidecar: StoryboardVideoPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
-  onBack: () => void;
 }) {
   const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(sidecar));
   const [storyboardBrief, setStoryboardBrief] = useState(() => sidecar?.storyboard_brief ?? '');
@@ -605,13 +497,6 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setDurationS(sidecar.duration_s);
   }, [sidecar, sidecarKey]);
 
-  const sourceItems = useMemo(
-    () => sourceImageIds.map((id) => ({
-      id,
-      item: mediaItems.find((m) => m.id === id) ?? null,
-    })),
-    [sourceImageIds, mediaItems],
-  );
   const outputAspect = useMemo(() => sourceAspectFromDimensions(16, 9), []);
   const storyboardState = useMemo(
     () => deriveStoryboardTileState(sidecar?.storyboard_asset_id, mediaItems),
@@ -625,18 +510,6 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     () => buildStoryboardVideoPayload(selectedVideoModel, sidecar, videoPrompt),
     [selectedVideoModel, sidecar, videoPrompt],
   );
-
-  const handleStoryboardBriefChange = useCallback((next: string) => {
-    setStoryboardBrief(next);
-    setStoryboardPromptEdited(false);
-    setVideoPromptEdited(false);
-  }, []);
-
-  const handleLoopVideoChange = useCallback((next: boolean) => {
-    setLoopVideo(next);
-    setStoryboardPromptEdited(false);
-    setVideoPromptEdited(false);
-  }, []);
 
   const handleStoryboardPromptChange = useCallback((next: string) => {
     setStoryboardPrompt(next);
@@ -692,49 +565,6 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       setSavingPlan(false);
     }
   }, [callTool, projectSlug, storyboardBrief, loopVideo, selectedVideoModel, durationS, storyboardPromptEdited, storyboardPrompt, videoPromptEdited, videoPrompt, onSidecarUpdate]);
-
-  const handleSourceDrop = useCallback((assetId: string) => {
-    if (!assetId.startsWith('img-')) {
-      toast({ title: 'Wrong asset type', description: `Drop an img-* source image, got ${assetId}.`, duration: 3000 });
-      return;
-    }
-    if (sourceImageIds.includes(assetId)) {
-      toast({ title: 'Source already added', description: `@${assetId} is already in the source list.`, duration: 2500 });
-      return;
-    }
-    const nextSourceImageIds = [...sourceImageIds, assetId];
-    setSourceImageIds(nextSourceImageIds);
-    setStoryboardPrompt('');
-    setVideoPrompt('');
-    setStoryboardPromptEdited(false);
-    setVideoPromptEdited(false);
-    void savePlan(nextSourceImageIds, { resetPrompts: true });
-  }, [sourceImageIds, savePlan]);
-
-  const handleSourceRemove = useCallback((assetId: string) => {
-    if (sourceImageIds.length <= 1) {
-      toast({ title: 'Source required', description: 'Keep at least one source image for the plan.', duration: 2500 });
-      return;
-    }
-    const nextSourceImageIds = sourceImageIds.filter((id) => id !== assetId);
-    setSourceImageIds(nextSourceImageIds);
-    setStoryboardPrompt('');
-    setVideoPrompt('');
-    setStoryboardPromptEdited(false);
-    setVideoPromptEdited(false);
-    void savePlan(nextSourceImageIds, { resetPrompts: true });
-  }, [sourceImageIds, savePlan]);
-
-  const handleSourcePromote = useCallback((assetId: string) => {
-    if (sourceImageIds[0] === assetId) return;
-    const nextSourceImageIds = [assetId, ...sourceImageIds.filter((id) => id !== assetId)];
-    setSourceImageIds(nextSourceImageIds);
-    setStoryboardPrompt('');
-    setVideoPrompt('');
-    setStoryboardPromptEdited(false);
-    setVideoPromptEdited(false);
-    void savePlan(nextSourceImageIds, { resetPrompts: true });
-  }, [sourceImageIds, savePlan]);
 
   const persistStoryboard = useCallback(async (assetId: string) => {
     const result = await callTool('replace_plan_storyboard_video_storyboard', {
@@ -860,49 +690,6 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
 
   return (
     <div className="space-y-5">
-      <div className="mb-6 pb-4 border-b border-zinc-800/60">
-        <div className="flex items-center justify-between mb-3 gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <PlanBackButton onBack={onBack} />
-            <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: storyboard</h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => { if (sourceImageIds.length > 0) void savePlan(sourceImageIds); }}
-            disabled={sourceImageIds.length === 0 || savingPlan}
-            title={sourceImageIds.length > 0 ? 'Save plan prompts' : 'Drop a source image'}
-            className={cn(
-              'h-8 px-3 flex items-center gap-1.5 rounded',
-              'text-xs font-mono font-bold uppercase tracking-wider',
-              'text-emerald-300 hover:text-white',
-              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
-              'transition-colors duration-150',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
-            {savingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            {savingPlan ? 'Saving...' : 'Save Plan'}
-          </button>
-        </div>
-        <StoryboardSourceDropZone
-          sources={sourceItems.map(({ id, item }) => ({
-            id,
-            src: item?.thumbnailSrc ?? item?.filePath ?? null,
-            label: item?.slug ?? `@${id}`,
-            aspect: sourceAspectFromDimensions(item?.width, item?.height),
-          }))}
-          onDropSource={handleSourceDrop}
-          onRemoveSource={handleSourceRemove}
-          onPromoteSource={handleSourcePromote}
-        />
-        <StoryboardDirectionPanel
-          storyboardBrief={storyboardBrief}
-          loopVideo={loopVideo}
-          onBriefChange={handleStoryboardBriefChange}
-          onLoopChange={handleLoopVideoChange}
-        />
-      </div>
-
       <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
         <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
           <div className="flex items-center gap-2 text-xs font-mono">
@@ -1040,227 +827,48 @@ function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
   ].join('|');
 }
 
-function ClipShowPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate, onBack }: {
+// Work area for the clip_show plan (rendered in /plan). Setup + plan creation
+// live in ClipShowSetup (the /templates marketplace); this renders the planned
+// segments with their per-step audio/frame/video generation.
+function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
   sidecar: ClipShowPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
-  onBack: () => void;
 }) {
-  const [characterId, setCharacterId] = useState(() => sidecar?.character.asset_id ?? '');
-  const [clipIds, setClipIds] = useState<string[]>(() => sidecar?.clip_asset_ids ?? []);
-  const [showBrief, setShowBrief] = useState(() => sidecar?.show_brief ?? '');
-  const [tone, setTone] = useState(() => sidecar?.tone ?? 'sharp, playful, punchy, not mean');
-  const [generatingPlan, setGeneratingPlan] = useState(false);
-  const sidecarKey = clipShowSidecarKey(sidecar);
-  const planPollCancelledRef = useRef(false);
-
-  useEffect(() => {
-    planPollCancelledRef.current = false;
-    return () => { planPollCancelledRef.current = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!sidecar) return;
-    setCharacterId(sidecar.character.asset_id);
-    setClipIds(sidecar.clip_asset_ids);
-    setShowBrief(sidecar.show_brief);
-    setTone(sidecar.tone);
-  }, [sidecar, sidecarKey]);
-
-  const characterItem = useMemo(
-    () => (characterId ? mediaItems.find((m) => m.id === characterId) ?? null : null),
-    [characterId, mediaItems],
-  );
-  const clipItems = useMemo(
-    () => clipIds.map((id) => ({ id, item: mediaItems.find((m) => m.id === id) ?? null })),
-    [clipIds, mediaItems],
-  );
-
-  const handleCharacterDrop = useCallback((assetId: string) => {
-    if (!assetId.startsWith('char-')) {
-      toast({ title: 'Wrong asset type', description: `Drop a char-* host, got ${assetId}.`, duration: 3000 });
-      return;
-    }
-    setCharacterId(assetId);
-  }, []);
-
-  const handleClipDrop = useCallback((assetId: string) => {
-    if (!assetId.startsWith('vid-')) {
-      toast({ title: 'Wrong asset type', description: `Drop vid-* clips, got ${assetId}.`, duration: 3000 });
-      return;
-    }
-    setClipIds((prev) => (prev.includes(assetId) ? prev : [...prev, assetId]));
-  }, []);
-
-  const handleClipRemove = useCallback((assetId: string) => {
-    setClipIds((prev) => prev.filter((id) => id !== assetId));
-  }, []);
-
-  const canGeneratePlan = characterId.length > 0 && clipIds.length > 0 && !generatingPlan;
-
-  const handleGeneratePlan = useCallback(async () => {
-    if (!canGeneratePlan) return;
-    // Remember the plan currently shown so polling can tell a freshly-generated
-    // plan apart from the existing one (regenerating with the same inputs still
-    // changes the GPT-written jokes/dialog, so the key differs).
-    const prevKey = clipShowSidecarKey(sidecar);
-    setGeneratingPlan(true);
-    try {
-      const result = await callTool('plan_clip_show', {
-        project_slug: projectSlug,
-        character_asset_id: characterId,
-        clip_asset_ids: clipIds,
-        show_brief: showBrief,
-        tone,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Clip Show plan failed';
-        toast({ title: 'Clip Show failed', description: msg, duration: 5000 });
-        return;
-      }
-
-      // plan_clip_show now runs in the background (GPT-5.5). Poll read_plan
-      // until the new clip_show plan — matching the requested host + clips —
-      // lands, then swap it in. The button shows "Planning..." but the rest of
-      // the UI stays responsive.
-      const POLL_MS = 3000;
-      const MAX_ATTEMPTS = 100; // ~5 min, covers slow GPT-5.5 generation
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        if (planPollCancelledRef.current) return;
-        const planResult = await callTool('read_plan', { project_slug: projectSlug });
-        if (planResult.isError) continue;
-        let parsed: AnyPlanSidecar;
-        try {
-          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          parsed = JSON.parse(text);
-        } catch {
-          continue;
-        }
-        if (planFormula(parsed) !== 'clip_show') continue;
-        const cs = parsed as ClipShowPlanSidecar;
-        const matchesRequest =
-          cs.character.asset_id === characterId &&
-          cs.clip_asset_ids.length === clipIds.length &&
-          cs.clip_asset_ids.every((id, i) => id === clipIds[i]);
-        if (matchesRequest && clipShowSidecarKey(cs) !== prevKey) {
-          onSidecarUpdate(cs);
-          await callTool('sync', { project_slug: projectSlug });
-          toast({ title: 'Clip Show planned', description: `${cs.segments.length} segment${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
-          return;
-        }
-      }
-      toast({ title: 'Clip Show still generating', description: 'It will appear here when ready.', duration: 4000 });
-    } finally {
-      setGeneratingPlan(false);
-    }
-  }, [canGeneratePlan, callTool, projectSlug, characterId, clipIds, showBrief, tone, onSidecarUpdate, sidecar]);
-
+  if (!sidecar) {
+    return (
+      <div className="rounded border border-dashed border-emerald-500/25 bg-zinc-950/40 p-6 text-center">
+        <Mic className="w-6 h-6 mx-auto mb-2 text-emerald-300/40" />
+        <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-300/45">
+          clip show plan not generated yet
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-5">
-      <section className="mb-6 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/70">
-        <div className="flex items-center justify-between gap-3 border-b border-emerald-500/15 bg-black/45 px-3 py-2.5">
-          <div className="flex items-center gap-2 min-w-0">
-            <PlanBackButton onBack={onBack} />
-            <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: clip show</h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => { void handleGeneratePlan(); }}
-            disabled={!canGeneratePlan}
-            title={canGeneratePlan ? 'Generate Clip Show plan with GPT-5.5' : 'Drop a host character and at least one clip'}
-            className={cn(
-              'h-8 px-3 flex items-center gap-1.5 rounded',
-              'text-xs font-mono font-bold uppercase tracking-wider',
-              'text-emerald-300 hover:text-white',
-              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
-              'transition-colors duration-150',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
-            {generatingPlan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
-            {generatingPlan ? 'Planning...' : 'Generate Plan'}
-          </button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-2">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
+          {sidecar.segments.length} clip{sidecar.segments.length === 1 ? '' : 's'} planned
         </div>
-        <div className="p-3 space-y-3">
-          <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
-            <ClipShowCharacterDropZone
-              item={characterItem}
-              assetId={characterId || null}
-              onDropAsset={handleCharacterDrop}
-            />
-            <ClipShowClipsDropZone
-              clips={clipItems}
-              onDropClip={handleClipDrop}
-              onRemoveClip={handleClipRemove}
-            />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
-            <label className="min-w-0">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
-              <textarea
-                value={showBrief}
-                onChange={(e) => setShowBrief(e.target.value)}
-                rows={2}
-                placeholder="Immigration in the UK"
-                className={cn(
-                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
-                  'text-sm font-mono text-emerald-200/90 resize-y',
-                  'focus:outline-none focus:border-emerald-400/70',
-                  'placeholder:text-emerald-300/30',
-                )}
-              />
-            </label>
-            <label className="min-w-0">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
-              <textarea
-                value={tone}
-                onChange={(e) => setTone(e.target.value)}
-                rows={2}
-                className={cn(
-                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
-                  'text-[11px] font-mono text-emerald-300/90 resize-y',
-                  'focus:outline-none focus:border-emerald-500/60',
-                )}
-              />
-            </label>
-          </div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/35">
+          dialog -&gt; audio -&gt; first frame -&gt; video
         </div>
-      </section>
-
-      {sidecar ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-2">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
-              {sidecar.segments.length} clip{sidecar.segments.length === 1 ? '' : 's'} planned
-            </div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/35">
-              dialog -&gt; audio -&gt; first frame -&gt; video
-            </div>
-          </div>
-          {sidecar.segments.map((segment, index) => (
-            <ClipShowSegmentBlock
-              key={`${segment.clip_asset_id}-${index}`}
-              sidecar={sidecar}
-              segment={segment}
-              index={index}
-              mediaItems={mediaItems}
-              projectSlug={projectSlug}
-              callTool={callTool}
-              onSidecarUpdate={onSidecarUpdate}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded border border-dashed border-emerald-500/25 bg-zinc-950/40 p-6 text-center">
-          <Mic className="w-6 h-6 mx-auto mb-2 text-emerald-300/40" />
-          <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-300/45">
-            drop a voiced char-* host and vid-* clips
-          </div>
-        </div>
-      )}
+      </div>
+      {sidecar.segments.map((segment, index) => (
+        <ClipShowSegmentBlock
+          key={`${segment.clip_asset_id}-${index}`}
+          sidecar={sidecar}
+          segment={segment}
+          index={index}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
+          callTool={callTool}
+          onSidecarUpdate={onSidecarUpdate}
+        />
+      ))}
     </div>
   );
 }
@@ -4167,67 +3775,6 @@ function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   );
 }
 
-function PlanHeader({ sourceId, charAId, charBId, mediaItems, sourceAspect, duration, scenesCount, canGenerate, generating, onSourceDrop, onCharADrop, onCharBDrop, onGenerate, onBack }: {
-  sourceId: string | null;
-  charAId: string | null;
-  charBId: string | null;
-  mediaItems: MediaItem[];
-  sourceAspect: SourceAspect;
-  duration: number | null;
-  scenesCount: number | null;
-  canGenerate: boolean;
-  generating: boolean;
-  onSourceDrop: (id: string) => void;
-  onCharADrop: (id: string) => void;
-  onCharBDrop: (id: string) => void;
-  onGenerate: () => void;
-  onBack: () => void;
-}) {
-  const sourceItem = sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null;
-  const charAItem = charAId ? mediaItems.find((m) => m.id === charAId) ?? null : null;
-  const charBItem = charBId ? mediaItems.find((m) => m.id === charBId) ?? null : null;
-  return (
-    <div className="mb-6 pb-4 border-b border-zinc-800/60">
-      <div className="flex items-center justify-between mb-3 gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <PlanBackButton onBack={onBack} />
-          <h1 className="text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider truncate">Plan: char swap</h1>
-        </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={generating || !canGenerate}
-          title={canGenerate ? 'Generate plan from these slots' : 'Drop a video source and two distinct characters'}
-          className={cn(
-            'h-8 px-3 flex items-center gap-1.5 rounded',
-            'text-xs font-mono font-bold uppercase tracking-wider',
-            'text-emerald-300 hover:text-white',
-            'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
-            'transition-colors duration-150',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-          )}
-        >
-          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
-          {generating ? 'Generating…' : 'Generate Plan'}
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-4 mb-4">
-        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={onSourceDrop} />
-        <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={onCharADrop} />
-        <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={onCharBDrop} />
-      </div>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
-        <dt className="text-emerald-300/60">Duration</dt>
-        <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
-        <dt className="text-emerald-300/60">Scenes</dt>
-        <dd className="text-emerald-300/90">
-          {scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}
-        </dd>
-      </dl>
-    </div>
-  );
-}
-
 interface VisionAuditScene {
   start: number;
   end: number;
@@ -4451,6 +3998,463 @@ function PlanPreviewSceneRow({ scene, sceneIndex, sourceId, projectSlug }: {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Template setup panels (rendered inside the /templates marketplace preview) ──
+// Each owns the per-formula config inputs + the Generate handler. On success the
+// new plan sidecar has landed (synchronous for storyboard; polled for the two
+// enqueued formulas), so `onGenerated()` navigates to /plan to work on it.
+
+export interface PlanTemplateSetupProps {
+  projectSlug: string;
+  mediaItems: MediaItem[];
+  callTool: UseMcpResult['callTool'];
+  onGenerated: () => void;
+}
+
+// Load the current plan sidecar once so a setup panel can pre-fill from an
+// existing plan of the same formula. Loading is gated so useState initializers
+// (not effects) can seed from it.
+function useCurrentSidecar(projectSlug: string, callTool: UseMcpResult['callTool']) {
+  const [state, setState] = useState<{ loading: boolean; sidecar: AnyPlanSidecar | null }>({ loading: true, sidecar: null });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // Flip to loading inside the async closure so the effect body stays
+      // setState-free (react-hooks/set-state-in-effect).
+      setState({ loading: true, sidecar: null });
+      const result = await callTool('read_plan', { project_slug: projectSlug });
+      if (cancelled) return;
+      if (result.isError) { setState({ loading: false, sidecar: null }); return; }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        setState({ loading: false, sidecar: JSON.parse(text) as AnyPlanSidecar });
+      } catch {
+        setState({ loading: false, sidecar: null });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectSlug, callTool]);
+  return state;
+}
+
+function SetupLoading() {
+  return (
+    <div className="min-h-[30vh] flex items-center justify-center">
+      <Loader2 className="w-5 h-5 animate-spin text-emerald-400/60" />
+    </div>
+  );
+}
+
+const SETUP_GENERATE_BTN = cn(
+  'h-9 px-4 flex items-center gap-2 rounded',
+  'text-xs font-mono font-bold uppercase tracking-wider',
+  'text-emerald-300 hover:text-white',
+  'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
+  'transition-colors duration-150',
+  'disabled:opacity-50 disabled:cursor-not-allowed',
+  FOCUS_RING_BUTTON,
+);
+
+function SetupGenerateRow({ generating, canGenerate, onGenerate, icon, hint }: {
+  generating: boolean;
+  canGenerate: boolean;
+  onGenerate: () => void;
+  icon: React.ReactNode;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={generating || !canGenerate}
+        title={canGenerate ? 'Generate this plan' : hint}
+        className={SETUP_GENERATE_BTN}
+      >
+        {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
+        {generating ? 'Generating…' : 'Generate Plan'}
+      </button>
+      {!canGenerate && !generating && <span className="text-[11px] font-mono text-emerald-300/40">{hint}</span>}
+    </div>
+  );
+}
+
+export function CharSwapSetup({ projectSlug, mediaItems, callTool, onGenerated }: PlanTemplateSetupProps) {
+  const { loading, sidecar } = useCurrentSidecar(projectSlug, callTool);
+  if (loading) return <SetupLoading />;
+  return (
+    <CharSwapSetupInner
+      projectSlug={projectSlug}
+      mediaItems={mediaItems}
+      callTool={callTool}
+      onGenerated={onGenerated}
+      initial={planFormula(sidecar) === 'char_swap' ? (sidecar as PlanSidecar) : null}
+    />
+  );
+}
+
+function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: PlanSidecar | null }) {
+  const [sourceId, setSourceId] = useState<string | null>(initial?.source_asset_id ?? null);
+  const [charAId, setCharAId] = useState<string | null>(initial?.characters[0]?.asset_id ?? null);
+  const [charBId, setCharBId] = useState<string | null>(initial?.characters[1]?.asset_id ?? null);
+  const [generating, setGenerating] = useState(false);
+  const cancelledRef = useRef(false);
+  useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
+
+  const sourceItem = useMemo(() => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null), [sourceId, mediaItems]);
+  const charAItem = useMemo(() => (charAId ? mediaItems.find((m) => m.id === charAId) ?? null : null), [charAId, mediaItems]);
+  const charBItem = useMemo(() => (charBId ? mediaItems.find((m) => m.id === charBId) ?? null : null), [charBId, mediaItems]);
+  const sourceAspect = useMemo(() => sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height), [sourceItem?.width, sourceItem?.height]);
+  const duration = sourceItem?.duration ?? null;
+  const scenesCount = duration && duration > 0 ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS)) : null;
+
+  const slotsDiffer = initial
+    ? initial.source_asset_id !== sourceId
+      || (initial.characters[0]?.asset_id ?? null) !== charAId
+      || (initial.characters[1]?.asset_id ?? null) !== charBId
+    : true;
+  const canGenerate = Boolean(sourceId && charAId && charBId) && charAId !== charBId && slotsDiffer;
+
+  const handleGenerate = useCallback(async () => {
+    if (!canGenerate || !sourceId || !charAId || !charBId) return;
+    setGenerating(true);
+    try {
+      const result = await callTool('plan_visualization', {
+        source_asset_id: sourceId,
+        project_slug: projectSlug,
+        character_asset_ids: [charAId, charBId],
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
+        toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
+        return;
+      }
+      // plan_visualization runs in the background (vision + ffmpeg). Poll
+      // read_plan until the new char_swap plan — matching the requested source +
+      // characters — lands, then hand off to /plan.
+      const POLL_MS = 3000;
+      const MAX_ATTEMPTS = 100; // ~5 min
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        if (cancelledRef.current) return;
+        const planResult = await callTool('read_plan', { project_slug: projectSlug });
+        if (planResult.isError) continue;
+        let parsed: AnyPlanSidecar;
+        try {
+          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
+          parsed = JSON.parse(text);
+        } catch { continue; }
+        const cs = planFormula(parsed) === 'char_swap' ? (parsed as PlanSidecar) : null;
+        const matches = Boolean(cs)
+          && cs!.source_asset_id === sourceId
+          && (cs!.characters[0]?.asset_id ?? null) === charAId
+          && (cs!.characters[1]?.asset_id ?? null) === charBId;
+        if (matches) {
+          await callTool('sync', { project_slug: projectSlug });
+          toast({ title: 'Plan generated', description: `${cs!.scenes.length} scenes`, duration: 2500 });
+          onGenerated();
+          return;
+        }
+      }
+      toast({ title: 'Plan still generating', description: 'Open /plan — it will appear when ready.', duration: 4000 });
+      onGenerated();
+    } finally {
+      if (!cancelledRef.current) setGenerating(false);
+    }
+  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, onGenerated]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap gap-4">
+        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={setSourceId} />
+        <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={setCharAId} />
+        <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={setCharBId} />
+      </div>
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
+        <dt className="text-emerald-300/60">Duration</dt>
+        <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
+        <dt className="text-emerald-300/60">Scenes</dt>
+        <dd className="text-emerald-300/90">{scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}</dd>
+      </dl>
+      <SetupGenerateRow
+        generating={generating}
+        canGenerate={canGenerate}
+        onGenerate={() => { void handleGenerate(); }}
+        icon={<MapPin className="w-3.5 h-3.5" />}
+        hint="Drop a video source and two distinct characters"
+      />
+      {sourceId && charAId && charBId && charAId !== charBId && (
+        <PlanPreviewBlock sourceId={sourceId} charAId={charAId} charBId={charBId} projectSlug={projectSlug} callTool={callTool} />
+      )}
+    </div>
+  );
+}
+
+export function StoryboardSetup({ projectSlug, mediaItems, callTool, onGenerated }: PlanTemplateSetupProps) {
+  const { loading, sidecar } = useCurrentSidecar(projectSlug, callTool);
+  if (loading) return <SetupLoading />;
+  return (
+    <StoryboardSetupInner
+      projectSlug={projectSlug}
+      mediaItems={mediaItems}
+      callTool={callTool}
+      onGenerated={onGenerated}
+      initial={isStoryboardVideoPlan(sidecar) ? sidecar : null}
+    />
+  );
+}
+
+function StoryboardSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: StoryboardVideoPlanSidecar | null }) {
+  const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(initial));
+  const [storyboardBrief, setStoryboardBrief] = useState(initial?.storyboard_brief ?? '');
+  const [loopVideo, setLoopVideo] = useState(initial?.loop_video ?? false);
+  const [durationS, setDurationS] = useState(initial?.duration_s ?? 15);
+  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(videoModelFromTool(initial?.video_model));
+  const [generating, setGenerating] = useState(false);
+
+  const sourceItems = useMemo(
+    () => sourceImageIds.map((id) => ({ id, item: mediaItems.find((m) => m.id === id) ?? null })),
+    [sourceImageIds, mediaItems],
+  );
+
+  const handleSourceDrop = useCallback((assetId: string) => {
+    if (!assetId.startsWith('img-')) {
+      toast({ title: 'Wrong asset type', description: `Drop an img-* source image, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setSourceImageIds((prev) => (prev.includes(assetId) ? prev : [...prev, assetId]));
+  }, []);
+  const handleSourceRemove = useCallback((assetId: string) => {
+    setSourceImageIds((prev) => (prev.length <= 1 ? prev : prev.filter((id) => id !== assetId)));
+  }, []);
+  const handleSourcePromote = useCallback((assetId: string) => {
+    setSourceImageIds((prev) => (prev[0] === assetId ? prev : [assetId, ...prev.filter((id) => id !== assetId)]));
+  }, []);
+
+  const canGenerate = sourceImageIds.length > 0 && !generating;
+
+  const handleGenerate = useCallback(async () => {
+    if (sourceImageIds.length === 0 || generating) return;
+    setGenerating(true);
+    try {
+      const result = await callTool('plan_storyboard_video', {
+        project_slug: projectSlug,
+        source_image_asset_id: sourceImageIds[0],
+        source_image_asset_ids: sourceImageIds,
+        storyboard_brief: storyboardBrief,
+        loop_video: loopVideo,
+        video_model: TOOL_BY_VIDEO_MODEL[selectedVideoModel],
+        duration_s: durationS,
+        rebuild_prompts: true,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan creation failed';
+        toast({ title: 'Plan creation failed', description: msg, duration: 5000 });
+        return;
+      }
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Storyboard plan ready', description: 'Generate the storyboard and video in /plan.', duration: 2500 });
+      onGenerated();
+    } finally {
+      setGenerating(false);
+    }
+  }, [sourceImageIds, generating, projectSlug, storyboardBrief, loopVideo, selectedVideoModel, durationS, callTool, onGenerated]);
+
+  return (
+    <div className="space-y-5">
+      <StoryboardSourceDropZone
+        sources={sourceItems.map(({ id, item }) => ({
+          id,
+          src: item?.thumbnailSrc ?? item?.filePath ?? null,
+          label: item?.slug ?? `@${id}`,
+          aspect: sourceAspectFromDimensions(item?.width, item?.height),
+        }))}
+        onDropSource={handleSourceDrop}
+        onRemoveSource={handleSourceRemove}
+        onPromoteSource={handleSourcePromote}
+      />
+      <StoryboardDirectionPanel
+        storyboardBrief={storyboardBrief}
+        loopVideo={loopVideo}
+        onBriefChange={setStoryboardBrief}
+        onLoopChange={setLoopVideo}
+      />
+      <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
+        <label className="flex items-center gap-1.5">
+          <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
+          <input
+            type="number"
+            min={4}
+            max={15}
+            value={durationS}
+            onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
+            className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+          />
+        </label>
+        <label className="flex items-center gap-1.5">
+          <span className="text-emerald-300/50 uppercase tracking-wider">Model:</span>
+          <select
+            value={selectedVideoModel}
+            onChange={(e) => setSelectedVideoModel(e.target.value as VideoModel)}
+            className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+          >
+            {STORYBOARD_VIDEO_MODELS.map((m) => <option key={m} value={m}>{LABEL_BY_VIDEO_MODEL[m]}</option>)}
+          </select>
+        </label>
+        <span className="text-emerald-300/45">16:9 / 2K storyboard / 720p video</span>
+      </div>
+      <SetupGenerateRow
+        generating={generating}
+        canGenerate={canGenerate}
+        onGenerate={() => { void handleGenerate(); }}
+        icon={<Images className="w-3.5 h-3.5" />}
+        hint="Drop at least one source image"
+      />
+    </div>
+  );
+}
+
+export function ClipShowSetup({ projectSlug, mediaItems, callTool, onGenerated }: PlanTemplateSetupProps) {
+  const { loading, sidecar } = useCurrentSidecar(projectSlug, callTool);
+  if (loading) return <SetupLoading />;
+  return (
+    <ClipShowSetupInner
+      projectSlug={projectSlug}
+      mediaItems={mediaItems}
+      callTool={callTool}
+      onGenerated={onGenerated}
+      initial={isClipShowPlan(sidecar) ? sidecar : null}
+    />
+  );
+}
+
+function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: ClipShowPlanSidecar | null }) {
+  const [characterId, setCharacterId] = useState(initial?.character.asset_id ?? '');
+  const [clipIds, setClipIds] = useState<string[]>(initial?.clip_asset_ids ?? []);
+  const [showBrief, setShowBrief] = useState(initial?.show_brief ?? '');
+  const [tone, setTone] = useState(initial?.tone ?? 'sharp, playful, punchy, not mean');
+  const [generating, setGenerating] = useState(false);
+  const cancelledRef = useRef(false);
+  useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
+
+  const characterItem = useMemo(() => (characterId ? mediaItems.find((m) => m.id === characterId) ?? null : null), [characterId, mediaItems]);
+  const clipItems = useMemo(() => clipIds.map((id) => ({ id, item: mediaItems.find((m) => m.id === id) ?? null })), [clipIds, mediaItems]);
+
+  const handleCharacterDrop = useCallback((assetId: string) => {
+    if (!assetId.startsWith('char-')) {
+      toast({ title: 'Wrong asset type', description: `Drop a char-* host, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setCharacterId(assetId);
+  }, []);
+  const handleClipDrop = useCallback((assetId: string) => {
+    if (!assetId.startsWith('vid-')) {
+      toast({ title: 'Wrong asset type', description: `Drop vid-* clips, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setClipIds((prev) => (prev.includes(assetId) ? prev : [...prev, assetId]));
+  }, []);
+  const handleClipRemove = useCallback((assetId: string) => { setClipIds((prev) => prev.filter((id) => id !== assetId)); }, []);
+
+  const canGenerate = characterId.length > 0 && clipIds.length > 0 && !generating;
+
+  const handleGenerate = useCallback(async () => {
+    if (!canGenerate) return;
+    const prevKey = clipShowSidecarKey(initial);
+    setGenerating(true);
+    try {
+      const result = await callTool('plan_clip_show', {
+        project_slug: projectSlug,
+        character_asset_id: characterId,
+        clip_asset_ids: clipIds,
+        show_brief: showBrief,
+        tone,
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Clip Show plan failed';
+        toast({ title: 'Clip Show failed', description: msg, duration: 5000 });
+        return;
+      }
+      // plan_clip_show runs in the background (GPT-5.5). Poll read_plan until the
+      // new clip_show plan — matching the requested host + clips, with a changed
+      // key vs the previous plan — lands, then hand off to /plan.
+      const POLL_MS = 3000;
+      const MAX_ATTEMPTS = 100; // ~5 min
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        if (cancelledRef.current) return;
+        const planResult = await callTool('read_plan', { project_slug: projectSlug });
+        if (planResult.isError) continue;
+        let parsed: AnyPlanSidecar;
+        try {
+          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
+          parsed = JSON.parse(text);
+        } catch { continue; }
+        if (planFormula(parsed) !== 'clip_show') continue;
+        const cs = parsed as ClipShowPlanSidecar;
+        const matches = cs.character.asset_id === characterId
+          && cs.clip_asset_ids.length === clipIds.length
+          && cs.clip_asset_ids.every((id, i) => id === clipIds[i]);
+        if (matches && clipShowSidecarKey(cs) !== prevKey) {
+          await callTool('sync', { project_slug: projectSlug });
+          toast({ title: 'Clip Show planned', description: `${cs.segments.length} segment${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
+          onGenerated();
+          return;
+        }
+      }
+      toast({ title: 'Clip Show still generating', description: 'Open /plan — it will appear when ready.', duration: 4000 });
+      onGenerated();
+    } finally {
+      if (!cancelledRef.current) setGenerating(false);
+    }
+  }, [canGenerate, initial, callTool, projectSlug, characterId, clipIds, showBrief, tone, onGenerated]);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
+        <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
+        <ClipShowClipsDropZone clips={clipItems} onDropClip={handleClipDrop} onRemoveClip={handleClipRemove} />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
+        <label className="min-w-0">
+          <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
+          <textarea
+            value={showBrief}
+            onChange={(e) => setShowBrief(e.target.value)}
+            rows={2}
+            placeholder="Immigration in the UK"
+            className={cn(
+              'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
+              'text-sm font-mono text-emerald-200/90 resize-y',
+              'focus:outline-none focus:border-emerald-400/70',
+              'placeholder:text-emerald-300/30',
+            )}
+          />
+        </label>
+        <label className="min-w-0">
+          <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
+          <textarea
+            value={tone}
+            onChange={(e) => setTone(e.target.value)}
+            rows={2}
+            className={cn(
+              'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
+              'text-[11px] font-mono text-emerald-300/90 resize-y',
+              'focus:outline-none focus:border-emerald-500/60',
+            )}
+          />
+        </label>
+      </div>
+      <SetupGenerateRow
+        generating={generating}
+        canGenerate={canGenerate}
+        onGenerate={() => { void handleGenerate(); }}
+        icon={<Mic className="w-3.5 h-3.5" />}
+        hint="Drop a host character and at least one clip"
+      />
     </div>
   );
 }

@@ -321,7 +321,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/templates",
-    description: "Open the Plan template chooser (Storyboard, Clip Show). Pick one to configure it in /plan.",
+    description: "Browse the plan template marketplace (Clip Show, Storyboard, Char Swap). Preview a template, configure it, and generate the plan.",
     example: "/templates",
     category: "action",
     icon: "LayoutTemplate",
@@ -333,7 +333,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan",
-    description: "Open the project's Plan to configure and generate the chosen template (Storyboard or Clip Show). Pick a template in /templates first. Singleton per project.",
+    description: "Open the project's generated Plan to work on it (regenerate scenes, frames, audio, video). Create a plan in /templates first. Singleton per project.",
     example: "/plan",
     category: "action",
     icon: "MapPin",
