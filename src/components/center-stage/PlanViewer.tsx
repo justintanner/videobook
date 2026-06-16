@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -18,6 +18,7 @@ import {
   sourceAspectFromDimensions,
   type SourceAspect,
 } from '@/lib/plan-aspect';
+import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
 
 interface PlanScene {
   start: number;
@@ -4048,37 +4049,61 @@ function SetupLoading() {
   );
 }
 
-const SETUP_GENERATE_BTN = cn(
-  'h-9 px-4 flex items-center gap-2 rounded',
-  'text-xs font-mono font-bold uppercase tracking-wider',
-  'text-emerald-300 hover:text-white',
-  'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
-  'transition-colors duration-150',
-  'disabled:opacity-50 disabled:cursor-not-allowed',
+const USE_TEMPLATE_BTN = cn(
+  'h-11 px-6 flex items-center justify-center gap-2.5 rounded-md',
+  'text-sm font-mono font-bold uppercase tracking-wider',
+  'text-emerald-950 bg-emerald-400 hover:bg-emerald-300',
+  'border border-emerald-300/60',
+  'shadow-[0_0_22px_rgba(52,211,153,0.28)] hover:shadow-[0_0_30px_rgba(52,211,153,0.45)]',
+  'transition-all duration-150',
+  'disabled:bg-emerald-500/15 disabled:text-emerald-300/55 disabled:border-emerald-500/30 disabled:shadow-none disabled:cursor-not-allowed',
   FOCUS_RING_BUTTON,
 );
 
-function SetupGenerateRow({ generating, canGenerate, onGenerate, icon, hint }: {
+// Big primary call-to-action at the top of every setup panel. Auto-picked inputs
+// keep `canGenerate` true on any project with the right assets, so this needs no
+// configuration; when assets are missing it disables with a hint pointing to Customize.
+function UseTemplateCTA({ generating, canGenerate, onUse, icon, hint }: {
   generating: boolean;
   canGenerate: boolean;
-  onGenerate: () => void;
+  onUse: () => void;
   icon: React.ReactNode;
   hint: string;
 }) {
   return (
-    <div className="flex items-center gap-3 pt-1">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
       <button
         type="button"
-        onClick={onGenerate}
+        onClick={onUse}
         disabled={generating || !canGenerate}
-        title={canGenerate ? 'Generate this plan' : hint}
-        className={SETUP_GENERATE_BTN}
+        title={canGenerate ? 'Use this template' : hint}
+        className={USE_TEMPLATE_BTN}
       >
-        {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
-        {generating ? 'Generating…' : 'Generate Plan'}
+        {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+        {generating ? 'Generating…' : 'Use Template'}
       </button>
-      {!canGenerate && !generating && <span className="text-[11px] font-mono text-emerald-300/40">{hint}</span>}
+      {!canGenerate && !generating && <span className="text-[11px] font-mono text-emerald-300/45">{hint}</span>}
     </div>
+  );
+}
+
+// Collapsed disclosure holding a setup panel's input controls (drop zones,
+// briefs, model/duration). Hidden by default so the preview stays a showcase;
+// editing here overrides the auto-picked seeds the CTA generates from.
+function CustomizeInputs({ children }: { children: React.ReactNode }) {
+  return (
+    <details className="group rounded border border-zinc-800/70 bg-black/25">
+      <summary className={cn(
+        'flex items-center gap-1.5 px-3 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden',
+        'text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/55 hover:text-emerald-200',
+      )}>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90" />
+        Customize inputs
+      </summary>
+      <div className="px-3 pb-3 pt-1">
+        {children}
+      </div>
+    </details>
   );
 }
 
@@ -4097,9 +4122,12 @@ export function CharSwapSetup({ projectSlug, mediaItems, callTool, onGenerated }
 }
 
 function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: PlanSidecar | null }) {
-  const [sourceId, setSourceId] = useState<string | null>(initial?.source_asset_id ?? null);
-  const [charAId, setCharAId] = useState<string | null>(initial?.characters[0]?.asset_id ?? null);
-  const [charBId, setCharBId] = useState<string | null>(initial?.characters[1]?.asset_id ?? null);
+  // Seed from the existing plan, else auto-pick the project's newest assets so
+  // "Use Template" works without opening Customize.
+  const autoPick = initial ? null : autoPickCharSwap(mediaItems);
+  const [sourceId, setSourceId] = useState<string | null>(initial?.source_asset_id ?? autoPick?.sourceId ?? null);
+  const [charAId, setCharAId] = useState<string | null>(initial?.characters[0]?.asset_id ?? autoPick?.charAId ?? null);
+  const [charBId, setCharBId] = useState<string | null>(initial?.characters[1]?.asset_id ?? autoPick?.charBId ?? null);
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
   useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
@@ -4111,12 +4139,7 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   const duration = sourceItem?.duration ?? null;
   const scenesCount = duration && duration > 0 ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS)) : null;
 
-  const slotsDiffer = initial
-    ? initial.source_asset_id !== sourceId
-      || (initial.characters[0]?.asset_id ?? null) !== charAId
-      || (initial.characters[1]?.asset_id ?? null) !== charBId
-    : true;
-  const canGenerate = Boolean(sourceId && charAId && charBId) && charAId !== charBId && slotsDiffer;
+  const canGenerate = Boolean(sourceId && charAId && charBId) && charAId !== charBId;
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate || !sourceId || !charAId || !charBId) return;
@@ -4167,28 +4190,32 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, onGenerated]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap gap-4">
-        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={setSourceId} />
-        <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={setCharAId} />
-        <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={setCharBId} />
-      </div>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
-        <dt className="text-emerald-300/60">Duration</dt>
-        <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
-        <dt className="text-emerald-300/60">Scenes</dt>
-        <dd className="text-emerald-300/90">{scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}</dd>
-      </dl>
-      <SetupGenerateRow
+    <div className="space-y-4">
+      <UseTemplateCTA
         generating={generating}
         canGenerate={canGenerate}
-        onGenerate={() => { void handleGenerate(); }}
-        icon={<MapPin className="w-3.5 h-3.5" />}
-        hint="Drop a video source and two distinct characters"
+        onUse={() => { void handleGenerate(); }}
+        icon={<MapPin className="w-4 h-4" />}
+        hint="Needs a transcribed video + two distinct subjects — open Customize"
       />
-      {sourceId && charAId && charBId && charAId !== charBId && (
-        <PlanPreviewBlock sourceId={sourceId} charAId={charAId} charBId={charBId} projectSlug={projectSlug} callTool={callTool} />
-      )}
+      <CustomizeInputs>
+        <div className="space-y-5">
+          <div className="flex flex-wrap gap-4">
+            <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={setSourceId} />
+            <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={setCharAId} />
+            <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={setCharBId} />
+          </div>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
+            <dt className="text-emerald-300/60">Duration</dt>
+            <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
+            <dt className="text-emerald-300/60">Scenes</dt>
+            <dd className="text-emerald-300/90">{scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}</dd>
+          </dl>
+          {sourceId && charAId && charBId && charAId !== charBId && (
+            <PlanPreviewBlock sourceId={sourceId} charAId={charAId} charBId={charBId} projectSlug={projectSlug} callTool={callTool} />
+          )}
+        </div>
+      </CustomizeInputs>
     </div>
   );
 }
@@ -4208,7 +4235,11 @@ export function StoryboardSetup({ projectSlug, mediaItems, callTool, onGenerated
 }
 
 function StoryboardSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: StoryboardVideoPlanSidecar | null }) {
-  const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(initial));
+  // Seed from the existing plan, else auto-pick the newest source image so
+  // "Use Template" works without opening Customize.
+  const [sourceImageIds, setSourceImageIds] = useState<string[]>(
+    () => (initial ? storyboardSourceImageIds(initial) : autoPickStoryboard(mediaItems).sourceImageIds),
+  );
   const [storyboardBrief, setStoryboardBrief] = useState(initial?.storyboard_brief ?? '');
   const [loopVideo, setLoopVideo] = useState(initial?.loop_video ?? false);
   const [durationS, setDurationS] = useState(initial?.duration_s ?? 15);
@@ -4264,55 +4295,59 @@ function StoryboardSetupInner({ projectSlug, mediaItems, callTool, onGenerated, 
   }, [sourceImageIds, generating, projectSlug, storyboardBrief, loopVideo, selectedVideoModel, durationS, callTool, onGenerated]);
 
   return (
-    <div className="space-y-5">
-      <StoryboardSourceDropZone
-        sources={sourceItems.map(({ id, item }) => ({
-          id,
-          src: item?.thumbnailSrc ?? item?.filePath ?? null,
-          label: item?.slug ?? `@${id}`,
-          aspect: sourceAspectFromDimensions(item?.width, item?.height),
-        }))}
-        onDropSource={handleSourceDrop}
-        onRemoveSource={handleSourceRemove}
-        onPromoteSource={handleSourcePromote}
-      />
-      <StoryboardDirectionPanel
-        storyboardBrief={storyboardBrief}
-        loopVideo={loopVideo}
-        onBriefChange={setStoryboardBrief}
-        onLoopChange={setLoopVideo}
-      />
-      <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
-        <label className="flex items-center gap-1.5">
-          <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
-          <input
-            type="number"
-            min={4}
-            max={15}
-            value={durationS}
-            onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
-            className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
-          />
-        </label>
-        <label className="flex items-center gap-1.5">
-          <span className="text-emerald-300/50 uppercase tracking-wider">Model:</span>
-          <select
-            value={selectedVideoModel}
-            onChange={(e) => setSelectedVideoModel(e.target.value as VideoModel)}
-            className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
-          >
-            {STORYBOARD_VIDEO_MODELS.map((m) => <option key={m} value={m}>{LABEL_BY_VIDEO_MODEL[m]}</option>)}
-          </select>
-        </label>
-        <span className="text-emerald-300/45">16:9 / 2K storyboard / 720p video</span>
-      </div>
-      <SetupGenerateRow
+    <div className="space-y-4">
+      <UseTemplateCTA
         generating={generating}
         canGenerate={canGenerate}
-        onGenerate={() => { void handleGenerate(); }}
-        icon={<Images className="w-3.5 h-3.5" />}
-        hint="Drop at least one source image"
+        onUse={() => { void handleGenerate(); }}
+        icon={<Images className="w-4 h-4" />}
+        hint="Needs a source image — open Customize"
       />
+      <CustomizeInputs>
+        <div className="space-y-5">
+          <StoryboardSourceDropZone
+            sources={sourceItems.map(({ id, item }) => ({
+              id,
+              src: item?.thumbnailSrc ?? item?.filePath ?? null,
+              label: item?.slug ?? `@${id}`,
+              aspect: sourceAspectFromDimensions(item?.width, item?.height),
+            }))}
+            onDropSource={handleSourceDrop}
+            onRemoveSource={handleSourceRemove}
+            onPromoteSource={handleSourcePromote}
+          />
+          <StoryboardDirectionPanel
+            storyboardBrief={storyboardBrief}
+            loopVideo={loopVideo}
+            onBriefChange={setStoryboardBrief}
+            onLoopChange={setLoopVideo}
+          />
+          <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono">
+            <label className="flex items-center gap-1.5">
+              <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
+              <input
+                type="number"
+                min={4}
+                max={15}
+                value={durationS}
+                onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
+                className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+              />
+            </label>
+            <label className="flex items-center gap-1.5">
+              <span className="text-emerald-300/50 uppercase tracking-wider">Model:</span>
+              <select
+                value={selectedVideoModel}
+                onChange={(e) => setSelectedVideoModel(e.target.value as VideoModel)}
+                className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+              >
+                {STORYBOARD_VIDEO_MODELS.map((m) => <option key={m} value={m}>{LABEL_BY_VIDEO_MODEL[m]}</option>)}
+              </select>
+            </label>
+            <span className="text-emerald-300/45">16:9 / 2K storyboard / 720p video</span>
+          </div>
+        </div>
+      </CustomizeInputs>
     </div>
   );
 }
@@ -4332,8 +4367,11 @@ export function ClipShowSetup({ projectSlug, mediaItems, callTool, onGenerated }
 }
 
 function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: ClipShowPlanSidecar | null }) {
-  const [characterId, setCharacterId] = useState(initial?.character.asset_id ?? '');
-  const [clipIds, setClipIds] = useState<string[]>(initial?.clip_asset_ids ?? []);
+  // Seed from the existing plan, else auto-pick the newest host + clips so
+  // "Use Template" works without opening Customize.
+  const autoPick = initial ? null : autoPickClipShow(mediaItems);
+  const [characterId, setCharacterId] = useState(initial?.character.asset_id ?? autoPick?.characterId ?? '');
+  const [clipIds, setClipIds] = useState<string[]>(initial?.clip_asset_ids ?? autoPick?.clipIds ?? []);
   const [showBrief, setShowBrief] = useState(initial?.show_brief ?? '');
   const [tone, setTone] = useState(initial?.tone ?? 'sharp, playful, punchy, not mean');
   const [generating, setGenerating] = useState(false);
@@ -4413,48 +4451,52 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   }, [canGenerate, initial, callTool, projectSlug, characterId, clipIds, showBrief, tone, onGenerated]);
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
-        <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
-        <ClipShowClipsDropZone clips={clipItems} onDropClip={handleClipDrop} onRemoveClip={handleClipRemove} />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
-        <label className="min-w-0">
-          <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
-          <textarea
-            value={showBrief}
-            onChange={(e) => setShowBrief(e.target.value)}
-            rows={2}
-            placeholder="Immigration in the UK"
-            className={cn(
-              'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
-              'text-sm font-mono text-emerald-200/90 resize-y',
-              'focus:outline-none focus:border-emerald-400/70',
-              'placeholder:text-emerald-300/30',
-            )}
-          />
-        </label>
-        <label className="min-w-0">
-          <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
-          <textarea
-            value={tone}
-            onChange={(e) => setTone(e.target.value)}
-            rows={2}
-            className={cn(
-              'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
-              'text-[11px] font-mono text-emerald-300/90 resize-y',
-              'focus:outline-none focus:border-emerald-500/60',
-            )}
-          />
-        </label>
-      </div>
-      <SetupGenerateRow
+    <div className="space-y-4">
+      <UseTemplateCTA
         generating={generating}
         canGenerate={canGenerate}
-        onGenerate={() => { void handleGenerate(); }}
-        icon={<Mic className="w-3.5 h-3.5" />}
-        hint="Drop a host character and at least one clip"
+        onUse={() => { void handleGenerate(); }}
+        icon={<Mic className="w-4 h-4" />}
+        hint="Needs a host character + at least one clip — open Customize"
       />
+      <CustomizeInputs>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
+            <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
+            <ClipShowClipsDropZone clips={clipItems} onDropClip={handleClipDrop} onRemoveClip={handleClipRemove} />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
+            <label className="min-w-0">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
+              <textarea
+                value={showBrief}
+                onChange={(e) => setShowBrief(e.target.value)}
+                rows={2}
+                placeholder="Immigration in the UK"
+                className={cn(
+                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
+                  'text-sm font-mono text-emerald-200/90 resize-y',
+                  'focus:outline-none focus:border-emerald-400/70',
+                  'placeholder:text-emerald-300/30',
+                )}
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
+              <textarea
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
+                rows={2}
+                className={cn(
+                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
+                  'text-[11px] font-mono text-emerald-300/90 resize-y',
+                  'focus:outline-none focus:border-emerald-500/60',
+                )}
+              />
+            </label>
+          </div>
+        </div>
+      </CustomizeInputs>
     </div>
   );
 }

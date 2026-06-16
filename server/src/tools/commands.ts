@@ -321,7 +321,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/templates",
-    description: "Browse the plan template marketplace (Clip Show, Storyboard, Char Swap). Preview a template, configure it, and generate the plan.",
+    description: "Browse the plan template marketplace (Clip Show, Storyboard, Char Swap). Preview a template and use it to generate a plan — inputs auto-fill from your project, customizing is optional.",
     example: "/templates",
     category: "action",
     icon: "LayoutTemplate",

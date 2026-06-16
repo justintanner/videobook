@@ -71,7 +71,7 @@ function TemplateCard({ entry, isCurrent, onOpen }: {
             'w-9 h-9 rounded border flex items-center justify-center shrink-0',
             isCurrent ? 'border-teal-500/70 text-teal-200 bg-teal-500/15' : 'border-zinc-700/80 text-teal-300/65 bg-black/35',
           )}>
-            {entry.icon}
+            <entry.icon className="w-5 h-5" />
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-mono font-bold uppercase tracking-wider text-teal-200 truncate">{entry.name}</span>

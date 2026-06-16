@@ -5,9 +5,10 @@ import type { MediaItem } from '@/components/sidebar/types';
 import { CharSwapSetup, StoryboardSetup, ClipShowSetup } from '../PlanViewer';
 import type { TemplateCatalogEntry } from './catalog';
 
-// Marketplace detail/preview page: describes the template, then hosts its
-// per-formula config form + Generate (the setup panels). On generate, the
-// parent navigates to /plan to work on the new plan.
+// Marketplace detail/preview page: an app-store-style showcase — large icon
+// hero + description, then the per-formula setup panel which leads with a big
+// "Use Template" CTA (auto-picks inputs) and a collapsed Customize expander. On
+// generate, the parent navigates to /plan to work on the new plan.
 export function TemplatePreview({ entry, projectSlug, mediaItems, callTool, onBack, onGenerated }: {
   entry: TemplateCatalogEntry;
   projectSlug: string;
@@ -37,17 +38,17 @@ export function TemplatePreview({ entry, projectSlug, mediaItems, callTool, onBa
         </button>
       </div>
 
-      <div className="mb-5 pb-4 border-b border-zinc-800/70">
-        <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded border border-teal-500/40 bg-teal-500/10 text-teal-200 flex items-center justify-center shrink-0">
-            {entry.icon}
+      <div className="mb-5 pb-5 border-b border-zinc-800/70">
+        <div className="flex items-center gap-4">
+          <span className="w-20 h-20 rounded-lg border border-teal-500/40 bg-teal-500/10 text-teal-200 flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(45,212,191,0.18)]">
+            <entry.icon className="w-9 h-9" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-teal-300 font-mono uppercase tracking-wider truncate">{entry.name}</h1>
-            <p className="text-[11px] font-mono text-teal-300/45">{entry.tagline}</p>
+            <h1 className="text-2xl font-bold text-teal-300 font-mono uppercase tracking-wider truncate">{entry.name}</h1>
+            <p className="mt-1 text-xs font-mono text-teal-300/50">{entry.tagline}</p>
           </div>
         </div>
-        <p className="mt-3 text-xs font-mono text-zinc-300/80 leading-relaxed">{entry.description}</p>
+        <p className="mt-4 text-xs font-mono text-zinc-300/80 leading-relaxed">{entry.description}</p>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-300/45 mb-1">What it produces</div>
@@ -67,7 +68,6 @@ export function TemplatePreview({ entry, projectSlug, mediaItems, callTool, onBa
         </div>
       </div>
 
-      <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-300/45 mb-3">Configure &amp; generate</div>
       {entry.id === 'clip_show' ? (
         <ClipShowSetup {...setupProps} />
       ) : entry.id === 'storyboard_video' ? (
