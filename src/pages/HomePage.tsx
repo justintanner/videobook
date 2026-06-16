@@ -1378,7 +1378,7 @@ export function HomePage() {
 
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className={`flex-1 ${planCenterStageOpen || templatesOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
+              <div className={`flex-1 ${planCenterStageOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
                 {settingsOpen ? (
                   <ProviderKeysScreen
                     data={providerKeyStatus}
