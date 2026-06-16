@@ -58,11 +58,30 @@ const fuchsia: ChipVariantStyle = {
   focusWithinRing: 'focus-within:ring-fuchsia-400/80',
 };
 
-export const variants: Record<Domain | 'fuchsia', ChipVariantStyle> = {
+// templates — teal (teal-400 #2dd4bf). Like `fuchsia`, a standalone variant
+// with no Domain mapping: it identifies the /templates chooser button without
+// forcing a 6th key into every Record<Domain, …> map across the gen panels.
+const teal: ChipVariantStyle = {
+  bg: 'bg-teal-500/20 border-teal-500/30',
+  shadow: 'rgba(45,212,191,0.5)',
+  chevron: 'text-teal-400/40 group-hover:text-teal-400/50',
+  chevronDown: 'text-teal-400/40 group-hover:text-teal-400/60',
+  cursorBg: 'bg-teal-400/40',
+  promptBg: 'bg-black/40 shadow-[inset_0_0_10px_rgba(45,212,191,0.05)]',
+  promptHover: 'group-hover:bg-black/60 group-hover:shadow-[inset_0_0_10px_rgba(45,212,191,0.12)]',
+  text: 'text-teal-400/70 group-hover:text-teal-400/90',
+  icon: 'text-teal-400/80 group-hover:text-teal-400',
+  hoverBorder: 'hover:border-teal-400/40',
+  focusRing: 'focus-visible:ring-teal-400/80',
+  focusWithinRing: 'focus-within:ring-teal-400/80',
+};
+
+export const variants: Record<Domain | 'fuchsia' | 'templates', ChipVariantStyle> = {
   projects: chipVariant('projects'),
   image: chipVariant('image'),
   video: chipVariant('video'),
   plan: chipVariant('plan'),
   final: chipVariant('final'),
   fuchsia,
+  templates: teal,
 };

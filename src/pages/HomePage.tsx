@@ -13,7 +13,8 @@ import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, PlanViewer, ArchiveBrowser } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, PlanViewer, TemplatesViewer, ArchiveBrowser } from '@/components/center-stage';
+import type { PlanFormula } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -124,6 +125,10 @@ export function HomePage() {
   const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [planOpenKey, setPlanOpenKey] = useState(0);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  // The template chosen in /templates, carried into /plan so it opens that
+  // formula's config. Cleared when /plan is opened directly.
+  const [planRequestedFormula, setPlanRequestedFormula] = useState<PlanFormula | null>(null);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -369,6 +374,7 @@ export function HomePage() {
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSettingsOpen(false);
     setArchiveOpen(false);
+    setTemplatesOpen(false);
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
@@ -377,6 +383,37 @@ export function HomePage() {
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
+
+  // Open the /templates chooser center stage, clearing the other center-stage
+  // views (an active selection outranks templates in the render cascade).
+  const openTemplates = useCallback(() => {
+    setSettingsOpen(false);
+    setArchiveOpen(false);
+    setSelectedItem(null);
+    setGenPanel(null);
+    setTimelineSlotIndex(null);
+    setPlanEmptyOverride(false);
+    setTemplatesOpen(true);
+  }, []);
+
+  // Open /plan from a /templates choice, configured for the chosen formula.
+  // Mirrors open_plan but preserves the requested formula instead of clearing it.
+  const handleSelectTemplate = useCallback((formula: PlanFormula) => {
+    setPlanRequestedFormula(formula);
+    setTemplatesOpen(false);
+    setSettingsOpen(false);
+    setArchiveOpen(false);
+    const planAsset = mediaItems.find((m) => m.id === 'plan');
+    if (planAsset) {
+      handleSelectItem(planAsset);
+    } else {
+      setPlanOpenKey((key) => key + 1);
+      setSelectedItem(null);
+      setGenPanel(null);
+      setTimelineSlotIndex(null);
+      setPlanEmptyOverride(true);
+    }
+  }, [mediaItems, handleSelectItem]);
 
   const handleViewerSizeChange = useCallback((size: ViewerSize) => {
     setViewerSize(size);
@@ -584,6 +621,7 @@ export function HomePage() {
   const handleSlotClick = useCallback((slotIndex: number) => {
     setSettingsOpen(false);
     setArchiveOpen(false);
+    setTemplatesOpen(false);
     setSelectedItem(null);
     setGenPanel(null);
     setTimelineSlotIndex(slotIndex);
@@ -1083,6 +1121,7 @@ export function HomePage() {
     open_gen: (type: string, prompt: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
+      setTemplatesOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
@@ -1091,6 +1130,7 @@ export function HomePage() {
     open_gen_video: (prompt: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
+      setTemplatesOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'video', prompt: prompt || '' });
@@ -1098,6 +1138,7 @@ export function HomePage() {
     open_gen_image: (prompt: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
+      setTemplatesOpen(false);
       setSelectedItem(null);
       setTimelineSlotIndex(null);
       setGenPanel({ category: 'image', prompt: prompt || '' });
@@ -1169,6 +1210,8 @@ export function HomePage() {
     open_plan: () => {
       setSettingsOpen(false);
       setArchiveOpen(false);
+      setTemplatesOpen(false);
+      setPlanRequestedFormula(null);
       const planAsset = mediaItems.find((m) => m.id === 'plan');
       if (planAsset) {
         handleSelectItem(planAsset);
@@ -1180,6 +1223,7 @@ export function HomePage() {
         setPlanEmptyOverride(true);
       }
     },
+    open_templates: openTemplates,
     open_projects: () => setProjectsOpen(true),
     create_project: (slug: string) => { void handleCreateProject(slug); },
     rename_project: (newSlug: string) => { void handleRenameProject(newSlug); },
@@ -1195,10 +1239,11 @@ export function HomePage() {
     open_provider_keys: () => {
       setSettingsOpen(true);
       setArchiveOpen(false);
+      setTemplatesOpen(false);
       setStatusOpen(false);
       void refreshProviderKeyStatus();
     },
-    open_archive: (query: string) => openArchive(query),
+    open_archive: (query: string) => { setTemplatesOpen(false); openArchive(query); },
     timeline_audio_add: handleTimelineAudioAdd,
     timeline_audio_move: handleTimelineAudioMove,
     timeline_audio_remove: handleTimelineAudioRemove,
@@ -1208,7 +1253,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
   return (
     <MountKeyProvider>
@@ -1339,7 +1384,7 @@ export function HomePage() {
 
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className={`flex-1 ${planCenterStageOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
+              <div className={`flex-1 ${planCenterStageOpen || templatesOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
                 {settingsOpen ? (
                   <ProviderKeysScreen
                     data={providerKeyStatus}
@@ -1395,12 +1440,21 @@ export function HomePage() {
                     callTool={callTool}
                     callState={state}
                     planResetKey={planOpenKey}
+                    planRequestedFormula={planRequestedFormula}
+                    onBackToTemplates={openTemplates}
                     onClose={() => setSelectedItem(null)}
                     imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
                     mediaItems={mediaItems}
                     onEditCharacterProfile={(charId, profile, onProfileSaved) => setCharacterDialog({ initialSlug: charId, initialProfile: profile, onProfileSaved })}
                     cropTarget={cropTarget}
                     onCropConsumed={() => setCropTarget(null)}
+                  />
+                ) : templatesOpen ? (
+                  <TemplatesViewer
+                    projectSlug={projectSlug ?? ''}
+                    callTool={callTool}
+                    onSelectTemplate={handleSelectTemplate}
+                    onClose={() => setTemplatesOpen(false)}
                   />
                 ) : planEmptyOverride ? (
                   <PlanViewer
@@ -1409,7 +1463,9 @@ export function HomePage() {
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
                     resetKey={planOpenKey}
+                    requestedFormula={planRequestedFormula}
                     onClose={() => setPlanEmptyOverride(false)}
+                    onBackToTemplates={openTemplates}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer

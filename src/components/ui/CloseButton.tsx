@@ -2,13 +2,14 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DISABLED_STATE, FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
 
-export type CloseButtonTone = 'primary' | 'cyan' | 'violet' | 'emerald';
+export type CloseButtonTone = 'primary' | 'cyan' | 'violet' | 'emerald' | 'teal';
 
 const toneClasses: Record<CloseButtonTone, string> = {
   primary: 'hover:text-primary hover:bg-primary/10 focus-visible:ring-primary/60',
   cyan: 'hover:text-cyan-300 hover:bg-cyan-500/10 focus-visible:ring-cyan-400/60',
   violet: 'hover:text-violet-300 hover:bg-violet-500/10 focus-visible:ring-violet-400/60',
   emerald: 'hover:text-emerald-300 hover:bg-emerald-500/10 focus-visible:ring-emerald-400/60',
+  teal: 'hover:text-teal-300 hover:bg-teal-500/10 focus-visible:ring-teal-400/60',
 };
 
 interface CloseButtonProps {

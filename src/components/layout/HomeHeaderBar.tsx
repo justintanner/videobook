@@ -1,4 +1,4 @@
-import { ArchiveRestore, Clapperboard, Film, ImageIcon, MapPin, Settings, History } from 'lucide-react';
+import { ArchiveRestore, Clapperboard, Film, ImageIcon, LayoutTemplate, MapPin, Settings, History } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import { useToast } from '@/hooks/useToast';
@@ -47,6 +47,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
         />
 
         {/* Generation shortcuts */}
+        <CommandButton command="/templates" icon={<LayoutTemplate className="w-3.5 h-3.5" />} variant="templates" onClick={() => onAnimateCommand('/templates')} />
         <CommandButton command="/plan" icon={<MapPin className="w-3.5 h-3.5" />} variant="plan" onClick={() => onAnimateCommand('/plan')} />
         <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
         <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />

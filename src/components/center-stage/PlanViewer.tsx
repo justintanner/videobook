@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2 } from 'lucide-react';
+import { ArrowLeft, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -53,7 +55,7 @@ interface PlanSidecar {
   word_count?: number;
 }
 
-type PlanFormula = 'char_swap' | 'storyboard_video' | 'clip_show';
+export type PlanFormula = 'char_swap' | 'storyboard_video' | 'clip_show';
 
 interface StoryboardVideoPlanSidecar {
   formula: 'storyboard_video';
@@ -160,10 +162,16 @@ interface PlanViewerProps {
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   resetKey?: number;
+  // The template chosen in /templates (or null when /plan is opened directly).
+  // When set it forces that formula's config; otherwise the formula is derived
+  // from the existing plan sidecar, falling back to the "pick a template" state.
+  requestedFormula?: PlanFormula | null;
   onClose: () => void;
+  // Navigate back to the /templates chooser (a separate center stage).
+  onBackToTemplates: () => void;
 }
 
-export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, onClose }: PlanViewerProps) {
+export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, requestedFormula, onClose, onBackToTemplates }: PlanViewerProps) {
   useMountKey('viewer');
   return (
     <PlanBody
@@ -172,7 +180,9 @@ export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, 
       projectSlug={projectSlug}
       callTool={callTool}
       resetKey={resetKey}
+      requestedFormula={requestedFormula}
       onClose={onClose}
+      onBackToTemplates={onBackToTemplates}
     />
   );
 }
@@ -213,17 +223,19 @@ function PlanShell({ title, slug, onClose, children }: {
 // points. 10s = midpoint.
 const APPROX_SCENE_SECONDS = 10;
 
-function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }: {
+function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, requestedFormula, onClose, onBackToTemplates }: {
   item: MediaItem | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   resetKey?: number;
+  requestedFormula?: PlanFormula | null;
   onClose: () => void;
+  onBackToTemplates: () => void;
 }) {
   const { dispatch } = useCommandDispatch();
   const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
-  const [activeFormula, setActiveFormula] = useState<PlanFormula | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
   const [pendingSource, setPendingSource] = useState<string | null>(null);
   const [pendingCharA, setPendingCharA] = useState<string | null>(null);
   const [pendingCharB, setPendingCharB] = useState<string | null>(null);
@@ -231,24 +243,26 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
   const cancelledRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setActiveFormula(null);
-  }, [resetKey]);
+  // The formula whose config to show: an explicit choice from /templates wins,
+  // otherwise fall back to the existing plan's formula. Null → no plan yet.
+  const formula = requestedFormula ?? planFormula(sidecar);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [activeFormula, resetKey]);
+  }, [formula, resetKey]);
 
   // Load read_plan on mount / when the plan asset changes. A read failure here
   // means "no plan yet" — we keep sidecar=null and the slot UI takes over.
   useEffect(() => {
     if (!projectSlug) return;
     cancelledRef.current = false;
+    setLoadingPlan(true);
     void (async () => {
       const result = await callTool('read_plan', { project_slug: projectSlug });
       if (cancelledRef.current) return;
       if (result.isError) {
         setSidecar(null);
+        setLoadingPlan(false);
         return;
       }
       try {
@@ -260,6 +274,8 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
         setPendingCharB(null);
       } catch {
         setSidecar(null);
+      } finally {
+        if (!cancelledRef.current) setLoadingPlan(false);
       }
     })();
     return () => { cancelledRef.current = true; };
@@ -338,7 +354,6 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
           && (cs.characters[1]?.asset_id ?? null) === charBId;
         if (matchesRequest) {
           setSidecar(parsed);
-          setActiveFormula(planFormula(parsed) ?? 'char_swap');
           setPendingSource(null);
           setPendingCharA(null);
           setPendingCharB(null);
@@ -352,15 +367,15 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
     }
   }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool]);
 
-  const currentFormula = planFormula(sidecar);
   const slug = sidecar ? (item?.slug ?? 'plan') : 'plan (not yet generated)';
-  const title = activeFormula == null
+  const title = formula == null
     ? 'PLAN'
-    : activeFormula === 'clip_show'
+    : formula === 'clip_show'
     ? 'PLAN: CLIP SHOW'
-    : activeFormula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
-  const showSelector = activeFormula == null;
-  const backToTemplates = useCallback(() => setActiveFormula(null), []);
+    : formula === 'storyboard_video' ? 'PLAN: STORYBOARD' : 'PLAN: CHAR SWAP';
+  // While the initial read_plan is in flight and nothing was explicitly
+  // requested, hold off rendering so the empty state doesn't flash.
+  const showLoading = loadingPlan && formula == null;
 
   return (
     <PlanShell title={title} slug={slug} onClose={onClose}>
@@ -370,12 +385,13 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
         style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
       >
         <div className="w-full min-w-0 px-4 sm:px-6 py-5">
-          {showSelector ? (
-            <PlanTemplateSelector
-              currentFormula={currentFormula}
-              onSelect={setActiveFormula}
-            />
-          ) : activeFormula === 'char_swap' ? (
+          {showLoading ? (
+            <div className="min-h-[40vh] flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-emerald-400/60" />
+            </div>
+          ) : formula == null ? (
+            <PlanEmptyState onBackToTemplates={onBackToTemplates} />
+          ) : formula === 'char_swap' ? (
             <>
               <PlanHeader
                 sourceId={sourceId}
@@ -391,7 +407,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
                 onCharADrop={setPendingCharA}
                 onCharBDrop={setPendingCharB}
                 onGenerate={() => { void handleGenerate(); }}
-                onBack={backToTemplates}
+                onBack={onBackToTemplates}
               />
               {charSidecar && (
                 <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
@@ -417,14 +433,14 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
                 />
               )}
             </>
-          ) : activeFormula === 'storyboard_video' ? (
+          ) : formula === 'storyboard_video' ? (
             <StoryboardVideoPlanFormula
               sidecar={storyboardVideoSidecar}
               mediaItems={mediaItems}
               projectSlug={projectSlug}
               callTool={callTool}
               onSidecarUpdate={(next) => setSidecar(next)}
-              onBack={backToTemplates}
+              onBack={onBackToTemplates}
             />
           ) : (
             <ClipShowPlanFormula
@@ -433,12 +449,35 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose }
               projectSlug={projectSlug}
               callTool={callTool}
               onSidecarUpdate={(next) => setSidecar(next)}
-              onBack={backToTemplates}
+              onBack={onBackToTemplates}
             />
           )}
         </div>
       </div>
     </PlanShell>
+  );
+}
+
+function PlanEmptyState({ onBackToTemplates }: { onBackToTemplates: () => void }) {
+  return (
+    <div className="min-h-[40vh] flex flex-col items-center justify-center text-center gap-4">
+      <EmptyState size="md">No template selected for this plan.</EmptyState>
+      <button
+        type="button"
+        onClick={onBackToTemplates}
+        className={cn(
+          'h-8 px-3 flex items-center gap-1.5 rounded',
+          'text-xs font-mono font-bold uppercase tracking-wider',
+          'text-emerald-300 hover:text-white',
+          'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
+          'transition-colors duration-150',
+          FOCUS_RING_BUTTON,
+        )}
+      >
+        <LayoutTemplate className="w-3.5 h-3.5" />
+        /templates
+      </button>
+    </div>
   );
 }
 
@@ -461,86 +500,6 @@ function PlanBackButton({ onBack }: {
       <ArrowLeft className="w-3.5 h-3.5" />
       Templates
     </button>
-  );
-}
-
-function PlanTemplateSelector({ currentFormula, onSelect }: {
-  currentFormula: PlanFormula | null;
-  onSelect: (formula: PlanFormula) => void;
-}) {
-  const templates: Array<{ id: Exclude<PlanFormula, 'char_swap'>; label: string; icon: React.ReactNode; meta: string }> = [
-    { id: 'clip_show', label: 'Clip Show', icon: <Mic className="w-4 h-4" />, meta: 'char-* + vid-*' },
-    { id: 'storyboard_video', label: 'Storyboard', icon: <Images className="w-4 h-4" />, meta: 'img-*' },
-  ];
-  return (
-    <div className="min-h-full flex flex-col">
-      <div className="mb-5 pb-4 border-b border-zinc-800/70">
-        <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/45">Plan</div>
-        <h1 className="mt-1 text-lg font-bold text-emerald-300 font-mono uppercase tracking-wider">Templates</h1>
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        {templates.map((template) => {
-          const isCurrent = currentFormula === template.id;
-          return (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() => onSelect(template.id)}
-              className={cn(
-                'min-h-32 p-4 rounded border text-left transition-colors',
-                'bg-zinc-950/50 hover:bg-emerald-500/10',
-                isCurrent ? 'border-emerald-500/65' : 'border-zinc-800/75 hover:border-emerald-500/50',
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={cn(
-                    'w-8 h-8 rounded border flex items-center justify-center shrink-0',
-                    isCurrent ? 'border-emerald-500/70 text-emerald-200 bg-emerald-500/15' : 'border-zinc-700/80 text-emerald-300/65 bg-black/35',
-                  )}>
-                    {template.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-mono font-bold uppercase tracking-wider text-emerald-200 truncate">{template.label}</span>
-                    <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-emerald-300/40 truncate">{template.meta}</span>
-                  </span>
-                </div>
-                {isCurrent && (
-                  <span className="shrink-0 h-5 px-2 rounded border border-emerald-500/40 bg-emerald-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-200/80">
-                    Current
-                  </span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {currentFormula === 'char_swap' && (
-        <button
-          type="button"
-          onClick={() => onSelect('char_swap')}
-          className={cn(
-            'mt-4 w-full min-h-20 p-4 rounded border text-left transition-colors',
-            'bg-zinc-950/40 hover:bg-emerald-500/10 border-zinc-800/75 hover:border-emerald-500/45',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-8 h-8 rounded border border-zinc-700/80 flex items-center justify-center shrink-0 text-emerald-300/55 bg-black/35">
-                <MapPin className="w-4 h-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-mono font-bold uppercase tracking-wider text-emerald-200 truncate">Legacy Plan</span>
-                <span className="block mt-0.5 text-[10px] font-mono uppercase tracking-wider text-emerald-300/35 truncate">char swap</span>
-              </span>
-            </div>
-            <span className="shrink-0 h-5 px-2 rounded border border-emerald-500/35 bg-emerald-500/10 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-200/70">
-              Current
-            </span>
-          </div>
-        </button>
-      )}
-    </div>
   );
 }
 
