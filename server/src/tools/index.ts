@@ -160,6 +160,7 @@ import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboa
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
 import { planClipShowDef } from "./plan-clip-show.js";
 import { replacePlanClipShowAssetDef } from "./replace-plan-clip-show-asset.js";
+import { regenerateClipShowSegmentDef } from "./regenerate-clip-show-segment.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -347,6 +348,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     replacePlanStoryboardVideoVideoDef(fs),
     planClipShowDef(fs),
     replacePlanClipShowAssetDef(fs),
+    regenerateClipShowSegmentDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),

@@ -2,13 +2,23 @@ import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
+import type { ClipShowItem } from "../plan-types.js";
 import type { ToolDef } from "./tool-def.js";
+
+const itemSchema = z.union([
+  z.object({ kind: z.literal("topic"), topic: z.string().min(1) }),
+  z.object({ kind: z.literal("image"), image_asset_id: z.string().min(1) }),
+]);
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   character_asset_id: z.string().describe("Host character asset id (char-*) with an assigned ElevenLabs voice"),
-  clip_asset_ids: z.array(z.string()).min(1).max(8).describe("Ordered video clips (vid-*) to talk about"),
-  show_brief: z.string().optional().describe("Optional creative direction for the clip show"),
+  items: z
+    .array(itemSchema)
+    .min(1)
+    .max(12)
+    .describe("Ordered items the host jokes about — each a {kind:'topic',topic} or {kind:'image',image_asset_id} (img-*)"),
+  show_brief: z.string().optional().describe("Optional creative direction for the read-through"),
   tone: z.string().optional().describe("Optional comedy tone"),
 };
 
@@ -16,19 +26,19 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
   return {
     name: "plan_clip_show",
     description:
-      "Create the active Clip Show plan from one char-* host with an ElevenLabs voice and one or more vid-* clips. Uses GPT-5.5 to write before/after jokes, dialog, first-frame prompts, and Seedance video prompts. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
+      "Create the active Clip Show plan: a host char-* with an ElevenLabs voice does an audio read-through, writing one joke per item (each item a text topic or an img-* image, read via vision). Uses GPT-5.5. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
     schema,
     handler: async (args) => {
       const {
         project_slug,
         character_asset_id,
-        clip_asset_ids,
+        items,
         show_brief,
         tone,
       } = args as {
         project_slug: string;
         character_asset_id: string;
-        clip_asset_ids: string[];
+        items: ClipShowItem[];
         show_brief?: string;
         tone?: string;
       };
@@ -40,8 +50,8 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      // Cheap pre-check: confirm the host character and clips resolve before
-      // enqueuing. Heavy context loading (transcripts, frames) stays in the job.
+      // Cheap pre-check: confirm the host character and any image items resolve
+      // before enqueuing. Heavy work (vision, GPT) stays in the job.
       const charId = character_asset_id.replace(/^@/, "");
       const charManifest = await fs.getManifest(charId, project_slug, { includeDotfiles: true });
       if (!charManifest.ok) {
@@ -63,13 +73,14 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
           }],
         };
       }
-      for (const clip of clip_asset_ids) {
-        const clipId = clip.replace(/^@/, "");
-        const clipManifest = await fs.getManifest(clipId, project_slug);
-        if (!clipManifest.ok) {
+      for (const item of items) {
+        if (item.kind !== "image") continue;
+        const imgId = item.image_asset_id.replace(/^@/, "");
+        const imgManifest = await fs.getManifest(imgId, project_slug);
+        if (!imgManifest.ok) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `Clip not found: ${clipId}` }],
+            content: [{ type: "text" as const, text: `Image not found: ${imgId}` }],
           };
         }
       }
@@ -83,7 +94,7 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
         type: "plan_clip_show",
         projectSlug: project_slug,
         characterAssetId: character_asset_id,
-        clipAssetIds: clip_asset_ids,
+        items,
         showBrief: show_brief ?? null,
         tone: tone ?? null,
       });

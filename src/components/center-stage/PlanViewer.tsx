@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, Film, Loader2, MapPin, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Plus, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -81,8 +81,6 @@ interface StoryboardVideoPlanSidecar {
   total_duration_s: number;
 }
 
-type ClipShowPlacement = 'before' | 'after' | 'both';
-
 interface ClipShowCharacter {
   asset_id: string;
   name: string;
@@ -90,36 +88,44 @@ interface ClipShowCharacter {
   elevenlabs_voice_id: string;
 }
 
+// One input the host jokes about: a text topic or an img-* image.
+type ClipShowItem =
+  | { kind: 'topic'; topic: string }
+  | { kind: 'image'; image_asset_id: string };
+
 interface ClipShowSegment {
-  clip_asset_id: string;
-  clip_summary: string;
-  placement: ClipShowPlacement;
-  intro_dialog: string;
-  outro_dialog: string;
-  dialog: string;
-  joke_notes: string;
-  quality_notes: string;
-  first_frame_prompt: string;
-  video_prompt: string;
+  kind: 'topic' | 'image';
+  topic?: string;
+  image_asset_id?: string;
+  source_summary: string;
+  joke: string;
+  joke_notes?: string;
+  joke_type?: string;
   audio_asset_id?: string | null;
-  first_frame_asset_id?: string | null;
-  video_asset_id?: string | null;
 }
+
+// Comedic styles offered by the per-joke type dropdown. Mirrors the server's
+// CLIP_SHOW_JOKE_TYPES (id + label only — the prompt hint lives server-side).
+const CLIP_SHOW_JOKE_TYPES: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'observational', label: 'Observational' },
+  { id: 'one_liner', label: 'One-liner' },
+  { id: 'pun', label: 'Pun / wordplay' },
+  { id: 'deadpan', label: 'Deadpan' },
+  { id: 'absurdist', label: 'Absurdist' },
+  { id: 'roast', label: 'Roast' },
+  { id: 'self_deprecating', label: 'Self-deprecating' },
+  { id: 'hyperbole', label: 'Hyperbole' },
+];
+const DEFAULT_JOKE_TYPE = 'auto';
 
 interface ClipShowPlanSidecar {
   formula: 'clip_show';
   character: ClipShowCharacter;
-  clip_asset_ids: string[];
   show_brief: string;
   tone: string;
   model: 'gpt-5.5';
   audio_model: 'elevenlabs';
-  first_frame_model: 'generate_gpt_image';
-  video_model: 'generate_seedance2_video';
-  video_resolution: '720p';
-  video_aspect_ratio: '16:9';
-  video_duration_s: number;
-  total_duration_s: number;
   segments: ClipShowSegment[];
 }
 
@@ -800,37 +806,102 @@ function deriveClipShowAudioState(assetId: string | null | undefined, mediaItems
   return { kind: 'generating' };
 }
 
-function deriveClipShowVideoState(assetId: string | null | undefined, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
-  if (!assetId) return { kind: 'idle' };
-  const item = mediaItems.find((m) => m.id === assetId);
-  if (!item) return { kind: 'generating' };
-  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
-  if (item.status === 'ready') return { kind: 'ready', src: `/files/${projectSlug}/${assetId}/original.mp4` };
-  return { kind: 'generating', label: item.status === 'replacing-audio' ? 'splicing audio...' : 'generating...' };
-}
-
 function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
   if (!sidecar) return '';
   return [
     sidecar.character.asset_id,
-    sidecar.clip_asset_ids.join(','),
     sidecar.show_brief,
     sidecar.tone,
     sidecar.segments.map((s) => [
-      s.clip_asset_id,
-      s.dialog,
-      s.first_frame_prompt,
-      s.video_prompt,
+      s.kind,
+      s.topic ?? '',
+      s.image_asset_id ?? '',
+      s.joke,
+      s.joke_type ?? '',
       s.audio_asset_id ?? '',
-      s.first_frame_asset_id ?? '',
-      s.video_asset_id ?? '',
     ].join(':')).join('|'),
   ].join('|');
 }
 
-// Work area for the clip_show plan (rendered in /plan). Setup + plan creation
-// live in ClipShowSetup (the /templates marketplace); this renders the planned
-// segments with their per-step audio/frame/video generation.
+// True when a clip_show sidecar predates the read-through refactor (old segments
+// keyed on clips, lacking joke/kind). Such plans must be regenerated.
+function isStaleClipShowPlan(sidecar: ClipShowPlanSidecar): boolean {
+  return sidecar.segments.some((s) => s.joke === undefined || s.kind === undefined);
+}
+
+// Plays each segment's ready voiceover in order — the "read-through". Driven
+// imperatively (no effect): handlers + onEnded advance to the next ready track.
+function ClipShowReadThroughPlayer({ sidecar, mediaItems, projectSlug }: {
+  sidecar: ClipShowPlanSidecar;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+}) {
+  const tracks = useMemo(
+    () => sidecar.segments.map((s) => {
+      const state = deriveClipShowAudioState(s.audio_asset_id, mediaItems, projectSlug);
+      return state.kind === 'ready' ? state.src : null;
+    }),
+    [sidecar.segments, mediaItems, projectSlug],
+  );
+  const readyCount = tracks.filter(Boolean).length;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState<number | null>(null);
+
+  const playIndex = useCallback((i: number) => {
+    const el = audioRef.current;
+    const src = tracks[i] ?? null;
+    if (!el || !src) {
+      // advance to the next ready track
+      for (let j = i + 1; j < tracks.length; j++) {
+        if (tracks[j]) { const next = audioRef.current; if (next) { setPlaying(j); next.src = tracks[j] as string; void next.play().catch(() => setPlaying(null)); } return; }
+      }
+      setPlaying(null);
+      return;
+    }
+    setPlaying(i);
+    el.src = src;
+    void el.play().catch(() => setPlaying(null));
+  }, [tracks]);
+
+  const advance = useCallback((fromInclusive: number) => {
+    for (let i = fromInclusive; i < tracks.length; i++) {
+      if (tracks[i]) { playIndex(i); return; }
+    }
+    setPlaying(null);
+  }, [tracks, playIndex]);
+
+  const stop = useCallback(() => { setPlaying(null); audioRef.current?.pause(); }, []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => (playing == null ? advance(0) : stop())}
+        disabled={readyCount === 0}
+        title={readyCount === 0 ? 'Generate some voiceovers first' : 'Play the jokes in order'}
+        className={cn(
+          'h-7 px-2.5 flex items-center gap-1.5 rounded',
+          'text-[10px] font-mono font-bold uppercase tracking-wider',
+          'text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20',
+          'border border-emerald-500/35 hover:border-emerald-500/60 transition-colors',
+          'disabled:opacity-40 disabled:cursor-not-allowed',
+          FOCUS_RING_BUTTON,
+        )}
+      >
+        {playing == null ? <Play className="w-3 h-3" /> : <Square className="w-3 h-3" />}
+        {playing == null ? 'Play read-through' : 'Stop'}
+      </button>
+      <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/40">
+        {playing != null ? `playing ${playing + 1}/${sidecar.segments.length}` : `${readyCount}/${sidecar.segments.length} voiced`}
+      </span>
+      <audio ref={audioRef} onEnded={() => advance((playing ?? -1) + 1)} hidden />
+    </div>
+  );
+}
+
+// Work area for the clip_show read-through (rendered in /plan). Setup + plan
+// creation live in ClipShowSetup (the /templates marketplace); this renders the
+// per-item joke segments with their voiceover generation + a play-all control.
 function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
   sidecar: ClipShowPlanSidecar | null;
   mediaItems: MediaItem[];
@@ -843,8 +914,19 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
       <div className="rounded border border-dashed border-emerald-500/25 bg-zinc-950/40 p-6 text-center">
         <Mic className="w-6 h-6 mx-auto mb-2 text-emerald-300/40" />
         <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-300/45">
-          clip show plan not generated yet
+          read-through plan not generated yet
         </div>
+      </div>
+    );
+  }
+  if (isStaleClipShowPlan(sidecar)) {
+    return (
+      <div className="rounded border border-dashed border-amber-500/30 bg-amber-500/5 p-6 text-center space-y-2">
+        <Mic className="w-6 h-6 mx-auto text-amber-300/50" />
+        <div className="text-[11px] font-mono uppercase tracking-wider text-amber-300/70">old clip show format</div>
+        <p className="text-[11px] font-mono text-amber-200/60 leading-relaxed">
+          This plan predates the read-through update. Open <span className="text-amber-200/90">Templates</span> above and regenerate Clip Show.
+        </p>
       </div>
     );
   }
@@ -852,15 +934,13 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-2">
         <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
-          {sidecar.segments.length} clip{sidecar.segments.length === 1 ? '' : 's'} planned
+          {sidecar.segments.length} joke{sidecar.segments.length === 1 ? '' : 's'} planned
         </div>
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/35">
-          dialog -&gt; audio -&gt; first frame -&gt; video
-        </div>
+        <ClipShowReadThroughPlayer sidecar={sidecar} mediaItems={mediaItems} projectSlug={projectSlug} />
       </div>
       {sidecar.segments.map((segment, index) => (
         <ClipShowSegmentBlock
-          key={`${segment.clip_asset_id}-${index}`}
+          key={index}
           sidecar={sidecar}
           segment={segment}
           index={index}
@@ -919,12 +999,38 @@ function ClipShowCharacterDropZone({ item, assetId, onDropAsset }: {
   );
 }
 
-function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
-  clips: Array<{ id: string; item: MediaItem | null }>;
-  onDropClip: (assetId: string) => void;
-  onRemoveClip: (assetId: string) => void;
+// Ordered mixed list of items the host jokes about: type a topic or drop an
+// img-* image. Reorder/remove inline. Replaces the old vid-* clips drop zone.
+function ClipShowItemsEditor({ items, mediaItems, onChange }: {
+  items: ClipShowItem[];
+  mediaItems: MediaItem[];
+  onChange: (next: ClipShowItem[]) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
+  const [topicDraft, setTopicDraft] = useState('');
+
+  const addTopic = () => {
+    const topic = topicDraft.trim();
+    if (!topic) return;
+    onChange([...items, { kind: 'topic', topic }]);
+    setTopicDraft('');
+  };
+  const addImage = (assetId: string) => {
+    if (!assetId.startsWith('img-')) {
+      toast({ title: 'Wrong asset type', description: `Drop an img-* image, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    if (items.some((it) => it.kind === 'image' && it.image_asset_id === assetId)) return;
+    onChange([...items, { kind: 'image', image_asset_id: assetId }]);
+  };
+  const removeAt = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
@@ -932,11 +1038,12 @@ function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
     if (!json) return;
     try {
       const payload = JSON.parse(json) as SidebarDragPayload;
-      if (typeof payload.id === 'string') onDropClip(payload.id);
+      if (typeof payload.id === 'string') addImage(payload.id);
     } catch {
       return;
     }
   };
+
   return (
     <div
       className={cn(
@@ -949,47 +1056,66 @@ function ClipShowClipsDropZone({ clips, onDropClip, onRemoveClip }: {
       onDrop={handleDrop}
     >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Clips</div>
-        <div className="text-[10px] font-mono text-emerald-300/40">{clips.length > 0 ? `${clips.length} clip${clips.length === 1 ? '' : 's'}` : 'drop vid-* clips'}</div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Topics &amp; images</div>
+        <div className="text-[10px] font-mono text-emerald-300/40">{items.length > 0 ? `${items.length} item${items.length === 1 ? '' : 's'}` : 'drop img-* or add topics'}</div>
       </div>
-      {clips.length === 0 ? (
-        <div className="h-32 rounded bg-zinc-950/70 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
-          <Film className="w-5 h-5 text-emerald-300/35" />
-          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop clips here</span>
+      <div className="flex gap-2 mb-2">
+        <input
+          value={topicDraft}
+          onChange={(e) => setTopicDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }}
+          placeholder="Add a topic to joke about…"
+          className="min-w-0 flex-1 h-7 px-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 placeholder:text-emerald-300/30"
+        />
+        <button
+          type="button"
+          onClick={addTopic}
+          disabled={!topicDraft.trim()}
+          className={cn(
+            'h-7 px-2.5 flex items-center gap-1 rounded text-[10px] font-mono font-bold uppercase tracking-wider',
+            'text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/60 transition-colors',
+            'disabled:opacity-40 disabled:cursor-not-allowed',
+            FOCUS_RING_BUTTON,
+          )}
+        >
+          <Plus className="w-3 h-3" /> Add
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div className="h-20 rounded bg-zinc-950/70 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
+          <Images className="w-5 h-5 text-emerald-300/35" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop img-* here or add a topic</span>
         </div>
       ) : (
-        <div className="flex min-h-32 flex-wrap gap-2">
-          {clips.map(({ id, item }, index) => {
-            const src = item?.thumbnailSrc ?? null;
+        <ol className="space-y-1.5">
+          {items.map((it, index) => {
+            const imageItem = it.kind === 'image' ? mediaItems.find((m) => m.id === it.image_asset_id) ?? null : null;
+            const src = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
             return (
-              <div key={id} className="group relative w-36 rounded border border-zinc-700/60 bg-zinc-950/80 overflow-hidden">
-                <div className="h-20 bg-black/40 flex items-center justify-center">
-                  {src ? <img src={src} alt={item?.slug ?? id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-4 h-4 text-emerald-300/40" />}
+              <li
+                key={`${it.kind}-${it.kind === 'image' ? it.image_asset_id : index}-${index}`}
+                className="flex items-center gap-2 rounded border border-zinc-700/60 bg-zinc-950/75 p-1.5"
+              >
+                <span className="shrink-0 w-5 text-center text-[10px] font-mono text-emerald-300/45">{index + 1}</span>
+                {it.kind === 'image' ? (
+                  <>
+                    <span className="shrink-0 h-9 w-14 rounded bg-black/40 border border-zinc-800/70 overflow-hidden flex items-center justify-center">
+                      {src ? <img src={src} alt={it.image_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Images className="w-3.5 h-3.5 text-emerald-300/40" />}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[11px] font-mono text-emerald-200/75 truncate">{imageItem?.slug ?? `@${it.image_asset_id}`}</span>
+                  </>
+                ) : (
+                  <span className="min-w-0 flex-1 text-[11px] font-mono text-emerald-200/85 truncate">{it.topic}</span>
+                )}
+                <div className="ml-auto flex items-center gap-0.5 shrink-0">
+                  <button type="button" onClick={() => move(index, -1)} disabled={index === 0} title="Move up" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowUp className="w-3 h-3" /></button>
+                  <button type="button" onClick={() => move(index, 1)} disabled={index === items.length - 1} title="Move down" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowDown className="w-3 h-3" /></button>
+                  <button type="button" onClick={() => removeAt(index)} title="Remove" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:border-red-300/70 hover:bg-red-500/25', FOCUS_RING_BUTTON)}><X className="w-3 h-3" /></button>
                 </div>
-                <div className="px-1.5 py-1">
-                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/45">Clip {index + 1}</div>
-                  <div className="text-[10px] font-mono text-emerald-200/75 truncate">{item?.slug ?? `@${id}`}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveClip(id)}
-                  title="Remove clip"
-                  className={cn(
-                    'absolute top-1 right-1 h-5 w-5 rounded border border-zinc-700/70 bg-black/80',
-                    'items-center justify-center text-emerald-300/60 hover:text-white hover:border-red-300/70 hover:bg-red-500/25',
-                    'hidden group-hover:flex',
-                  )}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
+              </li>
             );
           })}
-          <div className="w-36 min-h-28 rounded border border-dashed border-zinc-700/70 bg-black/25 flex flex-col items-center justify-center gap-1 text-center px-2">
-            <Film className="w-4 h-4 text-emerald-300/30" />
-            <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">drop to add</span>
-          </div>
-        </div>
+        </ol>
       )}
     </div>
   );
@@ -1102,43 +1228,78 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
 }) {
-  const [dialog, setDialog] = useState(segment.dialog);
-  const [firstFramePrompt, setFirstFramePrompt] = useState(segment.first_frame_prompt);
-  const [videoPrompt, setVideoPrompt] = useState(segment.video_prompt);
+  const [joke, setJoke] = useState(segment.joke);
+  const [jokeType, setJokeType] = useState(segment.joke_type ?? DEFAULT_JOKE_TYPE);
   const [generatingAudio, setGeneratingAudio] = useState(false);
-  const [generatingFrame, setGeneratingFrame] = useState(false);
-  const [generatingVideo, setGeneratingVideo] = useState(false);
-  const outputAspect = useMemo(() => sourceAspectFromDimensions(16, 9), []);
-  const clipItem = useMemo(
-    () => mediaItems.find((m) => m.id === segment.clip_asset_id) ?? null,
-    [mediaItems, segment.clip_asset_id],
+  const [regenerating, setRegenerating] = useState(false);
+  const [sourceDragActive, setSourceDragActive] = useState(false);
+  const imageItem = useMemo(
+    () => (segment.kind === 'image' && segment.image_asset_id ? mediaItems.find((m) => m.id === segment.image_asset_id) ?? null : null),
+    [segment.kind, segment.image_asset_id, mediaItems],
   );
   const audioState = useMemo(
     () => deriveClipShowAudioState(segment.audio_asset_id, mediaItems, projectSlug),
     [segment.audio_asset_id, mediaItems, projectSlug],
   );
-  const frameState = useMemo(
-    () => deriveStoryboardTileState(segment.first_frame_asset_id, mediaItems),
-    [segment.first_frame_asset_id, mediaItems],
-  );
-  const videoState = useMemo(
-    () => deriveClipShowVideoState(segment.video_asset_id, mediaItems, projectSlug),
-    [segment.video_asset_id, mediaItems, projectSlug],
-  );
 
   useEffect(() => {
-    setDialog(segment.dialog);
-    setFirstFramePrompt(segment.first_frame_prompt);
-    setVideoPrompt(segment.video_prompt);
-  }, [segment.dialog, segment.first_frame_prompt, segment.video_prompt]);
+    setJoke(segment.joke);
+  }, [segment.joke]);
+  useEffect(() => {
+    setJokeType(segment.joke_type ?? DEFAULT_JOKE_TYPE);
+  }, [segment.joke_type]);
+
+  // Rewrite this joke via GPT-5.5 in the selected joke type, optionally from a
+  // dropped-in img-* source. The tool returns the full updated plan (with the
+  // segment's stale voiceover cleared); we apply it directly.
+  const handleRegenerate = useCallback(async (opts?: { imageAssetId?: string }) => {
+    setRegenerating(true);
+    try {
+      const result = await callTool('regenerate_clip_show_segment', {
+        project_slug: projectSlug,
+        segment_index: index,
+        joke_type: jokeType,
+        ...(opts?.imageAssetId ? { image_asset_id: opts.imageAssetId } : {}),
+      });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Regenerate failed';
+        toast({ title: 'Regenerate failed', description: msg, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    } finally {
+      setRegenerating(false);
+    }
+  }, [callTool, projectSlug, index, jokeType, onSidecarUpdate]);
+
+  const handleSourceDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setSourceDragActive(false);
+    if (regenerating) return;
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const droppedId = payload.id;
+      if (typeof droppedId !== 'string') return;
+      if (!droppedId.startsWith('img-')) {
+        toast({ title: 'Not an image', description: `Drop an img-* image to replace the source, got ${droppedId}.`, duration: 3000 });
+        return;
+      }
+      if (droppedId === segment.image_asset_id) return;
+      void handleRegenerate({ imageAssetId: droppedId });
+    } catch {
+      return;
+    }
+  }, [regenerating, segment.image_asset_id, handleRegenerate]);
 
   const replaceSegment = useCallback(async (patch: Record<string, unknown>) => {
     const result = await callTool('replace_plan_clip_show_asset', {
       project_slug: projectSlug,
       segment_index: index,
-      dialog,
-      first_frame_prompt: firstFramePrompt,
-      video_prompt: videoPrompt,
+      joke,
       ...patch,
     });
     if (result.isError) {
@@ -1150,10 +1311,10 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
     const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
     if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
     return parsed.sidecar ?? null;
-  }, [callTool, projectSlug, index, dialog, firstFramePrompt, videoPrompt, onSidecarUpdate]);
+  }, [callTool, projectSlug, index, joke, onSidecarUpdate]);
 
   const handleGenerateAudio = useCallback(async () => {
-    if (!dialog.trim()) return;
+    if (!joke.trim()) return;
     setGeneratingAudio(true);
     try {
       const saved = await replaceSegment({});
@@ -1161,7 +1322,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
       const result = await callTool('generate_elevenlabs_t2a', {
         project_slug: projectSlug,
         character_asset_id: sidecar.character.asset_id,
-        text: dialog.trim(),
+        text: joke.trim(),
         asset_name: `clip-show-s${index + 1}`,
       });
       if (result.isError) {
@@ -1177,86 +1338,15 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
     } finally {
       setGeneratingAudio(false);
     }
-  }, [dialog, replaceSegment, callTool, projectSlug, sidecar.character.asset_id, sidecar.character.elevenlabs_voice_id, index]);
-
-  const handleGenerateFrame = useCallback(async () => {
-    if (!firstFramePrompt.trim()) return;
-    setGeneratingFrame(true);
-    try {
-      const saved = await replaceSegment({});
-      if (!saved) return;
-      const result = await callTool('generate_gpt_image', {
-        project_slug: projectSlug,
-        prompt: firstFramePrompt.trim(),
-        image_slugs: [`@${sidecar.character.asset_id}`],
-        aspect_ratio: '16:9',
-        resolution: '2K',
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'First frame generation failed';
-        toast({ title: 'First frame failed', description: msg, duration: 5000 });
-        return;
-      }
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { img_asset_id?: string };
-      if (parsed.img_asset_id) await replaceSegment({ first_frame_asset_id: parsed.img_asset_id });
-      await callTool('sync', { project_slug: projectSlug });
-      toast({ title: 'First frame enqueued', description: 'GPT Image 2', duration: 2500 });
-    } finally {
-      setGeneratingFrame(false);
-    }
-  }, [firstFramePrompt, replaceSegment, callTool, projectSlug, sidecar.character.asset_id]);
-
-  const handleGenerateVideo = useCallback(async () => {
-    const firstFrameAssetId = segment.first_frame_asset_id;
-    const audioAssetId = segment.audio_asset_id;
-    if (!firstFrameAssetId || !audioAssetId) return;
-    setGeneratingVideo(true);
-    try {
-      const saved = await replaceSegment({});
-      if (!saved) return;
-      const prompt = `${videoPrompt.trim()}\n\nSpoken dialog: ${dialog.trim()}`;
-      const result = await callTool('generate_seedance2_video', {
-        project_slug: projectSlug,
-        first_frame_slug: `@${firstFrameAssetId}`,
-        prompt,
-        duration: String(sidecar.video_duration_s),
-        resolution: sidecar.video_resolution,
-        aspect_ratio: sidecar.video_aspect_ratio,
-        generate_audio: false,
-        replace_audio_with: `@${audioAssetId}`,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Seedance video generation failed';
-        toast({ title: 'Video generation failed', description: msg, duration: 5000 });
-        return;
-      }
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { vid_asset_id?: string };
-      if (parsed.vid_asset_id) await replaceSegment({ video_asset_id: parsed.vid_asset_id });
-      await callTool('sync', { project_slug: projectSlug });
-      toast({ title: 'Seedance video enqueued', description: 'audio will be spliced after generation', duration: 2500 });
-    } finally {
-      setGeneratingVideo(false);
-    }
-  }, [segment.first_frame_asset_id, segment.audio_asset_id, replaceSegment, videoPrompt, dialog, callTool, projectSlug, sidecar.video_duration_s, sidecar.video_resolution, sidecar.video_aspect_ratio]);
+  }, [joke, replaceSegment, callTool, projectSlug, sidecar.character.asset_id, sidecar.character.elevenlabs_voice_id, index]);
 
   const handleAudioReplace = useCallback(async (assetId: string) => {
     await replaceSegment({ audio_asset_id: assetId });
   }, [replaceSegment]);
 
-  const handleFrameReplace = useCallback(async (assetId: string) => {
-    await replaceSegment({ first_frame_asset_id: assetId });
-  }, [replaceSegment]);
-
-  const handleVideoReplace = useCallback(async (assetId: string) => {
-    await replaceSegment({ video_asset_id: assetId });
-  }, [replaceSegment]);
-
-  const canGenerateAudio = dialog.trim().length > 0 && !generatingAudio;
-  const canGenerateVideo = audioState.kind === 'ready' && frameState.kind === 'ready' && !generatingVideo;
-  const clipSrc = clipItem?.thumbnailSrc ?? null;
-  const placementLabel = segment.placement === 'before' ? 'Intro' : segment.placement === 'after' ? 'Outro' : 'Intro + Outro';
+  const canGenerateAudio = joke.trim().length > 0 && !generatingAudio && !regenerating;
+  const imageSrc = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
+  const sourceLabel = segment.kind === 'image' ? (imageItem?.slug ?? `@${segment.image_asset_id ?? 'img'}`) : 'Topic';
 
   return (
     <section className="min-w-0 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/55">
@@ -1264,94 +1354,109 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
         <div className="min-w-0 flex items-center gap-2 font-mono">
           <span className="inline-flex w-6 h-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/45 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold">{index + 1}</span>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-200 truncate">Clip {index + 1} {placementLabel}</h2>
-            <div className="text-[10px] uppercase tracking-wider text-emerald-300/40 truncate">{clipItem?.slug ?? `@${segment.clip_asset_id}`}</div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-200 truncate">Joke {index + 1}</h2>
+            <div className="text-[10px] uppercase tracking-wider text-emerald-300/40 truncate">{sourceLabel}</div>
           </div>
         </div>
         <div className="text-[10px] font-mono text-emerald-300/45">GPT-5.5</div>
       </header>
-      <div className="min-w-0 p-3 space-y-3">
+      <div className="min-w-0 p-3">
         <div className="grid grid-cols-1 xl:grid-cols-[15rem_minmax(0,1fr)] gap-3">
-          <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2 space-y-2">
+          <div
+            className={cn(
+              'relative min-w-0 rounded border border-dashed bg-black/35 p-2 space-y-2 transition-colors',
+              sourceDragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-800/70',
+            )}
+            onDragEnter={(e) => { e.preventDefault(); setSourceDragActive(true); }}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSourceDragActive(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setSourceDragActive(false); }}
+            onDrop={handleSourceDrop}
+          >
             <div className="flex items-center justify-between gap-2">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/60">Source clip</div>
-              <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/35">{segment.placement}</div>
-            </div>
-            <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
-              <div className="h-28 flex items-center justify-center">
-                {clipSrc ? <img src={clipSrc} alt={clipItem?.slug ?? segment.clip_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Film className="w-5 h-5 text-emerald-300/35" />}
+              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/60">
+                {segment.kind === 'image' ? 'Source image' : 'Topic'}
               </div>
+              <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">drop img-* to replace</div>
             </div>
-            <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed line-clamp-5">{segment.clip_summary}</div>
+            {segment.kind === 'image' ? (
+              <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
+                <div className="h-28 flex items-center justify-center">
+                  {imageSrc ? <img src={imageSrc} alt={sourceLabel} className="w-full h-full object-contain" loading="lazy" /> : <Images className="w-5 h-5 text-emerald-300/35" />}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded border border-zinc-700/60 bg-black/40 p-2 text-[11px] font-mono text-emerald-200/85 leading-relaxed">
+                {segment.topic}
+              </div>
+            )}
+            {segment.source_summary && (
+              <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed line-clamp-4">{segment.source_summary}</div>
+            )}
+            {sourceDragActive && (
+              <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none rounded">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop img-* to replace</span>
+              </div>
+            )}
+            {regenerating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none rounded">
+                <Loader2 className="w-5 h-5 animate-spin text-emerald-300/80" />
+              </div>
+            )}
           </div>
 
-          <div className="min-w-0 grid grid-cols-1 lg:grid-cols-[repeat(2,minmax(0,1fr))] 2xl:grid-cols-[repeat(4,minmax(0,1fr))] gap-3">
+          <div className="min-w-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_16rem] gap-3">
             <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Dialog</div>
-                <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">edit</div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Joke</div>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={jokeType}
+                    onChange={(e) => setJokeType(e.target.value)}
+                    disabled={regenerating}
+                    title="Joke type — applied when you regenerate"
+                    className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {CLIP_SHOW_JOKE_TYPES.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => { void handleRegenerate(); }}
+                    disabled={regenerating}
+                    title="Rewrite this joke with GPT-5.5 in the selected type"
+                    className={cn(
+                      'h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider',
+                      'text-emerald-300/80 hover:text-emerald-300',
+                      'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      FOCUS_RING_BUTTON,
+                    )}
+                  >
+                    {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    Regenerate
+                  </button>
+                </div>
               </div>
-              <PromptEditor value={dialog} onChange={setDialog} mediaItems={mediaItems} projectSlug={projectSlug} />
+              <PromptEditor value={joke} onChange={setJoke} mediaItems={mediaItems} projectSlug={projectSlug} />
+              {segment.joke_notes && (
+                <div className="text-[10px] font-mono text-emerald-300/40 leading-relaxed">{segment.joke_notes}</div>
+              )}
             </div>
 
             <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">T2A audio</div>
-                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">dialog voiceover</div>
-                </div>
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Voiceover</div>
+                <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">host reads the joke</div>
               </div>
               <ClipShowAudioSlot
                 state={audioState}
                 assetId={segment.audio_asset_id ?? null}
                 generating={generatingAudio}
                 disabled={!canGenerateAudio}
-                disabledReason="Dialog required"
+                disabledReason="Joke required"
                 onGenerate={() => { void handleGenerateAudio(); }}
                 onReplace={(assetId) => { void handleAudioReplace(assetId); }}
-              />
-            </div>
-
-            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">First frame</div>
-                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">prompt to image</div>
-                </div>
-              </div>
-              <PromptEditor value={firstFramePrompt} onChange={setFirstFramePrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
-              <StoryboardImageSlot
-                state={frameState}
-                sourceAspect={outputAspect}
-                assetId={segment.first_frame_asset_id ?? null}
-                replacing={false}
-                generating={generatingFrame}
-                onIdleClick={() => { void handleGenerateFrame(); }}
-                onReplace={(assetId) => { void handleFrameReplace(assetId); }}
-                onErrorRetry={() => { void handleGenerateFrame(); }}
-                onRegen={() => { void handleGenerateFrame(); }}
-              />
-            </div>
-
-            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Final video</div>
-                  <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">frame + audio</div>
-                </div>
-              </div>
-              <PromptEditor value={videoPrompt} onChange={setVideoPrompt} mediaItems={mediaItems} projectSlug={projectSlug} />
-              <VideoSwapSlot
-                state={videoState}
-                sourceAspect={outputAspect}
-                videoAssetId={segment.video_asset_id ?? null}
-                replacing={generatingVideo}
-                disabled={!canGenerateVideo}
-                disabledReason="Audio and first frame required"
-                onIdleClick={() => { void handleGenerateVideo(); }}
-                onReplace={(assetId) => { void handleVideoReplace(assetId); }}
-                onErrorRetry={() => { void handleGenerateVideo(); }}
-                onRegen={() => { void handleGenerateVideo(); }}
               />
             </div>
           </div>
@@ -4366,12 +4471,22 @@ export function ClipShowSetup({ projectSlug, mediaItems, callTool, onGenerated }
   );
 }
 
+function segmentsToItems(segments: ClipShowSegment[]): ClipShowItem[] {
+  return segments.map((s) =>
+    s.kind === 'image'
+      ? { kind: 'image', image_asset_id: s.image_asset_id ?? '' }
+      : { kind: 'topic', topic: s.topic ?? '' },
+  );
+}
+
 function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: ClipShowPlanSidecar | null }) {
-  // Seed from the existing plan, else auto-pick the newest host + clips so
-  // "Use Template" works without opening Customize.
+  // Seed from the existing plan, else auto-pick the newest voiced host + images
+  // so "Use Template" works without opening Customize.
   const autoPick = initial ? null : autoPickClipShow(mediaItems);
   const [characterId, setCharacterId] = useState(initial?.character.asset_id ?? autoPick?.characterId ?? '');
-  const [clipIds, setClipIds] = useState<string[]>(initial?.clip_asset_ids ?? autoPick?.clipIds ?? []);
+  const [items, setItems] = useState<ClipShowItem[]>(
+    initial && !isStaleClipShowPlan(initial) ? segmentsToItems(initial.segments) : autoPick?.items ?? [],
+  );
   const [showBrief, setShowBrief] = useState(initial?.show_brief ?? '');
   const [tone, setTone] = useState(initial?.tone ?? 'sharp, playful, punchy, not mean');
   const [generating, setGenerating] = useState(false);
@@ -4379,7 +4494,6 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
 
   const characterItem = useMemo(() => (characterId ? mediaItems.find((m) => m.id === characterId) ?? null : null), [characterId, mediaItems]);
-  const clipItems = useMemo(() => clipIds.map((id) => ({ id, item: mediaItems.find((m) => m.id === id) ?? null })), [clipIds, mediaItems]);
 
   const handleCharacterDrop = useCallback((assetId: string) => {
     if (!assetId.startsWith('char-')) {
@@ -4388,23 +4502,15 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
     }
     setCharacterId(assetId);
   }, []);
-  const handleClipDrop = useCallback((assetId: string) => {
-    if (!assetId.startsWith('vid-')) {
-      toast({ title: 'Wrong asset type', description: `Drop vid-* clips, got ${assetId}.`, duration: 3000 });
-      return;
-    }
-    setClipIds((prev) => (prev.includes(assetId) ? prev : [...prev, assetId]));
-  }, []);
-  const handleClipRemove = useCallback((assetId: string) => { setClipIds((prev) => prev.filter((id) => id !== assetId)); }, []);
 
   // Clip Show narration needs a voiced host. hasVoice === false means we know
   // it lacks one; null/undefined (unknown) doesn't block — the server pre-check
   // is the backstop.
   const hostMissingVoice = characterItem?.hasVoice === false;
-  const canGenerate = characterId.length > 0 && clipIds.length > 0 && !hostMissingVoice && !generating;
+  const canGenerate = characterId.length > 0 && items.length > 0 && !hostMissingVoice && !generating;
   const ctaHint = hostMissingVoice
     ? `@${characterId} has no ElevenLabs voice — assign one or pick another in Customize`
-    : 'Needs a host character + at least one clip — open Customize';
+    : 'Needs a host character + at least one topic or image — open Customize';
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
@@ -4414,7 +4520,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
       const result = await callTool('plan_clip_show', {
         project_slug: projectSlug,
         character_asset_id: characterId,
-        clip_asset_ids: clipIds,
+        items,
         show_brief: showBrief,
         tone,
       });
@@ -4424,8 +4530,8 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         return;
       }
       // plan_clip_show runs in the background (GPT-5.5). Poll read_plan until the
-      // new clip_show plan — matching the requested host + clips, with a changed
-      // key vs the previous plan — lands, then hand off to /plan.
+      // new clip_show plan — matching the requested host + item count, with a
+      // changed key vs the previous plan — lands, then hand off to /plan.
       const POLL_MS = 3000;
       const MAX_ATTEMPTS = 100; // ~5 min
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -4440,12 +4546,10 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         } catch { continue; }
         if (planFormula(parsed) !== 'clip_show') continue;
         const cs = parsed as ClipShowPlanSidecar;
-        const matches = cs.character.asset_id === characterId
-          && cs.clip_asset_ids.length === clipIds.length
-          && cs.clip_asset_ids.every((id, i) => id === clipIds[i]);
+        const matches = cs.character.asset_id === characterId && cs.segments.length === items.length;
         if (matches && clipShowSidecarKey(cs) !== prevKey) {
           await callTool('sync', { project_slug: projectSlug });
-          toast({ title: 'Clip Show planned', description: `${cs.segments.length} segment${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
+          toast({ title: 'Clip Show planned', description: `${cs.segments.length} joke${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
           onGenerated();
           return;
         }
@@ -4455,7 +4559,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
     } finally {
       if (!cancelledRef.current) setGenerating(false);
     }
-  }, [canGenerate, initial, callTool, projectSlug, characterId, clipIds, showBrief, tone, onGenerated]);
+  }, [canGenerate, initial, callTool, projectSlug, characterId, items, showBrief, tone, onGenerated]);
 
   return (
     <div className="space-y-4">
@@ -4470,16 +4574,16 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         <div className="space-y-3">
           <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
             <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
-            <ClipShowClipsDropZone clips={clipItems} onDropClip={handleClipDrop} onRemoveClip={handleClipRemove} />
+            <ClipShowItemsEditor items={items} mediaItems={mediaItems} onChange={setItems} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
             <label className="min-w-0">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Topic</span>
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Show brief</span>
               <textarea
                 value={showBrief}
                 onChange={(e) => setShowBrief(e.target.value)}
                 rows={2}
-                placeholder="Immigration in the UK"
+                placeholder="Overall angle for the read-through (optional)"
                 className={cn(
                   'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
                   'text-sm font-mono text-emerald-200/90 resize-y',

@@ -143,7 +143,8 @@ function jobTypeToAssetWorkKind(
     case "analyze_jokes":
     case "detect_scenes":
     case "plan_visualization":
-    case "plan_clip_show":         return { kind: "analyze" };
+    case "plan_clip_show":
+    case "regenerate_clip_show_segment": return { kind: "analyze" };
     case "transcribe":
     case "transcribe_video_audio": return { kind: "transcribe" };
     case "trim_video":             return { kind: "trim" };
