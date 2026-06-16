@@ -4397,7 +4397,14 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   }, []);
   const handleClipRemove = useCallback((assetId: string) => { setClipIds((prev) => prev.filter((id) => id !== assetId)); }, []);
 
-  const canGenerate = characterId.length > 0 && clipIds.length > 0 && !generating;
+  // Clip Show narration needs a voiced host. hasVoice === false means we know
+  // it lacks one; null/undefined (unknown) doesn't block — the server pre-check
+  // is the backstop.
+  const hostMissingVoice = characterItem?.hasVoice === false;
+  const canGenerate = characterId.length > 0 && clipIds.length > 0 && !hostMissingVoice && !generating;
+  const ctaHint = hostMissingVoice
+    ? `@${characterId} has no ElevenLabs voice — assign one or pick another in Customize`
+    : 'Needs a host character + at least one clip — open Customize';
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
@@ -4457,7 +4464,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         canGenerate={canGenerate}
         onUse={() => { void handleGenerate(); }}
         icon={<Mic className="w-4 h-4" />}
-        hint="Needs a host character + at least one clip — open Customize"
+        hint={ctaHint}
       />
       <CustomizeInputs>
         <div className="space-y-3">

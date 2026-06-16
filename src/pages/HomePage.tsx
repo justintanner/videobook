@@ -287,6 +287,7 @@ export function HomePage() {
         failedMessage: failed?.failMsg,
         failedTaskType: failed?.taskType,
         seenAt: asset.seen_at,
+        hasVoice: asset.has_voice ?? null,
       };
     });
   }, [assetList, result, renderingOverrides, deletingIds]);

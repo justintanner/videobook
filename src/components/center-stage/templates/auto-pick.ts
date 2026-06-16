@@ -34,8 +34,14 @@ function byNewest(a: MediaItem, b: MediaItem): number {
 // Per-formula seeds. Each mirrors the inputs its setup panel needs.
 
 export function autoPickClipShow(items: MediaItem[]): { characterId: string; clipIds: string[] } {
+  // Prefer a host that already has an ElevenLabs voice (Clip Show needs one);
+  // fall back to the newest char so the panel still pre-fills and the disabled
+  // hint / server pre-check can explain the missing voice.
+  const voiced = items.filter((m) => m.hasVoice === true);
+  const characterId =
+    newestIdsByPrefix(voiced, 'char-', 1)[0] ?? newestIdsByPrefix(items, 'char-', 1)[0] ?? '';
   return {
-    characterId: newestIdsByPrefix(items, 'char-', 1)[0] ?? '',
+    characterId,
     clipIds: newestIdsByPrefix(items, 'vid-', 8),
   };
 }

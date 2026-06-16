@@ -1,6 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
+import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
 import type { ToolDef } from "./tool-def.js";
 
 const schema = {
@@ -47,6 +48,19 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Host character not found: ${charId}` }],
+        };
+      }
+      // Voice is required to narrate the show. The background job also enforces
+      // this, but checking here returns an actionable error immediately instead
+      // of failing silently mid-job (the client would otherwise poll for ~5 min).
+      const charMeta = await fs.readMetadata<Character>(charId, CHARACTER_METADATA_KEY, project_slug);
+      if (!charMeta.ok || !charMeta.value.elevenlabs_voice_id?.trim()) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Host character @${charId} has no ElevenLabs voice assigned. Assign a voice in the character editor, or pick a different host under Customize.`,
+          }],
         };
       }
       for (const clip of clip_asset_ids) {

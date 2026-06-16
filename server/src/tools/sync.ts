@@ -69,6 +69,10 @@ export type SyncAsset = {
   /** Unix seconds when user first viewed this asset, or null if still unseen.
    *  Drives the sidebar's NEW badge. */
   seen_at: number | null;
+  /** Character assets only: whether an ElevenLabs voice is assigned. Lets the
+   *  client flag voiceless hosts before attempting a Clip Show plan. Null for
+   *  non-character assets. */
+  has_voice: boolean | null;
 };
 
 type ArchiveMetadata = {
@@ -399,6 +403,14 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         } catch { /* non-fatal */ }
       }
 
+      // Character assets: surface whether an ElevenLabs voice is assigned, so the
+      // client can flag voiceless hosts before a Clip Show plan is attempted.
+      let has_voice: boolean | null = null;
+      if (a.type === "character") {
+        const charMeta = await fs.readMetadata<{ elevenlabs_voice_id?: string }>(a.id, "character", project_slug);
+        has_voice = charMeta.ok ? Boolean(charMeta.value.elevenlabs_voice_id?.trim()) : false;
+      }
+
       // Read markdown content for script (original.md) and plan (index.md) assets
       let prompt = (meta?.prompt as string) ?? null;
       if (!prompt && a.type === "script") {
@@ -437,6 +449,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,
         archived_at: typeof archiveMeta?.archived_at === "string" ? archiveMeta.archived_at : null,
         seen_at: assetWorkRow.ok && assetWorkRow.value ? assetWorkRow.value.seenAt : null,
+        has_voice,
       };
     }),
   );

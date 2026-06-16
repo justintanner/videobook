@@ -73,4 +73,8 @@ export interface MediaItem {
   /** Unix seconds when user first viewed this asset, or null if still unseen.
    *  Drives the NEW badge in the sidebar. */
   seenAt?: number | null;
+  /** Character assets only: whether an ElevenLabs voice is assigned. Null/undefined
+   *  for non-character assets or when unknown. Lets template auto-pick prefer a
+   *  voiced host for Clip Show. */
+  hasVoice?: boolean | null;
 }

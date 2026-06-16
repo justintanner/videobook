@@ -20,6 +20,9 @@ export interface ListAsset {
   archive_id: string | null;
   archived_at: string | null;
   seen_at: number | null;
+  /** Character assets only: whether an ElevenLabs voice is assigned. Null for
+   *  non-character assets (or older servers that don't report it). */
+  has_voice?: boolean | null;
 }
 
 interface UseListAssetsResult {
