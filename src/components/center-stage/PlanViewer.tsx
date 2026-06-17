@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Plus, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -999,22 +999,15 @@ function ClipShowCharacterDropZone({ item, assetId, onDropAsset }: {
   );
 }
 
-// Ordered mixed list of items the host jokes about: type a topic or drop an
-// img-* image. Reorder/remove inline. Replaces the old vid-* clips drop zone.
+// Ordered list of img-* images the host jokes about — each joke is driven by the
+// image plus the house-style jokes reference. Reorder/remove inline.
 function ClipShowItemsEditor({ items, mediaItems, onChange }: {
   items: ClipShowItem[];
   mediaItems: MediaItem[];
   onChange: (next: ClipShowItem[]) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
-  const [topicDraft, setTopicDraft] = useState('');
 
-  const addTopic = () => {
-    const topic = topicDraft.trim();
-    if (!topic) return;
-    onChange([...items, { kind: 'topic', topic }]);
-    setTopicDraft('');
-  };
   const addImage = (assetId: string) => {
     if (!assetId.startsWith('img-')) {
       toast({ title: 'Wrong asset type', description: `Drop an img-* image, got ${assetId}.`, duration: 3000 });
@@ -1056,35 +1049,13 @@ function ClipShowItemsEditor({ items, mediaItems, onChange }: {
       onDrop={handleDrop}
     >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Topics &amp; images</div>
-        <div className="text-[10px] font-mono text-emerald-300/40">{items.length > 0 ? `${items.length} item${items.length === 1 ? '' : 's'}` : 'drop img-* or add topics'}</div>
-      </div>
-      <div className="flex gap-2 mb-2">
-        <input
-          value={topicDraft}
-          onChange={(e) => setTopicDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }}
-          placeholder="Add a topic to joke about…"
-          className="min-w-0 flex-1 h-7 px-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 placeholder:text-emerald-300/30"
-        />
-        <button
-          type="button"
-          onClick={addTopic}
-          disabled={!topicDraft.trim()}
-          className={cn(
-            'h-7 px-2.5 flex items-center gap-1 rounded text-[10px] font-mono font-bold uppercase tracking-wider',
-            'text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/60 transition-colors',
-            'disabled:opacity-40 disabled:cursor-not-allowed',
-            FOCUS_RING_BUTTON,
-          )}
-        >
-          <Plus className="w-3 h-3" /> Add
-        </button>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Images</div>
+        <div className="text-[10px] font-mono text-emerald-300/40">{items.length > 0 ? `${items.length} item${items.length === 1 ? '' : 's'}` : 'drop img-*'}</div>
       </div>
       {items.length === 0 ? (
         <div className="h-20 rounded bg-zinc-950/70 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
           <Images className="w-5 h-5 text-emerald-300/35" />
-          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop img-* here or add a topic</span>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop img-* here</span>
         </div>
       ) : (
         <ol className="space-y-1.5">
@@ -4487,8 +4458,6 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   const [items, setItems] = useState<ClipShowItem[]>(
     initial && !isStaleClipShowPlan(initial) ? segmentsToItems(initial.segments) : autoPick?.items ?? [],
   );
-  const [showBrief, setShowBrief] = useState(initial?.show_brief ?? '');
-  const [tone, setTone] = useState(initial?.tone ?? 'sharp, playful, punchy, not mean');
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
   useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
@@ -4510,7 +4479,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   const canGenerate = characterId.length > 0 && items.length > 0 && !hostMissingVoice && !generating;
   const ctaHint = hostMissingVoice
     ? `@${characterId} has no ElevenLabs voice — assign one or pick another in Customize`
-    : 'Needs a host character + at least one topic or image — open Customize';
+    : 'Needs a host character + at least one image — open Customize';
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
@@ -4521,8 +4490,6 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         project_slug: projectSlug,
         character_asset_id: characterId,
         items,
-        show_brief: showBrief,
-        tone,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Clip Show plan failed';
@@ -4559,7 +4526,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
     } finally {
       if (!cancelledRef.current) setGenerating(false);
     }
-  }, [canGenerate, initial, callTool, projectSlug, characterId, items, showBrief, tone, onGenerated]);
+  }, [canGenerate, initial, callTool, projectSlug, characterId, items, onGenerated]);
 
   return (
     <div className="space-y-4">
@@ -4571,41 +4538,9 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         hint={ctaHint}
       />
       <CustomizeInputs>
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
-            <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
-            <ClipShowItemsEditor items={items} mediaItems={mediaItems} onChange={setItems} />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
-            <label className="min-w-0">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Show brief</span>
-              <textarea
-                value={showBrief}
-                onChange={(e) => setShowBrief(e.target.value)}
-                rows={2}
-                placeholder="Overall angle for the read-through (optional)"
-                className={cn(
-                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-emerald-500/25',
-                  'text-sm font-mono text-emerald-200/90 resize-y',
-                  'focus:outline-none focus:border-emerald-400/70',
-                  'placeholder:text-emerald-300/30',
-                )}
-              />
-            </label>
-            <label className="min-w-0">
-              <span className="block text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Host tone</span>
-              <textarea
-                value={tone}
-                onChange={(e) => setTone(e.target.value)}
-                rows={2}
-                className={cn(
-                  'w-full min-h-[3.75rem] p-2.5 rounded bg-black/60 border border-zinc-700',
-                  'text-[11px] font-mono text-emerald-300/90 resize-y',
-                  'focus:outline-none focus:border-emerald-500/60',
-                )}
-              />
-            </label>
-          </div>
+        <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
+          <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
+          <ClipShowItemsEditor items={items} mediaItems={mediaItems} onChange={setItems} />
         </div>
       </CustomizeInputs>
     </div>

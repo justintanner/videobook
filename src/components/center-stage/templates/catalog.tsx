@@ -21,11 +21,11 @@ export const TEMPLATE_CATALOG: TemplateCatalogEntry[] = [
   {
     id: 'clip_show',
     name: 'Clip Show',
-    tagline: 'A voiced host riffs on your topics and images.',
+    tagline: 'A voiced host riffs on your images.',
     description:
-      'A host character delivers one joke per item — type topics or drop in images. GPT-5.5 writes each joke (reading images via vision); ElevenLabs voices the host. Play each line, or the whole read-through in order.',
-    produces: 'An ordered audio read-through — one voiced joke per topic/image.',
-    inputs: ['1 host character (char-*) with an ElevenLabs voice', 'A list of topics and/or images (img-*)', 'Optional show brief + host tone'],
+      'A host character delivers one joke per image — drop in images and GPT-5.5 writes each joke (reading them via vision, in the house comedic voice); ElevenLabs voices the host. Play each line, or the whole read-through in order.',
+    produces: 'An ordered audio read-through — one voiced joke per image.',
+    inputs: ['1 host character (char-*) with an ElevenLabs voice', 'A list of images (img-*)'],
     icon: Mic,
     keywords: ['clip', 'show', 'host', 'commentary', 'voice', 'talking', 'podcast', 'joke', 'read-through', 'audio'],
   },
