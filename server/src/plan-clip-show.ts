@@ -8,11 +8,20 @@ import { z } from "zod";
 import { CHARACTER_METADATA_KEY, type Character } from "./jobs/extract-character.js";
 import { findImageFile } from "./tools/_image-inputs.js";
 import { mimeForImageFilename } from "./jobs/describe-image.js";
+import { slugify } from "./tools/_fal-shared.js";
+import { queue } from "./queue.js";
 import { DEFAULT_JOKE_TYPE, jokeTypeHint, normalizeJokeType } from "./clip-show-joke-types.js";
-import type { ClipShowCharacter, ClipShowItem, ClipShowPlanSidecar, ClipShowSegment } from "./plan-types.js";
+import { normalizeTreatment } from "./clip-show-osg-types.js";
+import type { ClipShowCharacter, ClipShowOsg, ClipShowPlanSidecar, ClipShowSegment } from "./plan-types.js";
 
 const MODEL = "gpt-5.5";
-const MAX_ITEMS = 12;
+const IMAGE_MODEL = "generate_nano_banana_pro_fal" as const;
+const OSG_ASPECT_RATIO = "16:9";
+const MAX_POOL = 12; // max input images dropped into one plan
+const MAX_OSGS_PER_JOKE = 12; // bound the run length
+const MAX_TOTAL_OSGS = 48; // bound total text-to-image fan-out per plan
+const MIN_OSG_MS = 500;
+const MAX_OSG_MS = 4000;
 const DEFAULT_TONE = "sharp, profane, irreverent, roast-heavy";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +32,7 @@ type JokeReference = { examples: string; typesPalette: string };
 
 // Read the house-style examples + joke-type palette once, then cache the
 // promise. Static reference text; ~2k tokens injected into every generation
-// and per-segment regeneration.
+// and per-joke regeneration.
 let referencePromise: Promise<JokeReference> | null = null;
 function loadJokeReference(): Promise<JokeReference> {
   if (!referencePromise) {
@@ -40,33 +49,66 @@ function loadJokeReference(): Promise<JokeReference> {
 
 type LoadedImage = { bytes: Buffer; mime: "image/jpeg" | "image/png" | "image/webp" };
 
-const GeneratedSegmentSchema = z.object({
-  index: z.number().int(),
+// One OSG as returned by the model: either a reused input image
+// (source:"input" + input_index) or a new generated graphic
+// (source:"generated" + image_prompt). Strict JSON schema can't express a
+// discriminated union, so both fields are required+nullable and resolved by
+// `source` in normalization.
+const GeneratedOsgSchema = z.object({
+  source: z.enum(["input", "generated"]),
+  input_index: z.number().int().nullable(),
+  image_prompt: z.string().nullable(),
+  treatment: z.string(),
+  beat_text: z.string(),
+  caption: z.string().nullable(),
+  duration_ms: z.number().int(),
+});
+
+const GeneratedJokeSchema = z.object({
+  source_image_indexes: z.array(z.number().int()),
   source_summary: z.string().min(1),
   joke: z.string().min(1),
   joke_notes: z.string(),
+  osgs: z.array(GeneratedOsgSchema).min(1),
 });
 
 const GeneratedPlanSchema = z.object({
-  segments: z.array(GeneratedSegmentSchema).min(1),
+  jokes: z.array(GeneratedJokeSchema).min(1),
 });
 
 const GENERATED_PLAN_JSON_SCHEMA = {
   type: "object",
-  required: ["segments"],
+  required: ["jokes"],
   additionalProperties: false,
   properties: {
-    segments: {
+    jokes: {
       type: "array",
       items: {
         type: "object",
-        required: ["index", "source_summary", "joke", "joke_notes"],
+        required: ["source_image_indexes", "source_summary", "joke", "joke_notes", "osgs"],
         additionalProperties: false,
         properties: {
-          index: { type: "integer" },
+          source_image_indexes: { type: "array", items: { type: "integer" } },
           source_summary: { type: "string" },
           joke: { type: "string" },
           joke_notes: { type: "string" },
+          osgs: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["source", "input_index", "image_prompt", "treatment", "beat_text", "caption", "duration_ms"],
+              additionalProperties: false,
+              properties: {
+                source: { type: "string", enum: ["input", "generated"] },
+                input_index: { type: ["integer", "null"] },
+                image_prompt: { type: ["string", "null"] },
+                treatment: { type: "string" },
+                beat_text: { type: "string" },
+                caption: { type: ["string", "null"] },
+                duration_ms: { type: "integer" },
+              },
+            },
+          },
         },
       },
     },
@@ -76,34 +118,58 @@ const GENERATED_PLAN_JSON_SCHEMA = {
 // Built per call so the house-style examples and joke-type palette (read from
 // server/src/guides/ at runtime) can be baked into the system message.
 function buildSystemPrompt(reference: JokeReference): string {
-  return `You are the comedy writer for a short audio read-through hosted by one recurring character.
+  return `You are the comedy writer AND art director for a Last Week Tonight–style news-comedy cold open. One recurring host delivers the jokes as a voiceover while a rapid-fire run of on-screen graphics (OSGs) illustrates each joke.
 
-You receive an ordered list of ITEMS. Each item is either a text topic or an image (provided via vision). For every item, write exactly ONE spoken joke the host delivers as a voiceover.
+You receive a POOL of input images (provided via vision), each with an index. Your job:
 
-For each item return:
-- index: the item's position (echo the number you were given).
-- source_summary: one short sentence describing the item (paraphrase the topic, or describe what you see in the image).
-- joke: ONE punchy spoken line for ElevenLabs text-to-speech — a single clear premise, turn, and payoff. One or two sentences, no more. Plain spoken words only: no stage directions, no emoji, no markdown, no quotation marks around the line.
-- joke_notes: a one-line note on the comedic angle. Start it with the joke type you used, e.g. "Type: Visual roast — ...".
+1. GROUP the pool into JOKES. A single joke is one comedic premise the host reads aloud — setup, escalation, payoff. One joke may pull in SEVERAL input images, and may also call for NEW graphics you invent. Some images may stand alone as a one-image joke; related images should be grouped together.
+
+2. For each joke, write the spoken line(s) AND lay out an ORDERED RUN of OSGs that fire across the line — fast cuts, one idea per card, building from setup to a hard visual payoff.
+
+Reference example of ONE joke = a 7-OSG run (~13s): a "sinkhole of misery" bit — (1) a map locating the place, (2) a grim cityscape, (3) a Wallace & Gromit still for an absurd aside, (4) a George Orwell portrait for the dystopia turn, (5) a real-looking newspaper headline card, (6) a fake movie-poster payoff, (7) a title-card button. Match THIS density and setup→payoff shape; invent fresh content for the actual images.
+
+For each JOKE return:
+- source_image_indexes: the pool indexes this joke uses (may be empty if the whole run is newly generated graphics).
+- source_summary: one short sentence describing what these inputs are.
+- joke: the spoken line(s) for ElevenLabs text-to-speech — plain spoken words only: no stage directions, no emoji, no markdown, no quotation marks. One clear premise, escalation, and payoff. Keep it tight enough to read across the run.
+- joke_notes: a one-line note on the comedic angle. Start it with the joke type, e.g. "Type: Visual roast — ...".
+- osgs: the ordered run (most jokes are 4–8 cards; don't pad). Each OSG is EITHER:
+    * a reused INPUT image — set "source":"input" and "input_index" to one of this joke's pool indexes (and "image_prompt": null), OR
+    * a NEW generated graphic — set "source":"generated" and write "image_prompt": a vivid, self-contained 16:9 text-to-image prompt in the style implied by the treatment (and "input_index": null).
+  Every OSG also has:
+    * treatment: one of photo | cityscape | map | headline | fake_poster | title_card | caption | portrait
+    * beat_text: the exact word or phrase in the joke this card lands on
+    * caption: on-screen overlay text, or null
+    * duration_ms: how long it holds — rapid-fire cards are short (700–1500), a payoff can hold longer (1500–3000)
 
 HOUSE STYLE — match this voice and rhythm:
-The host is irreverent, profane, sexually frank, and roast-forward, with absurd escalations and a hard punch. Be specific to the item and go for the laugh; don't soften it or keep it polite. The lines below are the target voice, energy, and structure — match them. Do NOT reuse these specific people, topics, or wording; write fresh material aimed at the actual item.
+The host is irreverent, profane, sexually frank, and roast-forward, with absurd escalations and a hard punch. Be specific and go for the laugh; don't soften it. The lines below are the target voice, energy, and structure — match them. Do NOT reuse these specific people, topics, or wording; write fresh material aimed at the actual images.
 
 ${reference.examples}
 
 JOKE TYPES — palette:
-Pick whichever type lands best for the item, then name it at the start of joke_notes. Draw from:
+Pick whichever type lands best, then name it at the start of joke_notes. Draw from:
 ${reference.typesPalette}
-
-If an item specifies a comedic style, write that joke in that style. Otherwise pick whatever angle lands best from the palette.
 
 The one floor: roast targets, situations, and contradictions — never punch at protected traits with slurs, and never sexualize anyone who appears to be a minor. Everything else is fair game.
 
-Return exactly one segment per input item, in the same order. Return JSON only.`;
+Return JSON only.`;
 }
 
 function stripAt(value: string): string {
   return value.replace(/^@/, "").trim();
+}
+
+function uniqueInOrder(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
 }
 
 function characterDescription(profile: Character): string {
@@ -149,88 +215,241 @@ async function loadImageBytes(fs: VideocityFs, projectSlug: string, rawAssetId: 
   return { bytes: Buffer.from(read.value), mime: mimeForImageFilename(file.name) };
 }
 
-function normalizeItems(raw: ClipShowItem[]): ClipShowItem[] {
-  const out: ClipShowItem[] = [];
-  const seenImages = new Set<string>();
-  for (const item of raw) {
-    if (item.kind === "topic") {
-      const topic = item.topic.trim();
-      if (topic) out.push({ kind: "topic", topic });
-    } else {
-      const id = stripAt(item.image_asset_id);
-      if (id.startsWith("img-") && !seenImages.has(id)) {
-        seenImages.add(id);
-        out.push({ kind: "image", image_asset_id: id });
-      }
-    }
-  }
-  if (out.length === 0) throw new Error("At least one item (topic or image) is required");
-  if (out.length > MAX_ITEMS) throw new Error(`At most ${MAX_ITEMS} items are supported per Clip Show plan`);
-  return out;
+// Normalize the dropped image pool: img-* only, deduped, in order, bounded.
+function normalizePool(raw: string[]): string[] {
+  const pool = uniqueInOrder(raw.map(stripAt).filter((id) => id.startsWith("img-")));
+  if (pool.length === 0) throw new Error("At least one img-* image is required");
+  if (pool.length > MAX_POOL) throw new Error(`At most ${MAX_POOL} images are supported per Clip Show plan`);
+  return pool;
 }
 
-function buildUserContent(
-  character: ClipShowCharacter,
-  items: ClipShowItem[],
-  images: Map<string, LoadedImage>,
-  jokeTypes: string[],
-  showBrief: string,
-  tone: string,
-): OpenAiContentPart[] {
+// Load every distinct pool image's bytes for vision.
+async function loadImagePool(
+  fs: VideocityFs,
+  projectSlug: string,
+  pool: string[],
+): Promise<Map<string, LoadedImage>> {
+  const images = new Map<string, LoadedImage>();
+  for (const id of pool) {
+    if (!images.has(id)) {
+      const loaded = await loadImageBytes(fs, projectSlug, id);
+      if (loaded) images.set(id, loaded);
+    }
+  }
+  return images;
+}
+
+type GenerationMode = "pool" | "single";
+
+function buildUserContent(args: {
+  character: ClipShowCharacter;
+  pool: string[];
+  images: Map<string, LoadedImage>;
+  mode: GenerationMode;
+  jokeType: string;
+  showBrief: string;
+  tone: string;
+  textSeed: string;
+}): OpenAiContentPart[] {
+  const { character, pool, images, mode, jokeType, showBrief, tone, textSeed } = args;
+  const hint = jokeTypeHint(jokeType);
   const header = [
-    "Write a comedy read-through.",
+    "Write a Last Week Tonight–style news-comedy cold open.",
     "",
     `Host: ${character.name} (@${character.asset_id})`,
     `Host description: ${character.description || "n/a"}`,
-    `Show brief: ${showBrief || "One quick joke per item."}`,
+    ...(showBrief ? [`Show brief: ${showBrief}`] : []),
     `Tone: ${tone}`,
+    ...(hint ? [`Comedic style for ${mode === "single" ? "this joke" : "the jokes"}: ${hint}`] : []),
     "",
-    `There are ${items.length} item(s). Write exactly one joke per item, in order, and echo each item's index.`,
-    "",
-    "Items:",
+    mode === "single"
+      ? pool.length > 0
+        ? `Treat ALL ${pool.length} image(s) below as ONE joke. Return exactly one joke whose OSG run uses these images (by index) plus any new generated graphics you invent.`
+        : "Rewrite the joke described below as ONE joke. There are no input images, so build the OSG run entirely from new generated graphics."
+      : `Here is the input image POOL (${pool.length} image(s)), each with an index. Group them into jokes and lay out each joke's OSG run.`,
+    ...(textSeed ? ["", `Subject to keep: ${textSeed}`] : []),
+    ...(pool.length > 0 ? ["", "Images:"] : []),
   ].join("\n");
+
   const parts: OpenAiContentPart[] = [textPart(header)];
-  items.forEach((item, index) => {
-    const hint = jokeTypeHint(jokeTypes[index]);
-    const style = hint ? ` Comedic style: ${hint}` : "";
-    if (item.kind === "topic") {
-      parts.push(textPart(`Item ${index} (topic): ${item.topic}${style}`));
-      return;
-    }
-    const img = images.get(item.image_asset_id);
-    parts.push(textPart(`Item ${index} (image @${item.image_asset_id})${img ? " — image follows:" : " — (image unavailable; infer from the id)"}${style}`));
+  pool.forEach((id, index) => {
+    const img = images.get(id);
+    parts.push(textPart(`Image index ${index} (@${id})${img ? " — image follows:" : " — (image unavailable; infer from the id)"}`));
     if (img) parts.push(imageBase64Part(img.bytes.toString("base64"), img.mime, "low"));
   });
   return parts;
 }
 
-function normalizeGeneratedSegments(
-  generated: z.infer<typeof GeneratedPlanSchema>["segments"],
-  items: ClipShowItem[],
-  jokeTypes: string[],
+function clampDuration(ms: number): number {
+  if (!Number.isFinite(ms)) return 1500;
+  return Math.min(MAX_OSG_MS, Math.max(MIN_OSG_MS, Math.round(ms)));
+}
+
+// Resolve one model OSG to a persisted ClipShowOsg, or null to drop it.
+// Generated OSGs keep image_asset_id:null here — it's filled by the image
+// pipeline (materializeGeneratedOsgs).
+function normalizeOsg(raw: z.infer<typeof GeneratedOsgSchema>, pool: string[]): ClipShowOsg | null {
+  const treatment = normalizeTreatment(raw.treatment);
+  const beat_text = raw.beat_text.trim();
+  const caption = raw.caption && raw.caption.trim() ? raw.caption.trim() : null;
+  const duration_ms = clampDuration(raw.duration_ms);
+  if (raw.source === "input") {
+    const idx = raw.input_index;
+    if (idx === null || !Number.isInteger(idx) || idx < 0 || idx >= pool.length) return null;
+    return { source: "upload", image_asset_id: pool[idx], image_prompt: null, treatment, beat_text, caption, duration_ms };
+  }
+  const prompt = raw.image_prompt?.trim();
+  if (!prompt) return null;
+  return { source: "generated", image_asset_id: null, image_prompt: prompt, treatment, beat_text, caption, duration_ms };
+}
+
+// Resolve model jokes to persisted segments. Generated OSGs are left
+// unmaterialized (image_asset_id:null) for the image pipeline. Bounds the run
+// length per joke and the total OSG fan-out per plan.
+function normalizeGeneratedJokes(
+  generated: z.infer<typeof GeneratedPlanSchema>["jokes"],
+  pool: string[],
+  jokeType: string,
 ): ClipShowSegment[] {
-  const byIndex = new Map<number, (typeof generated)[number]>();
-  generated.forEach((segment, i) => {
-    const idx = Number.isInteger(segment.index) ? segment.index : i;
-    if (!byIndex.has(idx)) byIndex.set(idx, segment);
-  });
-  return items.map((item, index) => {
-    const segment = byIndex.get(index) ?? generated[index];
-    if (!segment) throw new Error(`Model did not return a joke for item ${index}`);
-    const base =
-      item.kind === "topic"
-        ? { kind: "topic" as const, topic: item.topic }
-        : { kind: "image" as const, image_asset_id: item.image_asset_id };
-    const notes = segment.joke_notes.trim();
-    return {
-      ...base,
-      source_summary: segment.source_summary.trim(),
-      joke: segment.joke.trim(),
+  const segments: ClipShowSegment[] = [];
+  let totalOsgs = 0;
+  for (const joke of generated) {
+    if (totalOsgs >= MAX_TOTAL_OSGS) break;
+    const sourceIds = uniqueInOrder(
+      joke.source_image_indexes
+        .filter((i) => Number.isInteger(i) && i >= 0 && i < pool.length)
+        .map((i) => pool[i]),
+    );
+    const osgs: ClipShowOsg[] = [];
+    for (const raw of joke.osgs) {
+      if (osgs.length >= MAX_OSGS_PER_JOKE || totalOsgs >= MAX_TOTAL_OSGS) break;
+      const osg = normalizeOsg(raw, pool);
+      if (!osg) continue;
+      osgs.push(osg);
+      totalOsgs++;
+    }
+    if (osgs.length === 0) continue;
+    const notes = joke.joke_notes.trim();
+    segments.push({
+      source_image_asset_ids: sourceIds,
+      source_summary: joke.source_summary.trim(),
+      joke: joke.joke.trim(),
       ...(notes ? { joke_notes: notes } : {}),
-      joke_type: normalizeJokeType(jokeTypes[index]),
+      joke_type: jokeType,
+      osgs,
       audio_asset_id: null,
-    };
+    });
+  }
+  if (segments.length === 0) throw new Error("Model returned no usable jokes");
+  return segments;
+}
+
+// Create an img-* asset for a generated OSG and enqueue its text-to-image job.
+// Returns the asset id (still generating) or null if the asset couldn't be
+// created. The client's sync loop downloads + readies the image; status is
+// derived from the asset store, never written back into the plan.
+async function createAndEnqueueOsgImage(
+  fs: VideocityFs,
+  projectSlug: string,
+  prompt: string,
+  seq: number,
+): Promise<string | null> {
+  const base = slugify(prompt).slice(0, 40) || "osg";
+  const created = await fs.createAsset("img", `osg-${base}-${seq}-${Date.now().toString(36)}`, projectSlug);
+  if (!created.ok) return null;
+  const { assetId, path } = created.value;
+  const jobId = `osg-img-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: IMAGE_MODEL,
+    imgAssetId: assetId,
+    imgAssetDir: path,
+    projectSlug,
+    prompt,
+    aspect_ratio: OSG_ASPECT_RATIO,
+  } as unknown as Record<string, unknown>);
+  return assetId;
+}
+
+// Walk segments and turn each unmaterialized generated OSG into a real img-*
+// asset + enqueued job. A failed createAsset leaves image_asset_id:null (the
+// UI offers a regenerate slot); it never fails the whole plan.
+async function materializeGeneratedOsgs(
+  fs: VideocityFs,
+  projectSlug: string,
+  segments: ClipShowSegment[],
+): Promise<ClipShowSegment[]> {
+  let seq = 0;
+  const out: ClipShowSegment[] = [];
+  for (const segment of segments) {
+    const osgs: ClipShowOsg[] = [];
+    for (const osg of segment.osgs) {
+      if (osg.source === "generated" && osg.image_asset_id === null && osg.image_prompt) {
+        const assetId = await createAndEnqueueOsgImage(fs, projectSlug, osg.image_prompt, seq++);
+        osgs.push({ ...osg, image_asset_id: assetId });
+      } else {
+        osgs.push(osg);
+      }
+    }
+    out.push({ ...segment, osgs });
+  }
+  return out;
+}
+
+// Run GPT-5.5 over a pool of images and return normalized (unmaterialized)
+// segments. Shared by full-plan generation ("pool") and single-joke
+// regeneration ("single").
+async function generateJokes(args: {
+  fs: VideocityFs;
+  projectSlug: string;
+  character: ClipShowCharacter;
+  pool: string[];
+  mode: GenerationMode;
+  jokeType: string;
+  showBrief: string;
+  tone: string;
+  textSeed?: string;
+}): Promise<ClipShowSegment[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+
+  const images = await loadImagePool(args.fs, args.projectSlug, args.pool);
+  const reference = await loadJokeReference();
+  const provider = createOpenAi({ apiKey, timeout: 240_000 });
+  const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+
+  const result = await call({
+    model: MODEL,
+    stream: false,
+    messages: [
+      { role: "system", content: buildSystemPrompt(reference) },
+      {
+        role: "user",
+        content: buildUserContent({
+          character: args.character,
+          pool: args.pool,
+          images,
+          mode: args.mode,
+          jokeType: args.jokeType,
+          showBrief: args.showBrief,
+          tone: args.tone,
+          textSeed: args.textSeed ?? "",
+        }),
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "clip_show_plan",
+        schema: GENERATED_PLAN_JSON_SCHEMA as unknown as Record<string, unknown>,
+        strict: true,
+      },
+    },
+    max_completion_tokens: 8192,
   });
+
+  const parsed = GeneratedPlanSchema.parse(JSON.parse(firstContent(result)));
+  const jokes = args.mode === "single" ? parsed.jokes.slice(0, 1) : parsed.jokes;
+  return normalizeGeneratedJokes(jokes, args.pool, args.jokeType);
 }
 
 function renderMarkdown(sidecar: ClipShowPlanSidecar): string {
@@ -239,29 +458,35 @@ function renderMarkdown(sidecar: ClipShowPlanSidecar): string {
     "",
     `**Host:** @${sidecar.character.asset_id} (${sidecar.character.name})`,
     `**Voice:** ${sidecar.character.elevenlabs_voice_id}`,
-    `**Model:** ${sidecar.model}`,
+    `**Models:** ${sidecar.model} · images ${sidecar.image_model} · audio ${sidecar.audio_model}`,
     `**Tone:** ${sidecar.tone}`,
     "",
-    "## Show Brief",
-    "",
-    sidecar.show_brief || "One quick joke per item.",
-    "",
+    ...(sidecar.show_brief ? ["## Show Brief", "", sidecar.show_brief, ""] : []),
     ...sidecar.segments.flatMap((segment, index) => {
-      const source = segment.kind === "image" ? `@${segment.image_asset_id ?? "img"}` : segment.topic ?? "";
       const style = segment.joke_type && segment.joke_type !== DEFAULT_JOKE_TYPE ? ` (${segment.joke_type})` : "";
+      const sources = segment.source_image_asset_ids.length
+        ? segment.source_image_asset_ids.map((id) => `@${id}`).join(", ")
+        : "—";
       return [
-        `## Item ${index + 1} — ${source}`,
+        `## Joke ${index + 1}${style}`,
         "",
-        `**Audio:** ${segment.audio_asset_id ? `@${segment.audio_asset_id}` : "not generated"}${style}`,
-        "",
-        "### Source",
+        `**Sources:** ${sources}`,
+        `**Audio:** ${segment.audio_asset_id ? `@${segment.audio_asset_id}` : "not generated"}`,
         "",
         segment.source_summary,
         "",
         "### Joke",
         "",
         segment.joke,
-        ...(segment.joke_notes ? ["", "### Notes", "", segment.joke_notes] : []),
+        ...(segment.joke_notes ? ["", `_${segment.joke_notes}_`] : []),
+        "",
+        "### OSG run",
+        "",
+        ...segment.osgs.map((osg, i) => {
+          const img = osg.image_asset_id ? `@${osg.image_asset_id}` : "(no image)";
+          const cap = osg.caption ? ` — “${osg.caption}”` : "";
+          return `${i + 1}. **${osg.treatment}** ${img} (${osg.source}, ${osg.duration_ms}ms) — ${osg.beat_text}${cap}`;
+        }),
         "",
       ];
     }),
@@ -290,87 +515,32 @@ export async function readClipShowPlan(fs: VideocityFs, projectSlug: string): Pr
   return read.value;
 }
 
-// Load every distinct image item's bytes for vision (skips topics, dedupes).
-async function loadImagesForItems(
-  fs: VideocityFs,
-  projectSlug: string,
-  items: ClipShowItem[],
-): Promise<Map<string, LoadedImage>> {
-  const images = new Map<string, LoadedImage>();
-  for (const item of items) {
-    if (item.kind === "image" && !images.has(item.image_asset_id)) {
-      const loaded = await loadImageBytes(fs, projectSlug, item.image_asset_id);
-      if (loaded) images.set(item.image_asset_id, loaded);
-    }
-  }
-  return images;
-}
-
-// Run GPT-5.5 over the items and return normalized segments (1:1, in order).
-// Shared by full-plan generation and single-segment regeneration.
-async function generateSegments(args: {
-  fs: VideocityFs;
-  projectSlug: string;
-  character: ClipShowCharacter;
-  items: ClipShowItem[];
-  jokeTypes: string[];
-  showBrief: string;
-  tone: string;
-}): Promise<ClipShowSegment[]> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
-
-  const images = await loadImagesForItems(args.fs, args.projectSlug, args.items);
-  const reference = await loadJokeReference();
-  const provider = createOpenAi({ apiKey, timeout: 240_000 });
-  const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
-
-  const result = await call({
-    model: MODEL,
-    stream: false,
-    messages: [
-      { role: "system", content: buildSystemPrompt(reference) },
-      { role: "user", content: buildUserContent(args.character, args.items, images, args.jokeTypes, args.showBrief, args.tone) },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "clip_show_plan",
-        schema: GENERATED_PLAN_JSON_SCHEMA as unknown as Record<string, unknown>,
-        strict: true,
-      },
-    },
-    max_completion_tokens: 8192,
-  });
-
-  const parsed = GeneratedPlanSchema.parse(JSON.parse(firstContent(result)));
-  return normalizeGeneratedSegments(parsed.segments, args.items, args.jokeTypes);
-}
-
 export async function generateClipShowPlan(
   fs: VideocityFs,
   args: {
     projectSlug: string;
     characterAssetId: string;
-    items: ClipShowItem[];
+    imageAssetIds: string[];
     showBrief?: string;
     tone?: string;
   },
 ): Promise<ClipShowPlanSidecar> {
-  const items = normalizeItems(args.items);
+  const pool = normalizePool(args.imageAssetIds);
   const character = await loadClipShowCharacter(fs, args.projectSlug, args.characterAssetId);
   const showBrief = args.showBrief?.trim() ?? "";
   const tone = args.tone?.trim() || DEFAULT_TONE;
 
-  const segments = await generateSegments({
+  const drafted = await generateJokes({
     fs,
     projectSlug: args.projectSlug,
     character,
-    items,
-    jokeTypes: items.map(() => DEFAULT_JOKE_TYPE),
+    pool,
+    mode: "pool",
+    jokeType: DEFAULT_JOKE_TYPE,
     showBrief,
     tone,
   });
+  const segments = await materializeGeneratedOsgs(fs, args.projectSlug, drafted);
 
   const sidecar: ClipShowPlanSidecar = {
     formula: "clip_show",
@@ -378,6 +548,7 @@ export async function generateClipShowPlan(
     show_brief: showBrief,
     tone,
     model: MODEL,
+    image_model: IMAGE_MODEL,
     audio_model: "elevenlabs",
     segments,
   };
@@ -385,26 +556,11 @@ export async function generateClipShowPlan(
   return sidecar;
 }
 
-// Resolve which item a segment should be regenerated from: a swapped-in image
-// (drag-and-drop replace) overrides; otherwise reuse the segment's own source.
-function itemForRegeneration(segment: ClipShowSegment, newImageAssetId: string | null): ClipShowItem {
-  if (newImageAssetId) {
-    const id = stripAt(newImageAssetId);
-    if (!id.startsWith("img-")) throw new Error(`image_asset_id must be an img-* asset, got: ${id}`);
-    return { kind: "image", image_asset_id: id };
-  }
-  if (segment.kind === "image" && segment.image_asset_id) {
-    return { kind: "image", image_asset_id: segment.image_asset_id };
-  }
-  if (segment.kind === "topic" && segment.topic) {
-    return { kind: "topic", topic: segment.topic };
-  }
-  throw new Error("Segment has no source to regenerate from");
-}
-
-// Rewrite one segment's joke via GPT-5.5 — optionally with a new joke type
-// and/or a swapped source image. Stale audio is cleared (the new joke no
-// longer matches the old voiceover). Returns the full updated sidecar.
+// Rewrite one joke (and its whole OSG run) via GPT-5.5 — optionally in a
+// different joke type and/or with an added/swapped source image. The joke's
+// image pool is its existing source images plus any reused-upload OSGs; with no
+// images we fall back to a text seed. Materializes fresh generated OSGs and
+// clears the now-stale voiceover. Returns the full updated sidecar.
 export async function regenerateClipShowSegment(
   fs: VideocityFs,
   args: {
@@ -417,27 +573,77 @@ export async function regenerateClipShowSegment(
   const sidecar = await readClipShowPlan(fs, args.projectSlug);
   const existing = sidecar.segments[args.segmentIndex];
   if (!existing) throw new Error(`Clip Show segment ${args.segmentIndex} not found`);
-  if (existing.joke === undefined || existing.kind === undefined) {
+  if (!Array.isArray(existing.osgs)) {
     throw new Error("This Clip Show plan uses the old format — regenerate it from /templates before editing.");
   }
 
-  const item = itemForRegeneration(existing, args.newImageAssetId ?? null);
-  const jokeType = normalizeJokeType(args.jokeType ?? existing.joke_type);
+  const pool = uniqueInOrder([
+    ...existing.source_image_asset_ids,
+    ...existing.osgs.filter((o) => o.source === "upload" && o.image_asset_id).map((o) => o.image_asset_id as string),
+  ]);
+  if (args.newImageAssetId) {
+    const id = stripAt(args.newImageAssetId);
+    if (!id.startsWith("img-")) throw new Error(`image_asset_id must be an img-* asset, got: ${id}`);
+    if (!pool.includes(id)) pool.push(id);
+  }
+  if (pool.length > MAX_POOL) pool.length = MAX_POOL;
 
-  const [segment] = await generateSegments({
+  const jokeType = normalizeJokeType(args.jokeType ?? existing.joke_type);
+  const textSeed = pool.length === 0 ? `${existing.source_summary} — ${existing.joke}`.trim() : "";
+
+  const drafted = await generateJokes({
     fs,
     projectSlug: args.projectSlug,
     character: sidecar.character,
-    items: [item],
-    jokeTypes: [jokeType],
+    pool,
+    mode: "single",
+    jokeType,
     showBrief: sidecar.show_brief,
     tone: sidecar.tone,
+    textSeed,
   });
+  const [segment] = await materializeGeneratedOsgs(fs, args.projectSlug, drafted);
   if (!segment) throw new Error("Model did not return a joke for the segment");
 
   const next: ClipShowPlanSidecar = {
     ...sidecar,
     segments: sidecar.segments.map((s, i) => (i === args.segmentIndex ? segment : s)),
+  };
+  await writeClipShowPlan(fs, args.projectSlug, next);
+  return next;
+}
+
+// Generate a fresh image for one OSG: create an img-* asset, enqueue the
+// text-to-image job, and patch that OSG's image_asset_id/prompt/treatment in
+// place. A plain read-modify-write — no GPT. Returns the updated sidecar.
+export async function regenerateClipShowOsg(
+  fs: VideocityFs,
+  args: {
+    projectSlug: string;
+    segmentIndex: number;
+    osgIndex: number;
+    imagePrompt?: string | null;
+    treatment?: string | null;
+  },
+): Promise<ClipShowPlanSidecar> {
+  const sidecar = await readClipShowPlan(fs, args.projectSlug);
+  const segment = sidecar.segments[args.segmentIndex];
+  if (!segment || !Array.isArray(segment.osgs)) throw new Error(`Clip Show joke ${args.segmentIndex} not found`);
+  const osg = segment.osgs[args.osgIndex];
+  if (!osg) throw new Error(`Clip Show OSG ${args.osgIndex} not found`);
+
+  const prompt = (args.imagePrompt?.trim() || osg.image_prompt?.trim() || "").trim();
+  if (!prompt) throw new Error("This OSG has no image prompt to regenerate from — supply image_prompt or swap an upload instead.");
+  const treatment = args.treatment ? normalizeTreatment(args.treatment) : osg.treatment;
+
+  const assetId = await createAndEnqueueOsgImage(fs, args.projectSlug, prompt, args.osgIndex);
+  const nextOsg: ClipShowOsg = { ...osg, source: "generated", image_asset_id: assetId, image_prompt: prompt, treatment };
+
+  const next: ClipShowPlanSidecar = {
+    ...sidecar,
+    segments: sidecar.segments.map((s, i) =>
+      i === args.segmentIndex ? { ...s, osgs: s.osgs.map((o, j) => (j === args.osgIndex ? nextOsg : o)) } : s,
+    ),
   };
   await writeClipShowPlan(fs, args.projectSlug, next);
   return next;

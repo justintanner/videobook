@@ -345,7 +345,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan-clip-show",
-    description: "Generate a Clip Show read-through: a char-* host with an ElevenLabs voice tells one joke per item — each item a text topic or an img-* image (read via vision). GPT-5.5 writes the jokes; no video. Writes to plan/.",
+    description: "Generate a Clip Show: a char-* host with an ElevenLabs voice does a read-through over rapid-fire on-screen graphics (OSGs). GPT-5.5 groups the dropped img-* pool into jokes and lays out each joke's OSG run (reused uploads + newly generated graphics); generated OSG images are auto-enqueued. Writes to plan/.",
     example: "/plan-clip-show",
     category: "context_menu",
     icon: "Mic",
@@ -354,13 +354,13 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "character_asset_id", type: "string", required: true, description: "Host character asset with assigned ElevenLabs voice" },
-      { name: "items", type: "string[]", required: true, description: "Ordered items to joke about — {kind:'topic',topic} or {kind:'image',image_asset_id} (img-*)" },
+      { name: "image_asset_ids", type: "string[]", required: true, description: "Pool of img-* images to joke about (the model groups them into jokes)" },
     ],
     mcpTool: { tool: "plan_clip_show", autoInject: ["project_slug"] },
   },
   {
     command: "/regen-joke",
-    description: "Rewrite one Clip Show joke with GPT-5.5 — optionally in a different joke type and/or from a swapped img-* source image. Clears the segment's stale voiceover and returns the updated plan.",
+    description: "Rewrite one Clip Show joke and its whole OSG run with GPT-5.5 — optionally in a different joke type and/or with an added img-* source image. Re-enqueues generated OSG images, clears the joke's stale voiceover, and returns the updated plan.",
     example: "/regen-joke",
     category: "context_menu",
     icon: "RefreshCw",
@@ -368,9 +368,9 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "segment_index", type: "number", required: true, description: "Zero-based Clip Show segment index" },
+      { name: "segment_index", type: "number", required: true, description: "Zero-based Clip Show joke (segment) index" },
       { name: "joke_type", type: "string", required: false, description: "Comedic style (observational, one_liner, pun, deadpan, absurdist, roast, self_deprecating, hyperbole, auto)" },
-      { name: "image_asset_id", type: "string", required: false, description: "New img-* source image to swap in before regenerating" },
+      { name: "image_asset_id", type: "string", required: false, description: "New img-* image to add to this joke's source pool before regenerating" },
     ],
     mcpTool: { tool: "regenerate_clip_show_segment", autoInject: ["project_slug"] },
   },

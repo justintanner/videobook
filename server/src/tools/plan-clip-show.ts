@@ -2,22 +2,16 @@ import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import { CHARACTER_METADATA_KEY, type Character } from "../jobs/extract-character.js";
-import type { ClipShowItem } from "../plan-types.js";
 import type { ToolDef } from "./tool-def.js";
-
-const itemSchema = z.union([
-  z.object({ kind: z.literal("topic"), topic: z.string().min(1) }),
-  z.object({ kind: z.literal("image"), image_asset_id: z.string().min(1) }),
-]);
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   character_asset_id: z.string().describe("Host character asset id (char-*) with an assigned ElevenLabs voice"),
-  items: z
-    .array(itemSchema)
+  image_asset_ids: z
+    .array(z.string().min(1))
     .min(1)
     .max(12)
-    .describe("Ordered items the host jokes about — each a {kind:'topic',topic} or {kind:'image',image_asset_id} (img-*)"),
+    .describe("Pool of img-* images the host jokes about. The model groups them into jokes and lays out each joke's on-screen-graphic (OSG) run."),
   show_brief: z.string().optional().describe("Optional creative direction for the read-through"),
   tone: z.string().optional().describe("Optional comedy tone"),
 };
@@ -26,19 +20,13 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
   return {
     name: "plan_clip_show",
     description:
-      "Create the active Clip Show plan: a host char-* with an ElevenLabs voice does an audio read-through, writing one joke per item (each item a text topic or an img-* image, read via vision). Uses GPT-5.5. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
+      "Create the active Clip Show plan: a host char-* with an ElevenLabs voice does an audio read-through over a rapid-fire run of on-screen graphics (OSGs). The model groups the dropped img-* pool into jokes, writes each joke, and lays out its OSG run (reused uploads + newly generated graphics). Generated OSG images are auto-enqueued. Uses GPT-5.5. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
     schema,
     handler: async (args) => {
-      const {
-        project_slug,
-        character_asset_id,
-        items,
-        show_brief,
-        tone,
-      } = args as {
+      const { project_slug, character_asset_id, image_asset_ids, show_brief, tone } = args as {
         project_slug: string;
         character_asset_id: string;
-        items: ClipShowItem[];
+        image_asset_ids: string[];
         show_brief?: string;
         tone?: string;
       };
@@ -50,8 +38,8 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      // Cheap pre-check: confirm the host character and any image items resolve
-      // before enqueuing. Heavy work (vision, GPT) stays in the job.
+      // Cheap pre-check: confirm the host character and each image resolve
+      // before enqueuing. Heavy work (vision, GPT, image gen) stays in the job.
       const charId = character_asset_id.replace(/^@/, "");
       const charManifest = await fs.getManifest(charId, project_slug, { includeDotfiles: true });
       if (!charManifest.ok) {
@@ -73,9 +61,8 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
           }],
         };
       }
-      for (const item of items) {
-        if (item.kind !== "image") continue;
-        const imgId = item.image_asset_id.replace(/^@/, "");
+      for (const raw of image_asset_ids) {
+        const imgId = raw.replace(/^@/, "");
         const imgManifest = await fs.getManifest(imgId, project_slug);
         if (!imgManifest.ok) {
           return {
@@ -94,7 +81,7 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
         type: "plan_clip_show",
         projectSlug: project_slug,
         characterAssetId: character_asset_id,
-        items,
+        imageAssetIds: image_asset_ids,
         showBrief: show_brief ?? null,
         tone: tone ?? null,
       });

@@ -15,14 +15,14 @@ const schema = {
   image_asset_id: z
     .string()
     .optional()
-    .describe("New img-* source image to swap in before regenerating (drag-and-drop replace). Converts a topic segment to an image segment."),
+    .describe("New img-* source image to add to this joke's pool before regenerating its OSG run (drag-and-drop)."),
 };
 
 export function regenerateClipShowSegmentDef(fs: VideocityFs): ToolDef {
   return {
     name: "regenerate_clip_show_segment",
     description:
-      "Rewrite one Clip Show read-through joke with GPT-5.5 — optionally in a different joke type and/or from a swapped img-* source image. Clears the segment's now-stale voiceover. Runs in the background and returns the updated plan once written (plan/index.md and plan/.plan.json).",
+      "Rewrite one Clip Show joke and its whole on-screen-graphic (OSG) run with GPT-5.5 — optionally in a different joke type and/or with an added/swapped img-* source image. Re-enqueues generated OSG images and clears the joke's now-stale voiceover. Runs in the background and returns the updated plan once written (plan/index.md and plan/.plan.json).",
     schema,
     handler: async (args) => {
       const { project_slug, segment_index, joke_type, image_asset_id } = args as {
@@ -45,7 +45,7 @@ export function regenerateClipShowSegmentDef(fs: VideocityFs): ToolDef {
         const sidecar = await readClipShowPlan(fs, project_slug);
         const segment = sidecar.segments[segment_index];
         if (!segment) throw new Error(`Clip Show segment ${segment_index} not found`);
-        if (segment.joke === undefined || segment.kind === undefined) {
+        if (!Array.isArray(segment.osgs)) {
           throw new Error("This Clip Show plan uses the old format — regenerate it from /templates before editing.");
         }
 

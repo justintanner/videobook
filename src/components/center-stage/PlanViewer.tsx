@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -88,21 +88,40 @@ interface ClipShowCharacter {
   elevenlabs_voice_id: string;
 }
 
-// One input the host jokes about: a text topic or an img-* image.
-type ClipShowItem =
-  | { kind: 'topic'; topic: string }
-  | { kind: 'image'; image_asset_id: string };
+// One on-screen graphic in a joke's visual run (mirrors server ClipShowOsg).
+interface ClipShowOsg {
+  source: 'upload' | 'generated';
+  image_asset_id: string | null;
+  image_prompt: string | null;
+  treatment: string;
+  beat_text: string;
+  caption: string | null;
+  duration_ms: number;
+}
 
+// One joke = host voiceover + an ordered run of OSGs.
 interface ClipShowSegment {
-  kind: 'topic' | 'image';
-  topic?: string;
-  image_asset_id?: string;
+  source_image_asset_ids: string[];
   source_summary: string;
   joke: string;
   joke_notes?: string;
   joke_type?: string;
+  osgs: ClipShowOsg[];
   audio_asset_id?: string | null;
 }
+
+// Visual treatments offered by the per-OSG dropdown. Mirrors the server's
+// CLIP_SHOW_TREATMENTS (id + label only).
+const CLIP_SHOW_TREATMENTS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'photo', label: 'Photo' },
+  { id: 'cityscape', label: 'Cityscape' },
+  { id: 'map', label: 'Map' },
+  { id: 'headline', label: 'Headline' },
+  { id: 'fake_poster', label: 'Fake poster' },
+  { id: 'title_card', label: 'Title card' },
+  { id: 'caption', label: 'Caption' },
+  { id: 'portrait', label: 'Portrait' },
+];
 
 // Comedic styles offered by the per-joke type dropdown. Mirrors the server's
 // CLIP_SHOW_JOKE_TYPES (id + label only — the prompt hint lives server-side).
@@ -125,6 +144,7 @@ interface ClipShowPlanSidecar {
   show_brief: string;
   tone: string;
   model: 'gpt-5.5';
+  image_model: 'generate_nano_banana_pro_fal';
   audio_model: 'elevenlabs';
   segments: ClipShowSegment[];
 }
@@ -791,6 +811,8 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   );
 }
 
+type ToolResult = Awaited<ReturnType<UseMcpResult['callTool']>>;
+
 type AudioTileState =
   | { kind: 'idle' }
   | { kind: 'generating' }
@@ -806,6 +828,24 @@ function deriveClipShowAudioState(assetId: string | null | undefined, mediaItems
   return { kind: 'generating' };
 }
 
+type ImageTileState =
+  | { kind: 'missing' } // no image asset attached (gen couldn't be created)
+  | { kind: 'generating' }
+  | { kind: 'ready'; src: string }
+  | { kind: 'error'; message: string };
+
+// Resolve an OSG's image status from the asset store (never stored in the plan).
+// An uploaded image with no live MediaItem still shows via its files path.
+function deriveClipShowImageState(assetId: string | null | undefined, mediaItems: MediaItem[], projectSlug: string): ImageTileState {
+  if (!assetId) return { kind: 'missing' };
+  const item = mediaItems.find((m) => m.id === assetId);
+  const fallback = `/files/${projectSlug}/${assetId}/original.jpg`;
+  if (!item) return { kind: 'generating' };
+  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'image gen failed' };
+  if (item.status === 'ready') return { kind: 'ready', src: item.thumbnailSrc || item.filePath || fallback };
+  return { kind: 'generating' };
+}
+
 function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
   if (!sidecar) return '';
   return [
@@ -813,20 +853,19 @@ function clipShowSidecarKey(sidecar: ClipShowPlanSidecar | null): string {
     sidecar.show_brief,
     sidecar.tone,
     sidecar.segments.map((s) => [
-      s.kind,
-      s.topic ?? '',
-      s.image_asset_id ?? '',
+      (s.source_image_asset_ids ?? []).join(','),
       s.joke,
       s.joke_type ?? '',
       s.audio_asset_id ?? '',
+      (s.osgs ?? []).map((o) => `${o.source}:${o.image_asset_id ?? ''}:${o.treatment}:${o.caption ?? ''}:${o.duration_ms}`).join('~'),
     ].join(':')).join('|'),
   ].join('|');
 }
 
-// True when a clip_show sidecar predates the read-through refactor (old segments
-// keyed on clips, lacking joke/kind). Such plans must be regenerated.
+// True when a clip_show sidecar predates the OSG-run refactor (old segments
+// lack an osgs array). Such plans must be regenerated.
 function isStaleClipShowPlan(sidecar: ClipShowPlanSidecar): boolean {
-  return sidecar.segments.some((s) => s.joke === undefined || s.kind === undefined);
+  return sidecar.segments.some((s) => !Array.isArray(s.osgs));
 }
 
 // Plays each segment's ready voiceover in order — the "read-through". Driven
@@ -999,12 +1038,12 @@ function ClipShowCharacterDropZone({ item, assetId, onDropAsset }: {
   );
 }
 
-// Ordered list of img-* images the host jokes about — each joke is driven by the
-// image plus the house-style jokes reference. Reorder/remove inline.
-function ClipShowItemsEditor({ items, mediaItems, onChange }: {
-  items: ClipShowItem[];
+// Ordered pool of img-* images dropped for a Clip Show. The model groups these
+// into jokes and lays out each joke's OSG run. Reorder/remove inline.
+function ClipShowItemsEditor({ imageAssetIds, mediaItems, onChange }: {
+  imageAssetIds: string[];
   mediaItems: MediaItem[];
-  onChange: (next: ClipShowItem[]) => void;
+  onChange: (next: string[]) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
 
@@ -1013,14 +1052,14 @@ function ClipShowItemsEditor({ items, mediaItems, onChange }: {
       toast({ title: 'Wrong asset type', description: `Drop an img-* image, got ${assetId}.`, duration: 3000 });
       return;
     }
-    if (items.some((it) => it.kind === 'image' && it.image_asset_id === assetId)) return;
-    onChange([...items, { kind: 'image', image_asset_id: assetId }]);
+    if (imageAssetIds.includes(assetId)) return;
+    onChange([...imageAssetIds, assetId]);
   };
-  const removeAt = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  const removeAt = (i: number) => onChange(imageAssetIds.filter((_, idx) => idx !== i));
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
-    if (j < 0 || j >= items.length) return;
-    const next = [...items];
+    if (j < 0 || j >= imageAssetIds.length) return;
+    const next = [...imageAssetIds];
     [next[i], next[j]] = [next[j], next[i]];
     onChange(next);
   };
@@ -1049,38 +1088,32 @@ function ClipShowItemsEditor({ items, mediaItems, onChange }: {
       onDrop={handleDrop}
     >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Images</div>
-        <div className="text-[10px] font-mono text-emerald-300/40">{items.length > 0 ? `${items.length} item${items.length === 1 ? '' : 's'}` : 'drop img-*'}</div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Image pool</div>
+        <div className="text-[10px] font-mono text-emerald-300/40">{imageAssetIds.length > 0 ? `${imageAssetIds.length} image${imageAssetIds.length === 1 ? '' : 's'}` : 'drop img-*'}</div>
       </div>
-      {items.length === 0 ? (
+      {imageAssetIds.length === 0 ? (
         <div className="h-20 rounded bg-zinc-950/70 border border-zinc-800/70 flex flex-col items-center justify-center gap-1.5">
           <Images className="w-5 h-5 text-emerald-300/35" />
           <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">drop img-* here</span>
         </div>
       ) : (
         <ol className="space-y-1.5">
-          {items.map((it, index) => {
-            const imageItem = it.kind === 'image' ? mediaItems.find((m) => m.id === it.image_asset_id) ?? null : null;
+          {imageAssetIds.map((id, index) => {
+            const imageItem = mediaItems.find((m) => m.id === id) ?? null;
             const src = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
             return (
               <li
-                key={`${it.kind}-${it.kind === 'image' ? it.image_asset_id : index}-${index}`}
+                key={`${id}-${index}`}
                 className="flex items-center gap-2 rounded border border-zinc-700/60 bg-zinc-950/75 p-1.5"
               >
                 <span className="shrink-0 w-5 text-center text-[10px] font-mono text-emerald-300/45">{index + 1}</span>
-                {it.kind === 'image' ? (
-                  <>
-                    <span className="shrink-0 h-9 w-14 rounded bg-black/40 border border-zinc-800/70 overflow-hidden flex items-center justify-center">
-                      {src ? <img src={src} alt={it.image_asset_id} className="w-full h-full object-contain" loading="lazy" /> : <Images className="w-3.5 h-3.5 text-emerald-300/40" />}
-                    </span>
-                    <span className="min-w-0 flex-1 text-[11px] font-mono text-emerald-200/75 truncate">{imageItem?.slug ?? `@${it.image_asset_id}`}</span>
-                  </>
-                ) : (
-                  <span className="min-w-0 flex-1 text-[11px] font-mono text-emerald-200/85 truncate">{it.topic}</span>
-                )}
+                <span className="shrink-0 h-9 w-14 rounded bg-black/40 border border-zinc-800/70 overflow-hidden flex items-center justify-center">
+                  {src ? <img src={src} alt={id} className="w-full h-full object-contain" loading="lazy" /> : <Images className="w-3.5 h-3.5 text-emerald-300/40" />}
+                </span>
+                <span className="min-w-0 flex-1 text-[11px] font-mono text-emerald-200/75 truncate">{imageItem?.slug ?? `@${id}`}</span>
                 <div className="ml-auto flex items-center gap-0.5 shrink-0">
                   <button type="button" onClick={() => move(index, -1)} disabled={index === 0} title="Move up" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowUp className="w-3 h-3" /></button>
-                  <button type="button" onClick={() => move(index, 1)} disabled={index === items.length - 1} title="Move down" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowDown className="w-3 h-3" /></button>
+                  <button type="button" onClick={() => move(index, 1)} disabled={index === imageAssetIds.length - 1} title="Move down" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowDown className="w-3 h-3" /></button>
                   <button type="button" onClick={() => removeAt(index)} title="Remove" className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:border-red-300/70 hover:bg-red-500/25', FOCUS_RING_BUTTON)}><X className="w-3 h-3" /></button>
                 </div>
               </li>
@@ -1204,10 +1237,6 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [sourceDragActive, setSourceDragActive] = useState(false);
-  const imageItem = useMemo(
-    () => (segment.kind === 'image' && segment.image_asset_id ? mediaItems.find((m) => m.id === segment.image_asset_id) ?? null : null),
-    [segment.kind, segment.image_asset_id, mediaItems],
-  );
   const audioState = useMemo(
     () => deriveClipShowAudioState(segment.audio_asset_id, mediaItems, projectSlug),
     [segment.audio_asset_id, mediaItems, projectSlug],
@@ -1220,9 +1249,47 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
     setJokeType(segment.joke_type ?? DEFAULT_JOKE_TYPE);
   }, [segment.joke_type]);
 
-  // Rewrite this joke via GPT-5.5 in the selected joke type, optionally from a
-  // dropped-in img-* source. The tool returns the full updated plan (with the
-  // segment's stale voiceover cleared); we apply it directly.
+  // Apply a tool result that returns the full updated plan sidecar.
+  const applyResult = useCallback((result: ToolResult, failTitle: string): boolean => {
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `${failTitle} failed`;
+      toast({ title: failTitle, description: msg, duration: 5000 });
+      return false;
+    }
+    try {
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    } catch {
+      return false;
+    }
+    return true;
+  }, [onSidecarUpdate]);
+
+  // Structural plan edit (op-based, GPT-free): joke text, audio, and all OSG ops.
+  const editPlan = useCallback(async (args: Record<string, unknown>): Promise<boolean> => {
+    const result = await callTool('replace_plan_clip_show_asset', {
+      project_slug: projectSlug,
+      segment_index: index,
+      ...args,
+    });
+    return applyResult(result, 'Clip Show update');
+  }, [callTool, projectSlug, index, applyResult]);
+
+  // Regenerate one OSG's image (new img-* asset + enqueued t2i job).
+  const regenOsgImage = useCallback(async (osgIndex: number, opts?: { image_prompt?: string; treatment?: string }): Promise<boolean> => {
+    const result = await callTool('regenerate_clip_show_osg', {
+      project_slug: projectSlug,
+      segment_index: index,
+      osg_index: osgIndex,
+      ...opts,
+    });
+    return applyResult(result, 'OSG regenerate');
+  }, [callTool, projectSlug, index, applyResult]);
+
+  // Rewrite this joke and its whole OSG run via GPT-5.5, optionally adding a
+  // dropped-in img-* to the joke's source pool. Returns the full updated plan
+  // (stale voiceover cleared, generated OSG images re-enqueued).
   const handleRegenerate = useCallback(async (opts?: { imageAssetId?: string }) => {
     setRegenerating(true);
     try {
@@ -1232,18 +1299,11 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
         joke_type: jokeType,
         ...(opts?.imageAssetId ? { image_asset_id: opts.imageAssetId } : {}),
       });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Regenerate failed';
-        toast({ title: 'Regenerate failed', description: msg, duration: 5000 });
-        return;
-      }
-      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
-      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      applyResult(result, 'Regenerate');
     } finally {
       setRegenerating(false);
     }
-  }, [callTool, projectSlug, index, jokeType, onSidecarUpdate]);
+  }, [callTool, projectSlug, index, jokeType, applyResult]);
 
   const handleSourceDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -1256,39 +1316,21 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
       const droppedId = payload.id;
       if (typeof droppedId !== 'string') return;
       if (!droppedId.startsWith('img-')) {
-        toast({ title: 'Not an image', description: `Drop an img-* image to replace the source, got ${droppedId}.`, duration: 3000 });
+        toast({ title: 'Not an image', description: `Drop an img-* to add a source, got ${droppedId}.`, duration: 3000 });
         return;
       }
-      if (droppedId === segment.image_asset_id) return;
+      if (segment.source_image_asset_ids.includes(droppedId)) return;
       void handleRegenerate({ imageAssetId: droppedId });
     } catch {
       return;
     }
-  }, [regenerating, segment.image_asset_id, handleRegenerate]);
-
-  const replaceSegment = useCallback(async (patch: Record<string, unknown>) => {
-    const result = await callTool('replace_plan_clip_show_asset', {
-      project_slug: projectSlug,
-      segment_index: index,
-      joke,
-      ...patch,
-    });
-    if (result.isError) {
-      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Plan update failed';
-      toast({ title: 'Clip Show update failed', description: msg, duration: 5000 });
-      return null;
-    }
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-    const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
-    if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-    return parsed.sidecar ?? null;
-  }, [callTool, projectSlug, index, joke, onSidecarUpdate]);
+  }, [regenerating, segment.source_image_asset_ids, handleRegenerate]);
 
   const handleGenerateAudio = useCallback(async () => {
     if (!joke.trim()) return;
     setGeneratingAudio(true);
     try {
-      const saved = await replaceSegment({});
+      const saved = await editPlan({ op: 'set_joke', joke: joke.trim() });
       if (!saved) return;
       const result = await callTool('generate_elevenlabs_t2a', {
         project_slug: projectSlug,
@@ -1303,21 +1345,19 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
       }
       const text = (result.content as Array<{ type: string; text: string }>)[0].text;
       const parsed = JSON.parse(text) as { aud_asset_id?: string };
-      if (parsed.aud_asset_id) await replaceSegment({ audio_asset_id: parsed.aud_asset_id });
+      if (parsed.aud_asset_id) await editPlan({ op: 'set_audio', audio_asset_id: parsed.aud_asset_id });
       await callTool('sync', { project_slug: projectSlug });
       toast({ title: 'Audio enqueued', description: sidecar.character.elevenlabs_voice_id, duration: 2500 });
     } finally {
       setGeneratingAudio(false);
     }
-  }, [joke, replaceSegment, callTool, projectSlug, sidecar.character.asset_id, sidecar.character.elevenlabs_voice_id, index]);
+  }, [joke, editPlan, callTool, projectSlug, sidecar.character.asset_id, sidecar.character.elevenlabs_voice_id, index]);
 
   const handleAudioReplace = useCallback(async (assetId: string) => {
-    await replaceSegment({ audio_asset_id: assetId });
-  }, [replaceSegment]);
+    await editPlan({ op: 'set_audio', audio_asset_id: assetId });
+  }, [editPlan]);
 
   const canGenerateAudio = joke.trim().length > 0 && !generatingAudio && !regenerating;
-  const imageSrc = imageItem?.thumbnailSrc ?? imageItem?.filePath ?? null;
-  const sourceLabel = segment.kind === 'image' ? (imageItem?.slug ?? `@${segment.image_asset_id ?? 'img'}`) : 'Topic';
 
   return (
     <section className="min-w-0 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/55">
@@ -1326,114 +1366,349 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
           <span className="inline-flex w-6 h-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/45 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold">{index + 1}</span>
           <div className="min-w-0">
             <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-200 truncate">Joke {index + 1}</h2>
-            <div className="text-[10px] uppercase tracking-wider text-emerald-300/40 truncate">{sourceLabel}</div>
+            <div className="text-[10px] uppercase tracking-wider text-emerald-300/40 truncate">{segment.osgs.length} OSG{segment.osgs.length === 1 ? '' : 's'}</div>
           </div>
         </div>
         <div className="text-[10px] font-mono text-emerald-300/45">GPT-5.5</div>
       </header>
-      <div className="min-w-0 p-3">
-        <div className="grid grid-cols-1 xl:grid-cols-[15rem_minmax(0,1fr)] gap-3">
-          <div
-            className={cn(
-              'relative min-w-0 rounded border border-dashed bg-black/35 p-2 space-y-2 transition-colors',
-              sourceDragActive ? 'border-emerald-300 bg-emerald-500/10' : 'border-zinc-800/70',
-            )}
-            onDragEnter={(e) => { e.preventDefault(); setSourceDragActive(true); }}
-            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSourceDragActive(true); }}
-            onDragLeave={(e) => { e.preventDefault(); setSourceDragActive(false); }}
-            onDrop={handleSourceDrop}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/60">
-                {segment.kind === 'image' ? 'Source image' : 'Topic'}
+      <div className="min-w-0 p-3 space-y-3">
+        <ClipShowOsgStrip
+          segment={segment}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
+          onEdit={editPlan}
+          onRegenOsg={regenOsgImage}
+          disabled={regenerating}
+        />
+
+        <div className="min-w-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_16rem] gap-3">
+          <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Joke</div>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={jokeType}
+                  onChange={(e) => setJokeType(e.target.value)}
+                  disabled={regenerating}
+                  title="Joke type — applied when you regenerate"
+                  className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {CLIP_SHOW_JOKE_TYPES.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { void handleRegenerate(); }}
+                  disabled={regenerating}
+                  title="Rewrite this joke and its OSG run with GPT-5.5 in the selected type"
+                  className={cn(
+                    'h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider',
+                    'text-emerald-300/80 hover:text-emerald-300',
+                    'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    FOCUS_RING_BUTTON,
+                  )}
+                >
+                  {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Regenerate
+                </button>
               </div>
-              <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">drop img-* to replace</div>
             </div>
-            {segment.kind === 'image' ? (
-              <div className="rounded border border-zinc-700/60 bg-black/40 overflow-hidden">
-                <div className="h-28 flex items-center justify-center">
-                  {imageSrc ? <img src={imageSrc} alt={sourceLabel} className="w-full h-full object-contain" loading="lazy" /> : <Images className="w-5 h-5 text-emerald-300/35" />}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded border border-zinc-700/60 bg-black/40 p-2 text-[11px] font-mono text-emerald-200/85 leading-relaxed">
-                {segment.topic}
-              </div>
+            <PromptEditor value={joke} onChange={setJoke} mediaItems={mediaItems} projectSlug={projectSlug} />
+            {segment.joke_notes && (
+              <div className="text-[10px] font-mono text-emerald-300/40 leading-relaxed">{segment.joke_notes}</div>
             )}
-            {segment.source_summary && (
-              <div className="text-[10px] font-mono text-emerald-300/55 leading-relaxed line-clamp-4">{segment.source_summary}</div>
-            )}
-            {sourceDragActive && (
-              <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none rounded">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop img-* to replace</span>
-              </div>
-            )}
-            {regenerating && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none rounded">
-                <Loader2 className="w-5 h-5 animate-spin text-emerald-300/80" />
-              </div>
-            )}
+            <div
+              className={cn(
+                'flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-800/60 rounded transition-colors',
+                sourceDragActive ? 'bg-emerald-500/10' : '',
+              )}
+              onDragEnter={(e) => { e.preventDefault(); setSourceDragActive(true); }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSourceDragActive(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setSourceDragActive(false); }}
+              onDrop={handleSourceDrop}
+            >
+              <span className="text-[9px] font-mono uppercase tracking-wider text-cyan-300/55">Sources</span>
+              {segment.source_image_asset_ids.length === 0 ? (
+                <span className="text-[9px] font-mono text-emerald-300/35">none</span>
+              ) : (
+                segment.source_image_asset_ids.map((id) => {
+                  const slug = mediaItems.find((m) => m.id === id)?.slug ?? `@${id}`;
+                  return <span key={id} className="rounded bg-black/50 border border-zinc-700/60 px-1.5 py-0.5 text-[9px] font-mono text-emerald-200/70 truncate max-w-[10rem]">{slug}</span>;
+                })
+              )}
+              <span className="ml-auto text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">drop img-* to add + regen</span>
+            </div>
           </div>
 
-          <div className="min-w-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_16rem] gap-3">
-            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Joke</div>
-                <div className="flex items-center gap-1.5">
-                  <select
-                    value={jokeType}
-                    onChange={(e) => setJokeType(e.target.value)}
-                    disabled={regenerating}
-                    title="Joke type — applied when you regenerate"
-                    className="h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {CLIP_SHOW_JOKE_TYPES.map((t) => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => { void handleRegenerate(); }}
-                    disabled={regenerating}
-                    title="Rewrite this joke with GPT-5.5 in the selected type"
-                    className={cn(
-                      'h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider',
-                      'text-emerald-300/80 hover:text-emerald-300',
-                      'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      FOCUS_RING_BUTTON,
-                    )}
-                  >
-                    {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    Regenerate
-                  </button>
-                </div>
-              </div>
-              <PromptEditor value={joke} onChange={setJoke} mediaItems={mediaItems} projectSlug={projectSlug} />
-              {segment.joke_notes && (
-                <div className="text-[10px] font-mono text-emerald-300/40 leading-relaxed">{segment.joke_notes}</div>
-              )}
+          <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Voiceover</div>
+              <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">host reads the joke</div>
             </div>
-
-            <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
-              <div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/55">Voiceover</div>
-                <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">host reads the joke</div>
-              </div>
-              <ClipShowAudioSlot
-                state={audioState}
-                assetId={segment.audio_asset_id ?? null}
-                generating={generatingAudio}
-                disabled={!canGenerateAudio}
-                disabledReason="Joke required"
-                onGenerate={() => { void handleGenerateAudio(); }}
-                onReplace={(assetId) => { void handleAudioReplace(assetId); }}
-              />
-            </div>
+            <ClipShowAudioSlot
+              state={audioState}
+              assetId={segment.audio_asset_id ?? null}
+              generating={generatingAudio}
+              disabled={!canGenerateAudio}
+              disabledReason="Joke required"
+              onGenerate={() => { void handleGenerateAudio(); }}
+              onReplace={(assetId) => { void handleAudioReplace(assetId); }}
+            />
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+// The ordered OSG run for one joke: a horizontal filmstrip of cards plus a
+// drop-to-add tile. Each card edits/regenerates a single graphic.
+function ClipShowOsgStrip({ segment, mediaItems, projectSlug, onEdit, onRegenOsg, disabled }: {
+  segment: ClipShowSegment;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  onEdit: (args: Record<string, unknown>) => Promise<boolean>;
+  onRegenOsg: (osgIndex: number, opts?: { image_prompt?: string; treatment?: string }) => Promise<boolean>;
+  disabled: boolean;
+}) {
+  const [addDragActive, setAddDragActive] = useState(false);
+  const handleAddDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setAddDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const id = payload.id;
+      if (typeof id !== 'string') return;
+      if (!id.startsWith('img-')) {
+        toast({ title: 'Not an image', description: `Drop an img-* to add an OSG, got ${id}.`, duration: 3000 });
+        return;
+      }
+      void onEdit({ op: 'add_osg', image_asset_id: id, treatment: 'photo' });
+    } catch {
+      return;
+    }
+  };
+  return (
+    <div className="min-w-0 rounded border border-zinc-800/70 bg-black/35 p-2.5 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/60">OSG run · {segment.osgs.length}</div>
+        <div className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/30">drop img-* on a card to swap</div>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {segment.osgs.map((osg, i) => (
+          <ClipShowOsgCard
+            key={i}
+            osg={osg}
+            osgIndex={i}
+            total={segment.osgs.length}
+            mediaItems={mediaItems}
+            projectSlug={projectSlug}
+            onEdit={onEdit}
+            onRegen={onRegenOsg}
+            disabled={disabled}
+          />
+        ))}
+        <div
+          className={cn(
+            'shrink-0 w-24 self-stretch min-h-[12rem] rounded border border-dashed flex flex-col items-center justify-center gap-1 transition-colors',
+            addDragActive ? 'border-emerald-300 bg-emerald-500/10 text-emerald-200' : 'border-zinc-700/70 text-emerald-300/45',
+          )}
+          onDragEnter={(e) => { e.preventDefault(); setAddDragActive(true); }}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setAddDragActive(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setAddDragActive(false); }}
+          onDrop={handleAddDrop}
+          title="Drop an img-* to add a card"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="text-[9px] font-mono uppercase tracking-wider text-center px-1">drop img-* to add</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One on-screen graphic: image (with live status), treatment, caption,
+// duration, reorder/regenerate/edit-prompt/delete controls. Drop an img-* to
+// swap the backing image to an upload.
+function ClipShowOsgCard({ osg, osgIndex, total, mediaItems, projectSlug, onEdit, onRegen, disabled }: {
+  osg: ClipShowOsg;
+  osgIndex: number;
+  total: number;
+  mediaItems: MediaItem[];
+  projectSlug: string;
+  onEdit: (args: Record<string, unknown>) => Promise<boolean>;
+  onRegen: (osgIndex: number, opts?: { image_prompt?: string; treatment?: string }) => Promise<boolean>;
+  disabled: boolean;
+}) {
+  const [caption, setCaption] = useState(osg.caption ?? '');
+  const [duration, setDuration] = useState(String(osg.duration_ms));
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  const [prompt, setPrompt] = useState(osg.image_prompt ?? '');
+  const [busy, setBusy] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  useEffect(() => { setCaption(osg.caption ?? ''); }, [osg.caption]);
+  useEffect(() => { setDuration(String(osg.duration_ms)); }, [osg.duration_ms]);
+  useEffect(() => { setPrompt(osg.image_prompt ?? ''); }, [osg.image_prompt]);
+
+  const imageState = useMemo(
+    () => deriveClipShowImageState(osg.image_asset_id, mediaItems, projectSlug),
+    [osg.image_asset_id, mediaItems, projectSlug],
+  );
+
+  const run = useCallback(async (fn: () => Promise<boolean>) => {
+    setBusy(true);
+    try { return await fn(); } finally { setBusy(false); }
+  }, []);
+
+  const busyAll = busy || disabled;
+  const canRegen = osg.source === 'generated' || !!osg.image_prompt;
+
+  const commitCaption = () => {
+    const next = caption.trim();
+    if (next === (osg.caption ?? '')) return;
+    void run(() => onEdit({ op: 'set_osg_field', osg_index: osgIndex, caption: next || null }));
+  };
+  const commitDuration = () => {
+    const n = Number(duration);
+    if (!Number.isFinite(n) || Math.round(n) === osg.duration_ms) { setDuration(String(osg.duration_ms)); return; }
+    void run(() => onEdit({ op: 'set_osg_field', osg_index: osgIndex, duration_ms: Math.round(n) }));
+  };
+  const swapDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    try {
+      const payload = JSON.parse(json) as SidebarDragPayload;
+      const id = payload.id;
+      if (typeof id !== 'string') return;
+      if (!id.startsWith('img-')) {
+        toast({ title: 'Not an image', description: `Drop an img-* to swap, got ${id}.`, duration: 3000 });
+        return;
+      }
+      if (id === osg.image_asset_id) return;
+      void run(() => onEdit({ op: 'swap_osg_image', osg_index: osgIndex, image_asset_id: id }));
+    } catch {
+      return;
+    }
+  };
+
+  return (
+    <div className="shrink-0 w-44 rounded border border-zinc-700/60 bg-zinc-950/70 p-2 space-y-1.5">
+      <div
+        className={cn(
+          'relative h-24 rounded bg-black/40 border overflow-hidden flex items-center justify-center transition-colors',
+          dragActive ? 'border-emerald-300 ring-1 ring-emerald-300/40' : 'border-zinc-800/70',
+        )}
+        onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+        onDrop={swapDrop}
+        title="Drop an img-* to swap this card's image"
+      >
+        {imageState.kind === 'ready' ? (
+          <img src={imageState.src} alt={osg.beat_text} className="w-full h-full object-cover" loading="lazy" />
+        ) : imageState.kind === 'generating' ? (
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-300/70" />
+        ) : imageState.kind === 'error' ? (
+          <span className="text-[9px] font-mono text-red-200/80 px-1 text-center line-clamp-3">{imageState.message}</span>
+        ) : (
+          <Images className="w-5 h-5 text-emerald-300/35" />
+        )}
+        <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-black/70 px-1 py-0.5 text-[8px] font-mono uppercase tracking-wider text-emerald-200/80">
+          {osg.source === 'generated' ? <Sparkles className="w-2.5 h-2.5" /> : <Images className="w-2.5 h-2.5" />}
+          {osg.source === 'generated' ? 'gen' : 'up'}
+        </span>
+        <span className="absolute top-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[8px] font-mono text-emerald-200/70">{osgIndex + 1}</span>
+        {busyAll && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-300/80" />
+          </div>
+        )}
+      </div>
+
+      <select
+        value={osg.treatment}
+        disabled={busyAll}
+        onChange={(e) => void run(() => onEdit({ op: 'set_osg_field', osg_index: osgIndex, treatment: e.target.value }))}
+        title="Treatment"
+        className="w-full h-6 px-1 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-200/90 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50"
+      >
+        {CLIP_SHOW_TREATMENTS.map((t) => (
+          <option key={t.id} value={t.id}>{t.label}</option>
+        ))}
+      </select>
+
+      <input
+        value={caption}
+        disabled={busyAll}
+        onChange={(e) => setCaption(e.target.value)}
+        onBlur={commitCaption}
+        placeholder="caption…"
+        className="w-full h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-100/90 placeholder:text-emerald-300/25 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50"
+      />
+
+      <div className="flex items-center gap-1">
+        <input
+          value={duration}
+          disabled={busyAll}
+          onChange={(e) => setDuration(e.target.value)}
+          onBlur={commitDuration}
+          inputMode="numeric"
+          title="Hold duration (ms)"
+          className="w-14 h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-100/90 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50"
+        />
+        <span className="text-[9px] font-mono text-emerald-300/40">ms</span>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button type="button" disabled={busyAll || osgIndex === 0} title="Move left" onClick={() => void run(() => onEdit({ op: 'reorder_osg', osg_index: osgIndex, to_index: osgIndex - 1 }))} className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowLeft className="w-3 h-3" /></button>
+          <button type="button" disabled={busyAll || osgIndex === total - 1} title="Move right" onClick={() => void run(() => onEdit({ op: 'reorder_osg', osg_index: osgIndex, to_index: osgIndex + 1 }))} className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><ArrowRight className="w-3 h-3" /></button>
+        </div>
+      </div>
+
+      <div className="text-[9px] font-mono text-emerald-300/40 leading-snug line-clamp-2" title={osg.beat_text}>{osg.beat_text || '—'}</div>
+
+      {editingPrompt && (
+        <div className="space-y-1">
+          <textarea
+            value={prompt}
+            disabled={busyAll}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            placeholder="image prompt…"
+            className="w-full px-1.5 py-1 rounded bg-black/60 border border-zinc-700 text-[10px] font-mono text-emerald-100/90 placeholder:text-emerald-300/25 focus:outline-none focus:border-emerald-500/60 disabled:opacity-50"
+          />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={busyAll || !prompt.trim()}
+              title="Generate from this prompt"
+              onClick={() => void run(async () => {
+                const ok = await onRegen(osgIndex, { image_prompt: prompt.trim() });
+                if (ok) setEditingPrompt(false);
+                return ok;
+              })}
+              className={cn('h-6 px-2 flex items-center gap-1 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 disabled:opacity-50 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}
+            >
+              <Sparkles className="w-3 h-3" /> Generate
+            </button>
+            <button type="button" onClick={() => { setEditingPrompt(false); setPrompt(osg.image_prompt ?? ''); }} className="h-6 px-2 rounded text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 hover:text-white">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-0.5 pt-0.5 border-t border-zinc-800/60">
+        {canRegen && (
+          <button type="button" disabled={busyAll} title="Regenerate this image" onClick={() => void run(() => onRegen(osgIndex))} className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-40', FOCUS_RING_BUTTON)}><RefreshCw className="w-3 h-3" /></button>
+        )}
+        <button type="button" disabled={busyAll} title="Edit image prompt" onClick={() => setEditingPrompt((v) => !v)} className={cn('h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-white hover:bg-emerald-500/15 disabled:opacity-40', FOCUS_RING_BUTTON)}><Pencil className="w-3 h-3" /></button>
+        <button type="button" disabled={busyAll || total <= 1} title={total <= 1 ? 'A joke needs at least one OSG' : 'Delete this card'} onClick={() => void run(() => onEdit({ op: 'remove_osg', osg_index: osgIndex }))} className={cn('ml-auto h-6 w-6 rounded flex items-center justify-center text-emerald-300/55 hover:text-red-200 hover:bg-red-500/25 disabled:opacity-30 disabled:cursor-not-allowed', FOCUS_RING_BUTTON)}><X className="w-3 h-3" /></button>
+      </div>
+    </div>
   );
 }
 
@@ -4442,12 +4717,16 @@ export function ClipShowSetup({ projectSlug, mediaItems, callTool, onGenerated }
   );
 }
 
-function segmentsToItems(segments: ClipShowSegment[]): ClipShowItem[] {
-  return segments.map((s) =>
-    s.kind === 'image'
-      ? { kind: 'image', image_asset_id: s.image_asset_id ?? '' }
-      : { kind: 'topic', topic: s.topic ?? '' },
-  );
+// Collect a plan's distinct source-pool images (in order) to re-seed the editor.
+function segmentsToPool(segments: ClipShowSegment[]): string[] {
+  const seen = new Set<string>();
+  const pool: string[] = [];
+  for (const s of segments) {
+    for (const id of s.source_image_asset_ids ?? []) {
+      if (id && !seen.has(id)) { seen.add(id); pool.push(id); }
+    }
+  }
+  return pool;
 }
 
 function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: ClipShowPlanSidecar | null }) {
@@ -4455,8 +4734,8 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   // so "Use Template" works without opening Customize.
   const autoPick = initial ? null : autoPickClipShow(mediaItems);
   const [characterId, setCharacterId] = useState(initial?.character.asset_id ?? autoPick?.characterId ?? '');
-  const [items, setItems] = useState<ClipShowItem[]>(
-    initial && !isStaleClipShowPlan(initial) ? segmentsToItems(initial.segments) : autoPick?.items ?? [],
+  const [imageAssetIds, setImageAssetIds] = useState<string[]>(
+    initial && !isStaleClipShowPlan(initial) ? segmentsToPool(initial.segments) : autoPick?.imageAssetIds ?? [],
   );
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
@@ -4476,7 +4755,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   // it lacks one; null/undefined (unknown) doesn't block — the server pre-check
   // is the backstop.
   const hostMissingVoice = characterItem?.hasVoice === false;
-  const canGenerate = characterId.length > 0 && items.length > 0 && !hostMissingVoice && !generating;
+  const canGenerate = characterId.length > 0 && imageAssetIds.length > 0 && !hostMissingVoice && !generating;
   const ctaHint = hostMissingVoice
     ? `@${characterId} has no ElevenLabs voice — assign one or pick another in Customize`
     : 'Needs a host character + at least one image — open Customize';
@@ -4489,16 +4768,16 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
       const result = await callTool('plan_clip_show', {
         project_slug: projectSlug,
         character_asset_id: characterId,
-        items,
+        image_asset_ids: imageAssetIds,
       });
       if (result.isError) {
         const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Clip Show plan failed';
         toast({ title: 'Clip Show failed', description: msg, duration: 5000 });
         return;
       }
-      // plan_clip_show runs in the background (GPT-5.5). Poll read_plan until the
-      // new clip_show plan — matching the requested host + item count, with a
-      // changed key vs the previous plan — lands, then hand off to /plan.
+      // plan_clip_show runs in the background (GPT-5.5). The model groups the pool
+      // into jokes, so the joke count isn't known up front — poll read_plan until
+      // a fresh clip_show plan for this host (changed key vs the previous) lands.
       const POLL_MS = 3000;
       const MAX_ATTEMPTS = 100; // ~5 min
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -4513,7 +4792,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         } catch { continue; }
         if (planFormula(parsed) !== 'clip_show') continue;
         const cs = parsed as ClipShowPlanSidecar;
-        const matches = cs.character.asset_id === characterId && cs.segments.length === items.length;
+        const matches = cs.character.asset_id === characterId && !isStaleClipShowPlan(cs) && cs.segments.length >= 1;
         if (matches && clipShowSidecarKey(cs) !== prevKey) {
           await callTool('sync', { project_slug: projectSlug });
           toast({ title: 'Clip Show planned', description: `${cs.segments.length} joke${cs.segments.length === 1 ? '' : 's'}`, duration: 2500 });
@@ -4526,7 +4805,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
     } finally {
       if (!cancelledRef.current) setGenerating(false);
     }
-  }, [canGenerate, initial, callTool, projectSlug, characterId, items, onGenerated]);
+  }, [canGenerate, initial, callTool, projectSlug, characterId, imageAssetIds, onGenerated]);
 
   return (
     <div className="space-y-4">
@@ -4540,7 +4819,7 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
       <CustomizeInputs>
         <div className="grid grid-cols-1 xl:grid-cols-[14rem_minmax(0,1fr)] gap-3">
           <ClipShowCharacterDropZone item={characterItem} assetId={characterId || null} onDropAsset={handleCharacterDrop} />
-          <ClipShowItemsEditor items={items} mediaItems={mediaItems} onChange={setItems} />
+          <ClipShowItemsEditor imageAssetIds={imageAssetIds} mediaItems={mediaItems} onChange={setImageAssetIds} />
         </div>
       </CustomizeInputs>
     </div>

@@ -33,26 +33,17 @@ function byNewest(a: MediaItem, b: MediaItem): number {
 
 // Per-formula seeds. Each mirrors the inputs its setup panel needs.
 
-// A Clip Show item the host jokes about: a text topic or an img-* image. Mirrors
-// the union in PlanViewer/plan-types (kept local to avoid a client import cycle).
-export type ClipShowItem =
-  | { kind: 'topic'; topic: string }
-  | { kind: 'image'; image_asset_id: string };
-
-export function autoPickClipShow(mediaItems: MediaItem[]): { characterId: string; items: ClipShowItem[] } {
+export function autoPickClipShow(mediaItems: MediaItem[]): { characterId: string; imageAssetIds: string[] } {
   // Prefer a host that already has an ElevenLabs voice (Clip Show needs one);
   // fall back to the newest char so the panel still pre-fills and the disabled
   // hint / server pre-check can explain the missing voice.
   const voiced = mediaItems.filter((m) => m.hasVoice === true);
   const characterId =
     newestIdsByPrefix(voiced, 'char-', 1)[0] ?? newestIdsByPrefix(mediaItems, 'char-', 1)[0] ?? '';
-  // Seed the newest images as items (no images → empty; user adds topics/images
-  // in Customize). Topics can't be auto-invented.
-  const items: ClipShowItem[] = newestIdsByPrefix(mediaItems, 'img-', 6).map((id) => ({
-    kind: 'image',
-    image_asset_id: id,
-  }));
-  return { characterId, items };
+  // Seed the newest images as the joke pool (no images → empty; user adds more
+  // in Customize). The model groups them into jokes and lays out OSG runs.
+  const imageAssetIds = newestIdsByPrefix(mediaItems, 'img-', 6);
+  return { characterId, imageAssetIds };
 }
 
 export function autoPickStoryboard(items: MediaItem[]): { sourceImageIds: string[] } {
