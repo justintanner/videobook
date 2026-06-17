@@ -493,6 +493,25 @@ function renderMarkdown(sidecar: ClipShowPlanSidecar): string {
   ].join("\n");
 }
 
+// Write one plan file only when its content actually changed. The engine commits
+// each write scoped to that file's path, and a scoped `git commit -- <path>` with
+// no diff exits non-zero (empty stderr, "nothing to commit") whenever the repo is
+// otherwise dirty — which it almost always is, since the engine's state DB is
+// modified by routine asset work. Skipping no-op writes lets idempotent plan
+// edits (e.g. "set joke" with unchanged text before generating a voiceover)
+// succeed instead of throwing a bare "Failed to commit file write".
+async function writePlanFileIfChanged(
+  fs: VideocityFs,
+  projectSlug: string,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  const existing = await fs.readFile("plan", fileName, projectSlug);
+  if (existing.ok && Buffer.from(existing.value).toString("utf-8") === content) return;
+  const written = await fs.writeFile("plan", fileName, content, projectSlug);
+  if (!written.ok) throw new Error(`Failed to write ${fileName}: ${written.error.message}`);
+}
+
 export async function writeClipShowPlan(
   fs: VideocityFs,
   projectSlug: string,
@@ -502,10 +521,8 @@ export async function writeClipShowPlan(
   if (!projectResult.ok) throw new Error(projectResult.error.message);
   await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
 
-  const writeMd = await fs.writeFile("plan", "index.md", renderMarkdown(sidecar), projectSlug);
-  if (!writeMd.ok) throw new Error(`Failed to write index.md: ${writeMd.error.message}`);
-  const writeJson = await fs.writeFile("plan", ".plan.json", JSON.stringify(sidecar, null, 2), projectSlug);
-  if (!writeJson.ok) throw new Error(`Failed to write .plan.json: ${writeJson.error.message}`);
+  await writePlanFileIfChanged(fs, projectSlug, "index.md", renderMarkdown(sidecar));
+  await writePlanFileIfChanged(fs, projectSlug, ".plan.json", JSON.stringify(sidecar, null, 2));
 }
 
 export async function readClipShowPlan(fs: VideocityFs, projectSlug: string): Promise<ClipShowPlanSidecar> {
