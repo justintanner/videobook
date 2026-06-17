@@ -938,6 +938,76 @@ function ClipShowReadThroughPlayer({ sidecar, mediaItems, projectSlug }: {
   );
 }
 
+// Opt-in image generation. Text-to-image is deferred at plan time, so generated
+// OSGs land prompt-only; this fills every one that still lacks an image in a
+// single call (idempotent server-side). Hidden when the plan has no generated
+// OSGs at all; disabled once they're all materialized.
+function ClipShowGenerateImagesButton({ sidecar, projectSlug, callTool, onSidecarUpdate }: {
+  sidecar: ClipShowPlanSidecar;
+  projectSlug: string;
+  callTool: UseMcpResult['callTool'];
+  onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const { pending, totalGenerated } = useMemo(() => {
+    let pending = 0;
+    let totalGenerated = 0;
+    for (const s of sidecar.segments) {
+      for (const o of s.osgs ?? []) {
+        if (o.source !== 'generated') continue;
+        totalGenerated++;
+        if (!o.image_asset_id && o.image_prompt) pending++;
+      }
+    }
+    return { pending, totalGenerated };
+  }, [sidecar.segments]);
+
+  const handleClick = useCallback(async () => {
+    setBusy(true);
+    try {
+      const result = await callTool('generate_clip_show_images', { project_slug: projectSlug });
+      if (result.isError) {
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Image generation failed';
+        toast({ title: 'Generate images failed', description: msg, duration: 5000 });
+        return;
+      }
+      try {
+        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+        const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+      } catch {
+        // sync below reconciles if the result body can't be parsed
+      }
+      await callTool('sync', { project_slug: projectSlug });
+      toast({ title: 'Images enqueued', description: `${pending} OSG image${pending === 1 ? '' : 's'} generating`, duration: 2500 });
+    } finally {
+      setBusy(false);
+    }
+  }, [callTool, projectSlug, onSidecarUpdate, pending]);
+
+  if (totalGenerated === 0) return null;
+  const disabled = busy || pending === 0;
+  return (
+    <button
+      type="button"
+      onClick={() => { void handleClick(); }}
+      disabled={disabled}
+      title={pending === 0 ? 'All generated OSGs already have images' : `Generate ${pending} OSG image${pending === 1 ? '' : 's'} (text-to-image)`}
+      className={cn(
+        'h-7 px-2.5 flex items-center gap-1.5 rounded',
+        'text-[10px] font-mono font-bold uppercase tracking-wider',
+        'text-cyan-200 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20',
+        'border border-cyan-500/35 hover:border-cyan-500/60 transition-colors',
+        'disabled:opacity-40 disabled:cursor-not-allowed',
+        FOCUS_RING_BUTTON,
+      )}
+    >
+      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {pending === 0 ? 'Images ready' : `Generate ${pending} image${pending === 1 ? '' : 's'}`}
+    </button>
+  );
+}
+
 // Work area for the clip_show read-through (rendered in /plan). Setup + plan
 // creation live in ClipShowSetup (the /templates marketplace); this renders the
 // per-item joke segments with their voiceover generation + a play-all control.
@@ -975,7 +1045,10 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
         <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
           {sidecar.segments.length} joke{sidecar.segments.length === 1 ? '' : 's'} planned
         </div>
-        <ClipShowReadThroughPlayer sidecar={sidecar} mediaItems={mediaItems} projectSlug={projectSlug} />
+        <div className="flex items-center gap-2">
+          <ClipShowGenerateImagesButton sidecar={sidecar} projectSlug={projectSlug} callTool={callTool} onSidecarUpdate={onSidecarUpdate} />
+          <ClipShowReadThroughPlayer sidecar={sidecar} mediaItems={mediaItems} projectSlug={projectSlug} />
+        </div>
       </div>
       {sidecar.segments.map((segment, index) => (
         <ClipShowSegmentBlock
@@ -1617,6 +1690,11 @@ function ClipShowOsgCard({ osg, osgIndex, total, mediaItems, projectSlug, onEdit
           <Loader2 className="w-5 h-5 animate-spin text-emerald-300/70" />
         ) : imageState.kind === 'error' ? (
           <span className="text-[9px] font-mono text-red-200/80 px-1 text-center line-clamp-3">{imageState.message}</span>
+        ) : osg.source === 'generated' ? (
+          <div className="flex flex-col items-center gap-0.5 text-cyan-300/45">
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[8px] font-mono uppercase tracking-wider">not generated</span>
+          </div>
         ) : (
           <Images className="w-5 h-5 text-emerald-300/35" />
         )}

@@ -22,7 +22,7 @@ export function regenerateClipShowSegmentDef(fs: VideocityFs): ToolDef {
   return {
     name: "regenerate_clip_show_segment",
     description:
-      "Rewrite one Clip Show joke and its whole on-screen-graphic (OSG) run with GPT-5.5 — optionally in a different joke type and/or with an added/swapped img-* source image. Re-enqueues generated OSG images and clears the joke's now-stale voiceover. Runs in the background and returns the updated plan once written (plan/index.md and plan/.plan.json).",
+      "Rewrite one Clip Show joke and its whole on-screen-graphic (OSG) run with GPT-5.5 — optionally in a different joke type and/or with an added/swapped img-* source image. New generated OSGs get prompts but no images yet (use the Generate images button); the joke's now-stale voiceover is cleared. Runs in the background and returns the updated plan once written (plan/index.md and plan/.plan.json).",
     schema,
     handler: async (args) => {
       const { project_slug, segment_index, joke_type, image_asset_id } = args as {

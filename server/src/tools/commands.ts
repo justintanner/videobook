@@ -345,7 +345,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/plan-clip-show",
-    description: "Generate a Clip Show: a char-* host with an ElevenLabs voice does a read-through over rapid-fire on-screen graphics (OSGs). GPT-5.5 groups the dropped img-* pool into jokes and lays out each joke's OSG run (reused uploads + newly generated graphics); generated OSG images are auto-enqueued. Writes to plan/.",
+    description: "Generate a Clip Show: a char-* host with an ElevenLabs voice does a read-through over rapid-fire on-screen graphics (OSGs). GPT-5.5 groups the dropped img-* pool into jokes and lays out each joke's OSG run (reused uploads + newly generated graphics); generated OSGs get prompts but their images are NOT auto-generated — use /clip-show-images to render them. Writes to plan/.",
     example: "/plan-clip-show",
     category: "context_menu",
     icon: "Mic",
@@ -360,7 +360,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/regen-joke",
-    description: "Rewrite one Clip Show joke and its whole OSG run with GPT-5.5 — optionally in a different joke type and/or with an added img-* source image. Re-enqueues generated OSG images, clears the joke's stale voiceover, and returns the updated plan.",
+    description: "Rewrite one Clip Show joke and its whole OSG run with GPT-5.5 — optionally in a different joke type and/or with an added img-* source image. New generated OSGs get prompts but no images yet (use /clip-show-images), clears the joke's stale voiceover, and returns the updated plan.",
     example: "/regen-joke",
     category: "context_menu",
     icon: "RefreshCw",
@@ -373,6 +373,18 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "image_asset_id", type: "string", required: false, description: "New img-* image to add to this joke's source pool before regenerating" },
     ],
     mcpTool: { tool: "regenerate_clip_show_segment", autoInject: ["project_slug"] },
+  },
+  {
+    command: "/clip-show-images",
+    description: "Generate the still-missing OSG images for the active Clip Show plan: for every generated on-screen graphic that has a prompt but no image yet, create an img-* asset and enqueue its text-to-image job (Nano Banana Pro, 16:9). Idempotent — uploads and already-generated OSGs are left alone. Returns the updated plan immediately; images fill in via sync.",
+    example: "/clip-show-images",
+    category: "context_menu",
+    icon: "Sparkles",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [],
+    mcpTool: { tool: "generate_clip_show_images", autoInject: ["project_slug"] },
   },
   {
     command: "/plan-vis",

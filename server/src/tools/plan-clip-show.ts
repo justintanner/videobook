@@ -20,7 +20,7 @@ export function planClipShowDef(fs: VideocityFs): ToolDef {
   return {
     name: "plan_clip_show",
     description:
-      "Create the active Clip Show plan: a host char-* with an ElevenLabs voice does an audio read-through over a rapid-fire run of on-screen graphics (OSGs). The model groups the dropped img-* pool into jokes, writes each joke, and lays out its OSG run (reused uploads + newly generated graphics). Generated OSG images are auto-enqueued. Uses GPT-5.5. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
+      "Create the active Clip Show plan: a host char-* with an ElevenLabs voice does an audio read-through over a rapid-fire run of on-screen graphics (OSGs). The model groups the dropped img-* pool into jokes, writes each joke, and lays out its OSG run (reused uploads + newly generated graphics). Generated OSGs get prompts but their images are NOT auto-generated — fill them with the plan's Generate images button (generate_clip_show_images) or per-OSG regenerate. Uses GPT-5.5. Runs in the background. Writes plan/index.md and plan/.plan.json. Returns immediately; read_plan reports the new plan when it lands.",
     schema,
     handler: async (args) => {
       const { project_slug, character_asset_id, image_asset_ids, show_brief, tone } = args as {

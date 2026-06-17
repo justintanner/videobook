@@ -530,7 +530,10 @@ export async function generateClipShowPlan(
   const showBrief = args.showBrief?.trim() ?? "";
   const tone = args.tone?.trim() || DEFAULT_TONE;
 
-  const drafted = await generateJokes({
+  // Generated OSGs are left unmaterialized (image_asset_id:null) — text-to-image
+  // is opt-in. The user fills them via the plan's "Generate images" button
+  // (generate_clip_show_images) or per-OSG regenerate, not automatically.
+  const segments = await generateJokes({
     fs,
     projectSlug: args.projectSlug,
     character,
@@ -540,7 +543,6 @@ export async function generateClipShowPlan(
     showBrief,
     tone,
   });
-  const segments = await materializeGeneratedOsgs(fs, args.projectSlug, drafted);
 
   const sidecar: ClipShowPlanSidecar = {
     formula: "clip_show",
@@ -591,7 +593,9 @@ export async function regenerateClipShowSegment(
   const jokeType = normalizeJokeType(args.jokeType ?? existing.joke_type);
   const textSeed = pool.length === 0 ? `${existing.source_summary} — ${existing.joke}`.trim() : "";
 
-  const drafted = await generateJokes({
+  // Like full-plan generation, the rewritten OSG run is left unmaterialized;
+  // the user opts into images via the plan's "Generate images" button.
+  const [segment] = await generateJokes({
     fs,
     projectSlug: args.projectSlug,
     character: sidecar.character,
@@ -602,13 +606,29 @@ export async function regenerateClipShowSegment(
     tone: sidecar.tone,
     textSeed,
   });
-  const [segment] = await materializeGeneratedOsgs(fs, args.projectSlug, drafted);
   if (!segment) throw new Error("Model did not return a joke for the segment");
 
   const next: ClipShowPlanSidecar = {
     ...sidecar,
     segments: sidecar.segments.map((s, i) => (i === args.segmentIndex ? segment : s)),
   };
+  await writeClipShowPlan(fs, args.projectSlug, next);
+  return next;
+}
+
+// Opt-in image generation for the whole plan: materialize every generated OSG
+// that still lacks an image (source:"generated", image_asset_id:null, has a
+// prompt) by creating its img-* asset and enqueuing the text-to-image job.
+// Idempotent — already-materialized OSGs and uploads are untouched — and a plain
+// read-modify-write (no GPT). Returns the updated sidecar; images fill in via
+// the normal sync loop.
+export async function generateClipShowImages(
+  fs: VideocityFs,
+  args: { projectSlug: string },
+): Promise<ClipShowPlanSidecar> {
+  const sidecar = await readClipShowPlan(fs, args.projectSlug);
+  const segments = await materializeGeneratedOsgs(fs, args.projectSlug, sidecar.segments);
+  const next: ClipShowPlanSidecar = { ...sidecar, segments };
   await writeClipShowPlan(fs, args.projectSlug, next);
   return next;
 }
