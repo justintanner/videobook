@@ -24,6 +24,7 @@ import {
   HappyHorseAudioSettingSchema,
   HappyHorseResolutionSchema,
   HappyHorseReferenceToVideoRequestSchema,
+  VolcengineVideoToVideoLipSyncModeSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -282,6 +283,22 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
+  volcengine_lipsync: {
+    label: "Volcengine Lip-Sync",
+    tool_name: "generate_volcengine_lipsync_video",
+    description: "Volcengine video-to-video lip-sync — drive a source video's lips from a separate audio track (kie)",
+    params: [
+      "video_slug", "audio_slug", "mode",
+      "separate_vocal", "open_scenedet", "align_audio", "align_audio_reverse", "templ_start_seconds",
+    ],
+    defaults: {
+      mode: "basic", separate_vocal: false, open_scenedet: false,
+      align_audio: true, align_audio_reverse: false, templ_start_seconds: 0,
+    },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
   alibaba_video: {
     label: "Alibaba Video Synthesis",
     tool_name: "generate_alibaba_video",
@@ -486,6 +503,8 @@ const HAPPYHORSE_ASPECT_RATIOS = enumOptions(HappyHorseAspectRatioSchema);
 const HAPPYHORSE_AUDIO_SETTINGS = enumOptions(HappyHorseAudioSettingSchema);
 const HAPPYHORSE_DURATIONS = ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
 
+const VOLCENGINE_LIPSYNC_MODES = enumOptions(VolcengineVideoToVideoLipSyncModeSchema);
+
 const ALIBABA_VIDEO_RESOLUTIONS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.resolution);
 const ALIBABA_VIDEO_AUDIO_SETTINGS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.audio_setting);
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
@@ -571,6 +590,11 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   motion_video_slugs: { type: "array", items: { type: "string" }, description: "Motion reference video @slugs (video_urls)" },
   character_orientation: { type: "string", description: "Character orientation source: video / image" },
   background_source: { type: "string", description: "Background source: input_video / input_image" },
+  separate_vocal: { type: "boolean", description: "Separate vocals from background audio before sync (default false)", default: false },
+  open_scenedet: { type: "boolean", description: "Enable scene-cut detection (default false)", default: false },
+  align_audio: { type: "boolean", description: "Align audio to the video timeline (default true)", default: true },
+  align_audio_reverse: { type: "boolean", description: "Reverse the audio alignment direction (default false)", default: false },
+  templ_start_seconds: { type: "number", description: "Template start offset in seconds (default 0)", minimum: 0, default: 0 },
 };
 
 // ---------------------------------------------------------------------------
@@ -781,6 +805,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
       if (param === "audio_setting") { prop.enum = HAPPYHORSE_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
     }
+    if (toolName === "generate_volcengine_lipsync_video") {
+      if (param === "video_slug") prop.description = "Source video asset to lip-sync (e.g., @vid-scene)";
+      if (param === "audio_slug") prop.description = "Driving audio asset whose speech drives the lips (e.g., @aud-voice)";
+      if (param === "mode") { prop.enum = VOLCENGINE_LIPSYNC_MODES; prop.description = "Quality mode: lite (faster) or basic (default)"; }
+      if (param === "templ_start_seconds") prop.description = "Template start offset in seconds (default 0)";
+    }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
@@ -808,7 +838,8 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       && toolName !== "generate_kling30_motion_control_video"
     ) required.push(param);
     if (toolName === "generate_grok_imagine_video" && param === "image_slugs") required.push(param);
-    if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video")) required.push(param);
+    if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video" || toolName === "generate_volcengine_lipsync_video")) required.push(param);
+    if (param === "audio_slug" && toolName === "generate_volcengine_lipsync_video") required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
       && (param === "aspect_ratio" || param === "duration")
@@ -982,6 +1013,7 @@ ROUTING PREFERENCES:
 - Use extend_wan27_video ONLY when user explicitly wants to extend an existing Wan 2.7 video
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 - Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
+- Use generate_volcengine_lipsync_video ONLY when user explicitly mentions "volcengine" or wants to lip-sync / dub an existing video to a separate audio track
 
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
@@ -993,6 +1025,7 @@ KEY CONSTRAINTS:
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
 - For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 2-15 (integer seconds), audio_setting "auto"/"origin"
+- For generate_volcengine_lipsync_video: REQUIRES video_slug (source video) and audio_slug (driving audio); mode "lite"/"basic"
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.

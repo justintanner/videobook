@@ -12,6 +12,13 @@ import { requireApiKey } from "../api-key.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 
+// Local shim: @apicity/cost@0.4.2 has no rate for the Volcengine v2v lip-sync
+// model that shipped in @apicity/kie@0.4.2, so computeEstimate flags it as
+// unbounded. The paygate only binds the request hash — it never recomputes
+// cost downstream — so admitting this model here is safe. Remove the entry once
+// @apicity/cost prices "volcengine/video-to-video-lip-sync".
+const COST_TABLE_PENDING_MODELS = new Set<string>(["volcengine/video-to-video-lip-sync"]);
+
 type SubmitKieTaskArgs = {
   request: MediaGenerationRequest;
   assetId: string;
@@ -54,8 +61,9 @@ export function ensurePaygateSecret(): string {
 
 export function mintKieOtp(request: MediaGenerationRequest, ttlSeconds = 10 * 60): string {
   const payload = request as unknown as Record<string, unknown>;
+  const model = typeof payload.model === "string" ? payload.model : "";
   const estimate = computeEstimate({ provider: "kie", payload });
-  if (estimate.warnings.length > 0) {
+  if (estimate.warnings.length > 0 && !COST_TABLE_PENDING_MODELS.has(model)) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 

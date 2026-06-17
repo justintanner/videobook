@@ -51,6 +51,8 @@ import type {
   Wan27AspectRatio,
   Wan27ImageAspectRatio,
   Wan27ImageResolution,
+  VolcengineVideoToVideoLipSyncRequest,
+  VolcengineVideoToVideoLipSyncMode,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
@@ -619,6 +621,45 @@ export function buildWan27VideoEditPayload(
 }
 
 // ---------------------------------------------------------------------------
+// Volcengine payload builders
+// ---------------------------------------------------------------------------
+
+type VolcengineLipSyncArgs = {
+  mode?: VolcengineVideoToVideoLipSyncMode;
+  separate_vocal?: boolean;
+  open_scenedet?: boolean;
+  align_audio?: boolean;
+  align_audio_reverse?: boolean;
+  templ_start_seconds?: number;
+};
+
+type VolcengineLipSyncOpts = {
+  videoUrl: string;
+  audioUrl: string;
+};
+
+export function buildVolcengineLipSyncPayload(
+  args: VolcengineLipSyncArgs,
+  opts: VolcengineLipSyncOpts,
+): VolcengineVideoToVideoLipSyncRequest {
+  // The upstream input fields carry zod defaults, so the inferred request type
+  // requires them all — mirror those defaults rather than spread-omitting.
+  return {
+    model: "volcengine/video-to-video-lip-sync",
+    input: {
+      mode: args.mode ?? "basic",
+      video_url: opts.videoUrl,
+      audio_url: opts.audioUrl,
+      separate_vocal: args.separate_vocal ?? false,
+      open_scenedet: args.open_scenedet ?? false,
+      align_audio: args.align_audio ?? true,
+      align_audio_reverse: args.align_audio_reverse ?? false,
+      templ_start_seconds: args.templ_start_seconds ?? 0,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // HappyHorse payload builders
 // ---------------------------------------------------------------------------
 
@@ -1071,6 +1112,15 @@ function translateToolPayload(
       const payload = buildWan27VideoEditPayload(args as Wan27VideoEditArgs, {
         videoUrl: videoSlug,
         referenceImageUrl: imageSlug,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_volcengine_lipsync_video": {
+      const videoSlug = (args.video_slug as string) ?? "";
+      const audioSlug = (args.audio_slug as string) ?? "";
+      const payload = buildVolcengineLipSyncPayload(args as VolcengineLipSyncArgs, {
+        videoUrl: videoSlug,
+        audioUrl: audioSlug,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }

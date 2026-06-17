@@ -62,6 +62,7 @@ import { generateHappyhorseT2vVideoDef } from "./generate-happyhorse-t2v-video.j
 import { generateHappyhorseI2vVideoDef } from "./generate-happyhorse-i2v-video.js";
 import { generateHappyhorseRefVideoDef } from "./generate-happyhorse-ref-video.js";
 import { generateHappyhorseVideoeditVideoDef } from "./generate-happyhorse-videoedit-video.js";
+import { generateVolcengineLipsyncVideoDef } from "./generate-volcengine-lipsync-video.js";
 import { generateWan27ImageDef } from "./generate-wan27-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
@@ -249,6 +250,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateHappyhorseI2vVideoDef(fs),
     generateHappyhorseRefVideoDef(fs),
     generateHappyhorseVideoeditVideoDef(fs),
+    generateVolcengineLipsyncVideoDef(fs),
     generateWan27ImageDef(fs),
     generateWan27ImageProDef(fs),
     generateNanoBananaImageDef(fs),
