@@ -1,6 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createOpenAi, firstContent, imageBase64Part, textPart, withRetry } from "@apicity/openai";
 import type { OpenAiContentPart } from "@apicity/openai";
 import { z } from "zod";
@@ -12,7 +13,30 @@ import type { ClipShowCharacter, ClipShowItem, ClipShowPlanSidecar, ClipShowSegm
 
 const MODEL = "gpt-5.5";
 const MAX_ITEMS = 12;
-const DEFAULT_TONE = "sharp, playful, punchy, not mean";
+const DEFAULT_TONE = "sharp, profane, irreverent, roast-heavy";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STYLE_EXAMPLES_PATH = join(__dirname, "guides/joke_style_examples.txt");
+const TYPE_PALETTE_PATH = join(__dirname, "guides/joke_types_palette.txt");
+
+type JokeReference = { examples: string; typesPalette: string };
+
+// Read the house-style examples + joke-type palette once, then cache the
+// promise. Static reference text; ~2k tokens injected into every generation
+// and per-segment regeneration.
+let referencePromise: Promise<JokeReference> | null = null;
+function loadJokeReference(): Promise<JokeReference> {
+  if (!referencePromise) {
+    referencePromise = (async () => {
+      const [examples, typesPalette] = await Promise.all([
+        readFile(STYLE_EXAMPLES_PATH, "utf-8"),
+        readFile(TYPE_PALETTE_PATH, "utf-8"),
+      ]);
+      return { examples: examples.trim(), typesPalette: typesPalette.trim() };
+    })();
+  }
+  return referencePromise;
+}
 
 type LoadedImage = { bytes: Buffer; mime: "image/jpeg" | "image/png" | "image/webp" };
 
@@ -49,7 +73,10 @@ const GENERATED_PLAN_JSON_SCHEMA = {
   },
 } as const;
 
-const SYSTEM_PROMPT = `You are the comedy writer for a short audio read-through hosted by one recurring character.
+// Built per call so the house-style examples and joke-type palette (read from
+// server/src/guides/ at runtime) can be baked into the system message.
+function buildSystemPrompt(reference: JokeReference): string {
+  return `You are the comedy writer for a short audio read-through hosted by one recurring character.
 
 You receive an ordered list of ITEMS. Each item is either a text topic or an image (provided via vision). For every item, write exactly ONE spoken joke the host delivers as a voiceover.
 
@@ -57,13 +84,23 @@ For each item return:
 - index: the item's position (echo the number you were given).
 - source_summary: one short sentence describing the item (paraphrase the topic, or describe what you see in the image).
 - joke: ONE punchy spoken line for ElevenLabs text-to-speech — a single clear premise, turn, and payoff. One or two sentences, no more. Plain spoken words only: no stage directions, no emoji, no markdown, no quotation marks around the line.
-- joke_notes: optional one-line note on the comedic angle (may be empty).
+- joke_notes: a one-line note on the comedic angle. Start it with the joke type you used, e.g. "Type: Visual roast — ...".
 
-Stay in the host's voice and the requested tone. Be specific to the item. Punch at the situation, timing, contradiction, or visual detail — never at protected traits. Keep the host likable.
+HOUSE STYLE — match this voice and rhythm:
+The host is irreverent, profane, sexually frank, and roast-forward, with absurd escalations and a hard punch. Be specific to the item and go for the laugh; don't soften it or keep it polite. The lines below are the target voice, energy, and structure — match them. Do NOT reuse these specific people, topics, or wording; write fresh material aimed at the actual item.
 
-If an item specifies a comedic style, write that joke in that style. Otherwise pick whatever angle lands best.
+${reference.examples}
+
+JOKE TYPES — palette:
+Pick whichever type lands best for the item, then name it at the start of joke_notes. Draw from:
+${reference.typesPalette}
+
+If an item specifies a comedic style, write that joke in that style. Otherwise pick whatever angle lands best from the palette.
+
+The one floor: roast targets, situations, and contradictions — never punch at protected traits with slurs, and never sexualize anyone who appears to be a minor. Everything else is fair game.
 
 Return exactly one segment per input item, in the same order. Return JSON only.`;
+}
 
 function stripAt(value: string): string {
   return value.replace(/^@/, "").trim();
@@ -284,6 +321,7 @@ async function generateSegments(args: {
   if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
   const images = await loadImagesForItems(args.fs, args.projectSlug, args.items);
+  const reference = await loadJokeReference();
   const provider = createOpenAi({ apiKey, timeout: 240_000 });
   const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
@@ -291,7 +329,7 @@ async function generateSegments(args: {
     model: MODEL,
     stream: false,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: buildSystemPrompt(reference) },
       { role: "user", content: buildUserContent(args.character, args.items, images, args.jokeTypes, args.showBrief, args.tone) },
     ],
     response_format: {
