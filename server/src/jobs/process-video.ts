@@ -17,6 +17,32 @@ type ProcessVideoPayload = {
   skipDownstreamJobs?: boolean;
 };
 
+// Write a derived binary file, skipping the write when the bytes are unchanged.
+//
+// The engine commits each write scoped to that file's path. A scoped
+// `git commit -- <path>` with no diff exits non-zero ("nothing to commit" on
+// stdout, empty stderr) whenever the rest of the tree is dirty — which it is
+// on a force re-process, since we just deleted original.jpg + frames. Audio is
+// stream-copied during watermarking, so re-extracting original.mp3 yields bytes
+// identical to the already-committed file; the scoped commit then finds nothing
+// and the engine surfaces a bare "Failed to commit file write:". Skipping the
+// no-op write lets idempotent re-processing succeed. Mirrors
+// writePlanFileIfChanged in plan-clip-show.ts.
+async function writeBinaryIfChanged(
+  fs: VideocityFs,
+  assetId: string,
+  filename: string,
+  data: Buffer,
+  projectSlug: string,
+): Promise<void> {
+  const existing = await fs.readFile(assetId, filename, projectSlug);
+  if (existing.ok && existing.value.equals(data)) return;
+  const written = await fs.writeFile(assetId, filename, data, projectSlug);
+  if (!written.ok) {
+    throw new Error(`writeFile ${filename} failed for ${assetId}: ${written.error.message}`);
+  }
+}
+
 export function registerProcessVideoJob(fs: VideocityFs): void {
   registerJobHandler("process_video", async (payload, ctx) => {
     const {
@@ -67,10 +93,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
       try {
         await runFfmpeg(transcodeArgs);
         const mp4Buf = await fsReadFile(tempPath);
-        const mp4Result = await fs.writeFile(assetId, "original.mp4", mp4Buf, projectSlug);
-        if (!mp4Result.ok) {
-          throw new Error(`writeFile original.mp4 failed for ${assetId}: ${mp4Result.error.message}`);
-        }
+        await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf, projectSlug);
       } finally {
         await rm(tempPath, { force: true });
       }
@@ -127,10 +150,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
       await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath]);
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
-        const mp3Result = await fs.writeFile(assetId, "original.mp3", mp3Buf, projectSlug);
-        if (!mp3Result.ok) {
-          throw new Error(`writeFile original.mp3 failed for ${assetId}: ${mp3Result.error.message}`);
-        }
+        await writeBinaryIfChanged(fs, assetId, "original.mp3", mp3Buf, projectSlug);
       } finally {
         await rm(mp3TempPath, { force: true });
       }
