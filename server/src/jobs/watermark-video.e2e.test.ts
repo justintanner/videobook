@@ -113,4 +113,36 @@ describe("watermark_video tool end-to-end: async force re-process must not job-e
     expect(await fileExists(join(assetDir, "original.mp4"))).toBe(true);
     expect(await fileExists(join(assetDir, "original.mp3"))).toBe(true);
   });
+
+  it("accepts a non-default position + scale and re-watermarks without job-error", async () => {
+    const procBefore = await countCommits(projectDir, /\] process_video$/);
+    const errBefore = await countCommits(projectDir, /job-error/);
+
+    const result = await client.callTool({
+      name: "watermark_video",
+      arguments: {
+        project_slug: PROJECT,
+        asset_id: assetId,
+        handle: "justinwtanner",
+        position: "bottom-left",
+        scale: 0.5,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(parse(result as { content: unknown }).status).toBe("completed");
+
+    const start = Date.now();
+    let procAfter = procBefore;
+    let errAfter = errBefore;
+    while (Date.now() - start < 90_000) {
+      procAfter = await countCommits(projectDir, /\] process_video$/);
+      errAfter = await countCommits(projectDir, /job-error/);
+      if (procAfter > procBefore || errAfter > errBefore) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    expect(errAfter).toBe(errBefore);
+    expect(procAfter).toBeGreaterThan(procBefore);
+    expect(await fileExists(join(assetDir, "original.mp4"))).toBe(true);
+  });
 });

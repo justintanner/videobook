@@ -62,6 +62,35 @@ async function buildCardPng({ url, label, outputPath }: BuildCardArgs): Promise<
     .toFile(outputPath);
 }
 
+export type WatermarkPosition =
+  | "top-left" | "top-center" | "top-right"
+  | "middle-left" | "middle-center" | "middle-right"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+export function overlayXY(position: WatermarkPosition, margin: number): { x: string; y: string } {
+  const [v, h] = position.split("-");
+  const x = h === "left" ? `${margin}` : h === "right" ? `W-w-${margin}` : `(W-w)/2`;
+  const y = v === "top" ? `${margin}` : v === "bottom" ? `H-h-${margin}` : `(H-h)/2`;
+  return { x, y };
+}
+
+interface OverlayFilterArgs {
+  position: WatermarkPosition;
+  scale: number;
+  alpha: number;
+  margin: number;
+  enable: string;
+}
+
+export function buildOverlayFilter({ position, scale, alpha, margin, enable }: OverlayFilterArgs): string {
+  const { x, y } = overlayXY(position, margin);
+  const scaleFilter = scale !== 1 ? `scale=iw*${scale}:ih*${scale},` : "";
+  return (
+    `[1:v]${scaleFilter}format=rgba,colorchannelmixer=aa=${alpha}[card];` +
+    `[0:v][card]overlay=x=${x}:y=${y}:enable='${enable}'`
+  );
+}
+
 interface OverlayArgs {
   inputPath: string;
   cardPath: string;
@@ -69,6 +98,8 @@ interface OverlayArgs {
   startSec: number;
   endSec: number;
   hasAudio: boolean;
+  position: WatermarkPosition;
+  scale: number;
 }
 
 async function overlayWatermark({
@@ -78,11 +109,17 @@ async function overlayWatermark({
   startSec,
   endSec,
   hasAudio,
+  position,
+  scale,
 }: OverlayArgs): Promise<void> {
   const enable = `between(t,${startSec.toFixed(3)},${endSec.toFixed(3)})`;
-  const filter =
-    `[1:v]format=rgba,colorchannelmixer=aa=${OVERLAY_ALPHA}[card];` +
-    `[0:v][card]overlay=x=W-w-${OVERLAY_MARGIN}:y=H-h-${OVERLAY_MARGIN}:enable='${enable}'`;
+  const filter = buildOverlayFilter({
+    position,
+    scale,
+    alpha: OVERLAY_ALPHA,
+    margin: OVERLAY_MARGIN,
+    enable,
+  });
   const args = [
     "-y",
     "-i", inputPath,
@@ -106,6 +143,8 @@ type WatermarkVideoPayload = {
   assetId: string;
   assetDir: string;
   projectSlug: string;
+  position?: WatermarkPosition;
+  scale?: number;
 };
 
 export function registerWatermarkVideoJob(fs: VideocityFs): void {
@@ -113,6 +152,7 @@ export function registerWatermarkVideoJob(fs: VideocityFs): void {
     const {
       inputPath, outputPath, url, label,
       assetId, assetDir, projectSlug,
+      position = "bottom-right", scale = 1,
     } = payload as WatermarkVideoPayload;
 
     const result = await withLockedLocalLease(
@@ -145,6 +185,8 @@ export function registerWatermarkVideoJob(fs: VideocityFs): void {
             startSec,
             endSec,
             hasAudio: probe.hasAudio,
+            position,
+            scale,
           });
         } finally {
           await rm(tempDir, { recursive: true, force: true });
