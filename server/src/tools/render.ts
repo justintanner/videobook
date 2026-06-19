@@ -248,20 +248,14 @@ export function renderDef(fs: VideocityFs): ToolDef {
 
       const hasElevenlabs = manifest.files.some((f) => f.name === "elevenlabs.json");
 
+      // Default subtitles on iff a transcript already exists; an explicit
+      // request wins. When subtitles are requested without a transcript, the
+      // render job auto-transcribes inline (under its asset lease) rather than
+      // blocking here — see ensureTranscript in render-project.ts.
       const subsEnabled =
         subtitles_enabled !== undefined
           ? subtitles_enabled
           : hasElevenlabs;
-
-      if (subsEnabled && !hasElevenlabs) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Subtitles enabled but elevenlabs.json not found in asset ${asset_id}. Transcribe the asset first or set subtitles_enabled=false.`,
-          }],
-        };
-      }
 
       // Resolve OSG image
       let osgImagePath: string | null = null;
@@ -317,7 +311,6 @@ export function renderDef(fs: VideocityFs): ToolDef {
             assetDir,
             videoPath,
             videoFilename: videoFile.name,
-            hasElevenlabs,
           }],
           subtitlesEnabled: subsEnabled,
           subtitleLanguage: subtitle_language,

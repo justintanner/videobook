@@ -148,7 +148,6 @@ export async function enqueueLazyTimelineRender(
       assetDir: action.assetDir,
       videoPath: action.videoPath,
       videoFilename: action.videoFilename,
-      hasElevenlabs: action.hasElevenlabs,
     }],
     subtitlesEnabled,
     subtitleLanguage: isLanguageSetting(stored.subtitleLanguage) ? stored.subtitleLanguage : "original",
