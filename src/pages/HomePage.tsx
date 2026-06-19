@@ -463,14 +463,27 @@ export function HomePage() {
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
-    const orient = viewerSize !== 'original' ? viewerSize as Orientation : undefined;
+    // Render the orientation the settings panel is showing. viewerSize is
+    // 'original' while previewing the source clip, but the panel always targets
+    // a concrete orientation (settingsOrientation), so derive from that — using
+    // viewerSize sent no orientation, which rendered all three and skipped the
+    // optimistic feedback below.
+    const orient = settingsOrientation;
     // Optimistically show rendering animation immediately
-    if (orient) {
-      setRenderingOverrides(prev => new Map(prev).set(activeSelection.id, `render-queued-${orient}`));
+    setRenderingOverrides(prev => new Map(prev).set(activeSelection.id, `render-queued-${orient}`));
+    const { ok, error } = await renderAsset(activeSelection.id, projectSlug, orient, settings);
+    if (!ok) {
+      // Roll back the optimistic state and surface why nothing rendered.
+      setRenderingOverrides(prev => {
+        const next = new Map(prev);
+        next.delete(activeSelection.id);
+        return next;
+      });
+      toast({ title: 'Render failed', description: error ?? 'render failed', duration: 6000 });
+      return;
     }
-    await renderAsset(activeSelection.id, projectSlug, orient, settings);
     sync(projectSlug);
-  }, [projectSlug, activeSelection, renderAsset, viewerSize, sync]);
+  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {

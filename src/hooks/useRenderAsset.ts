@@ -3,15 +3,20 @@ import type { UseMcpResult } from "use-mcp/react";
 import type { RenderSettings } from "@/components/center-stage/render-settings-types";
 import type { Orientation } from "@/hooks/useTimeline";
 
+interface RenderOutcome {
+  ok: boolean;
+  error?: string;
+}
+
 interface UseRenderAssetResult {
-  renderAsset: (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings) => Promise<boolean>;
+  renderAsset: (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings) => Promise<RenderOutcome>;
 }
 
 export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAssetResult {
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const renderAsset = useCallback(async (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings): Promise<boolean> => {
+  const renderAsset = useCallback(async (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings): Promise<RenderOutcome> => {
     try {
       const args: Record<string, string | number | boolean> = {
         asset_id: assetId,
@@ -46,10 +51,15 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
       }
 
       const result = await callToolRef.current("render", args);
-      return !result.isError;
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined;
+        return { ok: false, error: content?.[0]?.text ?? "render failed" };
+      }
+      return { ok: true };
     } catch (e: unknown) {
-      console.error("[render] exception:", e instanceof Error ? e.message : String(e));
-      return false;
+      const error = e instanceof Error ? e.message : String(e);
+      console.error("[render] exception:", error);
+      return { ok: false, error };
     }
   }, []);
 
