@@ -23,6 +23,7 @@ export type SubtitleStyle = "impact" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
 export type OsgPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type OsgSize = "small" | "medium" | "large";
 export type BackgroundMode = "blur" | "black";
 
 export interface RenderSettings {
@@ -58,6 +59,7 @@ export interface RenderInputProps extends Record<string, unknown> {
   audioVolume: number;
   osgSrc: string | null;
   osgPosition: OsgPosition;
+  osgSize: OsgSize;
   backgroundMode: BackgroundMode;
   strokeWidth: number;
   strokeColor: string;

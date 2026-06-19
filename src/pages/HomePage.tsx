@@ -348,6 +348,7 @@ export function HomePage() {
     trimAssetId ? mediaItems.find(m => m.id === trimAssetId) ?? null : null,
   [mediaItems, trimAssetId]);
 
+
   // Derive the active selection — clear if item was removed from list
   const activeSelection = useMemo(() => {
     if (!selectedItem) return null;
@@ -783,6 +784,14 @@ export function HomePage() {
         };
         const pos = posMap[value];
         return pos ? { ...prev, osgPosition: pos } : prev;
+      }
+      if (field === 'size' || field === 'osgSize') {
+        const sizeMap: Record<string, RenderSettings['osgSize']> = {
+          s: 'small', m: 'medium', l: 'large',
+          small: 'small', medium: 'medium', large: 'large',
+        };
+        const size = sizeMap[value.toLowerCase()];
+        return size ? { ...prev, osgSize: size } : prev;
       }
       if (field === 'clear') {
         return { ...prev, osgAssetId: null, osgAssetSrc: null };

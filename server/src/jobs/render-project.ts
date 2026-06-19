@@ -15,6 +15,7 @@ import type {
   SubtitlePosition,
   FontSizePreset,
   OsgPosition,
+  OsgSize,
   BackgroundMode,
   Chunk,
   RenderInputProps,
@@ -91,6 +92,7 @@ type RenderProjectPayload = {
   osgImagePath: string | null;
   osgAssetId?: string | null;
   osgPosition: OsgPosition;
+  osgSize: OsgSize;
   backgroundMode: BackgroundMode;
   strokeWidth: number;
   strokeColor: string;
@@ -170,6 +172,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       osgImagePath,
       osgAssetId,
       osgPosition,
+      osgSize,
       backgroundMode,
       strokeWidth,
       strokeColor,
@@ -276,6 +279,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 audioVolume,
                 osgSrc: osgCopyName,
                 osgPosition: osgPosition ?? "top-right",
+                osgSize: osgSize ?? "medium",
                 backgroundMode,
                 strokeWidth,
                 strokeColor,

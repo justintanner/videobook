@@ -23,6 +23,7 @@ const defaultProps: RenderInputProps = {
   audioVolume: 100,
   osgSrc: null,
   osgPosition: "top-right",
+  osgSize: "medium",
   backgroundMode: "blur",
   strokeWidth: 6,
   strokeColor: "#000000",

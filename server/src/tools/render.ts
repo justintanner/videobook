@@ -95,6 +95,10 @@ export function renderDef(fs: VideocityFs): ToolDef {
         .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
         .optional()
         .describe("OSG position (default: top-right)"),
+      osg_size: z
+        .enum(["small", "medium", "large"])
+        .optional()
+        .describe("OSG size preset; small ≈ half (default: medium)"),
       background_mode: z
         .enum(["blur", "black"])
         .optional()
@@ -133,6 +137,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         audio_volume = 100,
         osg_asset_id,
         osg_position = "top-right",
+        osg_size = "medium",
         background_mode = "blur",
         stroke_width = 6,
         stroke_color = "#000000",
@@ -154,6 +159,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         audio_volume?: number;
         osg_asset_id?: string;
         osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+        osg_size?: "small" | "medium" | "large";
         background_mode?: "blur" | "black";
         stroke_width?: number;
         stroke_color?: string;
@@ -326,6 +332,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
           osgImagePath,
           osgAssetId: osg_asset_id ?? null,
           osgPosition: osg_position,
+          osgSize: osg_size,
           backgroundMode: background_mode,
           strokeWidth: stroke_width,
           strokeColor: stroke_color,

@@ -417,7 +417,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/watermark",
-    description: "Overlay a black-and-white QR + 'X: <handle>' in the bottom-right during the last 2 seconds of a video",
+    description: "Overlay a black-and-white QR + 'X: <handle>' at a chosen position and size during the last 2 seconds of a video",
     example: "/watermark @hero-clip",
     category: "context_menu",
     icon: "QrCode",
@@ -428,6 +428,8 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to watermark" },
       { name: "handle", type: "string", required: false, description: "X handle without @ (default: justinwtanner)" },
       { name: "url", type: "string", required: false, description: "URL the QR resolves to (default: https://x.com/<handle>)" },
+      { name: "position", type: "string", required: false, description: "Anchor: bottom-right (default), bottom-left, top-right, …" },
+      { name: "scale", type: "string", required: false, description: "Size multiplier: 1 (default), 0.5 = half, …" },
     ],
     mcpTool: { tool: "watermark_video", autoInject: ["project_slug"] },
   },

@@ -181,6 +181,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
   const handleOsgChange = (field: string, value: string | boolean | null) => {
     const keyMap: Record<string, keyof RenderSettings> = {
       position: 'osgPosition',
+      size: 'osgSize',
       assetId: 'osgAssetId',
       assetSrc: 'osgAssetSrc',
     };
@@ -221,6 +222,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
       osgAssetId={settings.osgAssetId}
       osgAssetSrc={settings.osgAssetSrc}
       osgPosition={settings.osgPosition}
+      osgSize={settings.osgSize}
       onOsgChange={handleOsgChange}
       backgroundMode={settings.backgroundMode}
       onBackgroundChange={handleBackgroundChange}

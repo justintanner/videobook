@@ -21,6 +21,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   audioVolume,
   osgSrc,
   osgPosition,
+  osgSize,
   backgroundMode,
   strokeWidth,
   strokeColor,
@@ -53,7 +54,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
         />
       )}
       {osgSrc && (
-        <OsgOverlay src={osgSrc} position={osgPosition} />
+        <OsgOverlay src={osgSrc} position={osgPosition} size={osgSize} />
       )}
     </AbsoluteFill>
   );

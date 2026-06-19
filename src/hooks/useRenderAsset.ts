@@ -37,6 +37,7 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
           args.osg_asset_id = settings.osgAssetId;
         }
         args.osg_position = settings.osgPosition;
+        args.osg_size = settings.osgSize;
         args.background_mode = settings.backgroundMode;
         args.stroke_width = settings.strokeWidth;
         args.stroke_color = settings.strokeColor;

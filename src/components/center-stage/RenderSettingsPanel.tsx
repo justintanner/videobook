@@ -47,6 +47,7 @@ export interface RenderSettingsPanelProps {
   osgAssetId: string | null;
   osgAssetSrc: string | null;
   osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  osgSize: 'small' | 'medium' | 'large';
   onOsgChange?: (field: string, value: string | boolean | null) => void;
 
   backgroundMode: 'blur' | 'black';
@@ -476,7 +477,7 @@ export function RenderSettingsPanel({
   textColor = '#F8FAFC', highlightColor = '#991B1B',
   strokeWidth, strokeColor, shadowBlur, shadowOpacity, onSubtitleChange,
   audioVolume, audioFadeIn, audioFadeOut, onAudioChange,
-  osgAssetId, osgAssetSrc, osgPosition, onOsgChange,
+  osgAssetId, osgAssetSrc, osgPosition, osgSize, onOsgChange,
   backgroundMode, onBackgroundChange,
   onApply, applyState, disabled,
 }: RenderSettingsPanelProps) {
@@ -589,6 +590,9 @@ export function RenderSettingsPanel({
                 />
                 <PositionGrid theme={emerald} disabled={disabled} options={[{ label: 'TL', value: 'top-left' }, { label: 'TR', value: 'top-right' }, { label: 'BL', value: 'bottom-left' }, { label: 'BR', value: 'bottom-right' }]} value={osgPosition} onChange={(v) => onOsgChange?.('position', v)} />
               </div>
+              <SettingRow label="Size" theme={emerald}>
+                <PillToggle theme={emerald} disabled={disabled} options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]} value={osgSize} onChange={(v) => onOsgChange?.('size', v)} />
+              </SettingRow>
             </Section>
           </div>
         </div>

@@ -12,6 +12,7 @@ export interface RenderSettings {
   osgAssetId: string | null;
   osgAssetSrc: string | null;
   osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  osgSize: 'small' | 'medium' | 'large';
   backgroundMode: 'blur' | 'black';
   strokeWidth: number;
   strokeColor: string;
@@ -33,6 +34,7 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   osgAssetId: null,
   osgAssetSrc: null,
   osgPosition: 'top-right',
+  osgSize: 'medium',
   backgroundMode: 'blur',
   strokeWidth: 6,
   strokeColor: '#000000',
@@ -100,6 +102,7 @@ export function storedToRenderSettings(stored: Record<string, unknown>): RenderS
     osgAssetId: (stored.osgAssetId as string | undefined) ?? extractAssetId(stored.osgImagePath as string | undefined),
     osgAssetSrc: null, // frontend resolves src from asset list
     osgPosition: (stored.osgPosition as RenderSettings['osgPosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgPosition,
+    osgSize: (stored.osgSize as RenderSettings['osgSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgSize,
     backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,
     strokeWidth: (stored.strokeWidth as number | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeWidth,
     strokeColor: (stored.strokeColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeColor,
