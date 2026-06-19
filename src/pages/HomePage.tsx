@@ -433,11 +433,13 @@ export function HomePage() {
     fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
       if (cancelled) return;
       const stored = all?.settings?.[settingsOrientation];
-      setRenderSettings(stored ? storedToRenderSettings(stored) : getDefaultRenderSettings(settingsOrientation));
+      setRenderSettings(stored
+        ? storedToRenderSettings(stored, (id) => mediaItems.find(m => m.id === id)?.filePath ?? null)
+        : getDefaultRenderSettings(settingsOrientation));
       setTranscriptInfo(all?.transcript ?? null);
     });
     return () => { cancelled = true; };
-  }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings]);
+  }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings, mediaItems]);
 
   const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, settingsOrientation);
 

@@ -87,7 +87,14 @@ export function getDefaultRenderSettings(orientation: string): RenderSettings {
   return { ...DEFAULT_RENDER_SETTINGS, subtitleStyle: 'highlight', textColor: '#FFFFFF', highlightColor: '#991B1B' };
 }
 
-export function storedToRenderSettings(stored: Record<string, unknown>): RenderSettings {
+// `resolveOsgSrc` maps a stored OSG asset id to a displayable image src (e.g. the
+// asset's filePath from the loaded media list). Without it, osgAssetSrc stays null
+// and the drop zone shows its empty placeholder even when an OSG asset is applied.
+export function storedToRenderSettings(
+  stored: Record<string, unknown>,
+  resolveOsgSrc?: (assetId: string) => string | null,
+): RenderSettings {
+  const osgAssetId = (stored.osgAssetId as string | undefined) ?? extractAssetId(stored.osgImagePath as string | undefined);
   return {
     subtitlesEnabled: (stored.subtitlesEnabled as boolean | undefined) ?? DEFAULT_RENDER_SETTINGS.subtitlesEnabled,
     subtitleLanguage: isSubtitleLanguage(stored.subtitleLanguage) ? stored.subtitleLanguage : DEFAULT_RENDER_SETTINGS.subtitleLanguage,
@@ -99,8 +106,8 @@ export function storedToRenderSettings(stored: Record<string, unknown>): RenderS
     audioVolume: (stored.audioVolume as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioVolume,
     audioFadeIn: (stored.audioFadeIn as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioFadeIn,
     audioFadeOut: (stored.audioFadeOut as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioFadeOut,
-    osgAssetId: (stored.osgAssetId as string | undefined) ?? extractAssetId(stored.osgImagePath as string | undefined),
-    osgAssetSrc: null, // frontend resolves src from asset list
+    osgAssetId,
+    osgAssetSrc: osgAssetId ? (resolveOsgSrc?.(osgAssetId) ?? null) : null,
     osgPosition: (stored.osgPosition as RenderSettings['osgPosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgPosition,
     osgSize: (stored.osgSize as RenderSettings['osgSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgSize,
     backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Zap, Type, Volume2, Tv, ImageIcon, Plus, Minus, X, ChevronDown, Check } from 'lucide-react';
+import { Zap, Type, Volume2, Tv, ImageIcon, ImageOff, Plus, Minus, X, ChevronDown, Check } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -362,8 +362,13 @@ function ThemedDropSlot({ value, onChange, disabled, theme }: {
           {value.src ? (
             <img src={value.src} alt={value.slug} draggable={false} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className={cn('text-xs font-mono truncate px-2', theme.labelText)}>{value.slug}</span>
+            // Asset id is set but its image src couldn't be resolved (e.g. the
+            // referenced asset was deleted). Show an explicit "missing" state
+            // rather than a bare id string so it isn't mistaken for a label.
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-2">
+              <ImageOff className="w-5 h-5 text-red-400/70" />
+              <span className="text-[10px] font-mono tracking-wider text-red-400/70">MISSING</span>
+              <span className={cn('text-[10px] font-mono truncate max-w-full', theme.inactiveText)}>{value.slug}</span>
             </div>
           )}
           {!disabled && (
