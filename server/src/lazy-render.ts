@@ -4,6 +4,7 @@ import type {
   FontSizePreset,
   Orientation,
   OsgPosition,
+  OsgSize,
   SubtitlePosition,
   SubtitleStyle,
 } from "./remotion/subtitles/types.js";
@@ -78,6 +79,10 @@ function isFontSizePreset(value: unknown): value is FontSizePreset {
 
 function isOsgPosition(value: unknown): value is OsgPosition {
   return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+}
+
+function isOsgSize(value: unknown): value is OsgSize {
+  return value === "small" || value === "medium" || value === "large";
 }
 
 function isBackgroundMode(value: unknown): value is BackgroundMode {
@@ -162,6 +167,7 @@ export async function enqueueLazyTimelineRender(
     osgImagePath: nullableString(stored.osgImagePath),
     osgAssetId: nullableString(stored.osgAssetId),
     osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right",
+    osgSize: isOsgSize(stored.osgSize) ? stored.osgSize : "medium",
     backgroundMode: isBackgroundMode(stored.backgroundMode) ? stored.backgroundMode : "blur",
     strokeWidth: numberOr(stored.strokeWidth, 6),
     strokeColor: stringOr(stored.strokeColor, "#000000"),

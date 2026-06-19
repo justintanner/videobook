@@ -8,12 +8,14 @@ interface OsgOverlayProps {
   size: OsgSize;
 }
 
-// Max edge of the graphic as a fraction of the video width. `medium` keeps the
-// historical 5%; `small` is half that (the "half size" preset), `large` 1.5×.
+// Max edge of the graphic as a fraction of the video width. Sized for a
+// visible on-screen graphic (TV-style logo bug): `medium` ≈ 14% of width,
+// `small` half that, `large` 1.5×. The previous 5%/2.5%/7.5% presets rendered
+// a near-invisible corner thumbnail that users read as "OSG didn't apply".
 const SIZE_FACTOR: Record<OsgSize, number> = {
-  small: 0.025,
-  medium: 0.05,
-  large: 0.075,
+  small: 0.07,
+  medium: 0.14,
+  large: 0.21,
 };
 
 // The OSG always eases in over this window so it never pops in abruptly.

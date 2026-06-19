@@ -389,6 +389,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 osgImagePath: osgImagePath ?? undefined,
                 osgAssetId: osgAssetId ?? undefined,
                 osgPosition,
+                osgSize,
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };
