@@ -22,7 +22,10 @@ export type Orientation = "landscape" | "portrait" | "square";
 export type SubtitleStyle = "impact" | "highlight";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
-export type OsgPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type OsgPosition =
+  | "top-left" | "top-center" | "top-right"
+  | "middle-left" | "middle-center" | "middle-right"
+  | "bottom-left" | "bottom-center" | "bottom-right";
 export type OsgSize = "small" | "medium" | "large";
 export type BackgroundMode = "blur" | "black";
 
@@ -60,6 +63,8 @@ export interface RenderInputProps extends Record<string, unknown> {
   osgSrc: string | null;
   osgPosition: OsgPosition;
   osgSize: OsgSize;
+  osgScale: number;
+  osgTailSeconds: number | null;
   backgroundMode: BackgroundMode;
   strokeWidth: number;
   strokeColor: string;

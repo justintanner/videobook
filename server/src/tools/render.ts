@@ -4,7 +4,7 @@ import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import { isValidHex } from "../remotion/util.js";
-import type { Orientation } from "../remotion/subtitles/types.js";
+import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
@@ -92,13 +92,28 @@ export function renderDef(fs: VideocityFs): ToolDef {
         .optional()
         .describe("Image asset ID (img- prefix) for on-screen graphic overlay"),
       osg_position: z
-        .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
+        .enum([
+          "top-left", "top-center", "top-right",
+          "middle-left", "middle-center", "middle-right",
+          "bottom-left", "bottom-center", "bottom-right",
+        ])
         .optional()
         .describe("OSG position (default: top-right)"),
       osg_size: z
         .enum(["small", "medium", "large"])
         .optional()
         .describe("OSG size preset; small ≈ half (default: medium)"),
+      osg_scale: z
+        .number()
+        .min(0.1)
+        .max(2)
+        .optional()
+        .describe("OSG size multiplier applied on top of osg_size (default: 1)"),
+      osg_tail_seconds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe("Show the OSG only during the last N seconds (end-card); omit for full duration"),
       background_mode: z
         .enum(["blur", "black"])
         .optional()
@@ -138,6 +153,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osg_asset_id,
         osg_position = "top-right",
         osg_size = "medium",
+        osg_scale = 1,
+        osg_tail_seconds,
         background_mode = "blur",
         stroke_width = 6,
         stroke_color = "#000000",
@@ -158,8 +175,10 @@ export function renderDef(fs: VideocityFs): ToolDef {
         audio_fade_out?: number;
         audio_volume?: number;
         osg_asset_id?: string;
-        osg_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+        osg_position?: OsgPosition;
         osg_size?: "small" | "medium" | "large";
+        osg_scale?: number;
+        osg_tail_seconds?: number;
         background_mode?: "blur" | "black";
         stroke_width?: number;
         stroke_color?: string;
@@ -326,6 +345,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
           osgAssetId: osg_asset_id ?? null,
           osgPosition: osg_position,
           osgSize: osg_size,
+          osgScale: osg_scale,
+          osgTailSeconds: osg_tail_seconds ?? null,
           backgroundMode: background_mode,
           strokeWidth: stroke_width,
           strokeColor: stroke_color,

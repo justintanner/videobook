@@ -22,6 +22,8 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   osgSrc,
   osgPosition,
   osgSize,
+  osgScale,
+  osgTailSeconds,
   backgroundMode,
   strokeWidth,
   strokeColor,
@@ -54,7 +56,13 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
         />
       )}
       {osgSrc && (
-        <OsgOverlay src={osgSrc} position={osgPosition} size={osgSize} />
+        <OsgOverlay
+          src={osgSrc}
+          position={osgPosition}
+          size={osgSize}
+          scale={osgScale}
+          tailSeconds={osgTailSeconds}
+        />
       )}
     </AbsoluteFill>
   );

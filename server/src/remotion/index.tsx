@@ -24,6 +24,8 @@ const defaultProps: RenderInputProps = {
   osgSrc: null,
   osgPosition: "top-right",
   osgSize: "medium",
+  osgScale: 1,
+  osgTailSeconds: null,
   backgroundMode: "blur",
   strokeWidth: 6,
   strokeColor: "#000000",

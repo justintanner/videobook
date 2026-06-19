@@ -257,7 +257,7 @@ function cellFor(index: number, grid: Grid, dimensions: Dimensions): Placement["
   };
 }
 
-async function writeImageVariants(
+export async function writeImageVariants(
   fs: VideocityFs,
   assetId: string,
   buffer: Buffer,

@@ -58,7 +58,7 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { MediaItem, AssetType, ClipState, PendingState } from '@/components/sidebar/types';
-import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isSubtitleLanguage, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
+import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
@@ -793,11 +793,7 @@ export function HomePage() {
   const applyOsgSetting = useCallback((field: string, value: string) => {
     setRenderSettings(prev => {
       if (field === 'position' || field === 'osgPosition') {
-        const posMap: Record<string, RenderSettings['osgPosition']> = {
-          tl: 'top-left', tr: 'top-right', bl: 'bottom-left', br: 'bottom-right',
-          'top-left': 'top-left', 'top-right': 'top-right', 'bottom-left': 'bottom-left', 'bottom-right': 'bottom-right',
-        };
-        const pos = posMap[value];
+        const pos = parseOsgPosition(value);
         return pos ? { ...prev, osgPosition: pos } : prev;
       }
       if (field === 'size' || field === 'osgSize') {
@@ -820,6 +816,42 @@ export function HomePage() {
       return prev;
     });
   }, [mediaItems]);
+
+  // /watermark: generate the QR card as an img-* asset (server) then apply it as
+  // the active OSG with a 2s tail window so the next render composites it.
+  const applyWatermark = useCallback(async (handle: string, url: string, position: string, scale: string) => {
+    if (state !== 'ready' || !projectSlug) return;
+    const cleanHandle = handle.trim().replace(/^@/, '');
+    const toolArgs: Record<string, string> = { project_slug: projectSlug };
+    if (cleanHandle) toolArgs.handle = cleanHandle;
+    if (url.trim()) toolArgs.url = url.trim();
+
+    const result = await callTool('create_watermark', toolArgs);
+    if (result.isError) return;
+    const content = result.content as Array<{ type: string; text: string }> | undefined;
+    let assetId: string | null = null;
+    try {
+      assetId = JSON.parse(content?.[0]?.text ?? '{}').asset_id ?? null;
+    } catch {
+      assetId = null;
+    }
+    if (!assetId) return;
+
+    const pos = parseOsgPosition(position) ?? 'bottom-right';
+    const parsedScale = parseFloat(scale);
+    const osgScale = Number.isFinite(parsedScale) && parsedScale > 0 ? parsedScale : 1;
+    setRenderSettings(prev => ({
+      ...prev,
+      osgAssetId: assetId,
+      osgAssetSrc: mediaItems.find(m => m.id === assetId)?.filePath ?? null,
+      osgPosition: pos,
+      osgSize: 'medium',
+      osgScale,
+      osgTailSeconds: 2,
+    }));
+    // Surface the new asset so its preview src can resolve once synced.
+    void sync(projectSlug);
+  }, [state, projectSlug, callTool, mediaItems, sync]);
 
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen((open) => !open);
@@ -1207,6 +1239,11 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
+    settings_watermark: (handle: string, url: string, position: string, scale: string) => {
+      void applyWatermark(handle, url, position, scale);
+      setPendingBackTab('settings');
+      setViewerFlipped(true);
+    },
     gen_prompt: (text: string) => genPanelRef.current?.setField('prompt', text),
     gen_model: (key: string) => genPanelRef.current?.setModel(key),
     gen_aspect: (ratio: string) => genPanelRef.current?.setField('aspect_ratio', ratio),
@@ -1272,7 +1309,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, applyWatermark, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
   return (
     <MountKeyProvider>

@@ -203,6 +203,8 @@ const BASE_DEFAULTS: Record<string, unknown> = {
   osgImagePath: null,
   osgAssetId: null,
   osgPosition: "top-right",
+  osgScale: 1,
+  osgTailSeconds: null,
   backgroundMode: "blur",
   strokeWidth: 6,
   strokeColor: "#000000",

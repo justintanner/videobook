@@ -46,8 +46,9 @@ async function pollForFile(filePath: string, timeoutMs = 60_000): Promise<void> 
   throw new Error(`${filePath} not found after ${timeoutMs}ms`);
 }
 
-// Regression for the watermark re-process failure: watermark_video stream-copies
-// the audio then enqueues process_video with force=true. force deletes
+// Regression for a force re-process failure (originally surfaced by the watermark
+// flow): a job stream-copies the audio then enqueues process_video with
+// force=true. force deletes
 // original.jpg + frames (dirtying the tree), and the deterministic mp3 extraction
 // reproduces bytes identical to the already-committed original.mp3. The engine
 // commits each write scoped to its path, but its "anything to commit?" pre-check

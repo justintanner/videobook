@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { SUBTITLE_LANGUAGES } from './render-settings-types';
+import { SUBTITLE_LANGUAGES, type OsgPosition } from './render-settings-types';
 import { sectionTheme, type SectionTheme as DomainSectionTheme } from '@/theme/domains';
 
 // ── Types ──
@@ -46,7 +46,7 @@ export interface RenderSettingsPanelProps {
 
   osgAssetId: string | null;
   osgAssetSrc: string | null;
-  osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  osgPosition: OsgPosition;
   osgSize: 'small' | 'medium' | 'large';
   onOsgChange?: (field: string, value: string | boolean | null) => void;
 
@@ -194,17 +194,19 @@ function SegmentedControl<T extends string>({
 // ── 2x2 position grid ──
 
 function PositionGrid<T extends string>({
-  options, value, onChange, disabled, theme,
+  options, value, onChange, disabled, theme, cols = 2,
 }: {
   options: { label: string; value: T }[];
   value: T;
   onChange?: (value: T) => void;
   disabled?: boolean;
   theme: SectionTheme;
+  cols?: 2 | 3;
 }) {
   return (
     <div className={cn(
-      'grid grid-cols-2 gap-1 rounded border p-1',
+      'grid gap-1 rounded border p-1',
+      cols === 3 ? 'grid-cols-3' : 'grid-cols-2',
       disabled ? 'opacity-30 pointer-events-none' : '',
       theme.controlBorder, theme.controlBg,
     )}>
@@ -216,7 +218,8 @@ function PositionGrid<T extends string>({
             disabled={disabled}
             onClick={() => onChange?.(opt.value)}
             className={cn(
-              'h-9 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
+              cols === 3 ? 'h-8' : 'h-9',
+              'rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
               active
                 ? cn(theme.activeBg, theme.activeBorder, theme.activeText)
                 : cn(theme.controlBg, theme.inactiveBorder, theme.inactiveText, theme.inactiveHoverText, theme.inactiveHoverBorder),
@@ -586,14 +589,25 @@ export function RenderSettingsPanel({
 
             {/* /osg */}
             <Section tag="/osg" icon={<Tv className="w-4 h-4" />} theme={emerald}>
-              <div className="grid grid-cols-2 gap-2" style={{ height: 88 }}>
+              <div className="grid grid-cols-2 gap-2" style={{ height: 112 }}>
                 <ThemedDropSlot
                   theme={emerald}
                   disabled={disabled}
                   value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '' } : null}
                   onChange={(asset) => { onOsgChange?.('assetId', asset?.id ?? null); onOsgChange?.('assetSrc', asset?.src ?? null); }}
                 />
-                <PositionGrid theme={emerald} disabled={disabled} options={[{ label: 'TL', value: 'top-left' }, { label: 'TR', value: 'top-right' }, { label: 'BL', value: 'bottom-left' }, { label: 'BR', value: 'bottom-right' }]} value={osgPosition} onChange={(v) => onOsgChange?.('position', v)} />
+                <PositionGrid
+                  theme={emerald}
+                  disabled={disabled}
+                  cols={3}
+                  options={[
+                    { label: 'TL', value: 'top-left' }, { label: 'TC', value: 'top-center' }, { label: 'TR', value: 'top-right' },
+                    { label: 'ML', value: 'middle-left' }, { label: 'MC', value: 'middle-center' }, { label: 'MR', value: 'middle-right' },
+                    { label: 'BL', value: 'bottom-left' }, { label: 'BC', value: 'bottom-center' }, { label: 'BR', value: 'bottom-right' },
+                  ]}
+                  value={osgPosition}
+                  onChange={(v) => onOsgChange?.('position', v)}
+                />
               </div>
               <SettingRow label="Size" theme={emerald}>
                 <PillToggle theme={emerald} disabled={disabled} options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]} value={osgSize} onChange={(v) => onOsgChange?.('size', v)} />

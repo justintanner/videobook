@@ -1,3 +1,31 @@
+export type OsgPosition =
+  | 'top-left' | 'top-center' | 'top-right'
+  | 'middle-left' | 'middle-center' | 'middle-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+export const OSG_POSITIONS: readonly OsgPosition[] = [
+  'top-left', 'top-center', 'top-right',
+  'middle-left', 'middle-center', 'middle-right',
+  'bottom-left', 'bottom-center', 'bottom-right',
+];
+
+export function isOsgPosition(value: unknown): value is OsgPosition {
+  return OSG_POSITIONS.includes(value as OsgPosition);
+}
+
+// Accepts shorthand (tl/tc/tr/ml/mc/mr/bl/bc/br) and full names; null if unknown.
+const OSG_POSITION_SHORTHAND: Record<string, OsgPosition> = {
+  tl: 'top-left', tc: 'top-center', tr: 'top-right',
+  ml: 'middle-left', mc: 'middle-center', mr: 'middle-right',
+  bl: 'bottom-left', bc: 'bottom-center', br: 'bottom-right',
+};
+
+export function parseOsgPosition(value: string): OsgPosition | null {
+  const key = value.trim().toLowerCase();
+  if (OSG_POSITION_SHORTHAND[key]) return OSG_POSITION_SHORTHAND[key];
+  return isOsgPosition(key) ? key : null;
+}
+
 export interface RenderSettings {
   subtitlesEnabled: boolean;
   subtitleLanguage: string;
@@ -11,8 +39,10 @@ export interface RenderSettings {
   audioFadeOut: number;
   osgAssetId: string | null;
   osgAssetSrc: string | null;
-  osgPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  osgPosition: OsgPosition;
   osgSize: 'small' | 'medium' | 'large';
+  osgScale: number;
+  osgTailSeconds: number | null;
   backgroundMode: 'blur' | 'black';
   strokeWidth: number;
   strokeColor: string;
@@ -35,6 +65,8 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   osgAssetSrc: null,
   osgPosition: 'top-right',
   osgSize: 'medium',
+  osgScale: 1,
+  osgTailSeconds: null,
   backgroundMode: 'blur',
   strokeWidth: 6,
   strokeColor: '#000000',
@@ -108,8 +140,10 @@ export function storedToRenderSettings(
     audioFadeOut: (stored.audioFadeOut as number | undefined) ?? DEFAULT_RENDER_SETTINGS.audioFadeOut,
     osgAssetId,
     osgAssetSrc: osgAssetId ? (resolveOsgSrc?.(osgAssetId) ?? null) : null,
-    osgPosition: (stored.osgPosition as RenderSettings['osgPosition'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgPosition,
+    osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : DEFAULT_RENDER_SETTINGS.osgPosition,
     osgSize: (stored.osgSize as RenderSettings['osgSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgSize,
+    osgScale: (stored.osgScale as number | undefined) ?? DEFAULT_RENDER_SETTINGS.osgScale,
+    osgTailSeconds: typeof stored.osgTailSeconds === 'number' ? stored.osgTailSeconds : DEFAULT_RENDER_SETTINGS.osgTailSeconds,
     backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,
     strokeWidth: (stored.strokeWidth as number | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeWidth,
     strokeColor: (stored.strokeColor as string | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeColor,

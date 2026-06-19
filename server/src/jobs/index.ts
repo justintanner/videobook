@@ -103,7 +103,6 @@ import { registerGenerateGrokImagineVideoR2vFalJob } from "./generate-grok-imagi
 import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-imagine-video-extend-fal.js";
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
 import { registerPostToXJob } from "./post-to-x.js";
-import { registerWatermarkVideoJob } from "./watermark-video.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 
 export function registerAllJobHandlers(fs: VideocityFs): void {
@@ -214,5 +213,4 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateGrokImagineVideoEditFalJob(fs);
   registerGenerateElevenlabsT2aJob(fs);
   registerPostToXJob(fs);
-  registerWatermarkVideoJob(fs);
 }

@@ -24,6 +24,7 @@ export interface UiActionCallbacks {
   settings_audio: (field: string, value: string) => void;
   settings_bg: (mode: string) => void;
   settings_osg: (field: string, value: string) => void;
+  settings_watermark: (handle: string, url: string, position: string, scale: string) => void;
   gen_prompt: (text: string) => void;
   gen_model: (key: string) => void;
   gen_aspect: (ratio: string) => void;
@@ -111,6 +112,14 @@ export function executeUiAction(
       break;
     case 'settings_osg':
       (fn as UiActionCallbacks['settings_osg'])(ctx.args.field ?? '', ctx.args.value ?? '');
+      break;
+    case 'settings_watermark':
+      (fn as UiActionCallbacks['settings_watermark'])(
+        ctx.args.handle ?? ctx.raw,
+        ctx.args.url ?? '',
+        ctx.args.position ?? '',
+        ctx.args.scale ?? '',
+      );
       break;
     case 'gen_prompt':
       (fn as UiActionCallbacks['gen_prompt'])(ctx.args.text ?? ctx.raw);

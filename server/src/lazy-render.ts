@@ -77,8 +77,14 @@ function isFontSizePreset(value: unknown): value is FontSizePreset {
   return value === "small" || value === "medium" || value === "large";
 }
 
+const OSG_POSITIONS: readonly OsgPosition[] = [
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+];
+
 function isOsgPosition(value: unknown): value is OsgPosition {
-  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+  return OSG_POSITIONS.includes(value as OsgPosition);
 }
 
 function isOsgSize(value: unknown): value is OsgSize {
@@ -168,6 +174,8 @@ export async function enqueueLazyTimelineRender(
     osgAssetId: nullableString(stored.osgAssetId),
     osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right",
     osgSize: isOsgSize(stored.osgSize) ? stored.osgSize : "medium",
+    osgScale: numberOr(stored.osgScale, 1),
+    osgTailSeconds: typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null,
     backgroundMode: isBackgroundMode(stored.backgroundMode) ? stored.backgroundMode : "blur",
     strokeWidth: numberOr(stored.strokeWidth, 6),
     strokeColor: stringOr(stored.strokeColor, "#000000"),
