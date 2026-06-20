@@ -735,6 +735,48 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
+  // 10b. /doctor — doctor (diagnose + fix)
+  // -----------------------------------------------------------------------
+  describe("/doctor", () => {
+    it("parses '/doctor' (full project scan, no args)", () => {
+      const args = simulateParse("/doctor", "");
+      expect(args).toEqual({});
+    });
+
+    it("parses '/doctor @vid-florida fix' into asset_id + fix:true", () => {
+      const args = simulateParse("/doctor", "@vid-florida fix");
+      expect(args.asset_id).toBe("vid-florida");
+      expect(args.fix).toBe(true);
+    });
+
+    it("dispatches doctor via mcpTool with project_slug auto-injected", () => {
+      const cmd = findCommand("/doctor");
+      expect(cmd.mcpTool?.tool).toBe("doctor");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+    });
+
+    it("reports a healthy project (no broken or stuck assets)", async () => {
+      const result = await client.callTool({
+        name: "doctor",
+        arguments: { project_slug: "test-proj" },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.broken).toEqual([]);
+      expect(parsed.stuck).toEqual([]);
+    });
+
+    it("errors when fix is requested without an asset_id", async () => {
+      const result = await client.callTool({
+        name: "doctor",
+        arguments: { project_slug: "test-proj", fix: true },
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0].text).toMatch(/requires an explicit asset_id/i);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // 11. Command dispatch wiring
   // -----------------------------------------------------------------------
   describe("command dispatch wiring", () => {

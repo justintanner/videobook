@@ -429,6 +429,13 @@ export function AssetMenu({
       title: 'Rename',
       onSelect: () => onAnimateEdit?.(`/rename ${slug} `),
     },
+    {
+      command: `/doctor ${slug} fix`,
+      title: 'Fix (Doctor)',
+      titleClassName: 'text-emerald-400',
+      accentColor: 'border-l-emerald-500/50 focus:border-l-emerald-500/80',
+      onSelect: () => onAnimateCommand?.(`/doctor ${slug} fix`),
+    },
   ]
 
   const hasImageActions = imageActions.length > 0

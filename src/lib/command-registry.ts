@@ -44,7 +44,7 @@ function parseNumberToken(token: string): string | number {
 
 function parseBooleanToken(token: string): string | boolean {
   const stripped = stripAt(token).toLowerCase();
-  if (['true', '1', 'yes', 'y', 'on', 'full'].includes(stripped)) return true;
+  if (['true', '1', 'yes', 'y', 'on', 'full', 'fix'].includes(stripped)) return true;
   if (['false', '0', 'no', 'n', 'off'].includes(stripped)) return false;
   return stripAt(token);
 }

@@ -292,6 +292,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "recover_asset", autoInject: ["project_slug"] },
   },
   {
+    command: "/doctor",
+    description: "Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.",
+    example: "/doctor   ·   /doctor @vid-florida fix",
+    category: "action",
+    icon: "Stethoscope",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: false, description: "Asset to diagnose; required to fix (e.g. @vid-florida). Omit for a full project scan." },
+      { name: "fix", type: "boolean", required: false, description: "Restore the asset to its last usable state before the current error. Requires asset_id." },
+    ],
+    mcpTool: { tool: "doctor", autoInject: ["project_slug"] },
+  },
+  {
     command: "/analyze-jokes",
     description: "Identify the jokes in a clip's transcript, classified by type",
     example: "/analyze-jokes @vid-intro",

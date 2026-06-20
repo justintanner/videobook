@@ -14,6 +14,7 @@ import {
   Users,
   Archive,
   LayoutTemplate,
+  Stethoscope,
 } from 'lucide-react';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -31,6 +32,7 @@ const iconMap: Record<string, LucideIcon> = {
   Users,
   Archive,
   LayoutTemplate,
+  Stethoscope,
 };
 
 export function resolveIcon(name: string): LucideIcon | undefined {

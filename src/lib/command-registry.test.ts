@@ -206,6 +206,19 @@ describe("parseCommandArgs", () => {
     expect(parseCommandArgs("true", params)).toEqual({ full: true });
   });
 
+  it("treats 'fix' as a truthy boolean token (e.g. /doctor @x fix)", () => {
+    const params: CommandParam[] = [
+      { name: "asset_id", type: "string", required: false, description: "" },
+      { name: "fix", type: "boolean", required: false, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-florida fix", params)).toEqual({
+      asset_id: "vid-florida",
+      fix: true,
+    });
+    // Bare scan: no asset, no fix.
+    expect(parseCommandArgs("@vid-florida", params)).toEqual({ asset_id: "vid-florida" });
+  });
+
   // -----------------------------------------------------------------------
   // Freeform-style edge cases
   // -----------------------------------------------------------------------
