@@ -886,9 +886,13 @@ export function HomePage() {
     void sync(projectSlug);
   }, [state, projectSlug, callTool, mediaItems, sync]);
 
-  // Persist OSG overlay placement from the OsgOverlay (no render). Passing null
-  // clears the overlay. Mirrors into the in-memory render settings when editing
-  // the currently selected asset so a later /render uses the new placement.
+  // Persist OSG overlay placement from the OsgOverlay (passing null clears it),
+  // then re-render so the new placement is reflected in the output. When editing
+  // the active selection we merge the placement into the current render settings
+  // and kick off handleRender for the viewed orientation — a deliberate Apply is
+  // the right moment to render (unlike a passive orientation tab switch, which
+  // never triggers a render). set_osg persists to all orientations, so the others
+  // pick up the placement the next time they render.
   const handleOsgApply = useCallback(async (assetId: string, value: OsgApplyValue | null) => {
     if (state !== 'ready' || !projectSlug) return;
     const args: Record<string, unknown> = {
@@ -902,19 +906,24 @@ export function HomePage() {
     const result = await callTool('set_osg', args);
     if (result.isError) return;
     if (assetId === activeSelection?.id) {
-      setRenderSettings(prev => value
+      const nextSettings: RenderSettings = value
         ? {
-            ...prev,
+            ...renderSettings,
             osgAssetId: value.osgAssetId,
             osgAssetSrc: mediaItems.find(m => m.id === value.osgAssetId)?.filePath ?? null,
             osgPosition: value.position,
             osgSize: value.size,
             osgScale: value.scale,
           }
-        : { ...prev, osgAssetId: null, osgAssetSrc: null });
+        : { ...renderSettings, osgAssetId: null, osgAssetSrc: null };
+      setRenderSettings(nextSettings);
+      // handleRender shows the optimistic readout, switches the viewer to the
+      // rendered orientation, and syncs on completion.
+      void handleRender(nextSettings);
+      return;
     }
     void sync(projectSlug);
-  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, sync]);
+  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
 
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen((open) => !open);
