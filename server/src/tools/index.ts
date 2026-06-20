@@ -32,6 +32,7 @@ import { trimVideoDef } from "./trim-video.js";
 import { splitVideoDef } from "./split-video.js";
 import { evenSplitDef } from "./even-split.js";
 import { cropVideoDef } from "./crop-video.js";
+import { setOsgDef } from "./set-osg.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
 import { searchArchiveDef } from "./search-archive.js";
@@ -221,6 +222,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     splitVideoDef(fs),
     evenSplitDef(fs),
     cropVideoDef(fs),
+    setOsgDef(fs),
     downloadVideoDef(fs),
     archiveClipDef(fs),
     searchArchiveDef(),

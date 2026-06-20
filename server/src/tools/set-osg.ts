@@ -1,0 +1,112 @@
+import type { VideocityFs } from "videocity-engine";
+import { z } from "zod";
+import type { ToolDef } from "./tool-def.js";
+import { RENDER_ORIENTATIONS } from "./sync.js";
+
+const OSG_POSITIONS = [
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+] as const;
+
+/**
+ * Persist OSG (on-screen graphic) overlay settings for a video asset WITHOUT
+ * triggering a render. The OSG positioning overlay (client `OsgOverlay`) applies
+ * here; the render path later reads these fields from the asset's `.render`
+ * metadata. We merge into every orientation's metadata so the badge + render
+ * stay consistent regardless of which orientation is rendered.
+ */
+export function setOsgDef(fs: VideocityFs): ToolDef {
+  return {
+    name: "set_osg",
+    description:
+      "Set or clear the on-screen-graphic (OSG) overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.",
+    schema: {
+      asset_id: z.string().describe("Video asset ID (e.g. vid-my-clip)"),
+      project_slug: z.string().describe("Project slug"),
+      osg_asset_id: z
+        .string()
+        .nullable()
+        .describe("Image asset ID (img- prefix) for the overlay, or null to clear the OSG"),
+      osg_position: z.enum(OSG_POSITIONS).describe("Anchor position (default top-right)"),
+      osg_size: z.enum(["small", "medium", "large"]).describe("Size preset"),
+      osg_scale: z
+        .number()
+        .min(0.1)
+        .max(2)
+        .optional()
+        .describe("Size multiplier applied on top of osg_size (default 1)"),
+      osg_tail_seconds: z
+        .number()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe("Show the OSG only during the last N seconds; omit to leave unchanged"),
+    },
+    handler: async (args) => {
+      const {
+        asset_id,
+        project_slug,
+        osg_asset_id,
+        osg_position,
+        osg_size,
+        osg_scale,
+        osg_tail_seconds,
+      } = args as {
+        asset_id: string;
+        project_slug: string;
+        osg_asset_id: string | null;
+        osg_position: (typeof OSG_POSITIONS)[number];
+        osg_size: "small" | "medium" | "large";
+        osg_scale?: number;
+        osg_tail_seconds?: number | null;
+      };
+
+      const clearing = osg_asset_id == null;
+
+      for (const orient of RENDER_ORIENTATIONS) {
+        const existing = await fs.readMetadata<Record<string, unknown>>(
+          asset_id,
+          `${orient}.render`,
+          project_slug,
+        );
+        const base = existing.ok ? existing.value : {};
+        const merged: Record<string, unknown> = {
+          ...base,
+          // osgAssetId is canonical; null out the legacy osgImagePath so a stale
+          // path can't override a cleared/changed asset id at render time.
+          osgImagePath: null,
+          osgAssetId: clearing ? null : osg_asset_id,
+          osgPosition: osg_position,
+          osgSize: osg_size,
+          osgScale: osg_scale ?? (typeof base.osgScale === "number" ? base.osgScale : 1),
+        };
+        if (osg_tail_seconds !== undefined) {
+          merged.osgTailSeconds = clearing ? null : osg_tail_seconds;
+        } else if (clearing) {
+          merged.osgTailSeconds = null;
+        }
+        await fs.writeMetadata(asset_id, `${orient}.render`, merged, project_slug);
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              asset_id,
+              osg: clearing
+                ? null
+                : {
+                    assetId: osg_asset_id,
+                    position: osg_position,
+                    size: osg_size,
+                    scale: osg_scale ?? 1,
+                  },
+            }),
+          },
+        ],
+      };
+    },
+  };
+}

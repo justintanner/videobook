@@ -1,4 +1,16 @@
+import type { OsgPosition } from '@/components/center-stage/render-settings-types';
+
 export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'plan' | 'final' | 'character';
+
+/** Resolved on-screen graphic overlay summary for a video/final asset. `src` is
+ *  the overlay image's displayable URL, resolved client-side from `assetId`. */
+export interface OsgInfo {
+  assetId: string;
+  src: string | null;
+  position: OsgPosition;
+  size: 'small' | 'medium' | 'large';
+  scale: number;
+}
 
 export type PendingState = 'queued' | 'processing' | 'success' | 'fail' | 'expired';
 
@@ -77,4 +89,6 @@ export interface MediaItem {
    *  for non-character assets or when unknown. Lets template auto-pick prefer a
    *  voiced host for Clip Show. */
   hasVoice?: boolean | null;
+  /** Video/final assets only: configured OSG overlay (resolved src), or null. */
+  osg?: OsgInfo | null;
 }

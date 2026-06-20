@@ -73,7 +73,39 @@ export type SyncAsset = {
    *  client flag voiceless hosts before attempting a Clip Show plan. Null for
    *  non-character assets. */
   has_voice: boolean | null;
+  /** Video/final assets only: a compact summary of the configured on-screen
+   *  graphic overlay, read from `.render` metadata. Drives the OSG badge on
+   *  clip cards and timeline slots. Null when no OSG is set. */
+  osg: OsgSummary | null;
 };
+
+export type OsgSummary = {
+  assetId: string;
+  position: string;
+  size: string;
+  scale: number;
+};
+
+/** Read the OSG overlay summary from the asset's render metadata. OSG is stored
+ *  identically across orientations, so the first orientation that carries an
+ *  osgAssetId wins. Returns null when no overlay is configured. */
+export async function readOsgSummary(
+  fs: VideocityFs, assetId: string, projectSlug: string,
+): Promise<OsgSummary | null> {
+  for (const orient of RENDER_ORIENTATIONS) {
+    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+    if (!meta.ok) continue;
+    const osgAssetId = meta.value.osgAssetId;
+    if (typeof osgAssetId !== "string" || !osgAssetId) continue;
+    return {
+      assetId: osgAssetId,
+      position: typeof meta.value.osgPosition === "string" ? meta.value.osgPosition : "top-right",
+      size: typeof meta.value.osgSize === "string" ? meta.value.osgSize : "medium",
+      scale: typeof meta.value.osgScale === "number" ? meta.value.osgScale : 1,
+    };
+  }
+  return null;
+}
 
 type ArchiveMetadata = {
   archive_id?: unknown;
@@ -413,6 +445,13 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         has_voice = charMeta.ok ? Boolean(charMeta.value.elevenlabs_voice_id?.trim()) : false;
       }
 
+      // Video/final assets: surface the configured OSG overlay so the client can
+      // render its badge on clip cards and timeline slots without a per-asset
+      // settings fetch. Bounded to one metadata read per OSG-eligible asset.
+      const osg = (a.type === "video" || a.type === "final")
+        ? await readOsgSummary(fs, a.id, project_slug)
+        : null;
+
       // Read markdown content for script (original.md) and plan (index.md) assets
       let prompt = (meta?.prompt as string) ?? null;
       if (!prompt && a.type === "script") {
@@ -452,6 +491,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         archived_at: typeof archiveMeta?.archived_at === "string" ? archiveMeta.archived_at : null,
         seen_at: assetWorkRow.ok && assetWorkRow.value ? assetWorkRow.value.seenAt : null,
         has_voice,
+        osg,
       };
     }),
   );

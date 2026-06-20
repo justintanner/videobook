@@ -1,4 +1,4 @@
-import type { MediaItem } from '../types';
+import type { MediaItem, OsgInfo } from '../types';
 import { cardTone } from '@/theme/domains';
 import { colorWithAlpha, getCardVisualState } from '../stateColors';
 
@@ -107,6 +107,38 @@ export function ArchiveBadge({ item }: ArchiveBadgeProps) {
     >
       ARCHIVED
     </div>
+  );
+}
+
+interface OsgBadgeProps {
+  osg: OsgInfo;
+  /** Fires when the badge is clicked; opens the OSG positioning overlay. */
+  onClick?: () => void;
+  /** Tailwind size classes for the badge box (default w-8 h-8). */
+  sizeClassName?: string;
+}
+
+// Map a 9-anchor OSG position to corner placement classes, mirroring the server
+// OsgOverlay placement so the badge previews where the graphic actually renders.
+const OSG_BADGE_ANCHOR: Record<string, string> = {
+  'top-left': 'top-1 left-1', 'top-center': 'top-1 left-1/2 -translate-x-1/2', 'top-right': 'top-1 right-1',
+  'middle-left': 'top-1/2 left-1 -translate-y-1/2', 'middle-center': 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2', 'middle-right': 'top-1/2 right-1 -translate-y-1/2',
+  'bottom-left': 'bottom-1 left-1', 'bottom-center': 'bottom-1 left-1/2 -translate-x-1/2', 'bottom-right': 'bottom-1 right-1',
+};
+
+export function OsgBadge({ osg, onClick, sizeClassName = 'w-8 h-8' }: OsgBadgeProps) {
+  if (!osg || !osg.src) return null;
+  const anchor = OSG_BADGE_ANCHOR[osg.position] ?? OSG_BADGE_ANCHOR['top-right'];
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      title="Edit on-screen graphic"
+      className={`absolute z-40 ${sizeClassName} rounded-sm overflow-hidden border border-emerald-400/70 bg-black/40 shadow-[0_0_8px_rgba(110,231,183,0.5)] transition-transform hover:scale-110 ${anchor}`}
+    >
+      <img src={osg.src} alt="OSG" draggable={false} className="w-full h-full object-contain" />
+    </button>
   );
 }
 

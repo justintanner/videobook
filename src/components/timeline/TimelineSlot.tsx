@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/context-menu';
 import { Waveform } from './Waveform';
 import { SlotHourglass } from './SlotHourglass';
-import type { ClipState } from '@/components/sidebar/types';
+import { OsgBadge } from '@/components/sidebar/cards/badges';
+import type { ClipState, OsgInfo } from '@/components/sidebar/types';
 
 function parseTimestamp(url: string): number {
   const match = url.match(/(\d+\.\d+)\.jpg$/);
@@ -94,6 +95,7 @@ interface TimelineSlotProps {
   duration?: number;
   assetId?: string;
   renderStatus?: ClipState;
+  osg?: OsgInfo;
   flex?: number;
   onClick?: () => void;
   onAnimateCommand?: (text: string) => void;
@@ -114,6 +116,7 @@ export function TimelineSlot({
   duration,
   assetId,
   renderStatus,
+  osg,
   flex = 1,
   onClick,
   onAnimateCommand,
@@ -139,11 +142,17 @@ export function TimelineSlot({
     if (!onAnimateCommand) return;
     try {
       const data = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (data?.id) {
+      if (!data?.id) return;
+      // Dropping an image onto a filled slot sets that clip's OSG overlay; any
+      // other asset is assigned into the slot as before.
+      const slotVideoId = assetId?.replace(/^@/, '');
+      if (data.type === 'image' && hasContent && slotVideoId) {
+        onAnimateCommand(`/osg @${slotVideoId} @${data.id}`);
+      } else {
         onAnimateCommand(`/assign @${data.id} ${label}`);
       }
     } catch { /* ignore */ }
-  }, [onAnimateCommand, label]);
+  }, [onAnimateCommand, label, assetId, hasContent]);
 
   const canClear = hasContent && onAnimateCommand;
 
@@ -265,6 +274,18 @@ export function TimelineSlot({
             {assetId}
           </span>
         </div>
+      )}
+
+      {/* OSG overlay badge — click opens the positioning overlay */}
+      {osg && !isRendering && (
+        <OsgBadge
+          osg={osg}
+          sizeClassName="w-6 h-6"
+          onClick={() => {
+            const slotVideoId = assetId?.replace(/^@/, '');
+            if (slotVideoId && onAnimateCommand) onAnimateCommand(`/osg @${slotVideoId}`);
+          }}
+        />
       )}
 
       {/* Active indicator */}

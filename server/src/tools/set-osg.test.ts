@@ -1,0 +1,134 @@
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createTestClient } from "../test-client.js";
+import { createFs, type VideocityFs } from "videocity-engine";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+type TextContent = Array<{ type: string; text: string }>;
+
+const ORIENTATIONS = ["landscape", "portrait", "square"] as const;
+
+describe("set_osg tool", () => {
+  let client: Client;
+  let fs: VideocityFs;
+  let tempDir: string;
+  const projectSlug = "test-proj";
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-set-osg-test-"));
+    client = await createTestClient(tempDir);
+    fs = createFs({ projectsDir: tempDir });
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: projectSlug },
+    });
+  });
+
+  afterEach(async () => {
+    await client?.close();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function createVideoAsset(): Promise<string> {
+    const created = await fs.createAsset("vid", "clip", projectSlug);
+    if (!created.ok) throw new Error(created.error.message);
+    const write = await fs.writeFile(created.value.assetId, "original.mp4", Buffer.from("fake-video"), projectSlug);
+    if (!write.ok) throw new Error(write.error.message);
+    return created.value.assetId;
+  }
+
+  it("writes osg fields to the render metadata of every orientation", async () => {
+    const assetId = await createVideoAsset();
+
+    const result = await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: "img-logo",
+        osg_position: "bottom-right",
+        osg_size: "large",
+        osg_scale: 1.5,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.osg).toEqual({ assetId: "img-logo", position: "bottom-right", size: "large", scale: 1.5 });
+
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgAssetId).toBe("img-logo");
+      expect(meta.value.osgPosition).toBe("bottom-right");
+      expect(meta.value.osgSize).toBe("large");
+      expect(meta.value.osgScale).toBe(1.5);
+      // Legacy path must be nulled so it can't override the canonical asset id.
+      expect(meta.value.osgImagePath).toBeNull();
+    }
+  });
+
+  it("preserves unrelated render settings when merging osg fields", async () => {
+    const assetId = await createVideoAsset();
+    // Seed a pre-existing render setting that set_osg must not clobber.
+    await fs.writeMetadata(assetId, "landscape.render", { subtitlesEnabled: false, textColor: "#ABCDEF" }, projectSlug);
+
+    await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: "img-badge",
+        osg_position: "top-left",
+        osg_size: "small",
+      },
+    });
+
+    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "landscape.render", projectSlug);
+    if (!meta.ok) throw new Error("missing landscape.render");
+    expect(meta.value.subtitlesEnabled).toBe(false);
+    expect(meta.value.textColor).toBe("#ABCDEF");
+    expect(meta.value.osgAssetId).toBe("img-badge");
+    expect(meta.value.osgPosition).toBe("top-left");
+    expect(meta.value.osgSize).toBe("small");
+    expect(meta.value.osgScale).toBe(1);
+  });
+
+  it("clears the osg when osg_asset_id is null", async () => {
+    const assetId = await createVideoAsset();
+    await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: "img-logo",
+        osg_position: "bottom-right",
+        osg_size: "medium",
+      },
+    });
+
+    const cleared = await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: null,
+        osg_position: "top-right",
+        osg_size: "medium",
+      },
+    });
+
+    expect(cleared.isError).toBeFalsy();
+    const parsed = JSON.parse((cleared.content as TextContent)[0].text);
+    expect(parsed.osg).toBeNull();
+
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgAssetId).toBeNull();
+      expect(meta.value.osgTailSeconds).toBeNull();
+    }
+  });
+});

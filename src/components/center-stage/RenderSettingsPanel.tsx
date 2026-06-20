@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Zap, Type, Volume2, Tv, ImageIcon, ImageOff, Plus, Minus, X, ChevronDown, Check } from 'lucide-react';
+import { Zap, Type, Volume2, ImageIcon, Plus, Minus, ChevronDown, Check } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { SUBTITLE_LANGUAGES, type OsgPosition } from './render-settings-types';
+import { SUBTITLE_LANGUAGES } from './render-settings-types';
 import { sectionTheme, type SectionTheme as DomainSectionTheme } from '@/theme/domains';
 
 // ── Types ──
@@ -43,12 +43,6 @@ export interface RenderSettingsPanelProps {
   audioFadeIn: number;
   audioFadeOut: number;
   onAudioChange?: (field: string, value: number) => void;
-
-  osgAssetId: string | null;
-  osgAssetSrc: string | null;
-  osgPosition: OsgPosition;
-  osgSize: 'small' | 'medium' | 'large';
-  onOsgChange?: (field: string, value: string | boolean | null) => void;
 
   backgroundMode: 'blur' | 'black';
   onBackgroundChange?: (mode: 'blur' | 'black') => void;
@@ -191,49 +185,6 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// ── 2x2 position grid ──
-
-function PositionGrid<T extends string>({
-  options, value, onChange, disabled, theme, cols = 2,
-}: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange?: (value: T) => void;
-  disabled?: boolean;
-  theme: SectionTheme;
-  cols?: 2 | 3;
-}) {
-  return (
-    <div className={cn(
-      'grid gap-1 rounded border p-1',
-      cols === 3 ? 'grid-cols-3' : 'grid-cols-2',
-      disabled ? 'opacity-30 pointer-events-none' : '',
-      theme.controlBorder, theme.controlBg,
-    )}>
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            disabled={disabled}
-            onClick={() => onChange?.(opt.value)}
-            className={cn(
-              cols === 3 ? 'h-8' : 'h-9',
-              'rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border',
-              active
-                ? cn(theme.activeBg, theme.activeBorder, theme.activeText)
-                : cn(theme.controlBg, theme.inactiveBorder, theme.inactiveText, theme.inactiveHoverText, theme.inactiveHoverBorder),
-            )}
-            style={active ? { boxShadow: theme.activeGlow } : undefined}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Number input with +/- ──
 
 function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disabled, theme }: {
@@ -304,100 +255,6 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
       >
         <Plus className="w-3 h-3" />
       </button>
-    </div>
-  );
-}
-
-// ── Themed asset drop slot ──
-
-function ThemedDropSlot({ value, onChange, disabled, theme }: {
-  value: { id: string; slug: string; src: string } | null;
-  onChange: (asset: { id: string; slug: string; src: string; type: 'image' } | null) => void;
-  disabled?: boolean;
-  theme: SectionTheme;
-}) {
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (disabled) return;
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (disabled) return;
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (data && data.type === 'image') {
-        onChange({ id: data.id, slug: data.slug, src: data.filePath || data.src, type: 'image' });
-      }
-    } catch { /* invalid drop */ }
-  };
-
-  return (
-    <div
-      className={cn(
-        'relative w-full h-full rounded border transition-all duration-200 overflow-hidden',
-        disabled && 'opacity-30 pointer-events-none',
-        isDragOver && !disabled
-          ? cn(theme.activeBorder, 'border-solid')
-          : value
-            ? cn(theme.controlBorder, 'border-solid')
-            : cn(theme.controlBorder, 'border-dashed', theme.inactiveHoverBorder),
-        theme.controlBg,
-      )}
-      style={isDragOver ? { boxShadow: theme.activeGlow } : undefined}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {value ? (
-        <>
-          {value.src ? (
-            <img src={value.src} alt={value.slug} draggable={false} className="w-full h-full object-cover" />
-          ) : (
-            // Asset id is set but its image src couldn't be resolved (e.g. the
-            // referenced asset was deleted). Show an explicit "missing" state
-            // rather than a bare id string so it isn't mistaken for a label.
-            <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-2">
-              <ImageOff className="w-5 h-5 text-red-400/70" />
-              <span className="text-[10px] font-mono tracking-wider text-red-400/70">MISSING</span>
-              <span className={cn('text-[10px] font-mono truncate max-w-full', theme.inactiveText)}>{value.slug}</span>
-            </div>
-          )}
-          {!disabled && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onChange(null); }}
-              className={cn(
-                'absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center transition-colors',
-                theme.controlBg, theme.controlBorder, 'border',
-                'hover:bg-red-500/30 hover:border-red-500/60',
-              )}
-            >
-              <X className={cn('w-3 h-3', theme.controlText)} />
-            </button>
-          )}
-        </>
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-          <ImageIcon className={cn(
-            'w-5 h-5 transition-all duration-200',
-            isDragOver ? cn(theme.activeText, 'scale-110') : theme.inactiveText,
-          )} />
-          <span className={cn('text-[10px] font-mono tracking-wider', theme.inactiveText)}>
-            DROP
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -485,7 +342,6 @@ export function RenderSettingsPanel({
   textColor = '#F8FAFC', highlightColor = '#991B1B',
   strokeWidth, strokeColor, shadowBlur, shadowOpacity, onSubtitleChange,
   audioVolume, audioFadeIn, audioFadeOut, onAudioChange,
-  osgAssetId, osgAssetSrc, osgPosition, osgSize, onOsgChange,
   backgroundMode, onBackgroundChange,
   onApply, applyState, disabled,
 }: RenderSettingsPanelProps) {
@@ -499,7 +355,6 @@ export function RenderSettingsPanel({
   const cyan = sectionThemes.cyan;
   const violet = sectionThemes.violet;
   const amber = sectionThemes.amber;
-  const emerald = sectionThemes.emerald;
 
   return (
     <div className="flex flex-col h-full bg-zinc-950 relative overflow-hidden">
@@ -585,33 +440,6 @@ export function RenderSettingsPanel({
             {/* /bg */}
             <Section tag="/bg" icon={<ImageIcon className="w-4 h-4" />} theme={amber}>
               <SegmentedControl theme={amber} disabled={disabled} options={[{ label: 'BLUR', value: 'blur' }, { label: 'BLACK', value: 'black' }]} value={backgroundMode} onChange={onBackgroundChange} />
-            </Section>
-
-            {/* /osg */}
-            <Section tag="/osg" icon={<Tv className="w-4 h-4" />} theme={emerald}>
-              <div className="grid grid-cols-2 gap-2" style={{ height: 112 }}>
-                <ThemedDropSlot
-                  theme={emerald}
-                  disabled={disabled}
-                  value={osgAssetId ? { id: osgAssetId, slug: osgAssetId, src: osgAssetSrc ?? '' } : null}
-                  onChange={(asset) => { onOsgChange?.('assetId', asset?.id ?? null); onOsgChange?.('assetSrc', asset?.src ?? null); }}
-                />
-                <PositionGrid
-                  theme={emerald}
-                  disabled={disabled}
-                  cols={3}
-                  options={[
-                    { label: 'TL', value: 'top-left' }, { label: 'TC', value: 'top-center' }, { label: 'TR', value: 'top-right' },
-                    { label: 'ML', value: 'middle-left' }, { label: 'MC', value: 'middle-center' }, { label: 'MR', value: 'middle-right' },
-                    { label: 'BL', value: 'bottom-left' }, { label: 'BC', value: 'bottom-center' }, { label: 'BR', value: 'bottom-right' },
-                  ]}
-                  value={osgPosition}
-                  onChange={(v) => onOsgChange?.('position', v)}
-                />
-              </div>
-              <SettingRow label="Size" theme={emerald}>
-                <PillToggle theme={emerald} disabled={disabled} options={[{ label: 'S', value: 'small' }, { label: 'M', value: 'medium' }, { label: 'L', value: 'large' }]} value={osgSize} onChange={(v) => onOsgChange?.('size', v)} />
-              </SettingRow>
             </Section>
           </div>
         </div>

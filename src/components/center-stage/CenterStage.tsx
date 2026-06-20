@@ -4,6 +4,7 @@ import type { Orientation } from '@/hooks/useTimeline';
 import type { RenderSettings, TranscriptInfo } from './render-settings-types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { VideoViewer } from './VideoViewer';
+import type { OsgApplyValue } from './OsgOverlay';
 import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
@@ -14,7 +15,7 @@ import type { ViewerSize, BackTab } from './viewer-types';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, onBackToTemplates, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, onBackToTemplates, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -40,6 +41,9 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile, onProfileSaved?: (profile: CharacterProfile) => void) => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
   onCropConsumed?: () => void;
+  osgTarget?: { assetId: string; osgAssetId?: string } | null;
+  onOsgConsumed?: () => void;
+  onOsgApply?: (assetId: string, value: OsgApplyValue | null) => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isPlan = item.type === 'plan';
@@ -69,6 +73,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onClose={onClose}
         cropTarget={cropTarget}
         onCropConsumed={onCropConsumed}
+        osgTarget={osgTarget}
+        onOsgConsumed={onOsgConsumed}
+        onOsgApply={onOsgApply}
+        imageAssets={imageAssets}
       />
     );
   }

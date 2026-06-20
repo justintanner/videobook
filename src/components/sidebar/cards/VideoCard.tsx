@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
-import { SlugBadge, DurationBadge } from './badges';
+import { SlugBadge, DurationBadge, OsgBadge } from './badges';
 import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
@@ -21,9 +21,14 @@ interface VideoCardProps {
   /** Fires when an aud-* card is dropped onto this video. HomePage uses this
    *  to surface a "replace audio?" confirm before invoking replace_video_audio. */
   onAudioDropped?: (audioAssetId: string, audioSlug: string) => void;
+  /** Fires when an img-* card is dropped onto this video — sets it as the OSG
+   *  overlay and opens the positioning overlay. */
+  onImageDropped?: (imageAssetId: string, imageSlug: string) => void;
+  /** Fires when the OSG badge is clicked — opens the positioning overlay. */
+  onEditOsg?: () => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onRecover, onAudioDropped }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onRecover, onAudioDropped, onImageDropped, onEditOsg }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -46,33 +51,42 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const showThumb = thumbSrc !== null && erroredSrc !== thumbSrc;
 
-  const [audioDragOver, setAudioDragOver] = useState(false);
+  // The video card accepts two kinds of asset drop: an audio clip (replace the
+  // video's audio) and an image (set it as the OSG overlay). We track which kind
+  // is hovering so the affordance label matches.
+  const [dropKind, setDropKind] = useState<'audio' | 'image' | null>(null);
   const canAcceptAudioDrop = !!onAudioDropped && status === 'ready';
+  const canAcceptImageDrop = !!onImageDropped && status === 'ready';
+  const canAcceptDrop = canAcceptAudioDrop || canAcceptImageDrop;
 
-  const handleDragOver = canAcceptAudioDrop
+  const handleDragOver = canAcceptDrop
     ? (e: ReactDragEvent<HTMLDivElement>) => {
-        if (!e.dataTransfer.types.includes('application/x-videocity-asset-audio')) return;
+        const isAudio = canAcceptAudioDrop && e.dataTransfer.types.includes('application/x-videocity-asset-audio');
+        const isImage = canAcceptImageDrop && e.dataTransfer.types.includes('application/x-videocity-asset-image');
+        if (!isAudio && !isImage) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
-        if (!audioDragOver) setAudioDragOver(true);
+        const kind = isAudio ? 'audio' : 'image';
+        if (dropKind !== kind) setDropKind(kind);
       }
     : undefined;
 
-  const handleDragLeave = canAcceptAudioDrop
+  const handleDragLeave = canAcceptDrop
     ? (e: ReactDragEvent<HTMLDivElement>) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-          setAudioDragOver(false);
+          setDropKind(null);
         }
       }
     : undefined;
 
-  const handleDrop = canAcceptAudioDrop
+  const handleDrop = canAcceptDrop
     ? (e: ReactDragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        setAudioDragOver(false);
+        setDropKind(null);
         try {
           const data = JSON.parse(e.dataTransfer.getData('application/json')) as DragData;
           if (data.type === 'audio' && data.id && onAudioDropped) onAudioDropped(data.id, data.slug);
+          else if (data.type === 'image' && data.id && onImageDropped) onImageDropped(data.id, data.slug);
         } catch {
           // Invalid drop payload — silently ignore.
         }
@@ -102,16 +116,26 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       {/* Duration badge - top left */}
       {!hasOpaqueOverlay && !isError && <DurationBadge item={item} seconds={item.duration} muted={isProcessing} />}
 
+      {/* OSG overlay badge — top/bottom corner per stored position */}
+      {!hasOpaqueOverlay && !isError && item.osg && <OsgBadge osg={item.osg} onClick={onEditOsg} />}
+
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} muted={hasOpaqueOverlay || isProcessing} />}
 
       {/* Recover / Delete buttons — visible on hover for error-state cards */}
       {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}
       </CardShell>
-      {audioDragOver && (
+      {dropKind === 'audio' && (
         <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-amber-500/20 ring-2 ring-amber-400 ring-inset">
           <span className="px-2 py-1 rounded-sm bg-black/85 backdrop-blur-md border border-amber-400/60 text-[10px] font-mono font-bold tracking-widest text-amber-300">
             REPLACE AUDIO?
+          </span>
+        </div>
+      )}
+      {dropKind === 'image' && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-emerald-500/20 ring-2 ring-emerald-400 ring-inset">
+          <span className="px-2 py-1 rounded-sm bg-black/85 backdrop-blur-md border border-emerald-400/60 text-[10px] font-mono font-bold tracking-widest text-emerald-300">
+            SET OSG?
           </span>
         </div>
       )}

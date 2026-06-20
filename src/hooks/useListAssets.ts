@@ -23,6 +23,8 @@ export interface ListAsset {
   /** Character assets only: whether an ElevenLabs voice is assigned. Null for
    *  non-character assets (or older servers that don't report it). */
   has_voice?: boolean | null;
+  /** Video/final assets only: configured on-screen graphic overlay, or null. */
+  osg?: { assetId: string; position: string; size: string; scale: number } | null;
 }
 
 interface UseListAssetsResult {

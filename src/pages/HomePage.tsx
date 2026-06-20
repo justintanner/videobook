@@ -57,12 +57,32 @@ import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
-import type { MediaItem, AssetType, ClipState, PendingState } from '@/components/sidebar/types';
-import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
+import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
+import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
+import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
+
+const OSG_SIZES = new Set(['small', 'medium', 'large']);
+
+/** Resolve a raw synced OSG summary into a typed OsgInfo, looking up the overlay
+ *  image's display URL. Returns null when no overlay or an unknown position. */
+function resolveOsgInfo(
+  raw: { assetId: string; position: string; size: string; scale: number } | null | undefined,
+  urlById: Map<string, string | null>,
+): OsgInfo | null {
+  if (!raw || !isOsgPosition(raw.position)) return null;
+  const size = OSG_SIZES.has(raw.size) ? (raw.size as OsgInfo['size']) : 'medium';
+  return {
+    assetId: raw.assetId,
+    src: urlById.get(raw.assetId) ?? null,
+    position: raw.position,
+    size,
+    scale: raw.scale,
+  };
+}
 
 function humanizeId(id: string): string {
   const rawName = id.replace(/^[a-z]+-/, '');
@@ -98,6 +118,7 @@ export function HomePage() {
   const [deleteProjectSubmitting, setDeleteProjectSubmitting] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
+  const [osgTarget, setOsgTarget] = useState<{ assetId: string; osgAssetId?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>('landscape');
   const [viewerFlipped, setViewerFlipped] = useState(false);
@@ -252,6 +273,9 @@ export function HomePage() {
       }
     }
 
+    const urlById = new Map<string, string | null>();
+    for (const a of assetList) urlById.set(a.id, a.thumbnail_url ?? a.media_url);
+
     return assetList.map((asset) => {
       let status: ClipState = (renderingOverrides.get(asset.id) ?? asset.status ?? 'ready') as ClipState;
       const failed = failedMap.get(asset.id);
@@ -288,6 +312,7 @@ export function HomePage() {
         failedTaskType: failed?.taskType,
         seenAt: asset.seen_at,
         hasVoice: asset.has_voice ?? null,
+        osg: resolveOsgInfo(asset.osg, urlById),
       };
     });
   }, [assetList, result, renderingOverrides, deletingIds]);
@@ -596,6 +621,7 @@ export function HomePage() {
     setArchiveInitialLoading(false);
     setTrimAssetId(null);
     setCropTarget(null);
+    setOsgTarget(null);
     setSelectedItem(null);
     setViewerFlipped(false);
     setPendingFilePosition(null);
@@ -860,6 +886,36 @@ export function HomePage() {
     void sync(projectSlug);
   }, [state, projectSlug, callTool, mediaItems, sync]);
 
+  // Persist OSG overlay placement from the OsgOverlay (no render). Passing null
+  // clears the overlay. Mirrors into the in-memory render settings when editing
+  // the currently selected asset so a later /render uses the new placement.
+  const handleOsgApply = useCallback(async (assetId: string, value: OsgApplyValue | null) => {
+    if (state !== 'ready' || !projectSlug) return;
+    const args: Record<string, unknown> = {
+      asset_id: assetId,
+      project_slug: projectSlug,
+      osg_asset_id: value ? value.osgAssetId : null,
+      osg_position: value ? value.position : 'top-right',
+      osg_size: value ? value.size : 'medium',
+    };
+    if (value) args.osg_scale = value.scale;
+    const result = await callTool('set_osg', args);
+    if (result.isError) return;
+    if (assetId === activeSelection?.id) {
+      setRenderSettings(prev => value
+        ? {
+            ...prev,
+            osgAssetId: value.osgAssetId,
+            osgAssetSrc: mediaItems.find(m => m.id === value.osgAssetId)?.filePath ?? null,
+            osgPosition: value.position,
+            osgSize: value.size,
+            osgScale: value.scale,
+          }
+        : { ...prev, osgAssetId: null, osgAssetSrc: null });
+    }
+    void sync(projectSlug);
+  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, sync]);
+
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen((open) => !open);
     setArchiveOpen(false);
@@ -1005,6 +1061,7 @@ export function HomePage() {
     setSettingsOpen(false);
     setTrimAssetId(null);
     setCropTarget(null);
+    setOsgTarget(null);
     setViewerFlipped(false);
     setPendingFilePosition(null);
     setPendingBackTab(null);
@@ -1177,6 +1234,16 @@ export function HomePage() {
       handleViewerSizeChange('original');
       setCropTarget({ assetId: item?.id ?? target, ratio });
     },
+    open_osg: (assetId: string, imageId?: string) => {
+      const cleaned = assetId.trim().replace(/^@/, '');
+      const target = cleaned || selectedItem?.id || '';
+      if (!target) return;
+      const item = mediaItems.find((m) => m.id === target || m.slug === `@${target}` || m.slug === target);
+      if (item) handleSelectItem(item);
+      handleViewerSizeChange('original');
+      const osgAssetId = imageId ? imageId.trim().replace(/^@/, '') : undefined;
+      setOsgTarget({ assetId: item?.id ?? target, osgAssetId });
+    },
     open_gen: (type: string, prompt: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
@@ -1316,7 +1383,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, applyWatermark, selectedItem, setCropTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, applyWatermark, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
   return (
     <MountKeyProvider>
@@ -1510,6 +1577,9 @@ export function HomePage() {
                     onEditCharacterProfile={(charId, profile, onProfileSaved) => setCharacterDialog({ initialSlug: charId, initialProfile: profile, onProfileSaved })}
                     cropTarget={cropTarget}
                     onCropConsumed={() => setCropTarget(null)}
+                    osgTarget={osgTarget}
+                    onOsgConsumed={() => setOsgTarget(null)}
+                    onOsgApply={handleOsgApply}
                   />
                 ) : templatesOpen ? (
                   <TemplatesViewer
@@ -1601,7 +1671,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
                         {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
                       </div>
                     );
@@ -1638,6 +1708,7 @@ export function HomePage() {
                     duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
                     renderStatus={slotAsset?.status}
+                    osg={slotAsset?.osg ?? undefined}
                     onClick={() => slotSlug && handleSlotClick(i)}
                     onAnimateCommand={handleAnimateCommand}
                   />

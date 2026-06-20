@@ -3853,15 +3853,14 @@ describe("slash commands e2e", () => {
       expect(cmd.params.find((p) => p.name === "mode")!.required).toBe(true);
     });
 
-    it("/osg has uiAction=settings_osg, onMount=['viewer'], field+value params", () => {
+    it("/osg has uiAction=open_osg with required asset_id + optional image params", () => {
       const cmd = findCommand("/osg");
-      expect(cmd.uiAction).toBe("settings_osg");
-      expect(cmd.onMount).toContain("viewer");
+      expect(cmd.uiAction).toBe("open_osg");
       const names = cmd.params.map((p) => p.name);
-      expect(names).toContain("field");
-      expect(names).toContain("value");
-      expect(cmd.params.find((p) => p.name === "field")!.required).toBe(true);
-      expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
+      expect(names).toContain("asset_id");
+      expect(names).toContain("image");
+      expect(cmd.params.find((p) => p.name === "asset_id")!.required).toBe(true);
+      expect(cmd.params.find((p) => p.name === "image")!.required).toBe(false);
     });
   });
 
@@ -3996,40 +3995,16 @@ describe("slash commands e2e", () => {
   // /osg different inputs — parse + dispatch
   // -----------------------------------------------------------------------
   describe("/osg different inputs", () => {
-    it("/osg position tl", () => {
-      const args = simulateParse("/osg", "position tl");
-      expect(args.field).toBe("position");
-      expect(args.value).toBe("tl");
+    it("/osg @vid-clip parses the video asset id", () => {
+      const args = simulateParse("/osg", "@vid-clip");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.image).toBeUndefined();
     });
 
-    it("/osg position tr", () => {
-      const args = simulateParse("/osg", "position tr");
-      expect(args.field).toBe("position");
-      expect(args.value).toBe("tr");
-    });
-
-    it("/osg position bl", () => {
-      const args = simulateParse("/osg", "position bl");
-      expect(args.field).toBe("position");
-      expect(args.value).toBe("bl");
-    });
-
-    it("/osg position br", () => {
-      const args = simulateParse("/osg", "position br");
-      expect(args.field).toBe("position");
-      expect(args.value).toBe("br");
-    });
-
-    it("/osg clear", () => {
-      const args = simulateParse("/osg", "clear");
-      expect(args.field).toBe("clear");
-      expect(args.value).toBeUndefined();
-    });
-
-    it("/osg @img-logo strips @ prefix", () => {
-      const args = simulateParse("/osg", "@img-logo");
-      expect(args.field).toBe("img-logo");
-      expect(args.value).toBeUndefined();
+    it("/osg @vid-clip @img-logo parses both asset ids", () => {
+      const args = simulateParse("/osg", "@vid-clip @img-logo");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.image).toBe("img-logo");
     });
   });
 
