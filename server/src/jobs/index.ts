@@ -4,6 +4,7 @@ import { registerTranslateTranscriptJob } from "./translate-transcript.js";
 import { registerDownloadVideoJob } from "./download-video.js";
 import { registerArchiveClipJob } from "./archive-clip.js";
 import { registerRestoreArchiveClipJob } from "./restore-archive-clip.js";
+import { registerDoctorFixJob } from "./doctor-fix.js";
 import { registerTrimVideoJob } from "./trim-video.js";
 import { registerSplitVideoJob } from "./split-video.js";
 import { registerEvenSplitJob } from "./even-split.js";
@@ -111,6 +112,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerDownloadVideoJob(fs);
   registerArchiveClipJob(fs);
   registerRestoreArchiveClipJob(fs);
+  registerDoctorFixJob(fs);
   registerTrimVideoJob(fs);
   registerSplitVideoJob(fs);
   registerEvenSplitJob(fs);
