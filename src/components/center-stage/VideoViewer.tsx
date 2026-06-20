@@ -84,6 +84,8 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
           initialPosition={item.osg?.position ?? 'top-right'}
           initialSize={item.osg?.size ?? 'medium'}
           initialScale={item.osg?.scale ?? 1}
+          initialStartSeconds={item.osg?.startSeconds ?? null}
+          initialEndSeconds={item.osg?.endSeconds ?? null}
           onApply={onOsgApply}
           onRemove={onOsgRemove}
           onCancel={onOsgCancel}

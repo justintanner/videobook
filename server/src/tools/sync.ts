@@ -84,6 +84,8 @@ export type OsgSummary = {
   position: string;
   size: string;
   scale: number;
+  startSeconds: number | null;
+  endSeconds: number | null;
 };
 
 /** Read the OSG overlay summary from the asset's render metadata. OSG is stored
@@ -102,6 +104,8 @@ export async function readOsgSummary(
       position: typeof meta.value.osgPosition === "string" ? meta.value.osgPosition : "top-right",
       size: typeof meta.value.osgSize === "string" ? meta.value.osgSize : "medium",
       scale: typeof meta.value.osgScale === "number" ? meta.value.osgScale : 1,
+      startSeconds: typeof meta.value.osgStartSeconds === "number" ? meta.value.osgStartSeconds : null,
+      endSeconds: typeof meta.value.osgEndSeconds === "number" ? meta.value.osgEndSeconds : null,
     };
   }
   return null;
@@ -236,6 +240,8 @@ const BASE_DEFAULTS: Record<string, unknown> = {
   osgAssetId: null,
   osgPosition: "top-right",
   osgScale: 1,
+  osgStartSeconds: null,
+  osgEndSeconds: null,
   osgTailSeconds: null,
   backgroundMode: "blur",
   strokeWidth: 6,

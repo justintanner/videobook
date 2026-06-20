@@ -14,6 +14,9 @@ export interface OsgApplyValue {
   position: OsgPosition;
   size: OsgSize;
   scale: number;
+  // Absolute visibility window in seconds; null ⇒ open on that side (clip start/end).
+  startSeconds: number | null;
+  endSeconds: number | null;
 }
 
 interface RectPx {
@@ -31,6 +34,9 @@ interface OsgOverlayProps {
   initialPosition: OsgPosition;
   initialSize: OsgSize;
   initialScale: number;
+  /** Stored visibility window (null ⇒ open-ended). Preselects the temporal strip. */
+  initialStartSeconds: number | null;
+  initialEndSeconds: number | null;
   onApply: (value: OsgApplyValue) => void;
   onRemove: () => void;
   onCancel: () => void;
@@ -46,6 +52,17 @@ const SIZE_FACTOR: Record<OsgSize, number> = {
 };
 const EDGE_PADDING = 0.02; // 2% of width, matching the server placement.
 const MIN_BOX_FRACTION = 0.02;
+// Smallest visibility window the temporal strip allows between the two handles.
+const MIN_WINDOW_SECONDS = 0.3;
+// Tolerance for treating a handle at the very edge as "open" (clip start / end).
+const EDGE_EPSILON_SECONDS = 0.05;
+
+function formatClock(seconds: number): string {
+  const safe = Math.max(0, seconds);
+  const m = Math.floor(safe / 60);
+  const s = Math.floor(safe % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 type DragMode =
   | { kind: 'move'; startPx: RectPx; startPointer: { x: number; y: number } }
@@ -163,7 +180,7 @@ const HANDLE_BASE = 'absolute w-3 h-3 bg-emerald-300 border border-zinc-900 shad
 
 export function OsgOverlay({
   videoRef, imageAssets, initialOsgAssetId, initialPosition, initialSize, initialScale,
-  onApply, onRemove, onCancel,
+  initialStartSeconds, initialEndSeconds, onApply, onRemove, onCancel,
 }: OsgOverlayProps) {
   const [osgAssetId, setOsgAssetId] = useState<string | null>(initialOsgAssetId);
   const [content, setContent] = useState<RectPx | null>(null);
@@ -175,6 +192,14 @@ export function OsgOverlay({
   const overlayRef = useRef<HTMLDivElement>(null);
   const placedRef = useRef(false);
 
+  // ── Temporal visibility window (the /osg timing strip) ──
+  const [duration, setDuration] = useState<number | null>(null);
+  const [winStart, setWinStart] = useState(0);
+  const [winEnd, setWinEnd] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const timeDragRef = useRef<'start' | 'end' | null>(null);
+  const windowPlacedRef = useRef(false);
+
   const selectedImage = useMemo(
     () => imageAssets.find((a) => a.id === osgAssetId) ?? null,
     [imageAssets, osgAssetId],
@@ -185,7 +210,10 @@ export function OsgOverlay({
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
-    const recompute = () => setContent(computeContentRect(videoEl));
+    const recompute = () => {
+      setContent(computeContentRect(videoEl));
+      setDuration(Number.isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : null);
+    };
     recompute();
     videoEl.addEventListener('loadedmetadata', recompute);
     window.addEventListener('resize', recompute);
@@ -205,6 +233,18 @@ export function OsgOverlay({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRectPx(rectFromAnchor(content, initialPosition, initialSize, initialScale, imageAspect));
   }, [content, imageSrc, imageAspect, initialPosition, initialSize, initialScale]);
+
+  // Seed the temporal window from the stored values once the clip duration is known.
+  useEffect(() => {
+    if (duration == null || windowPlacedRef.current) return;
+    windowPlacedRef.current = true;
+    const start = initialStartSeconds != null ? Math.min(Math.max(0, initialStartSeconds), duration) : 0;
+    const end = initialEndSeconds != null ? Math.min(Math.max(start, initialEndSeconds), duration) : duration;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWinStart(start);
+     
+    setWinEnd(end);
+  }, [duration, initialStartSeconds, initialEndSeconds]);
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -272,9 +312,57 @@ export function OsgOverlay({
     return { position: snapPosition(rectPx, content), ...snapSize(rectPx, content) };
   }, [rectPx, content]);
 
+  // ── Temporal strip interaction ──
+  const handleTimeDragStart = (which: 'start' | 'end') => (e: React.PointerEvent) => {
+    if (duration == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trackRef.current?.setPointerCapture(e.pointerId);
+    timeDragRef.current = which;
+  };
+
+  const handleTimePointerMove = (e: React.PointerEvent) => {
+    const which = timeDragRef.current;
+    const track = trackRef.current;
+    if (!which || !track || duration == null) return;
+    const r = track.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width)));
+    const sec = frac * duration;
+    if (which === 'start') {
+      setWinStart(Math.min(sec, winEnd - MIN_WINDOW_SECONDS));
+    } else {
+      setWinEnd(Math.max(sec, winStart + MIN_WINDOW_SECONDS));
+    }
+  };
+
+  const handleTimePointerUp = (e: React.PointerEvent) => {
+    if (timeDragRef.current) {
+      try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      timeDragRef.current = null;
+    }
+  };
+
+  const resetWindow = () => {
+    if (duration == null) return;
+    setWinStart(0);
+    setWinEnd(duration);
+  };
+
+  // null on a side ⇒ open to the clip start/end; a near-edge handle counts as open.
+  const windowStartSeconds = winStart > EDGE_EPSILON_SECONDS ? winStart : null;
+  const windowEndSeconds = duration != null && winEnd < duration - EDGE_EPSILON_SECONDS ? winEnd : null;
+  const isWholeClip = windowStartSeconds == null && windowEndSeconds == null;
+
   const handleApply = () => {
     if (!osgAssetId || !snapped) return;
-    onApply({ osgAssetId, position: snapped.position, size: snapped.size, scale: snapped.scale });
+    onApply({
+      osgAssetId,
+      position: snapped.position,
+      size: snapped.size,
+      scale: snapped.scale,
+      startSeconds: windowStartSeconds,
+      endSeconds: windowEndSeconds,
+    });
   };
 
   // ── Image picker (shown until an overlay image is chosen) ──
@@ -397,6 +485,50 @@ export function OsgOverlay({
           <RefreshCw className="w-3 h-3" />
         </button>
       </div>
+
+      {/* Temporal visibility window strip */}
+      {duration != null && (
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[72%] max-w-[640px] flex flex-col gap-1.5 bg-zinc-950/85 border border-emerald-700/50 rounded px-3 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono text-emerald-300/90 tracking-widest">WHEN</span>
+            <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+              {isWholeClip ? 'whole clip' : `${formatClock(winStart)} → ${formatClock(winEnd)}`}
+            </span>
+            <button
+              tabIndex={-1}
+              onClick={resetWindow}
+              className="text-[10px] font-mono text-muted-foreground hover:text-emerald-300 transition-colors"
+            >
+              Whole clip
+            </button>
+          </div>
+          <div
+            ref={trackRef}
+            onPointerMove={handleTimePointerMove}
+            onPointerUp={handleTimePointerUp}
+            onPointerCancel={handleTimePointerUp}
+            className="relative h-5 flex items-center"
+          >
+            <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/10" />
+            <div
+              className="absolute h-1.5 rounded-full bg-emerald-400/70"
+              style={{ left: `${(winStart / duration) * 100}%`, width: `${((winEnd - winStart) / duration) * 100}%` }}
+            />
+            <div
+              onPointerDown={handleTimeDragStart('start')}
+              title="OSG appears"
+              className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
+              style={{ left: `${(winStart / duration) * 100}%` }}
+            />
+            <div
+              onPointerDown={handleTimeDragStart('end')}
+              title="OSG disappears"
+              className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
+              style={{ left: `${(winEnd / duration) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Actions (bottom) */}
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-zinc-950/80 border border-emerald-700/50 rounded px-1 py-1">

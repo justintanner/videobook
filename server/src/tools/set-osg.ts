@@ -36,12 +36,24 @@ export function setOsgDef(fs: VideocityFs): ToolDef {
         .max(2)
         .optional()
         .describe("Size multiplier applied on top of osg_size (default 1)"),
+      osg_start_seconds: z
+        .number()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe("Absolute window start in seconds; null ⇒ from clip start. Omit to leave unchanged"),
+      osg_end_seconds: z
+        .number()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe("Absolute window end in seconds; null ⇒ to clip end. Omit to leave unchanged"),
       osg_tail_seconds: z
         .number()
         .min(0)
         .nullable()
         .optional()
-        .describe("Show the OSG only during the last N seconds; omit to leave unchanged"),
+        .describe("Legacy: show the OSG only during the last N seconds; omit to leave unchanged"),
     },
     handler: async (args) => {
       const {
@@ -51,6 +63,8 @@ export function setOsgDef(fs: VideocityFs): ToolDef {
         osg_position,
         osg_size,
         osg_scale,
+        osg_start_seconds,
+        osg_end_seconds,
         osg_tail_seconds,
       } = args as {
         asset_id: string;
@@ -59,6 +73,8 @@ export function setOsgDef(fs: VideocityFs): ToolDef {
         osg_position: (typeof OSG_POSITIONS)[number];
         osg_size: "small" | "medium" | "large";
         osg_scale?: number;
+        osg_start_seconds?: number | null;
+        osg_end_seconds?: number | null;
         osg_tail_seconds?: number | null;
       };
 
@@ -81,9 +97,21 @@ export function setOsgDef(fs: VideocityFs): ToolDef {
           osgSize: osg_size,
           osgScale: osg_scale ?? (typeof base.osgScale === "number" ? base.osgScale : 1),
         };
+        if (osg_start_seconds !== undefined) {
+          merged.osgStartSeconds = clearing ? null : osg_start_seconds;
+        } else if (clearing) {
+          merged.osgStartSeconds = null;
+        }
+        if (osg_end_seconds !== undefined) {
+          merged.osgEndSeconds = clearing ? null : osg_end_seconds;
+        } else if (clearing) {
+          merged.osgEndSeconds = null;
+        }
+        // An absolute window supersedes the legacy duration-relative tail.
+        const windowProvided = osg_start_seconds !== undefined || osg_end_seconds !== undefined;
         if (osg_tail_seconds !== undefined) {
           merged.osgTailSeconds = clearing ? null : osg_tail_seconds;
-        } else if (clearing) {
+        } else if (clearing || windowProvided) {
           merged.osgTailSeconds = null;
         }
         await fs.writeMetadata(asset_id, `${orient}.render`, merged, project_slug);

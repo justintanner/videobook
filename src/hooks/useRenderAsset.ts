@@ -44,6 +44,12 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
         args.osg_position = settings.osgPosition;
         args.osg_size = settings.osgSize;
         args.osg_scale = settings.osgScale;
+        if (settings.osgStartSeconds != null) {
+          args.osg_start_seconds = settings.osgStartSeconds;
+        }
+        if (settings.osgEndSeconds != null) {
+          args.osg_end_seconds = settings.osgEndSeconds;
+        }
         if (settings.osgTailSeconds != null) {
           args.osg_tail_seconds = settings.osgTailSeconds;
         }

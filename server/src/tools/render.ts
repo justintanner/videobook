@@ -109,11 +109,23 @@ export function renderDef(fs: VideocityFs): ToolDef {
         .max(2)
         .optional()
         .describe("OSG size multiplier applied on top of osg_size (default: 1)"),
+      osg_start_seconds: z
+        .number()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe("OSG visibility window start in seconds; null/omit ⇒ from clip start"),
+      osg_end_seconds: z
+        .number()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe("OSG visibility window end in seconds; null/omit ⇒ to clip end"),
       osg_tail_seconds: z
         .number()
         .min(0)
         .optional()
-        .describe("Show the OSG only during the last N seconds (end-card); omit for full duration"),
+        .describe("Legacy: show the OSG only during the last N seconds (end-card); omit for full duration"),
       background_mode: z
         .enum(["blur", "black"])
         .optional()
@@ -154,6 +166,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osg_position = "top-right",
         osg_size = "medium",
         osg_scale = 1,
+        osg_start_seconds,
+        osg_end_seconds,
         osg_tail_seconds,
         background_mode = "blur",
         stroke_width = 6,
@@ -178,6 +192,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osg_position?: OsgPosition;
         osg_size?: "small" | "medium" | "large";
         osg_scale?: number;
+        osg_start_seconds?: number | null;
+        osg_end_seconds?: number | null;
         osg_tail_seconds?: number;
         background_mode?: "blur" | "black";
         stroke_width?: number;
@@ -346,6 +362,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
           osgPosition: osg_position,
           osgSize: osg_size,
           osgScale: osg_scale,
+          osgStartSeconds: osg_start_seconds ?? null,
+          osgEndSeconds: osg_end_seconds ?? null,
           osgTailSeconds: osg_tail_seconds ?? null,
           backgroundMode: background_mode,
           strokeWidth: stroke_width,

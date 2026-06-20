@@ -64,6 +64,8 @@ export interface RenderInputProps extends Record<string, unknown> {
   osgPosition: OsgPosition;
   osgSize: OsgSize;
   osgScale: number;
+  osgStartSeconds: number | null;
+  osgEndSeconds: number | null;
   osgTailSeconds: number | null;
   backgroundMode: BackgroundMode;
   strokeWidth: number;

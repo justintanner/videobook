@@ -175,6 +175,8 @@ export async function enqueueLazyTimelineRender(
     osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right",
     osgSize: isOsgSize(stored.osgSize) ? stored.osgSize : "medium",
     osgScale: numberOr(stored.osgScale, 1),
+    osgStartSeconds: typeof stored.osgStartSeconds === "number" ? stored.osgStartSeconds : null,
+    osgEndSeconds: typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null,
     osgTailSeconds: typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null,
     backgroundMode: isBackgroundMode(stored.backgroundMode) ? stored.backgroundMode : "blur",
     strokeWidth: numberOr(stored.strokeWidth, 6),

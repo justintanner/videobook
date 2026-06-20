@@ -10,6 +10,8 @@ export interface OsgInfo {
   position: OsgPosition;
   size: 'small' | 'medium' | 'large';
   scale: number;
+  startSeconds?: number | null;
+  endSeconds?: number | null;
 }
 
 export type PendingState = 'queued' | 'processing' | 'success' | 'fail' | 'expired';

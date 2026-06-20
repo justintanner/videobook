@@ -9,9 +9,14 @@ interface OsgOverlayProps {
   // Multiplier applied on top of the size preset. 1 = preset size. Used by the
   // watermark producer to carry its numeric scale; normal OSG leaves it at 1.
   scale?: number;
-  // When set, the graphic only shows during the last `tailSeconds` of the
-  // video (a brief end-card, e.g. the QR watermark). null/undefined ⇒ the
-  // graphic shows for the full duration (default OSG behavior).
+  // Absolute visibility window in seconds (interactive /osg control). The graphic
+  // shows only between `startSeconds` and `endSeconds`; null ⇒ open on that side
+  // (start of clip / end of clip). When either is set it wins over `tailSeconds`.
+  startSeconds?: number | null;
+  endSeconds?: number | null;
+  // Legacy duration-relative window: the graphic only shows during the last
+  // `tailSeconds` of the video (a brief end-card, e.g. the QR watermark). Used as
+  // a fallback when no absolute window is set. null/undefined ⇒ full duration.
   tailSeconds?: number | null;
 }
 
@@ -25,14 +30,16 @@ const SIZE_FACTOR: Record<OsgSize, number> = {
   large: 0.21,
 };
 
-// The OSG always eases in over this window so it never pops in abruptly.
-const FADE_IN_SECONDS = 0.4;
+// The OSG always eases in/out over this window so it never pops abruptly.
+const FADE_SECONDS = 0.4;
 
 export const OsgOverlay: React.FC<OsgOverlayProps> = ({
   src,
   position,
   size,
   scale = 1,
+  startSeconds = null,
+  endSeconds = null,
   tailSeconds = null,
 }) => {
   const { width, fps, durationInFrames } = useVideoConfig();
@@ -40,19 +47,53 @@ export const OsgOverlay: React.FC<OsgOverlayProps> = ({
   const maxSize = Math.round(width * SIZE_FACTOR[size] * scale);
   const padding = Math.round(width * 0.02);
 
-  // When a tail window is set, the graphic appears `tailSeconds` before the end
-  // and fades in from there; otherwise it fades in from the first frame.
-  const fadeInFrames = Math.max(1, Math.round(FADE_IN_SECONDS * fps));
-  const startFrame =
-    tailSeconds != null
-      ? Math.max(0, durationInFrames - Math.round(tailSeconds * fps))
-      : 0;
-  const opacity = interpolate(
-    frame,
-    [startFrame, startFrame + fadeInFrames],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-  );
+  // Resolve the visibility window [startFrame, endFrame]. Precedence: an explicit
+  // absolute window (startSeconds/endSeconds) wins; else a duration-relative tail;
+  // else the full clip. An explicit end < duration gets a symmetric fade-out.
+  const hasWindow = startSeconds != null || endSeconds != null;
+  let startFrame: number;
+  let endFrame: number;
+  if (hasWindow) {
+    startFrame = startSeconds != null ? Math.round(startSeconds * fps) : 0;
+    endFrame = endSeconds != null ? Math.round(endSeconds * fps) : durationInFrames;
+  } else if (tailSeconds != null) {
+    startFrame = Math.max(0, durationInFrames - Math.round(tailSeconds * fps));
+    endFrame = durationInFrames;
+  } else {
+    startFrame = 0;
+    endFrame = durationInFrames;
+  }
+  startFrame = Math.min(Math.max(0, startFrame), durationInFrames);
+  endFrame = Math.min(Math.max(startFrame, endFrame), durationInFrames);
+  const hasExplicitEnd = endFrame < durationInFrames;
+
+  // Fades ease over FADE_SECONDS, shrinking to fit very short windows.
+  const span = Math.max(1, endFrame - startFrame);
+  const maxFade = Math.max(1, Math.round(FADE_SECONDS * fps));
+  const fadeIn = Math.max(1, Math.min(maxFade, Math.floor(span / 2)));
+  const fadeOut = hasExplicitEnd ? Math.max(1, Math.min(maxFade, Math.floor(span / 2))) : 0;
+
+  const inEnd = startFrame + fadeIn;
+  const outStart = endFrame - fadeOut;
+  const opacity =
+    fadeOut > 0 && outStart > inEnd
+      ? interpolate(
+          frame,
+          [startFrame, inEnd, outStart, endFrame],
+          [0, 1, 1, 0],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+        )
+      : interpolate(
+          frame,
+          [startFrame, inEnd],
+          [0, 1],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+        );
+
+  // Hard-gate visibility to the window so a collapsed fade (sub-second span)
+  // can't leave the graphic showing past an explicit end.
+  const inWindow = frame >= startFrame && (!hasExplicitEnd || frame < endFrame);
+  const finalOpacity = inWindow ? opacity : 0;
 
   const [vertical, horizontal] = position.split("-");
   const posStyle: React.CSSProperties = { position: "absolute" };
@@ -76,7 +117,7 @@ export const OsgOverlay: React.FC<OsgOverlayProps> = ({
       src={src}
       style={{
         ...posStyle,
-        opacity,
+        opacity: finalOpacity,
         maxWidth: maxSize,
         maxHeight: maxSize,
         objectFit: "contain",

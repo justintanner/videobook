@@ -96,6 +96,71 @@ describe("set_osg tool", () => {
     expect(meta.value.osgScale).toBe(1);
   });
 
+  it("persists an absolute visibility window and nulls the legacy tail", async () => {
+    const assetId = await createVideoAsset();
+    // Seed a legacy tail so we can prove an absolute window supersedes it.
+    for (const orient of ORIENTATIONS) {
+      await fs.writeMetadata(assetId, `${orient}.render`, { osgTailSeconds: 2 }, projectSlug);
+    }
+
+    const result = await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: "img-logo",
+        osg_position: "top-right",
+        osg_size: "medium",
+        osg_start_seconds: 10,
+        osg_end_seconds: 22,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgStartSeconds).toBe(10);
+      expect(meta.value.osgEndSeconds).toBe(22);
+      // The absolute window wins over (and clears) the legacy duration-relative tail.
+      expect(meta.value.osgTailSeconds).toBeNull();
+    }
+  });
+
+  it("clears the visibility window when the osg is removed", async () => {
+    const assetId = await createVideoAsset();
+    await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: "img-logo",
+        osg_position: "top-right",
+        osg_size: "medium",
+        osg_start_seconds: 5,
+        osg_end_seconds: 9,
+      },
+    });
+
+    await client.callTool({
+      name: "set_osg",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        osg_asset_id: null,
+        osg_position: "top-right",
+        osg_size: "medium",
+      },
+    });
+
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgStartSeconds).toBeNull();
+      expect(meta.value.osgEndSeconds).toBeNull();
+    }
+  });
+
   it("clears the osg when osg_asset_id is null", async () => {
     const assetId = await createVideoAsset();
     await client.callTool({

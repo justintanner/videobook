@@ -70,7 +70,10 @@ const OSG_SIZES = new Set(['small', 'medium', 'large']);
 /** Resolve a raw synced OSG summary into a typed OsgInfo, looking up the overlay
  *  image's display URL. Returns null when no overlay or an unknown position. */
 function resolveOsgInfo(
-  raw: { assetId: string; position: string; size: string; scale: number } | null | undefined,
+  raw:
+    | { assetId: string; position: string; size: string; scale: number; startSeconds?: number | null; endSeconds?: number | null }
+    | null
+    | undefined,
   urlById: Map<string, string | null>,
 ): OsgInfo | null {
   if (!raw || !isOsgPosition(raw.position)) return null;
@@ -81,6 +84,8 @@ function resolveOsgInfo(
     position: raw.position,
     size,
     scale: raw.scale,
+    startSeconds: raw.startSeconds ?? null,
+    endSeconds: raw.endSeconds ?? null,
   };
 }
 
@@ -902,7 +907,12 @@ export function HomePage() {
       osg_position: value ? value.position : 'top-right',
       osg_size: value ? value.size : 'medium',
     };
-    if (value) args.osg_scale = value.scale;
+    if (value) {
+      args.osg_scale = value.scale;
+      // Pass the absolute window (null ⇒ open-ended); set_osg nulls the legacy tail.
+      args.osg_start_seconds = value.startSeconds;
+      args.osg_end_seconds = value.endSeconds;
+    }
     const result = await callTool('set_osg', args);
     if (result.isError) return;
     if (assetId === activeSelection?.id) {
@@ -914,8 +924,11 @@ export function HomePage() {
             osgPosition: value.position,
             osgSize: value.size,
             osgScale: value.scale,
+            osgStartSeconds: value.startSeconds,
+            osgEndSeconds: value.endSeconds,
+            osgTailSeconds: null,
           }
-        : { ...renderSettings, osgAssetId: null, osgAssetSrc: null };
+        : { ...renderSettings, osgAssetId: null, osgAssetSrc: null, osgStartSeconds: null, osgEndSeconds: null, osgTailSeconds: null };
       setRenderSettings(nextSettings);
       // handleRender shows the optimistic readout, switches the viewer to the
       // rendered orientation, and syncs on completion.

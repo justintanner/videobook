@@ -95,6 +95,8 @@ type RenderProjectPayload = {
   osgPosition: OsgPosition;
   osgSize: OsgSize;
   osgScale?: number;
+  osgStartSeconds?: number | null;
+  osgEndSeconds?: number | null;
   osgTailSeconds?: number | null;
   backgroundMode: BackgroundMode;
   strokeWidth: number;
@@ -201,6 +203,8 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       osgPosition,
       osgSize,
       osgScale,
+      osgStartSeconds,
+      osgEndSeconds,
       osgTailSeconds,
       backgroundMode,
       strokeWidth,
@@ -315,6 +319,8 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 osgPosition: osgPosition ?? "top-right",
                 osgSize: osgSize ?? "medium",
                 osgScale: osgScale ?? 1,
+                osgStartSeconds: osgStartSeconds ?? null,
+                osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,
                 backgroundMode,
                 strokeWidth,
@@ -397,6 +403,8 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 osgPosition,
                 osgSize,
                 osgScale: osgScale ?? 1,
+                osgStartSeconds: osgStartSeconds ?? null,
+                osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],

@@ -42,6 +42,8 @@ export interface RenderSettings {
   osgPosition: OsgPosition;
   osgSize: 'small' | 'medium' | 'large';
   osgScale: number;
+  osgStartSeconds: number | null;
+  osgEndSeconds: number | null;
   osgTailSeconds: number | null;
   backgroundMode: 'blur' | 'black';
   strokeWidth: number;
@@ -66,6 +68,8 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   osgPosition: 'top-right',
   osgSize: 'medium',
   osgScale: 1,
+  osgStartSeconds: null,
+  osgEndSeconds: null,
   osgTailSeconds: null,
   backgroundMode: 'blur',
   strokeWidth: 6,
@@ -143,6 +147,8 @@ export function storedToRenderSettings(
     osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : DEFAULT_RENDER_SETTINGS.osgPosition,
     osgSize: (stored.osgSize as RenderSettings['osgSize'] | undefined) ?? DEFAULT_RENDER_SETTINGS.osgSize,
     osgScale: (stored.osgScale as number | undefined) ?? DEFAULT_RENDER_SETTINGS.osgScale,
+    osgStartSeconds: typeof stored.osgStartSeconds === 'number' ? stored.osgStartSeconds : DEFAULT_RENDER_SETTINGS.osgStartSeconds,
+    osgEndSeconds: typeof stored.osgEndSeconds === 'number' ? stored.osgEndSeconds : DEFAULT_RENDER_SETTINGS.osgEndSeconds,
     osgTailSeconds: typeof stored.osgTailSeconds === 'number' ? stored.osgTailSeconds : DEFAULT_RENDER_SETTINGS.osgTailSeconds,
     backgroundMode: (stored.backgroundMode as RenderSettings['backgroundMode'] | undefined) ?? DEFAULT_RENDER_SETTINGS.backgroundMode,
     strokeWidth: (stored.strokeWidth as number | undefined) ?? DEFAULT_RENDER_SETTINGS.strokeWidth,
