@@ -469,6 +469,13 @@ export function HomePage() {
     // viewerSize sent no orientation, which rendered all three and skipped the
     // optimistic feedback below.
     const orient = settingsOrientation;
+    // Show the rendered output, not the un-rendered source. The render targets a
+    // concrete orientation (landscape when viewing 'original'), so a render fired
+    // while viewing 'original' writes landscape.mp4 yet the viewer keeps showing
+    // original.mp4 — the render looks like a no-op. Switch the viewer to the
+    // orientation being rendered so its result (rendering readout, then the
+    // output) is what's on screen. No-op when already viewing that orientation.
+    if (viewerSize !== orient) handleViewerSizeChange(orient);
     // Optimistically show rendering animation immediately
     setRenderingOverrides(prev => new Map(prev).set(activeSelection.id, `render-queued-${orient}`));
     const { ok, error } = await renderAsset(activeSelection.id, projectSlug, orient, settings);
@@ -483,7 +490,7 @@ export function HomePage() {
       return;
     }
     sync(projectSlug);
-  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync]);
+  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
