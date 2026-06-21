@@ -179,6 +179,7 @@ import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { createWatermarkDef } from "./create-watermark.js";
+import { getWatermarkConfigDef } from "./get-watermark-config.js";
 import { withLogging } from "./log-wrapper.js";
 
 export function registerAllTools(server: McpServer, fs: VideocityFs): void {
@@ -373,5 +374,6 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     xConnectStartDef(),
     xConnectStatusDef(),
     createWatermarkDef(fs),
+    getWatermarkConfigDef(),
   ];
 }

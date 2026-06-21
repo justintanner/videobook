@@ -4,6 +4,7 @@ import sharp from "sharp";
 import QRCode from "qrcode";
 import type { ToolDef } from "./tool-def.js";
 import { writeImageVariants } from "./concat-images.js";
+import { recordHandle } from "../watermark-config.js";
 
 const DEFAULT_HANDLE = "justinwtanner";
 
@@ -70,10 +71,14 @@ export function createWatermarkDef(fs: VideocityFs): ToolDef {
       project_slug: z.string().describe("Project slug"),
       handle: z.string().optional().describe(`X handle without @ (default: ${DEFAULT_HANDLE})`),
       url: z.string().optional().describe("URL the QR code resolves to (default: https://x.com/<handle>)"),
+      save_default: z
+        .boolean()
+        .optional()
+        .describe("Remember this handle as the default for future watermarks"),
     },
     handler: async (args) => {
-      const { project_slug, handle, url } = args as {
-        project_slug: string; handle?: string; url?: string;
+      const { project_slug, handle, url, save_default } = args as {
+        project_slug: string; handle?: string; url?: string; save_default?: boolean;
       };
 
       const resolvedHandle = (handle ?? DEFAULT_HANDLE).replace(/^@/, "").trim();
@@ -144,6 +149,9 @@ export function createWatermarkDef(fs: VideocityFs): ToolDef {
           content: [{ type: "text" as const, text: variantsResult.error }],
         };
       }
+
+      // Remember the handle so the next watermark dialog defaults to it.
+      await recordHandle(resolvedHandle, { saveDefault: save_default }).catch(() => undefined);
 
       return {
         content: [{

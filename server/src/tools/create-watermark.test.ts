@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { createFs } from "videocity-engine";
 import { createTestClient } from "../test-client.js";
+import { readWatermarkConfig } from "../watermark-config.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -24,6 +25,8 @@ describe("create_watermark tool", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-create-watermark-"));
+    // Isolate the remembered-handle store to this temp dir.
+    process.env.WATERMARK_CONFIG_PATH = join(tempDir, "watermark-config.json");
     fs = createFs({ projectsDir: tempDir });
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -34,6 +37,7 @@ describe("create_watermark tool", () => {
 
   afterEach(async () => {
     await client?.close();
+    delete process.env.WATERMARK_CONFIG_PATH;
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -82,5 +86,31 @@ describe("create_watermark tool", () => {
     const parsed = JSON.parse(resultText(result)) as { handle: string; url: string };
     expect(parsed.handle).toBe("justinwtanner");
     expect(parsed.url).toBe("https://x.com/justinwtanner");
+  });
+
+  it("remembers used handles and the saved default", async () => {
+    await client!.callTool({
+      name: "create_watermark",
+      arguments: { project_slug: PROJECT, handle: "alice", save_default: true },
+    });
+    await client!.callTool({
+      name: "create_watermark",
+      arguments: { project_slug: PROJECT, handle: "@bob" },
+    });
+
+    // Most-recent-first; saved default stays pinned to the save_default handle.
+    const config = await readWatermarkConfig();
+    expect(config.recent).toEqual(["bob", "alice"]);
+    expect(config.savedHandle).toBe("alice");
+
+    // get_watermark_config exposes the same state to the client.
+    const cfgResult = await client!.callTool({
+      name: "get_watermark_config",
+      arguments: {},
+    });
+    expect(cfgResult.isError).not.toBe(true);
+    const exposed = JSON.parse(resultText(cfgResult)) as { savedHandle: string | null; recent: string[] };
+    expect(exposed.savedHandle).toBe("alice");
+    expect(exposed.recent).toEqual(["bob", "alice"]);
   });
 });

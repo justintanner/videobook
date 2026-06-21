@@ -368,7 +368,7 @@ export function AssetMenu({
         },
         {
           command: `/watermark ${slug}`,
-          title: 'Watermark (last 2s)',
+          title: 'Watermark…',
           onSelect: () => onAnimateCommand?.(`/watermark ${slug}`),
         },
       ]

@@ -62,6 +62,7 @@ import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSub
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
 import { isRenderingStatus } from '@/components/center-stage/viewer-types';
+import { WatermarkDialog, type WatermarkApplyValue } from '@/components/watermark/WatermarkDialog';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
@@ -148,6 +149,7 @@ export function HomePage() {
     onProfileSaved?: (profile: CharacterProfile) => void;
   } | null>(null);
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
+  const [watermarkPanel, setWatermarkPanel] = useState<{ assetId: string | null } | null>(null);
   const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [planOpenKey, setPlanOpenKey] = useState(0);
@@ -861,41 +863,60 @@ export function HomePage() {
     });
   }, [mediaItems]);
 
-  // /watermark: generate the QR card as an img-* asset (server) then apply it as
-  // the active OSG with a 2s tail window so the next render composites it.
-  const applyWatermark = useCallback(async (handle: string, url: string, position: string, scale: string) => {
+  // Generate the QR card (server) then apply it as the target video's OSG with a
+  // 2s tail so it renders as an end-card. Persists via set_osg and — when the
+  // target is the open clip — re-renders immediately (mirrors handleOsgApply).
+  const applyWatermark = useCallback(async (value: WatermarkApplyValue) => {
     if (state !== 'ready' || !projectSlug) return;
-    const cleanHandle = handle.trim().replace(/^@/, '');
-    const toolArgs: Record<string, string> = { project_slug: projectSlug };
-    if (cleanHandle) toolArgs.handle = cleanHandle;
-    if (url.trim()) toolArgs.url = url.trim();
+    const { targetId, handle, position, scale, saveDefault } = value;
 
-    const result = await callTool('create_watermark', toolArgs);
-    if (result.isError) return;
-    const content = result.content as Array<{ type: string; text: string }> | undefined;
-    let assetId: string | null = null;
+    const created = await callTool('create_watermark', {
+      project_slug: projectSlug,
+      handle,
+      save_default: saveDefault,
+    });
+    if (created.isError) return;
+    const content = created.content as Array<{ type: string; text: string }> | undefined;
+    let osgAssetId: string | null = null;
     try {
-      assetId = JSON.parse(content?.[0]?.text ?? '{}').asset_id ?? null;
+      osgAssetId = JSON.parse(content?.[0]?.text ?? '{}').asset_id ?? null;
     } catch {
-      assetId = null;
+      osgAssetId = null;
     }
-    if (!assetId) return;
+    if (!osgAssetId) return;
 
-    const pos = parseOsgPosition(position) ?? 'bottom-right';
-    const parsedScale = parseFloat(scale);
-    const osgScale = Number.isFinite(parsedScale) && parsedScale > 0 ? parsedScale : 1;
-    setRenderSettings(prev => ({
-      ...prev,
-      osgAssetId: assetId,
-      osgAssetSrc: mediaItems.find(m => m.id === assetId)?.filePath ?? null,
-      osgPosition: pos,
-      osgSize: 'medium',
-      osgScale,
-      osgTailSeconds: 2,
-    }));
-    // Surface the new asset so its preview src can resolve once synced.
+    // Persist as the watermark OSG: a 2s end-card tail, clearing any prior window.
+    const osgResult = await callTool('set_osg', {
+      asset_id: targetId,
+      project_slug: projectSlug,
+      osg_asset_id: osgAssetId,
+      osg_position: position,
+      osg_size: 'medium',
+      osg_scale: scale,
+      osg_start_seconds: null,
+      osg_end_seconds: null,
+      osg_tail_seconds: 2,
+    });
+    if (osgResult.isError) return;
+
+    if (targetId === activeSelection?.id) {
+      const nextSettings: RenderSettings = {
+        ...renderSettings,
+        osgAssetId,
+        osgAssetSrc: mediaItems.find(m => m.id === osgAssetId)?.filePath ?? null,
+        osgPosition: position,
+        osgSize: 'medium',
+        osgScale: scale,
+        osgStartSeconds: null,
+        osgEndSeconds: null,
+        osgTailSeconds: 2,
+      };
+      setRenderSettings(nextSettings);
+      void handleRender(nextSettings);
+      return;
+    }
     void sync(projectSlug);
-  }, [state, projectSlug, callTool, mediaItems, sync]);
+  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
 
   // Persist OSG overlay placement from the OsgOverlay (passing null clears it),
   // then re-render so the new placement is reflected in the output. When editing
@@ -1341,10 +1362,12 @@ export function HomePage() {
       setPendingBackTab('settings');
       setViewerFlipped(true);
     },
-    settings_watermark: (handle: string, url: string, position: string, scale: string) => {
-      void applyWatermark(handle, url, position, scale);
-      setPendingBackTab('settings');
-      setViewerFlipped(true);
+    open_watermark: (assetSlug: string) => {
+      const cleaned = assetSlug.trim().replace(/^@/, '');
+      const matched = cleaned
+        ? mediaItems.find((m) => m.id === cleaned || m.slug === `@${cleaned}` || m.slug === cleaned) ?? null
+        : activeSelection;
+      setWatermarkPanel({ assetId: matched?.id ?? null });
     },
     gen_prompt: (text: string) => genPanelRef.current?.setField('prompt', text),
     gen_model: (key: string) => genPanelRef.current?.setModel(key),
@@ -1411,7 +1434,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, applyWatermark, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
   return (
     <MountKeyProvider>
@@ -1805,6 +1828,14 @@ export function HomePage() {
         initialText={postPanel?.text ?? ''}
         projectSlug={projectSlug}
         callTool={callTool}
+      />
+      <WatermarkDialog
+        open={!!watermarkPanel}
+        onOpenChange={(next) => { if (!next) setWatermarkPanel(null); }}
+        item={watermarkPanel?.assetId ? mediaItems.find((m) => m.id === watermarkPanel.assetId) ?? null : null}
+        projectSlug={projectSlug}
+        callTool={callTool}
+        onApply={(v) => void applyWatermark(v)}
       />
       <ProjectExportPicker
         assetId={projectExportAssetId}
