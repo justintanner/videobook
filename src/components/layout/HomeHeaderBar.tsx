@@ -1,4 +1,4 @@
-import { ArchiveRestore, Clapperboard, Film, ImageIcon, LayoutTemplate, MapPin, Settings, History } from 'lucide-react';
+import { ArchiveRestore, Clapperboard, Film, ImageIcon, LayoutTemplate, Loader2, MapPin, Settings, History } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import { useToast } from '@/hooks/useToast';
@@ -8,6 +8,8 @@ interface HomeHeaderBarProps {
   pulseKey: number;
   projectSlug: string | undefined;
   assetCount: number | undefined;
+  /** Number of assets currently rendering — shows a global rendering indicator. */
+  renderingCount?: number;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
   onStatusClick: () => void;
@@ -20,9 +22,10 @@ interface HomeHeaderBarProps {
   onProjectsOpenChange?: (open: boolean) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
   const { toasts } = useToast();
   const hasOpenToast = toasts.some((toast) => toast.open);
+  const isRendering = renderingCount > 0;
 
   return (
     <div className="bg-card border-b border-border flex items-center justify-between px-2 h-12">
@@ -56,6 +59,20 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, callTool, onP
 
       {/* Right side */}
       <div className="flex items-center gap-1">
+        {isRendering && (
+          <button
+            type="button"
+            onClick={onStatusClick}
+            title={`${renderingCount} clip${renderingCount > 1 ? 's' : ''} rendering`}
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 transition-colors"
+          >
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span className="font-mono text-xs tracking-wider">
+              rendering{renderingCount > 1 ? ` ×${renderingCount}` : ''}
+            </span>
+          </button>
+        )}
+
         <CommandButton
           command="/activity"
           icon={<History className="w-3.5 h-3.5" />}

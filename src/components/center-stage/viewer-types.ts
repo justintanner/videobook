@@ -14,6 +14,19 @@ export const RENDERING_STATUSES = new Set<string>([
   'render-queued', 'render-queued-landscape', 'render-queued-portrait', 'render-queued-square',
 ]);
 
+/** True when the status represents a render in flight (queued or running). */
+export function isRenderingStatus(status: string | undefined): boolean {
+  return !!status && RENDERING_STATUSES.has(status);
+}
+
+/** True when an in-flight render targets `orient` (the unscoped `rendering` /
+ *  `render-queued` statuses match any orientation). */
+export function renderingTargetsOrientation(status: string | undefined, orient: ViewerSize): boolean {
+  if (!isRenderingStatus(status)) return false;
+  if (status === 'rendering' || status === 'render-queued') return true;
+  return status!.endsWith(`-${orient}`);
+}
+
 const BINARY_EXTENSIONS = new Set(['mp4', 'mp3', 'wav', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'webm', 'mov', 'flac', 'aac', 'ogg']);
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
 

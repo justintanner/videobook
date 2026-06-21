@@ -10,7 +10,7 @@ import { RenderSettingsPanel } from './RenderSettingsPanel';
 import { sourceLanguageLabel, type RenderSettings, type TranscriptInfo } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
-import { type ViewerSize, type BackTab, RENDERING_STATUSES } from './viewer-types';
+import { type ViewerSize, type BackTab, isRenderingStatus, renderingTargetsOrientation } from './viewer-types';
 import { CropOverlay, type CropRatio } from './CropOverlay';
 import { OsgOverlay, type OsgApplyValue } from './OsgOverlay';
 import {
@@ -117,6 +117,13 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
   const orient = size as Orientation;
   const renders = item.renders ?? [];
   const status = item.status;
+  const rendering = isRenderingStatus(status);
+
+  // A render of the viewed orientation takes precedence over its (stale) output,
+  // mirroring the timeline slot which shows the hourglass over existing content.
+  if (rendering && renderingTargetsOrientation(status, size)) {
+    return <RenderingReadout asset={item} />;
+  }
 
   if (renders.includes(orient)) {
     // The final singleton's rendered outputs are `timeline_<orient>.mp4`,
@@ -151,7 +158,9 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
     );
   }
 
-  if (status && RENDERING_STATUSES.has(status)) {
+  // Rendering a different orientation with nothing rendered here yet — still
+  // reflect that a render is in flight rather than offering the /render button.
+  if (rendering) {
     return <RenderingReadout asset={item} />;
   }
 

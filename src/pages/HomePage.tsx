@@ -61,6 +61,7 @@ import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/c
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
+import { isRenderingStatus } from '@/components/center-stage/viewer-types';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
@@ -328,6 +329,11 @@ export function HomePage() {
 
   const clips = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
+  [mediaItems]);
+
+  // How many assets are rendering right now — drives the global header indicator.
+  const renderingCount = useMemo(() =>
+    mediaItems.reduce((n, m) => n + (isRenderingStatus(m.status) ? 1 : 0), 0),
   [mediaItems]);
 
   // Drop ghost tiles once their real asset surfaces via sync, and expire
@@ -1449,6 +1455,7 @@ export function HomePage() {
             pulseKey={syncCount}
             projectSlug={projectSlug}
             assetCount={assetList?.length}
+            renderingCount={renderingCount}
             callTool={callTool}
             onProjectChange={handleProjectChange}
             onStatusClick={() => setStatusOpen(true)}
