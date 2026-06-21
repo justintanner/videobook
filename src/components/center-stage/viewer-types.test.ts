@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { isRenderingStatus, renderingTargetsOrientation, RENDERING_STATUSES } from './viewer-types';
+import { isRenderingStatus, renderingTargetsOrientation, supportsOnScreenGraphics, RENDERING_STATUSES } from './viewer-types';
+
+describe('supportsOnScreenGraphics', () => {
+  it('is false for the original source (graphics never bake into original.mp4)', () => {
+    expect(supportsOnScreenGraphics('original')).toBe(false);
+  });
+
+  it('is true for every rendered orientation', () => {
+    expect(supportsOnScreenGraphics('landscape')).toBe(true);
+    expect(supportsOnScreenGraphics('portrait')).toBe(true);
+    expect(supportsOnScreenGraphics('square')).toBe(true);
+  });
+});
 
 describe('isRenderingStatus', () => {
   it('is true for every status in RENDERING_STATUSES', () => {

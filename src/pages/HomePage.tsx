@@ -61,7 +61,7 @@ import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/c
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
-import { isRenderingStatus } from '@/components/center-stage/viewer-types';
+import { isRenderingStatus, supportsOnScreenGraphics } from '@/components/center-stage/viewer-types';
 import { WatermarkDialog, type WatermarkApplyValue } from '@/components/watermark/WatermarkDialog';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
@@ -1284,12 +1284,14 @@ export function HomePage() {
       setCropTarget({ assetId: item?.id ?? target, ratio });
     },
     open_osg: (assetId: string, imageId?: string) => {
+      // OSG only applies to rendered orientations; do nothing while on `original`
+      // (the user switches the orientation manually to enable it).
+      if (!supportsOnScreenGraphics(viewerSize)) return;
       const cleaned = assetId.trim().replace(/^@/, '');
       const target = cleaned || selectedItem?.id || '';
       if (!target) return;
       const item = mediaItems.find((m) => m.id === target || m.slug === `@${target}` || m.slug === target);
       if (item) handleSelectItem(item);
-      handleViewerSizeChange('original');
       const osgAssetId = imageId ? imageId.trim().replace(/^@/, '') : undefined;
       setOsgTarget({ assetId: item?.id ?? target, osgAssetId });
     },
@@ -1363,6 +1365,9 @@ export function HomePage() {
       setViewerFlipped(true);
     },
     open_watermark: (assetSlug: string) => {
+      // Watermark applies as an OSG end-card on the rendered orientations only;
+      // no-op while on `original` (switch orientation manually to enable it).
+      if (!supportsOnScreenGraphics(viewerSize)) return;
       const cleaned = assetSlug.trim().replace(/^@/, '');
       const matched = cleaned
         ? mediaItems.find((m) => m.id === cleaned || m.slug === `@${cleaned}` || m.slug === cleaned) ?? null
@@ -1434,7 +1439,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
   return (
     <MountKeyProvider>
@@ -1542,6 +1547,7 @@ export function HomePage() {
                           : undefined}
                         onMarkSeen={onMarkSeen}
                         onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
+                        viewerSize={viewerSize}
                         MenuItem={ContextMenuItem}
                       />
                     );
@@ -1718,6 +1724,7 @@ export function HomePage() {
                         onAnimateEdit={handleAnimateEdit}
                         onMarkSeen={onMarkSeen}
                         onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
+                        viewerSize={viewerSize}
                         MenuItem={ContextMenuItem}
                       />
                     );

@@ -48,6 +48,13 @@ export function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** On-screen graphics (OSG) and watermarks bake into the rendered orientations
+ *  only — never into the raw `original.mp4` source — so their controls are gated
+ *  off while viewing `original`. */
+export function supportsOnScreenGraphics(size: ViewerSize): boolean {
+  return size !== 'original';
+}
+
 export function ratioLabel(size: ViewerSize, item?: MediaItem): string {
   switch (size) {
     case 'original':

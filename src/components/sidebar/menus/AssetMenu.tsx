@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom'
 import type { UseMcpResult } from 'use-mcp/react'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { DISABLED_STATE } from '@/components/ui/interaction-states'
+import { supportsOnScreenGraphics, type ViewerSize } from '@/components/center-stage/viewer-types'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/useToast'
 
-type MenuItemComponent = ComponentType<{ onSelect: () => void; children: ReactNode; className?: string }>
+type MenuItemComponent = ComponentType<{ onSelect: () => void; children: ReactNode; className?: string; disabled?: boolean; title?: string }>
 
 interface AssetMenuProps {
   slug: string
@@ -17,6 +19,8 @@ interface AssetMenuProps {
   onExtractSkeleton?: () => void
   onMarkSeen?: () => void
   onOpenProjectExport?: () => void
+  /** Current viewer orientation; gates OSG/watermark actions off on `original`. */
+  viewerSize?: ViewerSize
   MenuItem: MenuItemComponent
 }
 
@@ -36,6 +40,9 @@ interface CommandAction {
   accentColor?: string
   onSelect: () => void
   className?: string
+  disabled?: boolean
+  /** Mouseover explanation shown while the action is disabled. */
+  disabledReason?: string
 }
 
 interface CommandMenuItemProps extends CommandAction {
@@ -62,9 +69,16 @@ function CommandMenuItem({
   MenuItem,
   className,
   showCommand = true,
+  disabled,
+  disabledReason,
 }: CommandMenuItemProps) {
   return (
-    <MenuItem onSelect={onSelect} className={commandItemClassName(accentColor, className)}>
+    <MenuItem
+      onSelect={disabled ? () => {} : onSelect}
+      disabled={disabled}
+      title={disabled ? disabledReason : undefined}
+      className={commandItemClassName(accentColor, cn(className, disabled && DISABLED_STATE))}
+    >
       <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold leading-none', titleClassName ?? 'text-foreground')}>
         {title}
       </span>
@@ -273,8 +287,11 @@ export function AssetMenu({
   onExtractSkeleton,
   onMarkSeen,
   onOpenProjectExport,
+  viewerSize,
   MenuItem,
 }: AssetMenuProps) {
+  // OSG/watermark bake into the rendered orientations only — never `original`.
+  const graphicsAllowed = supportsOnScreenGraphics(viewerSize ?? 'landscape')
   const imageActions: CommandAction[] = itemType === 'image'
     ? [
         {
@@ -370,6 +387,8 @@ export function AssetMenu({
           command: `/watermark ${slug}`,
           title: 'Watermark…',
           onSelect: () => onAnimateCommand?.(`/watermark ${slug}`),
+          disabled: !graphicsAllowed,
+          disabledReason: 'Switch to landscape, portrait, or square to add a watermark',
         },
       ]
     : []

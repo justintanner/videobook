@@ -10,7 +10,7 @@ import { RenderSettingsPanel } from './RenderSettingsPanel';
 import { sourceLanguageLabel, type RenderSettings, type TranscriptInfo } from './render-settings-types';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import type { UseMcpResult } from 'use-mcp/react';
-import { type ViewerSize, type BackTab, isRenderingStatus, renderingTargetsOrientation } from './viewer-types';
+import { type ViewerSize, type BackTab, isRenderingStatus, renderingTargetsOrientation, supportsOnScreenGraphics } from './viewer-types';
 import { CropOverlay, type CropRatio } from './CropOverlay';
 import { OsgOverlay, type OsgApplyValue } from './OsgOverlay';
 import {
@@ -327,15 +327,29 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
   const [osgMode, setOsgMode] = useState(false);
   const [osgInitialAssetId, setOsgInitialAssetId] = useState<string | null>(null);
   const osgImageAssets = useMemo(() => imageAssets ?? [], [imageAssets]);
+  // OSG (and watermark) only apply to rendered orientations, never `original`.
+  const osgAllowed = supportsOnScreenGraphics(size);
 
   useEffect(() => {
     if (!osgTarget || osgTarget.assetId !== item.id) return;
+    // A `/osg`-driven target while viewing `original` is a no-op: consume it so
+    // it can't open the overlay on a canvas the graphic won't render onto.
+    if (!osgAllowed) {
+      onOsgConsumed?.();
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOsgInitialAssetId(osgTarget.osgAssetId ?? item.osg?.assetId ?? null);
     setOsgMode(true);
     setCropMode(false);
     onOsgConsumed?.();
-  }, [osgTarget, item.id, item.osg?.assetId, onOsgConsumed]);
+  }, [osgTarget, item.id, item.osg?.assetId, onOsgConsumed, osgAllowed]);
+
+  // Leaving a rendered orientation for `original` closes any open OSG overlay.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!osgAllowed && osgMode) setOsgMode(false);
+  }, [osgAllowed, osgMode]);
 
   const handleOsgApplyLocal = useCallback((value: OsgApplyValue) => {
     setOsgMode(false);
@@ -401,12 +415,15 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                   <button
                     tabIndex={-1}
                     onClick={toggleOsgMode}
-                    title="/osg"
+                    disabled={!osgAllowed}
+                    title={osgAllowed ? '/osg' : 'Switch to landscape, portrait, or square to add an on-screen graphic'}
                     className={cn(
                       'w-6 h-6 flex items-center justify-center rounded transition-colors duration-150',
-                      osgMode
-                        ? 'text-emerald-300 bg-emerald-500/15'
-                        : 'text-muted-foreground hover:text-emerald-300 hover:bg-emerald-500/10',
+                      !osgAllowed
+                        ? 'text-muted-foreground/30 cursor-not-allowed'
+                        : osgMode
+                          ? 'text-emerald-300 bg-emerald-500/15'
+                          : 'text-muted-foreground hover:text-emerald-300 hover:bg-emerald-500/10',
                     )}
                   >
                     <Tv className="w-4 h-4 stroke-[2.5]" />
