@@ -8,56 +8,72 @@ import { recordHandle } from "../watermark-config.js";
 
 const DEFAULT_HANDLE = "justinwtanner";
 
+// Stylish dark card: an X logo + "@handle" header above a rounded white tile
+// that frames the QR. The white tile doubles as the QR quiet zone.
 const QR_SIZE = 240;
-const PADDING = 12;
-const TEXT_BAND_HEIGHT = 40;
-const CARD_WIDTH = QR_SIZE + PADDING * 2;
-const CARD_HEIGHT = TEXT_BAND_HEIGHT + QR_SIZE + PADDING * 2;
+const TILE_PAD = 16; // white frame around the QR (quiet zone)
+const TILE_SIZE = QR_SIZE + TILE_PAD * 2; // 272
+const OUTER_PAD = 24; // dark card padding around its contents
+const HEADER_HEIGHT = 40;
+const HEADER_GAP = 18; // header → tile spacing
+const CARD_WIDTH = TILE_SIZE + OUTER_PAD * 2; // 320
+const CARD_HEIGHT = OUTER_PAD + HEADER_HEIGHT + HEADER_GAP + TILE_SIZE + OUTER_PAD; // 378
+
+// The X (formerly Twitter) glyph, viewBox 0 0 24 24.
+const X_LOGO_PATH =
+  "M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z";
 
 function defaultUrl(handle: string): string {
   return `https://x.com/${handle}`;
 }
 
-function defaultLabel(handle: string): string {
-  return `X: ${handle}`;
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
-// Render the QR + "X: <handle>" card as a PNG buffer. Identical art to the old
-// FFmpeg watermark; now persisted as an img-* asset and composited via OSG.
-async function buildCardPng(url: string, label: string): Promise<Buffer> {
+// Render the QR watermark card as a PNG buffer: a rounded near-black card with
+// an X logo + "@handle" header and the QR set on a rounded white tile. Persisted
+// as an img-* asset and composited via OSG.
+async function buildCardPng(url: string, handle: string): Promise<Buffer> {
   const qrBuffer = await QRCode.toBuffer(url, {
     type: "png",
-    margin: 0,
-    color: { dark: "#000000", light: "#FFFFFF" },
+    margin: 1,
+    color: { dark: "#0B0B0F", light: "#FFFFFF" },
     errorCorrectionLevel: "M",
     width: QR_SIZE,
   });
 
-  const textImage = await sharp({
-    text: {
-      text: label,
-      font: "Helvetica Bold 22",
-      width: CARD_WIDTH - PADDING * 2,
-      height: TEXT_BAND_HEIGHT,
-      align: "center",
-      rgba: true,
-    },
-  })
-    .png()
-    .toBuffer();
+  const tileX = OUTER_PAD;
+  const tileY = OUTER_PAD + HEADER_HEIGHT + HEADER_GAP;
+  const logoSize = 26;
+  const logoX = OUTER_PAD;
+  const logoY = OUTER_PAD + (HEADER_HEIGHT - logoSize) / 2;
+  const handleX = logoX + logoSize + 12;
+  const handleBaseline = OUTER_PAD + HEADER_HEIGHT / 2 + 8;
+  const label = `@${handle}`;
 
-  return sharp({
-    create: {
-      width: CARD_WIDTH,
-      height: CARD_HEIGHT,
-      channels: 3,
-      background: { r: 255, g: 255, b: 255 },
-    },
-  })
-    .composite([
-      { input: textImage, top: PADDING, left: PADDING },
-      { input: qrBuffer, top: PADDING + TEXT_BAND_HEIGHT, left: PADDING },
-    ])
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16161D"/>
+      <stop offset="1" stop-color="#0A0A0F"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="${CARD_WIDTH - 2}" height="${CARD_HEIGHT - 2}" rx="28" fill="url(#card)" stroke="#26262F" stroke-width="1.5"/>
+  <svg x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>
+  <text x="${handleX}" y="${handleBaseline}" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.2" fill="#FFFFFF">${escapeXml(label)}</text>
+  <rect x="${tileX}" y="${tileY}" width="${TILE_SIZE}" height="${TILE_SIZE}" rx="20" fill="#FFFFFF"/>
+</svg>`;
+
+  const background = await sharp(Buffer.from(svg)).png().toBuffer();
+
+  return sharp(background)
+    .composite([{ input: qrBuffer, top: tileY + TILE_PAD, left: tileX + TILE_PAD }])
     .png()
     .toBuffer();
 }
@@ -89,11 +105,10 @@ export function createWatermarkDef(fs: VideocityFs): ToolDef {
         };
       }
       const resolvedUrl = url ?? defaultUrl(resolvedHandle);
-      const resolvedLabel = defaultLabel(resolvedHandle);
 
       let buffer: Buffer;
       try {
-        buffer = await buildCardPng(resolvedUrl, resolvedLabel);
+        buffer = await buildCardPng(resolvedUrl, resolvedHandle);
       } catch (err) {
         return {
           isError: true as const,

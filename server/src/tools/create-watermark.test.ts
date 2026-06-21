@@ -71,9 +71,10 @@ describe("create_watermark tool", () => {
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
     const metadata = await sharp(buffer).metadata();
-    // QR_SIZE 240 + 2*PADDING 12 = 264 wide; + TEXT_BAND 40 = 304 tall.
-    expect(metadata.width).toBe(264);
-    expect(metadata.height).toBe(304);
+    // TILE 272 (QR 240 + 2*TILE_PAD 16) + 2*OUTER_PAD 24 = 320 wide;
+    // OUTER_PAD 24 + HEADER 40 + GAP 18 + TILE 272 + OUTER_PAD 24 = 378 tall.
+    expect(metadata.width).toBe(320);
+    expect(metadata.height).toBe(378);
   });
 
   it("defaults the handle and derives the X URL", async () => {
