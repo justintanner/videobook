@@ -341,7 +341,6 @@ async function enrichMetadata(title: string | null, transcript: string): Promise
   try {
     const response = await provider.post.v1.chat.completions({
       model: ENRICHMENT_MODEL,
-      stream: false,
       messages: [
         {
           role: "system",

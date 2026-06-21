@@ -187,7 +187,7 @@ function buildGrokImagineT2vVideoPayload(
   };
 }
 
-type GrokImagineImageArgs = Omit<GrokImageToImageRequest["input"], "image_urls">;
+type GrokImagineImageArgs = Partial<Omit<GrokImageToImageRequest["input"], "image_urls">>;
 
 function buildGrokImagineImagePayload(
   args: GrokImagineImageArgs,
@@ -197,8 +197,8 @@ function buildGrokImagineImagePayload(
     model: "grok-imagine/image-to-image",
     input: {
       image_urls: (imageUrls.length > 0 ? imageUrls : []) as [string],
+      nsfw_checker: args.nsfw_checker ?? false,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
     },
   };
 }
@@ -220,7 +220,7 @@ function buildGrokImagineTextPayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokTextToImageRequest["input"]["aspect_ratio"] } : {}),
       ...(args.enable_pro !== undefined ? { enable_pro: args.enable_pro } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as GrokTextToImageRequest["input"],
   };
 }
 
@@ -287,8 +287,8 @@ function buildSeedance2VideoPayload(
 type NanoBananaImageArgs = {
   prompt: string;
   aspect_ratio?: string;
-  resolution?: NanoBananaResolution;
-  output_format?: NanoBananaOutputFormat;
+  resolution?: string;
+  output_format?: string;
 };
 
 function buildNanoBananaImagePayload(
@@ -301,9 +301,9 @@ function buildNanoBananaImagePayload(
       prompt: args.prompt,
       ...(imageInput.length > 0 ? { image_input: imageInput } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as NanoBananaProRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.output_format !== undefined ? { output_format: args.output_format } : {}),
-    },
+      ...(args.resolution !== undefined ? { resolution: args.resolution as NanoBananaResolution } : {}),
+      ...(args.output_format !== undefined ? { output_format: args.output_format as NanoBananaOutputFormat } : {}),
+    } as NanoBananaProRequest["input"],
   };
 }
 
@@ -327,7 +327,7 @@ function buildSeedreamTextImagePayload(
       nsfw_checker: args.nsfw_checker ?? false,
       quality: args.quality ?? "basic",
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-    },
+    } as SeedreamTextToImageRequest["input"],
   };
 }
 
@@ -343,7 +343,7 @@ function buildSeedreamImageEditPayload(
       nsfw_checker: args.nsfw_checker ?? false,
       quality: args.quality ?? "basic",
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-    },
+    } as SeedreamImageToImageRequest["input"],
   };
 }
 
@@ -368,7 +368,7 @@ function buildQwen2ImageEditPayload(
       image_size,
       output_format,
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
+    } as Qwen2ImageEditRequest["input"],
   };
 }
 
@@ -391,7 +391,7 @@ function buildGptImagePayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2ImageToImageAspectRatio } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution as GptImage2ImageToImageResolution } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as GptImage2ImageToImageRequest["input"],
   };
 }
 
@@ -412,7 +412,7 @@ function buildGptImageTextPayload(
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GptImage2TextToImageAspectRatio } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution as GptImage2TextToImageResolution } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as GptImage2TextToImageRequest["input"],
   };
 }
 
@@ -437,7 +437,7 @@ function buildWan27ImagePayload(
       ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageResolution } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as Wan27ImageRequest["input"],
   };
 }
 
@@ -454,7 +454,7 @@ function buildWan27ImageProPayload(
       ...(args.resolution !== undefined ? { resolution: args.resolution as Wan27ImageResolution } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as Wan27ImageProRequest["input"],
   };
 }
 
@@ -491,7 +491,7 @@ function buildWan27TextToVideoPayload(
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
+    } as Wan27TextToVideoRequest["input"],
   };
 }
 
@@ -532,7 +532,7 @@ function buildWan27FramesVideoPayload(
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
+    } as Wan27ImageToVideoRequest["input"],
   };
 }
 
@@ -575,7 +575,7 @@ function buildWan27ReferenceVideoPayload(
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
+    } as Wan27RefToVideoRequest["input"],
   };
 }
 
@@ -616,7 +616,7 @@ export function buildWan27VideoEditPayload(
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
+    } as Wan27VideoEditRequest["input"],
   };
 }
 
@@ -766,14 +766,13 @@ function buildXaiGrokImagineImagePayload(
       : imageUrls.length > 1
         ? { images: imageUrls.map((url): XaiImageReference => ({ url, type: "image_url" })) }
         : {}),
-    ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
   };
 }
 
 type GrokImagineRefVideoArgs = {
   prompt: string;
   duration?: string;
-  resolution?: GrokImagineResolution;
+  resolution?: string;
   aspect_ratio?: string;
 };
 
@@ -785,7 +784,7 @@ function buildXaiGrokImagineRefVideoPayload(
     prompt: args.prompt,
     ...(imageUrls.length > 0 ? { reference_images: imageUrls.map((url) => ({ url })) } : {}),
     ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-    ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution as XaiVideoGenerateRequest["resolution"] } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
@@ -885,7 +884,7 @@ function buildAlibabaQwenImagePayload(
 type AlibabaVideoArgs = Partial<AlibabaVideoSynthesisParameters> & {
   prompt: string;
   negative_prompt?: string;
-  model?: AlibabaVideoSynthesisRequest["model"];
+  model?: string;
 };
 
 type AlibabaVideoMedia = {
@@ -908,7 +907,7 @@ function buildAlibabaVideoPayload(
   if (media.videoUrl) mediaItems.push({ type: "video", url: media.videoUrl });
 
   return {
-    model: args.model ?? "wan2.7-i2v",
+    model: (args.model as AlibabaVideoSynthesisRequest["model"]) ?? "wan2.7-i2v",
     input: {
       prompt: args.prompt,
       media: mediaItems,
@@ -1045,7 +1044,7 @@ function translateToolPayload(
           prompt: (args as GrokImagineTextArgs).prompt ?? "",
           n: 1,
           response_format: "url",
-          ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as string } : {}),
+          ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiImageGenerateRequest["aspect_ratio"] } : {}),
         };
         return { provider_path: "xai.post.v1.images.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }

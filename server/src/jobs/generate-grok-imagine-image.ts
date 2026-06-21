@@ -2,7 +2,6 @@ import type { VideocityFs } from "videocity-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
-import type { GrokImageToImageRequest } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageResponse } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -29,6 +28,8 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
       imageFilename, imgAssetId, imgAssetDir,
       sourceImageId, projectSlug, prompt, aspectRatio, _provider,
     } = payload as GenerateGrokImagineImagePayload;
+    // NOTE: KIE's Grok Imagine 1.5 image-to-image no longer accepts aspect_ratio,
+    // so it is recorded in meta below but not forwarded to the generation request.
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
 
@@ -41,7 +42,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
       const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, projectSlug);
 
       const request = buildXaiGrokImagineImagePayload(
-        { prompt, aspect_ratio: aspectRatio },
+        { prompt },
         [imageUrl],
       );
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
@@ -82,7 +83,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
 
     const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, projectSlug);
 
-    const request = buildGrokImagineImagePayload({ prompt, aspect_ratio: aspectRatio as GrokImageToImageRequest["input"]["aspect_ratio"] }, [downloadUrl]);
+    const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: "grok_imagine_image",

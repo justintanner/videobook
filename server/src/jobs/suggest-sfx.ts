@@ -3,7 +3,7 @@ import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
 import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -92,11 +92,10 @@ export function registerSuggestSfxJob(fs: VideocityFs): void {
       ];
 
       const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
       const result = await call({
         model: MODEL,
-        stream: false,
         messages: [
           { role: "system", content: SYSTEM_PROMPT_SFX },
           { role: "user", content: userContent },

@@ -206,7 +206,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   grok_imagine: {
     label: "Grok Imagine 1.5 — Kie",
     tool_name: "generate_grok_imagine_video",
-    description: "Kie Grok Imagine Video 1.5 Preview image-to-video",
+    description: "Kie Grok Imagine Video 1.5 image-to-video",
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
     defaults: { duration: 8, resolution: "480p", aspect_ratio: "auto", nsfw_checker: true },
     providers: [

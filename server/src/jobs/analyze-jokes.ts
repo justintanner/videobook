@@ -1,7 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { createOpenAi, withRetry, textPart, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -127,11 +127,10 @@ export function registerAnalyzeJokesJob(fs: VideocityFs): void {
       const userContent: OpenAiContentPart[] = [textPart(buildJokesContext(eleven))];
 
       const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
       const result = await call({
         model: JOKES_MODEL,
-        stream: false,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },

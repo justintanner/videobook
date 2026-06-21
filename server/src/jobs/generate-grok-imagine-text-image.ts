@@ -37,7 +37,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
         prompt,
         n: 1,
         response_format: "url",
-        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+        ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio as XaiImageGenerateRequest["aspect_ratio"] } : {}),
       };
       await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
       const result = await callXaiPaid<XaiImageGenerateRequest, XaiImageResponse>(

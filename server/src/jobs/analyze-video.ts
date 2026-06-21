@@ -125,7 +125,7 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
     const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
     if (openaiKey) {
       const p = createOpenAi({ apiKey: openaiKey, timeout: 180_000 });
-      providers.push(withRetry(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
+      providers.push(withRetry<OpenAiChatRequest, OpenAiChatResponse>(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
     }
     if (kieKey) {
       const p = createKie({ apiKey: kieKey, timeout: 180_000 });
@@ -139,7 +139,6 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
           : providers[0];
         const result = await chat({
           model: "gpt-5.4",
-          stream: false,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userContent },

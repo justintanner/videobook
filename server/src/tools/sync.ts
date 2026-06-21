@@ -922,8 +922,8 @@ async function processSyncedTask(
       result.pending.push({
         assetId: task.assetId,
         taskType: task.taskType,
-        progress: data.progress,
-        state: data.state,
+        progress: data.progress ?? 0,
+        state: data.state ?? "waiting",
         prompt,
         startedAt: Math.round(task.createdAt * 1000),
       });
@@ -945,8 +945,8 @@ async function processSyncedTask(
     result.pending.push({
       assetId: task.assetId,
       taskType: task.taskType,
-      progress: data?.progress,
-      state: data?.state,
+      progress: data?.progress ?? 0,
+      state: data?.state ?? "waiting",
       prompt,
       startedAt: Math.round(task.createdAt * 1000),
     });

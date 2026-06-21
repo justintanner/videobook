@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOpenAi, firstContent, imageBase64Part, textPart, withRetry } from "@apicity/openai";
-import type { OpenAiContentPart } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { z } from "zod";
 import { CHARACTER_METADATA_KEY, type Character } from "./jobs/extract-character.js";
 import { findImageFile } from "./tools/_image-inputs.js";
@@ -415,11 +415,10 @@ async function generateJokes(args: {
   const images = await loadImagePool(args.fs, args.projectSlug, args.pool);
   const reference = await loadJokeReference();
   const provider = createOpenAi({ apiKey, timeout: 240_000 });
-  const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+  const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
   const result = await call({
     model: MODEL,
-    stream: false,
     messages: [
       { role: "system", content: buildSystemPrompt(reference) },
       {

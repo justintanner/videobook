@@ -55,7 +55,7 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_video",
-    description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5 Preview. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
       const { asset_id: rawAssetId, image_slugs, project_slug, prompt, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;

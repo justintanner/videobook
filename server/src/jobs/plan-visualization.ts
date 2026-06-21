@@ -8,7 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -204,11 +204,10 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
       ];
 
       const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
 
       const result = await call({
         model: MODEL,
-        stream: false,
         messages: [
           { role: "system", content: SYSTEM_PROMPT_PLAN },
           { role: "user", content: userContent },
