@@ -10,7 +10,7 @@ import type {
   KlingElement,
   MultiShotPrompt,
   GrokTextToVideoRequest,
-  GrokVideo15PreviewRequest,
+  GrokImageToVideoRequest,
   GrokImageToImageRequest,
   GrokTextToImageRequest,
   Seedance2FastRequest,
@@ -44,7 +44,6 @@ import type {
   KlingAspectRatio,
   GrokImagineMode,
   GrokImagineResolution,
-  GrokVideo15AspectRatio,
   NanoBananaResolution,
   NanoBananaOutputFormat,
   Wan27Resolution,
@@ -150,13 +149,16 @@ function numericDuration(value: number | string | undefined): number | undefined
 function buildGrokImagineVideoPayload(
   args: GrokImagineVideoArgs,
   imageUrls: string[],
-): GrokVideo15PreviewRequest {
+): GrokImageToVideoRequest {
+  const mode = args.mode === "fun" ? "fun" : "normal";
   return {
-    model: "grok-imagine-video-1-5-preview",
+    model: "grok-imagine/image-to-video",
     input: {
       image_urls: imageUrls,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      aspect_ratio: (args.aspect_ratio ?? "auto") as GrokVideo15AspectRatio,
+      index: 0,
+      mode,
+      aspect_ratio: (args.aspect_ratio ?? "16:9") as GrokImageToVideoRequest["input"]["aspect_ratio"],
       resolution: args.resolution ?? "480p",
       duration: numericDuration(args.duration) ?? 8,
       nsfw_checker: args.nsfw_checker ?? true,

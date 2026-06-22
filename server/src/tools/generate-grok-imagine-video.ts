@@ -2,7 +2,7 @@ import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { findAudioFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { GrokVideo15AspectRatioSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
+import { GrokImageToVideoRequestSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -22,14 +22,18 @@ function deriveVideoName(firstAssetId: string): string {
   return `grok-${baseName}`;
 }
 
+const GROK_IMAGE_TO_VIDEO_MODES = ["fun", "normal"] as const;
+const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options;
+
 const generateGrokImagineVideoSchema = {
   image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().max(4096).optional().describe("Optional prompt to guide video generation (max 4096 chars)"),
-  duration: z.number().int().min(1).max(15).optional().describe("Video duration in seconds (1-15)"),
+  mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
+  duration: z.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
   resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: z.enum(GrokVideo15AspectRatioSchema.options).optional().describe("Output aspect ratio"),
+  aspect_ratio: z.enum(GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS).optional().describe("Output aspect ratio"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
   replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug). Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
@@ -58,7 +62,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -139,7 +143,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `${modelSlug("kie", "grok-imagine-video-1-5-preview")}-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("kie", "grok-imagine/image-to-video")}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_video",
@@ -149,6 +153,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         vidAssetDir,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),

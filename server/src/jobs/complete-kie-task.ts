@@ -611,7 +611,7 @@ async function completeGrokImagineVideo(
       : taskType === "grok_imagine_t2v_video"
         ? "grok-imagine/text-to-video"
         : taskType === "grok_imagine_video"
-          ? "grok-imagine-video-1-5-preview"
+          ? "grok-imagine/image-to-video"
         : meta.sourceVideoId
           ? "grok-imagine/video-extension"
           : "grok-imagine/image-to-video",

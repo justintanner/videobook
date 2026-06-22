@@ -331,12 +331,12 @@ describe("getVideoToolSchema", () => {
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("image_slugs");
     expect(schema!.required).not.toContain("prompt");
-    expect(schema!.properties.mode).toBeUndefined();
+    expect(schema!.properties.mode.enum).toEqual(["fun", "normal"]);
     expect(schema!.properties.duration.type).toBe("integer");
-    expect(schema!.properties.duration.minimum).toBe(1);
-    expect(schema!.properties.duration.maximum).toBe(15);
+    expect(schema!.properties.duration.minimum).toBe(6);
+    expect(schema!.properties.duration.maximum).toBe(30);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
-    expect(schema!.properties.aspect_ratio.enum).toContain("auto");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["2:3", "3:2", "1:1", "16:9", "9:16"]);
     expect(schema!.properties.image_slugs.minItems).toBe(1);
     expect(schema!.properties.image_slugs.maxItems).toBe(7);
     expect(schema!.properties.nsfw_checker).toBeDefined();

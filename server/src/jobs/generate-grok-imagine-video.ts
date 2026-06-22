@@ -1,6 +1,6 @@
 import type { VideocityFs } from "videocity-engine";
 import { submitKieTask } from "./kie-paygate.js";
-import type { GrokVideo15AspectRatio } from "@apicity/kie";
+import type { GrokImageToVideoRequest } from "@apicity/kie";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -17,9 +17,10 @@ type GenerateGrokImagineVideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt?: string;
+  mode?: "fun" | "normal";
   duration?: number;
   resolution?: "480p" | "720p";
-  aspect_ratio?: GrokVideo15AspectRatio;
+  aspect_ratio?: GrokImageToVideoRequest["input"]["aspect_ratio"];
   nsfw_checker?: boolean;
   replaceAudioWith?: { assetId: string; filename: string };
   _provider?: string;
@@ -29,7 +30,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
-      projectSlug, prompt, duration, resolution, aspect_ratio, nsfw_checker, replaceAudioWith, _provider,
+      projectSlug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replaceAudioWith, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
     if (sourceImageIds.length === 0) {
@@ -93,7 +94,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
     }
 
     const request = buildGrokImagineVideoPayload(
-      { prompt, duration, resolution, aspect_ratio, nsfw_checker },
+      { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
       downloadUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {
@@ -105,6 +106,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
       meta: {
         sourceImageIds,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(replaceAudioWith !== undefined ? { replaceAudioWith } : {}),

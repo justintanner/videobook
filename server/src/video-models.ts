@@ -3,12 +3,11 @@
  */
 import type { ResolvedAsset } from "videocity-engine";
 import {
-  GrokVideo15PreviewRequestSchema,
+  GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,
   GrokImagineDurationSchema,
   GrokImagineModeSchema,
   GrokImagineResolutionSchema,
-  GrokVideo15AspectRatioSchema,
   KlingAspectRatioSchema,
   KlingDurationSchema,
   KlingModeSchema,
@@ -208,8 +207,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     label: "Grok Imagine 1.5 — Kie",
     tool_name: "generate_grok_imagine_video",
     description: "Kie Grok Imagine Video 1.5 image-to-video",
-    params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
-    defaults: { duration: 8, resolution: "480p", aspect_ratio: "auto", nsfw_checker: true },
+    params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
+    defaults: { mode: "normal", duration: 8, resolution: "480p", aspect_ratio: "16:9", nsfw_checker: true },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
@@ -453,7 +452,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unkno
   generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
   generate_seedance2_video: Seedance2InputSchema.shape.reference_image_urls,
   generate_seedance2_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
-  generate_grok_imagine_video: GrokVideo15PreviewRequestSchema.shape.input.shape.image_urls,
+  generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
   generate_happyhorse_ref_video: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.reference_image,
@@ -500,7 +499,8 @@ const SEEDANCE2_TOOL_NAMES = [
 const GROK_IMAGINE_MODES = enumOptions(GrokImagineModeSchema);
 const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
 const GROK_IMAGINE_RESOLUTIONS = enumOptions(GrokImagineResolutionSchema);
-const GROK_VIDEO_15_ASPECT_RATIOS = enumOptions(GrokVideo15AspectRatioSchema);
+const GROK_IMAGE_TO_VIDEO_MODES = GROK_IMAGINE_MODES.filter((mode) => mode !== "spicy");
+const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio);
 const GROK_TEXT_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokTextToVideoRequestSchema.shape.input.shape.aspect_ratio);
 
 const XAI_VIDEO_ASPECT_RATIOS = enumOptions(XaiVideoGenerateRequestSchema.shape.aspect_ratio);
@@ -714,9 +714,10 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 4096 chars)"; prop.maxLength = 4096; }
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 1; prop.maximum = 15; prop.description = "Video duration in seconds (1-15)"; }
+      if (param === "mode") { prop.enum = GROK_IMAGE_TO_VIDEO_MODES; prop.description = "Generation mode: fun / normal"; }
+      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
       if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = GROK_VIDEO_15_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default true)"; prop.default = true; }
       if (param === "image_slugs") {
         prop.description = "1-7 reference image assets (required, e.g., @img-sunset)";
@@ -998,8 +999,11 @@ function applyVideoToolConstraints(
   schema: ToolSchema,
   params: Record<string, unknown>,
 ): void {
-  void toolName; void schema; void params;
-  // No tool currently needs cross-field constraint rewriting.
+  void schema;
+  if (toolName === "generate_grok_imagine_video") {
+    if (params.mode === "spicy") params.mode = "normal";
+    if (params.aspect_ratio === "auto") params.aspect_ratio = "16:9";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1044,7 +1048,7 @@ ROUTING PREFERENCES:
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
 - For generate_seedance2_video and generate_seedance2_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
-- For generate_grok_imagine_video: REQUIRES at least one image, duration 1-15 (integer seconds), aspect_ratio may be "auto"
+- For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
 - For extend_grok_imagine_video: REQUIRES video_slug and prompt; optional extend_at (seconds, default 0) and extend_times "6"/"10"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
