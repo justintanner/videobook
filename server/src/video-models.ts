@@ -449,7 +449,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, { _def?: unknown; unwrap?: () => unkno
 };
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
-  generate_grok_imagine_video: { min: 1, max: 1 },
+  generate_grok_imagine_video: { min: 1, max: 7 },
 };
 
 // ---------------------------------------------------------------------------
@@ -704,9 +704,9 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "aspect_ratio") { prop.enum = GROK_VIDEO_15_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default true)"; prop.default = true; }
       if (param === "image_slugs") {
-        prop.description = "Exactly one reference image asset (required, e.g., @img-sunset)";
+        prop.description = "1-7 reference image assets (required, e.g., @img-sunset)";
         prop.minItems = 1;
-        prop.maxItems = 1;
+        prop.maxItems = 7;
       }
     }
     if (toolName === "generate_grok_imagine_t2v_video") {
@@ -893,8 +893,8 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
-  if (toolName === "generate_grok_imagine_video" && totalImages > 1) {
-    warnings.push(`Grok Imagine 1.5 supports exactly one reference image (got ${totalImages})`);
+  if (toolName === "generate_grok_imagine_video" && totalImages > 7) {
+    warnings.push(`Grok Imagine 1.5 supports up to 7 reference images (got ${totalImages})`);
   }
 
   if (toolName === "generate_kling30_video") {

@@ -23,7 +23,7 @@ function deriveVideoName(firstAssetId: string): string {
 }
 
 const generateGrokImagineVideoSchema = {
-  image_slugs: z.array(z.string()).min(1).max(1).optional().describe("Exactly one reference image asset slug (e.g., ['@img-sunset'])"),
+  image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().max(4096).optional().describe("Optional prompt to guide video generation (max 4096 chars)"),
@@ -80,10 +80,10 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
           content: [{ type: "text" as const, text: "image_slugs or asset_id is required" }],
         };
       }
-      if (slugs.length !== 1) {
+      if (slugs.length > 7) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "generate_grok_imagine_video supports exactly one image" }],
+          content: [{ type: "text" as const, text: "generate_grok_imagine_video supports up to 7 images" }],
         };
       }
 

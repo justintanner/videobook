@@ -137,13 +137,43 @@ describe("generate_grok_imagine_video tool", () => {
     expect(parsed.job_id).toBeDefined();
   });
 
-  it("rejects multiple image_slugs", async () => {
+  it("enqueues job with up to 7 image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createFs({ projectsDir: tempDir });
     const ids: string[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 7; i++) {
       const a = await fs.createAsset("img", `ref-${i}`, "test-proj");
+      if (!a.ok) throw new Error("Failed to create asset");
+      const png = await sharp({
+        create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+      }).png().toBuffer();
+      await fs.writeFile(a.value.assetId, "original.png", png, "test-proj");
+      ids.push(a.value.assetId);
+    }
+
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        image_slugs: ids,
+        project_slug: "test-proj",
+        duration: 12,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.source_images).toEqual(ids);
+  });
+
+  it("rejects more than 7 image_slugs", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const fs = createFs({ projectsDir: tempDir });
+    const ids: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = await fs.createAsset("img", `over-${i}`, "test-proj");
       if (!a.ok) throw new Error("Failed to create asset");
       const png = await sharp({
         create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
@@ -163,6 +193,6 @@ describe("generate_grok_imagine_video tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("expected array to have <=1 items");
+    expect(content[0].text).toContain("expected array to have <=7 items");
   });
 });
