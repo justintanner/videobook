@@ -25,6 +25,7 @@ import {
   HappyHorseResolutionSchema,
   HappyHorseReferenceToVideoRequestSchema,
   VolcengineVideoToVideoLipSyncModeSchema,
+  Omnihuman15OutputResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -299,6 +300,16 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
+  omnihuman: {
+    label: "OmniHuman 1.5",
+    tool_name: "generate_omnihuman_video",
+    description: "ByteDance OmniHuman 1.5 — animate a portrait image with a driving audio track into a talking/singing avatar video (kie)",
+    params: ["image_slug", "audio_slug", "prompt", "output_resolution", "pe_fast_mode", "seed"],
+    defaults: { output_resolution: "1080", pe_fast_mode: false },
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
   alibaba_video: {
     label: "Alibaba Video Synthesis",
     tool_name: "generate_alibaba_video",
@@ -505,6 +516,8 @@ const HAPPYHORSE_DURATIONS = ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12
 
 const VOLCENGINE_LIPSYNC_MODES = enumOptions(VolcengineVideoToVideoLipSyncModeSchema);
 
+const OMNIHUMAN_OUTPUT_RESOLUTIONS = enumOptions(Omnihuman15OutputResolutionSchema);
+
 const ALIBABA_VIDEO_RESOLUTIONS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.resolution);
 const ALIBABA_VIDEO_AUDIO_SETTINGS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.audio_setting);
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
@@ -595,6 +608,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   align_audio: { type: "boolean", description: "Align audio to the video timeline (default true)", default: true },
   align_audio_reverse: { type: "boolean", description: "Reverse the audio alignment direction (default false)", default: false },
   templ_start_seconds: { type: "number", description: "Template start offset in seconds (default 0)", minimum: 0, default: 0 },
+  output_resolution: { type: "string", description: "Output resolution" },
+  pe_fast_mode: { type: "boolean", description: "Prompt-enhance fast mode (default false)", default: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -811,6 +826,14 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "mode") { prop.enum = VOLCENGINE_LIPSYNC_MODES; prop.description = "Quality mode: lite (faster) or basic (default)"; }
       if (param === "templ_start_seconds") prop.description = "Template start offset in seconds (default 0)";
     }
+    if (toolName === "generate_omnihuman_video") {
+      if (param === "image_slug") prop.description = "Portrait image asset to animate (required, e.g., @img-face)";
+      if (param === "audio_slug") prop.description = "Driving audio asset whose speech/song drives the avatar (required, max 60s, e.g., @aud-voice)";
+      if (param === "prompt") { prop.description = "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"; prop.maxLength = 5000; }
+      if (param === "output_resolution") { prop.enum = OMNIHUMAN_OUTPUT_RESOLUTIONS; prop.description = "Output resolution: 720 / 1080 (default 1080)"; }
+      if (param === "pe_fast_mode") prop.description = "Prompt-enhance fast mode — faster, lower-fidelity (default false)";
+      if (param === "seed") prop.description = "Random seed for reproducibility (-1 = random)";
+    }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
@@ -836,10 +859,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       && toolName !== "generate_grok_imagine_video"
       && toolName !== "generate_wan27_videoedit_video"
       && toolName !== "generate_kling30_motion_control_video"
+      && toolName !== "generate_omnihuman_video"
     ) required.push(param);
     if (toolName === "generate_grok_imagine_video" && param === "image_slugs") required.push(param);
+    if (param === "image_slug" && toolName === "generate_omnihuman_video") required.push(param);
     if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video" || toolName === "generate_volcengine_lipsync_video")) required.push(param);
-    if (param === "audio_slug" && toolName === "generate_volcengine_lipsync_video") required.push(param);
+    if (param === "audio_slug" && (toolName === "generate_volcengine_lipsync_video" || toolName === "generate_omnihuman_video")) required.push(param);
     if (
       SEEDANCE2_TOOL_NAMES.includes(toolName)
       && (param === "aspect_ratio" || param === "duration")
@@ -1014,6 +1039,7 @@ ROUTING PREFERENCES:
 - Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 - Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
 - Use generate_volcengine_lipsync_video ONLY when user explicitly mentions "volcengine" or wants to lip-sync / dub an existing video to a separate audio track
+- Use generate_omnihuman_video ONLY when user explicitly mentions "omnihuman" or wants to animate a portrait/photo with a voice or audio track (talking/singing avatar from a still image)
 
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
@@ -1026,6 +1052,7 @@ KEY CONSTRAINTS:
 - For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
 - For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 2-15 (integer seconds), audio_setting "auto"/"origin"
 - For generate_volcengine_lipsync_video: REQUIRES video_slug (source video) and audio_slug (driving audio); mode "lite"/"basic"
+- For generate_omnihuman_video: REQUIRES image_slug (portrait) and audio_slug (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.
@@ -1203,6 +1230,19 @@ function buildModelOption(
     const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
     if (imageAssets.length > 0) {
       params.first_frame_slug ??= imageAssets[0].tag;
+    }
+  }
+
+  // For OmniHuman, prefill the portrait from image assets and the driving
+  // track from audio assets so the panel is immediately runnable.
+  if (toolName === "generate_omnihuman_video") {
+    const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
+    if (imageAssets.length > 0) {
+      params.image_slug ??= imageAssets[0].tag;
+    }
+    const audioAssets = resolvedAssets.filter((a) => a.asset_type === "audio");
+    if (audioAssets.length > 0) {
+      params.audio_slug ??= audioAssets[0].tag;
     }
   }
 

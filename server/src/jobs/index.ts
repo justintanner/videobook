@@ -38,6 +38,7 @@ import { registerGenerateHappyhorseI2vVideoJob } from "./generate-happyhorse-i2v
 import { registerGenerateHappyhorseRefVideoJob } from "./generate-happyhorse-ref-video.js";
 import { registerGenerateHappyhorseVideoeditVideoJob } from "./generate-happyhorse-videoedit-video.js";
 import { registerGenerateVolcengineLipsyncVideoJob } from "./generate-volcengine-lipsync-video.js";
+import { registerGenerateOmnihumanVideoJob } from "./generate-omnihuman-video.js";
 import { registerGenerateWan27ImageJob } from "./generate-wan27-image.js";
 import { registerGenerateWan27ImageProJob } from "./generate-wan27-image-pro.js";
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
@@ -146,6 +147,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateHappyhorseRefVideoJob(fs);
   registerGenerateHappyhorseVideoeditVideoJob(fs);
   registerGenerateVolcengineLipsyncVideoJob(fs);
+  registerGenerateOmnihumanVideoJob(fs);
   registerGenerateWan27ImageJob(fs);
   registerGenerateWan27ImageProJob(fs);
   registerGenerateNanoBananaImageJob(fs);

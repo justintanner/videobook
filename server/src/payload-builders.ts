@@ -53,6 +53,8 @@ import type {
   Wan27ImageResolution,
   VolcengineVideoToVideoLipSyncRequest,
   VolcengineVideoToVideoLipSyncMode,
+  Omnihuman15Request,
+  Omnihuman15OutputResolution,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
@@ -660,6 +662,44 @@ export function buildVolcengineLipSyncPayload(
 }
 
 // ---------------------------------------------------------------------------
+// OmniHuman payload builders
+// ---------------------------------------------------------------------------
+
+type OmnihumanArgs = {
+  prompt?: string;
+  output_resolution?: Omnihuman15OutputResolution;
+  pe_fast_mode?: boolean;
+  seed?: number;
+};
+
+type OmnihumanOpts = {
+  imageUrl: string;
+  audioUrl: string;
+  maskUrls?: string[];
+};
+
+export function buildOmnihumanPayload(
+  args: OmnihumanArgs,
+  opts: OmnihumanOpts,
+): Omnihuman15Request {
+  // output_resolution, pe_fast_mode, and seed carry zod defaults upstream, so
+  // the inferred request type requires them — mirror those defaults rather than
+  // spread-omitting (same shape as buildVolcengineLipSyncPayload above).
+  return {
+    model: "omnihuman-1-5",
+    input: {
+      image_url: opts.imageUrl,
+      audio_url: opts.audioUrl,
+      ...(opts.maskUrls && opts.maskUrls.length > 0 ? { mask_url: opts.maskUrls } : {}),
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      output_resolution: args.output_resolution ?? "1080",
+      pe_fast_mode: args.pe_fast_mode ?? false,
+      seed: args.seed ?? -1,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // HappyHorse payload builders
 // ---------------------------------------------------------------------------
 
@@ -1119,6 +1159,15 @@ function translateToolPayload(
       const audioSlug = (args.audio_slug as string) ?? "";
       const payload = buildVolcengineLipSyncPayload(args as VolcengineLipSyncArgs, {
         videoUrl: videoSlug,
+        audioUrl: audioSlug,
+      });
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_omnihuman_video": {
+      const imageSlug = (args.image_slug as string) ?? "";
+      const audioSlug = (args.audio_slug as string) ?? "";
+      const payload = buildOmnihumanPayload(args as OmnihumanArgs, {
+        imageUrl: imageSlug,
         audioUrl: audioSlug,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };

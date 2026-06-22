@@ -12,12 +12,15 @@ import { requireApiKey } from "../api-key.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 
-// Local shim: @apicity/cost@0.4.2 has no rate for the Volcengine v2v lip-sync
-// model that shipped in @apicity/kie@0.4.2, so computeEstimate flags it as
-// unbounded. The paygate only binds the request hash — it never recomputes
-// cost downstream — so admitting this model here is safe. Remove the entry once
-// @apicity/cost prices "volcengine/video-to-video-lip-sync".
-const COST_TABLE_PENDING_MODELS = new Set<string>(["volcengine/video-to-video-lip-sync"]);
+// Local shim: @apicity/cost@0.5.4 has no rate for the Volcengine v2v lip-sync
+// or OmniHuman 1.5 models shipped in @apicity/kie, so computeEstimate flags
+// them as unbounded. The paygate only binds the request hash — it never
+// recomputes cost downstream — so admitting these models here is safe. Remove
+// each entry once @apicity/cost prices the corresponding model.
+const COST_TABLE_PENDING_MODELS = new Set<string>([
+  "volcengine/video-to-video-lip-sync",
+  "omnihuman-1-5",
+]);
 
 type SubmitKieTaskArgs = {
   request: MediaGenerationRequest;
