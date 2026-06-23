@@ -8,7 +8,7 @@
 // frame-1 swap as continuity reference.
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
-import { UserRound } from 'lucide-react';
+import { UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
 import { usePlanFlow } from '../PlanFlowContext';
@@ -29,9 +29,9 @@ import { nodeImageHeight } from './nodeLayout';
 import { RunButton, Segmented } from './controls';
 import { VariantStrip, VARIANT_STRIP_H } from './VariantStrip';
 
-const NODE_WIDTH = 340;
-const CONTROLS_H = 150;
-const THUMB_STRIP_H = 42;
+const NODE_WIDTH = 400;
+const CONTROLS_H = 170;
+const THUMB_STRIP_H = 50;
 
 const PROVIDER_OPTIONS: ReadonlyArray<{ value: SwapProvider; label: string }> = [
   { value: 'kie', label: 'kie' },
@@ -40,19 +40,36 @@ const PROVIDER_OPTIONS: ReadonlyArray<{ value: SwapProvider; label: string }> = 
 
 // One labeled micro-thumb mapping an "Image N" prompt token to its actual
 // reference image, so the prompt's "Image 1 / Image 2 …" wording is legible.
-function TokenThumb({ n, src, title }: { n: number; src: string | null; title: string }) {
+// Wired-character thumbs get an × to unwire them from this frame (onRemove);
+// the source frame and prior-frame continuity thumbs are fixed (no ×).
+function TokenThumb({ n, src, title, onRemove }: { n: number; src: string | null; title: string; onRemove?: () => void }) {
   return (
-    <div className="relative shrink-0" style={{ width: 30, height: 30 }} title={title}>
+    <div className="group relative shrink-0" style={{ width: 36, height: 36 }} title={title}>
       {src ? (
         <img src={src} alt={title} className="w-full h-full object-cover rounded border border-zinc-700" />
       ) : (
         <div className="w-full h-full rounded border border-zinc-700 bg-black/50 flex items-center justify-center">
-          <UserRound className="w-3.5 h-3.5 text-zinc-600" />
+          <UserRound className="w-4 h-4 text-zinc-600" />
         </div>
       )}
       <span className="absolute -top-1 -left-1 min-w-[12px] h-3 px-0.5 rounded-sm bg-emerald-500/90 text-black text-[8px] font-mono font-bold leading-3 text-center">
         {n}
       </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          title="Remove this character from the frame"
+          aria-label="Remove character from frame"
+          className={cn(
+            'nodrag absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full',
+            'border border-zinc-600 bg-zinc-900 text-zinc-300 leading-none',
+            'hover:border-red-500 hover:bg-red-600 hover:text-white',
+          )}
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -113,6 +130,15 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
   const charCount = wiredChars.length;
   const priorSwapAssetId = frameIndex === 2 ? (scene?.swap?.image1 ?? undefined) : undefined;
 
+  // Unwire a character from this frame. Persists the reduced list; the frame
+  // must keep ≥1 character (the server rejects an empty set), so the × is only
+  // offered when more than one is wired.
+  const removeChar = useCallback((charId: string) => {
+    const next = wiredChars.map((c) => c.asset_id).filter((id) => id !== charId);
+    if (next.length < 1) return;
+    void actions.setFrameCharacters(sceneIndex, frameIndex, next);
+  }, [wiredChars, actions, sceneIndex, frameIndex]);
+
   const key = variantKey(provider, model);
   const prompt = overrides[key] ?? defaultSwapPrompt(charCount, Boolean(priorSwapAssetId));
   const onPromptChange = useCallback((next: string) => {
@@ -129,9 +155,10 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
   const hasVariants = !!variants && Object.keys(variants).length > 0;
 
   // Inline Image-token thumbs: 1 = source frame, 2/3 = wired chars, then prior.
+  // Char thumbs carry charId so they get an × (unwire); source/prior don't.
   const tokenThumbs = useMemo(() => {
     const cacheBust = scene ? `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}` : '';
-    const out: Array<{ n: number; src: string | null; title: string }> = [
+    const out: Array<{ n: number; src: string | null; title: string; charId?: string }> = [
       {
         n: 1,
         src: `/files/${projectSlug}/plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg?v=${cacheBust}`,
@@ -140,7 +167,7 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
     ];
     wiredChars.forEach((c, i) => {
       const item = mediaItems.find((m) => m.id === c.asset_id);
-      out.push({ n: i + 2, src: item?.thumbnailSrc ?? item?.filePath ?? null, title: `Image ${i + 2} — ${c.name}` });
+      out.push({ n: i + 2, src: item?.thumbnailSrc ?? item?.filePath ?? null, title: `Image ${i + 2} — ${c.name}`, charId: c.asset_id });
     });
     if (priorSwapAssetId) {
       const item = mediaItems.find((m) => m.id === priorSwapAssetId);
@@ -188,12 +215,20 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
           onPick={(assetId) => { void actions.promoteVariant(sceneIndex, frameIndex, assetId); }}
         />
       )}
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-2">
         {tokenThumbs.map((t) => (
-          <TokenThumb key={t.n} n={t.n} src={t.src} title={t.title} />
+          <TokenThumb
+            key={t.n}
+            n={t.n}
+            src={t.src}
+            title={t.title}
+            onRemove={t.charId && charCount > 1 ? () => removeChar(t.charId as string) : undefined}
+          />
         ))}
         {charCount === 1 && (
-          <span className="text-[8px] font-mono text-violet-300/60 leading-tight">1 char wired</span>
+          <span className="text-[9px] font-mono text-violet-300/60 leading-tight">
+            1 char · drag a character to add
+          </span>
         )}
       </div>
       <div className="mt-2 flex flex-col gap-1.5">
@@ -225,7 +260,7 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
         <textarea
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
-          rows={2}
+          rows={3}
           spellCheck={false}
           className={cn(
             'nodrag w-full resize-none rounded bg-black/60 border border-zinc-700 px-1.5 py-1',
