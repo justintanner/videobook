@@ -452,6 +452,15 @@ export function HomePage() {
     }
   }, [mediaItems, handleSelectItem]);
 
+  // The graph is the sole char_swap surface. Closing it returns to a neutral
+  // view rather than the (bypassed) scene list a char_swap plan would otherwise
+  // mount behind it.
+  const handleCloseGraph = useCallback(() => {
+    setPlanFlowOpen(false);
+    setSelectedItem((cur) => (cur?.type === 'plan' ? null : cur));
+    setPlanEmptyOverride(false);
+  }, []);
+
   const handleViewerSizeChange = useCallback((size: ViewerSize) => {
     setViewerSize(size);
     if (projectSlug) setCurrentOrientation(projectSlug, size);
@@ -1411,7 +1420,14 @@ export function HomePage() {
         setPlanEmptyOverride(true);
       }
     },
-    open_plan_flow: () => setPlanFlowOpen(true),
+    open_plan_flow: () => {
+      // The graph is char_swap's sole surface — opening it leaves the
+      // marketplace / settings so it isn't stacked behind them.
+      setTemplatesOpen(false);
+      setSettingsOpen(false);
+      setArchiveOpen(false);
+      setPlanFlowOpen(true);
+    },
     open_templates: openTemplates,
     open_projects: () => setProjectsOpen(true),
     create_project: (slug: string) => { void handleCreateProject(slug); },
@@ -1483,7 +1499,7 @@ export function HomePage() {
         />
         <PlanFlowEditor
           open={planFlowOpen}
-          onClose={() => setPlanFlowOpen(false)}
+          onClose={handleCloseGraph}
           mediaItems={mediaItems}
           projectSlug={projectSlug}
           callTool={callTool}

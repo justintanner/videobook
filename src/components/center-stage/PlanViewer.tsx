@@ -17,6 +17,7 @@ import {
   type SourceAspect,
 } from '@/lib/plan-aspect';
 import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
+import { useSceneFilesBootstrap } from './plan/useSceneFilesBootstrap';
 import {
   ALL_SWAP_PROVIDERS,
   ALL_VIDEO_MODELS,
@@ -229,11 +230,6 @@ function PlanShell({ title, slug, onClose, children }: {
   );
 }
 
-// Rough pre-generation estimate only; the real chunker runs server-side and
-// produces variable 7–14s scenes aligned to camera cuts and motion-settle
-// points. 10s = midpoint.
-const APPROX_SCENE_SECONDS = 10;
-
 function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates }: {
   item: MediaItem | null;
   mediaItems: MediaItem[];
@@ -286,6 +282,20 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
   const charSidecar = planFormula(sidecar) === 'char_swap' ? sidecar as PlanSidecar : null;
   const storyboardVideoSidecar = isStoryboardVideoPlan(sidecar) ? sidecar : null;
   const clipShowSidecar = isClipShowPlan(sidecar) ? sidecar : null;
+
+  // The graph is char_swap's sole UI: once a char_swap plan loads, auto-open the
+  // full-screen graph (the scene list below stays mounted only to run the shared
+  // clip/audio bootstrap — closing the graph deselects the plan, so it's never
+  // shown). Fire once per mount so closing the graph doesn't immediately reopen it.
+  const registry = useOptionalCommandRegistry();
+  const openGraph = registry?.uiActions.open_plan_flow;
+  const autoOpenedGraphRef = useRef(false);
+  useEffect(() => {
+    if (formula === 'char_swap' && charSidecar && openGraph && !autoOpenedGraphRef.current) {
+      autoOpenedGraphRef.current = true;
+      openGraph();
+    }
+  }, [formula, charSidecar, openGraph]);
 
   const charSourceItem = useMemo(
     () => (charSidecar?.source_asset_id ? mediaItems.find((m) => m.id === charSidecar.source_asset_id) ?? null : null),
@@ -2116,128 +2126,11 @@ function PlanScenes({ data, mediaItems, sourceAspect, projectSlug, callTool, dis
     [data.scenes],
   );
 
-  // Tracks whether all per-scene clip/audio files exist on disk. Flips to
-  // true after the bootstrap effect successfully observes (or writes) every
-  // sN.mp4 / sN.mp3. Drives the RUN VIDEO gate per scene; otherwise seedance
-  // would receive a half-written reference.
-  const [sceneFilesReady, setSceneFilesReady] = useState(false);
-
-  // Bootstrap once per (project, source). Two phases:
-  //   1. read the plan asset's manifest to see which sN.mp4 / sN.mp3 already
-  //      exist; if any clip is missing, fire one even_split with destination
-  //      writing all sN.mp4 into plan/.
-  //   2. for each missing sN.mp3, fire extract_audio with destination
-  //      pointing at the same plan asset (sequential — git mutex serialises
-  //      committing siblings into the same asset).
-  const splitBootstrapKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (planNeedsRegen) return;
-    const key = `${projectSlug}/${data.source_asset_id}`;
-    if (splitBootstrapKeyRef.current === key) return;
-    const sceneCount = data.scenes.length;
-    splitBootstrapKeyRef.current = key;
-    if (sceneCount === 0) return;
-    void (async () => {
-      // Reset readiness up-front in case we're switching plans mid-session.
-      // Doing it inside the async closure keeps the synchronous effect body
-      // setState-free (react-hooks/set-state-in-effect).
-      setSceneFilesReady(false);
-      const manifestResult = await callTool('asset_manifest', {
-        project_slug: projectSlug,
-        asset_id: PLAN_ASSET_ID,
-      });
-      let presentNames = new Set<string>();
-      if (!manifestResult.isError) {
-        try {
-          const text = (manifestResult.content as Array<{ type: string; text: string }>)[0].text;
-          const parsed = JSON.parse(text) as { files?: Array<{ name: string }> };
-          presentNames = new Set((parsed.files ?? []).map((f) => f.name));
-        } catch {
-          // Treat as empty — bootstrap will try to write everything. Server
-          // refuses overwrite, so any partial state surfaces as a toast below.
-        }
-      }
-
-      const missingClips = data.scenes
-        .map((s, i) => ({ scene: s, index: i }))
-        .filter(({ scene }) => scene.clip_filename && !presentNames.has(scene.clip_filename));
-
-      if (missingClips.length > 0) {
-        // even_split's destination mode writes all chunks into the plan asset
-        // in one job + one commit. We pass the full ordered filename list
-        // (server requires filenames.length === target_secs.length) and only
-        // fire if any clip is missing — destination mode rejects overwrites,
-        // so partial states need a manual fix first.
-        if (missingClips.length !== sceneCount) {
-          toast({
-            title: 'Plan clips partially present',
-            description: `${sceneCount - missingClips.length}/${sceneCount} clips already on disk. Delete the partial set or re-run /plan-vis.`,
-            duration: 6000,
-          });
-        } else {
-          const splitResult = await callTool('even_split', {
-            project_slug: projectSlug,
-            asset_id: data.source_asset_id,
-            target_secs: data.scenes.map((s) => s.end - s.start),
-            destination: {
-              asset_id: PLAN_ASSET_ID,
-              filenames: data.scenes.map((s) => s.clip_filename!),
-            },
-          });
-          if (splitResult.isError) {
-            const msg = (splitResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'even_split failed';
-            toast({ title: 'Source clip split failed', description: msg, duration: 5000 });
-            return;
-          }
-          // Re-read manifest so the audio phase sees the new clips.
-          try {
-            const refreshed = await callTool('asset_manifest', {
-              project_slug: projectSlug,
-              asset_id: PLAN_ASSET_ID,
-            });
-            if (!refreshed.isError) {
-              const text = (refreshed.content as Array<{ type: string; text: string }>)[0].text;
-              const parsed = JSON.parse(text) as { files?: Array<{ name: string }> };
-              presentNames = new Set((parsed.files ?? []).map((f) => f.name));
-            }
-          } catch {
-            // Fall through; the for-loop below tries each scene anyway.
-          }
-        }
-      }
-
-      let allAudioOk = true;
-      for (const scene of data.scenes) {
-        if (!scene.audio_filename) { allAudioOk = false; continue; }
-        if (presentNames.has(scene.audio_filename)) continue;
-        const audResult = await callTool('extract_audio', {
-          project_slug: projectSlug,
-          asset_id: data.source_asset_id,
-          destination: {
-            asset_id: PLAN_ASSET_ID,
-            filename: scene.audio_filename,
-          },
-          // Clip just this scene's window so the resulting mp3 stays under
-          // seedance-2's 15.2s reference cap. Without this the full source
-          // audio lands in plan/sN.mp3 and seedance rejects the call.
-          range: {
-            start_s: scene.start,
-            duration_s: scene.end - scene.start,
-          },
-        });
-        if (audResult.isError) {
-          allAudioOk = false;
-          const msg = (audResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_audio failed';
-          toast({ title: `Audio extract failed for ${scene.audio_filename}`, description: msg, duration: 5000 });
-        }
-      }
-      // Both even_split (enqueueAndWait) and extract_audio destination mode
-      // (enqueueAndWait) return only after their files land, so by here the
-      // mp4s + mp3s exist on disk. Flip the gate.
-      const allClipsOk = data.scenes.every((s) => s.clip_filename);
-      if (allClipsOk && allAudioOk) setSceneFilesReady(true);
-    })();
-  }, [projectSlug, data.source_asset_id, data.scenes, callTool, planNeedsRegen]);
+  // Per-scene clip/audio bootstrap (even_split + extract_audio). Lifted into a
+  // shared, module-deduped hook so the graph editor — which the template flow
+  // opens directly, without ever mounting this scene list — runs it too. Gates
+  // RUN VIDEO per scene; otherwise seedance would get a half-written reference.
+  const sceneFilesReady = useSceneFilesBootstrap({ projectSlug, sidecar: data, callTool });
 
   if (planNeedsRegen) {
     return (
@@ -3992,91 +3885,6 @@ function VisionAuditView({ data, projectSlug }: {
   );
 }
 
-interface PlanPreviewPayload {
-  source_asset_id: string;
-  scenes: VisionAuditScene[];
-  total_frames: number;
-  has_word_timings: boolean;
-  word_count: number;
-  system_prompt: string;
-  user_context: string;
-}
-
-type PreviewState =
-  | { kind: 'loading' }
-  | { kind: 'ready'; data: PlanPreviewPayload }
-  | { kind: 'error'; message: string };
-
-function PlanPreviewBlock({ sourceId, charAId, charBId, projectSlug, callTool }: {
-  sourceId: string;
-  charAId: string;
-  charBId: string;
-  projectSlug: string;
-  callTool: UseMcpResult['callTool'];
-}) {
-  const [state, setState] = useState<PreviewState>({ kind: 'loading' });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      // Defer the loading-state flip into the async closure so the synchronous
-      // effect body stays setState-free (react-hooks/set-state-in-effect).
-      setState({ kind: 'loading' });
-      const result = await callTool('plan_preview', {
-        source_asset_id: sourceId,
-        project_slug: projectSlug,
-        character_asset_ids: [charAId, charBId],
-      });
-      if (cancelled) return;
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'preview failed';
-        setState({ kind: 'error', message: msg });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed: PlanPreviewPayload = JSON.parse(text);
-        setState({ kind: 'ready', data: parsed });
-      } catch (err) {
-        setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [sourceId, charAId, charBId, projectSlug, callTool]);
-
-  if (state.kind === 'loading') {
-    return (
-      <div className="mb-6 flex items-center gap-2 text-xs font-mono text-emerald-300/60">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        <span>Computing scene boundaries and sampling frames…</span>
-      </div>
-    );
-  }
-  if (state.kind === 'error') {
-    return (
-      <div className="mb-6 rounded border border-amber-600/40 bg-amber-950/20 p-3 text-amber-200 text-xs font-mono">
-        Preview unavailable: {state.message}
-      </div>
-    );
-  }
-
-  const { data } = state;
-  return (
-    <VisionAuditView
-      data={{
-        headline: 'pre-flight',
-        sourceAssetId: data.source_asset_id,
-        scenes: data.scenes,
-        totalFrames: data.total_frames,
-        wordCount: data.has_word_timings ? data.word_count : null,
-        systemPrompt: data.system_prompt,
-        userContext: data.user_context,
-      }}
-      projectSlug={projectSlug}
-    />
-  );
-}
-
 function PlanAuditFromSidecar({ sidecar, projectSlug }: {
   sidecar: PlanSidecar;
   projectSlug: string;
@@ -4254,7 +4062,7 @@ function CustomizeInputs({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CharSwapSetup({ projectSlug, mediaItems, callTool, onGenerated }: PlanTemplateSetupProps) {
+export function CharSwapSetup({ projectSlug, mediaItems, callTool }: PlanTemplateSetupProps) {
   const { loading, sidecar } = useCurrentSidecar(projectSlug, callTool);
   if (loading) return <SetupLoading />;
   return (
@@ -4262,15 +4070,14 @@ export function CharSwapSetup({ projectSlug, mediaItems, callTool, onGenerated }
       projectSlug={projectSlug}
       mediaItems={mediaItems}
       callTool={callTool}
-      onGenerated={onGenerated}
       initial={planFormula(sidecar) === 'char_swap' ? (sidecar as PlanSidecar) : null}
     />
   );
 }
 
-function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: PlanSidecar | null }) {
+function CharSwapSetupInner({ projectSlug, mediaItems, callTool, initial }: Omit<PlanTemplateSetupProps, 'onGenerated'> & { initial: PlanSidecar | null }) {
   // Seed from the existing plan, else auto-pick the project's newest assets so
-  // "Use Template" works without opening Customize.
+  // the inputs come pre-filled.
   const autoPick = initial ? null : autoPickCharSwap(mediaItems);
   const [sourceId, setSourceId] = useState<string | null>(initial?.source_asset_id ?? autoPick?.sourceId ?? null);
   const [charAId, setCharAId] = useState<string | null>(initial?.characters[0]?.asset_id ?? autoPick?.charAId ?? null);
@@ -4279,12 +4086,13 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
   const cancelledRef = useRef(false);
   useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
 
+  const registry = useOptionalCommandRegistry();
+  const openGraph = registry?.uiActions.open_plan_flow;
+
   const sourceItem = useMemo(() => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null), [sourceId, mediaItems]);
   const charAItem = useMemo(() => (charAId ? mediaItems.find((m) => m.id === charAId) ?? null : null), [charAId, mediaItems]);
   const charBItem = useMemo(() => (charBId ? mediaItems.find((m) => m.id === charBId) ?? null : null), [charBId, mediaItems]);
   const sourceAspect = useMemo(() => sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height), [sourceItem?.width, sourceItem?.height]);
-  const duration = sourceItem?.duration ?? null;
-  const scenesCount = duration && duration > 0 ? Math.max(1, Math.ceil(duration / APPROX_SCENE_SECONDS)) : null;
 
   const canGenerate = Boolean(sourceId && charAId && charBId) && charAId !== charBId;
 
@@ -4302,67 +4110,28 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
         return;
       }
-      // plan_visualization runs in the background (vision + ffmpeg). Poll
-      // read_plan until the new char_swap plan — matching the requested source +
-      // characters — lands, then hand off to /plan.
-      const POLL_MS = 3000;
-      const MAX_ATTEMPTS = 100; // ~5 min
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        if (cancelledRef.current) return;
-        const planResult = await callTool('read_plan', { project_slug: projectSlug });
-        if (planResult.isError) continue;
-        let parsed: AnyPlanSidecar;
-        try {
-          const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          parsed = JSON.parse(text);
-        } catch { continue; }
-        const cs = planFormula(parsed) === 'char_swap' ? (parsed as PlanSidecar) : null;
-        const matches = Boolean(cs)
-          && cs!.source_asset_id === sourceId
-          && (cs!.characters[0]?.asset_id ?? null) === charAId
-          && (cs!.characters[1]?.asset_id ?? null) === charBId;
-        if (matches) {
-          await callTool('sync', { project_slug: projectSlug });
-          toast({ title: 'Plan generated', description: `${cs!.scenes.length} scenes`, duration: 2500 });
-          onGenerated();
-          return;
-        }
-      }
-      toast({ title: 'Plan still generating', description: 'Open /plan — it will appear when ready.', duration: 4000 });
-      onGenerated();
+      // plan_visualization runs in the background (vision + ffmpeg). The graph
+      // is char_swap's sole surface — open it now and let it poll for scenes.
+      openGraph?.();
     } finally {
       if (!cancelledRef.current) setGenerating(false);
     }
-  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, onGenerated]);
+  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, openGraph]);
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap gap-4">
+        <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={setSourceId} />
+        <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={setCharAId} />
+        <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={setCharBId} />
+      </div>
       <UseTemplateCTA
         generating={generating}
         canGenerate={canGenerate}
         onUse={() => { void handleGenerate(); }}
         icon={<MapPin className="w-4 h-4" />}
-        hint="Needs a transcribed video + two distinct subjects — open Customize"
+        hint="Pick a transcribed video + two distinct subjects"
       />
-      <CustomizeInputs>
-        <div className="space-y-5">
-          <div className="flex flex-wrap gap-4">
-            <PlanHeaderSlot label="Video Source" kind="source" item={sourceItem} sourceAspect={sourceAspect} onDrop={setSourceId} />
-            <PlanHeaderSlot label="Char A" kind="character" item={charAItem} onDrop={setCharAId} />
-            <PlanHeaderSlot label="Char B" kind="character" item={charBItem} onDrop={setCharBId} />
-          </div>
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs font-mono items-center">
-            <dt className="text-emerald-300/60">Duration</dt>
-            <dd className="text-emerald-300/90">{duration != null ? `${duration.toFixed(2)}s` : '—'}</dd>
-            <dt className="text-emerald-300/60">Scenes</dt>
-            <dd className="text-emerald-300/90">{scenesCount != null ? `~${scenesCount} (7–14s each, shot-aligned)` : '—'}</dd>
-          </dl>
-          {sourceId && charAId && charBId && charAId !== charBId && (
-            <PlanPreviewBlock sourceId={sourceId} charAId={charAId} charBId={charBId} projectSlug={projectSlug} callTool={callTool} />
-          )}
-        </div>
-      </CustomizeInputs>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
 import { PlanFlowCanvas } from './PlanFlowCanvas';
 import { useCharSwapActions } from './useCharSwapActions';
+import { useSceneFilesBootstrap } from './useSceneFilesBootstrap';
 import { ALL_SWAP_MODELS, type PlanSidecar, type SwapModel, type VideoModel } from './charSwapModel';
 
 interface PlanFlowEditorProps {
@@ -59,15 +60,42 @@ function parseSwapModel(token: string | undefined): SwapModel {
   return full ?? 'nano-banana-pro';
 }
 
+// Shown while plan_visualization is still shot-aligning the source (no scenes
+// in the sidecar yet).
+function BuildingState() {
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <Loader2 className="w-6 h-6 animate-spin text-emerald-400/70" />
+      <div className="font-mono text-sm text-emerald-200/80">Splitting video into scenes…</div>
+      <div className="font-mono text-[11px] text-zinc-500 max-w-xs leading-relaxed">
+        Vision is shot-aligning the source. Scene nodes appear here as they land.
+      </div>
+    </div>
+  );
+}
+
+// Floating pill over the canvas once the character rail is up but scenes are
+// still arriving.
+function BuildingBanner() {
+  return (
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex items-center gap-2 rounded-full border border-emerald-500/40 bg-zinc-900/90 px-3 py-1.5 shadow-lg">
+      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400/80" />
+      <span className="font-mono text-[11px] text-emerald-200/80">splitting video into scenes…</span>
+    </div>
+  );
+}
+
 export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callTool, assetSlugs }: PlanFlowEditorProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [building, setBuilding] = useState(false);
   const [sidecar, setSidecar] = useState<PlanSidecar | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [matching, setMatching] = useState(false);
   const cancelledRef = useRef(false);
   const matchPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch();
 
@@ -81,18 +109,29 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
     return () => clearTimeout(t);
   }, [open]);
 
-  // Load the plan when the overlay opens. Only char_swap is supported here.
+  // Load the plan when the overlay opens, then poll until scenes land. The
+  // template flow opens this overlay the moment it enqueues plan_visualization,
+  // so the plan may not exist yet (or may exist with characters but no scenes);
+  // poll read_plan for a few minutes and show a "building" state meanwhile.
+  // Only char_swap is supported here.
   useEffect(() => {
     if (!open || !projectSlug) return;
     cancelledRef.current = false;
-    setLoading(true);
-    setUnsupported(false);
-    void (async () => {
+    let tries = 0;
+    const MAX_TRIES = 100; // ~5 min at 3s — matches plan_visualization's budget
+    const keepPolling = () => {
+      if (tries < MAX_TRIES) loadPollRef.current = setTimeout(() => { void attempt(); }, 3000);
+      else setBuilding(false);
+    };
+    const attempt = async () => {
+      tries += 1;
       const result = await callTool('read_plan', { project_slug: projectSlug });
       if (cancelledRef.current) return;
       if (result.isError) {
-        setSidecar(null);
+        // No plan file yet — plan_visualization is still running.
         setLoading(false);
+        setBuilding(true);
+        keepPolling();
         return;
       }
       try {
@@ -101,16 +140,38 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
         if (parsed.formula && parsed.formula !== 'char_swap') {
           setSidecar(null);
           setUnsupported(true);
-        } else {
-          setSidecar(parsed);
+          setLoading(false);
+          setBuilding(false);
+          return;
         }
+        setSidecar(parsed);
+        setLoading(false);
+        if (parsed.scenes.length > 0) {
+          setBuilding(false); // full plan — done
+          return;
+        }
+        // Plan exists but the chunker hasn't written scenes yet.
+        setBuilding(true);
+        keepPolling();
       } catch {
-        setSidecar(null);
-      } finally {
-        if (!cancelledRef.current) setLoading(false);
+        setLoading(false);
+        setBuilding(true);
+        keepPolling();
       }
+    };
+    // Reset transient flags inside the async closure so the synchronous effect
+    // body stays setState-free (react-hooks/set-state-in-effect).
+    void (async () => {
+      setLoading(true);
+      setUnsupported(false);
+      setBuilding(false);
+      setMatching(false);
+      await attempt();
     })();
-    return () => { cancelledRef.current = true; };
+    return () => {
+      cancelledRef.current = true;
+      if (loadPollRef.current) { clearTimeout(loadPollRef.current); loadPollRef.current = null; }
+    };
   }, [open, projectSlug, callTool]);
 
   // Escape closes.
@@ -125,7 +186,7 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
 
   const sourceItem = useMemo(
     () => (sidecar?.source_asset_id ? mediaItems.find((m) => m.id === sidecar.source_asset_id) ?? null : null),
-    [sidecar?.source_asset_id, mediaItems],
+    [sidecar, mediaItems],
   );
   const sourceAspect = useMemo(
     () => sourceAspectFromDimensions(sourceItem?.width, sourceItem?.height),
@@ -143,6 +204,10 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
     callTool,
     onSidecarUpdate: setSidecar,
   });
+
+  // Extract per-scene clips/audio so video gens have their references. No-ops
+  // until scenes exist; module-deduped against the scene list if both mount.
+  useSceneFilesBootstrap({ sidecar: activeSidecar, projectSlug: projectSlug ?? '', callTool });
 
   // Vision auto-match: enqueue the job, then poll read_plan until the wiring
   // changes (the job writes frame_characters in the background). Triggered from
@@ -177,12 +242,18 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
   }, [projectSlug, matching, sidecar, actions, callTool]);
 
   // Stop any in-flight poll when the overlay closes / unmounts.
+  // On close, just stop the pollers. The transient flags (matching/building) are
+  // reset by the load effect on reopen, and the overlay renders nothing while
+  // closed — so this effect stays setState-free (react-hooks/set-state-in-effect).
   useEffect(() => {
     if (open) return;
     if (matchPollRef.current) { clearTimeout(matchPollRef.current); matchPollRef.current = null; }
-    setMatching(false);
+    if (loadPollRef.current) { clearTimeout(loadPollRef.current); loadPollRef.current = null; }
   }, [open]);
-  useEffect(() => () => { if (matchPollRef.current) clearTimeout(matchPollRef.current); }, []);
+  useEffect(() => () => {
+    if (matchPollRef.current) clearTimeout(matchPollRef.current);
+    if (loadPollRef.current) clearTimeout(loadPollRef.current);
+  }, []);
 
   const anyWired = useMemo(() => planHasWiring(sidecar), [sidecar]);
 
@@ -291,6 +362,23 @@ export function PlanFlowEditor({ open, onClose, mediaItems, projectSlug, callToo
               sourceAspect={sourceAspect}
               actions={actions}
             />
+          ) : sidecar && sidecar.characters.length > 0 ? (
+            // Plan exists with characters but no scenes yet — show the character
+            // rail now; scene nodes appear as the chunker writes them.
+            <>
+              <PlanFlowCanvas
+                sidecar={sidecar}
+                mediaItems={mediaItems}
+                projectSlug={projectSlug ?? ''}
+                sourceAspect={sourceAspect}
+                actions={actions}
+              />
+              <BuildingBanner />
+            </>
+          ) : building ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <BuildingState />
+            </div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               <EmptyState size="md">No char_swap plan to graph yet.</EmptyState>
