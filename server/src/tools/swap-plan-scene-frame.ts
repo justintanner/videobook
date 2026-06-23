@@ -6,7 +6,12 @@ import { type ImageInput, resolveImageSlugs } from "./_image-inputs.js";
 import { falWanImageSizeForDimensions, kieImageAspectRatioForDimensions } from "./_plan-aspect.js";
 import type { PlanSwapModel } from "./_plan-aspect.js";
 
-const REQUIRED_CHARACTERS = 2;
+// A frame swap now uses only the character(s) wired to it on the canvas:
+// 1 (a single matching subject) or 2 (both on-screen subjects). The client
+// derives the per-frame subset from scenes[N].frame_characters and passes it
+// here; this tool just validates the 1–2 range.
+const MIN_CHARACTERS = 1;
+const MAX_CHARACTERS = 2;
 
 const SUPPORTED_PROVIDERS = ["kie", "fal"] as const;
 const SUPPORTED_MODELS = ["nano-banana-pro", "gpt-image-2", "wan-2-7-image-pro"] as const;
@@ -87,8 +92,9 @@ const schema = {
   frame_index: z.union([z.literal(1), z.literal(2)]).describe("1 = first-frame swap (image1), 2 = last-frame swap (image2)"),
   character_asset_ids: z
     .array(z.string())
-    .length(REQUIRED_CHARACTERS)
-    .describe(`Exactly ${REQUIRED_CHARACTERS} char-* or img-* slugs — the two on-screen subjects to swap in.`),
+    .min(MIN_CHARACTERS)
+    .max(MAX_CHARACTERS)
+    .describe(`${MIN_CHARACTERS}–${MAX_CHARACTERS} char-* or img-* slugs — the on-screen subject(s) to swap into this frame. Pass one matching character to replace a single subject, or two for both.`),
   provider: z.enum(SUPPORTED_PROVIDERS).optional().describe("Image-edit provider (default: kie)"),
   model: z.enum(SUPPORTED_MODELS).optional().describe(`Image-edit model (default: ${DEFAULT_MODEL})`),
   prior_swap_asset_id: z
@@ -111,23 +117,40 @@ const schema = {
 // signature). nano-banana-pro is more permissive but the same tight
 // instruction works well for both.
 //
-// hasPriorSwap: when true, an extra Image 4 (a previously-swapped frame from
-// this scene — typically image1's swap when generating image2) is appended
-// for look continuity. Char refs (Image 2, Image 3) still drive identity.
-function buildSwapPrompt(hasPriorSwap: boolean, safeMode: boolean): string {
+// hasPriorSwap: when true, an extra prior-frame image is appended for look
+// continuity. Char refs drive identity. charCount selects single- vs
+// two-subject wording — with one character the inputs are [source, char A
+// (, prior)], so the prior frame is Image 3 not Image 4.
+//
+// Input layout by (charCount, hasPriorSwap):
+//   1, false → Image 1 source, Image 2 char A
+//   1, true  → Image 1 source, Image 2 char A, Image 3 prior frame
+//   2, false → Image 1 source, Image 2 char A, Image 3 char B
+//   2, true  → Image 1 source, Image 2 char A, Image 3 char B, Image 4 prior frame
+function buildSwapPrompt(hasPriorSwap: boolean, safeMode: boolean, charCount: number): string {
+  const single = charCount <= 1;
+  const priorImg = single ? "Image 3" : "Image 4";
   if (safeMode) {
     // Reframed without "replace people" / "swap subjects" wording — these
     // phrases trigger Kie/OpenAI moderation. Talk in styling / matching
     // terms instead. The references still drive the result.
+    const subjects = single
+      ? "the person in it looks like the person in Image 2"
+      : "the people in it look like the people in Image 2 and Image 3";
+    const subjectsAfter = single ? "that same person" : "those same two people";
     if (hasPriorSwap) {
-      return "Re-style Image 1 so the people in it look like the people in Image 2 and Image 3. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look to Image 4 for continuity. Keep Image 1's composition, framing, lighting, camera angle, and poses unchanged.";
+      return `Re-style Image 1 so ${subjects}. ${priorImg} shows how ${subjectsAfter} appeared in the prior frame of this scene — match their look to ${priorImg} for continuity. Keep Image 1's composition, framing, lighting, camera angle, and pose${single ? "" : "s"} unchanged.`;
     }
-    return "Re-style Image 1 so the people in it look like the people in Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and poses unchanged.";
+    return `Re-style Image 1 so ${subjects}, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and pose${single ? "" : "s"} unchanged.`;
   }
+  const replace = single
+    ? "replace the person with the person from Image 2"
+    : "replace the people with the people from Image 2 and Image 3";
+  const subjectsAfter = single ? "that same person" : "those same two people";
   if (hasPriorSwap) {
-    return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to Image 4 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+    return `Edit Image 1: ${replace}, matching each reference's appearance and outfit. ${priorImg} shows how ${subjectsAfter} appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to ${priorImg} exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original pose${single ? "" : "s"} unchanged.`;
   }
-  return "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
+  return `Edit Image 1: ${replace}, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original pose${single ? "" : "s"} unchanged.`;
 }
 
 function metadataNumber(value: unknown): number | null {
@@ -255,12 +278,12 @@ export function swapPlanSceneFrameDef(fs: VideocityFs): ToolDef {
           content: [{ type: "text" as const, text: resolvedChars.error }],
         };
       }
-      if (resolvedChars.inputs.length !== REQUIRED_CHARACTERS) {
+      if (resolvedChars.inputs.length < MIN_CHARACTERS || resolvedChars.inputs.length > MAX_CHARACTERS) {
         return {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: `Expected ${REQUIRED_CHARACTERS} character refs, got ${resolvedChars.inputs.length}`,
+            text: `Expected ${MIN_CHARACTERS}–${MAX_CHARACTERS} character refs, got ${resolvedChars.inputs.length}`,
           }],
         };
       }
@@ -292,7 +315,7 @@ export function swapPlanSceneFrameDef(fs: VideocityFs): ToolDef {
 
       const prompt = custom_prompt && custom_prompt.trim().length > 0
         ? custom_prompt.trim()
-        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true);
+        : buildSwapPrompt(Boolean(prior_swap_asset_id), safe_mode === true, resolvedChars.inputs.length);
 
       const slugCode = provider === "fal"
         ? `${SLUG_CODE_BY_MODEL[model]}-fal`

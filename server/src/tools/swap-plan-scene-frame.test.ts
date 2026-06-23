@@ -157,6 +157,26 @@ describe("swap_plan_scene_frame aspect payloads", () => {
     expect(payload.resolution).toBe("2K");
   });
 
+  it("accepts a single character ref and emits single-subject inputs + prompt", async () => {
+    const chars = await seedPlan(1920, 1080);
+
+    const result = await swapPlanSceneFrameDef(fs).handler({
+      project_slug: PROJECT,
+      scene_index: 0,
+      frame_index: 1,
+      character_asset_ids: [`@${chars[0]}`],
+      provider: "kie",
+      model: "nano-banana-pro",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = enqueuedPayload();
+    // source frame + exactly one character (no second subject, no prior frame).
+    expect((payload.imageInputs as unknown[]).length).toBe(2);
+    expect(payload.prompt).toContain("the person from Image 2");
+    expect(payload.prompt).not.toContain("Image 3");
+  });
+
   it("enqueues Fal Wan swaps with a source-derived image size", async () => {
     const chars = await seedPlan(1080, 1440);
 

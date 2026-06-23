@@ -10,6 +10,7 @@ interface CommandRegistryContextValue {
   commands: ServerCommand[];
   allCommands: ServerCommand[];
   dispatch: (input: string) => Promise<boolean>;
+  uiActions: UiActionMap;
 }
 
 const CommandRegistryContext = createContext<CommandRegistryContextValue | null>(null);
@@ -131,8 +132,8 @@ export function CommandRegistryProvider({
   }, [allCommands, callTool, projectSlug, uiActions, onAfterDispatch]);
 
   const value = useMemo(
-    () => ({ commands, allCommands, dispatch }),
-    [commands, allCommands, dispatch],
+    () => ({ commands, allCommands, dispatch, uiActions }),
+    [commands, allCommands, dispatch, uiActions],
   );
 
   return (

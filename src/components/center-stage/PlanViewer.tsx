@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil, Share2 } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -8,57 +8,48 @@ import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useCommandDispatch } from '@/hooks/useCommandDispatch';
+import { useOptionalCommandRegistry } from '@/contexts/CommandRegistryContext';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
 import { uploadProjectFile } from '@/lib/upload';
 import {
-  falWanImageSizeForDimensions,
-  grokAspectRatioForDimensions,
-  kieImageAspectRatioForDimensions,
-  seedanceAspectRatioForDimensions,
   sourceAspectFromDimensions,
   type SourceAspect,
 } from '@/lib/plan-aspect';
 import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
-
-interface PlanScene {
-  start: number;
-  end: number;
-  visual: string;
-  // Per-scene spoken dialog, sliced from the transcript at /plan-vis time. Seeds
-  // the Grok Imagine video prompt; older plans lack it (guarded with `?? ''`).
-  dialog?: string;
-  // Sibling files inside the `plan` asset that hold the per-scene clip and
-  // its extracted audio. Stamped at /plan-vis time so the render path can
-  // address them as @plan/<filename> without ID reconciliation. Optional in
-  // this type purely so we can detect old plans that lack the fields and
-  // surface a "re-run /plan-vis" notice.
-  clip_filename?: string;
-  audio_filename?: string;
-  // Audit data: per-scene frames sampled and sent to the vision model at
-  // plan-vis time. Older plans pre-dating the audit feature lack this.
-  frames?: Array<{ name: string; t: number }>;
-  swap?: {
-    image1: string | null;
-    image2: string | null;
-    image1_variants?: Record<string, string>;
-    image2_variants?: Record<string, string>;
-    video?: string | null;
-  } | null;
-}
-
-interface PlanSidecar {
-  formula?: 'char_swap';
-  scenes: PlanScene[];
-  total_duration_s: number;
-  max_scene_seconds: number;
-  source_asset_id: string;
-  characters: Array<{ asset_id: string; name: string; description: string }>;
-  model: string;
-  analysis_prompt?: string;
-  user_context?: string;
-  word_count?: number;
-}
+import {
+  ALL_SWAP_PROVIDERS,
+  ALL_VIDEO_MODELS,
+  DEFAULT_PROMPT_BY_SWAP_MODEL,
+  KIE_MODEL_NAME_BY_VIDEO,
+  LABEL_BY_VIDEO_MODEL,
+  MODELS_BY_PROVIDER,
+  PLAN_ASSET_ID,
+  SHORT_LABEL_BY_MODEL,
+  STORYBOARD_VIDEO_MODELS,
+  TOOL_BY_VIDEO_MODEL,
+  buildGrokImagineToolArgs,
+  buildKieVideoPayload,
+  buildSeedanceToolArgs,
+  buildSwapPayload,
+  deriveTileState,
+  deriveVideoTileState,
+  formatTimecode,
+  grokVideoReadyForGen,
+  makeEmptyModelPrompts,
+  modelCodeFromSwapAssetId,
+  parseVariantKey,
+  rewriteVisualWithImageTokens,
+  variantKey,
+  videoReadyForGen,
+  type FrameTileState,
+  type PlanScene,
+  type PlanSidecar,
+  type SwapModel,
+  type SwapProvider,
+  type VideoModel,
+  type VideoTileState,
+} from './plan/charSwapModel';
 
 export type PlanFormula = 'char_swap' | 'storyboard_video' | 'clip_show';
 
@@ -178,13 +169,6 @@ function storyboardSourceImageIds(sidecar: StoryboardVideoPlanSidecar | null): s
     ids.push(id);
   }
   return ids;
-}
-
-function formatTimecode(seconds: number): string {
-  const total = Math.max(0, seconds);
-  const m = Math.floor(total / 60);
-  const s = total - m * 60;
-  return `${m}:${s.toFixed(2).padStart(5, '0')}`;
 }
 
 interface PlanViewerProps {
@@ -338,8 +322,9 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
             <PlanEmptyState onBackToTemplates={onBackToTemplates} />
           ) : (
             <>
-              <div className="mb-4">
+              <div className="mb-4 flex items-center gap-2">
                 <PlanBackButton onBack={onBackToTemplates} />
+                {formula === 'char_swap' && charSidecar ? <PlanGraphViewButton /> : null}
               </div>
               {formula === 'char_swap' && charSidecar ? (
                 <>
@@ -420,6 +405,32 @@ function PlanBackButton({ onBack }: {
     >
       <ArrowLeft className="w-3.5 h-3.5" />
       Templates
+    </button>
+  );
+}
+
+// Opens the full-screen node-graph view of this char_swap plan (a sibling
+// overlay owned by HomePage, mirroring the Trim editor).
+function PlanGraphViewButton() {
+  const registry = useOptionalCommandRegistry();
+  const openGraph = registry?.uiActions.open_plan_flow;
+  if (!openGraph) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => openGraph()}
+      title="Open the node-graph view"
+      className={cn(
+        'h-8 px-2.5 flex items-center gap-1.5 rounded',
+        'text-[10px] font-mono font-bold uppercase tracking-wider',
+        'text-emerald-300 hover:text-white',
+        'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
+        'transition-colors duration-150',
+        FOCUS_RING_BUTTON,
+      )}
+    >
+      <Share2 className="w-3.5 h-3.5" />
+      Graph view
     </button>
   );
 }
@@ -2069,70 +2080,11 @@ function StoryboardImageSlot({ state, sourceAspect, assetId, replacing, generati
   );
 }
 
-type SwapModel = 'nano-banana-pro' | 'gpt-image-2' | 'wan-2-7-image-pro';
-type SwapProvider = 'kie' | 'fal';
-
-const ALL_SWAP_MODELS: SwapModel[] = ['nano-banana-pro', 'gpt-image-2', 'wan-2-7-image-pro'];
-const ALL_SWAP_PROVIDERS: SwapProvider[] = ['kie', 'fal'];
-
-// Mirror of server SUPPORTED_MODELS_BY_PROVIDER: fal doesn't host gpt-image-2.
-const MODELS_BY_PROVIDER: Record<SwapProvider, SwapModel[]> = {
-  kie: ['nano-banana-pro', 'gpt-image-2', 'wan-2-7-image-pro'],
-  fal: ['nano-banana-pro', 'wan-2-7-image-pro'],
-};
-
-const SHORT_LABEL_BY_MODEL: Record<SwapModel, string> = {
-  'nano-banana-pro': 'nbp',
-  'gpt-image-2': 'gi2',
-  'wan-2-7-image-pro': 'wan',
-};
-
-// Variant key used in scene.swap.image{N}_variants. Bare model name = kie
-// (preserves backward compat with older plans). `fal:{model}` = fal variant.
-function variantKey(provider: SwapProvider, model: SwapModel): string {
-  return provider === 'fal' ? `fal:${model}` : model;
-}
-
-function parseVariantKey(key: string): { provider: SwapProvider; model: SwapModel } | null {
-  const falPrefix = 'fal:';
-  if (key.startsWith(falPrefix)) {
-    const m = key.slice(falPrefix.length);
-    if ((ALL_SWAP_MODELS as readonly string[]).includes(m)) {
-      return { provider: 'fal', model: m as SwapModel };
-    }
-    return null;
-  }
-  if ((ALL_SWAP_MODELS as readonly string[]).includes(key)) {
-    return { provider: 'kie', model: key as SwapModel };
-  }
-  return null;
-}
-
-type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'grok-imagine-1-5';
-
-const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast', 'grok-imagine-1-5'];
-// Storyboard formula stays Seedance-only — Grok i2v animates from a single
-// reference frame, which doesn't fit the storyboard sheet → video flow.
-const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
-
-const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
-  'seedance-2-ref': 'generate_seedance2_video',
-  'seedance-2-fast': 'generate_seedance2_fast_video',
-  'grok-imagine-1-5': 'generate_grok_imagine_video',
-};
-
-const LABEL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
-  'seedance-2-ref': 'Seedance 2',
-  'seedance-2-fast': 'Seedance Fast',
-  'grok-imagine-1-5': 'Grok Imagine 1.5',
-};
-
 // Per-scene clip + audio live as sibling files inside the `plan` asset
 // (stamped into `.plan.json` by /plan-vis as `clip_filename` / `audio_filename`,
 // e.g. "s1.mp4" / "s1.mp3"). The render path addresses them via the
-// `@plan/<filename>` slug form the seedance/kie resolvers learned.
-const PLAN_ASSET_ID = 'plan';
-
+// `@plan/<filename>` slug form the seedance/kie resolvers learned. PLAN_ASSET_ID
+// and the swap/video model layer now live in ./plan/charSwapModel.
 interface SceneAssetSlugs {
   clipSlug: string;  // e.g. "plan/s1.mp4"
   audioSlug: string; // e.g. "plan/s1.mp3"
@@ -2321,12 +2273,6 @@ function PlanScenes({ data, mediaItems, sourceAspect, projectSlug, callTool, dis
   );
 }
 
-type FrameTileState =
-  | { kind: 'idle' }
-  | { kind: 'generating' }
-  | { kind: 'ready'; src: string }
-  | { kind: 'error'; message: string };
-
 type ReplaceSource =
   | { kind: 'file'; file: File }
   | { kind: 'asset'; assetId: string };
@@ -2335,36 +2281,6 @@ interface SidebarDragPayload {
   slug?: string;
   id?: string;
   type?: string;
-}
-
-function deriveTileState(
-  scene: PlanScene,
-  frameIndex: 1 | 2,
-  mediaItems: MediaItem[],
-): FrameTileState {
-  const swapId = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'];
-  if (!swapId) return { kind: 'idle' };
-  const item = mediaItems.find((m) => m.id === swapId);
-  if (!item) return { kind: 'generating' };
-  if (item.status === 'error') {
-    return { kind: 'error', message: item.failedMessage ?? 'swap failed' };
-  }
-  if (item.status === 'ready') {
-    const src = item.thumbnailSrc ?? item.filePath ?? null;
-    if (src) return { kind: 'ready', src };
-    return { kind: 'generating' };
-  }
-  return { kind: 'generating' };
-}
-
-// Extract the short model code from an auto-generated swap slug like
-// `img-nbp-s1-1` or `img-gi2-fal-s2-2`. Returns the code with optional `-fal`
-// suffix, or null for manual-upload assets and pre-rename legacy slugs.
-// Tail `(?:-\d+)*` tolerates collision-suffixed slugs from createAsset.
-function modelCodeFromSwapAssetId(assetId: string | null | undefined): string | null {
-  if (!assetId) return null;
-  const m = /^img-((?:nbp|gi2|wan)(?:-fal)?)-s\d+-\d+(?:-\d+)*$/.exec(assetId);
-  return m ? m[1] : null;
 }
 
 function SourceSlotRow({ sourceSrc, sourceAspect, state, inFlightCodes, currentModelCode, label, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
@@ -2594,27 +2510,6 @@ function SwapSlot({ state, sourceSrc, sourceAspect, inFlightCodes, currentModelC
   );
 }
 
-type VideoTileState =
-  | { kind: 'idle' }
-  | { kind: 'generating'; label?: string }
-  | { kind: 'ready'; src: string }
-  | { kind: 'error'; message: string };
-
-function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
-  const vidId = scene.swap?.video;
-  if (!vidId) return { kind: 'idle' };
-  const item = mediaItems.find((m) => m.id === vidId);
-  if (!item) return { kind: 'generating' };
-  if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
-  if (item.status === 'ready') {
-    const src = `/files/${projectSlug}/${vidId}/original.mp4`;
-    return { kind: 'ready', src };
-  }
-  // 'generating', 'replacing-audio', etc.
-  const label = item.status === 'replacing-audio' ? 'splicing audio…' : 'generating…';
-  return { kind: 'generating', label };
-}
-
 function VideoSwapSlot({
   state,
   sourceAspect,
@@ -2782,108 +2677,6 @@ function VideoSwapSlot({
   );
 }
 
-const DEFAULT_PROMPT_BY_SWAP_MODEL: Record<SwapModel, string> = {
-  'nano-banana-pro': "Photorealistic edit. Replace Image 1's people with Image 2 and Image 3 references, preserving each one's identity and clothing. Keep the original composition, framing, lighting, and camera angle exactly as in Image 1.",
-  'gpt-image-2': "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.",
-  'wan-2-7-image-pro': "Replace each person in Image 1 with the matching reference from Image 2 and Image 3. Match facial identity, hair, and outfit precisely. Preserve Image 1's pose, composition, lighting, and camera angle.",
-};
-
-// Frame 2 prompt — used when generating the last frame and a previously
-// swapped first frame is available. Inputs are [source last frame, char A,
-// char B, prior image1 swap]. Char refs drive identity; Image 4 is only a
-// look-continuity reference (face/hair/wardrobe/color grade).
-const DEFAULT_PROMPT_FRAME2_PRIOR_SWAP = "Edit Image 1: replace the people with the people from Image 2 and Image 3, matching each reference's appearance and outfit. Image 4 shows how those same two people appeared in the prior frame of this scene — match their look (face, hair, wardrobe, color grade) to Image 4 exactly so the two frames feel continuous. Keep Image 1's composition, framing, lighting, camera angle, and the original poses unchanged.";
-
-// Build a stable empty prompts map keyed by every (provider, model) combo.
-// Frame 2 seeds with the prior-swap continuity prompt (mentions Image 4);
-// frame 1 seeds with the per-model char-swap default.
-function makeEmptyModelPrompts(frameIndex: 1 | 2): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const provider of ALL_SWAP_PROVIDERS) {
-    for (const model of MODELS_BY_PROVIDER[provider]) {
-      out[variantKey(provider, model)] = frameIndex === 2
-        ? DEFAULT_PROMPT_FRAME2_PRIOR_SWAP
-        : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
-    }
-  }
-  return out;
-}
-
-// Mirrors what server/src/payload-builders.ts produces for the corresponding
-// `generate_*_image` tools, but in slug form (no URL resolution). Keep aligned
-// with the swap-plan-scene-frame queue payload and the per-model `input`
-// shapes from @apicity/kie's model-schemas.
-const KIE_MODEL_NAME_BY_SWAP: Record<SwapModel, string> = {
-  'nano-banana-pro': 'nano-banana-pro',
-  'gpt-image-2': 'gpt-image-2-image-to-image',
-  'wan-2-7-image-pro': 'wan/2-7-image-pro',
-};
-
-// Fal endpoint ids that the server's swap dispatch routes to (see
-// server/src/jobs/generate-{nano-banana-pro,wan27-pro}-edit-fal.ts).
-const FAL_ENDPOINT_BY_SWAP: Partial<Record<SwapModel, string>> = {
-  'nano-banana-pro': 'fal-ai/nano-banana-pro/edit',
-  'wan-2-7-image-pro': 'fal-ai/wan/v2.7/pro/edit',
-};
-
-function buildSwapPayload(
-  provider: SwapProvider,
-  model: SwapModel,
-  characters: PlanSidecar['characters'],
-  sceneIndex: number,
-  frameIndex: 1 | 2,
-  customPrompt: string,
-  sourceAspect: SourceAspect,
-  priorSwapAssetId?: string,
-): { provider: SwapProvider; endpoint: string; input: Record<string, unknown> } {
-  const sourceFrameSlug = `@plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
-  // 4-image input when priorSwapAssetId is set (frame 2 against an
-  // already-swapped frame 1): [source, char A, char B, prior swap].
-  // Mirrors the server's priorPushed branch in swap-plan-scene-frame.ts.
-  const inputs = [
-    sourceFrameSlug,
-    ...characters.map((c) => `@${c.asset_id}`),
-    ...(priorSwapAssetId ? [`@${priorSwapAssetId}`] : []),
-  ];
-  const trimmed = customPrompt.trim();
-  const defaultPrompt = priorSwapAssetId
-    ? DEFAULT_PROMPT_FRAME2_PRIOR_SWAP
-    : DEFAULT_PROMPT_BY_SWAP_MODEL[model];
-  const prompt = trimmed.length > 0 ? trimmed : defaultPrompt;
-  const imageAspectRatio = kieImageAspectRatioForDimensions(model, sourceAspect.width, sourceAspect.height);
-  if (provider === 'fal') {
-    const endpoint = FAL_ENDPOINT_BY_SWAP[model];
-    if (!endpoint) {
-      // gpt-image-2 isn't on Fal — surface a placeholder payload so the JSON
-      // tab still renders something rather than crashing.
-      return { provider, endpoint: `(no fal endpoint for ${model})`, input: { prompt, image_urls: inputs } };
-    }
-    if (model === 'wan-2-7-image-pro') {
-      return {
-        provider,
-        endpoint,
-        input: { prompt, image_urls: inputs, image_size: falWanImageSizeForDimensions(sourceAspect.width, sourceAspect.height) },
-      };
-    }
-    return {
-      provider,
-      endpoint,
-      input: { prompt, image_urls: inputs, aspect_ratio: imageAspectRatio, resolution: '2K' },
-    };
-  }
-  const inputKey = model === 'nano-banana-pro' ? 'image_input' : 'input_urls';
-  return {
-    provider,
-    endpoint: KIE_MODEL_NAME_BY_SWAP[model],
-    input: {
-      prompt,
-      [inputKey]: inputs,
-      aspect_ratio: imageAspectRatio,
-      resolution: model === 'gpt-image-2' ? '4K' : '2K',
-    },
-  };
-}
-
 // Per-frame block: provider/model dropdowns, prompt/JSON tabs (chip-aware
 // prompt view), and the source→slot row. Each frame is a self-contained unit;
 // idle slot click runs only the selected (provider, model) for THAT frame.
@@ -2990,189 +2783,6 @@ function ProviderModelSelect({ label, value, options, onChange }: {
       </select>
     </label>
   );
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function rewriteVisualWithImageTokens(
-  visual: string,
-  characters: PlanSidecar['characters'],
-): string {
-  let result = visual;
-  characters.forEach((c, i) => {
-    const re = new RegExp(`@${escapeRegExp(c.asset_id)}\\b`, 'g');
-    result = result.replace(re, `@Image${i + 1}`);
-  });
-  return result;
-}
-
-// "Both swaps present" gate. Slot-presence is the new accepted: a swap that's
-// landed in the slot counts; a missing or in-flight swap blocks RUN VIDEO.
-// Char-refs-only mode (no swap on either side) is also fine.
-function videoReadyForGen(
-  scene: PlanScene,
-  tile1: FrameTileState,
-  tile2: FrameTileState,
-): { ok: boolean; reason?: string } {
-  const hasAny = !!(scene.swap?.image1 || scene.swap?.image2);
-  if (!hasAny) return { ok: true };
-  if (tile1.kind === 'ready' && tile2.kind === 'ready') return { ok: true };
-  return { ok: false, reason: 'Both swap frames must finish generating' };
-}
-
-// Grok Imagine i2v animates from the first-frame swap alone, so only frame 1
-// must be present and ready — frame 2 is irrelevant to it.
-function grokVideoReadyForGen(
-  scene: PlanScene,
-  tile1: FrameTileState,
-): { ok: boolean; reason?: string } {
-  if (!scene.swap?.image1) return { ok: false, reason: 'Generate the first-frame swap first' };
-  if (tile1.kind !== 'ready') return { ok: false, reason: 'First-frame swap must finish generating' };
-  return { ok: true };
-}
-
-function readySwapAssetIds(
-  scene: PlanScene,
-  mediaItems: MediaItem[],
-): [string, string] | null {
-  const a = scene.swap?.image1;
-  const b = scene.swap?.image2;
-  if (!a || !b) return null;
-  const itemA = mediaItems.find((m) => m.id === a);
-  const itemB = mediaItems.find((m) => m.id === b);
-  if (itemA?.status !== 'ready' || itemB?.status !== 'ready') return null;
-  return [a, b];
-}
-
-const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
-  'seedance-2-ref': 'bytedance/seedance-2',
-  'seedance-2-fast': 'bytedance/seedance-2-fast',
-  'grok-imagine-1-5': 'grok-imagine/image-to-video',
-};
-
-// First-frame swap + character refs, used by both the Grok tool args and the
-// JSON preview. For preview-only the frame may not exist yet (RUN VIDEO is
-// gated on it), so fall back to the bare character refs.
-function grokImageSlugs(scene: PlanScene, characters: PlanSidecar['characters']): string[] {
-  const frame1 = scene.swap?.image1;
-  return frame1
-    ? [`@${frame1}`, ...characters.map((c) => `@${c.asset_id}`)]
-    : characters.map((c) => `@${c.asset_id}`);
-}
-
-// Grok i2v duration is an integer 6-30; scene lengths (~7-14s) clamp into range.
-function grokSceneDuration(scene: PlanScene): number {
-  return Math.min(30, Math.max(6, Math.round(scene.end - scene.start)));
-}
-
-function buildKieVideoPayload(
-  videoModel: VideoModel,
-  scene: PlanScene,
-  characters: PlanSidecar['characters'],
-  mediaItems: MediaItem[],
-  sceneClipSlug: string | null,
-  sceneAudioSlug: string | null,
-  customPrompt: string,
-  sourceAspect: SourceAspect,
-): { model: string; input: Record<string, unknown> } {
-  if (videoModel === 'grok-imagine-1-5') {
-    const trimmed = customPrompt.trim();
-    return {
-      model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
-      input: {
-        prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-        image_urls: grokImageSlugs(scene, characters),
-        mode: 'normal',
-        duration: grokSceneDuration(scene),
-        resolution: '720p',
-        aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-        nsfw_checker: false,
-      },
-    };
-  }
-  const swapped = readySwapAssetIds(scene, mediaItems);
-  const referenceImages = swapped
-    ? swapped.map((id) => `@${id}`)
-    : characters.map((c) => `@${c.asset_id}`);
-  const trimmed = customPrompt.trim();
-  const prompt = trimmed.length > 0
-    ? trimmed
-    : rewriteVisualWithImageTokens(scene.visual, characters);
-  const duration = Math.min(15, Math.max(4, Math.round(scene.end - scene.start)));
-  return {
-    model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
-    input: {
-      prompt,
-      reference_image_urls: referenceImages,
-      reference_video_urls: sceneClipSlug ? [`@${sceneClipSlug}`] : [],
-      reference_audio_urls: sceneAudioSlug ? [`@${sceneAudioSlug}`] : [],
-      resolution: '720p',
-      aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-      duration,
-      generate_audio: false,
-    },
-  };
-}
-
-// Build the args for the actual generate_seedance2_video / _fast_video MCP
-// tool call. This is what handleVideo dispatches; the JSON view shows the
-// derived KIE REST shape via buildKieVideoPayload above.
-function buildSeedanceToolArgs(
-  scene: PlanScene,
-  characters: PlanSidecar['characters'],
-  mediaItems: MediaItem[],
-  sceneClipSlug: string,
-  sceneAudioSlug: string,
-  customPrompt: string,
-  sourceAspect: SourceAspect,
-): Record<string, unknown> {
-  const swapped = readySwapAssetIds(scene, mediaItems);
-  const imageSlugs = swapped
-    ? swapped.map((id) => `@${id}`)
-    : characters.map((c) => `@${c.asset_id}`);
-  const trimmed = customPrompt.trim();
-  return {
-    prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-    image_slugs: imageSlugs,
-    video_slugs: [`@${sceneClipSlug}`],
-    audio_slugs: [`@${sceneAudioSlug}`],
-    // Server splices this audio over the seedance output before the asset
-    // reaches 'ready'. Survives page reloads — the prior client-side
-    // pendingAudioReplace effect did not.
-    replace_audio_with: `@${sceneAudioSlug}`,
-    resolution: '720p',
-    aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-    duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
-    generate_audio: false,
-  };
-}
-
-// Build the args for the generate_grok_imagine_video MCP tool. Grok i2v animates
-// from reference image(s) rather than interpolating between two frames, so it
-// anchors on the swapped first frame plus the character refs; the scene's
-// original audio is spliced back over the output server-side. Returns null when
-// the first-frame swap doesn't exist yet (Grok requires >=1 image).
-function buildGrokImagineToolArgs(
-  scene: PlanScene,
-  characters: PlanSidecar['characters'],
-  sceneAudioSlug: string,
-  customPrompt: string,
-  sourceAspect: SourceAspect,
-): Record<string, unknown> | null {
-  if (!scene.swap?.image1) return null;
-  const trimmed = customPrompt.trim();
-  return {
-    prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-    image_slugs: grokImageSlugs(scene, characters),
-    mode: 'normal',
-    duration: grokSceneDuration(scene),
-    resolution: '720p',
-    aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-    nsfw_checker: false,
-    replace_audio_with: `@${sceneAudioSlug}`,
-  };
 }
 
 // Per-frame self-contained block: provider/model dropdowns + prompt/JSON tabs
@@ -4055,7 +3665,9 @@ function renderJsonLine(
   return parts;
 }
 
-function PayloadJsonView({ payload, mediaItems, projectSlug }: {
+// Exported for the flow-canvas node JSON flip (Phase 3). Renders a payload with
+// inline @img-/@vid-/@aud-/@plan thumbnails via renderJsonLine.
+export function PayloadJsonView({ payload, mediaItems, projectSlug }: {
   payload: unknown;
   mediaItems: MediaItem[];
   projectSlug: string;

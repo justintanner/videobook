@@ -24,6 +24,7 @@ import { ProviderKeysScreen } from '@/components/settings/ProviderKeysScreen';
 import { ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { TrimEditor } from '@/components/commands/trim/TrimEditor';
+import { PlanFlowEditor } from '@/components/center-stage/plan/PlanFlowEditor';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
 import { CharacterDialog } from '@/components/character/CharacterDialog';
@@ -124,6 +125,7 @@ export function HomePage() {
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<string | null>(null);
   const [deleteProjectSubmitting, setDeleteProjectSubmitting] = useState(false);
   const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
+  const [planFlowOpen, setPlanFlowOpen] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [osgTarget, setOsgTarget] = useState<{ assetId: string; osgAssetId?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -1409,6 +1411,7 @@ export function HomePage() {
         setPlanEmptyOverride(true);
       }
     },
+    open_plan_flow: () => setPlanFlowOpen(true),
     open_templates: openTemplates,
     open_projects: () => setProjectsOpen(true),
     create_project: (slug: string) => { void handleCreateProject(slug); },
@@ -1477,6 +1480,14 @@ export function HomePage() {
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}
+        />
+        <PlanFlowEditor
+          open={planFlowOpen}
+          onClose={() => setPlanFlowOpen(false)}
+          mediaItems={mediaItems}
+          projectSlug={projectSlug}
+          callTool={callTool}
+          assetSlugs={assetSlugs}
         />
         <div className="grid grid-rows-[48px_1fr_auto] h-full">
           <HomeHeaderBar
