@@ -6,6 +6,7 @@ import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField } from "./schema-from-apicity.js";
+import { requireAtLeastOne, toolError } from "./_shared.js";
 
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"] as const;
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -119,61 +120,57 @@ export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
       } = args as Args;
 
       if (!process.env.DASHSCOPE_API_KEY) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "DASHSCOPE_API_KEY environment variable is not set" }],
-        };
+        return toolError("DASHSCOPE_API_KEY environment variable is not set");
       }
 
-      if (!first_frame_slug && !last_frame_slug && !first_clip_slug && !driving_audio_slug && !video_slug) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Alibaba Video Synthesis requires at least one media input (first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug, or video_slug)" }],
-        };
-      }
+      const missingInput = requireAtLeastOne("generate_alibaba_video", [
+        { name: "first_frame_slug", value: first_frame_slug },
+        { name: "last_frame_slug", value: last_frame_slug },
+        { name: "first_clip_slug", value: first_clip_slug },
+        { name: "driving_audio_slug", value: driving_audio_slug },
+        { name: "video_slug", value: video_slug },
+      ]);
+      if (missingInput) return missingInput;
 
       let firstFrame: RefInput | undefined;
       if (first_frame_slug) {
         const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        if (!r.ok) return toolError(r.error);
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_slug) {
         const r = await resolveImageSlug(fs, last_frame_slug, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        if (!r.ok) return toolError(r.error);
         lastFrame = r.value;
       }
 
       let firstClip: RefInput | undefined;
       if (first_clip_slug) {
         const r = await resolveVideoSlug(fs, first_clip_slug, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        if (!r.ok) return toolError(r.error);
         firstClip = r.value;
       }
 
       let drivingAudio: RefInput | undefined;
       if (driving_audio_slug) {
         const r = await resolveAudioSlug(fs, driving_audio_slug, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        if (!r.ok) return toolError(r.error);
         drivingAudio = r.value;
       }
 
       let videoRef: RefInput | undefined;
       if (video_slug) {
         const r = await resolveVideoSlug(fs, video_slug, project_slug);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
+        if (!r.ok) return toolError(r.error);
         videoRef = r.value;
       }
 
       const videoName = `alibaba-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }],
-        };
+        return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;

@@ -26,3 +26,27 @@ export function zodErrorToToolResult(err: ZodLikeError): ToolErrorResult {
     content: [{ type: "text" as const, text: lines.join("\n") }],
   };
 }
+
+// Standard MCP tool error from a plain message. Replaces the inline
+// `{ isError: true as const, content: [{ type: "text" as const, text }] }`
+// literals scattered through the tool handlers.
+export function toolError(text: string): ToolErrorResult {
+  return { isError: true as const, content: [{ type: "text" as const, text }] };
+}
+
+export type NamedInput = { name: string; value: unknown };
+
+// "provided" = a non-blank string, or an array with at least one non-blank entry.
+function isProvided(value: unknown): boolean {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(isProvided);
+  return value !== undefined && value !== null;
+}
+
+// Enforce a cross-field "at least one of these inputs must be provided" rule —
+// the kind MCP's flat JSON-Schema input can't express. Returns a tool error
+// naming every candidate when none are present, else null.
+export function requireAtLeastOne(label: string, inputs: NamedInput[]): ToolErrorResult | null {
+  if (inputs.some((i) => isProvided(i.value))) return null;
+  return toolError(`${label} requires at least one of: ${inputs.map((i) => i.name).join(", ")}`);
+}

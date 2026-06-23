@@ -3,6 +3,7 @@ import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
+import { requireAtLeastOne, toolError } from "./_shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -34,62 +35,49 @@ type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_image",
-    description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
     schema: generateGrokImagineImageSchema,
     handler: async (args) => {
       const { asset_id: rawAssetId, image_slugs, project_slug, prompt, aspect_ratio, _provider } = args as Args;
 
-      // Derive asset_id from image_slugs if not provided directly
-      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
-
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
       if (!process.env[requiredKey]) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `${requiredKey} environment variable is not set` }],
-        };
+        return toolError(`${requiredKey} environment variable is not set`);
       }
 
+      const missingInput = requireAtLeastOne("generate_grok_imagine_image", [
+        { name: "asset_id", value: rawAssetId },
+        { name: "image_slugs", value: image_slugs },
+      ]);
+      if (missingInput) return missingInput;
+
+      // Derive asset_id from image_slugs if not provided directly
+      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
       if (!asset_id) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "asset_id or image_slugs with at least one entry is required" }],
-        };
+        return toolError("asset_id or image_slugs with at least one entry is required");
       }
 
       if (!asset_id.startsWith("img-")) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `asset_id must start with img-, got: ${asset_id}` }],
-        };
+        return toolError(`asset_id must start with img-, got: ${asset_id}`);
       }
 
       const manifestResult = await fs.getManifest(asset_id, project_slug);
       if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
+        return toolError(manifestResult.error.message);
       }
 
       const manifest = manifestResult.value;
       const imageFile = findImageFile(manifest.files);
       if (!imageFile) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `No image file found in asset ${asset_id}` }],
-        };
+        return toolError(`No image file found in asset ${asset_id}`);
       }
 
       const imagePath = join(manifest.path, imageFile.name);
       const imgName = deriveImageName(asset_id);
       const assetResult = await fs.createAsset("img", imgName, project_slug);
       if (!assetResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }],
-        };
+        return toolError(`Failed to create image asset: ${assetResult.error.message}`);
       }
 
       const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;

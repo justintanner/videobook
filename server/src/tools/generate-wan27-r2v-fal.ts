@@ -7,6 +7,7 @@ import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import { apicityField } from "./schema-from-apicity.js";
+import { requireAtLeastOne, toolError } from "./_shared.js";
 
 type VideoInput = { assetId: string; filename: string };
 
@@ -51,7 +52,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_wan27_r2v_fal",
-    description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or video_slugs.",
     schema,
     handler: async (args) => {
       const {
@@ -62,23 +63,26 @@ export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
       } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
-        return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
+        return toolError("FAL_API_KEY environment variable is not set");
       }
+
+      const missingInput = requireAtLeastOne("generate_wan27_r2v_fal", [
+        { name: "image_slugs", value: image_slugs },
+        { name: "video_slugs", value: video_slugs },
+      ]);
+      if (missingInput) return missingInput;
 
       const imgSlugs = image_slugs ?? [];
       const vidSlugs = video_slugs ?? [];
-      if (imgSlugs.length === 0 && vidSlugs.length === 0) {
-        return { isError: true as const, content: [{ type: "text" as const, text: "Wan 2.7 Reference requires at least one reference image or video" }] };
-      }
 
       const resolvedImages = await resolveImageSlugs(fs, imgSlugs, project_slug);
-      if (!resolvedImages.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolvedImages.error }] };
+      if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
       const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, project_slug);
-      if (!resolvedVideos.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolvedVideos.error }] };
+      if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
       const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`, project_slug);
-      if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
+      if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 

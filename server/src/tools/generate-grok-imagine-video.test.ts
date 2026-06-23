@@ -195,4 +195,19 @@ describe("generate_grok_imagine_video tool", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("expected array to have <=7 items");
   });
+
+  it("returns standardized error when neither image_slugs nor asset_id is given", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        project_slug: "test-proj",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("requires at least one of: image_slugs, asset_id");
+  });
 });
