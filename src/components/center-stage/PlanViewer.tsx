@@ -13,6 +13,7 @@ import { ViewerToolbar } from './viewer-shared';
 import { uploadProjectFile } from '@/lib/upload';
 import {
   falWanImageSizeForDimensions,
+  grokAspectRatioForDimensions,
   kieImageAspectRatioForDimensions,
   seedanceAspectRatioForDimensions,
   sourceAspectFromDimensions,
@@ -24,6 +25,9 @@ interface PlanScene {
   start: number;
   end: number;
   visual: string;
+  // Per-scene spoken dialog, sliced from the transcript at /plan-vis time. Seeds
+  // the Grok Imagine video prompt; older plans lack it (guarded with `?? ''`).
+  dialog?: string;
   // Sibling files inside the `plan` asset that hold the per-scene clip and
   // its extracted audio. Stamped at /plan-vis time so the render path can
   // address them as @plan/<filename> without ID reconciliation. Optional in
@@ -2104,19 +2108,23 @@ function parseVariantKey(key: string): { provider: SwapProvider; model: SwapMode
   return null;
 }
 
-type VideoModel = 'seedance-2-ref' | 'seedance-2-fast';
+type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'grok-imagine-1-5';
 
-const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
+const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast', 'grok-imagine-1-5'];
+// Storyboard formula stays Seedance-only — Grok i2v animates from a single
+// reference frame, which doesn't fit the storyboard sheet → video flow.
 const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
 
 const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'generate_seedance2_video',
   'seedance-2-fast': 'generate_seedance2_fast_video',
+  'grok-imagine-1-5': 'generate_grok_imagine_video',
 };
 
 const LABEL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'Seedance 2',
   'seedance-2-fast': 'Seedance Fast',
+  'grok-imagine-1-5': 'Grok Imagine 1.5',
 };
 
 // Per-scene clip + audio live as sibling files inside the `plan` asset
@@ -3014,6 +3022,17 @@ function videoReadyForGen(
   return { ok: false, reason: 'Both swap frames must finish generating' };
 }
 
+// Grok Imagine i2v animates from the first-frame swap alone, so only frame 1
+// must be present and ready — frame 2 is irrelevant to it.
+function grokVideoReadyForGen(
+  scene: PlanScene,
+  tile1: FrameTileState,
+): { ok: boolean; reason?: string } {
+  if (!scene.swap?.image1) return { ok: false, reason: 'Generate the first-frame swap first' };
+  if (tile1.kind !== 'ready') return { ok: false, reason: 'First-frame swap must finish generating' };
+  return { ok: true };
+}
+
 function readySwapAssetIds(
   scene: PlanScene,
   mediaItems: MediaItem[],
@@ -3030,7 +3049,23 @@ function readySwapAssetIds(
 const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
   'seedance-2-ref': 'bytedance/seedance-2',
   'seedance-2-fast': 'bytedance/seedance-2-fast',
+  'grok-imagine-1-5': 'grok-imagine/image-to-video',
 };
+
+// First-frame swap + character refs, used by both the Grok tool args and the
+// JSON preview. For preview-only the frame may not exist yet (RUN VIDEO is
+// gated on it), so fall back to the bare character refs.
+function grokImageSlugs(scene: PlanScene, characters: PlanSidecar['characters']): string[] {
+  const frame1 = scene.swap?.image1;
+  return frame1
+    ? [`@${frame1}`, ...characters.map((c) => `@${c.asset_id}`)]
+    : characters.map((c) => `@${c.asset_id}`);
+}
+
+// Grok i2v duration is an integer 6-30; scene lengths (~7-14s) clamp into range.
+function grokSceneDuration(scene: PlanScene): number {
+  return Math.min(30, Math.max(6, Math.round(scene.end - scene.start)));
+}
 
 function buildKieVideoPayload(
   videoModel: VideoModel,
@@ -3042,6 +3077,21 @@ function buildKieVideoPayload(
   customPrompt: string,
   sourceAspect: SourceAspect,
 ): { model: string; input: Record<string, unknown> } {
+  if (videoModel === 'grok-imagine-1-5') {
+    const trimmed = customPrompt.trim();
+    return {
+      model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
+      input: {
+        prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
+        image_urls: grokImageSlugs(scene, characters),
+        mode: 'normal',
+        duration: grokSceneDuration(scene),
+        resolution: '720p',
+        aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
+        nsfw_checker: false,
+      },
+    };
+  }
   const swapped = readySwapAssetIds(scene, mediaItems);
   const referenceImages = swapped
     ? swapped.map((id) => `@${id}`)
@@ -3096,6 +3146,32 @@ function buildSeedanceToolArgs(
     aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
     generate_audio: false,
+  };
+}
+
+// Build the args for the generate_grok_imagine_video MCP tool. Grok i2v animates
+// from reference image(s) rather than interpolating between two frames, so it
+// anchors on the swapped first frame plus the character refs; the scene's
+// original audio is spliced back over the output server-side. Returns null when
+// the first-frame swap doesn't exist yet (Grok requires >=1 image).
+function buildGrokImagineToolArgs(
+  scene: PlanScene,
+  characters: PlanSidecar['characters'],
+  sceneAudioSlug: string,
+  customPrompt: string,
+  sourceAspect: SourceAspect,
+): Record<string, unknown> | null {
+  if (!scene.swap?.image1) return null;
+  const trimmed = customPrompt.trim();
+  return {
+    prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
+    image_slugs: grokImageSlugs(scene, characters),
+    mode: 'normal',
+    duration: grokSceneDuration(scene),
+    resolution: '720p',
+    aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
+    nsfw_checker: false,
+    replace_audio_with: `@${sceneAudioSlug}`,
   };
 }
 
@@ -3247,9 +3323,17 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // and which server tool RUN VIDEO dispatches.
   const [videoModelPrompts, setVideoModelPrompts] = useState<Record<VideoModel, string>>(() => {
     const seed = rewriteVisualWithImageTokens(scene.visual, characters);
-    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed };
+    // Grok Imagine can voice the swapped characters, so seed its prompt with the
+    // scene's transcribed dialog (skip the no-speech placeholder). Seedance seeds
+    // stay the bare visual.
+    const dialog = (scene.dialog ?? '').trim();
+    const grokSeed = dialog.length > 0 && dialog !== '(no speech in this chunk)'
+      ? `${seed}\n\nDialogue: ${dialog}`
+      : seed;
+    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'grok-imagine-1-5': grokSeed };
   });
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
+  const isGrokVideo = selectedVideoModel === 'grok-imagine-1-5';
   const setSelectedVideoPrompt = useCallback((next: string) => {
     setVideoModelPrompts((prev) => ({ ...prev, [selectedVideoModel]: next }));
   }, [selectedVideoModel]);
@@ -3419,7 +3503,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
     }
   }, [callTool, projectSlug, index, onSidecarUpdate]);
 
-  const videoGate = useMemo(() => videoReadyForGen(scene, tile1, tile2), [scene, tile1, tile2]);
+  const videoGate = useMemo(
+    () => isGrokVideo ? grokVideoReadyForGen(scene, tile1) : videoReadyForGen(scene, tile1, tile2),
+    [isGrokVideo, scene, tile1, tile2],
+  );
 
   const handleVideo = useCallback(async () => {
     if (submittingVideo) return;
@@ -3435,16 +3522,27 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
       });
       return;
     }
+    const isGrok = selectedVideoModel === 'grok-imagine-1-5';
+    const toolArgs = isGrok
+      ? buildGrokImagineToolArgs(scene, characters, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect)
+      : buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect);
+    if (!toolArgs) {
+      toast({
+        title: `Scene ${index + 1}`,
+        description: 'Generate the first-frame swap before running Grok Imagine.',
+        duration: 4000,
+      });
+      return;
+    }
     setSubmittingVideo(true);
     try {
       const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const toolArgs = buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect);
       const result = await callTool(toolName, {
         project_slug: projectSlug,
         ...toolArgs,
       });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to enqueue Seedance 2';
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `Failed to enqueue ${LABEL_BY_VIDEO_MODEL[selectedVideoModel]}`;
         toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
         return;
       }
@@ -3477,7 +3575,12 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
           }
         }
       }
-      const note = swapsReady ? 'Seedance 2 (kie) · 720p · swapped frames' : 'Seedance 2 (kie) · 720p · char refs';
+      const modelLabel = LABEL_BY_VIDEO_MODEL[selectedVideoModel];
+      const note = isGrok
+        ? `${modelLabel} (kie) · 720p · first frame + refs`
+        : swapsReady
+          ? `${modelLabel} (kie) · 720p · swapped frames`
+          : `${modelLabel} (kie) · 720p · char refs`;
       toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
     } finally {
       setSubmittingVideo(false);
@@ -3603,6 +3706,9 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
   // No-swap mode (char refs only) leaves bothReady false; videoGate.ok handles
   // that path so the video step still unlocks when the user skipped swaps.
   const bothReady = tile1.kind === 'ready' && tile2.kind === 'ready';
+  // Grok i2v animates from the first-frame swap alone; Seedance interpolates and
+  // needs both frames. Drives the step dimming + disabled gate per selected model.
+  const videoStepReady = isGrokVideo ? tile1.kind === 'ready' : bothReady;
   const videoTileState = useMemo(
     () => deriveVideoTileState(scene, mediaItems, projectSlug),
     [scene, mediaItems, projectSlug],
@@ -3663,7 +3769,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         onErrorRetry={() => retryFailedSwap(2)}
       />
       <VideoStepBlock
-        bothReady={bothReady}
+        bothReady={videoStepReady}
         selectedModel={selectedVideoModel}
         onSelectModel={setSelectedVideoModel}
         prompt={videoModelPrompts[selectedVideoModel]}
@@ -3672,10 +3778,10 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
         mediaItems={mediaItems}
         sourceAspect={sourceAspect}
         projectSlug={projectSlug}
-        disabled={!bothReady || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
+        disabled={!videoStepReady || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
         disabledReason={
-          !bothReady
-            ? 'Both swap frames must finish generating'
+          !videoStepReady
+            ? (isGrokVideo ? 'Waiting on the first-frame swap' : 'Both swap frames must finish generating')
             : !videoGate.ok
               ? videoGate.reason
               : anySwapInFlight
@@ -3701,7 +3807,7 @@ function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, scene
 // Step-3 wrapper around the existing VideoPanel. Always visible — when both
 // swap frames haven't landed yet, the contents are dimmed and Run Video stays
 // disabled with an explanatory tooltip.
-function VideoStepBlock({ bothReady, ...rest }: {
+function VideoStepBlock({ bothReady, selectedModel, ...rest }: {
   bothReady: boolean;
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
@@ -3744,12 +3850,12 @@ function VideoStepBlock({ bothReady, ...rest }: {
         </span>
         {!bothReady && (
           <span className="text-emerald-300/40 text-[10px] italic">
-            (waiting for both swap frames)
+            {selectedModel === 'grok-imagine-1-5' ? '(waiting for first-frame swap)' : '(waiting for both swap frames)'}
           </span>
         )}
       </div>
       <div className={cn(!bothReady && 'opacity-50 pointer-events-none')}>
-        <VideoPanel {...rest} />
+        <VideoPanel selectedModel={selectedModel} {...rest} />
       </div>
     </div>
   );

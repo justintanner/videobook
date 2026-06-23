@@ -197,6 +197,15 @@ export function sampleFramesForScenes(
   return out;
 }
 
+// Per-chunk spoken dialog, sliced from the word-level transcript by the chunk's
+// [start, end) window. Single source of truth for both the vision-model context
+// blob and the per-scene `dialog` field persisted in the plan sidecar.
+export function dialogForChunk(words: ElevenLabsWord[], chunk: Chunk): string {
+  const wordsOnly = words.filter((w) => w.type === "word");
+  const inChunk = wordsOnly.filter((w) => w.start >= chunk.start && w.start < chunk.end);
+  return inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
+}
+
 export function buildPlanContext(
   characters: CharacterContext[],
   chunks: Chunk[],
@@ -207,10 +216,8 @@ export function buildPlanContext(
     .map((c, i) => `  ${i + 1}. @${c.asset_id} (also known as: ${c.name}) — ${c.description || "(no description)"}`)
     .join("\n");
 
-  const wordsOnly = words.filter((w) => w.type === "word");
   const chunkBlocks = chunks.map((c, i) => {
-    const inChunk = wordsOnly.filter((w) => w.start >= c.start && w.start < c.end);
-    const text = inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
+    const text = dialogForChunk(words, c);
     const chunkFrameTs = sampledFrames
       .filter((f) => f.sceneIdx === i)
       .map((f) => `${f.t.toFixed(2)}s`)

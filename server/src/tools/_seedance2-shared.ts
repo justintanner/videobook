@@ -84,7 +84,10 @@ async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: strin
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+// Resolve an audio reference: `@<assetId>/<filename>` (e.g. `@plan/s1.mp3`)
+// first, falling back to the aud-* asset gate. Exported for reuse by other
+// generators that splice scene audio (e.g. Grok Imagine i2v).
+export async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");

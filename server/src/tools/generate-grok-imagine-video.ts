@@ -1,12 +1,12 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
-import { findAudioFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { apicityField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
+import { resolveAudioSlug, type RefInput } from "./_seedance2-shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -38,26 +38,11 @@ const generateGrokImagineVideoSchema = {
   resolution: apicityField(grokI2v.resolution, "Output resolution"),
   aspect_ratio: apicityField(grokI2v.aspect_ratio, "Output aspect ratio"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
-  replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug). Runs server-side so the asset only reaches ready once the splice is in."),
+  replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
-
-type RefAudioInput = {
-  assetId: string;
-  filename: string;
-};
-
-async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<{ ok: true; value: RefAudioInput } | { ok: false; error: string }> {
-  const assetId = raw.replace(/^@/, "").trim();
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `replace_audio_with must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
-  if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
 
 export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
@@ -105,7 +90,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         imageFilenames.push(imageFile.name);
       }
 
-      let replaceAudioWith: RefAudioInput | undefined;
+      let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
         const resolvedAudio = await resolveAudioSlug(fs, replace_audio_with, project_slug);
         if (!resolvedAudio.ok) {

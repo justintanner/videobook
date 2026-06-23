@@ -1,11 +1,43 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks, sampleFramesForScenes } from "./plan-visualization.js";
+import { computeChunks, sampleFramesForScenes, dialogForChunk } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
 
 const shot = (t: number, score = 25): Candidate => ({ t, score, kind: "shot" });
 const settle = (t: number, score = 5): Candidate => ({ t, score, kind: "settle" });
+
+const word = (text: string, start: number, end: number) =>
+  ({ text, start, end, type: "word" as const });
+const spacing = (start: number, end: number) =>
+  ({ text: " ", start, end, type: "spacing" as const });
+
+describe("dialogForChunk", () => {
+  it("joins words whose start falls within the chunk's [start, end) window", () => {
+    const words = [
+      word("hello", 0.0, 0.4),
+      word("there", 0.5, 0.9),
+      word("friend", 1.2, 1.6),
+      word("outside", 2.4, 2.9),
+    ];
+    expect(dialogForChunk(words, { start: 0, end: 2 })).toBe("hello there friend");
+  });
+
+  it("treats the window as half-open — a word starting exactly at chunk.end is excluded", () => {
+    const words = [word("inside", 1.0, 1.4), word("boundary", 2.0, 2.4)];
+    expect(dialogForChunk(words, { start: 0, end: 2 })).toBe("inside");
+  });
+
+  it("ignores spacing tokens", () => {
+    const words = [word("tight", 0.1, 0.3), spacing(0.3, 0.35), word("packed", 0.35, 0.6)];
+    expect(dialogForChunk(words, { start: 0, end: 1 })).toBe("tight packed");
+  });
+
+  it("falls back to a placeholder when no words land in the chunk", () => {
+    expect(dialogForChunk([word("later", 9.0, 9.4)], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
+    expect(dialogForChunk([], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
+  });
+});
 
 describe("computeChunks", () => {
   it("returns no chunks for non-positive duration", () => {

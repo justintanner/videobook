@@ -6,6 +6,9 @@ interface PlanScene {
   start: number;
   end: number;
   visual: string;
+  // Per-scene spoken dialog, sliced from the transcript at plan-vis time. Older
+  // plans pre-dating this field lack it; the client guards with `?? ''`.
+  dialog?: string;
   // Per-scene frames sampled from the source's original_frames/ at plan-vis
   // time; persisted so the audit view can render exactly what was sent. Older
   // plans pre-dating the audit feature lack this field.

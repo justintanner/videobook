@@ -19,6 +19,10 @@ const SOURCE_RATIO_NATIVE_TOLERANCE = Math.log(1.025)
 
 const SEEDANCE_NATIVE_ASPECT_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9'] as const
 
+const GROK_NATIVE_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '3:2', '2:3'] as const
+
+export type GrokAspectRatio = (typeof GROK_NATIVE_ASPECT_RATIOS)[number]
+
 const KIE_IMAGE_ASPECT_RATIOS_BY_MODEL = {
   'nano-banana-pro': ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
   'gpt-image-2': ['1:1', '9:16', '16:9', '4:3', '3:4'],
@@ -112,6 +116,18 @@ export function seedanceAspectRatioForDimensions(
   if (ratio === null) return FALLBACK_ASPECT_RATIO
   const nearest = nearestAspectRatio(ratio, SEEDANCE_NATIVE_ASPECT_RATIOS)
   return distance(ratio, aspectRatioValue(nearest)) <= SOURCE_RATIO_NATIVE_TOLERANCE ? nearest : 'adaptive'
+}
+
+// Grok Imagine i2v has no 'adaptive' option, so always snap the source ratio to
+// the nearest supported enum value (falling back to 16:9 when dimensions are
+// unknown).
+export function grokAspectRatioForDimensions(
+  width: number | null | undefined,
+  height: number | null | undefined,
+): GrokAspectRatio {
+  const ratio = sourceRatio(width, height)
+  if (ratio === null) return FALLBACK_ASPECT_RATIO
+  return nearestAspectRatio(ratio, GROK_NATIVE_ASPECT_RATIOS)
 }
 
 export function kieImageAspectRatioForDimensions(

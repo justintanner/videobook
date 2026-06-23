@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -194,6 +194,63 @@ describe("generate_grok_imagine_video tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("expected array to have <=7 items");
+  });
+
+  it("accepts a slashed @plan/<file> reference for replace_audio_with", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("img", "anchor-img", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+    const png = await sharp({
+      create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    }).png().toBuffer();
+    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+
+    // The char_swap pipeline addresses per-scene audio as @plan/sN.mp3 — a sibling
+    // file inside the non-media-prefixed `plan` asset, not an aud-* asset.
+    const planDir = join(tempDir, "test-proj", "plan");
+    await mkdir(planDir, { recursive: true });
+    await writeFile(join(planDir, "s1.mp3"), Buffer.from("fake-mp3-bytes"));
+
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        image_slugs: [asset.value.assetId],
+        project_slug: "test-proj",
+        replace_audio_with: "@plan/s1.mp3",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.replace_audio_with).toBe("plan");
+  });
+
+  it("rejects a bare non-aud reference for replace_audio_with", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("img", "anchor2-img", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+    const png = await sharp({
+      create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    }).png().toBuffer();
+    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        image_slugs: [asset.value.assetId],
+        project_slug: "test-proj",
+        replace_audio_with: "vid-not-audio",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("audio slug must be aud-* asset");
   });
 
   it("returns standardized error when neither image_slugs nor asset_id is given", async () => {

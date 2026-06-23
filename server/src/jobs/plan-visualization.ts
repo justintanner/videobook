@@ -21,6 +21,7 @@ import {
   SYSTEM_PROMPT_PLAN,
   buildPlanContext,
   computeChunks,
+  dialogForChunk,
   loadCharacter,
   sampleFramesForScenes,
   type CharacterContext,
@@ -42,6 +43,7 @@ type Scene = {
   start: number;
   end: number;
   visual: string;
+  dialog: string;
   clip_filename: string;
   audio_filename: string;
   frames: Array<{ name: string; t: number }>;
@@ -241,6 +243,7 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         start: c.start,
         end: c.end,
         visual: visuals[i].visual,
+        dialog: dialogForChunk(transcript.words, c),
         clip_filename: `s${i + 1}.mp4`,
         audio_filename: `s${i + 1}.mp3`,
         frames: sampled
