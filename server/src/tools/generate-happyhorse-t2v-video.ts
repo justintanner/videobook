@@ -4,6 +4,7 @@ import { z, type ZodRawShape } from "zod";
 import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -17,8 +18,8 @@ function slugify(text: string): string {
 const generateHappyhorseT2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 5000 chars / 2500 Chinese chars)"),
-  resolution: z.enum(HappyHorseResolutionSchema.options).optional().describe("Output resolution: 720p / 1080p (default 1080p)"),
-  aspect_ratio: z.enum(HappyHorseAspectRatioSchema.options).optional().describe("Output aspect ratio (default 16:9)"),
+  resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
+  aspect_ratio: apicityField(HappyHorseAspectRatioSchema, "Output aspect ratio (default 16:9)"),
   duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

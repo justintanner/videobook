@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -33,8 +34,8 @@ const generateHappyhorseVideoeditVideoSchema = {
   video_slug: z.string().describe("Source video asset to edit (3-60s, e.g., @vid-scene)"),
   prompt: z.string().describe("Edit instruction (max 5000 chars / 2500 Chinese chars)"),
   image_slugs: z.array(z.string()).max(5).optional().describe("0-5 optional reference images for character/style guidance"),
-  resolution: z.enum(HappyHorseResolutionSchema.options).optional().describe("Output resolution: 720p / 1080p (default 1080p)"),
-  audio_setting: z.enum(HappyHorseAudioSettingSchema.options).optional().describe("Audio: auto (model decides) or origin (keep original, default auto)"),
+  resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
+  audio_setting: apicityField(HappyHorseAudioSettingSchema, "Audio: auto (model decides) or origin (keep original, default auto)"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;

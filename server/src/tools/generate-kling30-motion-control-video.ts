@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -35,9 +36,9 @@ const generateKling30MotionControlVideoSchema = {
   prompt: z.string().optional().describe("Optional motion description"),
   character_image_slugs: z.array(z.string()).min(1).describe("Character image @slugs (input_urls)"),
   motion_video_slugs: z.array(z.string()).min(1).describe("Motion reference video @slugs (video_urls)"),
-  mode: z.enum(motionControlInput.mode.unwrap().options).optional().describe("Output resolution: 720p / 1080p (default 720p)"),
-  character_orientation: z.enum(motionControlInput.character_orientation.unwrap().options).optional().describe("Character orientation source: video / image (default video)"),
-  background_source: z.enum(motionControlInput.background_source.unwrap().options).optional().describe("Background source: input_video / input_image (default input_video)"),
+  mode: apicityField(motionControlInput.mode, "Output resolution: 720p / 1080p (default 720p)"),
+  character_orientation: apicityField(motionControlInput.character_orientation, "Character orientation source: video / image (default video)"),
+  background_source: apicityField(motionControlInput.background_source, "Background source: input_video / input_image (default input_video)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

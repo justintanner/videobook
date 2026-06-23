@@ -5,6 +5,7 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function deriveImageName(imageAssetId: string): string {
   const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
@@ -17,8 +18,8 @@ const generateQwen2ImageEditSchema = {
   prompt: z.string().describe("Image editing prompt (max 800 chars)"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).describe("1-3 @img-* slugs for reference images to edit"),
-  image_size: z.enum(qwen2ImageEditInputSchema.image_size.removeDefault().options).optional().describe("Output aspect ratio (default 16:9)"),
-  output_format: z.enum(qwen2ImageEditInputSchema.output_format.removeDefault().options).optional().describe("Output image format (default png)"),
+  image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
+  output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

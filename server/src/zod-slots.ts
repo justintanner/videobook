@@ -14,6 +14,25 @@
 
 type ZodCheckV4 = { _zod?: { def?: { check?: string; minimum?: number; maximum?: number } } };
 
+// A single number/string `.min()/.max()/.int()` check. The @apicity workspace
+// straddles two runtime layouts: Zod 3 exposes checks flat (`kind`/`value`),
+// Zod 4 nests them under `_zod.def` (`check`/`value`/`format`).
+type ZodConstraintCheck = {
+  kind?: string;
+  value?: number;
+  inclusive?: boolean;
+  _zod?: {
+    def?: {
+      check?: string;
+      value?: number;
+      inclusive?: boolean;
+      minimum?: number;
+      maximum?: number;
+      format?: string;
+    };
+  };
+};
+
 type ZodDef = {
   typeName?: string;
   type?: string;
@@ -24,6 +43,7 @@ type ZodDef = {
   maxLength?: { value: number } | null;
   checks?: ZodCheckV4[];
   items?: unknown[];
+  options?: unknown[];
   values?: unknown;
   entries?: unknown;
 };
@@ -227,4 +247,114 @@ export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
     def = defOf(cur);
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Numeric range / string length / enum-or-null readers
+//
+// Numeric `.min()/.max()/.int()` and string `.min()/.max()` constraints live
+// only in the runtime Zod schema (the published `.d.ts` erase them and the JSON
+// `modelInputSchemas` registry omits them). These read them out, straddling the
+// two runtime layouts the @apicity workspace ships: Zod 3 (kie/...: flat
+// `_def.checks[].kind`) and Zod 4 (alibaba/xai/fal vs kie differ — flat vs
+// `_def.checks[]._zod.def.check`).
+// ---------------------------------------------------------------------------
+
+export type NumberRange = { min?: number; max?: number; int: boolean };
+
+function readNumberChecks(def: ZodDef): NumberRange {
+  let min: number | undefined;
+  let max: number | undefined;
+  let int = false;
+  for (const raw of (def.checks ?? []) as ZodConstraintCheck[]) {
+    // Zod 3: flat `{ kind, value }`.
+    if (typeof raw.kind === "string") {
+      if (raw.kind === "int") int = true;
+      else if (raw.kind === "min" && typeof raw.value === "number") min = raw.value;
+      else if (raw.kind === "max" && typeof raw.value === "number") max = raw.value;
+      continue;
+    }
+    // Zod 4: `{ _zod: { def: { check, value, format } } }`.
+    const cdef = raw._zod?.def;
+    if (!cdef) continue;
+    if (cdef.check === "number_format" && cdef.format === "safeint") int = true;
+    else if (cdef.check === "greater_than" && typeof cdef.value === "number") min = cdef.value;
+    else if (cdef.check === "less_than" && typeof cdef.value === "number") max = cdef.value;
+  }
+  return { min, max, int };
+}
+
+/**
+ * Read the numeric range of a (possibly wrapped) `ZodNumber`. For a
+ * `ZodUnion<[ZodNumber, ZodString]>` (grok image-to-video `duration`) the number
+ * branch is read. Returns null if the schema is not a number / number-union.
+ */
+export function zodNumberRange(schema: ZodLike | null | undefined): NumberRange | null {
+  if (!schema) return null;
+  let inner = unwrapToCore(schema);
+  if (isType(inner, "ZodUnion", "union")) {
+    const def = defOf(inner);
+    const options = (def?.options ?? []) as unknown[];
+    const numberOpt = options.find((o) => isType(o, "ZodNumber", "number"));
+    if (!numberOpt) return null;
+    inner = numberOpt;
+  }
+  if (!isType(inner, "ZodNumber", "number")) return null;
+  const def = defOf(inner);
+  return def ? readNumberChecks(def) : null;
+}
+
+function readStringLength(def: ZodDef, which: "min" | "max"): number | undefined {
+  // Zod 3 also exposes string bounds as `_def.minLength/maxLength` objects.
+  if (which === "min" && def.minLength != null) return def.minLength.value;
+  if (which === "max" && def.maxLength != null) return def.maxLength.value;
+  for (const raw of (def.checks ?? []) as ZodConstraintCheck[]) {
+    if (typeof raw.kind === "string") {
+      if (which === "min" && raw.kind === "min" && typeof raw.value === "number") return raw.value;
+      if (which === "max" && raw.kind === "max" && typeof raw.value === "number") return raw.value;
+      continue;
+    }
+    const cdef = raw._zod?.def;
+    if (!cdef) continue;
+    if (which === "min" && cdef.check === "min_length" && typeof cdef.minimum === "number") return cdef.minimum;
+    if (which === "max" && cdef.check === "max_length" && typeof cdef.maximum === "number") return cdef.maximum;
+  }
+  return undefined;
+}
+
+/** Max string length of a (possibly wrapped) `ZodString`, or undefined. */
+export function zodStringMaxLength(schema: ZodLike | null | undefined): number | undefined {
+  if (!schema) return undefined;
+  const inner = unwrapToCore(schema);
+  if (!isType(inner, "ZodString", "string")) return undefined;
+  const def = defOf(inner);
+  return def ? readStringLength(def, "max") : undefined;
+}
+
+/** Min string length of a (possibly wrapped) `ZodString`, or undefined. */
+export function zodStringMinLength(schema: ZodLike | null | undefined): number | undefined {
+  if (!schema) return undefined;
+  const inner = unwrapToCore(schema);
+  if (!isType(inner, "ZodString", "string")) return undefined;
+  const def = defOf(inner);
+  return def ? readStringLength(def, "min") : undefined;
+}
+
+/** True when the (possibly wrapped) schema resolves to a `ZodBoolean`. */
+export function zodIsBoolean(schema: ZodLike | null | undefined): boolean {
+  if (!schema) return false;
+  return isType(unwrapToCore(schema), "ZodBoolean", "boolean");
+}
+
+/**
+ * Like {@link enumOptions} but returns null instead of throwing when the schema
+ * is not a `ZodEnum`, so callers can attempt-enum-then-fall-through to numeric /
+ * string / boolean handling.
+ */
+export function zodEnumOptionsOrNull(schema: ZodLike | null | undefined): EnumValues | null {
+  try {
+    return enumOptions(schema);
+  } catch {
+    return null;
+  }
 }

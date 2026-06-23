@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -70,8 +71,8 @@ const generateWan27R2vVideoSchema = {
   video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (max 5 combined with images)"),
   first_frame_slug: z.string().optional().describe("First frame image asset (overrides aspect_ratio, e.g., @img-start)"),
   audio_slug: z.string().optional().describe("Voice timbre audio asset (wav/mp3, 1-10s, e.g., @aud-voice)"),
-  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
-  aspect_ratio: z.enum(Wan27AspectRatioSchema.options).optional().describe("Video aspect ratio (ignored if first_frame_slug set)"),
+  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
+  aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio (ignored if first_frame_slug set)"),
   duration: z.string().optional().describe("Video duration in seconds (2-10)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),

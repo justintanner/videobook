@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -43,10 +44,10 @@ const generateKling30VideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().optional().describe("Video description"),
   image_slugs: z.array(z.string()).optional().describe("0-2 reference image @slugs (e.g., @img-sunset)"),
-  mode: z.enum(KlingModeSchema.options).describe("Resolution mode: std (standard) / pro (professional) / 4K"),
-  duration: z.enum(KlingDurationSchema.options).describe("Video duration: 3s-15s"),
+  mode: apicityField(KlingModeSchema, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
+  duration: apicityField(KlingDurationSchema, "Video duration: 3s-15s", { required: true }),
   sound: z.boolean().describe("Generate audio for the video"),
-  aspect_ratio: z.enum(KlingAspectRatioSchema.options).optional().describe("Video aspect ratio"),
+  aspect_ratio: apicityField(KlingAspectRatioSchema, "Video aspect ratio"),
   multi_shots: z.boolean().describe("Enable multi-shot mode"),
   multi_prompt: z.array(z.object({
     prompt: z.string(),

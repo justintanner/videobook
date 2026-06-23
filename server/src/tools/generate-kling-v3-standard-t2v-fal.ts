@@ -5,18 +5,17 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalKlingVideoV3StandardTextToVideoRequestSchema.shape;
-const shotTypeOptions = base.shot_type.unwrap().options as readonly [string, ...string[]];
-const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 2500 chars)"),
   duration: z.string().optional().describe("Video duration as string (model-specific)"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
-  shot_type: z.enum(shotTypeOptions).optional().describe("Shot type"),
+  shot_type: apicityField(base.shot_type, "Shot type"),
   negative_prompt: z.string().optional().describe("Things to avoid"),
   cfg_scale: z.number().min(0).max(2).optional().describe("CFG scale (0-2)"),
 } satisfies ZodRawShape;

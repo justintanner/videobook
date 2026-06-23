@@ -3,10 +3,10 @@ import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -23,9 +23,9 @@ const generateNanoBananaImageSchema = {
   prompt: z.string().describe("Text prompt for image generation"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(enumOptions(nanoBananaProInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
-  resolution: z.enum(NanoBananaResolutionSchema.options).optional().describe("Output resolution"),
-  output_format: z.enum(NanoBananaOutputFormatSchema.options).optional().describe("Output image format"),
+  aspect_ratio: apicityField(nanoBananaProInputSchema.aspect_ratio, "Aspect ratio"),
+  resolution: apicityField(NanoBananaResolutionSchema, "Output resolution"),
+  output_format: apicityField(NanoBananaOutputFormatSchema, "Output image format"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;

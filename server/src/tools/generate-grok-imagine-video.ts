@@ -2,9 +2,10 @@ import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { findAudioFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { GrokImageToVideoRequestSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
+import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
+import { apicityField } from "./schema-from-apicity.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -22,8 +23,9 @@ function deriveVideoName(firstAssetId: string): string {
   return `grok-${baseName}`;
 }
 
+// Apicity's mode enum includes "spicy", which this i2v endpoint rejects (docs/apicity-gaps.md).
 const GROK_IMAGE_TO_VIDEO_MODES = ["fun", "normal"] as const;
-const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio.unwrap().options;
+const grokI2v = GrokImageToVideoRequestSchema.shape.input.shape;
 
 const generateGrokImagineVideoSchema = {
   image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
@@ -31,9 +33,9 @@ const generateGrokImagineVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().max(4096).optional().describe("Optional prompt to guide video generation (max 4096 chars)"),
   mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
-  duration: z.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
-  resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: z.enum(GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS).optional().describe("Output aspect ratio"),
+  duration: apicityField(grokI2v.duration, "Video duration in seconds (6-30)"),
+  resolution: apicityField(grokI2v.resolution, "Output resolution"),
+  aspect_ratio: apicityField(grokI2v.aspect_ratio, "Output aspect ratio"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
   replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug). Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),

@@ -5,6 +5,7 @@ import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicit
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -19,8 +20,8 @@ const generateWan27ImageProSchema = {
   prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(Wan27ImageAspectRatioSchema.options).optional().describe("Output aspect ratio (default 1:1)"),
-  resolution: z.enum(Wan27ImageResolutionSchema.options).optional().describe("Output resolution (default 2K)"),
+  aspect_ratio: apicityField(Wan27ImageAspectRatioSchema, "Output aspect ratio (default 1:1)"),
+  resolution: apicityField(Wan27ImageResolutionSchema, "Output resolution (default 2K)"),
   seed: z.number().optional().describe("Random seed (0-2147483647)"),
   nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),

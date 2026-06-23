@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -56,10 +57,10 @@ const generateWan27VideoeditVideoSchema = {
   negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
   video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
   image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
-  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
-  aspect_ratio: z.enum(Wan27AspectRatioSchema.options).optional().describe("Video aspect ratio (omit to match source)"),
+  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
+  aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio (omit to match source)"),
   duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
-  audio_setting: z.enum(Wan27AudioSettingSchema.options).optional().describe("Audio: auto (model decides) or origin (keep original)"),
+  audio_setting: apicityField(Wan27AudioSettingSchema, "Audio: auto (model decides) or origin (keep original)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add 'AI generated' watermark (default false)"),
   nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),

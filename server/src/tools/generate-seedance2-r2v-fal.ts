@@ -6,6 +6,7 @@ import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 type MediaInput = { assetId: string; filename: string };
 
@@ -50,9 +51,6 @@ async function resolveAudioSlugs(
 }
 
 const base = FalSeedance2p0ReferenceToVideoRequestSchema.shape;
-const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
-const durationOptions = base.duration.unwrap().options as readonly [string, ...string[]];
-const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
@@ -60,9 +58,9 @@ const schema = {
   image_slugs: z.array(z.string()).max(9).optional().describe("0-9 reference image @slugs"),
   video_slugs: z.array(z.string()).max(3).optional().describe("0-3 reference video @slugs (combined 2-15s)"),
   audio_slugs: z.array(z.string()).max(3).optional().describe("0-3 reference audio @slugs (combined ≤15s)"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution (default 720p)"),
-  duration: z.enum(durationOptions).optional().describe("Duration in seconds or 'auto' (default auto)"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
+  resolution: apicityField(base.resolution, "Output resolution (default 720p)"),
+  duration: apicityField(base.duration, "Duration in seconds or 'auto' (default auto)"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   generate_audio: z.boolean().optional().describe("Generate synchronized audio (default true)"),
   seed: z.number().int().optional().describe("Seed for deterministic output"),
 } satisfies ZodRawShape;

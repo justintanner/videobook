@@ -5,6 +5,7 @@ import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicit
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -29,8 +30,8 @@ const generateWan27ImageSchema = {
   prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(Wan27ImageAspectRatioSchema.options).optional().describe("Output aspect ratio (default 1:1)"),
-  resolution: z.enum(Wan27ImageResolutionSchema.options).optional().describe("Output resolution (default 2K)"),
+  aspect_ratio: apicityField(Wan27ImageAspectRatioSchema, "Output aspect ratio (default 1:1)"),
+  resolution: apicityField(Wan27ImageResolutionSchema, "Output resolution (default 2K)"),
   seed: z.number().optional().describe("Random seed (0-2147483647)"),
   nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

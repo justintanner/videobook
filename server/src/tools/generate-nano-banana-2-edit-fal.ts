@@ -5,24 +5,20 @@ import { FalNanoBanana2EditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalNanoBanana2EditRequestSchema.shape;
-const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
-const outputFormatOptions = base.output_format.unwrap().options as readonly [string, ...string[]];
-const safetyToleranceOptions = base.safety_tolerance.unwrap().options as readonly [string, ...string[]];
-const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
-const thinkingLevelOptions = base.thinking_level.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Edit instruction"),
   image_slugs: z.array(z.string()).min(1).describe("1 or more @img-* slugs for reference images"),
   num_images: z.number().int().optional().describe("Number of images to generate"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Aspect ratio"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
-  output_format: z.enum(outputFormatOptions).optional().describe("Output image format"),
-  safety_tolerance: z.enum(safetyToleranceOptions).optional().describe("Safety tolerance 1-6"),
-  thinking_level: z.enum(thinkingLevelOptions).optional().describe("Thinking level (minimal/high)"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
+  resolution: apicityField(base.resolution, "Output resolution"),
+  output_format: apicityField(base.output_format, "Output image format"),
+  safety_tolerance: apicityField(base.safety_tolerance, "Safety tolerance 1-6"),
+  thinking_level: apicityField(base.thinking_level, "Thinking level (minimal/high)"),
   enable_web_search: z.boolean().optional().describe("Enable web search grounding"),
   seed: z.number().optional().describe("Seed for deterministic output"),
 } satisfies ZodRawShape;

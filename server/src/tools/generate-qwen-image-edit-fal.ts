@@ -6,6 +6,7 @@ import { queue } from "../queue.js";
 import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
 
@@ -33,9 +34,6 @@ const falImageSizeEnum = unionBranches(base.image_size).find(isEnumBranch);
 if (!falImageSizeEnum) throw new Error("FalQwenImageEditRequestSchema.image_size changed shape");
 const falImageSizeOptions = enumOptions(falImageSizeEnum);
 type FalImageSize = typeof falImageSizeOptions[number];
-
-const outputFormatOptions = base.output_format.unwrap().options as readonly [string, ...string[]];
-const accelerationOptions = base.acceleration.unwrap().options as readonly [string, ...string[]];
 
 // The UI sends the Kie-canonical aspect-ratio strings (matching Qwen2ImageEditRequestSchema
 // on Kie). Accept either those or the Fal enum, then normalize to the Fal enum for the job.
@@ -67,9 +65,9 @@ const schema = {
   num_inference_steps: z.number().int().min(2).max(50).optional().describe("Inference steps (2-50)"),
   guidance_scale: z.number().min(0).max(20).optional().describe("Guidance scale (0-20)"),
   num_images: z.number().int().min(1).max(4).optional().describe("Number of images (1-4)"),
-  output_format: z.enum(outputFormatOptions).optional().describe("Output image format"),
+  output_format: apicityField(base.output_format, "Output image format"),
   negative_prompt: z.string().optional().describe("Negative prompt"),
-  acceleration: z.enum(accelerationOptions).optional().describe("Acceleration level"),
+  acceleration: apicityField(base.acceleration, "Acceleration level"),
   enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
   seed: z.number().int().optional().describe("Seed for deterministic output"),
   output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),

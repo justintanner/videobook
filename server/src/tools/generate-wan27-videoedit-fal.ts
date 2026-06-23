@@ -7,21 +7,19 @@ import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import type { ImageInput } from "./_image-inputs.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
-const aspectRatioOptions = editBase.aspect_ratio.unwrap().options as readonly [string, ...string[]];
-const resolutionOptions = editBase.resolution.unwrap().options as readonly [string, ...string[]];
-const audioSettingOptions = editBase.audio_setting.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Edit instruction"),
   video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
   image_slug: z.string().optional().describe("Optional reference image for character/style guidance"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
+  aspect_ratio: apicityField(editBase.aspect_ratio, "Output aspect ratio"),
+  resolution: apicityField(editBase.resolution, "Output resolution"),
   duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds"),
-  audio_setting: z.enum(audioSettingOptions).optional().describe("Audio: auto or origin"),
+  audio_setting: apicityField(editBase.audio_setting, "Audio: auto or origin"),
   negative_prompt: z.string().optional().describe("Things to avoid"),
   enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
   seed: z.number().int().optional().describe("Seed for deterministic output"),

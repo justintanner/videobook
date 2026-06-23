@@ -5,19 +5,17 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalXaiGrokImagineImageRequestSchema.shape;
-const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
-const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
-const outputFormatOptions = base.output_format.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Text prompt for image generation"),
   num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Aspect ratio"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
-  output_format: z.enum(outputFormatOptions).optional().describe("Output image format"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
+  resolution: apicityField(base.resolution, "Output resolution"),
+  output_format: apicityField(base.output_format, "Output image format"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

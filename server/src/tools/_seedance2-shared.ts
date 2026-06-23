@@ -11,6 +11,7 @@ import {
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 type Seedance2Model = "bytedance/seedance-2" | "bytedance/seedance-2-fast";
 type Resolution = "480p" | "720p" | "1080p";
@@ -106,7 +107,7 @@ function buildSchema(resolutions: readonly Resolution[]) {
     image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (0-9, e.g., @img-style)"),
     video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
     audio_slugs: z.array(z.string()).optional().describe("Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
-    aspect_ratio: z.enum(seedance2InputSchema.aspect_ratio.unwrap().options).optional().describe("Output aspect ratio"),
+    aspect_ratio: apicityField(seedance2InputSchema.aspect_ratio, "Output aspect ratio"),
     resolution: z.enum(resolutions as [Resolution, ...Resolution[]]).optional().describe("Output resolution"),
     duration: z.string().optional().describe("Video duration in seconds (4-15)"),
     generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),

@@ -7,6 +7,7 @@ import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -69,7 +70,7 @@ const generateWan27I2vVideoSchema = {
   last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
   first_clip_slug: z.string().optional().describe("Video asset for continuation (e.g., @vid-scene)"),
   driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
-  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
+  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
   duration: z.string().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),

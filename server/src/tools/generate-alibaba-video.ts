@@ -5,6 +5,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"] as const;
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -94,11 +95,11 @@ const generateAlibabaVideoSchema = {
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),
   driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
   video_slug: z.string().optional().describe("Reference video asset (e.g., @vid-ref)"),
-  resolution: z.enum(AlibabaVideoSynthesisParametersSchema.shape.resolution.unwrap().options).optional().describe("Output resolution"),
+  resolution: apicityField(AlibabaVideoSynthesisParametersSchema.shape.resolution, "Output resolution"),
   duration: z.number().int().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting"),
   watermark: z.boolean().optional().describe("Add watermark to output video"),
-  audio_setting: z.enum(AlibabaVideoSynthesisParametersSchema.shape.audio_setting.unwrap().options).optional().describe("Driving-audio behavior: auto or origin"),
+  audio_setting: apicityField(AlibabaVideoSynthesisParametersSchema.shape.audio_setting, "Driving-audio behavior: auto or origin"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;

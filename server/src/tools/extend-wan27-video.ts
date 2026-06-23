@@ -5,6 +5,7 @@ import { Wan27ResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -48,7 +49,7 @@ const extendWan27VideoSchema = {
   video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
   prompt: z.string().describe("Video description (max 5000 chars)"),
   negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
+  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
   duration: z.string().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),

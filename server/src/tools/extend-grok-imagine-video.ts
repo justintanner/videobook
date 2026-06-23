@@ -5,6 +5,7 @@ import { GrokImagineDurationSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const extendGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
@@ -12,7 +13,7 @@ const extendGrokImagineVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().min(1).max(5000).describe("Describe how to extend the video"),
   extend_at: z.number().describe("Seconds into the source video to start extending from"),
-  extend_times: z.enum(GrokImagineDurationSchema.options).describe("Extension duration in seconds: 6 or 10"),
+  extend_times: apicityField(GrokImagineDurationSchema, "Extension duration in seconds: 6 or 10", { required: true }),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;

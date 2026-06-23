@@ -6,6 +6,7 @@ import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -31,8 +32,6 @@ type RefImageInput = {
   filename: string;
 };
 
-const XAI_VIDEO_ASPECT_RATIOS = XaiVideoGenerateRequestSchema.shape.aspect_ratio.unwrap().options;
-
 const generateGrokImagineRefVideoSchema = {
   prompt: z.string().describe("Text prompt for video generation"),
   project_slug: z.string().describe("Project slug"),
@@ -40,9 +39,9 @@ const generateGrokImagineRefVideoSchema = {
     .array(z.string())
     .optional()
     .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
-  duration: z.enum(GrokImagineDurationSchema.options).optional().describe("Video duration in seconds"),
-  resolution: z.enum(GrokImagineResolutionSchema.options).optional().describe("Output resolution"),
-  aspect_ratio: z.enum(XAI_VIDEO_ASPECT_RATIOS).optional().describe("Video aspect ratio"),
+  duration: apicityField(GrokImagineDurationSchema, "Video duration in seconds"),
+  resolution: apicityField(GrokImagineResolutionSchema, "Output resolution"),
+  aspect_ratio: apicityField(XaiVideoGenerateRequestSchema.shape.aspect_ratio, "Video aspect ratio"),
   _provider: z.string().optional().describe("Provider key (always xai)"),
 } satisfies ZodRawShape;
 

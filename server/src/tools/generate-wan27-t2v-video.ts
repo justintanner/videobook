@@ -5,6 +5,7 @@ import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod"
 import { queue } from "../queue.js";
 import { findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -34,8 +35,8 @@ const generateWan27T2vVideoSchema = {
   prompt: z.string().describe("Video description (max 5000 chars)"),
   negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
   audio_slug: z.string().optional().describe("Optional custom audio asset (e.g., @aud-music)"),
-  resolution: z.enum(Wan27ResolutionSchema.options).optional().describe("Video resolution (default 1080p)"),
-  aspect_ratio: z.enum(Wan27AspectRatioSchema.options).optional().describe("Video aspect ratio"),
+  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
+  aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio"),
   duration: z.string().optional().describe("Video duration in seconds (2-15)"),
   prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
   watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),

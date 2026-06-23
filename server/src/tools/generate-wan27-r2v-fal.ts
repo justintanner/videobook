@@ -6,6 +6,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 type VideoInput = { assetId: string; filename: string };
 
@@ -30,16 +31,14 @@ async function resolveVideoSlugs(
 }
 
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
-const aspectRatioOptions = editBase.aspect_ratio.unwrap().options as readonly [string, ...string[]];
-const resolutionOptions = editBase.resolution.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (optional)"),
   video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (optional)"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
+  aspect_ratio: apicityField(editBase.aspect_ratio, "Output aspect ratio"),
+  resolution: apicityField(editBase.resolution, "Output resolution"),
   duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds"),
   multi_shots: z.boolean().optional().describe("Enable multi-shot mode"),
   negative_prompt: z.string().optional().describe("Things to avoid"),

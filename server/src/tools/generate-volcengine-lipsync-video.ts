@@ -4,6 +4,7 @@ import { VolcengineVideoToVideoLipSyncModeSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 // modelSlug("kie", "volcengine/video-to-video-lip-sync") would throw —
 // @apicity/cost@0.4.2 has no slug registered for the Volcengine model yet, so
@@ -38,7 +39,7 @@ const generateVolcengineLipsyncVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   video_slug: z.string().describe("Source video asset to lip-sync (e.g., @vid-scene)"),
   audio_slug: z.string().describe("Driving audio asset whose speech drives the lips (e.g., @aud-voice)"),
-  mode: z.enum(VolcengineVideoToVideoLipSyncModeSchema.options).describe("Quality mode: lite (faster) or basic"),
+  mode: apicityField(VolcengineVideoToVideoLipSyncModeSchema, "Quality mode: lite (faster) or basic", { required: true }),
   separate_vocal: z.boolean().optional().describe("Separate vocals from background audio before sync"),
   open_scenedet: z.boolean().optional().describe("Enable scene-cut detection"),
   align_audio: z.boolean().optional().describe("Align audio to the video timeline"),

@@ -5,6 +5,7 @@ import { HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -20,7 +21,7 @@ const generateHappyhorseI2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
   prompt: z.string().optional().describe("Optional video description (max 5000 chars / 2500 Chinese chars)"),
-  resolution: z.enum(HappyHorseResolutionSchema.options).optional().describe("Output resolution: 720p / 1080p (default 1080p)"),
+  resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

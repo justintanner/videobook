@@ -5,16 +5,16 @@ import { FalWanV2p7ImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalWanV2p7ImageToVideoRequestSchema.shape;
-const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
   end_frame_slug: z.string().optional().describe("Optional end frame image asset"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
+  resolution: apicityField(base.resolution, "Output resolution"),
   duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds (2-15)"),
   negative_prompt: z.string().optional().describe("Things to avoid"),
   enable_prompt_expansion: z.boolean().optional().describe("Enable prompt expansion"),

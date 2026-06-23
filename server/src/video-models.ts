@@ -8,32 +8,21 @@ import {
   GrokVideoExtendRequestSchema,
   GrokImagineDurationSchema,
   GrokImagineModeSchema,
-  GrokImagineResolutionSchema,
-  KlingAspectRatioSchema,
-  KlingDurationSchema,
-  KlingModeSchema,
   KlingMotionControlRequestSchema,
   KlingVideoRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
-  Wan27AspectRatioSchema,
   Wan27AudioSettingSchema,
   Wan27ImageToVideoRequestSchema,
   Wan27RefToVideoRequestSchema,
-  Wan27ResolutionSchema,
   Wan27TextToVideoRequestSchema,
   Wan27VideoEditRequestSchema,
-  HappyHorseAspectRatioSchema,
-  HappyHorseAudioSettingSchema,
   HappyHorseImageToVideoRequestSchema,
-  HappyHorseResolutionSchema,
   HappyHorseReferenceToVideoRequestSchema,
   HappyHorseTextToVideoRequestSchema,
   HappyHorseVideoEditRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
-  VolcengineVideoToVideoLipSyncModeSchema,
   Omnihuman15RequestSchema,
-  Omnihuman15OutputResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -45,7 +34,15 @@ import {
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoEditVideoRequestSchema,
 } from "@apicity/fal/zod";
-import { readSlotConstraints, enumOptions, zodDefault, zodIsRequired, type SlotConstraints } from "./zod-slots.js";
+import {
+  readSlotConstraints,
+  enumOptions,
+  zodDefault,
+  zodEnumOptionsOrNull,
+  zodIsRequired,
+  zodNumberRange,
+  type SlotConstraints,
+} from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -666,59 +663,26 @@ type ParamSchema = {
   maxLength?: number;
 };
 
-const KLING_MODES = enumOptions(KlingModeSchema);
-const KLING_DURATIONS = enumOptions(KlingDurationSchema);
-const KLING_ASPECT_RATIOS = enumOptions(KlingAspectRatioSchema);
-const KLING_MOTION_CONTROL_MODES = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.mode);
-const KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.character_orientation);
-const KLING_MOTION_CONTROL_BACKGROUND_SOURCES = enumOptions(KlingMotionControlRequestSchema.shape.input.shape.background_source);
-
-const SEEDANCE2_ASPECT_RATIOS = enumOptions(Seedance2FastInputSchema.shape.aspect_ratio);
-const SEEDANCE2_FAST_RESOLUTIONS = enumOptions(Seedance2FastInputSchema.shape.resolution);
-const SEEDANCE2_RESOLUTIONS = enumOptions(Seedance2InputSchema.shape.resolution);
+// Most per-tool enums/ranges are now derived from VIDEO_PARAM_ZOD_SCHEMAS at
+// schema-build time (see applyApicityConstraints). Only constants that encode a
+// deliberate divergence from Apicity, or that feed PARAM_SCHEMAS, remain here.
 
 const SEEDANCE2_TOOL_NAMES = [
   "generate_seedance2_video",
   "generate_seedance2_fast_video",
 ];
 
+// grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
 const GROK_IMAGINE_MODES = enumOptions(GrokImagineModeSchema);
-const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
-const GROK_IMAGINE_RESOLUTIONS = enumOptions(GrokImagineResolutionSchema);
 const GROK_IMAGE_TO_VIDEO_MODES = GROK_IMAGINE_MODES.filter((mode) => mode !== "spicy");
-const GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio);
-const GROK_TEXT_TO_VIDEO_ASPECT_RATIOS = enumOptions(GrokTextToVideoRequestSchema.shape.input.shape.aspect_ratio);
+// grok ref-to-video routes through xAI (unbounded duration); kie's enum is 6/10.
+const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
 
-const XAI_VIDEO_ASPECT_RATIOS = enumOptions(XaiVideoGenerateRequestSchema.shape.aspect_ratio);
-
-const WAN27_RESOLUTIONS = enumOptions(Wan27ResolutionSchema);
-const WAN27_ASPECT_RATIOS = enumOptions(Wan27AspectRatioSchema);
+// Feeds the shared audio_setting entry in PARAM_SCHEMAS.
 const WAN27_AUDIO_SETTINGS = enumOptions(Wan27AudioSettingSchema);
 
-const HAPPYHORSE_RESOLUTIONS = enumOptions(HappyHorseResolutionSchema);
-const HAPPYHORSE_ASPECT_RATIOS = enumOptions(HappyHorseAspectRatioSchema);
-const HAPPYHORSE_AUDIO_SETTINGS = enumOptions(HappyHorseAudioSettingSchema);
-const HAPPYHORSE_DURATIONS = ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
-
-const VOLCENGINE_LIPSYNC_MODES = enumOptions(VolcengineVideoToVideoLipSyncModeSchema);
-
-const OMNIHUMAN_OUTPUT_RESOLUTIONS = enumOptions(Omnihuman15OutputResolutionSchema);
-
-const ALIBABA_VIDEO_RESOLUTIONS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.resolution);
-const ALIBABA_VIDEO_AUDIO_SETTINGS = enumOptions(AlibabaVideoSynthesisParametersSchema.shape.audio_setting);
+// Apicity exposes no standalone Alibaba video-model enum (docs/apicity-gaps.md).
 const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
-
-const FAL_WAN27_ASPECT_RATIOS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio);
-const FAL_WAN27_RESOLUTIONS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.resolution);
-const FAL_WAN27_AUDIO_SETTINGS = enumOptions(FalWanV2p7EditVideoRequestSchema.shape.audio_setting);
-
-const FAL_SEEDANCE2_REF_RESOLUTIONS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution);
-const FAL_SEEDANCE2_REF_DURATIONS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration);
-const FAL_SEEDANCE2_REF_ASPECT_RATIOS = enumOptions(FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio);
-
-const FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS = enumOptions(FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio);
-const FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS = enumOptions(FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution);
-const FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS = enumOptions(FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution);
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -816,6 +780,56 @@ function normalizeDefaultForParam(prop: ParamSchema, value: unknown): unknown {
   return value;
 }
 
+// (tool, param) pairs whose enum/range deliberately diverges from the mapped
+// Apicity schema — auto-derivation is skipped and the per-tool override block
+// remains the source. Each divergence is documented in docs/apicity-gaps.md.
+const APICITY_DERIVE_SKIP: Record<string, ReadonlySet<string>> = {
+  // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
+  generate_grok_imagine_video: new Set(["mode"]),
+  // Apicity Wan27VideoEditRequestSchema.duration is an unbounded int; the
+  // "0"/2-10 set is provider knowledge absent from the schema.
+  generate_wan27_videoedit_video: new Set(["duration"]),
+  // Apicity allows duration 0 (full-source) but reference-to-video has no source
+  // clip, so the app restricts to >= 2.
+  generate_wan27_r2v_fal_video: new Set(["duration"]),
+  // Apicity routes ref-to-video through xAI, whose duration is an unbounded
+  // number; the real endpoint only accepts 6 or 10 (kie's GrokImagineDuration).
+  generate_grok_imagine_ref_video: new Set(["duration"]),
+};
+
+function rangeToStringEnum(min: number, max: number): string[] {
+  const values: string[] = [];
+  for (let n = min; n <= max; n++) values.push(String(n));
+  return values;
+}
+
+// Apply enum options / numeric range / string length read from an Apicity field
+// schema onto a ParamSchema. An enum wins; otherwise a numeric range maps to
+// either integer min/max (when the param is already numeric) or, for
+// string-typed duration-style params, an expanded string enum to preserve the
+// existing wire shape.
+function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
+  const enumOpts = zodEnumOptionsOrNull(schema);
+  if (enumOpts) {
+    prop.enum = [...enumOpts];
+  } else {
+    const range = zodNumberRange(schema);
+    if (range && (range.min !== undefined || range.max !== undefined)) {
+      if (prop.type === "integer" || prop.type === "number") {
+        prop.type = range.int ? "integer" : "number";
+        if (range.min !== undefined) prop.minimum = range.min;
+        if (range.max !== undefined) prop.maximum = range.max;
+        prop.enum = undefined;
+      } else if (range.int && range.min !== undefined && range.max !== undefined) {
+        prop.enum = rangeToStringEnum(range.min, range.max);
+      }
+    }
+  }
+  // NOTE: string min/max length is intentionally NOT derived here. Prompt caps
+  // are hand-tuned and diverge from Apicity in places (e.g. grok i2v hardcodes
+  // 4096 where Apicity says 5000) — see docs/apicity-gaps.md.
+}
+
 function getVideoToolSchema(toolName: string): ToolSchema | null {
   const model = Object.values(VIDEO_MODELS).find((m) => m.tool_name === toolName);
   if (!model) return null;
@@ -834,9 +848,9 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     // Tool-specific enum/description overrides
     if (toolName === "generate_kling30_video") {
       if (param === "prompt") prop.description = "Video description";
-      if (param === "mode") { prop.enum = KLING_MODES; prop.description = "Resolution mode: std (standard) / pro (professional) / 4K"; }
-      if (param === "duration") { prop.enum = KLING_DURATIONS; prop.description = "Video duration: 3s-15s"; }
-      if (param === "aspect_ratio") { prop.enum = KLING_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "mode") prop.description = "Resolution mode: std (standard) / pro (professional) / 4K";
+      if (param === "duration") prop.description = "Video duration: 3s-15s";
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "sound") prop.description = "Generate audio for the video";
       if (param === "image_slugs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
     }
@@ -844,17 +858,16 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "prompt") prop.description = "Optional motion description";
       if (param === "character_image_slugs") prop.description = "Character image @slugs (input_urls)";
       if (param === "motion_video_slugs") prop.description = "Motion reference video @slugs (video_urls)";
-      if (param === "mode") { prop.enum = KLING_MOTION_CONTROL_MODES; prop.description = "Output resolution: 720p / 1080p"; }
-      if (param === "character_orientation") { prop.enum = KLING_MOTION_CONTROL_CHARACTER_ORIENTATIONS; prop.description = "Character orientation source: video / image"; }
-      if (param === "background_source") { prop.enum = KLING_MOTION_CONTROL_BACKGROUND_SOURCES; prop.description = "Background source: input_video / input_image"; }
+      if (param === "mode") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "character_orientation") prop.description = "Character orientation source: video / image";
+      if (param === "background_source") prop.description = "Background source: input_video / input_image";
     }
     if (SEEDANCE2_TOOL_NAMES.includes(toolName)) {
       if (param === "prompt") { prop.description = "Video description (3-20000 characters)"; prop.minLength = 3; prop.maxLength = 20000; }
-      if (param === "aspect_ratio") { prop.enum = SEEDANCE2_ASPECT_RATIOS; prop.description = "Frame dimensions (adaptive auto-fits to content)"; }
-      if (param === "duration") { prop.enum = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 4-15 seconds"; }
+      if (param === "aspect_ratio") prop.description = "Frame dimensions (adaptive auto-fits to content)";
+      if (param === "duration") prop.description = "Video duration: 4-15 seconds";
       if (param === "resolution") {
         const isFast = toolName === "generate_seedance2_fast_video";
-        prop.enum = isFast ? SEEDANCE2_FAST_RESOLUTIONS : SEEDANCE2_RESOLUTIONS;
         prop.description = isFast
           ? "Output resolution: 480p / 720p"
           : "Output resolution: 480p / 720p / 1080p";
@@ -869,45 +882,47 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_wan27_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "audio_slug") prop.description = "Optional custom audio asset (e.g., @aud-music)";
-      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
-      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
+      if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_wan27_i2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_wan27_videoedit_video") {
       if (param === "prompt") { prop.description = "Edit description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
       if (param === "image_slug") prop.description = "Reference image for character/style guidance (e.g., @img-outfit)";
-      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (omit to match source)"; }
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio (omit to match source)";
+      // Apicity types this duration as an unbounded int; the "0"/2-10 set is provider knowledge (APICITY_DERIVE_SKIP).
       if (param === "duration") { prop.enum = ["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
-      if (param === "audio_setting") { prop.enum = WAN27_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
       if (param === "watermark") { prop.type = "boolean"; prop.description = "Add 'AI generated' watermark to lower-right corner (default false)"; }
     }
     if (toolName === "generate_wan27_r2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "image_slugs") prop.description = "Reference image assets (max 5 total with videos, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (max 5 total with images, e.g., @vid-motion)";
-      if (param === "aspect_ratio") { prop.enum = WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (ignored if first_frame_slug set)"; }
-      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 2-10 seconds"; }
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio (ignored if first_frame_slug set)";
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "duration") prop.description = "Video duration: 2-10 seconds";
     }
     if (toolName === "extend_wan27_video") {
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-scene)"; }
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "resolution") { prop.enum = WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "duration") { prop.enum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]; prop.description = "Video duration: 2-15 seconds"; }
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Video motion description (optional, max 4096 chars)"; prop.maxLength = 4096; }
+      // Apicity mode enum includes "spicy" which this i2v endpoint rejects (APICITY_DERIVE_SKIP).
       if (param === "mode") { prop.enum = GROK_IMAGE_TO_VIDEO_MODES; prop.description = "Generation mode: fun / normal"; }
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
-      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = GROK_IMAGE_TO_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (6-30)"; }
+      if (param === "resolution") prop.description = "Video resolution: 480p / 720p";
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; }
       if (param === "image_slugs") {
         prop.description = "1-7 reference image assets (required, e.g., @img-sunset)";
@@ -917,31 +932,33 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_grok_imagine_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
-      if (param === "mode") { prop.enum = GROK_IMAGINE_MODES; prop.description = "Generation mode: fun / normal / spicy"; }
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 6; prop.maximum = 30; prop.description = "Video duration in seconds (6-30)"; }
-      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = GROK_TEXT_TO_VIDEO_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "mode") prop.description = "Generation mode: fun / normal / spicy";
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (6-30)"; }
+      if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; }
     }
     if (toolName === "generate_grok_imagine_ref_video") {
       if (param === "prompt") { prop.description = "Video description"; }
+      // Apicity routes this through xAI whose duration is unbounded; the real endpoint only accepts 6/10 (APICITY_DERIVE_SKIP).
       if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
-      if (param === "resolution") { prop.enum = GROK_IMAGINE_RESOLUTIONS; prop.description = "Video resolution: 480p / 720p"; }
-      if (param === "aspect_ratio") { prop.enum = XAI_VIDEO_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
+      if (param === "resolution") prop.description = "Video resolution: 480p / 720p";
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
     }
     if (toolName === "extend_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; prop.maxLength = 5000; }
       if (param === "extend_at") { prop.description = "Seconds into the source video to start extending from"; }
-      if (param === "extend_times") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Extension duration: 6s / 10s"; }
+      if (param === "extend_times") prop.description = "Extension duration: 6s / 10s";
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-sunset-drone)"; }
     }
     if (toolName === "generate_wan27_r2v_fal_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "image_slugs") prop.description = "Reference image assets (max 4, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (max 4, e.g., @vid-motion)";
-      if (param === "aspect_ratio") { prop.enum = FAL_WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio"; }
-      if (param === "resolution") { prop.enum = FAL_WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      // Apicity allows duration 0 (full-source) but ref-to-video has no source clip (APICITY_DERIVE_SKIP).
       if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Video duration in seconds (2-10)"; }
       if (param === "multi_shots") prop.description = "Enable multi-shot mode";
       if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
@@ -952,98 +969,104 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "Reference image assets (0-9)";
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, combined 2-15s)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, combined ≤15s)";
-      if (param === "resolution") { prop.enum = FAL_SEEDANCE2_REF_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
-      if (param === "duration") { prop.enum = FAL_SEEDANCE2_REF_DURATIONS; prop.description = "Duration in seconds or 'auto'"; }
-      if (param === "aspect_ratio") { prop.enum = FAL_SEEDANCE2_REF_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
+      if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
+      if (param === "duration") prop.description = "Duration in seconds or 'auto'";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
       if (param === "generate_audio") { prop.description = "Generate synchronized audio"; }
     }
     if (toolName === "generate_grok_imagine_r2v_fal_video") {
       if (param === "prompt") prop.description = "Video description";
       if (param === "image_slugs") prop.description = "Reference image assets (1-7 required, e.g., @img-style)";
+      // duration is not present in VIDEO_PARAM_ZOD_SCHEMAS for this tool — kept hardcoded.
       if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 1; prop.maximum = 10; prop.description = "Video duration in seconds (1-10)"; }
-      if (param === "aspect_ratio") { prop.enum = FAL_GROK_IMAGINE_VIDEO_REF_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
-      if (param === "resolution") { prop.enum = FAL_GROK_IMAGINE_VIDEO_REF_RESOLUTIONS; prop.description = "Output resolution: 480p / 720p"; }
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
+      if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
     }
     if (toolName === "generate_grok_imagine_extend_fal_video") {
       if (param === "prompt") prop.description = "Describe how to extend the video";
       if (param === "video_slug") prop.description = "Source video asset to extend (e.g., @vid-scene)";
+      // duration is not present in VIDEO_PARAM_ZOD_SCHEMAS for this tool — kept hardcoded.
       if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Extension duration in seconds (2-10)"; }
     }
     if (toolName === "generate_grok_imagine_edit_fal_video") {
       if (param === "prompt") prop.description = "Edit instruction";
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
-      if (param === "resolution") { prop.enum = FAL_GROK_IMAGINE_VIDEO_EDIT_RESOLUTIONS; prop.description = "Output resolution: auto / 480p / 720p"; }
+      if (param === "resolution") prop.description = "Output resolution: auto / 480p / 720p";
     }
     if (toolName === "generate_wan27_videoedit_fal_video") {
       if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
       if (param === "image_slug") prop.description = "Optional reference image for character/style guidance";
-      if (param === "aspect_ratio") { prop.enum = FAL_WAN27_ASPECT_RATIOS; prop.description = "Video aspect ratio (omit to match source)"; }
-      if (param === "resolution") { prop.enum = FAL_WAN27_RESOLUTIONS; prop.description = "Video resolution: 720p / 1080p"; }
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 0; prop.maximum = 10; prop.description = "Video duration in seconds (0 = full source, otherwise 2-10)"; }
-      if (param === "audio_setting") { prop.enum = FAL_WAN27_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "aspect_ratio") prop.description = "Video aspect ratio (omit to match source)";
+      if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (0 = full source, otherwise 2-10)"; }
+      if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
       if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
       if (param === "enable_safety_checker") { prop.description = "Content safety filter"; }
     }
     if (toolName === "generate_happyhorse_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
-      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
-      if (param === "aspect_ratio") { prop.enum = HAPPYHORSE_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
-      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
+      if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_i2v_video") {
       if (param === "prompt") { prop.description = "Optional video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
       if (param === "first_frame_slug") prop.description = "First frame image asset (required, e.g., @img-start)";
-      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
-      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_ref_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
       if (param === "image_slugs") prop.description = "Reference image assets (1-9, order defines character1/character2/...)";
-      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
-      if (param === "aspect_ratio") { prop.enum = HAPPYHORSE_ASPECT_RATIOS; prop.description = "Output aspect ratio"; }
-      if (param === "duration") { prop.enum = HAPPYHORSE_DURATIONS; prop.description = "Video duration: 3-15 seconds"; }
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
+      if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_videoedit_video") {
       if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
       if (param === "video_slug") prop.description = "Source video asset to edit (3-60s, e.g., @vid-scene)";
       if (param === "image_slugs") prop.description = "0-5 optional reference images for character/style guidance";
-      if (param === "resolution") { prop.enum = HAPPYHORSE_RESOLUTIONS; prop.description = "Output resolution: 720p / 1080p"; }
-      if (param === "audio_setting") { prop.enum = HAPPYHORSE_AUDIO_SETTINGS; prop.description = "Audio: auto (model decides) or origin (keep original)"; }
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
     }
     if (toolName === "generate_volcengine_lipsync_video") {
       if (param === "video_slug") prop.description = "Source video asset to lip-sync (e.g., @vid-scene)";
       if (param === "audio_slug") prop.description = "Driving audio asset whose speech drives the lips (e.g., @aud-voice)";
-      if (param === "mode") { prop.enum = VOLCENGINE_LIPSYNC_MODES; prop.description = "Quality mode: lite (faster) or basic"; }
+      if (param === "mode") prop.description = "Quality mode: lite (faster) or basic";
       if (param === "templ_start_seconds") prop.description = "Template start offset in seconds (default 0)";
     }
     if (toolName === "generate_omnihuman_video") {
       if (param === "image_slug") prop.description = "Portrait image asset to animate (required, e.g., @img-face)";
       if (param === "audio_slug") prop.description = "Driving audio asset whose speech/song drives the avatar (required, max 60s, e.g., @aud-voice)";
       if (param === "prompt") { prop.description = "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"; prop.maxLength = 5000; }
-      if (param === "output_resolution") { prop.enum = OMNIHUMAN_OUTPUT_RESOLUTIONS; prop.description = "Output resolution: 720 / 1080 (default 1080)"; }
+      if (param === "output_resolution") prop.description = "Output resolution: 720 / 1080 (default 1080)";
       if (param === "pe_fast_mode") prop.description = "Prompt-enhance fast mode — faster, lower-fidelity (default false)";
       if (param === "seed") prop.description = "Random seed for reproducibility (-1 = random)";
     }
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
+      // model is not present in VIDEO_PARAM_ZOD_SCHEMAS; Apicity exposes no standalone model enum (docs/apicity-gaps.md).
       if (param === "model") { prop.enum = ALIBABA_VIDEO_MODELS; prop.description = "DashScope video model: wan2.7-i2v (image-to-video) or wan2.7-videoedit (video editing)"; }
       if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
       if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
       if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }
       if (param === "driving_audio_slug") { prop.description = "Audio asset for audio-driven motion (e.g., @aud-music)"; }
       if (param === "video_slug") { prop.description = "Reference video asset (e.g., @vid-ref)"; }
-      if (param === "resolution") { prop.enum = ALIBABA_VIDEO_RESOLUTIONS; prop.description = "Output resolution"; }
-      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-15)"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 15; }
+      if (param === "resolution") prop.description = "Output resolution";
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-15)"; }
       if (param === "prompt_extend") { prop.description = "Intelligent prompt rewriting (default true)"; }
       if (param === "watermark") { prop.description = "Add watermark to output video (default false)"; }
-      if (param === "audio_setting") { prop.enum = ALIBABA_VIDEO_AUDIO_SETTINGS; prop.description = "Driving-audio behavior: auto (model decides) or origin (keep original)"; }
+      if (param === "audio_setting") prop.description = "Driving-audio behavior: auto (model decides) or origin (keep original)";
       if (param === "seed") { prop.description = "Random seed for reproducibility"; }
     }
 
     const providerSchema = zodSchemas[param];
     if (providerSchema) {
+      if (!APICITY_DERIVE_SKIP[toolName]?.has(param)) {
+        applyApicityConstraints(prop, providerSchema);
+      }
       const result = zodDefault(providerSchema);
       if (result.hasDefault) {
         const value = normalizeDefaultForParam(prop, result.value);

@@ -5,6 +5,7 @@ import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicit
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -31,8 +32,8 @@ const generateHappyhorseRefVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 5000 chars / 2500 Chinese chars)"),
   image_slugs: z.array(z.string()).min(1).max(9).describe("1-9 reference image @slugs (order defines character1, character2, ...)"),
-  resolution: z.enum(HappyHorseResolutionSchema.options).optional().describe("Output resolution: 720p / 1080p (default 1080p)"),
-  aspect_ratio: z.enum(HappyHorseAspectRatioSchema.options).optional().describe("Output aspect ratio (default 16:9)"),
+  resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
+  aspect_ratio: apicityField(HappyHorseAspectRatioSchema, "Output aspect ratio (default 16:9)"),
   duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
   seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

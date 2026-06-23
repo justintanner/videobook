@@ -5,18 +5,16 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalSeedance2p0FastTextToVideoRequestSchema.shape;
-const resolutionOptions = base.resolution.unwrap().options as readonly [string, ...string[]];
-const durationOptions = base.duration.unwrap().options as readonly [string, ...string[]];
-const aspectRatioOptions = base.aspect_ratio.unwrap().options as readonly [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
-  resolution: z.enum(resolutionOptions).optional().describe("Output resolution"),
-  duration: z.enum(durationOptions).optional().describe("Video duration in seconds"),
-  aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio"),
+  resolution: apicityField(base.resolution, "Output resolution"),
+  duration: apicityField(base.duration, "Video duration in seconds"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
   seed: z.number().optional().describe("Seed for deterministic output"),
 } satisfies ZodRawShape;
