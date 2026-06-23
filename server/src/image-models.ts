@@ -4,22 +4,27 @@
  * Parameter schemas and enums come from @apicity provider packages:
  *   - Kie: kie.modelInputSchemas (static prop, per-model input field schemas)
  *
- * Only identity, labels, image slot limits, and defaults are configured here.
+ * Only identity, labels, and image slot limits are configured here.
  */
 import type { ResolvedAsset } from "videocity-engine";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import {
   GptImage2ImageToImageRequestSchema,
+  GptImage2TextToImageRequestSchema,
   GrokImageToImageRequestSchema,
+  GrokTextToImageRequestSchema,
   NanoBananaProRequestSchema,
   Qwen2ImageEditRequestSchema,
   SeedreamImageToImageRequestSchema,
+  SeedreamTextToImageRequestSchema,
   Wan27ImageInputSchema,
+  Wan27ImageProRequestSchema,
+  Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
 import { z } from "zod";
-import { readSlotConstraints, type SlotConstraints } from "./zod-slots.js";
+import { readSlotConstraints, zodDefault, type SlotConstraints } from "./zod-slots.js";
 
 // Qwen multimodal endpoint accepts 0-3 reference images for qwen-image-2.0*
 // generation, and 1-3 required for qwen-image-edit*. No matching schema is
@@ -66,7 +71,7 @@ type ImageModelConfig = {
   /** Apicity Zod schema for the image-asset input field, or null if the tool takes no image input. */
   imageFieldSchema: ZodLike | null;
   kieImageField?: string;
-  defaults: Record<string, unknown>;
+  defaultSchemas?: Record<string, ZodLike>;
   /** Optional fal.ai routing — when set, adds "fal" as a provider option.
    *  Tool name is picked by image-slug count at submit time: withRefs when
    *  one or more reference images are present, noRefs otherwise. */
@@ -82,7 +87,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
     imageFieldSchema: NanoBananaProRequestSchema.shape.input.shape.image_input,
     kieImageField: "image_input",
-    defaults: { aspect_ratio: "1:1", resolution: "2K", output_format: "png" },
+    defaultSchemas: {
+      aspect_ratio: NanoBananaProRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: NanoBananaProRequestSchema.shape.input.shape.resolution,
+      output_format: NanoBananaProRequestSchema.shape.input.shape.output_format,
+    },
     falToolNames: { noRefs: "generate_nano_banana_pro_fal", withRefs: "generate_nano_banana_pro_edit_fal" },
   },
   {
@@ -94,7 +103,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Image-to-image transformation (requires exactly 1 reference image)",
     imageFieldSchema: GrokImageToImageRequestSchema.shape.input.shape.image_urls,
     kieImageField: "image_urls",
-    defaults: {},
+    defaultSchemas: { nsfw_checker: GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker },
     falToolNames: { withRefs: "generate_grok_imagine_image_edit_fal" },
   },
   {
@@ -105,7 +114,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Image editing with 1-16 reference images, aspect ratio, resolution (1K/2K/4K), and NSFW filter",
     imageFieldSchema: GptImage2ImageToImageRequestSchema.shape.input.shape.input_urls,
     kieImageField: "input_urls",
-    defaults: { aspect_ratio: "1:1" },
+    defaultSchemas: {
+      aspect_ratio: GptImage2ImageToImageRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: GptImage2ImageToImageRequestSchema.shape.input.shape.resolution,
+      nsfw_checker: GptImage2ImageToImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
   },
   {
     key: "gpt_image_text",
@@ -114,7 +127,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "GPT Image 2.0",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio and resolution (1K/2K/4K)",
     imageFieldSchema: null,
-    defaults: { aspect_ratio: "1:1" },
+    defaultSchemas: {
+      aspect_ratio: GptImage2TextToImageRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: GptImage2TextToImageRequestSchema.shape.input.shape.resolution,
+      nsfw_checker: GptImage2TextToImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
   },
   {
     key: "grok_imagine_text",
@@ -124,7 +141,10 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Grok Imagine",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
     imageFieldSchema: null,
-    defaults: { aspect_ratio: "1:1" },
+    defaultSchemas: {
+      aspect_ratio: GrokTextToImageRequestSchema.shape.input.shape.aspect_ratio,
+      nsfw_checker: GrokTextToImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { noRefs: "generate_grok_imagine_image_fal" },
   },
   {
@@ -135,7 +155,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Prompt-driven image edit using Qwen2 (requires 1-3 reference images)",
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
-    defaults: { image_size: "16:9", output_format: "png" },
+    defaultSchemas: {
+      image_size: Qwen2ImageEditRequestSchema.shape.input.shape.image_size,
+      output_format: Qwen2ImageEditRequestSchema.shape.input.shape.output_format,
+      nsfw_checker: Qwen2ImageEditRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { withRefs: "generate_qwen_image_edit_fal" },
   },
   {
@@ -145,7 +169,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Seedream 5 Lite",
     description: "Text-to-image generation with ByteDance Seedream 5 Lite (basic=2K, high=4K), with aspect ratio and content-safety control",
     imageFieldSchema: null,
-    defaults: { aspect_ratio: "1:1", quality: "basic" },
+    defaultSchemas: {
+      aspect_ratio: SeedreamTextToImageRequestSchema.shape.input.shape.aspect_ratio,
+      quality: SeedreamTextToImageRequestSchema.shape.input.shape.quality,
+      nsfw_checker: SeedreamTextToImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { noRefs: "generate_seedream_v5_lite_fal" },
   },
   {
@@ -156,7 +184,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Image-to-image edit with ByteDance Seedream 5 Lite (1-14 reference images), aspect ratio, and quality/safety control",
     imageFieldSchema: SeedreamImageToImageRequestSchema.shape.input.shape.image_urls,
     kieImageField: "image_urls",
-    defaults: { aspect_ratio: "1:1", quality: "basic" },
+    defaultSchemas: {
+      aspect_ratio: SeedreamImageToImageRequestSchema.shape.input.shape.aspect_ratio,
+      quality: SeedreamImageToImageRequestSchema.shape.input.shape.quality,
+      nsfw_checker: SeedreamImageToImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { withRefs: "generate_seedream_v5_lite_edit_fal" },
   },
   {
@@ -167,7 +199,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
     imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
     kieImageField: "input_urls",
-    defaults: { aspect_ratio: "1:1", resolution: "2K" },
+    defaultSchemas: {
+      aspect_ratio: Wan27ImageRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: Wan27ImageRequestSchema.shape.input.shape.resolution,
+      nsfw_checker: Wan27ImageRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { noRefs: "generate_wan27_fal", withRefs: "generate_wan27_edit_fal" },
   },
   {
@@ -178,7 +214,11 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Pro text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
     imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
     kieImageField: "input_urls",
-    defaults: { aspect_ratio: "1:1", resolution: "2K" },
+    defaultSchemas: {
+      aspect_ratio: Wan27ImageProRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: Wan27ImageProRequestSchema.shape.input.shape.resolution,
+      nsfw_checker: Wan27ImageProRequestSchema.shape.input.shape.nsfw_checker,
+    },
     falToolNames: { noRefs: "generate_wan27_pro_fal", withRefs: "generate_wan27_pro_edit_fal" },
   },
   {
@@ -187,7 +227,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Alibaba Wan 2.7 Image",
     description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
-    defaults: { model: "wan2.7-image" },
   },
   {
     key: "alibaba_image_pro",
@@ -195,7 +234,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Alibaba Wan 2.7 Image Pro",
     description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
-    defaults: { model: "wan2.7-image-pro" },
   },
   {
     key: "alibaba_qwen_image",
@@ -203,7 +241,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Alibaba Qwen Image",
     description: "Alibaba Cloud Qwen text-to-image (qwen-image-2.0 family) with 0-3 optional reference images, via the synchronous multimodal endpoint",
     imageFieldSchema: AlibabaQwenImageReferenceSlotsSchema,
-    defaults: { model: "qwen-image-2.0-pro" },
   },
   {
     key: "alibaba_qwen_image_edit",
@@ -211,12 +248,20 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     label: "Alibaba Qwen Image Edit",
     description: "Alibaba Cloud Qwen image editing (qwen-image-edit family) with 1-3 required reference images, via the synchronous multimodal endpoint",
     imageFieldSchema: AlibabaQwenImageEditReferenceSlotsSchema,
-    defaults: { model: "qwen-image-edit-plus" },
   },
 ];
 
 function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
   return readSlotConstraints(config.imageFieldSchema);
+}
+
+function getImageDefaultsForConfig(config: ImageModelConfig): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+  for (const [fieldName, schema] of Object.entries(config.defaultSchemas ?? {})) {
+    const result = zodDefault(schema);
+    if (result.hasDefault) defaults[fieldName] = result.value;
+  }
+  return defaults;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +298,7 @@ type ToolSchema = {
 function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fieldName: string): ParamSchema {
   const isImageField = fieldName === config.kieImageField;
   const outputName = isImageField ? "image_slugs" : fieldName;
+  const defaults = getImageDefaultsForConfig(config);
 
   const param: ParamSchema = {
     // Image fields are exposed to the frontend as `image_slugs: string[]` even
@@ -265,7 +311,7 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
 
   if (field.enum) param.enum = [...field.enum];
   if (isImageField || field.items) param.items = { type: "string" };
-  if (outputName in config.defaults) param.default = config.defaults[outputName];
+  if (outputName in defaults) param.default = defaults[outputName];
 
   return param;
 }
@@ -288,6 +334,7 @@ function imageSlotsDescription(slots: SlotConstraints | null): string {
 function getImageToolSchema(toolName: string): ToolSchema | null {
   const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
   if (!config) return null;
+  const defaults = getImageDefaultsForConfig(config);
 
   // Try Kie schema first
   const modelSchema = config.kieModelId ? kieModelSchemas[config.kieModelId] : null;
@@ -300,7 +347,7 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       properties[outputName] = kieFieldToParam(field, config, fieldName);
       if (field.required) required.push(outputName);
     }
-    return { type: "object", properties, required, defaults: config.defaults };
+    return { type: "object", properties, required, defaults };
   }
 
   // Fallback: use xaiSchemaOverride for xAI-only models
@@ -315,11 +362,11 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       };
       if (field.enum) param.enum = [...field.enum];
       if (isImageField || field.items) param.items = { type: "string" };
-      if (fieldName in config.defaults) param.default = config.defaults[fieldName];
+      if (fieldName in defaults) param.default = defaults[fieldName];
       properties[fieldName] = param;
       if (field.required) required.push(fieldName);
     }
-    return { type: "object", properties, required, defaults: config.defaults };
+    return { type: "object", properties, required, defaults };
   }
 
   // Alibaba image models — custom schema
@@ -337,7 +384,7 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       thinking_mode: { type: "boolean", description: "Enable thinking mode for better quality" },
       seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
     };
-    return { type: "object", properties, required: ["prompt"], defaults: config.defaults };
+    return { type: "object", properties, required: ["prompt"], defaults };
   }
 
   // Alibaba Qwen image models — custom schema (sync multimodal endpoint)
@@ -359,8 +406,8 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
       watermark: { type: "boolean", description: "Add watermark to generated image" },
       seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
     };
-    const required = isEdit ? ["prompt", "image_slugs"] : ["prompt"];
-    return { type: "object", properties, required, defaults: config.defaults };
+    const required = isEdit ? ["prompt", "image_slugs", "model"] : ["prompt", "model"];
+    return { type: "object", properties, required, defaults };
   }
 
   return null;
@@ -450,14 +497,18 @@ function getImageModels(): Record<string, ImageModelInfo> {
       }
     } else if (config.xaiSchemaOverride) {
       params.push(...Object.keys(config.xaiSchemaOverride));
+    } else {
+      const schema = getImageToolSchema(config.tool_name);
+      if (schema) params.push(...Object.keys(schema.properties));
     }
 
+    const defaults = getImageDefaultsForConfig(config);
     result[config.key] = {
       label: config.label,
       tool_name: config.tool_name,
       description: config.description,
       params,
-      defaults: config.defaults,
+      defaults,
       providers: buildProvidersForConfig(config),
     };
   }

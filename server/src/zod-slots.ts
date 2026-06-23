@@ -19,6 +19,7 @@ type ZodDef = {
   type?: string;
   innerType?: unknown;
   schema?: unknown;
+  defaultValue?: unknown;
   minLength?: { value: number } | null;
   maxLength?: { value: number } | null;
   checks?: ZodCheckV4[];
@@ -176,4 +177,54 @@ export function enumOptions(schema: ZodLike | null | undefined): EnumValues {
     throw new Error("enumOptions: schema did not resolve to a non-empty ZodEnum");
   }
   return values as EnumValues;
+}
+
+export function zodDefault(schema: ZodLike | null | undefined): { hasDefault: boolean; value?: unknown } {
+  let cur: unknown = schema;
+  let def = defOf(cur);
+  while (def) {
+    if (isType(cur, "ZodDefault", "default")) {
+      const raw = def.defaultValue;
+      return {
+        hasDefault: true,
+        value: typeof raw === "function" ? (raw as () => unknown)() : raw,
+      };
+    }
+    if (
+      !isType(cur, "ZodOptional", "optional") &&
+      !isType(cur, "ZodNullable", "nullable") &&
+      !isType(cur, "ZodEffects", "effects") &&
+      !isType(cur, "ZodPipe", "pipe")
+    ) {
+      break;
+    }
+    const isEffectsLike = isType(cur, "ZodEffects", "effects") || isType(cur, "ZodPipe", "pipe");
+    const next = isEffectsLike ? (def.schema ?? def.innerType) : def.innerType;
+    if (!next) break;
+    cur = next;
+    def = defOf(cur);
+  }
+  return { hasDefault: false };
+}
+
+export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
+  let cur: unknown = schema;
+  let def = defOf(cur);
+  while (def) {
+    if (
+      isType(cur, "ZodOptional", "optional") ||
+      isType(cur, "ZodNullable", "nullable") ||
+      isType(cur, "ZodDefault", "default")
+    ) {
+      return false;
+    }
+    if (!isType(cur, "ZodEffects", "effects") && !isType(cur, "ZodPipe", "pipe")) {
+      return true;
+    }
+    const next = def.schema ?? def.innerType;
+    if (!next) break;
+    cur = next;
+    def = defOf(cur);
+  }
+  return true;
 }

@@ -229,7 +229,7 @@ describe("buildImageModelOption history integration", () => {
     ];
     const option = buildImageModelOption("gpt_image", gptImage, {}, [], history);
     expect(option.prefilled_values.prompt).toBeUndefined();
-    expect(option.prefilled_values).not.toHaveProperty("resolution");
+    expect(option.prefilled_values.resolution).toBe("1K");
   });
 
   it("history params filtered by model's allowedParams", () => {

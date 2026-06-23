@@ -1487,7 +1487,7 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it("errors when subtitles_enabled=true but no elevenlabs.json", async () => {
+    it("enqueues when subtitles_enabled=true but no elevenlabs.json", async () => {
       const fs = createFs({ projectsDir: tempDir });
       const asset = await fs.createAsset("vid", "no-subs", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
@@ -1501,8 +1501,8 @@ describe("slash commands e2e", () => {
           subtitles_enabled: true,
         },
       });
-      expect(result.isError).toBe(true);
-      expect((result.content as TextContent)[0].text).toContain("elevenlabs.json");
+      expect(result.isError).toBeFalsy();
+      expect(parseResult(result).status).toBe("enqueued");
     });
   });
 

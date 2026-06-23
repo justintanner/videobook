@@ -11,8 +11,8 @@ const extendGrokImagineVideoSchema = {
   video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().min(1).max(5000).describe("Describe how to extend the video"),
-  extend_at: z.number().optional().describe("Seconds into the source video to start extending from (defaults to 0)"),
-  extend_times: z.enum(GrokImagineDurationSchema.options).optional().describe("Extension duration in seconds: 6 or 10"),
+  extend_at: z.number().describe("Seconds into the source video to start extending from"),
+  extend_times: z.enum(GrokImagineDurationSchema.options).describe("Extension duration in seconds: 6 or 10"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
@@ -116,4 +116,3 @@ export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

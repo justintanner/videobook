@@ -294,12 +294,12 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.sound).toBeDefined();
   });
 
-  it("seedance2 (full): aspect_ratio and duration required, full resolution range, all input slots exposed", () => {
+  it("seedance2 (full): duration default comes from Apicity, full resolution range, all input slots exposed", () => {
     const schema = getVideoToolSchema("generate_seedance2_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.required).toContain("aspect_ratio");
-    expect(schema!.required).toContain("duration");
+    expect(schema!.required).not.toContain("aspect_ratio");
+    expect(schema!.required).not.toContain("duration");
     expect(schema!.required).not.toContain("first_frame_slug");
     expect(schema!.required).not.toContain("last_frame_slug");
     expect(schema!.required).not.toContain("image_slugs");
@@ -312,6 +312,8 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.video_slugs).toBeDefined();
     expect(schema!.properties.audio_slugs).toBeDefined();
     expect(schema!.properties.nsfw_checker).toBeDefined();
+    expect(schema!.defaults.duration).toBe("5");
+    expect(schema!.defaults.nsfw_checker).toBe(false);
     expect(schema!.properties.model).toBeUndefined();
     expect(schema!.properties.prompt.minLength).toBe(3);
     expect(schema!.properties.prompt.maxLength).toBe(20000);
@@ -341,12 +343,19 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.image_slugs.maxItems).toBe(7);
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.properties.nsfw_checker.type).toBe("boolean");
-    expect(schema!.defaults).toEqual(VIDEO_MODELS.grok_imagine.defaults);
+    expect(schema!.defaults).toEqual({
+      mode: "normal",
+      duration: 6,
+      resolution: "480p",
+      aspect_ratio: "16:9",
+      nsfw_checker: false,
+    });
   });
 
-  it("includes defaults from model definition", () => {
+  it("does not invent Kling 3.0 defaults when Apicity has none", () => {
     const schema = getVideoToolSchema("generate_kling30_video");
-    expect(schema!.defaults).toEqual(VIDEO_MODELS.kling30.defaults);
+    expect(schema!.defaults).toEqual({});
+    expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "sound", "multi_shots"]));
   });
 });
 
@@ -366,6 +375,8 @@ describe("validateVideoParams", () => {
       prompt: "a sunset",
       mode: "std",
       duration: "8",
+      sound: true,
+      multi_shots: false,
       aspect_ratio: "16:9",
     });
     expect(result.valid).toBe(true);

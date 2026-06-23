@@ -31,7 +31,7 @@ const generateAlibabaQwenImageEditSchema = {
   prompt: z.string().describe("Edit instruction text"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).min(1).max(3).describe("1-3 @img-* slugs for source images (required)"),
-  model: z.enum(QWEN_EDIT_MODELS).optional().describe("Qwen edit model (default: qwen-image-edit-plus)"),
+  model: z.enum(QWEN_EDIT_MODELS).describe("Qwen edit model"),
   size: z.string().optional().describe("Output size. Not allowed when model is 'qwen-image-edit'"),
   n: z.number().int().min(1).max(6).optional().describe("Number of images (1-6). 'qwen-image-edit' supports only n=1"),
   negative_prompt: z.string().max(500).optional().describe("Negative prompt (max 500 chars)"),
@@ -69,7 +69,7 @@ export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const resolvedModel: QwenEditModel = model ?? "qwen-image-edit-plus";
+      const resolvedModel: QwenEditModel = model;
 
       if (resolvedModel === "qwen-image-edit") {
         if (n !== undefined && n !== 1) {

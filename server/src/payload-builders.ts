@@ -63,12 +63,34 @@ import type {
   AlibabaVideoSynthesisParameters,
 } from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
+import {
+  GrokImageToImageRequestSchema,
+  GrokImageToVideoRequestSchema,
+  GrokTextToVideoRequestSchema,
+  NanoBananaProRequestSchema,
+  Omnihuman15RequestSchema,
+  Qwen2ImageEditRequestSchema,
+  Seedance2FastInputSchema,
+  Seedance2InputSchema,
+  SeedreamImageToImageRequestSchema,
+  SeedreamTextToImageRequestSchema,
+  VolcengineVideoToVideoLipSyncRequestSchema,
+} from "@apicity/kie/zod";
 import { validateVideoParams } from "./video-models.js";
 import { validateImageParams } from "./image-models.js";
+import { zodDefault } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
 // Individual builders
 // ---------------------------------------------------------------------------
+
+type ZodLike = { _def?: unknown; unwrap?: () => unknown };
+
+function valueOrZodDefault<T>(value: T | undefined, schema: ZodLike): T | undefined {
+  if (value !== undefined) return value;
+  const result = zodDefault(schema);
+  return result.hasDefault ? result.value as T : undefined;
+}
 
 type Kling30Args = {
   prompt?: string;
@@ -90,14 +112,14 @@ function buildKling30VideoPayload(
     input: {
       ...(args.prompt ? { prompt: args.prompt } : {}),
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
-      sound: args.sound ?? true,
-      duration: (args.duration ?? "8") as KlingDuration,
+      ...(args.sound !== undefined ? { sound: args.sound } : {}),
+      ...(args.duration !== undefined ? { duration: args.duration as KlingDuration } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as KlingAspectRatio } : {}),
-      mode: (args.mode ?? "std") as KlingMode,
-      multi_shots: args.multi_shots ?? false,
+      ...(args.mode !== undefined ? { mode: args.mode as KlingMode } : {}),
+      ...(args.multi_shots !== undefined ? { multi_shots: args.multi_shots } : {}),
       ...(args.multi_prompt && args.multi_prompt.length > 0 ? { multi_prompt: args.multi_prompt } : {}),
       ...(elements.length > 0 ? { kling_elements: elements } : {}),
-    },
+    } as KlingVideoRequest["input"],
   };
 }
 
@@ -150,18 +172,27 @@ function buildGrokImagineVideoPayload(
   args: GrokImagineVideoArgs,
   imageUrls: string[],
 ): GrokImageToVideoRequest {
-  const mode = args.mode === "fun" ? "fun" : "normal";
+  const rawMode = valueOrZodDefault(args.mode, GrokImageToVideoRequestSchema.shape.input.shape.mode);
+  const mode = rawMode === "fun" ? "fun" : rawMode === "spicy" ? "normal" : rawMode;
+  const duration = numericDuration(args.duration) ?? valueOrZodDefault<number>(undefined, GrokImageToVideoRequestSchema.shape.input.shape.duration) as number;
+  const resolution = valueOrZodDefault(args.resolution, GrokImageToVideoRequestSchema.shape.input.shape.resolution) as GrokImagineResolution;
+  const aspectRatio = valueOrZodDefault(
+    args.aspect_ratio as GrokImageToVideoRequest["input"]["aspect_ratio"] | undefined,
+    GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio,
+  ) as GrokImageToVideoRequest["input"]["aspect_ratio"];
+  const index = valueOrZodDefault(args.index, GrokImageToVideoRequestSchema.shape.input.shape.index) as number;
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokImageToVideoRequestSchema.shape.input.shape.nsfw_checker) as boolean;
   return {
     model: "grok-imagine/image-to-video",
     input: {
       image_urls: imageUrls,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      index: 0,
-      mode,
-      aspect_ratio: (args.aspect_ratio ?? "16:9") as GrokImageToVideoRequest["input"]["aspect_ratio"],
-      resolution: args.resolution ?? "480p",
-      duration: numericDuration(args.duration) ?? 8,
-      nsfw_checker: args.nsfw_checker ?? true,
+      index,
+      mode: mode as "fun" | "normal" | "spicy",
+      aspect_ratio: aspectRatio,
+      resolution,
+      duration,
+      nsfw_checker: nsfwChecker,
     },
   };
 }
@@ -178,6 +209,7 @@ type GrokImagineT2vArgs = {
 function buildGrokImagineT2vVideoPayload(
   args: GrokImagineT2vArgs,
 ): GrokTextToVideoRequest {
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokTextToVideoRequestSchema.shape.input.shape.nsfw_checker) as boolean;
   return {
     model: "grok-imagine/text-to-video",
     input: {
@@ -186,7 +218,7 @@ function buildGrokImagineT2vVideoPayload(
       ...(args.duration !== undefined ? { duration: args.duration } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokTextToVideoRequest["input"]["aspect_ratio"] } : {}),
-      nsfw_checker: args.nsfw_checker ?? false,
+      nsfw_checker: nsfwChecker,
     },
   };
 }
@@ -197,11 +229,12 @@ function buildGrokImagineImagePayload(
   args: GrokImagineImageArgs,
   imageUrls: string[],
 ): GrokImageToImageRequest {
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker) as boolean;
   return {
     model: "grok-imagine/image-to-image",
     input: {
       image_urls: (imageUrls.length > 0 ? imageUrls : []) as [string],
-      nsfw_checker: args.nsfw_checker ?? false,
+      nsfw_checker: nsfwChecker,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
     },
   };
@@ -255,18 +288,23 @@ function buildSeedance2VideoPayload(
   opts: Seedance2VideoOpts,
 ): Seedance2FastRequest | Seedance2Request {
   const model: Seedance2Model = args.model ?? "bytedance/seedance-2-fast";
+  const inputSchema = model === "bytedance/seedance-2" ? Seedance2InputSchema : Seedance2FastInputSchema;
+  const duration = args.duration !== undefined
+    ? parseInt(args.duration, 10)
+    : valueOrZodDefault<number>(undefined, inputSchema.shape.duration);
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, inputSchema.shape.nsfw_checker);
   const input = {
     prompt: args.prompt,
-    web_search: args.web_search ?? false,
+    ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
     ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
     ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
     ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
     ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
     ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as Seedance2FastRequest["input"]["aspect_ratio"] } : {}),
-    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(duration !== undefined ? { duration } : {}),
     ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
-    ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
   };
   if (model === "bytedance/seedance-2") {
     return {
@@ -299,14 +337,20 @@ function buildNanoBananaImagePayload(
   args: NanoBananaImageArgs,
   imageInput: string[],
 ): NanoBananaProRequest {
+  const aspectRatio = valueOrZodDefault(
+    args.aspect_ratio as NanoBananaProRequest["input"]["aspect_ratio"] | undefined,
+    NanoBananaProRequestSchema.shape.input.shape.aspect_ratio,
+  );
+  const resolution = valueOrZodDefault(args.resolution as NanoBananaResolution | undefined, NanoBananaProRequestSchema.shape.input.shape.resolution);
+  const outputFormat = valueOrZodDefault(args.output_format as NanoBananaOutputFormat | undefined, NanoBananaProRequestSchema.shape.input.shape.output_format);
   return {
     model: "nano-banana-pro",
     input: {
       prompt: args.prompt,
       ...(imageInput.length > 0 ? { image_input: imageInput } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as NanoBananaProRequest["input"]["aspect_ratio"] } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution as NanoBananaResolution } : {}),
-      ...(args.output_format !== undefined ? { output_format: args.output_format as NanoBananaOutputFormat } : {}),
+      ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
     } as NanoBananaProRequest["input"],
   };
 }
@@ -324,12 +368,13 @@ type SeedreamImageArgs = {
 function buildSeedreamTextImagePayload(
   args: SeedreamImageArgs,
 ): SeedreamTextToImageRequest {
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, SeedreamTextToImageRequestSchema.shape.input.shape.nsfw_checker);
   return {
     model: "seedream/5-lite-text-to-image",
     input: {
       prompt: args.prompt,
-      nsfw_checker: args.nsfw_checker ?? false,
-      quality: args.quality ?? "basic",
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+      ...(args.quality !== undefined ? { quality: args.quality } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
     } as SeedreamTextToImageRequest["input"],
   };
@@ -339,13 +384,14 @@ function buildSeedreamImageEditPayload(
   args: SeedreamImageArgs,
   imageUrls: string[],
 ): SeedreamImageToImageRequest {
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, SeedreamImageToImageRequestSchema.shape.input.shape.nsfw_checker);
   return {
     model: "seedream/5-lite-image-to-image",
     input: {
       prompt: args.prompt,
       image_urls: imageUrls,
-      nsfw_checker: args.nsfw_checker ?? false,
-      quality: args.quality ?? "basic",
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+      ...(args.quality !== undefined ? { quality: args.quality } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
     } as SeedreamImageToImageRequest["input"],
   };
@@ -362,15 +408,18 @@ function buildQwen2ImageEditPayload(
   args: Qwen2ImageEditArgs,
   imageInput: string[],
 ): Qwen2ImageEditRequest {
-  const image_size = (args.image_size ?? "16:9") as NonNullable<Qwen2ImageEditRequest["input"]["image_size"]>;
-  const output_format = args.output_format ?? "png";
+  const image_size = valueOrZodDefault(
+    args.image_size as NonNullable<Qwen2ImageEditRequest["input"]["image_size"]> | undefined,
+    Qwen2ImageEditRequestSchema.shape.input.shape.image_size,
+  );
+  const output_format = valueOrZodDefault(args.output_format, Qwen2ImageEditRequestSchema.shape.input.shape.output_format);
   return {
     model: "qwen2/image-edit",
     input: {
       prompt: args.prompt,
       image_url: imageInput,
-      image_size,
-      output_format,
+      ...(image_size !== undefined ? { image_size } : {}),
+      ...(output_format !== undefined ? { output_format } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     } as Qwen2ImageEditRequest["input"],
   };
@@ -646,20 +695,23 @@ export function buildVolcengineLipSyncPayload(
   args: VolcengineLipSyncArgs,
   opts: VolcengineLipSyncOpts,
 ): VolcengineVideoToVideoLipSyncRequest {
-  // The upstream input fields carry zod defaults, so the inferred request type
-  // requires them all — mirror those defaults rather than spread-omitting.
+  const separateVocal = valueOrZodDefault(args.separate_vocal, VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.separate_vocal);
+  const openScenedet = valueOrZodDefault(args.open_scenedet, VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.open_scenedet);
+  const alignAudio = valueOrZodDefault(args.align_audio, VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.align_audio);
+  const alignAudioReverse = valueOrZodDefault(args.align_audio_reverse, VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.align_audio_reverse);
+  const templStartSeconds = valueOrZodDefault(args.templ_start_seconds, VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.templ_start_seconds);
   return {
     model: "volcengine/video-to-video-lip-sync",
     input: {
-      mode: args.mode ?? "basic",
+      ...(args.mode !== undefined ? { mode: args.mode } : {}),
       video_url: opts.videoUrl,
       audio_url: opts.audioUrl,
-      separate_vocal: args.separate_vocal ?? false,
-      open_scenedet: args.open_scenedet ?? false,
-      align_audio: args.align_audio ?? true,
-      align_audio_reverse: args.align_audio_reverse ?? false,
-      templ_start_seconds: args.templ_start_seconds ?? 0,
-    },
+      ...(separateVocal !== undefined ? { separate_vocal: separateVocal } : {}),
+      ...(openScenedet !== undefined ? { open_scenedet: openScenedet } : {}),
+      ...(alignAudio !== undefined ? { align_audio: alignAudio } : {}),
+      ...(alignAudioReverse !== undefined ? { align_audio_reverse: alignAudioReverse } : {}),
+      ...(templStartSeconds !== undefined ? { templ_start_seconds: templStartSeconds } : {}),
+    } as VolcengineVideoToVideoLipSyncRequest["input"],
   };
 }
 
@@ -684,9 +736,9 @@ export function buildOmnihumanPayload(
   args: OmnihumanArgs,
   opts: OmnihumanOpts,
 ): Omnihuman15Request {
-  // output_resolution, pe_fast_mode, and seed carry zod defaults upstream, so
-  // the inferred request type requires them — mirror those defaults rather than
-  // spread-omitting (same shape as buildVolcengineLipSyncPayload above).
+  const outputResolution = valueOrZodDefault(args.output_resolution, Omnihuman15RequestSchema.shape.input.shape.output_resolution) as Omnihuman15OutputResolution;
+  const peFastMode = valueOrZodDefault(args.pe_fast_mode, Omnihuman15RequestSchema.shape.input.shape.pe_fast_mode) as boolean;
+  const seed = valueOrZodDefault(args.seed, Omnihuman15RequestSchema.shape.input.shape.seed) as number;
   return {
     model: "omnihuman-1-5",
     input: {
@@ -694,9 +746,9 @@ export function buildOmnihumanPayload(
       audio_url: opts.audioUrl,
       ...(opts.maskUrls && opts.maskUrls.length > 0 ? { mask_url: opts.maskUrls } : {}),
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      output_resolution: args.output_resolution ?? "1080",
-      pe_fast_mode: args.pe_fast_mode ?? false,
-      seed: args.seed ?? -1,
+      output_resolution: outputResolution,
+      pe_fast_mode: peFastMode,
+      seed,
     },
   };
 }
@@ -949,7 +1001,7 @@ function buildAlibabaVideoPayload(
   if (media.videoUrl) mediaItems.push({ type: "video", url: media.videoUrl });
 
   return {
-    model: (args.model as AlibabaVideoSynthesisRequest["model"]) ?? "wan2.7-i2v",
+    model: args.model as AlibabaVideoSynthesisRequest["model"],
     input: {
       prompt: args.prompt,
       media: mediaItems,
@@ -1219,9 +1271,9 @@ function translateToolPayload(
         model: "grok-imagine/extend",
         input: {
           task_id: "<task_id_from_source_video_metadata>",
-          prompt: (args.prompt as string) ?? "",
-          extend_at: String((args.extend_at as number | undefined) ?? 0),
-          extend_times: (args.extend_times as "6" | "10" | undefined) ?? "6",
+          ...(args.prompt !== undefined ? { prompt: args.prompt as string } : {}),
+          ...(args.extend_at !== undefined ? { extend_at: String(args.extend_at as number) } : {}),
+          ...(args.extend_times !== undefined ? { extend_times: args.extend_times as "6" | "10" } : {}),
         },
       };
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };

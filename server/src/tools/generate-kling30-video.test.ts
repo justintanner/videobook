@@ -10,6 +10,13 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
+const requiredKlingArgs = {
+  mode: "std",
+  duration: "8",
+  sound: true,
+  multi_shots: false,
+} as const;
+
 function makePng(): Promise<Buffer> {
   return sharp({
     create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
@@ -53,6 +60,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "a dog skateboarding",
       },
@@ -69,6 +77,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "a dog skateboarding",
       },
@@ -95,6 +104,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "animate this image",
         image_slugs: [`@${asset.value.assetId}`],
@@ -114,6 +124,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "test",
         image_slugs: ["@vid-something"],
@@ -131,6 +142,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "test",
         image_slugs: ["@img-does-not-exist"],
@@ -152,6 +164,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "test",
         image_slugs: [`@${asset.value.assetId}`],
@@ -176,6 +189,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "character walks down the street",
         element1_slugs: [`@${asset.value.assetId}`],
@@ -196,6 +210,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "test",
         element1_slugs: ["@img-nonexistent"],
@@ -213,6 +228,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "a sunset timelapse",
         mode: "pro",
@@ -233,6 +249,7 @@ describe("generate_kling30_video tool", () => {
     const result = await client.callTool({
       name: "generate_kling30_video",
       arguments: {
+        ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "a story",
         multi_shots: true,

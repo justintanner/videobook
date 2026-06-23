@@ -31,7 +31,7 @@ const generateAlibabaQwenImageSchema = {
   prompt: z.string().describe("Text prompt for image generation"),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z.array(z.string()).optional().describe("0-3 @img-* slugs for reference images"),
-  model: z.enum(QWEN_GENERATION_MODELS).optional().describe("Qwen generation model (default: qwen-image-2.0-pro)"),
+  model: z.enum(QWEN_GENERATION_MODELS).describe("Qwen generation model"),
   size: z.string().optional().describe("Output size (e.g., '1024*1024')"),
   n: z.number().int().min(1).max(6).optional().describe("Number of images to generate (1-6)"),
   negative_prompt: z.string().max(500).optional().describe("Negative prompt (max 500 chars)"),
@@ -97,7 +97,7 @@ export function generateAlibabaQwenImageDef(fs: VideocityFs): ToolDef {
         sourceImageIds.push(id);
       }
 
-      const resolvedModel: QwenGenerationModel = model ?? "qwen-image-2.0-pro";
+      const resolvedModel: QwenGenerationModel = model;
 
       const assetResult = await fs.createAsset("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) {

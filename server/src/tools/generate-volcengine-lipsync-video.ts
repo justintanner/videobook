@@ -38,12 +38,12 @@ const generateVolcengineLipsyncVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   video_slug: z.string().describe("Source video asset to lip-sync (e.g., @vid-scene)"),
   audio_slug: z.string().describe("Driving audio asset whose speech drives the lips (e.g., @aud-voice)"),
-  mode: z.enum(VolcengineVideoToVideoLipSyncModeSchema.options).optional().describe("Quality mode: lite (faster) or basic (default)"),
-  separate_vocal: z.boolean().optional().describe("Separate vocals from background audio before sync (default false)"),
-  open_scenedet: z.boolean().optional().describe("Enable scene-cut detection (default false)"),
-  align_audio: z.boolean().optional().describe("Align audio to the video timeline (default true)"),
-  align_audio_reverse: z.boolean().optional().describe("Reverse the audio alignment direction (default false)"),
-  templ_start_seconds: z.number().min(0).optional().describe("Template start offset in seconds (default 0)"),
+  mode: z.enum(VolcengineVideoToVideoLipSyncModeSchema.options).describe("Quality mode: lite (faster) or basic"),
+  separate_vocal: z.boolean().optional().describe("Separate vocals from background audio before sync"),
+  open_scenedet: z.boolean().optional().describe("Enable scene-cut detection"),
+  align_audio: z.boolean().optional().describe("Align audio to the video timeline"),
+  align_audio_reverse: z.boolean().optional().describe("Reverse the audio alignment direction"),
+  templ_start_seconds: z.number().min(0).optional().describe("Template start offset in seconds"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

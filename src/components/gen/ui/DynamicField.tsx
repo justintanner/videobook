@@ -353,12 +353,14 @@ export function DynamicField({
 
   // Handle boolean type - use toggle with Yes/No
   if (schema.type === 'boolean') {
+    const options = required ? ['Unset', 'No', 'Yes'] as const : ['No', 'Yes'] as const;
+    const current = value === true ? 'Yes' : value === false ? 'No' : required ? 'Unset' : 'No';
     return (
       <GenField label={label} required={required} theme={theme} horizontal>
         <GenToggle
-          value={value === true ? 'Yes' : 'No'}
-          onChange={(v) => onChange(v === 'Yes')}
-          options={['No', 'Yes'] as const}
+          value={current}
+          onChange={(v) => onChange(v === 'Unset' ? undefined : v === 'Yes')}
+          options={options}
           disabled={disabled}
           theme={theme}
         />
