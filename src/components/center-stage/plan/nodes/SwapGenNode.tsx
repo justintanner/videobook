@@ -7,12 +7,12 @@
 // shows exactly what Image 1/2/3(/4) resolve to. Frame 2 threads the prior
 // frame-1 swap as continuity reference.
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { Node, NodeProps } from '@xyflow/react';
 import { UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/useToast';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
 import { usePlanFlow } from '../PlanFlowContext';
-import type { SwapGenNodeData } from '../buildPlanGraph';
+import type { SwapGenNodeData } from './nodeData';
 import {
   MODELS_BY_PROVIDER,
   SHORT_LABEL_BY_MODEL,
@@ -81,7 +81,7 @@ function TokenThumb({ n, src, title, onRemove, removeTitle }: {
   );
 }
 
-function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
+function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
   const { sidecar, mediaItems, projectSlug, sourceAspect, actions } = usePlanFlow();
   const { sceneIndex, frameIndex } = data;
   const scene = sidecar.scenes[sceneIndex];
@@ -89,6 +89,7 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
   const [provider, setProvider] = useState<SwapProvider>('kie');
   const [model, setModel] = useState<SwapModel>('nano-banana-pro');
   const [extra, setExtra] = useState<Set<SwapModel>>(new Set());
+  const [dropActive, setDropActive] = useState(false);
   // Sparse map of user prompt overrides keyed by variantKey; the displayed
   // prompt falls back to the count-aware default so it always reflects how many
   // characters are wired (1 → "Image 2", 2 → "Image 2 and Image 3").
@@ -149,6 +150,38 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
     const next = wiredChars.map((c) => c.asset_id).filter((id) => id !== charId);
     void actions.setFrameCharacters(sceneIndex, frameIndex, next);
   }, [wiredChars, actions, sceneIndex, frameIndex]);
+
+  // Drag a character from the asset sidebar onto this frame to wire it. Reuses
+  // the app-wide `application/json` { id } drag payload. We append to the frame's
+  // EXPLICIT wiring (not the all-characters fallback), capped at 2 — so dropping
+  // onto an unwired frame assigns exactly that character. Non-roster drops are
+  // rejected (a swap can only reference this plan's characters).
+  const onDropCharacter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDropActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    let id: string | null = null;
+    try {
+      const payload = JSON.parse(json) as { id?: unknown };
+      if (typeof payload.id === 'string') id = payload.id.replace(/^@/, '');
+    } catch {
+      return;
+    }
+    if (!id) return;
+    if (!sidecar.characters.some((c) => c.asset_id === id)) {
+      toast({
+        title: 'Not a character in this plan',
+        description: "Drop one of this plan's characters to wire it into the frame.",
+        duration: 4000,
+      });
+      return;
+    }
+    const frameKey = `image${frameIndex}` as 'image1' | 'image2';
+    const explicit = scene?.frame_characters?.[frameKey] ?? [];
+    if (explicit.includes(id)) return;
+    void actions.setFrameCharacters(sceneIndex, frameIndex, [...explicit, id].slice(-2));
+  }, [sidecar.characters, scene, frameIndex, sceneIndex, actions]);
 
   const key = variantKey(provider, model);
   const prompt = overrides[key] ?? defaultSwapPrompt(charCount, Boolean(priorSwapAssetId));
@@ -250,7 +283,16 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
           onPick={(assetId) => { void actions.promoteVariant(sceneIndex, frameIndex, assetId); }}
         />
       )}
-      <div className="mt-2 flex items-center gap-2 flex-wrap">
+      <div
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropActive(true); }}
+        onDragLeave={() => setDropActive(false)}
+        onDrop={onDropCharacter}
+        title="Drag a character from the sidebar to wire it into this frame"
+        className={cn(
+          'mt-2 flex items-center gap-2 flex-wrap rounded p-1 -m-1 transition-colors',
+          dropActive ? 'ring-1 ring-violet-400/70 bg-violet-500/10' : 'ring-1 ring-transparent',
+        )}
+      >
         {tokenThumbs.map((t) => {
           const removal = removalFor(t);
           return (
@@ -266,7 +308,7 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
         })}
         {charCount === 1 && (
           <span className="text-[9px] font-mono text-violet-300/60 leading-tight">
-            1 char · drag a character to add
+            1 char · drag a character from the sidebar to add
           </span>
         )}
         {canRestorePrior && (

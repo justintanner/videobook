@@ -3,11 +3,10 @@
 // SceneBlock, a Run wired to the shared useCharSwapActions, and a GUI↔JSON flip
 // showing the derived KIE video payload with inline clip/audio/ref thumbnails.
 import { memo, useCallback, useMemo, useState } from 'react';
-import type { Node, NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
 import { usePlanFlow } from '../PlanFlowContext';
-import type { SceneVideoNodeData } from '../buildPlanGraph';
+import type { SceneVideoNodeData } from './nodeData';
 import {
   ALL_VIDEO_MODELS,
   PLAN_ASSET_ID,
@@ -33,7 +32,7 @@ const SHORT_VIDEO_LABEL: Record<VideoModel, string> = {
 };
 const VIDEO_OPTIONS = ALL_VIDEO_MODELS.map((m) => ({ value: m, label: SHORT_VIDEO_LABEL[m] }));
 
-function SceneVideoNodeImpl({ data }: NodeProps<Node<SceneVideoNodeData>>) {
+function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
   const { sidecar, characters, mediaItems, projectSlug, sourceAspect, actions } = usePlanFlow();
   const { sceneIndex } = data;
   const scene = sidecar.scenes[sceneIndex];
@@ -119,7 +118,6 @@ function SceneVideoNodeImpl({ data }: NodeProps<Node<SceneVideoNodeData>>) {
       label={data.label}
       accent="border-sky-600/50"
       width={NODE_WIDTH}
-      source={false}
       badge={<FlipToggle flipped={flipped} onToggle={() => setFlipped((f) => !f)} />}
     >
       <FlipCard

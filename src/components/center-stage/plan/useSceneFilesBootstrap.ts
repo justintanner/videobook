@@ -3,11 +3,10 @@
 // `clip_filename` / `audio_filename` (stamped by /plan-vis), but the files
 // themselves are written client-side by an even_split + extract_audio bootstrap.
 //
-// This used to live inline in PlanViewer's PlanScenes (the scene list). It now
-// lives here so the graph (PlanFlowEditor) can run it too — the template flow
-// opens the graph directly and never mounts the scene list. A module-level
-// in-flight map keyed by (project, source) dedupes the work when both surfaces
-// are mounted for the same plan, so even_split fires exactly once.
+// This used to live inline in PlanViewer's (now-removed) scene list. It lives
+// here so the embedded PlanFlowStack runs it whenever a char_swap plan opens. A
+// module-level in-flight map keyed by (project, source) dedupes the work across
+// remounts, so even_split fires exactly once.
 import { useEffect, useRef, useState } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 import { toast } from '@/hooks/useToast';
@@ -95,8 +94,8 @@ async function bootstrapSceneFiles(projectSlug: string, sidecar: PlanSidecar, ca
   return allClipsOk && allAudioOk;
 }
 
-// Cross-instance dedup: the scene list and the graph can both mount for the same
-// char_swap plan. Keyed by `${projectSlug}/${sourceAssetId}`.
+// Cross-instance dedup across remounts of the same char_swap plan. Keyed by
+// `${projectSlug}/${sourceAssetId}`.
 const inFlight = new Map<string, Promise<boolean>>();
 
 export function useSceneFilesBootstrap(params: {

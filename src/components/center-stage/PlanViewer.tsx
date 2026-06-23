@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil, Share2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
@@ -7,47 +7,22 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { UseMcpResult } from 'use-mcp/react';
-import { useCommandDispatch } from '@/hooks/useCommandDispatch';
-import { useOptionalCommandRegistry } from '@/contexts/CommandRegistryContext';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
-import { uploadProjectFile } from '@/lib/upload';
 import {
   sourceAspectFromDimensions,
   type SourceAspect,
 } from '@/lib/plan-aspect';
 import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
-import { useSceneFilesBootstrap } from './plan/useSceneFilesBootstrap';
+import { PlanFlowStack } from './plan/PlanFlowStack';
 import {
-  ALL_SWAP_PROVIDERS,
   ALL_VIDEO_MODELS,
-  DEFAULT_PROMPT_BY_SWAP_MODEL,
   KIE_MODEL_NAME_BY_VIDEO,
   LABEL_BY_VIDEO_MODEL,
-  MODELS_BY_PROVIDER,
-  PLAN_ASSET_ID,
-  SHORT_LABEL_BY_MODEL,
   STORYBOARD_VIDEO_MODELS,
   TOOL_BY_VIDEO_MODEL,
-  buildGrokImagineToolArgs,
-  buildKieVideoPayload,
-  buildSeedanceToolArgs,
-  buildSwapPayload,
-  deriveTileState,
-  deriveVideoTileState,
-  formatTimecode,
-  grokVideoReadyForGen,
-  makeEmptyModelPrompts,
-  modelCodeFromSwapAssetId,
-  parseVariantKey,
-  rewriteVisualWithImageTokens,
-  variantKey,
-  videoReadyForGen,
   type FrameTileState,
-  type PlanScene,
   type PlanSidecar,
-  type SwapModel,
-  type SwapProvider,
   type VideoModel,
   type VideoTileState,
 } from './plan/charSwapModel';
@@ -239,7 +214,6 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
   onClose: () => void;
   onBackToTemplates: () => void;
 }) {
-  const { dispatch } = useCommandDispatch();
   const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
   const cancelledRef = useRef(false);
@@ -283,20 +257,6 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
   const storyboardVideoSidecar = isStoryboardVideoPlan(sidecar) ? sidecar : null;
   const clipShowSidecar = isClipShowPlan(sidecar) ? sidecar : null;
 
-  // The graph is char_swap's sole UI: once a char_swap plan loads, auto-open the
-  // full-screen graph (the scene list below stays mounted only to run the shared
-  // clip/audio bootstrap — closing the graph deselects the plan, so it's never
-  // shown). Fire once per mount so closing the graph doesn't immediately reopen it.
-  const registry = useOptionalCommandRegistry();
-  const openGraph = registry?.uiActions.open_plan_flow;
-  const autoOpenedGraphRef = useRef(false);
-  useEffect(() => {
-    if (formula === 'char_swap' && charSidecar && openGraph && !autoOpenedGraphRef.current) {
-      autoOpenedGraphRef.current = true;
-      openGraph();
-    }
-  }, [formula, charSidecar, openGraph]);
-
   const charSourceItem = useMemo(
     () => (charSidecar?.source_asset_id ? mediaItems.find((m) => m.id === charSidecar.source_asset_id) ?? null : null),
     [charSidecar?.source_asset_id, mediaItems],
@@ -334,18 +294,16 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
             <>
               <div className="mb-4 flex items-center gap-2">
                 <PlanBackButton onBack={onBackToTemplates} />
-                {formula === 'char_swap' && charSidecar ? <PlanGraphViewButton /> : null}
               </div>
               {formula === 'char_swap' && charSidecar ? (
                 <>
                   <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
-                  <PlanScenes
-                    data={charSidecar}
+                  <PlanFlowStack
+                    sidecar={charSidecar}
                     mediaItems={mediaItems}
-                    sourceAspect={charSourceAspect}
                     projectSlug={projectSlug}
+                    sourceAspect={charSourceAspect}
                     callTool={callTool}
-                    dispatch={dispatch}
                     onSidecarUpdate={(next) => setSidecar(next)}
                   />
                 </>
@@ -415,32 +373,6 @@ function PlanBackButton({ onBack }: {
     >
       <ArrowLeft className="w-3.5 h-3.5" />
       Templates
-    </button>
-  );
-}
-
-// Opens the full-screen node-graph view of this char_swap plan (a sibling
-// overlay owned by HomePage, mirroring the Trim editor).
-function PlanGraphViewButton() {
-  const registry = useOptionalCommandRegistry();
-  const openGraph = registry?.uiActions.open_plan_flow;
-  if (!openGraph) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => openGraph()}
-      title="Open the node-graph view"
-      className={cn(
-        'h-8 px-2.5 flex items-center gap-1.5 rounded',
-        'text-[10px] font-mono font-bold uppercase tracking-wider',
-        'text-emerald-300 hover:text-white',
-        'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 hover:border-emerald-500/70',
-        'transition-colors duration-150',
-        FOCUS_RING_BUTTON,
-      )}
-    >
-      <Share2 className="w-3.5 h-3.5" />
-      Graph view
     </button>
   );
 }
@@ -2090,319 +2022,6 @@ function StoryboardImageSlot({ state, sourceAspect, assetId, replacing, generati
   );
 }
 
-// Per-scene clip + audio live as sibling files inside the `plan` asset
-// (stamped into `.plan.json` by /plan-vis as `clip_filename` / `audio_filename`,
-// e.g. "s1.mp4" / "s1.mp3"). The render path addresses them via the
-// `@plan/<filename>` slug form the seedance/kie resolvers learned. PLAN_ASSET_ID
-// and the swap/video model layer now live in ./plan/charSwapModel.
-interface SceneAssetSlugs {
-  clipSlug: string;  // e.g. "plan/s1.mp4"
-  audioSlug: string; // e.g. "plan/s1.mp3"
-}
-
-function PlanScenes({ data, mediaItems, sourceAspect, projectSlug, callTool, dispatch, onSidecarUpdate }: {
-  data: PlanSidecar;
-  mediaItems: MediaItem[];
-  sourceAspect: SourceAspect;
-  projectSlug: string;
-  callTool: UseMcpResult['callTool'];
-  dispatch: (input: string) => Promise<boolean>;
-  onSidecarUpdate: (sidecar: PlanSidecar) => void;
-}) {
-  // Old plans (pre destination-mode plan-vis) have no per-scene clip/audio
-  // filenames. The render path can't address them, so prompt a re-run instead
-  // of half-rendering.
-  const planNeedsRegen = data.scenes.length > 0
-    && (!data.scenes[0].clip_filename || !data.scenes[0].audio_filename);
-
-  // Per-scene slugs derived directly from the sidecar — no ID reconciliation.
-  // `plan/sN.mp4` and `plan/sN.mp3` resolve via the @assetId/filename slug
-  // form the seedance/kie resolvers learned.
-  const sceneAssets: SceneAssetSlugs[] = useMemo(
-    () => data.scenes.map((s) => ({
-      clipSlug: `${PLAN_ASSET_ID}/${s.clip_filename ?? ''}`,
-      audioSlug: `${PLAN_ASSET_ID}/${s.audio_filename ?? ''}`,
-    })),
-    [data.scenes],
-  );
-
-  // Per-scene clip/audio bootstrap (even_split + extract_audio). Lifted into a
-  // shared, module-deduped hook so the graph editor — which the template flow
-  // opens directly, without ever mounting this scene list — runs it too. Gates
-  // RUN VIDEO per scene; otherwise seedance would get a half-written reference.
-  const sceneFilesReady = useSceneFilesBootstrap({ projectSlug, sidecar: data, callTool });
-
-  if (planNeedsRegen) {
-    return (
-      <div className="mt-5 rounded border border-amber-600/40 bg-amber-950/20 p-4 text-amber-200 text-sm">
-        This plan was generated by an older version of /plan-vis and is missing per-scene
-        clip/audio filenames. Re-run <span className="font-mono">/plan-vis</span> to enable
-        rendering.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {data.scenes.map((scene, idx) => (
-        <SceneBlock
-          key={`${scene.start}-${scene.end}-${idx}`}
-          scene={scene}
-          index={idx}
-          sceneCount={data.scenes.length}
-          characters={data.characters}
-          sceneClipSlug={sceneAssets[idx]?.clipSlug ?? null}
-          sceneAudioSlug={sceneAssets[idx]?.audioSlug ?? null}
-          sceneSourceReady={sceneFilesReady}
-          mediaItems={mediaItems}
-          sourceAspect={sourceAspect}
-          projectSlug={projectSlug}
-          callTool={callTool}
-          dispatch={dispatch}
-          onSidecarUpdate={onSidecarUpdate}
-        />
-      ))}
-    </div>
-  );
-}
-
-type ReplaceSource =
-  | { kind: 'file'; file: File }
-  | { kind: 'asset'; assetId: string };
-
-interface SidebarDragPayload {
-  slug?: string;
-  id?: string;
-  type?: string;
-}
-
-function SourceSlotRow({ sourceSrc, sourceAspect, state, inFlightCodes, currentModelCode, label, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
-  sourceSrc: string;
-  sourceAspect: SourceAspect;
-  state: FrameTileState;
-  inFlightCodes: string[];
-  currentModelCode: string | null;
-  label: string;
-  replacing: boolean;
-  onReplace: (source: ReplaceSource) => void;
-  onIdleClick: () => void;
-  onErrorRetry?: () => void;
-  onRegen: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <SourceThumb src={sourceSrc} sourceAspect={sourceAspect} alt={`source ${label}`} />
-        <span className="text-emerald-300/40 text-lg leading-none px-0.5 select-none">→</span>
-        <SwapSlot
-          state={state}
-          sourceSrc={sourceSrc}
-          sourceAspect={sourceAspect}
-          inFlightCodes={inFlightCodes}
-          currentModelCode={currentModelCode}
-          replacing={replacing}
-          onReplace={onReplace}
-          onIdleClick={onIdleClick}
-          onErrorRetry={onErrorRetry}
-          onRegen={onRegen}
-        />
-      </div>
-      <div className="text-[10px] font-mono text-emerald-300/50">{label}</div>
-    </div>
-  );
-}
-
-function SourceThumb({ src, sourceAspect, alt }: { src: string; sourceAspect: SourceAspect; alt: string }) {
-  const [errored, setErrored] = useState(false);
-  return (
-    <div
-      className="w-40 bg-zinc-900 border border-zinc-700/40 rounded overflow-hidden flex items-center justify-center"
-      style={{ aspectRatio: sourceAspect.css }}
-    >
-      {errored ? (
-        <span className="text-[9px] font-mono text-emerald-300/30 px-2 text-center">missing</span>
-      ) : (
-        <img
-          src={src}
-          alt={alt}
-          className="w-full h-full object-contain opacity-80"
-          loading="lazy"
-          onError={() => setErrored(true)}
-        />
-      )}
-    </div>
-  );
-}
-
-function SwapSlot({ state, sourceSrc, sourceAspect, inFlightCodes, currentModelCode, replacing, onReplace, onIdleClick, onErrorRetry, onRegen }: {
-  state: FrameTileState;
-  sourceSrc: string;
-  sourceAspect: SourceAspect;
-  inFlightCodes: string[];
-  currentModelCode: string | null;
-  replacing: boolean;
-  onReplace: (source: ReplaceSource) => void;
-  onIdleClick: () => void;
-  onErrorRetry?: () => void;
-  onRegen?: () => void;
-}) {
-  const [errored, setErrored] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const anyInFlight = inFlightCodes.length > 0;
-  const showSpinner = state.kind === 'generating' || replacing || (anyInFlight && state.kind === 'idle');
-  // Caption inside the spinner overlay so the user knows what's running.
-  // Prefers the currently-selected slot's code (whose asset is in 'generating'
-  // status) and otherwise lists any in-flight code submissions.
-  const spinnerLabel = (() => {
-    if (replacing) return 'uploading…';
-    if (state.kind === 'generating' && currentModelCode) {
-      return `${currentModelCode}…`;
-    }
-    if (inFlightCodes.length > 0) {
-      return inFlightCodes.join(', ');
-    }
-    return null;
-  })();
-  const showReadyActions = state.kind === 'ready' && !replacing;
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragActive(false);
-    const json = e.dataTransfer.getData('application/json');
-    if (json) {
-      try {
-        const payload = JSON.parse(json) as SidebarDragPayload;
-        const assetId = payload.id;
-        if (typeof assetId === 'string' && assetId.startsWith('img-')) {
-          onReplace({ kind: 'asset', assetId });
-          return;
-        }
-        if (typeof assetId === 'string') {
-          toast({ title: 'Not an image asset', description: `${assetId} is not an img-* asset.`, duration: 3000 });
-          return;
-        }
-      } catch {
-        // Malformed payload — fall through to file-drop branch.
-      }
-    }
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast({ title: 'Not an image', description: `Got ${file.type || 'unknown'}; drop a PNG/JPG/WEBP.`, duration: 3000 });
-      return;
-    }
-    onReplace({ kind: 'file', file });
-  };
-  return (
-    <div
-      className={cn(
-        'relative w-40 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center group transition-colors',
-        dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
-      )}
-      style={{ aspectRatio: sourceAspect.css }}
-      onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragActive(true); }}
-      onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
-      onDrop={handleDrop}
-    >
-      {state.kind === 'ready' ? (
-        <img src={state.src} alt="swap result" className="w-full h-full object-contain" loading="lazy" />
-      ) : state.kind === 'idle' && !anyInFlight ? (
-        <button
-          type="button"
-          onClick={onIdleClick}
-          title="Click to pick models and generate · or drop an image"
-          className="w-full h-full flex items-center justify-center hover:bg-emerald-500/5 transition-colors cursor-pointer"
-        >
-          <span className="text-[10px] font-mono text-emerald-300/40 group-hover:text-emerald-300/70 px-2 text-center">click to generate · or drop image</span>
-        </button>
-      ) : !errored ? (
-        <img
-          src={sourceSrc}
-          alt="working"
-          className="w-full h-full object-contain opacity-40"
-          loading="lazy"
-          onError={() => setErrored(true)}
-        />
-      ) : (
-        <span className="text-[10px] font-mono text-emerald-300/40 px-2 text-center">missing</span>
-      )}
-      {showSpinner && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60">
-          <Loader2 className="w-5 h-5 animate-spin text-emerald-300/80" />
-          {spinnerLabel && (
-            <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-300/70 px-2 text-center line-clamp-2">
-              {spinnerLabel}
-            </span>
-          )}
-          {onRegen && state.kind === 'generating' && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRegen(); }}
-              title="Re-fire this swap (use if generation is stuck)"
-              className={cn(
-                'absolute top-1 right-1',
-                'h-5 px-1.5 flex items-center gap-1 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-emerald-300/80 hover:text-emerald-300',
-                'bg-black/60 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
-              )}
-            >
-              <RefreshCw className="w-2.5 h-2.5" />
-              Retry
-            </button>
-          )}
-        </div>
-      )}
-      {state.kind === 'error' && !showSpinner && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-red-950/70 px-1.5">
-          <span className="text-[9px] font-mono text-red-200/90 text-center line-clamp-2">
-            {state.message}
-          </span>
-          {onErrorRetry && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onErrorRetry(); }}
-              title="Retry with a tamer prompt that avoids moderation triggers"
-              className={cn(
-                'h-5 px-1.5 flex items-center gap-1 rounded',
-                'text-[9px] font-mono uppercase tracking-wider',
-                'text-red-50 hover:text-white',
-                'bg-red-500/30 hover:bg-red-500/50 border border-red-300/50 hover:border-red-200/80',
-              )}
-            >
-              <RefreshCw className="w-2.5 h-2.5" />
-              Retry
-            </button>
-          )}
-        </div>
-      )}
-      {showReadyActions && onRegen && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 px-1.5 py-1 bg-gradient-to-t from-black/90 via-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRegen(); }}
-            title="Re-generate with the current provider, model, and prompt"
-            className={cn(
-              'h-6 px-2 flex items-center gap-1 rounded',
-              'text-[10px] font-mono uppercase tracking-wider',
-              'text-emerald-300/80 hover:text-emerald-300',
-              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60',
-            )}
-          >
-            <RefreshCw className="w-3 h-3" />
-            Regen
-          </button>
-        </div>
-      )}
-      {dragActive && !replacing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/30 pointer-events-none">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">drop to replace</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function VideoSwapSlot({
   state,
   sourceAspect,
@@ -2566,800 +2185,6 @@ function VideoSwapSlot({
           <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-50 font-bold">DROP TO REPLACE</span>
         </div>
       )}
-    </div>
-  );
-}
-
-// Per-frame block: provider/model dropdowns, prompt/JSON tabs (chip-aware
-// prompt view), and the source→slot row. Each frame is a self-contained unit;
-// idle slot click runs only the selected (provider, model) for THAT frame.
-function FrameImagePanel({ provider, onProviderChange, model, onModelChange, prompt, onPromptChange, payload, mediaItems, projectSlug }: {
-  provider: SwapProvider;
-  onProviderChange: (next: SwapProvider) => void;
-  model: SwapModel;
-  onModelChange: (next: SwapModel) => void;
-  prompt: string;
-  onPromptChange: (next: string) => void;
-  payload: unknown;
-  mediaItems: MediaItem[];
-  projectSlug: string;
-}) {
-  const [view, setView] = useState<'prompt' | 'json'>('prompt');
-  const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore clipboard permission failures
-    }
-  }, [payload]);
-  const allowedModels = MODELS_BY_PROVIDER[provider];
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-3 flex-wrap text-[11px] font-mono">
-        <ProviderModelSelect
-          label="Provider"
-          value={provider}
-          options={ALL_SWAP_PROVIDERS}
-          onChange={(next) => onProviderChange(next as SwapProvider)}
-        />
-        <ProviderModelSelect
-          label="Model"
-          value={model}
-          options={allowedModels}
-          onChange={(next) => onModelChange(next as SwapModel)}
-        />
-      </div>
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-800/60">
-        <div className="flex">
-          <TabButton active={view === 'prompt'} onClick={() => setView('prompt')} icon={<FileText className="w-3 h-3" />}>
-            Prompt
-          </TabButton>
-          <TabButton active={view === 'json'} onClick={() => setView('json')} icon={<Code className="w-3 h-3" />}>
-            JSON
-          </TabButton>
-        </div>
-        {view === 'json' && (
-          <button
-            type="button"
-            onClick={handleCopy}
-            title="Copy JSON payload"
-            className={cn(
-              'h-6 px-2 flex items-center gap-1 rounded',
-              'text-[10px] font-mono uppercase tracking-wider',
-              'text-emerald-300/70 hover:text-emerald-300',
-              'bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40',
-              'transition-colors duration-150',
-            )}
-          >
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        )}
-      </div>
-      {view === 'prompt' ? (
-        <PromptEditor
-          value={prompt}
-          onChange={onPromptChange}
-          mediaItems={mediaItems}
-          projectSlug={projectSlug}
-        />
-      ) : (
-        <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
-      )}
-    </div>
-  );
-}
-
-function ProviderModelSelect({ label, value, options, onChange }: {
-  label: string;
-  value: string;
-  options: readonly string[];
-  onChange: (next: string) => void;
-}) {
-  return (
-    <label className="flex items-center gap-1.5">
-      <span className="text-emerald-300/50 uppercase tracking-wider">{label}:</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          'h-6 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90',
-          'focus:outline-none focus:border-emerald-500/60 cursor-pointer',
-        )}
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-// Per-frame self-contained block: provider/model dropdowns + prompt/JSON tabs
-// + source→slot row. Owns its own (provider, model, prompt) state. Idle slot
-// click and Regen both dispatch the selected (provider, model) for THAT frame
-// only; for frame 2 the existing scene.swap.image1 (if any) is threaded as
-// prior_swap_asset_id so identity carries over from the prior frame.
-function FrameBlock({ ordinal, frameIndex, scene, sceneIndex, characters, mediaItems, sourceAspect, projectSlug, sourceSrc, tile, inFlightCodes, replacing, runSwap, onReplace, onErrorRetry }: {
-  ordinal: 1 | 2;
-  frameIndex: 1 | 2;
-  scene: PlanScene;
-  sceneIndex: number;
-  characters: PlanSidecar['characters'];
-  mediaItems: MediaItem[];
-  sourceAspect: SourceAspect;
-  projectSlug: string;
-  sourceSrc: string;
-  tile: FrameTileState;
-  inFlightCodes: string[];
-  replacing: boolean;
-  runSwap: (
-    frameIndex: 1 | 2,
-    provider: SwapProvider,
-    model: SwapModel,
-    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
-  ) => Promise<{ newAssetId: string } | null>;
-  onReplace: (source: ReplaceSource) => void;
-  onErrorRetry: () => void;
-}) {
-  const [selectedProvider, setSelectedProvider] = useState<SwapProvider>('kie');
-  const [selectedModel, setSelectedModel] = useState<SwapModel>('nano-banana-pro');
-  // One prompt per (provider, model) variant — switching the dropdown swaps
-  // which prompt the editor / JSON view reads from. Frame 2 seeds with the
-  // continuity prompt template since its inputs are [source last frame,
-  // first frame swap] (no char refs).
-  const [variantPrompts, setVariantPrompts] = useState<Record<string, string>>(
-    () => makeEmptyModelPrompts(frameIndex),
-  );
-
-  const handleProviderChange = useCallback((next: SwapProvider) => {
-    setSelectedProvider(next);
-    // Snap model to one supported by the new provider — fal lacks gpt-image-2.
-    setSelectedModel((prev) => (
-      MODELS_BY_PROVIDER[next].includes(prev) ? prev : MODELS_BY_PROVIDER[next][0]
-    ));
-  }, []);
-
-  const currentKey = variantKey(selectedProvider, selectedModel);
-  const currentPrompt = variantPrompts[currentKey] ?? DEFAULT_PROMPT_BY_SWAP_MODEL[selectedModel];
-
-  const setCurrentPrompt = useCallback((next: string) => {
-    setVariantPrompts((prev) => ({ ...prev, [currentKey]: next }));
-  }, [currentKey]);
-
-  const payload = useMemo(
-    () => buildSwapPayload(
-      selectedProvider,
-      selectedModel,
-      characters,
-      sceneIndex,
-      frameIndex,
-      currentPrompt,
-      sourceAspect,
-      frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined,
-    ),
-    [selectedProvider, selectedModel, characters, sceneIndex, frameIndex, currentPrompt, sourceAspect, scene.swap?.image1],
-  );
-
-  const dispatchGen = useCallback(() => {
-    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
-    void runSwap(frameIndex, selectedProvider, selectedModel, {
-      customPrompt: currentPrompt,
-      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
-    });
-  }, [runSwap, frameIndex, selectedProvider, selectedModel, currentPrompt, scene.swap?.image1]);
-
-  const titleText = ordinal === 1 ? 'Generate first frame' : 'Generate last frame';
-  const label = ordinal === 1
-    ? `image1 · first ${formatTimecode(scene.start)}`
-    : `image2 · last ${formatTimecode(scene.end)}`;
-
-  return (
-    <div className="px-3 py-3 border-b border-zinc-800/40 bg-black/20 flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[11px] font-mono">
-        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">
-          {ordinal}
-        </span>
-        <span className="text-emerald-300/70 uppercase tracking-wider">{titleText}</span>
-      </div>
-      <FrameImagePanel
-        provider={selectedProvider}
-        onProviderChange={handleProviderChange}
-        model={selectedModel}
-        onModelChange={setSelectedModel}
-        prompt={currentPrompt}
-        onPromptChange={setCurrentPrompt}
-        payload={payload}
-        mediaItems={mediaItems}
-        projectSlug={projectSlug}
-      />
-      <SourceSlotRow
-        sourceSrc={sourceSrc}
-        sourceAspect={sourceAspect}
-        state={tile}
-        inFlightCodes={inFlightCodes}
-        currentModelCode={modelCodeFromSwapAssetId(scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'])}
-        label={label}
-        replacing={replacing}
-        onReplace={onReplace}
-        onIdleClick={dispatchGen}
-        onErrorRetry={onErrorRetry}
-        onRegen={dispatchGen}
-      />
-    </div>
-  );
-}
-
-function SceneBlock({ scene, index, sceneCount, characters, sceneClipSlug, sceneAudioSlug, sceneSourceReady, mediaItems, sourceAspect, projectSlug, callTool, dispatch, onSidecarUpdate }: {
-  scene: PlanScene;
-  index: number;
-  sceneCount: number;
-  characters: PlanSidecar['characters'];
-  mediaItems: MediaItem[];
-  sourceAspect: SourceAspect;
-  projectSlug: string;
-  // Slugs in `<assetId>/<filename>` form, e.g. "plan/s1.mp4" — resolve via
-  // the seedance/kie video+audio resolvers' slashed branch.
-  sceneClipSlug: string | null;
-  sceneAudioSlug: string | null;
-  // True once PlanScenes' bootstrap has confirmed the per-scene clip+audio
-  // files actually exist on disk. Gates RUN VIDEO; otherwise seedance would
-  // get a half-written reference.
-  sceneSourceReady: boolean;
-  callTool: UseMcpResult['callTool'];
-  dispatch: (input: string) => Promise<boolean>;
-  onSidecarUpdate: (sidecar: PlanSidecar) => void;
-}) {
-  void dispatch;
-  const [submittingVideo, setSubmittingVideo] = useState(false);
-  // In-flight tags: `${variantKey}|${frameIndex}` (variantKey = bare model for
-  // kie, `fal:{model}` for fal). A single (provider, model, frame) tuple can
-  // be mid-flight while others run in parallel.
-  const [swapsInFlight, setSwapsInFlight] = useState<Set<string>>(new Set());
-  const [replacing, setReplacing] = useState<Set<1 | 2>>(new Set());
-  // VIDEO panel state — per-model prompt overrides (per scene), seeded from
-  // the rewritten scene visual so both seedance variants start populated. The
-  // model selector switches which model's prompt the textarea/JSON view targets
-  // and which server tool RUN VIDEO dispatches.
-  const [videoModelPrompts, setVideoModelPrompts] = useState<Record<VideoModel, string>>(() => {
-    const seed = rewriteVisualWithImageTokens(scene.visual, characters);
-    // Grok Imagine can voice the swapped characters, so seed its prompt with the
-    // scene's transcribed dialog (skip the no-speech placeholder). Seedance seeds
-    // stay the bare visual.
-    const dialog = (scene.dialog ?? '').trim();
-    const grokSeed = dialog.length > 0 && dialog !== '(no speech in this chunk)'
-      ? `${seed}\n\nDialogue: ${dialog}`
-      : seed;
-    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'grok-imagine-1-5': grokSeed };
-  });
-  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>('seedance-2-ref');
-  const isGrokVideo = selectedVideoModel === 'grok-imagine-1-5';
-  const setSelectedVideoPrompt = useCallback((next: string) => {
-    setVideoModelPrompts((prev) => ({ ...prev, [selectedVideoModel]: next }));
-  }, [selectedVideoModel]);
-  // In-flight flag for the video slot's drag-drop replacement.
-  const [replacingVideo, setReplacingVideo] = useState(false);
-  // Pending img- asset waiting on extract_last_frame to finish so we can
-  // forward it as scene N+1's accepted first frame. Cleared once the asset
-  // reaches 'ready' and we dispatch replace_plan_scene_frame_swap.
-  const [pendingLastFrameProp, setPendingLastFrameProp] = useState<{ imgAssetId: string; targetSceneIndex: number } | null>(null);
-
-  const tile1 = deriveTileState(scene, 1, mediaItems);
-  const tile2 = deriveTileState(scene, 2, mediaItems);
-  const isGenerating = (s: FrameTileState) => s.kind === 'generating';
-  const anySwapInFlight = swapsInFlight.size > 0 || isGenerating(tile1) || isGenerating(tile2);
-  const inFlightCodes1 = useMemo(
-    () => Array.from(swapsInFlight)
-      .filter((t) => t.endsWith('|1'))
-      .map((t) => {
-        const key = t.slice(0, -2);
-        const parsed = parseVariantKey(key);
-        if (!parsed) return key;
-        const short = SHORT_LABEL_BY_MODEL[parsed.model];
-        return parsed.provider === 'fal' ? `${short}-fal` : short;
-      }),
-    [swapsInFlight],
-  );
-  const inFlightCodes2 = useMemo(
-    () => Array.from(swapsInFlight)
-      .filter((t) => t.endsWith('|2'))
-      .map((t) => {
-        const key = t.slice(0, -2);
-        const parsed = parseVariantKey(key);
-        if (!parsed) return key;
-        const short = SHORT_LABEL_BY_MODEL[parsed.model];
-        return parsed.provider === 'fal' ? `${short}-fal` : short;
-      }),
-    [swapsInFlight],
-  );
-  const swapsReady = tile1.kind === 'ready' && tile2.kind === 'ready';
-
-  const runSwap = useCallback(async (
-    frameIndex: 1 | 2,
-    provider: SwapProvider,
-    model: SwapModel,
-    opts?: { priorSwapAssetId?: string; safeMode?: boolean; customPrompt?: string },
-  ): Promise<{ newAssetId: string } | null> => {
-    const key = variantKey(provider, model);
-    const tag = `${key}|${frameIndex}`;
-    setSwapsInFlight((prev) => {
-      const next = new Set(prev);
-      next.add(tag);
-      return next;
-    });
-    try {
-      const result = await callTool('swap_plan_scene_frame', {
-        project_slug: projectSlug,
-        scene_index: index,
-        frame_index: frameIndex,
-        character_asset_ids: characters.map((c) => `@${c.asset_id}`),
-        provider,
-        model,
-        ...(opts?.priorSwapAssetId ? { prior_swap_asset_id: opts.priorSwapAssetId } : {}),
-        ...(opts?.safeMode ? { safe_mode: true } : {}),
-        ...(opts?.customPrompt && opts.customPrompt.trim().length > 0 ? { custom_prompt: opts.customPrompt.trim() } : {}),
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Swap failed';
-        const code = provider === 'fal' ? `${SHORT_LABEL_BY_MODEL[model]}-fal` : SHORT_LABEL_BY_MODEL[model];
-        toast({ title: `Scene ${index + 1} ${code} image${frameIndex} swap failed`, description: msg, duration: 5000 });
-        return null;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar; asset_id?: string };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-        if (typeof parsed.asset_id === 'string') return { newAssetId: parsed.asset_id };
-      } catch {
-        // The job is enqueued either way; sidecar will refresh next read_plan.
-      }
-      return null;
-    } finally {
-      setSwapsInFlight((prev) => {
-        const next = new Set(prev);
-        next.delete(tag);
-        return next;
-      });
-    }
-  }, [callTool, projectSlug, index, characters, onSidecarUpdate]);
-
-  // Retry the currently-selected (failed) swap variant with safe_mode=true.
-  // safe_mode swaps the prompt for a tamer "restyle"-language version that
-  // avoids the moderation triggers in "replace people / swap subjects". The
-  // server ignores safe_mode if custom_prompt is set, so we deliberately omit
-  // customPrompt here to let the server's safe-mode default kick in.
-  const retryFailedSwap = useCallback((frameIndex: 1 | 2) => {
-    const swapId = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'];
-    if (!swapId) return;
-    const variantsKey = `image${frameIndex}_variants` as 'image1_variants' | 'image2_variants';
-    const variants = scene.swap?.[variantsKey];
-    if (!variants) return;
-    const matched = (Object.entries(variants) as Array<[string, string]>)
-      .find(([, id]) => id === swapId);
-    if (!matched) return;
-    const parsed = parseVariantKey(matched[0]);
-    if (!parsed) return;
-    const priorSwapAssetId = frameIndex === 2 ? (scene.swap?.image1 ?? undefined) : undefined;
-    void runSwap(frameIndex, parsed.provider, parsed.model, {
-      safeMode: true,
-      ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
-    });
-  }, [scene, runSwap]);
-
-  const runReplace = useCallback(async (frameIndex: 1 | 2, source: ReplaceSource) => {
-    setReplacing((prev) => {
-      const next = new Set(prev);
-      next.add(frameIndex);
-      return next;
-    });
-    try {
-      let assetId: string;
-      if (source.kind === 'asset') {
-        assetId = source.assetId;
-      } else {
-        const file = source.file;
-        const ext = (() => {
-          const dot = file.name.lastIndexOf('.');
-          if (dot >= 0) return file.name.slice(dot).toLowerCase();
-          if (file.type === 'image/png') return '.png';
-          if (file.type === 'image/jpeg') return '.jpg';
-          if (file.type === 'image/webp') return '.webp';
-          return '.png';
-        })();
-        const filename = `s${index + 1}-image${frameIndex}-user-${Date.now()}${ext}`;
-        try {
-          const uploaded = await uploadProjectFile(projectSlug, file, filename);
-          assetId = uploaded.assetId;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          toast({ title: `Scene ${index + 1} image${frameIndex} upload failed`, description: msg, duration: 5000 });
-          return;
-        }
-      }
-      const result = await callTool('replace_plan_scene_frame_swap', {
-        project_slug: projectSlug,
-        scene_index: index,
-        frame_index: frameIndex,
-        asset_id: assetId,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
-        toast({ title: `Scene ${index + 1} image${frameIndex} replace failed`, description: msg, duration: 5000 });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        // Sidecar refreshes on next read_plan.
-      }
-    } finally {
-      setReplacing((prev) => {
-        const next = new Set(prev);
-        next.delete(frameIndex);
-        return next;
-      });
-    }
-  }, [callTool, projectSlug, index, onSidecarUpdate]);
-
-  const videoGate = useMemo(
-    () => isGrokVideo ? grokVideoReadyForGen(scene, tile1) : videoReadyForGen(scene, tile1, tile2),
-    [isGrokVideo, scene, tile1, tile2],
-  );
-
-  const handleVideo = useCallback(async () => {
-    if (submittingVideo) return;
-    if (!videoGate.ok) return;
-    // The bootstrap in PlanScenes runs even_split + extract_audio per scene;
-    // by the time the user clicks RUN VIDEO both ids should be reconciled.
-    // If not, the user clicked too early — toast and let them retry.
-    if (!sceneClipSlug || !sceneAudioSlug) {
-      toast({
-        title: `Scene ${index + 1} not ready`,
-        description: 'Source clip + audio still extracting — try again in a moment.',
-        duration: 4000,
-      });
-      return;
-    }
-    const isGrok = selectedVideoModel === 'grok-imagine-1-5';
-    const toolArgs = isGrok
-      ? buildGrokImagineToolArgs(scene, characters, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect)
-      : buildSeedanceToolArgs(scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, videoModelPrompts[selectedVideoModel], sourceAspect);
-    if (!toolArgs) {
-      toast({
-        title: `Scene ${index + 1}`,
-        description: 'Generate the first-frame swap before running Grok Imagine.',
-        duration: 4000,
-      });
-      return;
-    }
-    setSubmittingVideo(true);
-    try {
-      const toolName = TOOL_BY_VIDEO_MODEL[selectedVideoModel];
-      const result = await callTool(toolName, {
-        project_slug: projectSlug,
-        ...toolArgs,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? `Failed to enqueue ${LABEL_BY_VIDEO_MODEL[selectedVideoModel]}`;
-        toast({ title: `Scene ${index + 1} failed`, description: msg, duration: 5000 });
-        return;
-      }
-      let newVidAssetId: string | null = null;
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { vid_asset_id?: string };
-        if (typeof parsed.vid_asset_id === 'string') newVidAssetId = parsed.vid_asset_id;
-      } catch {
-        // Tool always returns vid_asset_id; if parsing fails we fall back to
-        // a toast-only notification.
-      }
-      if (newVidAssetId) {
-        // Persist into scenes[N].swap.video so the slot survives reloads and
-        // re-generations supersede the prior pick. The audio splice is now
-        // server-driven (replace_audio_with arg above), so no client-side
-        // post-completion coordination is needed.
-        const persistResult = await callTool('replace_plan_scene_video_swap', {
-          project_slug: projectSlug,
-          scene_index: index,
-          asset_id: newVidAssetId,
-        });
-        if (!persistResult.isError) {
-          try {
-            const text = (persistResult.content as Array<{ type: string; text: string }>)[0].text;
-            const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-            if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-          } catch {
-            // Sidecar refreshes on next read_plan.
-          }
-        }
-      }
-      const modelLabel = LABEL_BY_VIDEO_MODEL[selectedVideoModel];
-      const note = isGrok
-        ? `${modelLabel} (kie) · 720p · first frame + refs`
-        : swapsReady
-          ? `${modelLabel} (kie) · 720p · swapped frames`
-          : `${modelLabel} (kie) · 720p · char refs`;
-      toast({ title: `Scene ${index + 1} enqueued`, description: note, duration: 2500 });
-    } finally {
-      setSubmittingVideo(false);
-    }
-  }, [submittingVideo, videoGate.ok, scene, characters, mediaItems, callTool, projectSlug, index, swapsReady, sceneClipSlug, sceneAudioSlug, selectedVideoModel, videoModelPrompts, sourceAspect, onSidecarUpdate]);
-
-  // Slot-presence is acceptance: when a scene's video reaches 'ready', auto-fire
-  // extract_last_frame and seed the next scene's first frame. One-shot per
-  // (sceneIndex, videoAssetId) tuple — re-generations swap in a new asset id
-  // and re-trigger; mediaItems churn for an unchanged id is ignored.
-  const propagatedVideoIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    const vidId = scene.swap?.video;
-    if (!vidId) return;
-    if (index + 1 >= sceneCount) return;
-    if (propagatedVideoIdRef.current === vidId) return;
-    const item = mediaItems.find((m) => m.id === vidId);
-    if (!item || item.status !== 'ready') return;
-    propagatedVideoIdRef.current = vidId;
-    void (async () => {
-      const extractResult = await callTool('extract_last_frame', {
-        project_slug: projectSlug,
-        asset_id: vidId,
-      });
-      if (extractResult.isError) {
-        const msg = (extractResult.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'extract_last_frame failed';
-        toast({ title: `Scene ${index + 1} last-frame extract failed`, description: msg, duration: 5000 });
-        return;
-      }
-      try {
-        const text = (extractResult.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { image_asset_id?: string };
-        if (typeof parsed.image_asset_id === 'string') {
-          setPendingLastFrameProp({ imgAssetId: parsed.image_asset_id, targetSceneIndex: index + 1 });
-        }
-      } catch {
-        // Couldn't parse — skip propagation, regen will retry.
-      }
-    })();
-  }, [scene.swap?.video, mediaItems, sceneCount, index, callTool, projectSlug]);
-
-  const runVideoReplace = useCallback(async (vidAssetId: string) => {
-    setReplacingVideo(true);
-    try {
-      const result = await callTool('replace_plan_scene_video_swap', {
-        project_slug: projectSlug,
-        scene_index: index,
-        asset_id: vidAssetId,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Replace failed';
-        toast({ title: `Scene ${index + 1} video replace failed`, description: msg, duration: 5000 });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        // Sidecar refreshes on next read_plan.
-      }
-    } finally {
-      setReplacingVideo(false);
-    }
-  }, [callTool, projectSlug, index, onSidecarUpdate]);
-
-  // Once the extracted last-frame img- asset reaches 'ready', forward it as
-  // scene N+1's accepted first frame. One-shot per accept event.
-  useEffect(() => {
-    if (!pendingLastFrameProp) return;
-    const item = mediaItems.find((m) => m.id === pendingLastFrameProp.imgAssetId);
-    if (!item) return;
-    if (item.status === 'error') {
-      toast({ title: `Scene ${index + 1} last-frame extract errored`, description: item.failedMessage ?? 'extract failed', duration: 5000 });
-      setPendingLastFrameProp(null);
-      return;
-    }
-    if (item.status !== 'ready') return;
-    const { imgAssetId, targetSceneIndex } = pendingLastFrameProp;
-    setPendingLastFrameProp(null);
-    void (async () => {
-      const result = await callTool('replace_plan_scene_frame_swap', {
-        project_slug: projectSlug,
-        scene_index: targetSceneIndex,
-        frame_index: 1,
-        asset_id: imgAssetId,
-      });
-      if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'replace_plan_scene_frame_swap failed';
-        toast({ title: `Scene ${targetSceneIndex + 1} first-frame seed failed`, description: msg, duration: 5000 });
-        return;
-      }
-      try {
-        const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        const parsed = JSON.parse(text) as { sidecar?: PlanSidecar };
-        if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
-      } catch {
-        // Sidecar refreshes on next read_plan.
-      }
-      toast({
-        title: `Scene ${targetSceneIndex + 1} first frame seeded`,
-        description: `from ${imgAssetId}`,
-        duration: 2500,
-      });
-    })();
-  }, [pendingLastFrameProp, mediaItems, callTool, projectSlug, index, onSidecarUpdate]);
-
-  const videoPayload = useMemo(
-    () => buildKieVideoPayload(
-      selectedVideoModel,
-      scene,
-      characters,
-      mediaItems,
-      sceneClipSlug,
-      sceneAudioSlug,
-      videoModelPrompts[selectedVideoModel],
-      sourceAspect,
-    ),
-    [selectedVideoModel, videoModelPrompts, scene, characters, mediaItems, sceneClipSlug, sceneAudioSlug, sourceAspect],
-  );
-
-  // Both swap slots are filled with ready images — slot-presence is acceptance.
-  // No-swap mode (char refs only) leaves bothReady false; videoGate.ok handles
-  // that path so the video step still unlocks when the user skipped swaps.
-  const bothReady = tile1.kind === 'ready' && tile2.kind === 'ready';
-  // Grok i2v animates from the first-frame swap alone; Seedance interpolates and
-  // needs both frames. Drives the step dimming + disabled gate per selected model.
-  const videoStepReady = isGrokVideo ? tile1.kind === 'ready' : bothReady;
-  const videoTileState = useMemo(
-    () => deriveVideoTileState(scene, mediaItems, projectSlug),
-    [scene, mediaItems, projectSlug],
-  );
-
-  const duration = (scene.end - scene.start).toFixed(2);
-
-  // Cache-bust the source-frame thumbnails on scene-boundary changes — when
-  // /plan-vis re-runs and produces different chunks, timestamps shift and the
-  // same filename now points at a different frame.
-  const v = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
-  const sourceUrl = (i: 1 | 2) =>
-    `/files/${projectSlug}/plan/s${index + 1}-image${i}-source.jpg?v=${v}`;
-
-  return (
-    <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="text-emerald-300/50">Scene {index + 1}</span>
-          <span className="text-emerald-300/90 font-bold">
-            {formatTimecode(scene.start)} – {formatTimecode(scene.end)}
-          </span>
-          <span className="text-emerald-300/40">({duration}s)</span>
-        </div>
-      </header>
-      <FrameBlock
-        ordinal={1}
-        frameIndex={1}
-        scene={scene}
-        sceneIndex={index}
-        characters={characters}
-        mediaItems={mediaItems}
-        sourceAspect={sourceAspect}
-        projectSlug={projectSlug}
-        sourceSrc={sourceUrl(1)}
-        tile={tile1}
-        inFlightCodes={inFlightCodes1}
-        replacing={replacing.has(1)}
-        runSwap={runSwap}
-        onReplace={(source) => { void runReplace(1, source); }}
-        onErrorRetry={() => retryFailedSwap(1)}
-      />
-      <FrameBlock
-        ordinal={2}
-        frameIndex={2}
-        scene={scene}
-        sceneIndex={index}
-        characters={characters}
-        mediaItems={mediaItems}
-        sourceAspect={sourceAspect}
-        projectSlug={projectSlug}
-        sourceSrc={sourceUrl(2)}
-        tile={tile2}
-        inFlightCodes={inFlightCodes2}
-        replacing={replacing.has(2)}
-        runSwap={runSwap}
-        onReplace={(source) => { void runReplace(2, source); }}
-        onErrorRetry={() => retryFailedSwap(2)}
-      />
-      <VideoStepBlock
-        bothReady={videoStepReady}
-        selectedModel={selectedVideoModel}
-        onSelectModel={setSelectedVideoModel}
-        prompt={videoModelPrompts[selectedVideoModel]}
-        onPromptChange={setSelectedVideoPrompt}
-        payload={videoPayload}
-        mediaItems={mediaItems}
-        sourceAspect={sourceAspect}
-        projectSlug={projectSlug}
-        disabled={!videoStepReady || !videoGate.ok || anySwapInFlight || !sceneSourceReady || submittingVideo}
-        disabledReason={
-          !videoStepReady
-            ? (isGrokVideo ? 'Waiting on the first-frame swap' : 'Both swap frames must finish generating')
-            : !videoGate.ok
-              ? videoGate.reason
-              : anySwapInFlight
-                ? 'Swap still running'
-                : !sceneSourceReady
-                  ? 'Source clip + audio still extracting…'
-                  : submittingVideo
-                    ? 'Video gen submitting…'
-                    : undefined
-        }
-        videoTileState={videoTileState}
-        videoAssetId={scene.swap?.video ?? null}
-        replacing={replacingVideo}
-        onIdleClick={() => { void handleVideo(); }}
-        onReplace={(vidAssetId) => { void runVideoReplace(vidAssetId); }}
-        onErrorRetry={() => { void handleVideo(); }}
-        onRegen={() => { void handleVideo(); }}
-      />
-    </section>
-  );
-}
-
-// Step-3 wrapper around the existing VideoPanel. Always visible — when both
-// swap frames haven't landed yet, the contents are dimmed and Run Video stays
-// disabled with an explanatory tooltip.
-function VideoStepBlock({ bothReady, selectedModel, ...rest }: {
-  bothReady: boolean;
-  selectedModel: VideoModel;
-  onSelectModel: (model: VideoModel) => void;
-  prompt: string;
-  onPromptChange: (next: string) => void;
-  payload: unknown;
-  mediaItems: MediaItem[];
-  sourceAspect: SourceAspect;
-  projectSlug: string;
-  disabled: boolean;
-  disabledReason?: string;
-  videoTileState: VideoTileState;
-  videoAssetId: string | null;
-  replacing: boolean;
-  onIdleClick: () => void;
-  onReplace: (videoAssetId: string) => void;
-  onErrorRetry?: () => void;
-  onRegen: () => void;
-}) {
-  return (
-    <div className="px-3 py-3 border-t border-zinc-800/40 bg-black/20 flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[11px] font-mono">
-        <span
-          className={cn(
-            'inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold',
-            bothReady
-              ? 'border border-emerald-500/40 text-emerald-300/80'
-              : 'border border-emerald-500/15 text-emerald-300/30',
-          )}
-        >
-          3
-        </span>
-        <span
-          className={cn(
-            'uppercase tracking-wider',
-            bothReady ? 'text-emerald-300/70' : 'text-emerald-300/30',
-          )}
-        >
-          Generate scene video
-        </span>
-        {!bothReady && (
-          <span className="text-emerald-300/40 text-[10px] italic">
-            {selectedModel === 'grok-imagine-1-5' ? '(waiting for first-frame swap)' : '(waiting for both swap frames)'}
-          </span>
-        )}
-      </div>
-      <div className={cn(!bothReady && 'opacity-50 pointer-events-none')}>
-        <VideoPanel selectedModel={selectedModel} {...rest} />
-      </div>
     </div>
   );
 }
@@ -3748,6 +2573,14 @@ function TabButton({ active, onClick, icon, children }: {
   );
 }
 
+// The JSON payload the asset sidebar emits on drag (consumed by every plan
+// drop zone). A trimmed mirror of the sidebar's drag data.
+interface SidebarDragPayload {
+  slug?: string;
+  id?: string;
+  type?: string;
+}
+
 type PlanSlotKind = 'source' | 'character';
 
 function isAcceptableForSlot(payload: SidebarDragPayload, kind: PlanSlotKind): boolean {
@@ -4062,7 +2895,7 @@ function CustomizeInputs({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CharSwapSetup({ projectSlug, mediaItems, callTool }: PlanTemplateSetupProps) {
+export function CharSwapSetup({ projectSlug, mediaItems, callTool, onGenerated }: PlanTemplateSetupProps) {
   const { loading, sidecar } = useCurrentSidecar(projectSlug, callTool);
   if (loading) return <SetupLoading />;
   return (
@@ -4070,12 +2903,13 @@ export function CharSwapSetup({ projectSlug, mediaItems, callTool }: PlanTemplat
       projectSlug={projectSlug}
       mediaItems={mediaItems}
       callTool={callTool}
+      onGenerated={onGenerated}
       initial={planFormula(sidecar) === 'char_swap' ? (sidecar as PlanSidecar) : null}
     />
   );
 }
 
-function CharSwapSetupInner({ projectSlug, mediaItems, callTool, initial }: Omit<PlanTemplateSetupProps, 'onGenerated'> & { initial: PlanSidecar | null }) {
+function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, initial }: PlanTemplateSetupProps & { initial: PlanSidecar | null }) {
   // Seed from the existing plan, else auto-pick the project's newest assets so
   // the inputs come pre-filled.
   const autoPick = initial ? null : autoPickCharSwap(mediaItems);
@@ -4085,9 +2919,6 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, initial }: Omit
   const [generating, setGenerating] = useState(false);
   const cancelledRef = useRef(false);
   useEffect(() => { cancelledRef.current = false; return () => { cancelledRef.current = true; }; }, []);
-
-  const registry = useOptionalCommandRegistry();
-  const openGraph = registry?.uiActions.open_plan_flow;
 
   const sourceItem = useMemo(() => (sourceId ? mediaItems.find((m) => m.id === sourceId) ?? null : null), [sourceId, mediaItems]);
   const charAItem = useMemo(() => (charAId ? mediaItems.find((m) => m.id === charAId) ?? null : null), [charAId, mediaItems]);
@@ -4110,13 +2941,13 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, initial }: Omit
         toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
         return;
       }
-      // plan_visualization runs in the background (vision + ffmpeg). The graph
-      // is char_swap's sole surface — open it now and let it poll for scenes.
-      openGraph?.();
+      // plan_visualization runs in the background (vision + ffmpeg). Navigate to
+      // the inline /plan view — the embedded stack polls there until scenes land.
+      onGenerated();
     } finally {
       if (!cancelledRef.current) setGenerating(false);
     }
-  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, openGraph]);
+  }, [canGenerate, sourceId, charAId, charBId, projectSlug, callTool, onGenerated]);
 
   return (
     <div className="space-y-4">

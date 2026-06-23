@@ -1,6 +1,5 @@
-// Presentational chrome shared by the flow-canvas node types. Emerald plan
-// domain styling; fixed widths so a future GUI↔JSON flip won't reflow the graph.
-import { Handle, Position } from '@xyflow/react';
+// Presentational chrome shared by the vertical-stack card types. Emerald plan
+// domain styling; fixed widths so the GUI↔JSON flip won't reflow the layout.
 import { Loader2, AlertTriangle, ImageOff, Code, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -54,16 +53,12 @@ export function NodeFrame({
   accent,
   badge,
   children,
-  source = true,
-  target = true,
   width = NODE_W,
 }: {
   label: string;
   accent?: string;
   badge?: React.ReactNode;
   children: React.ReactNode;
-  source?: boolean;
-  target?: boolean;
   width?: number;
 }) {
   return (
@@ -74,7 +69,6 @@ export function NodeFrame({
       )}
       style={{ width }}
     >
-      {target && <Handle type="target" position={Position.Left} className="!bg-emerald-400/70 !border-emerald-200/40" />}
       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-zinc-800/80 bg-black/50">
         <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/80 truncate">
           {label}
@@ -82,7 +76,6 @@ export function NodeFrame({
         {badge}
       </div>
       <div className="p-2">{children}</div>
-      {source && <Handle type="source" position={Position.Right} className="!bg-emerald-400/70 !border-emerald-200/40" />}
     </div>
   );
 }

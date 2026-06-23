@@ -1,7 +1,7 @@
 // Pure model layer for the char_swap plan formula — types, constants, and
-// side-effect-free helpers shared by the legacy stacked PlanViewer and the new
-// node-graph PlanFlowCanvas. No JSX / React imports beyond types so this stays
-// a plain module (and keeps react-refresh happy in the .tsx consumers).
+// side-effect-free helpers shared by PlanViewer and the embedded PlanFlowStack
+// editor. No JSX / React imports beyond types so this stays a plain module (and
+// keeps react-refresh happy in the .tsx consumers).
 //
 // Extracted verbatim from PlanViewer.tsx — keep behaviour identical. Tool arg
 // shapes here are the canonical source for both views; the server mirrors them
